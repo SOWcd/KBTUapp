@@ -693,6 +693,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input")
         return logic.posts(con, v, scope)
 
+    @app.get("/api/castings")
+    def list_castings(con: Con, v: Me):
+        return logic.castings(con, v)
+
+    @app.post("/api/posts/{pid}/casting/cancel")
+    def cancel_casting(pid: int, con: Con, v: Me):
+        return logic.cancel_casting(con, v, pid)
+
     @app.get("/api/posts/{pid}/video")
     async def post_video(pid: int, con: Con, v: Me):
         """A mirrored channel post's video file for the app's own player (mirror.video); not_found: the app frames

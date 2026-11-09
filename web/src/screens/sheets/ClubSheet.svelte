@@ -28,6 +28,7 @@
   import Notice from '../../ui/Notice.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
+  import { castingStatus, castingWhen } from '../../lib/posts';
   import { api, translated, type EventCard, type Id, type Org, type Post } from '../../lib/api';
   import { ago } from '../../lib/time';
   import { focusPos } from '../../lib/photo';
@@ -52,7 +53,7 @@
   let posts = $state<Post[] | null>(null);
   function play(p: Post) {
     if (!o || !posts) return;
-    const list = [...posts].sort((a, b) => a.createdAt - b.createdAt);
+    const list = posts.filter((x) => x.title).sort((a, b) => a.createdAt - b.createdAt); // a deleted casting has nothing to open
     sheets.stories([{ org: posts[0].org, items: list.map((post) => ({ post })), unread: list.some((x) => !x.read), cast: false }], 0, list.indexOf(p));
   }
   // the afisha already holds the club's upcoming events (the server's list is the same filter): they show at once
@@ -185,12 +186,14 @@
         <Section title={t('page.news')}>
           <Group>
             {#each posts.slice(0, 6) as p (p.id)}
-              {#if p.photo}
+              {@const sub = !p.casting ? ago(p.createdAt) : p.title ? `${t('casting.mark')} · ${castingStatus(p.casting)}` : `${castingWhen(p.casting)} · ${p.casting.place}`}
+              {#if !p.title}<Row dense title={t('casting.gone')} subtitle={sub} />
+              {:else if p.photo}
                 {@const ph = p.photo}
-                <Row dense title={p.title} subtitle={ago(p.createdAt)} onclick={() => play(p)}>
+                <Row dense title={p.title} subtitle={sub} onclick={() => play(p)}>
                   {#snippet lead()}<img class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
                 </Row>
-              {:else}<Row dense title={p.title} subtitle={ago(p.createdAt)} onclick={() => play(p)} />{/if}
+              {:else}<Row dense title={p.title} subtitle={sub} onclick={() => play(p)} />{/if}
             {/each}
           </Group>
         </Section>

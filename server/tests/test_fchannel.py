@@ -411,6 +411,9 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("DROP INDEX posts_casting")  # 143's
+    for col in ("casting_from", "casting_to", "casting_place", "casting_cancelled_at"):
+        con.execute(f"ALTER TABLE posts DROP COLUMN {col}")
     con.execute("DROP TABLE team_asks")  # 138's
     con.execute("ALTER TABLE events DROP COLUMN door_open_at")  # 137's
     con.execute("ALTER TABLE users DROP COLUMN announce_ok")  # 136's
