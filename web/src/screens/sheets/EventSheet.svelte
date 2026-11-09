@@ -314,9 +314,9 @@
       {:else}
         <Poster item={e} big play radius={22} dim={cancelled} />
       {/if}
-      {#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
+      <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
       {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
-      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
+      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}</div>
     </div>
 
     <div class="head">
@@ -651,9 +651,11 @@
   .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
   .dots i.on { background: var(--on-accent); transform: scale(1.25); }
-  .org { position: absolute; left: 12px; top: 12px; }
+  .top { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; } /* a long name yields to the tag, never under it */
+  .org { flex: 0 1 auto; min-width: 0; display: flex; }
+  .org :global(.tag) { max-width: 100%; min-width: 0; }
   .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: var(--fs-cap); gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-  .tag { position: absolute; right: 12px; top: 12px; }
+  .tag { flex: none; }
 
   /* the guests' album: the first photo big, two beside it, three under (whole blocks only) */
   .album { display: flex; flex-direction: column; gap: 10px; }
@@ -699,7 +701,9 @@
   .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .sv.on :global(.btn) { color: var(--warning); }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
-  .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; border-radius: var(--r-full);
+  .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
+  @media (max-width: 350px) { .yes :global(svg) { display: none; } } /* the words stay on one line */
+  .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; white-space: nowrap; border-radius: var(--r-full);
     background: var(--success-soft); color: var(--success-text); font: 600 var(--fs-body)/1 var(--font-text); }
 
   /* one tap after the event: bespoke (the faces), on a group's surface */
