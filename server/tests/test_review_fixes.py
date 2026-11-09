@@ -38,7 +38,12 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
         con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, claimed_by, rejected_by, created_at)
             VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, 0)""", (key, claimed, rejected))
     con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999')", (f"fsearch:{aid}:1", str(aid)))
+    for action, by in (("team_link_join", aid), ("grant_link_used", aid), ("team_link_join", 999)):
+        con.execute("INSERT INTO audit_log (action, target, data, at) VALUES (?, 'x', ?, 0)", (action, f'{{"link": "ab", "by": {by}}}'))
     delete_now(c, cfg, tma(21, "Ali"))
+    # who made the link leaves the line, the line stays
+    assert [(r[0], r[1]) for r in con.execute("SELECT json_extract(data, '$.link'), json_extract(data, '$.by') FROM audit_log WHERE target = 'x' ORDER BY id")] == [
+        ("ab", None), ("ab", None), ("ab", 999)]
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'fsearch:%' OR key LIKE 'rclaim:%' ORDER BY key")] == ["fsearch:999:1", "rclaim:2"]
     # the row I said was mine goes and a reload doesn't bring it back; one turned down, or never claimed, is the club's
     assert [tuple(r) for r in con.execute("SELECT key, rejected_by FROM roster_pending ORDER BY key")] == [("someone", None), ("turned_down", None)]
