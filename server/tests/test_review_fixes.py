@@ -40,7 +40,14 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999')", (f"fsearch:{aid}:1", str(aid)))
     for action, by in (("team_link_join", aid), ("grant_link_used", aid), ("team_link_join", 999)):
         con.execute("INSERT INTO audit_log (action, target, data, at) VALUES (?, 'x', ?, 0)", (action, f'{{"link": "ab", "by": {by}}}'))
+    bob = login(c, 22, "bob")["id"]
+    mine_ = {"friend_new": f"fn:{aid}:1", "friend_request": f"fq:{aid}:1", "join_request": f"jr:1:{aid}:1", "team_ask": f"ta:1:{aid}:1", "friend_invite": f"fi:1:{aid}",
+             "roster_claim": f"rq:1:{aid}", "tgc_good": f"gr:{aid}"}
+    for kind, ref in mine_.items():  # sent ones too: other people's queues
+        con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, ?, ?, 0, 1)", (bob, kind, ref))
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, 'join_request', ?, 0, 1)", (bob, f"jr:{aid}:999:1"))  # a club's number, not mine
     delete_now(c, cfg, tma(21, "Ali"))
+    assert [r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE user_id = ?", (bob,))] == [f"jr:{aid}:999:1"]
     # who made the link leaves the line, the line stays
     assert [(r[0], r[1]) for r in con.execute("SELECT json_extract(data, '$.link'), json_extract(data, '$.by') FROM audit_log WHERE target = 'x' ORDER BY id")] == [
         ("ab", None), ("ab", None), ("ab", 999)]
