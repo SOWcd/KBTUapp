@@ -1722,6 +1722,8 @@ const en: Dict = {
   'clubs.initiativeNote': "An initiative becomes official after DMP's review.",
   'clubs.daysLeft': { one: "{n} day left", other: "{n} days left" },
   'clubs.gov': "Student Government",
+  'clubs.open': "Open",
+  'clubs.leave': "Leave",
   'clubs.popular': "Popular",
   'clubs.found': "Found",
   'studio.postShort': 'News',

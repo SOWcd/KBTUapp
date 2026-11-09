@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember } from '../api';
+import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
@@ -366,6 +366,18 @@ export function toggleSub(id: Id): void {
     try { await api.subscribe(id, on); data.kept++; say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
     catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   });
+}
+
+/** Leaving a club from the Clubs tab, what Team's Leave does: one confirm, then gone at once, back if the server says no. */
+export async function leaveClub(m: Membership): Promise<void> {
+  if (!(await sheets.ask({ title: t('team.leaveAsk', { club: m.org.name }), text: t('team.leaveText'), ok: t('team.leave'), cancel: t('common.cancel'), danger: true }))) return;
+  const me = session.me; if (!me) return;
+  me.memberships = me.memberships.filter((x) => x.org.id !== m.org.id);
+  try { await api.removeMember(m.org.id, me.id); haptic.ok(); say(t('team.left'), 'waving_hand_3d_default'); studioChanged(); void loadMe(); }
+  catch (e) {
+    me.memberships = [...me.memberships, m];
+    haptic.error(); say(e instanceof ApiErr && e.message === 'president' ? t('team.presLeave') : t('common.error'), 'warning_3d');
+  }
 }
 
 // ---- classes I won't go to: one
