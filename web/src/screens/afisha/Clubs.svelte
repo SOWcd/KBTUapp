@@ -11,7 +11,7 @@
   import LayoutGrid from '@lucide/svelte/icons/layout-grid';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { data, loadChats, chatsFor, currentCastings } from '../../lib/state/data.svelte';
+  import { data, loadChats, chatsFor, currentCastings, leaveClub } from '../../lib/state/data.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -20,14 +20,16 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
-  import { type OrgCategory, type OrgRef } from '../../lib/api';
+  import { type Membership, type OrgCategory, type OrgRef } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { byWeight, clubSub, hit, nextByOrg, roundDue, waitsDmp } from '../../lib/clubs';
-  import { byRank, roleLabel } from '../../lib/perms';
+  import { byRank, canLeave, roleLabel } from '../../lib/perms';
   import Row from '../../ui/Row.svelte';
   import { nameOf } from '../../lib/short';
   import { SvelteSet } from 'svelte/reactivity';
   import { haptic } from '../../lib/tg';
+  import { longPress } from '../../ui/longpress';
+  import { menu } from '../../ui/menu';
   import ClubPoster from '../../ui/ClubPoster.svelte';
   import ClubRow from '../../ui/ClubRow.svelte';
   import RecruitCard from '../../ui/RecruitCard.svelte';
@@ -44,14 +46,15 @@
   const next = $derived(nextByOrg(data.events));
 
   // My clubs: the ones I'm in (by my rank; lead: President or Vice there), then the ones I follow
-  type Mine = { org: OrgRef; role: string | null; lead: boolean };
+  type Mine = { org: OrgRef; role: string | null; lead: boolean; leave: Membership | null };
   const mine = $derived.by<Mine[]>(() => {
     const ms = [...(session.me?.memberships ?? [])].sort(byRank);
     const inIds = new Set(ms.map((m) => m.org.id));
-    return [...ms.map((m) => ({ org: m.org, role: roleLabel(m), lead: m.role === 'president' || m.role === 'vice' })),
-      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, role: null, lead: false }))];
+    return [...ms.map((m) => ({ org: m.org, role: roleLabel(m), lead: m.role === 'president' || m.role === 'vice', leave: canLeave(m) ? m : null })),
+      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, role: null, lead: false, leave: null }))];
   });
   const openMine = (x: Mine) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const hold = (x: Mine) => (el: HTMLElement) => menu(el, [{ label: t('clubs.open'), onselect: () => openMine(x) }, { label: t('clubs.leave'), destructive: true, onselect: () => void leaveClub(x.leave!) }]);
   const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: `${x.role ?? t('clubs.following')} · ${next.get(x.org.id) ?? t('clubs.nothingSoon')}` }))); };
   // a strip name: the short one when the full one runs past the logo's column (StoryRow's rule), measured once each
   const tight = new SvelteSet<number>();
@@ -98,7 +101,7 @@
       <Section title={t('clubs.mineTitle')} onmore={allMine}>
         <div class="strip hscroll">
           {#each mine as x (x.org.id)}
-            <button class="mc" onclick={() => openMine(x)}>
+            <button class="mc" onclick={() => openMine(x)} {@attach x.leave && longPress(hold(x))}>
               <OrgLogo org={x.org} size={64} />
               <b class="ellipsis" {@attach fit(x.org)}>{tight.has(x.org.id) ? x.org.abbr : nameOf(x.org)}</b>
               <small class={['ellipsis', { lead: x.lead }]}>{x.role ?? t('clubs.following')}</small>

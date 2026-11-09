@@ -1744,6 +1744,8 @@ const ru = {
   'clubs.initiativeNote': "Инициатива становится официальной после проверки ДМП.",
   'clubs.daysLeft': { one: "Ещё {n} день", few: "Ещё {n} дня", many: "Ещё {n} дней", other: "Ещё {n} дня" },
   'clubs.gov': "Студенческое правительство",
+  'clubs.open': "Открыть",
+  'clubs.leave': "Выйти",
   'clubs.popular': "Популярные",
   'clubs.found': "Нашлось",
   'studio.postShort': 'Новость',

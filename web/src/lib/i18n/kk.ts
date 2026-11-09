@@ -1724,6 +1724,8 @@ const kk: Dict = {
   'clubs.initiativeNote': "Бастама ДМП тексеруінен кейін ресми болады.",
   'clubs.daysLeft': { one: "Тағы {n} күн", other: "Тағы {n} күн" },
   'clubs.gov': "Студенттік үкімет",
+  'clubs.open': "Ашу",
+  'clubs.leave': "Шығу",
   'clubs.popular': "Танымал",
   'clubs.found': "Табылды",
   'studio.postShort': 'Жаңалық',

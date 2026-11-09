@@ -7,7 +7,7 @@
   import type { Org } from '../lib/api';
   import { t, tn } from '../lib/i18n/index.svelte';
   import { daysLeft, roundDue } from '../lib/clubs';
-  import { artOf, mirrors } from '../lib/covers';
+  import { artOf, coverOf, mirrors } from '../lib/covers';
   import { toggleSub } from '../lib/state/data.svelte';
   import { session } from '../lib/state/session.svelte';
   import { sheets } from '../lib/state/sheets';
@@ -17,7 +17,6 @@
   import GovMark from './GovMark.svelte';
   import IconButton from './IconButton.svelte';
   import OfficialMark from './OfficialMark.svelte';
-  import { COVERS } from './OrgLogo.svelte';
 
   let { org: o, round }: { org: Org; round: NonNullable<Org['round']> } = $props();
   const [head, tail] = $derived(lastWord(nameOf(o)));
@@ -26,7 +25,7 @@
 
 <div class="rc surface">
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
-  <span class="cv" style:background={COVERS[o.cover % COVERS.length]}>
+  <span class="cv" style:background={coverOf(o)}>
     {#if art}<img class={["art", { flip: mirrors(o) }]} src={art} alt="" loading="lazy" decoding="async" draggable="false" /><i class="dim"></i>{/if}
     <span class="mark">{#if o.logo}<img src={o.logo} alt="" width="96" height="96" draggable="false" />{:else}<Emoji name={o.emoji} size={112} />{/if}</span>
     <b class="clamp-2">{head}<span class="nb">{tail}{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span></b>

@@ -2,14 +2,13 @@
   // A club as a poster, the shelves of the Clubs tab and an interest's page: its cover, its big mark, the name on it and
   // one line. wide: the page's first, the whole row. A tap opens the club.
   import type { Org } from '../lib/api';
-  import { artOf } from '../lib/covers';
+  import { artOf, coverOf } from '../lib/covers';
   import { sheets } from '../lib/state/sheets';
   import { lastWord, nameOf } from '../lib/short';
   import Emoji from './Emoji.svelte';
   import FriendsLine from './FriendsLine.svelte';
   import GovMark from './GovMark.svelte';
   import OfficialMark from './OfficialMark.svelte';
-  import { COVERS } from './OrgLogo.svelte';
 
   let { org: o, sub, wide = false }: { org: Org; sub: string; wide?: boolean } = $props();
   const size = $derived(wide ? 128 : 88);
@@ -17,7 +16,7 @@
   const art = $derived(artOf(o));
 </script>
 
-<button class={['poster', { wide }]} style:background={COVERS[o.cover % COVERS.length]} onclick={() => sheets.club(o.id)}>
+<button class={['poster', { wide }]} style:background={coverOf(o)} onclick={() => sheets.club(o.id)}>
   {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
   <span class="mark">{#if o.logo}<img src={o.logo} alt="" width={size} height={size} draggable="false" />{:else}<Emoji name={o.emoji} {size} />{/if}</span>
   <span class="tx">

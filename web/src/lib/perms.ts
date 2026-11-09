@@ -27,6 +27,9 @@ export const canManage = (m: { role: OrgRole; rights?: Right[] } | null | undefi
 /** The roles you can give: strictly below your own. */
 export const canGive = (mine: OrgRole): OrgRole[] => (['vice', 'head', 'member'] as OrgRole[]).filter((r) => RANK[r] < RANK[mine]);
 
+/** Anyone but the President can leave a club, whatever its kind (the server's remove_member; Team's Leave). */
+export const canLeave = (m: { role: OrgRole }): boolean => m.role !== 'president';
+
 /** The club's own name for someone's role (§2b), else the level's. */
 export const roleName = (role: OrgRole, title?: string | null): string => title || ROLE_NAME[role];
 /** A club role's name in the app's language: the club may give it in Kazakh and English too, else its own name. */
