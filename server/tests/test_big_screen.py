@@ -111,6 +111,7 @@ def test_pairing_survives_quiet_and_goes_when_the_tab_is_long_gone(env, monkeypa
     # the tab went quiet: not counted as connected, but its pairing holds, as it must through a dead network
     monkeypatch.setattr(checkin, "now", lambda: t + checkin.SCREEN_SEEN + 11)
     assert count() == 0
+    assert c.get("/api/screens", headers=tma(H)).json()[0]["paired"] == 1  # "disconnect" stays while the pairing does
     c.post("/api/screen/pair")                                           # (the sweep runs here)
     assert c.get("/api/screen", headers=me).json()["session"] == sid
     assert count() == 1                                                  # back as soon as it polls
@@ -118,4 +119,48 @@ def test_pairing_survives_quiet_and_goes_when_the_tab_is_long_gone(env, monkeypa
     monkeypatch.setattr(checkin, "now", lambda: t + checkin.SCREEN_SEEN + 11 + 86401)
     c.post("/api/screen/pair")
     assert c.get("/api/screen", headers=me).status_code == 403
+    con.close()
+
+
+def _age(con, by):
+    con.execute("UPDATE qr_screens SET created_at = created_at - ? WHERE session_id IS NOT NULL", (by,))
+
+
+def test_a_day_idle_pairing_stays_dead_without_anyone_pairing(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    _, sid, _ = _phone_event(c, con, "vol")
+    me = _paired(c, H, sid)
+    _age(con, 86401)                                                     # no /pair call: no sweep ran
+    assert c.get("/api/screen", headers=me).status_code == 403
+    assert con.execute("SELECT COUNT(*) FROM qr_screens WHERE session_id = ?", (sid,)).fetchone()[0] == 0
+    con.close()
+
+
+def test_a_removed_organizers_screen_is_revoked_at_its_next_check(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    eid, sid, _ = _phone_event(c, con, "vol")
+    me = _paired(c, H, sid)
+    _age(con, 11)
+    assert c.get("/api/screen", headers=me).json()["param"]              # still organizing: it holds
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (_me(c, H)["id"],))
+    con.execute("UPDATE qr_sessions SET lease_until = 0 WHERE id = ?", (sid,))
+    _age(con, 11)
+    assert c.get("/api/screen", headers=me).status_code == 403
+    assert con.execute("SELECT lease_until FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0] == 0  # no lease renewed on the way out
+    assert con.execute("SELECT COUNT(*) FROM qr_screens WHERE session_id = ?", (sid,)).fetchone()[0] == 0
+    con.close()
+
+
+def test_a_helper_who_is_an_admin_is_still_a_helper(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    eid, sid, _ = _in(c, con)
+    con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 2")
+    me = _me(c, 2)
+    assert me["checkin"]["session"] == sid and me["checkin"]["helper"] is True and "screens" not in me["checkin"]
+    org = con.execute("SELECT org_id FROM events WHERE id = ?", (eid,)).fetchone()[0]
+    con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (?, ?, 0)", (org, me["id"]))
+    assert _me(c, 2)["checkin"] is None                                  # banned by the club: the admin role doesn't bring it back
     con.close()

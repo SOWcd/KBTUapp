@@ -50,6 +50,12 @@ def qr_helping(con, v: Viewer, s: sqlite3.Row) -> bool:
         and bool(one(con, "SELECT 1 FROM qr_helpers WHERE session_id = ? AND user_id = ?", s["id"], v.id))
 
 
+# qr_helping's person and club checks as SQL over a qr_sessions row `s` (checkin.running, a query for all of them); binds the user twice
+_CLUBS = _RUNNING.replace(":e", "s.event_id")
+QR_HELPING = f"""(s.id IN (SELECT session_id FROM qr_helpers WHERE user_id = ?) AND (s.event_id IS NULL OR EXISTS ({_CLUBS}))
+    AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.user_id = ? AND (s.event_id IS NULL AND b.org_id = s.org_id OR b.org_id IN ({_CLUBS}))))"""
+
+
 def _running(con, eid: int) -> list[int]:
     """The clubs running it, the host first."""
     host = one(con, "SELECT org_id FROM events WHERE id = ?", eid)

@@ -114,7 +114,7 @@
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
           {#if s.started && own(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
-          {#if s.screens && own(s)}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
+          {#if s.paired && own(s)}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
         {/if}
       </div>
     </div>

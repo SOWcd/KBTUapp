@@ -293,6 +293,13 @@
     addEventListener('pointerdown', poke, { capture: true, passive: true });
     return () => { removeEventListener('pointerdown', poke, { capture: true }); clearTimeout(restTimer); };
   });
+  // the capsule holds a check-in from /me alone: finished or taken away elsewhere, only asking again lets it go
+  const holdingCheckin = $derived(!!session.me?.checkin);
+  $effect(() => {
+    if (!holdingCheckin) return;
+    const id = setInterval(() => { if (!document.hidden) void loadMe(true); }, 60_000);
+    return () => clearInterval(id);
+  });
   const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live && (resting || live.kind === 'checkin') ? null : TAB_LABEL[ui.tab]()) || null);
   // a spinner while a tap's work runs; a view that forgot its own icon gets the app's mark (Sparkles is the assistant's alone)
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);

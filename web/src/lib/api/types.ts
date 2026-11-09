@@ -90,7 +90,7 @@ export interface ChannelReply { id: Id; body: string; comment: number | null; st
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; helpers?: number }
+export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; paired: number; helpers?: number }
 /** The check-in the capsule shows (/api/me): one I run (ScreenSheet's numbers, for its first frame), or one I help at (my QR). until: when its event is over */
 export type MyCheckin = (ScreenSession & { helper: false; until: Ts }) | { helper: true; session: Id; event: Id | null; title: string; scanner: boolean; until: Ts };
 /** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
