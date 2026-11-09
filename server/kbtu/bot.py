@@ -242,6 +242,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         p = one(con, """SELECT p.casting_from, o.name FROM posts p JOIN orgs o ON o.id = p.org_id
             WHERE p.id = ? AND p.hidden_at IS NULL AND p.casting_cancelled_at IS NULL AND p.casting_to > ?""", int(ref[1]), logic.now())
         return (*texts.bot_message(lang, kind, org=p["name"], when=texts.when(p["casting_from"], lang)), "news") if p else None
+    if kind == "club_hidden":  # chid:<org>, to its president, once; gone if the club has gathered its people meanwhile
+        c = one(con, """SELECT o.id, o.name, (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) AS n FROM orgs o WHERE o.id = ? AND o.status = 'active'""", int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=c["name"], n=c["n"], need=logic.clubs.CLUB_MIN), f"cl_{c['id']}") if c and c["n"] < logic.clubs.CLUB_MIN else None
     if kind == "friend_request":  # fq:<asker>:<day>; gone once answered or taken back
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))
         if not p or not one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", int(ref[1]), m["user_id"]):
@@ -724,6 +727,7 @@ def _chores(cfg: Config, con) -> None:
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
+    logic.clubs.hidden_day(con)  # 11:00: a club too small for the registry, to its president, once
     logic.door_round(con)  # the door is open (early, or at T-30): each guest going hears it once
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on

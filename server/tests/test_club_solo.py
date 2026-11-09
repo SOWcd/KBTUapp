@@ -32,6 +32,29 @@ def test_solo_club_hidden(env, monkeypatch):
     assert org in ids(FAN)  # CLUB_MIN people: a club
 
 
+def test_president_hears_the_club_is_hidden_once(env, monkeypatch):
+    c, cfg = env
+    monkeypatch.setattr(logic.clubs, "CLUB_MIN", 5)
+    login(c, PRES, "pres")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (PRES,)).fetchone()[0]
+    org = logic.create_org(con, None, "Lonely", "LO", "crown_3d", True)
+    logic.set_role(con, None, uid, org, "president", "test")
+    day = 86400 * 20000 + 7 * 3600  # 12:00 in Almaty, past the job's hour
+    sent = lambda: con.execute("SELECT user_id, ref FROM bot_outbox WHERE kind = 'club_hidden'").fetchall()  # noqa: E731
+    monkeypatch.setattr(logic.core, "now", lambda: day)
+    con.execute("UPDATE orgs SET created_at = ? WHERE id = ?", (day - 86400, org))
+    logic.clubs.hidden_day(con)
+    assert not sent()  # a new club has two days
+    con.execute("UPDATE orgs SET created_at = ? WHERE id = ?", (day - 3 * 86400, org))
+    monkeypatch.setattr(logic.core, "now", lambda: day + 86400)
+    for _ in range(2):
+        logic.clubs.hidden_day(con)
+    monkeypatch.setattr(logic.core, "now", lambda: day + 2 * 86400)
+    logic.clubs.hidden_day(con)
+    assert [tuple(r) for r in sent()] == [(uid, f"chid:{org}")]
+
+
 def test_quiet_flag(env, monkeypatch):
     """Quiet clubs stay listed and carry the flag; new, active and official ones don't."""
     c, cfg = env

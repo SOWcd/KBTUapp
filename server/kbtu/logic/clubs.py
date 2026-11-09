@@ -100,6 +100,18 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     } for o in found}
 
 
+def hidden_day(con) -> None:
+    """11:00 (Almaty) daily: the president of a club under CLUB_MIN hears once that the registry doesn't show it
+    (notify's unique key is the once). Two days' grace: a new club is still gathering its people."""
+    local = core.now() + 5 * 3600
+    if local % 86400 < 11 * 3600 or not core._once(con, "club_hidden_day", str(local // 86400)):
+        return
+    for uid, oid in rows(con, """SELECT m.user_id, o.id FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.role = 'president'
+            WHERE o.kind = 'club' AND o.status = 'active' AND o.created_at < ?
+            AND (SELECT COUNT(*) FROM org_members x WHERE x.org_id = o.id) < ?""", core.now() - 2 * 86400, CLUB_MIN):
+        notify(con, uid, "club_hidden", f"chid:{oid}")
+
+
 def _join_qs(o: sqlite3.Row) -> list[dict]:
     """The always-open applications' questions (types.ts RoundQuestion; the id is the position)."""
     return [{"id": i, "kind": k, "text": t, "options": opts or None, "required": req, "tagId": None}
