@@ -1711,6 +1711,7 @@ const kk: Dict = {
   'clubs.studentMade': "Бейресми",
   'studio.postShort': 'Жаңалық',
   'studio.postSub': 'Афишаға жазба',
+  'studio.castingSub': "Тіркеусіз: қашан және қайда",
   'studio.channelShort': 'Арна',
   'studio.channelLink': 'Қосу',
   'studio.channelOff': 'Көшірілмейді',

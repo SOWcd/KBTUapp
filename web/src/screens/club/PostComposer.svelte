@@ -33,7 +33,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Lock from '@lucide/svelte/icons/lock';
 
-  let { overlay, org, post }: { overlay: Overlay; org: Id; post?: Post } = $props();
+  let { overlay, org, post, casting = false }: { overlay: Overlay; org: Id; post?: Post; casting?: boolean } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
   const pick = $derived(org);
   const club = $derived(mine.find((m) => m.org.id === pick)?.org);
@@ -57,7 +57,7 @@
   let photo = $state<Media | null>(was?.photo ?? null);
   const wasCast = was?.casting;
   const castFixed = !!wasCast && !castingOn(wasCast); // over or cancelled: its time stays as it was
-  let isCasting = $state(!!wasCast);
+  let isCasting = $state(!!wasCast || casting); // Studio's own Casting row opens with it on
   let fromDate = $state(wasCast ? dateInput(wasCast.from) : ''), fromTime = $state(wasCast ? time(wasCast.from) : '');
   let toDate = $state(wasCast ? dateInput(wasCast.to) : ''), toTime = $state(wasCast ? time(wasCast.to) : '');
   let place = $state(wasCast?.place ?? '');

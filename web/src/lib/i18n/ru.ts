@@ -1731,6 +1731,7 @@ const ru = {
   'clubs.studentMade': "Неофициальные",
   'studio.postShort': 'Новость',
   'studio.postSub': 'пост на Афишу',
+  'studio.castingSub': "Без записи: когда и где",
   'studio.channelShort': 'Канал',
   'studio.channelLink': 'Подключить',
   'studio.channelOff': 'Не копируется',

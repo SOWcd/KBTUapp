@@ -1711,6 +1711,7 @@ const en: Dict = {
   'clubs.studentMade': "Unofficial",
   'studio.postShort': 'News',
   'studio.postSub': 'post to Events',
+  'studio.castingSub': "No sign-up: when and where",
   'studio.channelShort': 'Channel',
   'studio.channelLink': 'Link',
   'studio.channelOff': 'Not copied',

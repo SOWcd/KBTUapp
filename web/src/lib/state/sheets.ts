@@ -96,7 +96,7 @@ export const sheets = {
   friends: () => {},
   team: () => {},
   /** a new post for a club (Head+), from Studio */
-  composer: (_org: Id, _post?: Post) => {},
+  composer: (_org: Id, _post?: Post, _casting?: boolean) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */
   addFriend: (_mode?: 'share') => {},
   /** a new achievement level just earned in a sheet that stays open (the anthem's): its unlock moment now, over it */

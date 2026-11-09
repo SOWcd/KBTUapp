@@ -6,6 +6,7 @@
   // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
   // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
   // mark by its name, the next event with how full it is, the actions as tiles, the channel's first (Vice+).
+  import Megaphone from '@lucide/svelte/icons/megaphone';
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -352,6 +353,7 @@
         {#if m.channel !== undefined}<Row icon={Megaphone} title={t('studio.channelShort')} subtitle={m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
         {#if staff}<Row icon={Plus} title={t('studio.newShort')} subtitle={t('studio.newSub')} accessory="chevron" onclick={() => sheets.editor(m.org.id)} />{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
+        {#if may(m, 'posts')}<Row icon={Megaphone} title={t('casting.mark')} subtitle={t('studio.castingSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id, undefined, true)} />{/if}
         {#if may(m, 'posts')}<Row icon={PenLine} title={t('studio.postShort')} subtitle={t('studio.postSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id)} />{/if}
         {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
         {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} subtitle={t('studio.memoSub')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
