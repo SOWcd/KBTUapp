@@ -28,7 +28,7 @@ from .account import (CONSENT, CONSENT_AI, agreed, ai_on, policy, CONSENT_BOARD,
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     deletion_hash, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me, me, ms_apply, ms_link, ms_pending, ms_remember, ms_sweep,
-    FIXABLE, fix_identity, refer, roster_requests, save_schedule, schedule, set_photo, update_me)  # noqa: F401
+    FIXABLE, fix_identity, sid_tries, refer, roster_requests, save_schedule, schedule, set_photo, update_me)  # noqa: F401
 from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, REAPPLY, RESERVED,
     SCHOOLS, SCHOOLS_VERSION, SHORT, SLUG, TRANSLIT, _HEAD, _KB, _SEP, _TAIL, _acronym, _club_app, _keep_name,
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,

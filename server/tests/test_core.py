@@ -5707,12 +5707,15 @@ def test_schedule_page_sid(env):
     assert '"old": "24B000009"' in audits()[0][0] and '"new": "24B000001"' in audits()[0][0]
     send("24B000001")                                                    # equal: nothing more
     assert len(audits()) == 1
+    again = lambda: con.execute("UPDATE students SET fixed = '' WHERE user_id = ?", (uid,))  # noqa: E731  (support's `fix reset`: a page spends the once)
+    again()
     send("24B000002")                                                     # held by Bek: unchanged, the founder told
     assert sid() == "24B000001" and len(audits()) == 1
     told = con.execute("SELECT b.ref, u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'sid_page_clash'").fetchall()
     assert [t[1] for t in told] == [52] and "24B000002" not in told[0][0] and "24B000001" not in told[0][0]
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'sid_page_taken'").fetchone()[0] == 1
     for x in ("24B000003", "24B000004", "24B000005"):                   # 1 year + 1 fix + 1 taken + these: the 5th is the last
+        again()
         send(x)
     assert sid() == "24B000004"
     con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (uid,))
