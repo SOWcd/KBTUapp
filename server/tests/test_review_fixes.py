@@ -46,7 +46,9 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     for kind, ref in mine_.items():  # sent ones too: other people's queues
         con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, ?, ?, 0, 1)", (bob, kind, ref))
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, 'join_request', ?, 0, 1)", (bob, f"jr:{aid}:999:1"))  # a club's number, not mine
+    con.execute("UPDATE users SET announce_ok = 1 WHERE id = ?", (aid,))
     delete_now(c, cfg, tma(21, "Ali"))
+    assert con.execute("SELECT announce_ok FROM users WHERE id = ?", (aid,)).fetchone()[0] is None
     assert [r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE user_id = ?", (bob,))] == [f"jr:{aid}:999:1"]
     # who made the link leaves the line, the line stays
     assert [(r[0], r[1]) for r in con.execute("SELECT json_extract(data, '$.link'), json_extract(data, '$.by') FROM audit_log WHERE target = 'x' ORDER BY id")] == [
