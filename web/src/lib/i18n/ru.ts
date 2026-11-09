@@ -1010,7 +1010,7 @@ const ru = {
   'list.kind.lectureLong': "Лекция",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Лабораторная",
-  'sched.cardTitle': "Пары в Афише",
+  'sched.cardTitle': "Добавить расписание",
   'sched.cardSub': "Отправь боту страницу расписания — займёт минуту",
   'sched.howTitle': "Пары",
   'sched.howLead': "Вся неделя пар — прямо в приложении.",

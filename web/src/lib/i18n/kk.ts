@@ -990,7 +990,7 @@ const kk: Dict = {
   'list.kind.lectureLong': "Дәріс",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Зертханалық",
-  'sched.cardTitle': "Сабақтар Афишада",
+  'sched.cardTitle': "Кестені қосу",
   'sched.cardSub': "Кесте бетін ботқа жібер — бір минут қана",
   'sched.howTitle': "Кесте",
   'sched.howLead': "Бүкіл апталық сабақтар — қосымшада.",

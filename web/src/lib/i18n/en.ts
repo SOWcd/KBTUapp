@@ -990,7 +990,7 @@ const en: Dict = {
   'list.kind.lectureLong': "Lecture",
   'list.kind.practiceLong': "Practice",
   'list.kind.labLong': "Lab",
-  'sched.cardTitle': "Your classes here",
+  'sched.cardTitle': "Add your timetable",
   'sched.cardSub': "Send the bot your timetable page: it takes a minute",
   'sched.howTitle': "Classes",
   'sched.howLead': "Your whole week of classes, right in the app.",

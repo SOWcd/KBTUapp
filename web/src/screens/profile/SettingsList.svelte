@@ -26,6 +26,7 @@
   import Languages from '@lucide/svelte/icons/languages';
   import Bell from '@lucide/svelte/icons/bell';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import Smartphone from '@lucide/svelte/icons/smartphone';
   import Lock from '@lucide/svelte/icons/lock';
@@ -182,6 +183,7 @@
       <Row icon={ThemeGlyph} title={t('me.guestTheme')} value={t(`theme.${theme.current}`)} menu={(['dark', 'light'] as const).map((x) => ({ label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, glyph.el) }))} />
       {#if me?.student}
         <Row icon={Bell} title={t('me.notifications')} value={bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
+        <Row icon={CalendarPlus} title={t(data.schedule.length ? 'sched.update' : 'sched.cardTitle')} accessory="chevron" onclick={() => { haptic.tap(); sheets.schedHowTo(); }} />
         <Row icon={CalendarDays} title={t('set.calShort')} accessory="external" onclick={() => { haptic.tap(); void subscribe(); }} />
       {/if}
       <Row icon={BatteryMedium} title={t('power.title')} value={t(`power.${power.mode}`)} menu={POWER_MODES.map((m) => ({ label: t(`power.${m}`), checked: power.mode === m,

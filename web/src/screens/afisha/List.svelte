@@ -42,8 +42,6 @@
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
-  import Group from '../../ui/Group.svelte';
-  import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
@@ -216,7 +214,7 @@
   {#if askSched}
     <!-- no timetable yet: one card at the top, under my events (owner, Nov 8: an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
-    <div class="ask"><Group><Row icon={CalendarPlus} title={t('sched.cardTitle')} subtitle={t('sched.cardSub')} accessory="chevron" onclick={() => sheets.schedHowTo()} /></Group></div>
+    <div class="ask"><Button kind="primary" size="l" full onclick={() => sheets.schedHowTo()}>{#snippet icon()}<CalendarPlus size={20} />{/snippet}{t('sched.cardTitle')}</Button><p class="fs-sub">{t('sched.cardSub')}</p></div>
   {/if}
 
   <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
@@ -384,5 +382,6 @@
   .free { padding: 6px 0 0 90px; }
 
   .ask { margin-top: 20px; }
+  .ask p { margin: 8px 0 0; text-align: center; color: var(--text-3); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>
