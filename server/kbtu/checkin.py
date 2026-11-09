@@ -267,9 +267,17 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
 # apart from ci_) to someone beside them. That student then shows the session's QR and works the event's scanner as a
 # scanner-only door helper (logic/crew.py), until Finish or "remove all"; nothing else of the session is theirs.
 
+def _hands_over(con, v: Viewer, sid: int):
+    """Who may let a helper in: the club's President or Vice, as the privacy policy says of door helpers, or the app's admin."""
+    s = _mine(con, v, sid, cohost=False)
+    if v.role != "admin" and not (s["org_id"] and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", s["org_id"], v.id)):
+        raise ApiError("forbidden", "screen")
+    return s
+
+
 def hand(con, key: bytes, v: Viewer, sid: int) -> dict:
     """The helper's QR, for the sheet showing it: each poll renews its lease."""
-    s = _mine(con, v, sid, cohost=False)
+    s = _hands_over(con, v, sid)
     live = s["started_at"] is not None and s["ended_at"] is None
     if live:
         con.execute("UPDATE qr_sessions SET help_until = ? WHERE id = ?", (now() + LEASE, sid))
@@ -279,7 +287,7 @@ def hand(con, key: bytes, v: Viewer, sid: int) -> dict:
 
 
 def hands_off(con, key: bytes, v: Viewer, sid: int) -> dict:
-    _mine(con, v, sid, cohost=False)
+    _hands_over(con, v, sid)
     with tx(con):
         n = con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,)).rowcount
         if n:

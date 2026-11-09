@@ -59,6 +59,9 @@
     return () => clearInterval(id);
   });
 
+  // who may let a helper in: the club's President or Vice (the privacy policy's door helper), or the app's admin (server checkin._hands_over)
+  const board = (s: ScreenSession) => { if (session.me?.role === 'admin') return true; const ev = s.event ? eventById(s.event) : null; return !!ev && !!session.me?.memberships.some((m) => m.org.id === ev.org.id && (m.role === 'president' || m.role === 'vice')); };
+
   // the badge to everyone counted lives in Admin → Badges (staff controls only there)
   async function act(s: ScreenSession, a: 'start' | 'finish' | 'unpair' | 'out' | 'in') {
     if (busy) return;
@@ -99,7 +102,7 @@
         {:else}
           {#if s.event && !s.ended}<Button kind="filled" size="m" full onclick={() => { haptic.tap(); sheets.eventQr(s.event!); }}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('aw.show')}</Button>{/if}
           {#if !s.started}<Button kind="primary" size="m" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={17} />{/snippet}{t('scr.start')}</Button>{/if}
-          {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
+          {#if s.started && !s.ended && board(s)}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
           {#if s.started && own(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}

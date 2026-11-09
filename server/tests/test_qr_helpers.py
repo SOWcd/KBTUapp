@@ -6,9 +6,16 @@ import time
 from kbtu import checkin, db
 from test_core import delete_now, login, tma  # noqa: F401
 from test_core import env  # noqa: F401  (the fixture)
-from test_review_checkin import _phone_event, _scan
+from test_review_checkin import _phone_event as _head_event, _scan
 
-H = 9  # the organizer (Head of the club, test_review_checkin._phone_event)
+H = 9  # the organizer (test_review_checkin._phone_event, made Vice below)
+
+
+def _phone_event(c, con, *args):
+    """The organizer as the club's Vice: the policy's door helper is let in by a President or Vice."""
+    out = _head_event(c, con, *args)
+    con.execute("UPDATE org_members SET role = 'vice' WHERE role = 'head'")
+    return out
 
 
 def _hand(c, sid):
@@ -169,3 +176,11 @@ def test_deleted_account_leaves_no_row(env):
     delete_now(c, cfg, tma(2))
     assert con.execute("SELECT COUNT(*) FROM qr_helpers").fetchone()[0] == 0
     con.close()
+
+
+def test_a_head_cannot_hand_it_over(env):
+    """A Head runs the session but doesn't let helpers in (the policy says President or Vice)."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    _, sid, _ = _head_event(c, con, "vol")
+    assert c.post(f"/api/screens/{sid}/helpers", headers=tma(H)).status_code == 403
