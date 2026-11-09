@@ -16,7 +16,7 @@
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { onMount } from 'svelte';
-  import type { ClassItem, EventCard } from '../../lib/api';
+  import type { ClassItem, EventCard, Post } from '../../lib/api';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -28,7 +28,8 @@
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
   import { openLink } from '../../lib/tg';
-  import { tagName } from '../../lib/posts';
+  import { castingOn, tagName } from '../../lib/posts';
+  import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
   import { inner } from '../../lib/perms';
   import Poster from '../../ui/Poster.svelte';
@@ -61,7 +62,7 @@
   const featured = $derived(data.posts.find((p) => p.featured));
   const shown = $derived(data.events.filter((e) => e.status !== 'cancelled'));
 
-  type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard });
+  type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard } | { p: Post });
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
   // an event of several days that began earlier and still runs sits on today (a casting, 2-12 Nov). Its ids as one string:
   // the days below follow the date and this, not the 30 s clock (every tick rebuilt all the days and re-rendered every row)
@@ -69,6 +70,8 @@
   const days = $derived.by(() => {
     const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
     for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
+    // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs (owner, Nov 9)
+    for (const p of data.castings) { if (!p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
     // the coming week's class days too (the owner missed his Wednesday), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -241,6 +244,7 @@
       <div class="list">
         {#each day.items as it (it.key)}
           {#if 'c' in it}{@render clRow(it)}
+          {:else if 'p' in it}<CastingCard post={it.p} />
           {:else}
             {@const e = it.e}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
