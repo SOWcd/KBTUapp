@@ -115,13 +115,13 @@ def _casting_input(c: object) -> tuple[int, int, str]:
 
 
 def castings(con, v: Viewer) -> list[dict]:
-    """The Clubs tab's "Recruiting" strip: castings not over yet, soonest first, by the same rule for every viewer. A public
-    post's reach; a club under CLUB_MIN isn't in the registry, so not here either, not even for its own people."""
+    """The Clubs tab's "Recruiting" strip: castings not over yet, soonest first, the same for every viewer: the strip is how students
+    find a casting, an initiative's too (owner, Nov 9); a club under CLUB_MIN isn't in the registry, so not here either, not even for its own people."""
     return post_shapes(con, v, rows(con, f"""SELECT * FROM posts WHERE hidden_at IS NULL AND audience = 'public'
-        AND casting_to > ? AND casting_cancelled_at IS NULL AND {_REACH}
+        AND casting_to > ? AND casting_cancelled_at IS NULL
         AND org_id IN (SELECT id FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
             AND (kind != 'club' OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?))
-        ORDER BY casting_from, id LIMIT 30""", core.now(), v.id, v.id, clubs.CLUB_MIN))
+        ORDER BY casting_from, id LIMIT 30""", core.now(), clubs.CLUB_MIN))
 
 
 def cancel_casting(con, v: Viewer, pid: int) -> dict:
