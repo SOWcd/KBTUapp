@@ -8,7 +8,7 @@
 // its lower right and throws a shadow on what lies under it (owner, Nov 3: the flat pictures read childish).
 //   Recruiter (rc-*): a constellation. I am the star in the middle; each level one more friend lights up on the
 //     orbit, tied to me and to each other. The rim is the level's metal (bronze I-III, silver IV-VI, gold VII-VIII,
-//     legend IX); gold grows laurels, legend a full wreath, an iridescent bezel and a crown star.
+//     legend IX); gold grows laurels, legend a full wreath, the whole metal holographic foil and a crown star.
 //   The others (rg, st, fi, so, tm, se, bg, dm, cr): <p>-field (its enamel), <p>-art-<metal> and <p>-near-<metal> (the
 //     relief in the level's metal) under the rc rims; the ribbons; the pins (zn-*): the shield frames, the enamel's
 //     guilloche, and the glyphs in the frame's metal (zn-<glyph>-<metal>).
@@ -32,12 +32,16 @@ const FACE = {
   b: ['#FFE8D2', '#EEB07A', '#B26A3C', '#F9D2AC', '#9C5828', '#5E2E12'],
   r: ['#FFEFE6', '#F5C3AE', '#BE7862', '#FCDACC', '#A8624C', '#64301F'],
 };
-FACE.l = FACE.g;
+// legend: holographic foil (owner, Nov 9: "just gold with rainbow edges"). The hues run through the part as a foil's do,
+// a bright stop beside each deep one so it still reads as metal under relief()'s light; FACE.l for what wants
+// single stops (the mirror ball's sphere, the cut lines' deep violet)
+FACE.l = ['#FFF2FB', '#7FE8FF', '#B08CFF', '#FFE3A0', '#F050C8', '#3A1480'];
+const HOLO = ['#E0249A', '#FF8AE0', '#FFE8FB', '#9A6BFF', '#4A38D8', '#3FC0FF', '#E2FBFF', '#2FD9AE', '#129A6E', '#C4F566', '#FFFCD8', '#FFB036', '#E2513A', '#E0249A'];
 const METAL = {
   b: { rim: FACE.b, lit: '#FFD9B3', glow: '#FF9D57' },
   s: { rim: FACE.s, lit: '#F2F6FF', glow: '#9CC4FF' },
   g: { rim: FACE.g, lit: '#FFF0B8', glow: '#FFC94A' },
-  l: { rim: FACE.g, iri: ['#FF6BD6', '#7C4DFF', '#35D0FF', '#2FD3A0', '#FFD23F', '#FF6BD6'], lit: '#FFFFFF', glow: '#E59BFF' },
+  l: { rim: FACE.l, iri: ['#FF6BD6', '#7C4DFF', '#35D0FF', '#2FD3A0', '#FFD23F', '#FF6BD6'], lit: '#FFFFFF', glow: '#E59BFF' },
 };
 // the Recruiter's enamel per metal (its constellation glows on it)
 const RC_FIELD = { b: ['#1F4E6E', '#0C2438', '#04101C'], s: ['#2C55D6', '#142A85', '#070F3C'], g: ['#3A2A8C', '#1A1050', '#08051F'], l: ['#7A3BE0', '#3A1290', '#12043A'] };
@@ -59,7 +63,7 @@ const relief = (id, blur, depth, sh = 1, spec = 1.15, exp = 22) => `<filter id="
 // three heights: a main part, a raised detail, a fine one
 const RELIEFS = relief('r1', 6, 7) + relief('r2', 3.5, 5, 0.6) + relief('r3', 1.8, 3, 0.35);
 // the metal's fills: across the part, the other way, and a sphere's
-const metals = (k) => lin('mg', FACE[k], 1, 1) + lin('mh', [FACE[k][3], FACE[k][1], FACE[k][2], FACE[k][0], FACE[k][4]], 0, 1, 1, 0) + rad('ms', [FACE[k][0], FACE[k][1], FACE[k][2], FACE[k][5]], 0.36, 0.3, 0.8);
+const metals = (k) => k === 'l' ? lin('mg', HOLO, 1, 1) + lin('mh', [...HOLO.slice(6), ...HOLO.slice(1, 7)], 0, 1, 1, 0) + rad('ms', ['#FFFFFF', '#FFC8F4', '#9A6BFF', '#3FC0FF', '#2FD9AE', '#FFB036', '#7A1E9E'], 0.36, 0.3, 0.85) : lin('mg', FACE[k], 1, 1) + lin('mh', [FACE[k][3], FACE[k][1], FACE[k][2], FACE[k][0], FACE[k][4]], 0, 1, 1, 0) + rad('ms', [FACE[k][0], FACE[k][1], FACE[k][2], FACE[k][5]], 0.36, 0.3, 0.8);
 const part = (filter, fill, body) => `<g filter="url(#${filter})" fill="url(#${fill})">${body}</g>`;
 // a line cut into the metal: its upper left wall in shadow, its lower right one catching the light
 const cut = (d, w = 5, k = 'g') => `<path d="${d}" fill="none" stroke="${FACE[k][5]}" stroke-opacity=".75" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="${f(w * 0.4)}" stroke-linecap="round" stroke-linejoin="round" transform="translate(${f(w * 0.3)} ${f(w * 0.3)})"/>`;
@@ -95,14 +99,14 @@ function rim(k, extra = '') {
   return svg(`${metals(k)}${relief('rr', 10, 11, 0.5)}${relief('re', 3, 6, 0)}${RELIEFS}
 <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".2"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
 <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>
-${m.iri ? lin('iri', m.iri, 1, 1) : ''}
+
 <radialGradient id="sink" cx=".5" cy=".5" r=".5"><stop offset=".88" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>`,
   `<circle cx="${C}" cy="${C}" r="${FIELD + 1}" fill="url(#sink)"/>
 <path d="M${C - 200} ${C - 30}A${FIELD} ${FIELD} 0 0 1 ${C + 170} ${C - 120}Q${C} ${C - 120} ${C - 200} ${C - 30}z" fill="url(#gloss)"/>
 ${part('re', 'mh', ring(238, 255))}
 <path d="${knurl}" stroke="${m.rim[5]}" stroke-width="1.6" opacity=".5"/>
 ${part('rr', 'mg', ring(220, 240))}
-${m.iri ? `<circle cx="${C}" cy="${C}" r="226" fill="none" stroke="url(#iri)" stroke-width="13" opacity=".9"/>` : ''}
+
 ${part('r3', 'mh', ring(FIELD, 221))}
 <circle cx="${C}" cy="${C}" r="${FIELD}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.5"/>
 ${extra}`);
@@ -176,8 +180,8 @@ for (let l = 1; l <= 9; l++) files[`rc-net-${l}`] = net(l);
 // ---- the other medals (round 3, owner Nov 3: "the same as my coins"): one bold subject each, struck in heavy relief
 // in the level's metal and filling its field the way the 2026 dome fills his coin, enamel laid into it where a colour
 // tells it apart, few small details (it reads at 34 px). A calm enamel field (engine-turned, a soft light behind the
-// subject, no rays) inside a wide polished band (md-rim-<m>, no laurels: the band's metal is the level, legend adds an
-// iridescent bezel), which carries the medal's name engraved round its top at full size (<p>-legend-<m>, ui/Medal from
+// subject, no rays) inside a wide polished band (md-rim-<m>, no laurels: the band's metal is the level, legend's a
+// holographic foil), which carries the medal's name engraved round its top at full size (<p>-legend-<m>, ui/Medal from
 // 160 px, as his coins carry theirs). Layers: <p>-field (far), <p>-art-<m> (the subject), <p>-near-<m> (its nearest
 // part, floats most). Every subject keeps inside r 180.
 const ENAMELS = lin('er', ['#FF7A6A', '#D6283A', '#8A0E22'], 0.3, 1) + lin('eo', ['#FFE08A', '#FF9A2A', '#E0441C', '#9E1420'], 0, 1)
@@ -194,16 +198,16 @@ function mdRim(k) {
   let knurl = '';
   for (let i = 0; i < 160; i++) { const [a, b] = pt(254, i * 2.25), [c, d] = pt(244, i * 2.25); knurl += `M${a} ${b}L${c} ${d}`; }
   const ring = (r0, r1) => `<path fill-rule="evenodd" d="M${C - r1} ${C}a${r1} ${r1} 0 1 0 ${2 * r1} 0a${r1} ${r1} 0 1 0 ${-2 * r1} 0zM${C - r0} ${C}a${r0} ${r0} 0 1 0 ${2 * r0} 0a${r0} ${r0} 0 1 0 ${-2 * r0} 0z"/>`;
-  return svg(`${metals(k)}${relief('rr', 7, 8, 0.5, 1.3, 18)}${lin('band', [FACE[k][4], FACE[k][1], FACE[k][3], FACE[k][2], FACE[k][5], FACE[k][2], FACE[k][1], FACE[k][3], FACE[k][4]], 1, 1)}${relief('re', 3, 6, 0)}${RELIEFS}
+  return svg(`${metals(k)}${relief('rr', 7, 8, 0.5, 1.3, 18)}${lin('band', k === 'l' ? HOLO : [FACE[k][4], FACE[k][1], FACE[k][3], FACE[k][2], FACE[k][5], FACE[k][2], FACE[k][1], FACE[k][3], FACE[k][4]], 1, 1)}${relief('re', 3, 6, 0)}${RELIEFS}
 <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".16"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-${m.iri ? lin('iri', m.iri, 1, 1) : ''}
+
 <radialGradient id="sink" cx=".5" cy=".5" r=".5"><stop offset=".86" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".6"/></radialGradient>`,
   `<circle cx="${C}" cy="${C}" r="${MR + 1}" fill="url(#sink)"/>
 <path d="M${C - 176} ${C - 30}A${MR} ${MR} 0 0 1 ${C + 150} ${C - 112}Q${C} ${C - 104} ${C - 176} ${C - 30}z" fill="url(#gloss)"/>
 ${part('re', 'mh', ring(240, 255))}
 <path d="${knurl}" stroke="${m.rim[5]}" stroke-width="1.6" opacity=".5"/>
 ${part('rr', 'band', ring(MR + 4, 242))}
-${m.iri ? `<circle cx="${C}" cy="${C}" r="238" fill="none" stroke="url(#iri)" stroke-width="7" opacity=".95"/><circle cx="${C}" cy="${C}" r="${MR + 9}" fill="none" stroke="url(#iri)" stroke-width="5" opacity=".9"/>` : ''}
+
 ${part('r3', 'mh', ring(MR, MR + 6))}
 <circle cx="${C}" cy="${C}" r="${MR}" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="2.5"/>`);
 }
@@ -322,13 +326,12 @@ ${enamel('M256 186Q188 192 184 268Q184 342 256 364z', 'er')}${enamel('M268 186Q3
 <g fill="url(#ek)"><circle cx="224" cy="236" r="16"/><circle cx="300" cy="236" r="16"/><circle cx="212" cy="296" r="14"/><circle cx="312" cy="296" r="14"/><circle cx="238" cy="338" r="10"/><circle cx="286" cy="338" r="10"/></g>
 <ellipse cx="220" cy="218" rx="22" ry="10" fill="#FFFFFF" opacity=".45" transform="rotate(-36 220 218)"/>`));
 
-// Attendance required: the lectern the hall was called to, its star plate in enamel, the microphone bent over it
+// Attendance required: a raised open hand, the "I'm here" of a roll call, one silhouette so the bevel runs round it all;
+// a tick in enamel on the palm, as Season's days
+const FINGER = (cx, top, rot, w = 50, base = 300) => `<rect x="${cx - w / 2}" y="${top}" width="${w}" height="${base - top}" rx="${w / 2}" transform="rotate(${rot} ${cx} ${base})"/>`;
 pic('dm', ['#8E2438', '#470C1C', '#1A040A'], 'ATTENDANCE' + DOT + 'KBTU APP',
-  (k) => fit(1.1, 256, 268, `${part('r0', 'mg', '<path d="M166 232H346L322 392H190z"/>')}
-${enamel('M196 258H316L302 368H210z', 'ew')}${enamel(star5(256, 314, 40, 18), 'er')}
-${part('r1', 'mh', '<rect x="144" y="206" width="224" height="32" rx="11"/><rect x="172" y="388" width="168" height="26" rx="9"/>')}`),
-  (k) => fit(1.1, 256, 268, `${part('r1', 'ms', '<path d="M256 208C254 170 270 150 298 142" fill="none" stroke="url(#ms)" stroke-width="11" stroke-linecap="round"/>')}
-${part('r0', 'mh', '<rect x="290" y="86" width="50" height="76" rx="25" transform="rotate(26 315 124)"/>')}`));
+  () => fit(1.12, 240, 258, part('r0', 'mg', `<path d="M164 256H350Q356 330 334 376Q322 402 290 402H222Q190 402 178 376Q158 330 164 256z"/>${FINGER(190, 150, -9)}${FINGER(240, 118, -3)}${FINGER(290, 130, 3)}${FINGER(338, 176, 10, 44)}${FINGER(182, 234, -38, 50, 350)}`)),
+  () => fit(1.12, 240, 258, `${part('r1', 'mh', '<circle cx="256" cy="328" r="46"/>')}<circle cx="256" cy="328" r="35" fill="url(#er)"/><path d="M238 329l13 13l23 -26" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`));
 
 // Couch critic: a deep sofa in coral upholstery in its metal frame, a speech bubble over it with its three dots
 pic('cr', ['#18848A', '#0A3E44', '#021A1D'], 'COUCH CRITIC' + DOT + 'KBTU APP',
