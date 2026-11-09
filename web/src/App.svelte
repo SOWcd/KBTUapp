@@ -455,7 +455,7 @@
       sheets.helperQr(h.session, h.event, h.scanner);
     } catch (e) {
       haptic.error();
-      say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'closed' ? t('ci.closed') : t('scr.helpOld'), 'pleading_face_3d');
+      say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'closed' ? t('ci.closed') : e.message === 'qr' || e.message === 'qr_old' ? t('scr.helpOld') : t('common.error'), 'pleading_face_3d');
     }
   }
 

@@ -64,6 +64,14 @@ def test_one_counter_for_settings_and_page(env, monkeypatch):
     assert got()[0] == "26B000009" and logic.sid_tries(con, uid) == 5
 
 
+def test_a_free_id_found_then_refused_still_counts(env):
+    """A free ID written, then a bad field undoing it: without the count, an unlimited probe of which IDs are free."""
+    cfg, con, uid, got = _ali(env)
+    with pytest.raises(logic.ApiError) as e:
+        logic.update_me(con, logic.Viewer(uid, "user", True), {"studentId": "26B000001", "city": "!"})
+    assert e.value.message != "sid_taken" and got() == ("26B000009", 2, "") and logic.sid_tries(con, uid) == 1
+
+
 def test_clash_alert_goes_with_the_account(env):
     c, cfg = env
     fon = login(c, 72, "fon")["id"]

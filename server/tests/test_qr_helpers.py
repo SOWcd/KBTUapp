@@ -82,7 +82,7 @@ def test_forged_old_and_crossed_codes_refused(env):
     assert bad("hq_x")["message"] == "qr"
     assert _scan(c, 2, good).json()["message"] == "qr"                                                    # nor a helper's a check-in QR
     assert _scan(c, 2, f"ci_{s}_{slot}_{sig}").json()["message"] == "qr"
-    old = int(time.time()) // checkin.SLOT - (checkin.SCAN_OK + 3 * checkin.SLOT) // checkin.SLOT
+    old = int(time.time()) // checkin.SLOT - (checkin.HAND_OK + 3 * checkin.SLOT) // checkin.SLOT
     assert bad(f"hq_{s}_{old}_{by}_{checkin._sig(cfg.token_key, f'qh.{s}.{old}.{by}.0')}")["message"] == "qr_old"
     con.execute("UPDATE qr_sessions SET help_until = ? WHERE id = ?", (int(time.time()) - checkin.HAND_GRACE - 1, sid))  # the sheet is closed
     assert bad(good)["message"] == "qr_old"

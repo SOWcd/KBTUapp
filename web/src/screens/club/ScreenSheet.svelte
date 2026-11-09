@@ -60,7 +60,7 @@
   });
 
   // who may let a helper in: the club's President or Vice (the privacy policy's door helper), or the app's admin (server checkin._hands_over)
-  const board = (s: ScreenSession) => { if (session.me?.role === 'admin') return true; const ev = s.event ? eventById(s.event) : null; return !!ev && !!session.me?.memberships.some((m) => m.org.id === ev.org.id && (m.role === 'president' || m.role === 'vice')); };
+  const board = (s: ScreenSession) => { if (session.me?.role === 'admin' && !code) return true; const ev = s.event ? eventById(s.event) : null; return !!ev && !!session.me?.memberships.some((m) => m.org.id === ev.org.id && (m.role === 'president' || m.role === 'vice')); };
 
   // the badge to everyone counted lives in Admin → Badges (staff controls only there)
   async function act(s: ScreenSession, a: 'start' | 'finish' | 'unpair' | 'out' | 'in') {

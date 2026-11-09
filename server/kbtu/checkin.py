@@ -29,6 +29,7 @@ PAIR_MAX = 5000     # unpaired screens at once, all together: junk requests can'
 PAIR_PER_IP = 10    # ... and from one address (its hash): one machine can't take them all and lock every screen out
 CSV_TTL = 300       # the CSV link the app hands Telegram's download works this long
 LEASE = logic.profiles.QR_LEASE  # each poll of a screen showing the QR renews this: nothing showing it, its code stops this soon after
+HAND_OK = 45        # how old the helper's QR may be: it gives a whole session's QR, so a forwarded photo dies sooner than SCAN_OK's
 HAND_GRACE = 30     # the helper's QR, once its sheet closed: time to read "help run this?" and say yes
 
 
@@ -310,7 +311,7 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
         raise ApiError("bad_input", "qr")
     if s["started_at"] is None or s["ended_at"] is not None:
         raise ApiError("closed", "qr")
-    if not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT or (s["help_until"] or 0) + HAND_GRACE < now():
+    if not 0 <= time.time() - slot * SLOT <= HAND_OK + SLOT or (s["help_until"] or 0) + HAND_GRACE < now():
         raise ApiError("bad_input", "qr_old")
     if logic.crew.barred(con, v.id, s):
         raise ApiError("forbidden", "banned")

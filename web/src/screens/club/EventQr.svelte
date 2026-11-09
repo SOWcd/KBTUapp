@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { QR_TONE } from '../../lib/awards';
-  import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -23,9 +23,14 @@
 
   let q = $state<ScreenSession | null>(null), note = $state('');
   let sid: Id, timer: ReturnType<typeof setTimeout> | undefined, gone = false;
+  let off = $state(false), epoch = 0, waited = false; // epoch: a poll started before a pause or "remove all" has nothing to say after it
+  const covered = $derived([...overlays].reverse().find((o) => !o.closing)?.id !== overlay.id);
+  const halt = () => { epoch++; clearTimeout(timer); };
   const out = $derived(q?.phase === 'out');
   const fetchQr = () => (hand ? api.screenHand(sid) : api.screenAct(sid, 'show'));
-  const poll = () => void fetchQr().then(got).catch(stop);
+  const poll = () => { if (covered || off) return; const at = epoch; void fetchQr().then((r) => { if (at === epoch) got(r); }, (e) => { if (at === epoch) stop(e); }); };
+  // Under the scanner nothing shows this code, so nothing renews its lease; back on top, a fresh one at once
+  $effect(() => { if (covered) { waited = true; halt(); } else if (waited) { waited = false; poll(); } });
   function got(r: ScreenSession) {
     if (gone) return;
     if (q && (hand ? (r.helpers ?? 0) > (q.helpers ?? 0) : r.done > q.done)) haptic.soft();
@@ -48,7 +53,11 @@
 
   async function handsOff() {
     if (!(await sheets.ask({ title: t('scr.handOffAsk'), text: t('scr.handOffText'), ok: t('scr.handOff'), cancel: t('scr.keep') }))) return;
-    try { q = await api.screenHandsOff(sid); haptic.ok(); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    off = true; halt();
+    let r: ScreenSession | undefined;
+    try { r = await api.screenHandsOff(sid); haptic.ok(); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    off = false;
+    if (r) got(r); else poll();
   }
 
   let wrap: HTMLDivElement, scrim: HTMLDivElement;
@@ -85,7 +94,7 @@
     {#if q && hand}
       {#if q.param}<p class="hint">{t('scr.handHint')}</p>{/if}
       <p class="got">{t('scr.helpersN', { n: q.helpers ?? 0 })}</p>
-      {#if q.helpers}<Button kind="secondary" size="m" onclick={handsOff}>{t('scr.handOff')}</Button>{/if}
+      {#if q.helpers}<Button kind="secondary" size="m" loading={off} onclick={handsOff}>{t('scr.handOff')}</Button>{/if}
     {:else if q}
       {#if q.param}<p class="hint">{t(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
       <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>

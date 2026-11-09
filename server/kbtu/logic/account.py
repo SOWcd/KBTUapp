@@ -695,8 +695,10 @@ def _spend(con, uid: int, s, col: str, val) -> None:
 
 def update_me(con, v: Viewer, patch: dict) -> dict:
     """Settings' save, all or nothing (review once-edit 9): one transaction, so a refused field leaves the others unsaved."""
-    taken = None
+    err = None
+    held = lambda: con.execute("SELECT student_id FROM students WHERE user_id = ?", (v.id,)).fetchall()  # noqa: E731
     with tx(con):
+        was = held()
         con.execute("SAVEPOINT patch")
         try:
             _update_me(con, v, patch)
@@ -705,10 +707,16 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
             log_action(con, v.id, "sid_try", f"user:{v.id}")
             if e.holder:
                 id_clash(con, e.sid, v.id, e.holder)
-            taken = e
+            err = e
+        except ApiError as e:  # a free ID found, then another field refused: undone, and that look-up counts as well (review sid2)
+            looked = [tuple(r) for r in held()] != [tuple(r) for r in was]
+            con.execute("ROLLBACK TO patch")
+            if looked:
+                log_action(con, v.id, "sid_try", f"user:{v.id}")
+            err = e
         con.execute("RELEASE patch")
-    if taken:
-        raise taken
+    if err:
+        raise err
     return me(con, v)
 
 
