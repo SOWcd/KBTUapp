@@ -66,3 +66,27 @@ def test_the_group_link_leaves_with_the_member(env):
     con.execute("DELETE FROM org_bans")
     logic.set_role(con, None, ids[ANN], oid, "none", "test")
     assert "groupLink" not in casting.view(con, ann, oid)
+
+
+def test_no_interview_after_the_result(env):
+    """Told, no time to pick: a seat still ahead goes back to those waiting (one already past stays: who came), the
+    app stops offering times, and a late booking is refused."""
+    con, boss, rid, apps, oid, ids = _round(env)
+    t = int(time.time())
+    add = "INSERT INTO round_slots (round_id, starts_at, minutes, capacity, place) VALUES (?, ?, 20, 1, '')"
+    ahead, past = con.execute(add, (rid, t + 3600)).lastrowid, con.execute(add, (rid, t - 3600)).lastrowid
+    for tg in (ANN, BOB):
+        casting.decide(con, boss, apps[tg], {"stage": "next"})
+    casting.invite(con, boss, rid)
+    ann = logic.Viewer(ids[ANN], "user", True)
+    casting.book(con, ann, rid, {"slotId": ahead})
+    con.execute("UPDATE round_apps SET slot_id = ? WHERE id = ?", (past, apps[BOB]))
+    casting.decide(con, boss, apps[ANN], {"stage": "no"})
+    casting.decide(con, boss, apps[BOB], {"stage": "yes"})
+    casting.send(con, boss, rid, final=False)
+    slot = lambda tg: con.execute("SELECT slot_id FROM round_apps WHERE id = ?", (apps[tg],)).fetchone()[0]  # noqa: E731
+    assert slot(ANN) is None and slot(BOB) == past
+    assert not casting.view(con, ann, oid)["mine"]["invited"]
+    with pytest.raises(logic.ApiError) as no:
+        casting.book(con, ann, rid, {"slotId": ahead})
+    assert no.value.code == "closed" and slot(ANN) is None

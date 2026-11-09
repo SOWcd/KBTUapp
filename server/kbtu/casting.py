@@ -65,7 +65,7 @@ def view(con, v: Viewer, oid: int) -> dict | None:
            "questions": [{"id": q["id"], "kind": q["kind"], "text": q["text"], "options": json.loads(q["options"]) if q["options"] else None,
                           "required": bool(q["required"]), "tagId": q["tag_id"]} for q in qs],
            "mine": {"departments": json.loads(mine["departments"]), "answers": json.loads(mine["answers"]), "stage": _seen(mine, r),
-                    "invited": bool(mine["invited_at"]), "slot": _slot(con, mine["slot_id"])}
+                    "invited": bool(mine["invited_at"]) and not told, "slot": _slot(con, mine["slot_id"])}
            if mine and mine["stage"] != "withdrawn" else None}
     if told and mine["stage"] == "no":
         out["declineText"] = r["decline_text"]
@@ -341,6 +341,9 @@ def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
             raise ApiError("conflict")
         yes = no = 0
         decided = "" if final else "AND stage IN ('yes', 'no')"
+        # told now: an interview still ahead is off and its seat free (one already past stays: who came); the bot's reminders check sent_at
+        con.execute(f"""UPDATE round_apps SET slot_id = NULL WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}
+            AND slot_id IN (SELECT id FROM round_slots WHERE starts_at > ?)""", (rid, now()))
         for a in rows(con, f"SELECT * FROM round_apps WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}", rid):
             if a["stage"] == "yes" and not banned(con, oid, a["user_id"]):
                 con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now()))
@@ -452,11 +455,13 @@ def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     r = _get(con, rid)
     if r["status"] == "done":
         raise ApiError("closed")
-    a = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ? AND stage != 'withdrawn'", rid, v.id)
-    if not a or not a["invited_at"]:
-        raise ApiError("forbidden")
     sid = body.get("slotId")
     with tx(con):
+        a = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ? AND stage != 'withdrawn'", rid, v.id)
+        if not a or not a["invited_at"]:
+            raise ApiError("forbidden")
+        if a["sent_at"]:  # told: their result stands, the time is for those still waiting
+            raise ApiError("closed")
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_iv_remind' AND ref LIKE ? AND sent_at IS NULL", (f"ivr:{a['id']}:%",))
         if sid is None:
             con.execute("UPDATE round_apps SET slot_id = NULL WHERE id = ?", (a["id"],))
