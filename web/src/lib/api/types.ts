@@ -90,7 +90,9 @@ export interface ChannelReply { id: Id; body: string; comment: number | null; st
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number }
+export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; helpers?: number }
+/** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
+export interface ScreenHelper { session: Id; event: Id | null; title: string; joined: boolean; scanner: boolean }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
 export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'tgc'; id: Id; text: string; at: Ts }
 /** My own comment the bot deleted in the forum channel's Telegram group (POST /api/me/tg-comment): to me alone. */

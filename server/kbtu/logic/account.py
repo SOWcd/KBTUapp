@@ -1024,6 +1024,7 @@ _DEL_GONE = {
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
+    ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted

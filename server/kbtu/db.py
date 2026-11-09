@@ -1329,6 +1329,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     # a check-in QR is good only while something shows it: each poll of a /show screen or an organizer's phone renews this
     # (checkin.mark). NULL: never shown since this column came, so a session running through the deploy isn't cut off
     (144, "ALTER TABLE qr_sessions ADD COLUMN lease_until INTEGER;"),
+    # who an organizer let help run a check-in, by a QR (checkin.hand); help_until: that QR's lease, as lease_until above
+    (145, """ALTER TABLE qr_sessions ADD COLUMN help_until INTEGER;
+    CREATE TABLE qr_helpers (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      added_by INTEGER REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (session_id, user_id));"""),
 ]
 
 

@@ -32,7 +32,22 @@ def kind(con, v: Viewer, e: sqlite3.Row) -> str | None:
         return None  # made team-only or a partner's since: the team's own door (adversarial review 1)
     r = con.execute(f"""SELECT kind FROM event_crew WHERE event_id = :e AND user_id = :u AND org_id IN ({_RUNNING})
         AND NOT EXISTS (SELECT 1 FROM org_bans WHERE user_id = :u AND org_id IN ({_RUNNING}))""", {"e": e["id"], "u": v.id}).fetchone()
-    return r["kind"] if r else None
+    if r:
+        return r["kind"]
+    s = one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", e["id"])
+    return "scan" if s and qr_helping(con, v, s) else None  # let in by the organizer's QR: the scanner alone, while the session runs
+
+
+def barred(con, uid: int, s: sqlite3.Row) -> bool:
+    """A check-in session (checkin.py) closed to this person: a club running it banned them, or no club runs its event now."""
+    clubs = _running(con, s["event_id"]) if s["event_id"] else [s["org_id"]]
+    return not clubs or bool(one(con, f"SELECT 1 FROM org_bans WHERE user_id = ? AND org_id IN ({','.join('?' * len(clubs))})", uid, *clubs))
+
+
+def qr_helping(con, v: Viewer, s: sqlite3.Row) -> bool:
+    """My QR helper's right at this session, checked at use: it ends with the session, on removal, with a ban, with the student."""
+    return v.student and s["started_at"] is not None and s["ended_at"] is None and not barred(con, v.id, s) \
+        and bool(one(con, "SELECT 1 FROM qr_helpers WHERE session_id = ? AND user_id = ?", s["id"], v.id))
 
 
 def _running(con, eid: int) -> list[int]:

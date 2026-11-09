@@ -437,6 +437,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def screen_csv_link(sid: int, con: Con, v: Me):
         return qr.csv_link(con, cfg.token_key, v, sid)
 
+    # helpers, let in by a QR (checkin.py)
+    @app.post("/api/screens/helper")
+    def screen_helper(con: Con, v: Me, body: dict = Body(...)):
+        return qr.helper(con, cfg.token_key, v, str(body.get("p") or ""), body.get("join") is True)
+
+    @app.post("/api/screens/{sid}/helpers")
+    def screen_hand(sid: int, con: Con, v: Me):
+        return qr.hand(con, cfg.token_key, v, sid)
+
+    @app.delete("/api/screens/{sid}/helpers")
+    def screen_hands_off(sid: int, con: Con, v: Me):
+        return qr.hands_off(con, cfg.token_key, v, sid)
+
     @app.post("/api/screens/{sid}/{act}")
     def screen_act(sid: int, act: str, con: Con, v: Me):
         return qr.control(con, cfg.token_key, v, sid, act)

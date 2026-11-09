@@ -55,6 +55,10 @@ export const sheets = {
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */
   eventQr: (_event: Id) => {},
+  /** the same screen for someone an organizer let help (server checkin.py); scanner: the event's door scanner too */
+  helperQr: (_session: Id, _event: Id | null, _scanner: boolean) => {},
+  /** the QR an organizer shows to let someone help */
+  handQr: (_session: Id) => {},
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id, _staff?: boolean) => {},

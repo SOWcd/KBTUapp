@@ -220,6 +220,9 @@ export interface Api {
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
   screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in' | 'show'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving; show: this phone is showing it (the lease, checkin.py)
   screenGrant(id: Id, code: string): Promise<{ granted: number; batch: string }>;  // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
+  screenHand(id: Id): Promise<import('./types').ScreenSession>;                       // the QR that lets someone help run it (hq_…); param is that QR, helpers how many
+  screenHandsOff(id: Id): Promise<import('./types').ScreenSession>;                   // every helper out
+  qrHelper(p: string, join?: boolean): Promise<import('./types').ScreenHelper>;       // a scan of that QR; join: yes, I'll help
   eventScreen(event: Id): Promise<import('./types').ScreenSession>;                   // an event's own session, made on first use (organizers)
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs

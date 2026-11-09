@@ -110,6 +110,8 @@
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
+  sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
+  sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id, staff) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
@@ -370,6 +372,7 @@
     }
     if (p === 'news') { ui.tab = 'afisha'; sheets.news(); return; } // every post: Afisha's "All" 
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
+    if (/^hq_\d+_\d+_\d+_[0-9a-f]{16}$/.test(p)) { asStudent(() => void helpRun(p), p); return; } // an organizer's "help me mark people" QR
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
@@ -437,6 +440,22 @@
     } catch (e) {
       haptic.error();
       say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : e instanceof ApiErr && e.message === 'qr_not_in' ? t('ci.notIn') : t('common.error'), 'warning_3d');
+    }
+  }
+
+  // An organizer's helper QR: the event named first, then its QR on this phone. The way back after closing it: scan again
+  async function helpRun(p: string): Promise<void> {
+    try {
+      let h = await api.qrHelper(p);
+      if (!h.joined) {
+        if (!(await sheets.ask({ title: t('scr.helpAsk', { title: h.title }), text: t('scr.helpText'), ok: t('scr.helpYes'), cancel: t('scr.keep') }))) return;
+        h = await api.qrHelper(p, true);
+      }
+      haptic.ok();
+      sheets.helperQr(h.session, h.event, h.scanner);
+    } catch (e) {
+      haptic.error();
+      say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'closed' ? t('ci.closed') : t('scr.helpOld'), 'pleading_face_3d');
     }
   }
 

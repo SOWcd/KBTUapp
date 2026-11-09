@@ -2,41 +2,53 @@
   // An event's rotating check-in QR on the organizer's own phone, for a hall with no big screen (admin/BadgeQr.svelte's
   // look). Opening starts the event's session if it isn't running; closing leaves it running and keeps every mark.
   // The code is the server's, and each poll renews its 15 s lease: nothing showing it, it stops (server checkin.py).
+  // `sess`: a session someone was let help (the same QR, a running session only); with `hand`, the QR that lets them in.
   import { onMount } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { QR_TONE } from '../../lib/awards';
-  import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import CloseX from '../../ui/CloseX.svelte';
+  import Button from '../../ui/Button.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
+  import ScanLine from '@lucide/svelte/icons/scan-line';
 
-  let { overlay, event }: { overlay: Overlay; event: Id } = $props();
-  $effect(() => { overlay.title = t('aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; });
+  let { overlay, event, sess, hand = false, scanner = false }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean } = $props();
+  $effect(() => { overlay.title = t(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 
-  let q = $state<ScreenSession | null>(null), failed = $state(false);
+  let q = $state<ScreenSession | null>(null), note = $state('');
   let sid: Id, timer: ReturnType<typeof setTimeout> | undefined, gone = false;
   const out = $derived(q?.phase === 'out');
-  const poll = () => void api.screenAct(sid, 'show').then(got).catch(stop);
+  const fetchQr = () => (hand ? api.screenHand(sid) : api.screenAct(sid, 'show'));
+  const poll = () => void fetchQr().then(got).catch(stop);
   function got(r: ScreenSession) {
     if (gone) return;
-    if (q && r.done > q.done) haptic.soft();
+    if (q && (hand ? (r.helpers ?? 0) > (q.helpers ?? 0) : r.done > q.done)) haptic.soft();
     q = r;
     if (!r.ended) timer = setTimeout(poll, Math.min(r.next, 3) * 1000 + 300); // the next code as the slot turns, the count meanwhile
   }
   function stop(e: unknown) {
     if (gone) return;
-    if (!q || (e instanceof ApiErr && e.code === 'forbidden')) { q = null; failed = true; return; }
+    const no = e instanceof ApiErr && e.code === 'forbidden';
+    if (!q || no) { q = null; note = t(sess && no ? 'scr.helpEnded' : 'common.error'); return; }
     timer = setTimeout(poll, 3000); // a blip of the network: try again
   }
   async function open() {
-    const s = await api.eventScreen(event);
+    if (sess) { sid = sess; got(await fetchQr()); return; }
+    const s = await api.eventScreen(event!);
     sid = s.session;
     if (!s.started) await api.screenAct(sid, 'start');
     got(await api.screenAct(sid, 'show'));
+  }
+
+  async function handsOff() {
+    if (!(await sheets.ask({ title: t('scr.handOffAsk'), text: t('scr.handOffText'), ok: t('scr.handOff'), cancel: t('scr.keep') }))) return;
+    try { q = await api.screenHandsOff(sid); haptic.ok(); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
   let wrap: HTMLDivElement, scrim: HTMLDivElement;
@@ -66,14 +78,19 @@
     <div class="plate" class:off={!q?.param}>
       {#if q?.param}
         {#key q.param}<Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr>{/key}
-      {:else if q?.ended || failed}
-        <p class="note">{failed ? t('common.error') : t('scr.closed')}</p>
+      {:else if q?.ended || note}
+        <p class="note">{note || t('scr.closed')}</p>
       {/if}
     </div>
-    {#if q}
+    {#if q && hand}
+      {#if q.param}<p class="hint">{t('scr.handHint')}</p>{/if}
+      <p class="got">{t('scr.helpersN', { n: q.helpers ?? 0 })}</p>
+      {#if q.helpers}<Button kind="secondary" size="m" onclick={handsOff}>{t('scr.handOff')}</Button>{/if}
+    {:else if q}
       {#if q.param}<p class="hint">{t(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
       <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>
       {#if q.pending}<p class="hint">{t('scr.joining', { n: q.pending })}</p>{/if}
+      {#if sess && scanner && q.param && event}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.scannerOnly(event); }}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
     {/if}
   </div>
   <CloseX onclick={() => close(overlay.id)} />

@@ -29,6 +29,7 @@ PAIR_MAX = 5000     # unpaired screens at once, all together: junk requests can'
 PAIR_PER_IP = 10    # ... and from one address (its hash): one machine can't take them all and lock every screen out
 CSV_TTL = 300       # the CSV link the app hands Telegram's download works this long
 LEASE = logic.profiles.QR_LEASE  # each poll of a screen showing the QR renews this: nothing showing it, its code stops this soon after
+HAND_GRACE = 30     # the helper's QR, once its sheet closed: time to read "help run this?" and say yes
 
 
 def _sig(key: bytes, msg: str) -> str:
@@ -170,13 +171,16 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
-    s = _mine(con, v, sid, cohost=act in ("start", "show"))  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
+    s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
+    if not (act == "show" and s and logic.crew.qr_helping(con, v, s)):  # a helper only keeps the QR showing (hand, below)
+        s = _mine(con, v, sid, cohost=act in ("start", "show"))  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
         _lease(con, sid)
     elif act == "finish":
         con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now(), sid))
+        con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,))
     elif act == "unpair":  # every screen of it goes back to its pairing QR
         con.execute("DELETE FROM qr_screens WHERE session_id = ?", (sid,))
     elif act in ("out", "in"):  # the same QR marks leaving now (a running session), or arriving again
@@ -256,6 +260,58 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         if x["email"] not in seen:
             w.writerow(map(_cell, ["absent", x["full_name"], "", "", "", "", x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", "", "", ""]))
     return "\ufeff" + out.getvalue()
+
+
+# ------------------------------------------------------------ helpers, let in by a QR
+# (owner, Nov 9, a live event) Whoever fully runs a session shows a rotating QR (hq_<session>_<slot>_<by>_<sig>, signed
+# apart from ci_) to someone beside them. That student then shows the session's QR and works the event's scanner as a
+# scanner-only door helper (logic/crew.py), until Finish or "remove all"; nothing else of the session is theirs.
+
+def hand(con, key: bytes, v: Viewer, sid: int) -> dict:
+    """The helper's QR, for the sheet showing it: each poll renews its lease."""
+    s = _mine(con, v, sid, cohost=False)
+    live = s["started_at"] is not None and s["ended_at"] is None
+    if live:
+        con.execute("UPDATE qr_sessions SET help_until = ? WHERE id = ?", (now() + LEASE, sid))
+    slot = int(time.time()) // SLOT
+    return {**_row(con, key, s), "param": f"hq_{sid}_{slot}_{v.id}_{_sig(key, f'qh.{sid}.{slot}.{v.id}')}" if live else None,
+            "helpers": one(con, "SELECT COUNT(*) FROM qr_helpers WHERE session_id = ?", sid)[0]}
+
+
+def hands_off(con, key: bytes, v: Viewer, sid: int) -> dict:
+    _mine(con, v, sid, cohost=False)
+    with tx(con):
+        n = con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,)).rowcount
+        if n:
+            log_action(con, v.id, "checkin_helpers_off", f"qr:{sid}", json.dumps({"n": n}))
+    return hand(con, key, v, sid)
+
+
+def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
+    """A scan of the helper's QR: what it's for (the app asks first), or, with join, I'm in. Scanned again: in already."""
+    logic.need_student(v)
+    try:
+        kind, sid, slot, by, sig = str(p).split("_")
+        sid, slot, by = int(sid), int(slot), int(by)
+    except ValueError:
+        raise ApiError("bad_input", "qr") from None
+    if kind != "hq" or not _same(_sig(key, f"qh.{sid}.{slot}.{by}"), sig):
+        raise ApiError("bad_input", "qr")
+    s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
+    if not s or s["started_at"] is None or s["ended_at"] is not None:
+        raise ApiError("closed", "qr")
+    if not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT or (s["help_until"] or 0) + HAND_GRACE < now():
+        raise ApiError("bad_input", "qr_old")
+    if logic.crew.barred(con, v.id, s):
+        raise ApiError("forbidden", "banned")
+    runs = _runs(con, v, s)  # an organizer scanning it: theirs already, no row
+    if join and not runs:
+        with tx(con):
+            if con.execute("INSERT OR IGNORE INTO qr_helpers (session_id, user_id, added_by, created_at) VALUES (?, ?, ?, ?)", (sid, v.id, by, now())).rowcount:
+                log_action(con, by, "checkin_helper", f"user:{v.id}", json.dumps({"session": sid}))
+    e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+    return {"session": sid, "event": s["event_id"], "title": _title_for(con, s, v.id, True), "joined": runs or logic.crew.qr_helping(con, v, s),
+            "scanner": bool(e) and logic.crew.kind(con, v, e) is not None}
 
 
 # ------------------------------------------------------------ the student's scan
