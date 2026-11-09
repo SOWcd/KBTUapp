@@ -38,7 +38,7 @@ def _sig(key: bytes, msg: str) -> str:
 
 def _same(sig: str, given: object) -> bool:
     """compare_digest on bytes: a non-ASCII str would raise TypeError (a 500)"""
-    return hmac.compare_digest(sig.encode(), str(given or "").encode())
+    return hmac.compare_digest(sig.encode(), str(given or "").encode("utf-8", "replace"))  # replace: a lone surrogate in JSON
 
 
 def new(con, title: str, people: list[dict], org_id: int | None = None) -> int:
@@ -187,7 +187,8 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         con.execute("UPDATE qr_sessions SET phase = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (act, sid))
     else:
         raise ApiError("not_found")
-    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
+    out = _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
+    return {**out, "title": _title_for(con, s, v.id, True)} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
 
 
 def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
@@ -282,13 +283,14 @@ def hand(con, key: bytes, v: Viewer, sid: int) -> dict:
     if live:
         con.execute("UPDATE qr_sessions SET help_until = ? WHERE id = ?", (now() + LEASE, sid))
     slot = int(time.time()) // SLOT
-    return {**_row(con, key, s), "param": f"hq_{sid}_{slot}_{v.id}_{_sig(key, f'qh.{sid}.{slot}.{v.id}')}" if live else None,
+    return {**_row(con, key, s), "param": f"hq_{sid}_{slot}_{v.id}_{_sig(key, f"qh.{sid}.{slot}.{v.id}.{s['help_gen']}")}" if live else None,
             "helpers": one(con, "SELECT COUNT(*) FROM qr_helpers WHERE session_id = ?", sid)[0]}
 
 
 def hands_off(con, key: bytes, v: Viewer, sid: int) -> dict:
     _hands_over(con, v, sid)
-    with tx(con):
+    with tx(con):  # help_gen: every code shown so far stops working too, or the one just removed scans it again
+        con.execute("UPDATE qr_sessions SET help_gen = help_gen + 1 WHERE id = ?", (sid,))
         n = con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,)).rowcount
         if n:
             log_action(con, v.id, "checkin_helpers_off", f"qr:{sid}", json.dumps({"n": n}))
@@ -303,10 +305,10 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
         sid, slot, by = int(sid), int(slot), int(by)
     except ValueError:
         raise ApiError("bad_input", "qr") from None
-    if kind != "hq" or not _same(_sig(key, f"qh.{sid}.{slot}.{by}"), sig):
-        raise ApiError("bad_input", "qr")
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not s or s["started_at"] is None or s["ended_at"] is not None:
+    if kind != "hq" or not s or not _same(_sig(key, f"qh.{sid}.{slot}.{by}.{s['help_gen']}"), sig):
+        raise ApiError("bad_input", "qr")
+    if s["started_at"] is None or s["ended_at"] is not None:
         raise ApiError("closed", "qr")
     if not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT or (s["help_until"] or 0) + HAND_GRACE < now():
         raise ApiError("bad_input", "qr_old")
@@ -315,7 +317,10 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
     runs = _runs(con, v, s)  # an organizer scanning it: theirs already, no row
     if join and not runs:
         with tx(con):
-            if con.execute("INSERT OR IGNORE INTO qr_helpers (session_id, user_id, added_by, created_at) VALUES (?, ?, ?, ?)", (sid, v.id, by, now())).rowcount:
+            # re-checked under the lock: a Finish or "remove all" that landed after the checks above wins
+            if con.execute("""INSERT OR IGNORE INTO qr_helpers (session_id, user_id, added_by, created_at) SELECT ?, ?, ?, ?
+                    WHERE EXISTS (SELECT 1 FROM qr_sessions WHERE id = ? AND ended_at IS NULL AND help_gen = ?)""",
+                           (sid, v.id, by, now(), sid, s["help_gen"])).rowcount:
                 log_action(con, by, "checkin_helper", f"user:{v.id}", json.dumps({"session": sid}))
     e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
     return {"session": sid, "event": s["event_id"], "title": _title_for(con, s, v.id, True), "joined": runs or logic.crew.qr_helping(con, v, s),

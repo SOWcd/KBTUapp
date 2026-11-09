@@ -83,7 +83,7 @@ def test_forged_old_and_crossed_codes_refused(env):
     assert _scan(c, 2, good).json()["message"] == "qr"                                                    # nor a helper's a check-in QR
     assert _scan(c, 2, f"ci_{s}_{slot}_{sig}").json()["message"] == "qr"
     old = int(time.time()) // checkin.SLOT - (checkin.SCAN_OK + 3 * checkin.SLOT) // checkin.SLOT
-    assert bad(f"hq_{s}_{old}_{by}_{checkin._sig(cfg.token_key, f'qh.{s}.{old}.{by}')}")["message"] == "qr_old"
+    assert bad(f"hq_{s}_{old}_{by}_{checkin._sig(cfg.token_key, f'qh.{s}.{old}.{by}.0')}")["message"] == "qr_old"
     con.execute("UPDATE qr_sessions SET help_until = ? WHERE id = ?", (int(time.time()) - checkin.HAND_GRACE - 1, sid))  # the sheet is closed
     assert bad(good)["message"] == "qr_old"
     assert con.execute("SELECT COUNT(*) FROM qr_helpers").fetchone()[0] == 0
@@ -175,6 +175,21 @@ def test_deleted_account_leaves_no_row(env):
     assert con.execute("SELECT COUNT(*) FROM qr_helpers").fetchone()[0] == 1
     delete_now(c, cfg, tma(2))
     assert con.execute("SELECT COUNT(*) FROM qr_helpers").fetchone()[0] == 0
+    con.close()
+
+
+def test_remove_all_kills_the_codes_shown(env):
+    """The one just removed can't scan the same code again; a fresh code works; a lone surrogate is a refusal, not a crash."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    _, sid, _ = _phone_event(c, con, "vol")
+    login(c, 2, "bob")
+    old = _hand(c, sid)["param"]
+    assert _ask(c, 2, old, True).status_code == 200
+    c.delete(f"/api/screens/{sid}/helpers", headers=tma(H))
+    assert _ask(c, 2, old, True).status_code == 400 and _show(c, sid).status_code == 403
+    assert checkin._same("a", "\ud800") is False
+    assert _ask(c, 2, _hand(c, sid)["param"], True).status_code == 200 and _show(c, sid).status_code == 200
     con.close()
 
 

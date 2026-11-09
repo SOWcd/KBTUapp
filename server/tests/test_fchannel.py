@@ -413,6 +413,7 @@ def test_old_board_cleaned_up(env):
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
     con.execute("DROP TABLE qr_helpers")  # 145's
     con.execute("ALTER TABLE qr_sessions DROP COLUMN help_until")
+    con.execute("ALTER TABLE qr_sessions DROP COLUMN help_gen")
     con.execute("ALTER TABLE orgs DROP COLUMN category")  # 143's
     con.execute("DROP INDEX posts_casting")  # 142's
     for col in ("casting_from", "casting_to", "casting_place", "casting_cancelled_at"):

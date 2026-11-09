@@ -1331,6 +1331,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (144, "ALTER TABLE qr_sessions ADD COLUMN lease_until INTEGER;"),
     # who an organizer let help run a check-in, by a QR (checkin.hand); help_until: that QR's lease, as lease_until above
     (145, """ALTER TABLE qr_sessions ADD COLUMN help_until INTEGER;
+    ALTER TABLE qr_sessions ADD COLUMN help_gen INTEGER NOT NULL DEFAULT 0;
     CREATE TABLE qr_helpers (
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id),
       user_id INTEGER NOT NULL REFERENCES users(id),
