@@ -5,6 +5,7 @@
   //   icon      a lucide component (default by tone: info, a triangle, a triangle, sparkles)
   //   title     a bold first line (optional);  text: the words;  children: anything else under them (the AI's suggestion)
   //   action    { label, onclick }: an S button at its end (primary for warning and danger, secondary otherwise)
+  //   stack     the action under the text, full width (an M button), for a text too long to share its line
   import type { Component, Snippet } from 'svelte';
   import Info from '@lucide/svelte/icons/info';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -12,8 +13,8 @@
   import Button from './Button.svelte';
 
   type Props = { tone?: 'neutral' | 'warning' | 'danger' | 'accent'; icon?: Component<any>; title?: string; text?: string;
-    action?: { label: string; onclick: () => void }; children?: Snippet };
-  let { tone = 'neutral', icon, title, text, action, children }: Props = $props();
+    action?: { label: string; onclick: () => void }; children?: Snippet; stack?: boolean };
+  let { tone = 'neutral', icon, title, text, action, children, stack = false }: Props = $props();
   const Icon = $derived(icon ?? (tone === 'accent' ? Sparkles : tone === 'neutral' ? Info : TriangleAlert));
 </script>
 
@@ -24,7 +25,7 @@
     {#if text}<p class="nt">{text}</p>{/if}
     {#if children}{@render children()}{/if}
   </div>
-  {#if action}<span class="na"><Button kind={tone === 'warning' || tone === 'danger' ? 'primary' : 'secondary'} size="s" onclick={action.onclick}>{action.label}</Button></span>{/if}
+  {#if action}<span class={['na', { stack }]}><Button kind={tone === 'warning' || tone === 'danger' ? 'primary' : 'secondary'} size={stack ? 'm' : 's'} full={stack} onclick={action.onclick}>{action.label}</Button></span>{/if}
 </div>
 
 <style>
@@ -43,4 +44,5 @@
   .nh { font: 600 var(--fs-body)/1.3 var(--font-text); }
   .nt { font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
   .na { flex: none; margin-left: auto; }
+  .na.stack { flex: 0 0 100%; margin-left: 0; }
 </style>

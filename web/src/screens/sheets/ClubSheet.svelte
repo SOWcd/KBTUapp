@@ -135,7 +135,7 @@
       {:else if fetched && o.myRights?.includes('profile')}
         <!-- none yet: shown to the club's own team, who can link them (the app's admin does it in Admin) -->
         <Section title={t('oc.title')}>
-          <Notice text={t('oc.emptyHint')} action={{ label: t('oc.linkChat'), onclick: () => sheets.clubEdit(o.id, 'chats') }} />
+          <Notice stack text={t('oc.emptyHint')} action={{ label: t('oc.linkChat'), onclick: () => sheets.clubEdit(o.id, 'chats') }} />
         </Section>
       {/if}
 
