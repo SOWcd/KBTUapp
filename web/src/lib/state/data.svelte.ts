@@ -12,6 +12,7 @@ import { burst } from '../../ui/burst';
 import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
 import { clearCache } from './cache';
+import { castingOn } from '../posts';
 
 export const data = $state({
   events: [] as EventCard[],
@@ -24,6 +25,7 @@ export const data = $state({
   orgs: [] as Org[],
   schedule: [] as ClassItem[],
   posts: [] as Post[],
+  castings: [] as Post[], // the Clubs tab's "recruiting" strip, read once with the Afisha (currentCastings)
   friends: null as Friends | null, // Profile → Friends: loaded as soon as I'm known to be a student, so the page opens full
   myCard: null as PersonCard | null, // my own card (numbers, awards, showcase): Profile's hero and the Awards page, the same way
   news: null as { casts: Post[]; posts: Post[] } | null, // tab 2 → News for club members: broadcasts, then my clubs' posts
@@ -102,7 +104,8 @@ export async function loadAfisha(): Promise<void> {
   loadChats();
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
-    const [events, orgs, schedule, posts, past] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true)]);
+    const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true), api.castings()]);
+    if (castings.status === 'fulfilled') data.castings = castings.value;
     if (past.status === 'fulfilled') data.past = past.value;
     if (events.status === 'fulfilled') data.events = events.value;
     if (orgs.status === 'fulfilled') data.orgs = orgs.value;
@@ -111,6 +114,26 @@ export async function loadAfisha(): Promise<void> {
     data.error = events.status === 'rejected';
   } catch { data.error = true; }
   data.eventsReady = true;
+}
+
+/** Castings not over yet, soonest first (the server's order; the phone's clock drops what ended since). */
+export const currentCastings = (now = nowTs()): Post[] => data.castings.filter((p) => p.casting && castingOn(p.casting, now));
+export async function loadCastings(): Promise<void> {
+  try { data.castings = await api.castings(); } catch { /* the last copy stays */ }
+}
+
+/** The club calls a casting off, after a question: marked at once, back if the server says no; the post stays. */
+export async function cancelCasting(p: Post): Promise<void> {
+  const c = p.casting;
+  if (!c || !(await sheets.ask({ title: t('casting.cancelAsk'), text: t('casting.cancelText'), ok: t('casting.cancel'), cancel: t('casting.keep'), danger: true }))) return;
+  const strip = data.castings;
+  c.cancelled = true; data.castings = strip.filter((x) => x.id !== p.id);
+  haptic.warn();
+  try {
+    Object.assign(p, await api.cancelCasting(p.id)); // now it can also be deleted
+    say(t('casting.cancelSay'), 'waving_hand_3d_default');
+    void loadNews(); api.posts('all').then((l) => (data.posts = l)).catch(() => {}); // the other lists hold their own copies
+  } catch { c.cancelled = false; data.castings = strip; haptic.error(); say(t('common.error'), 'warning_3d'); }
 }
 
 /** Admin → Inbox and Done, the staff's (one request); the shield's number catches up with it. withStats: the admin's

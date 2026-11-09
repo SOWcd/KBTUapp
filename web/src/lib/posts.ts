@@ -1,11 +1,29 @@
 // Post labels (SPEC §4.10): the composer's chips by code, named in the UI language; an older free-text tag shows as is.
-import type { EventCard, Post, PostTag } from './api';
+import type { Casting, EventCard, Post, PostTag } from './api';
 import { SvelteSet } from 'svelte/reactivity';
 import { t } from './i18n/index.svelte';
+import { dayMonthShort, dayNo, nowTs, relDay, time } from './time';
 
 export const POST_TAGS: PostTag[] = ['important', 'recruiting', 'results', 'news'];
 export const tagName = (tag: string | null): string | null =>
   tag && (POST_TAGS as string[]).includes(tag) ? t(`tag.${tag}` as 'tag.news') : tag;
+
+/** A casting's state, on the phone's clock (the copy it holds ages; server newsfeed.casting_state is the same rule). */
+export type CastingState = 'scheduled' | 'open' | 'ended' | 'cancelled';
+export const castingState = (c: Casting, now = nowTs()): CastingState =>
+  c.cancelled ? 'cancelled' : now >= c.to ? 'ended' : now >= c.from ? 'open' : 'scheduled';
+export const castingOn = (c: Casting, now = nowTs()): boolean => !c.cancelled && now < c.to;
+/** "Today until 20:00", "Tomorrow, 18:00", "Ended", "Cancelled" */
+export function castingStatus(c: Casting, now = nowTs()): string {
+  const st = castingState(c, now);
+  if (st === 'ended' || st === 'cancelled') return t(`casting.${st}`);
+  if (st === 'scheduled') return `${relDay(c.from, now)}, ${time(c.from)}`;
+  return dayNo(c.to) === dayNo(now) ? t('casting.todayTill', { time: time(c.to) }) : t('casting.till', { when: `${dayMonthShort(c.to)}, ${time(c.to)}` });
+}
+/** "Today, 18:00-20:00", or both ends with their days when it runs over a night */
+export const castingWhen = (c: Casting, now = nowTs()): string => dayNo(c.from) === dayNo(c.to)
+  ? `${relDay(c.from, now)}, ${time(c.from)}–${time(c.to)}`
+  : `${relDay(c.from, now)}, ${time(c.from)} – ${relDay(c.to, now)}, ${time(c.to)}`;
 
 /** News as stories: one circle per club, the broadcasts (DMP, KBTU App) first, then clubs with something
  *  unread, then by their newest. A circle holds the club's posts and its new events, oldest first, opening at the first unseen, as
