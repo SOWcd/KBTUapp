@@ -20,6 +20,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
+  import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { t, LANG_FULL } from '../../lib/i18n/index.svelte';
   import { ANTHEM, SUNG } from '../../lib/i18n/anthem';
   import { GAP, lineLen, lyricAt, wordAt } from '../../lib/lyrics';
@@ -84,12 +85,13 @@
     if (a.loop && at < 1 && run >= dur - 3) { award(); run = at; return; }
     if (at <= run + 2 + gone) { run = Math.max(run, at); return; }
     run = -1;
-    if (!told && !sent && session.me?.student) { told = true; say(t('anthem.skipNote'), 'headphone_3d'); }
+    if (!told && !sent && session.me?.student && !owned()) { told = true; say(t('anthem.skipNote'), 'headphone_3d'); }
   }
+  const owned = () => !!data.myCard?.awards.achievements.some((x) => x.code === 'anthem' && x.level > 0); // nothing to lose by skipping
   function award() {
     if (sent || !session.me?.student) return;
     sent = true;
-    api.anthemHeard().then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; sheets.celebrate(); }).catch(() => (sent = false));
+    api.anthemHeard().then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; sheets.celebrate(); void loadMyCard(); }).catch(() => (sent = false));
   }
 
   function toggle() {
