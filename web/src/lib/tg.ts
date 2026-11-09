@@ -3,6 +3,7 @@
 // leaves a blank screen. Nothing in the app calls window.Telegram directly.
 
 type Inset = { top: number; bottom: number; left: number; right: number };
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 type TgUser = { id: number; first_name: string; last_name?: string; username?: string; language_code?: string; photo_url?: string };
 
 interface WebApp {
@@ -37,6 +38,7 @@ interface WebApp {
   openLink(url: string): void;
   openTelegramLink(url: string): void;
   shareMessage?(id: string, cb?: (ok: boolean) => void): void;
+  openInvoice?(url: string, cb?: (status: InvoiceStatus) => void): void;
   downloadFile?(p: { url: string; file_name: string }, cb?: (ok: boolean) => void): void;
   requestWriteAccess?(cb?: (ok: boolean) => void): void;
   readTextFromClipboard?(cb: (text: string | null) => void): void;
@@ -164,6 +166,13 @@ export function scanQr(text: string, onText: (value: string) => boolean): boolea
 }
 
 export function closeScanner(): void { if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
+
+/** Telegram's own payment window can take Stars here: they came with Bot API 7.4, an older client hides the option. */
+export const canStars = (): boolean => can('7.4') && !!W?.openInvoice;
+
+export function openInvoice(url: string, cb: (status: InvoiceStatus) => void): void {
+  try { W!.openInvoice!(url, cb); } catch { cb('failed'); } // another invoice is open, or the link is refused
+}
 
 /** true: sent; false: the picker closed; null: this client can't share a card (Telegram Desktop said UNSUPPORTED). */
 export function shareMessage(preparedId: string): Promise<boolean | null> {

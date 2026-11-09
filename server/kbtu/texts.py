@@ -682,6 +682,16 @@ BOT = {
 
 
 # why a receipt looks wrong, as the student reads it (the flags of logic._receipt_flags)
+# "Support the app" in Telegram Stars (logic/stars.py): the invoice's title (32 characters at most) and description (255)
+STARS_INVOICE = {
+    "ru": ("Поддержка KBTU App", "Добровольная поддержка приложения. Это не покупка: взамен ничего не выдаётся."),
+    "kk": ("KBTU App-ті қолдау", "Қосымшаны ерікті қолдау. Бұл сатып алу емес: орнына ештеңе берілмейді."),
+    "en": ("Support KBTU App", "Voluntary support for the app. This is not a purchase: nothing is given in return."),
+}
+# shown by Telegram when a pre-checkout is refused (bot._checkouts)
+STARS_REFUSED = {"ru": "Не получилось. Попробуйте ещё раз.", "kk": "Сәтсіз аяқталды. Қайта көріңіз.", "en": "That didn't work. Please try again."}
+
+
 RECEIPT_WHY = {
     "ru": {"duplicate": "этот чек уже присылали", "unreadable": "не похоже на чек Kaspi", "amount_short": "сумма меньше цены",
            "amount_over": "сумма не совпадает с ценой", "recipient_mismatch": "другой получатель", "too_early": "чек старше самого события"},

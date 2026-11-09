@@ -1904,6 +1904,10 @@ const ru = {
   'don.bank': "Перевод по номеру",
   'don.banks': "Без комиссии — откройте свой банк",
   'don.safe': "Мы никогда не просим денег в личных сообщениях",
+  'don.stars': "Telegram Stars",
+  'don.own': "Своя",
+  'don.give': "Отправить",
+  'don.thanks': "Спасибо за поддержку",
   'psy.kbtu': "Психолог KBTU",
   'me.psychBook': "Записаться",
   // the academic calendar (SPEC §4.11)

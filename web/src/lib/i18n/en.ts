@@ -1883,6 +1883,10 @@ const en: Dict = {
   'don.bank': "Transfer by number",
   'don.banks': "No fee — open your bank",
   'don.safe': "We never ask for money in private messages",
+  'don.stars': "Telegram Stars",
+  'don.own': "Other",
+  'don.give': "Send",
+  'don.thanks': "Thank you for your support",
   'psy.kbtu': "A KBTU psychologist",
   'me.psychBook': "Book",
   // the academic calendar (SPEC §4.11)

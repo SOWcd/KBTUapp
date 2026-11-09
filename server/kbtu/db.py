@@ -1338,6 +1338,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       added_by INTEGER REFERENCES users(id),
       created_at INTEGER NOT NULL,
       PRIMARY KEY (session_id, user_id));"""),
+    # Stars given on "Support the app" (logic/stars.py): the charge, its size, its time, and nothing about who gave
+    (146, """CREATE TABLE star_gifts (
+      charge_id TEXT PRIMARY KEY,
+      amount INTEGER NOT NULL CHECK (amount > 0),
+      created_at INTEGER NOT NULL) WITHOUT ROWID;"""),
 ]
 
 

@@ -20,6 +20,7 @@ import os
 import re
 import sqlite3
 import time
+from collections import deque
 from pathlib import Path
 
 import anyio.to_thread
@@ -37,6 +38,8 @@ POLL = 2                    # seconds between outbox checks
 GAP = 0.05                  # ≤ 20 messages a second (Telegram allows about 30)
 AI_GAP = 10                 # seconds between translations (ai.py): a backlog drains without a burst
 LEASE = 60                  # a taken message is free again after this, if its postman died or the network was down
+PEEK = 2                    # seconds between looks for Stars' pre-checkouts while a batch of updates runs (_checkout_watch)
+_checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the look and the next round see the same ones
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
 
@@ -1260,14 +1263,46 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 
 
+def _wanted(cfg: Config) -> str:
+    return json.dumps(["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
+                       # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
+                       *(["message_reaction_count"] if cfg.forum_channel else [])])
+
+
+async def _checkouts(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) -> None:
+    """Stars' pre-checkouts, answered once each: no database, nothing slow."""
+    for upd in updates:
+        q = upd.get("pre_checkout_query")
+        if not q or q["id"] in _checked:
+            continue
+        good = logic.stars.checkout_ok(q)
+        why = {} if good else {"error_message": texts.pick(texts.STARS_REFUSED, str((q.get("from") or {}).get("language_code") or ""))}
+        await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerPreCheckoutQuery", json={"pre_checkout_query_id": q["id"], "ok": good, **why})
+        _checked.append(q["id"])
+
+
+async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, done: asyncio.Event) -> None:
+    """Telegram allows 10 s for a pre-checkout and a batch can spend longer on one receipt's OCR, so while a batch runs
+    this looks for new ones. getUpdates at the batch's own offset confirms nothing (they all come again to the next
+    round, which only skips the answered ones), and it never overlaps the long poll: hear waits for this to end."""
+    while True:
+        try:
+            await asyncio.wait_for(done.wait(), PEEK)
+            return
+        except asyncio.TimeoutError:
+            pass
+        try:
+            r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates", params={"offset": offset, "timeout": 0, "allowed_updates": _wanted(cfg)})
+            await _checkouts(cfg, http, r.json().get("result") or [])
+        except (httpx.HTTPError, ValueError) as exc:
+            log.warning("checkouts: %s", type(exc).__name__)
+
+
 async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": json.dumps(
-                               ["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member",
-                                # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
-                                *(["message_reaction_count"] if cfg.forum_channel else [])])}, timeout=WAIT + 10)
+                           params={"offset": offset, "timeout": WAIT, "allowed_updates": _wanted(cfg)}, timeout=WAIT + 10)
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
@@ -1277,6 +1312,12 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
         log.warning("ears: %s", str(answer.get("description", r.status_code))[:200])
         await asyncio.sleep(60)
         return offset
+    try:  # Stars' pre-checkouts before all else (10 s to answer)
+        await _checkouts(cfg, http, answer["result"])
+    except httpx.HTTPError as exc:
+        log.warning("checkouts: %s", type(exc).__name__)
+    done = asyncio.Event()
+    watch = asyncio.create_task(_checkout_watch(cfg, http, offset, done)) if answer["result"] else None
     con = db.connect(cfg.db_path)
     try:
         # the forum channel's comments first: a stranger's comment is gone before anything slow in the batch runs
@@ -1296,13 +1337,16 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             msg = {}
             try:  # all of it: a locked database even in the ban check replayed the whole batch
                 offset = upd["update_id"] + 1
-                if "edited_message" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group (above)
+                if "edited_message" in upd or "pre_checkout_query" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group; pre-checkouts are answered (above)
                     continue
                 if rc := upd.get("message_reaction_count"):
                     if (rc.get("chat") or {}).get("id") == cfg.forum_channel:
                         logic.fchannel.reacted(con, rc)
                     continue
                 msg = upd.get("message") or {}
+                if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
+                    await asyncio.to_thread(logic.stars.paid, con, payment)
+                    continue
                 sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
                 group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
                 if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
@@ -1344,6 +1388,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     except Exception as again:
                         log.warning("ears: %s", type(again).__name__)
     finally:
+        done.set()
+        if watch:
+            await watch
         con.close()
     return offset
 

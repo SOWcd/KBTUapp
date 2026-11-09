@@ -26,7 +26,8 @@
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
   import { t, i18n, type Key } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import Star from '@lucide/svelte/icons/star';
+  import { canStars, haptic, openInvoice, openLink } from '../../lib/tg';
   import Emoji from '../../ui/Emoji.svelte';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
@@ -181,6 +182,22 @@
     ['freedom', 'Freedom', 'https://freedombank.onelink.me/PcDG/'], ['forte', 'Forte', 'https://forte.kz/app/'],
     ['bereke', 'Bereke', 'https://berekebank.onelink.me/lyyx/'], ['bcc', 'BCC', 'https://bcc-kz.onelink.me/DHqP/'],
     ['homecredit', 'Home Credit', 'https://homekz.onelink.me/vrwF/'], ['alatau', 'Alatau', 'https://app.alataucitybank.kz/sFFz/']] as const;
+  // Telegram Stars beside the banks (owner, Nov 9): the server makes the invoice, Telegram's own window confirms it.
+  // Cancelled or failed: nothing to say. An old client has no such row (canStars).
+  const stars = canStars();
+  let giving = $state<number | null>(null); // lit in the tap's own frame, until Telegram's window closes
+  let own = $state('');
+  const ownStars = $derived(+own >= 1 && +own <= 10000 ? +own : 0);
+  async function give(n: number) {
+    giving = n;
+    try {
+      const { url } = await api.starsInvoice(n);
+      openInvoice(url, (status) => {
+        giving = null;
+        if (status === 'paid') { haptic.ok(); own = ''; say(t('don.thanks'), 'blue_heart_3d'); }
+      });
+    } catch { giving = null; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function toBank(url: string) {
     await copyDonate();
     openLink(url);
@@ -342,6 +359,18 @@
           <button class="bank" onclick={() => { haptic.tap(); void toBank(url); }}><img src="banks/{id}.webp" alt="" width="46" height="46" /><small>{name}</small></button>
         {/each}
       </div>
+      {#if stars}
+        <p class="fs-sub faint banks-h">{t('don.stars')}</p>
+        <form class="stars" onsubmit={(e) => { e.preventDefault(); if (ownStars) void give(ownStars); }}>
+          {#each [50, 100, 500] as n (n)}
+            <button type="button" class={['st', { on: giving === n }]} disabled={giving !== null} onclick={() => give(n)}><Star size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />{n}</button>
+          {/each}
+          <input class="st own" bind:value={own} oninput={() => (own = own.replace(/\D/g, '').slice(0, 5))} inputmode="numeric" enterkeyhint="send" autocomplete="off" placeholder={t('don.own')} aria-label={t('don.own')} />
+          {#if ownStars}
+            <button class={['send', { on: giving === ownStars }]} disabled={giving !== null}>{t('don.give')}<Star size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />{ownStars}</button>
+          {/if}
+        </form>
+      {/if}
       <p class="fs-sub faint dfoot">{t('don.safe')}</p>
     </div>
   {/if}
@@ -378,6 +407,18 @@
   .bank img { width: 46px; height: 46px; border-radius: var(--r-s); box-shadow: var(--shadow-thumb); }
   /* "Home Credit" whole at 320 too */
   .bank small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 clamp(var(--fs-tab), 3.3vw, var(--fs-cap))/1.2 var(--font-text); letter-spacing: -0.01em; color: var(--text-2); }
+  .stars { align-self: stretch; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); }
+  .st { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: var(--ctl-l); border-radius: var(--r-m); background: var(--surface);
+    font: 600 var(--fs-body)/1 var(--font-text); font-variant-numeric: tabular-nums; color: var(--text); transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease); }
+  .st :global(svg), .send :global(svg) { flex: none; color: var(--gold); }
+  .st:active:not(:disabled), .send:active:not(:disabled) { transform: scale(0.96); }
+  .st.on, .send.on { opacity: 0.55; }
+  /* --fs-row, 17 px: iOS doesn't zoom in on the field */
+  .own { width: 100%; padding: 0 var(--s-1); text-align: center; font-size: var(--fs-row); }
+  .own::placeholder { color: var(--text-2); }
+  .own:focus { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .send { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--ctl-l); border-radius: var(--r-m);
+    background: var(--surface); font: 600 var(--fs-body)/1 var(--font-text); font-variant-numeric: tabular-nums; color: var(--accent-text); }
   .dfoot { margin-top: var(--s-5); max-width: 280px; text-wrap: balance; }
   .wide { max-width: 60vw; color: var(--text-3); overflow-wrap: anywhere; text-align: right; }
 </style>

@@ -1883,6 +1883,10 @@ const kk: Dict = {
   'don.bank': "Нөмір бойынша аударым",
   'don.banks': "Комиссиясыз — өз банкіңізді ашыңыз",
   'don.safe': "Біз ешқашан жеке хабарламада ақша сұрамаймыз",
+  'don.stars': "Telegram Stars",
+  'don.own': "Басқа",
+  'don.give': "Жіберу",
+  'don.thanks': "Қолдауыңызға рахмет",
   'psy.kbtu': "KBTU психологы",
   'me.psychBook': "Жазылу",
   // the academic calendar (SPEC §4.11)

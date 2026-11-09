@@ -325,6 +325,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
         return logic.dm_on(con, v, (body or {}).get("event"))
 
+    @app.post("/api/donate/stars")
+    async def donate_stars(con: Con, v: Me, body: dict = Body(...)):
+        lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
+        return {"url": await logic.stars.invoice(app.state.cfg, ai_http(), v.id, lang, body.get("amount"))}
+
     @app.post("/api/me/keep")
     def keep_me(con: Con, v: Me):
         return logic.keep_me(con, v)

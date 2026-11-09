@@ -107,6 +107,7 @@ export const server: Api = {
   deleteInfo: () => call('GET', '/me/delete'),
   consent: (version) => call('POST', '/me/consent', { version }),
   keepMe: () => call('POST', '/me/keep'),
+  starsInvoice: (amount) => call('POST', '/donate/stars', { amount }),
   dmOn: (event?: Id) => call('POST', '/me/dm', { event }),
 
   events: (q = {}) => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
