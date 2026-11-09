@@ -1318,6 +1318,12 @@ MIGRATIONS: list[tuple[int, str]] = [
      + "\nUPDATE registrations SET status = 'unset' WHERE ticket_code GLOB 'old:*';"),
     # Sunday classes are the portal's online duplicates of the week's (owner, Nov 8): the import drops them, the old ones go
     (141, "DELETE FROM schedule_classes WHERE weekday = 7;"),
+    # an offline casting is a marked post (newsfeed.casting_state): come at this time to this place, no sign-up
+    (143, """ALTER TABLE posts ADD COLUMN casting_from INTEGER;
+    ALTER TABLE posts ADD COLUMN casting_to INTEGER;
+    ALTER TABLE posts ADD COLUMN casting_place TEXT;
+    ALTER TABLE posts ADD COLUMN casting_cancelled_at INTEGER;
+    CREATE INDEX posts_casting ON posts(casting_to) WHERE casting_to IS NOT NULL;"""),
 ]
 
 

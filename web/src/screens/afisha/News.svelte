@@ -19,17 +19,18 @@
   import { videoLinks } from '../../lib/social';
   import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago } from '../../lib/time';
-  import { tagName } from '../../lib/posts';
+  import { castingOn, tagName } from '../../lib/posts';
   import { focusPos } from '../../lib/photo';
   import { haptic, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import CastingBlock from '../../ui/CastingBlock.svelte';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Section from '../../ui/Section.svelte';
@@ -103,6 +104,7 @@
       await api.hidePost(p.id);
       if (data.news) data.news = { casts: data.news.casts.filter((x) => x.id !== p.id), posts: data.news.posts.filter((x) => x.id !== p.id) };
       data.posts = data.posts.filter((x) => x.id !== p.id);
+      data.castings = data.castings.filter((x) => x.id !== p.id);
       haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
@@ -111,6 +113,7 @@
     menu(e.currentTarget as Element, [
       ...(p.canEdit ? [{ label: t('news.edit'), onselect: () => sheets.composer(p.org.id, p) },
         { label: p.pinned ? t('news.unpin') : t('news.pin'), onselect: () => void pin(p) }] : []),
+      ...(p.canEdit && p.casting && castingOn(p.casting) ? [{ label: t('casting.cancel'), destructive: true, onselect: () => void cancelCasting(p) }] : []),
       // anyone but its own club's writers: the one report sheet
       ...(!p.canEdit && session.me?.student ? [{ label: t('cm.report'), onselect: () => sheets.report('post', p.id, p.title) }] : []),
       ...(p.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown(p) }] : []),
@@ -136,6 +139,7 @@
       {#if p.tag}<Tag tone={p.tag === 'important' ? 'warning' : 'accent'}>{tagName(p.tag)}</Tag>{/if}
       {#if p.canEdit || p.canDelete || session.me?.student}<span class="more"><IconButton icon={Ellipsis} kind="plain" size="s" label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
     </header>
+    {#if p.casting}<CastingBlock casting={p.casting} />{/if}
     <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}

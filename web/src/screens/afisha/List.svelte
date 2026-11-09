@@ -35,6 +35,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import CastingBlock from '../../ui/CastingBlock.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import { fitTitle, largeTitle } from '../../ui/title';
@@ -207,7 +208,8 @@
 
   {#if featured}
     <div class="pin"><Card onclick={() => (openPost = !openPost)}>
-      <span class="pin-top"><Tag tone="warning">{tagName(featured.tag) ?? t('common.more')}</Tag><span class="ellipsis">{nameOf(featured.org)}</span></span>
+      <span class="pin-top">{#if !featured.casting}<Tag tone="warning">{tagName(featured.tag) ?? t('common.more')}</Tag>{/if}<span class="ellipsis">{nameOf(featured.org)}</span></span>
+      {#if featured.casting}<CastingBlock casting={featured.casting} />{/if}
       <b>{featured.title}</b>
       <span class="pin-b" class:clamp-2={!openPost}>{featured.body}</span>
     </Card></div>

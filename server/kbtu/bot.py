@@ -238,6 +238,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind in ("broadcast", "important"):  # post:<id>, to every club member / to its club's members; gone if taken down
         post = one(con, "SELECT p.title, p.i18n, o.name FROM posts p JOIN orgs o ON o.id = p.org_id WHERE p.id = ? AND p.hidden_at IS NULL", int(ref[1]))
         return (*texts.bot_message(lang, kind, org=post["name"], title=logic.title_in(post, lang)), "news") if post else None
+    if kind == "casting_open":  # cst:<post>, to a club's followers who aren't in it; gone once it's over, cancelled or deleted
+        p = one(con, """SELECT p.casting_from, o.name FROM posts p JOIN orgs o ON o.id = p.org_id
+            WHERE p.id = ? AND p.hidden_at IS NULL AND p.casting_cancelled_at IS NULL AND p.casting_to > ?""", int(ref[1]), logic.now())
+        return (*texts.bot_message(lang, kind, org=p["name"], when=texts.when(p["casting_from"], lang)), "news") if p else None
     if kind == "friend_request":  # fq:<asker>:<day>; gone once answered or taken back
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))
         if not p or not one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", int(ref[1]), m["user_id"]):
