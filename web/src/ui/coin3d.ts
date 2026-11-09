@@ -13,6 +13,7 @@ import {
 } from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { springStep } from './tilt';
+import { drawCoinBack } from './coinback';
 
 export type CoinState = () => { x: number; y: number; spin: number }; // tilt -1..1, spin in degrees
 // the canvas round the medal, in medal sizes: wide enough for the swing, tall above for the ribbon
@@ -65,19 +66,9 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   }
   const ridges = own(new CanvasTexture(rc)); ridges.wrapS = RepeatWrapping; ridges.repeat.set(26, 1);
 
-  // the back: polished metal, fine concentric guilloché and the app's colonnade (the icon's five columns) struck in
-  // low relief; one grey canvas is both the shading and the bump
+  // the back: one grey canvas (ui/coinback) is both the shading and the bump
   const [bc, bg] = canvas2d(1024, 1024);
-  bg.fillStyle = 'rgb(200, 200, 200)'; bg.fillRect(0, 0, 1024, 1024);
-  for (let r = 470; r > 250; r -= 5) { bg.strokeStyle = r % 10 ? 'rgb(178, 178, 178)' : 'rgb(226, 226, 226)'; bg.lineWidth = 2; bg.beginPath(); bg.arc(512, 512, r, 0, Math.PI * 2); bg.stroke(); }
-  bg.strokeStyle = 'rgb(150, 150, 150)'; bg.lineWidth = 10; bg.beginPath(); bg.arc(512, 512, 490, 0, Math.PI * 2); bg.stroke();
-  bg.strokeStyle = 'rgb(236, 236, 236)'; bg.lineWidth = 6; bg.beginPath(); bg.arc(512, 512, 250, 0, Math.PI * 2); bg.stroke();
-  const mark = (fill: string, dx: number, dy: number) => {
-    bg.fillStyle = fill;
-    const box = (x: number, y: number, ww: number, hh: number) => { bg.beginPath(); bg.roundRect(512 - 196 + dx + x * 14, 512 - 165 + dy + y * 14, ww * 14, hh * 14, 18); bg.fill(); };
-    box(1, 1.5, 26, 4); for (const x of [2, 7.25, 12.5, 17.75, 23]) box(x, 7, 3, 11); box(0, 19.5, 28, 3);
-  };
-  mark('rgb(236, 236, 236)', -3, -3); mark('rgb(120, 120, 120)', 3, 3); mark('rgb(192, 192, 192)', 0, 0); // light above, shade below: struck
+  drawCoinBack(bg);
   const backMap = own(new CanvasTexture(bc)); backMap.colorSpace = SRGBColorSpace;
   backMap.center.set(0.5, 0.5); backMap.rotation = Math.PI; backMap.wrapS = RepeatWrapping; backMap.repeat.x = -1; // upright from behind
   const backBump = own(new CanvasTexture(bc)); backBump.center.set(0.5, 0.5); backBump.rotation = Math.PI; backBump.wrapS = RepeatWrapping; backBump.repeat.x = -1;

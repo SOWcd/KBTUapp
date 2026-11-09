@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, artOf, isCoin, isDrawnPin, isMedal, isRound, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, artOf, isCoin, isDrawnPin, isMedal, isRound, layersOf, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -20,6 +20,7 @@
   import { glass, recenter } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
   import Award from '../../ui/Award.svelte';
+  import { paintCoinBack } from '../../ui/coinback';
   import MedalArt from '../../ui/Medal.svelte';
   import { nameOf } from '../../lib/short';
   import { session } from '../../lib/state/session.svelte';
@@ -104,6 +105,12 @@
   // went missing frame by frame. There the coin is one flat layer that tilts; the 3D (three.js) medals are one canvas
   // and keep their spin. ponytail: no edge on Android; a rim drawn into the face (one layer) is the upgrade
   const layered = $derived(!!edge && !onAndroid);
+  // a drawn medal's back: the owner's coins' reverse in its own metal, the letter of its rim file (the temporary vb set
+  // has none: gold, no ribbon). The rest (the coins without WebGL, the seals) keep the mirrored face
+  const drawn = $derived(va?.level ? layersOf(artOf(va)) : null);
+  const rim = $derived(drawn ? /rim-([bsgl])$/.exec(drawn[drawn.length - 1][0])?.[1] : undefined);
+  let backCanvas = $state<HTMLCanvasElement>();
+  $effect(() => { if (backCanvas) paintCoinBack(backCanvas, rim ?? 'g'); });
 
   // a finger turns the coin round its upright axis, a flick spins it past its back, then it settles face up (Apple's
   // award view); on top of the tilt. --spin is written straight on .big: no re-render per frame
@@ -199,7 +206,7 @@
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if lit}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if lit}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" class:struck={!!drawn} aria-hidden="true">{#if drawn}{#if rim}<img class="rib" src={`medals/ribbon-${rim}.svg`} alt="" draggable="false" />{/if}<canvas bind:this={backCanvas}></canvas><span class="shine"></span>{:else}<Award it={shown} size={SIZE} />{/if}</span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -336,12 +343,14 @@
   .halo, .rays, .shade { transition: opacity 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
   .dim :is(.halo, .rays, .shade) { opacity: 0; }
   .gl { position: absolute; inset: 0; pointer-events: none; }
-  /* the face hides when it turns away; the back is the same disc, mirrored, darker and flatter, like a struck reverse */
+  /* the face hides when it turns away; a drawn medal's back is ui/coinback's reverse; the others' the same disc, mirrored, darker and flatter */
   .face { position: relative; display: inline-flex; }
   .coin .face { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
   .back { position: absolute; inset: 0; display: inline-flex; -webkit-backface-visibility: hidden; backface-visibility: hidden;
     transform: translateZ(-23px) rotateY(180deg) scaleX(-1); }
-  .coin .back > :global(:first-child) { filter: grayscale(0.55) brightness(0.62) contrast(1.15); }
+  .coin .back:not(.struck) > :global(:first-child) { filter: grayscale(0.55) brightness(0.62) contrast(1.15); }
+  .back canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); } /* .back mirrors: the relief's light stays on its upper left */
+  .back .rib { position: absolute; left: 0; top: 0; width: 100%; height: 125%; }
   .back::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 -1px 2px rgba(255, 255, 255, 0.18); }
   /* the edge: discs of the metal stacked 1 px apart behind the face (at 26 deg a step projects to under 0.5 px: no gaps);
      the rim shows on the side the coin turns away from, as on a real coin. Darker than the face's rim, lit from above,
