@@ -58,6 +58,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal (owner, Nov 1)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
+    ("dmp", "spiral_calendar_3d", (1, 3, 5, 10), False),  # the university's general meetings (DMP's): one a day, by the QR its giver shows
     ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU (9 levels since Nov 2)
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
@@ -97,7 +98,7 @@ def _counts(con, uid: int) -> dict[str, int]:
     streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
-            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
+            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
             "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
             "critic": critic(con, uid) if CRITIC_ON else 0}
 
@@ -178,7 +179,8 @@ def sync_levels(con) -> None:
 BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
-GRANTABLE = ("bugs", "creator_laugh", "creator_found", "init26", "init26f", "init26p")  # the manual ones (§4.11); "First 500" is given at verification
+GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p")  # the manual ones (§4.11); "First 500" is given at verification
+ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found")  # about the creator himself: he alone gives them (owner, Nov 3)
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
 LINK_DAYS = (1, 3, 7, 14)
@@ -213,7 +215,9 @@ def grant(con, v: Viewer, uid: object, code: object) -> dict:
 
 
 def _grant(con, by: int, uid: int, code: str, batch: str | None = None, log: bool = True) -> int:
-    if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", uid, code):
+    # a meeting counts once: a second QR opened for it, a card scanned twice. Almaty's day (no meetings table to name it)
+    since = (core.now() + 5 * 3600) // 86400 * 86400 - 5 * 3600 if code == "dmp" else 0
+    if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ? AND created_at >= ?", uid, code, since):
         raise ApiError("conflict")
     before = _levels(con, uid)
     gid = con.execute("INSERT INTO achievement_grants (user_id, code, granted_by, created_at, batch) VALUES (?, ?, ?, ?, ?)",
@@ -243,6 +247,8 @@ def grant_link(con, v: Viewer, code: object, uses: object = 1, days: object = 7)
     """An award link for people the admin can't pick in the app (a bug report in a chat, a crowd on stage): up to
     `uses` people (None: no cap), each once, for `days`. Made when the share card is sent (app.py /api/share)."""
     code = _giver(con, v, code)
+    if code == "dmp":  # you have to be in the hall: a link can be forwarded and kept for another day
+        raise ApiError("bad_input")
     if type(days) is not int or days not in LINK_DAYS or uses is not None and (type(uses) is not int or not 1 <= uses <= 1000):
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
@@ -272,7 +278,7 @@ def use_grant_link(con, v: Viewer, token: str, qr: bool = False) -> dict:
                 raise ApiError("conflict")
             return {"code": r["code"]}  # mine already: nothing more, even if it was taken back since
         cap = r["max_uses"] if r["multi"] else 1
-        if cap is None and not qr and r["code"] != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
+        if cap is None and not qr and r["code"] not in ADDS_UP and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
             return {"code": r["code"]}  # a link with no cap held some other way (an older one, tapped again): quietly nothing
         if cap is not None and r["used"] >= cap:
             raise ApiError("closed")
@@ -350,7 +356,7 @@ def claim_link(con, code: str, until: int) -> str:
     """admin claim new (the CLI): a link many students open for `code` (not Bug hunter), given by the owner, until
     `until`, no cap. The app's links are grant_link's."""
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
-    if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
+    if not owner or code not in GRANTABLE or code in ADDS_UP or until <= core.now():
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
     con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi) VALUES (?, ?, ?, ?, ?, 1)",
@@ -447,7 +453,7 @@ def my_grants(con, v: Viewer) -> list[dict]:
 
 # ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
-SHOWN = (*CREATOR_ONLY, "bugs", *BADGES["init26"])  # as the chips go; a badge's highest variant first
+SHOWN = (*CREATOR_ONLY, "bugs", "dmp", *BADGES["init26"])  # as the chips go; a badge's highest variant first
 
 
 def _badge_row(con, p) -> dict:
@@ -469,7 +475,7 @@ def award_counts(con, v: Viewer) -> dict:
     _admin(v)
     have = dict(rows(con, f"""SELECT COALESCE(CASE {' '.join(f"WHEN code IN ({','.join(repr(c) for c in vs)}) THEN '{b}'" for b, vs in BADGES.items())} END, code),
         COUNT(DISTINCT user_id) FROM achievement_grants WHERE code IN ({','.join('?' * len(GRANTABLE))}) GROUP BY 1""", *GRANTABLE))
-    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *BADGES)}
+    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", "dmp", *BADGES)}
 
 
 def award_people(con, v: Viewer, award: object) -> list[dict]:

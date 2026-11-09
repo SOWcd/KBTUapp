@@ -49,7 +49,7 @@ it('every medal layer and pin glyph is drawn', async () => {
   const fs = await import('node:fs' as string);
   const has = (n: string) => fs.existsSync(new URL(`../../public/medals/${n}.svg`, import.meta.url));
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
-  for (const code of ['regular', 'streak', 'first_in', 'soul', 'team', 'season', 'bugs', 'critic', 'referral'])
+  for (const code of ['regular', 'streak', 'first_in', 'soul', 'team', 'season', 'bugs', 'dmp', 'critic', 'referral'])
     for (const n of [1, 4, 7]) {
       const art = artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }), leg = legendOf(art);
       expect(layersOf(art)!.every(([f]) => has(f)) && (code === 'referral' ? leg === null : has(leg!))).toBe(true);
@@ -78,9 +78,9 @@ it("every club's and school's lanyard QR ink reads on the white plate (>= 7:1)",
 
 // Admin → Awards: one entry per award; a badge's grant codes are its variants, never the award's own code alone
 it('lists a badge once, its variants inside', () => {
-  expect(MANUAL.map((a) => a.code)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26']);
-  expect(codesOf(MANUAL[3])).toEqual(['init26p', 'init26', 'init26f']);
+  expect(MANUAL.map((a) => a.code)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'dmp', 'init26']);
+  expect(codesOf(MANUAL[4])).toEqual(['init26p', 'init26', 'init26f']);
   expect(codesOf(MANUAL[2])).toEqual(['bugs']);
   for (const c of ['init26p', 'init26', 'init26f']) expect(awardOf(c).code).toBe('init26'); // a held Performer or Guest holds it
-  expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26p', 'init26', 'init26f']);
+  expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'dmp', 'init26p', 'init26', 'init26f']);
 });

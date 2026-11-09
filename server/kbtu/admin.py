@@ -282,7 +282,7 @@ def main(args: list[str]) -> None:
         came = [c for c in counts if c["regular"]]
         print(f"{len(counts)} students, {len(came)} came to an event at least once; each level: share of all / of those who came")
         for code, _, needs, _ in ACHIEVEMENTS:
-            if code in ("first50", "creator_laugh", "creator_found", "bugs", "init26", "init26f"):
+            if code in ("first50", "creator_laugh", "creator_found", "bugs", "dmp", "init26", "init26f"):
                 continue  # given by hand or at sign-in: no counter to tune
             vals = sorted(c[code] for c in counts)
             at = lambda q: vals[min(len(vals) - 1, int(q * len(vals)))] if vals else 0  # noqa: E731

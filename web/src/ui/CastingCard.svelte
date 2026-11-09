@@ -4,12 +4,13 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import type { Post } from '../lib/api';
   import { t } from '../lib/i18n/index.svelte';
-  import { castingStatus } from '../lib/posts';
+  import { castingState, castingStatus } from '../lib/posts';
   import { nameOf } from '../lib/short';
   import { sheets } from '../lib/state/sheets';
   import OrgLogo from './OrgLogo.svelte';
 
   let { post }: { post: Post } = $props();
+  const live = $derived(!!post.casting && castingState(post.casting) === 'open');
   const open = () => sheets.stories([{ org: post.org, items: [{ post }], unread: false, cast: false }], 0);
 </script>
 
@@ -17,7 +18,7 @@
   <button class="cc" onclick={open}>
     <OrgLogo org={post.org} size={40} />
     <span class="tx">
-      <b class="ellipsis">{t('casting.come')}</b>
+      <b class="ellipsis" class:live>{t(live ? 'casting.offlineNow' : 'casting.offline')}</b>
       <small class="ellipsis">{nameOf(post.org)}</small>
       <small class="wh ellipsis">{castingStatus(post.casting)}</small>
       <small class="ellipsis">{post.casting.place}</small>
@@ -31,6 +32,7 @@
   .cc:active { transform: scale(0.98); }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .tx b { font: 600 var(--fs-body)/1.25 var(--font-text); }
+  .tx b.live { color: var(--success); }
   .tx small { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .tx .wh { font-weight: 600; color: var(--accent-text); }
   .mk { flex: none; display: flex; color: var(--text-3); }

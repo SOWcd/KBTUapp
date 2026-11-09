@@ -6,7 +6,7 @@
   // variant). The creator's own two show for the creator alone (the server refuses the rest).
   //   person  whose;  has  their awards when the caller has them already (the search's rows), else they load here
   import { api, ApiErr, type GrantItem, type PersonRef } from '../../lib/api';
-  import { MANUAL, codesOf, manualMedal, manualName, manualTitle, type Manual } from '../../lib/awards';
+  import { MANUAL, addsUp, codesOf, manualMedal, manualName, manualTitle, type Manual } from '../../lib/awards';
   import { say } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -51,7 +51,7 @@
     }
     const code = a.code as Code;
     if (!held?.includes(code)) give(code);
-    else if (code === 'bugs') menu(e.currentTarget as Element, [
+    else if (addsUp(code)) menu(e.currentTarget as Element, [
       { label: t('aw.oneMore'), onselect: () => give(code) },
       { label: t('adm.takeBack'), destructive: true, onselect: () => take(code) },
     ]);

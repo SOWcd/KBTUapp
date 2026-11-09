@@ -9,7 +9,7 @@
 //   Recruiter (rc-*): a constellation. I am the star in the middle; each level one more friend lights up on the
 //     orbit, tied to me and to each other. The rim is the level's metal (bronze I-III, silver IV-VI, gold VII-VIII,
 //     legend IX); gold grows laurels, legend a full wreath, an iridescent bezel and a crown star.
-//   The others (rg, st, fi, so, tm, se, bg, cr): <p>-field (its enamel), <p>-art-<metal> and <p>-near-<metal> (the
+//   The others (rg, st, fi, so, tm, se, bg, dm, cr): <p>-field (its enamel), <p>-art-<metal> and <p>-near-<metal> (the
 //     relief in the level's metal) under the rc rims; the ribbons; the pins (zn-*): the shield frames, the enamel's
 //     guilloche, and the glyphs in the frame's metal (zn-<glyph>-<metal>).
 // usage: node tools/medals.mjs   (from web/)
@@ -321,6 +321,14 @@ ${part('r0', 'ms', '<ellipse cx="262" cy="188" rx="48" ry="34"/>')}`),
 ${enamel('M256 186Q188 192 184 268Q184 342 256 364z', 'er')}${enamel('M268 186Q336 192 340 268Q340 342 268 364z', 'er')}
 <g fill="url(#ek)"><circle cx="224" cy="236" r="16"/><circle cx="300" cy="236" r="16"/><circle cx="212" cy="296" r="14"/><circle cx="312" cy="296" r="14"/><circle cx="238" cy="338" r="10"/><circle cx="286" cy="338" r="10"/></g>
 <ellipse cx="220" cy="218" rx="22" ry="10" fill="#FFFFFF" opacity=".45" transform="rotate(-36 220 218)"/>`));
+
+// Attendance required: the lectern the hall was called to, its star plate in enamel, the microphone bent over it
+pic('dm', ['#8E2438', '#470C1C', '#1A040A'], 'ATTENDANCE' + DOT + 'KBTU APP',
+  (k) => fit(1.1, 256, 268, `${part('r0', 'mg', '<path d="M166 232H346L322 392H190z"/>')}
+${enamel('M196 258H316L302 368H210z', 'ew')}${enamel(star5(256, 314, 40, 18), 'er')}
+${part('r1', 'mh', '<rect x="144" y="206" width="224" height="32" rx="11"/><rect x="172" y="388" width="168" height="26" rx="9"/>')}`),
+  (k) => fit(1.1, 256, 268, `${part('r1', 'ms', '<path d="M256 208C254 170 270 150 298 142" fill="none" stroke="url(#ms)" stroke-width="11" stroke-linecap="round"/>')}
+${part('r0', 'mh', '<rect x="290" y="86" width="50" height="76" rx="25" transform="rotate(26 315 124)"/>')}`));
 
 // Couch critic: a deep sofa in coral upholstery in its metal frame, a speech bubble over it with its three dots
 pic('cr', ['#18848A', '#0A3E44', '#021A1D'], 'COUCH CRITIC' + DOT + 'KBTU APP',

@@ -115,7 +115,7 @@ def test_award_rows_and_holders(env):
     ann, bob = login(c, 62, "ann"), login(c, 63, "bob")
     give = lambda uid, code: c.post("/api/admin/grants", headers=tma(60), json={"userId": uid, "code": code})  # noqa: E731
     give(ann["id"], "init26p"); give(ann["id"], "init26"); give(bob["id"], "init26f"); give(bob["id"], "bugs"); give(bob["id"], "bugs")
-    assert c.get("/api/admin/awards", headers=tma(61)).json() == {"creator_laugh": 0, "creator_found": 0, "bugs": 1, "init26": 2}  # a badge once a person
+    assert c.get("/api/admin/awards", headers=tma(61)).json() == {"creator_laugh": 0, "creator_found": 0, "bugs": 1, "dmp": 0, "init26": 2}  # a badge once a person
     who = c.get("/api/admin/awards/init26/people", headers=tma(61)).json()
     assert sorted((w["person"]["id"], w["code"]) for w in who) == sorted([(ann["id"], "init26p"), (ann["id"], "init26"), (bob["id"], "init26f")])
     assert len(c.get("/api/admin/awards/bugs/people", headers=tma(61)).json()) == 1                  # the latest bug, one row
@@ -236,3 +236,20 @@ def test_badge_qr(env):
     finally:
         profiles._tries.clear()
     con.close()
+
+
+def test_attendance_counts_once_a_meeting(env):
+    """Attendance required adds up, one a day: a second QR the same day gives nothing; the next day's meeting is +1."""
+    c, cfg = env
+    con, boss, adm = _staff(c, cfg)
+    ann = login(c, 62, "ann")
+    show = lambda: c.post("/api/admin/badge-qr", headers=tma(60), json={"code": "dmp"}).json()["param"]  # noqa: E731
+    claim = lambda p: c.post("/api/badge-qr", headers=tma(62), json={"p": p})  # noqa: E731
+    count = lambda: con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'dmp'", (ann["id"],)).fetchone()[0]  # noqa: E731
+    assert claim(show()).json() == {"code": "dmp"} and count() == 1
+    assert claim(show()).status_code == 409 and count() == 1
+    con.execute("UPDATE achievement_grants SET created_at = created_at - 86400 WHERE code = 'dmp'")
+    assert claim(show()).json() == {"code": "dmp"} and count() == 2
+    card = c.get(f"/api/users/{ann['id']}", headers=tma(62)).json()["awards"]["achievements"]
+    assert next(a for a in card if a["code"] == "dmp")["count"] == 2
+    assert c.post("/api/share", headers=tma(60), json={"kind": "gl", "code": "dmp", "uses": 1, "days": 1}).status_code == 400  # the hall only

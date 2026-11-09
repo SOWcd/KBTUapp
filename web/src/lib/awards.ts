@@ -42,10 +42,13 @@ export const BADGES: { code: string; variants: { code: string; emoji: string }[]
 /** the manual awards staff give, one entry per award (a badge's variants inside it, the highest first): `scan` false
  *  for Bug hunter (it adds up, a QR seen twice would give it twice); `creator` ones the creator alone gives */
 export type Manual = { code: string; emoji: string; scan: boolean; creator?: boolean; variants?: { code: GrantItem['code']; emoji: string }[] };
+/** one grant is +1, not "held" (the server's ADDS_UP): given again and again, never to a whole check-in session */
+export const addsUp = (code: string): boolean => code === 'bugs' || code === 'dmp';
 export const MANUAL: Manual[] = [
   { code: 'creator_laugh', emoji: 'face_with_tears_of_joy_3d', scan: true, creator: true },
   { code: 'creator_found', emoji: 'waving_hand_3d_default', scan: true, creator: true },
   { code: 'bugs', emoji: 'lady_beetle_3d', scan: false },
+  { code: 'dmp', emoji: 'spiral_calendar_3d', scan: true },
   ...BADGES.map((b) => ({ code: b.code, emoji: b.variants[0].emoji, scan: true, variants: b.variants as Manual['variants'] })),
 ];
 /** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
@@ -83,7 +86,7 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
 // tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
-const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', critic: 'cr', referral: 'rc' };
+const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
@@ -186,7 +189,7 @@ const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.
 /** The closest medal to its next level (started ones first, else the nearest goal); secrets don't count, nor Bug
  *  hunter (the creator gives it by hand) or the pins (one time, nobody works toward them). */
 export function closest(ach: Achievement[]): Achievement | undefined {
-  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && a.code !== 'bugs' && nextOf(a));
+  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && !addsUp(a.code) && nextOf(a));
   return [...open].filter((a) => a.count > 0).sort((a, b) => ratio(b) - ratio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];
 }
 export function leftLine(a: Achievement): string {

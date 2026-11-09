@@ -198,7 +198,7 @@ def grant_all(con, v: Viewer, sid: int, code: object) -> dict:
     the batch that undoes them all at once (logic.undo_batch)."""
     if not logic._owner(con, v):
         raise ApiError("forbidden")
-    if code not in logic.GRANTABLE or code == "bugs" or not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
+    if code not in logic.GRANTABLE or code in ("bugs", "dmp") or not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
         raise ApiError("bad_input")
     n, batch = 0, f"q{sid}_{now()}"
     with tx(con):

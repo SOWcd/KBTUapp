@@ -10,7 +10,7 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type BadgeSession, type GrantItem, type GrantLink } from '../../lib/api';
-  import { codesOf, manualMedal, manualName, manualTitle, variantHow, type Manual } from '../../lib/awards';
+  import { addsUp, codesOf, manualMedal, manualName, manualTitle, variantHow, type Manual } from '../../lib/awards';
   import { say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -44,7 +44,7 @@
   const loadLinks = () => api.grantLinks().then((l) => (links = l)).catch(() => {});
   const loadHolders = () => api.awardPeople(a.code).then((l) => (holders = l)).catch(() => (holders = []));
   void loadLinks(); void loadHolders();
-  $effect(() => { if (owner && a.code !== 'bugs') api.badgeSessions().then((l) => (checkins = l)).catch(() => {}); });
+  $effect(() => { if (owner && !addsUp(a.code)) api.badgeSessions().then((l) => (checkins = l)).catch(() => {}); });
   const changed = () => { void loadHolders(); onchange?.(); };
 
   // ---- the scanner: our camera on the page; Telegram's popup only when ours is refused or missing
@@ -196,7 +196,7 @@
         {#if a.scan}<Button kind="filled" full onclick={() => { haptic.tap(); sheets.badgeQr(a, code); }}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('aw.show')}</Button>{/if}
         <div class="btns">
           {#if a.scan}<Button kind="tinted" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
-          <Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>
+          {#if a.code !== 'dmp'}<Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>{/if}
         </div>
         {#if mode === 'link'}
           <div class="form" transition:fold>
