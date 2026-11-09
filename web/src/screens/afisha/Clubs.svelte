@@ -1,18 +1,17 @@
 <script lang="ts">
   // The Clubs tab, top down (the owner's mockup, Nov 8):
   //   My clubs     one strip of logos, my role under each; a club I'm in opens its Studio, one I follow its page
-  //   search       RevealSearch; typing turns the tab into the results
+  //   search       always there, sticks under the capsule; typing turns the tab into the results
   //   Recruiting   open rounds as cards in a row (RecruitCard); my own clubs aren't here
-  //   Catalog      official / initiatives / schools and offices: one list
+  //   the catalog  official, initiatives, schools and offices: each under its heading, nothing behind a control
   //   two rows     create a club, KBTU's chats (a club's own chats stay on its page)
   // The Student Government first wherever it shows.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import RevealSearch from '../../ui/RevealSearch.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
   import { data, loadChats, chatsFor } from '../../lib/state/data.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import Segmented from '../../ui/Segmented.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
@@ -20,7 +19,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { type Org, type OrgRef } from '../../lib/api';
   import { asStudent, session } from '../../lib/state/session.svelte';
-  import { byWeight, hit } from '../../lib/clubs';
+  import { byWeight, hit, roundDue } from '../../lib/clubs';
   import { byRank, roleLabel } from '../../lib/perms';
   import Row from '../../ui/Row.svelte';
   import { nameOf } from '../../lib/short';
@@ -38,13 +37,12 @@
   const bySize = (a: Org, b: Org) => +!a.gov - +!b.gov || b.members - a.members || b.subscribers - a.subscribers || a.name.localeCompare(b.name, 'ru');
   const found = $derived(searching ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
 
-  // the catalog: one list at a time. Initiatives: the Ascent's top (server clubs.py) first, then by size
-  let seg = $state<'official' | 'initiatives' | 'schools'>('official');
-  const segs = $derived([{ value: 'official' as const, label: t('clubs.segOfficial') }, { value: 'initiatives' as const, label: t('clubs.segInitiatives') }, { value: 'schools' as const, label: t('clubs.schools') }]);
-  const catalog = $derived(
-    seg === 'schools' ? data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru'))
-    : seg === 'official' ? clubsOnly.filter((o) => o.official).sort(bySize)
-    : clubsOnly.filter((o) => !o.official).sort((a, b) => +!a.top - +!b.top || bySize(a, b)));
+  // the catalog, each part under its own heading. Initiatives: the Ascent's top (server clubs.py) first, then by size
+  const catalog = $derived([
+    { key: 'official', title: t('clubs.headOfficial'), orgs: clubsOnly.filter((o) => o.official).sort(bySize) },
+    { key: 'initiatives', title: t('clubs.headInitiatives'), orgs: clubsOnly.filter((o) => !o.official).sort((a, b) => +!a.top - +!b.top || bySize(a, b)) },
+    { key: 'schools', title: t('clubs.schoolsOffices'), orgs: data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')) },
+  ].filter((part) => part.orgs.length));
 
   // what's next at each club: its soonest event
   const next = $derived.by(() => {
@@ -71,6 +69,7 @@
   const mineIds = $derived(new Set(mine.map((x) => x.org.id)));
   const rounds = $derived(data.orgs.flatMap((o) => (o.round && !mineIds.has(o.id) && !o.myRole ? [{ org: o, round: o.round }] : []))
     .sort((a, b) => a.round.closesAt - b.round.closesAt || byWeight(a.org, b.org)));
+  const allRounds = () => { haptic.tap(); sheets.myClubs(rounds.map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) })), t('clubs.recruitingNow')); };
   const openLine = (o: Org) => (o.recruiting && !o.round && !o.myRole ? t('clubs.openNow') : ''); // takes applications any time
   // a strip name: the short one when the full one runs past the logo's column (StoryRow's rule), measured once each
   const tight = new SvelteSet<number>();
@@ -85,6 +84,16 @@
   // the row's line: what's next, else its latest event of the last 30 days (quiet, no dot), else its people
   const sub = (o: Org) => next.get(o.id) ?? (o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : null) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
   const waiting = (o: Org) => !!o.top && !o.official; // at the Ascent's top: its line says it's waiting for DMP
+
+  // stuck under the capsule: the bar's ground reaches up to it, so no row shows between them (a sentinel just above the
+  // bar: once it's under the capsule's line, the bar is stuck)
+  let stuck = $state(false);
+  function sentinel(el: HTMLElement) {
+    const top = Math.round((document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46) + 8);
+    const io = new IntersectionObserver(([e]) => { stuck = !e.isIntersecting && e.boundingClientRect.top < top; }, { rootMargin: `-${top}px 0px 0px 0px` });
+    io.observe(el);
+    return () => io.disconnect();
+  }
 </script>
 
 <div class="page scroll stagger">
@@ -102,7 +111,8 @@
     </Section>
   {/if}
 
-  <RevealSearch bind:value={q} placeholder={t('clubs.search')} />
+  <i class="sent" {@attach sentinel} aria-hidden="true"></i>
+  <div class={['find', { stuck }]}><SearchField bind:value={q} placeholder={t('clubs.search')} /></div>
 
   {#if searching}
     <Section title={t('clubs.found')} count={found.length}>
@@ -113,29 +123,28 @@
     </Section>
   {:else}
     {#if rounds.length}
-      <Section title={t('clubs.recruitingNow')}>
+      <Section title={t('clubs.recruitingNow')} onmore={allRounds}>
         <div class="cards hscroll">
           {#each rounds as r (r.org.id)}<RecruitCard org={r.org} round={r.round} />{/each}
         </div>
       </Section>
     {/if}
 
-    {#if data.orgs.length}
-      <Section title={t('clubs.catalog')} count={catalog.length}>
-        <Segmented items={segs} bind:value={seg} label={t('clubs.catalog')} />
-        <Group footnote={seg === 'initiatives' ? t('clubs.initiativeNote') : undefined}>
-          {#each catalog as o (o.id)}
-            {#if seg === 'schools'}
+    {#each catalog as part (part.key)}
+      <Section title={part.title} count={part.orgs.length}>
+        <Group footnote={part.key === 'initiatives' ? t('clubs.initiativeNote') : undefined}>
+          {#each part.orgs as o (o.id)}
+            {#if part.key === 'schools'}
               <ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)}>
                 {#snippet end()}<span class="chev"><ChevronRight size={18} /></span>{/snippet}
               </ClubRow>
             {:else}
               <ClubRow org={o} sub={waiting(o) ? t('clubs.awaitsDmp') : [openLine(o), next.get(o.id) ?? (openLine(o) ? '' : sub(o))].filter(Boolean).join(' · ')} hot={!waiting(o) && next.has(o.id)} />
             {/if}
-          {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
+          {/each}
         </Group>
       </Section>
-    {/if}
+    {/each}
   {/if}
 
   <div class="rows">
@@ -163,6 +172,16 @@
   .mc b { width: 100%; margin-top: 7px; font: 600 var(--fs-cap)/1.25 var(--font-text); }
   .mc small { width: 100%; font: 500 var(--fs-micro)/1.3 var(--font-text); color: var(--text-3); }
   .mc small.lead { color: var(--accent-text); font-weight: 600; }
+
+  /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */
+  .sent { display: block; height: 0; }
+  .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-6) calc(-1 * var(--gutter)) 0;
+    padding: 0 var(--gutter) var(--s-2); background: var(--bg); }
+  .sent:first-child + .find { margin-top: var(--s-1); }
+  .find::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(var(--head-bottom) + var(--s-2)); background: var(--bg);
+    opacity: 0; transition: opacity var(--t-fast) var(--ease); pointer-events: none; }
+  .find.stuck::before { opacity: 1; }
+  .find.stuck { box-shadow: 0 0.5px 0 var(--separator); }
 
   /* Recruiting: cards in a row */
   .cards { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--s-2); scroll-padding: 0 var(--gutter); }

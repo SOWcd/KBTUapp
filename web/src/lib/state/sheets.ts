@@ -130,7 +130,7 @@ export const sheets = {
   /** a club of mine: its Studio pushed over the Clubs tab (the tab's Mine row, the bot's links) */
   studio: (_org: Id) => {},
   /** all my clubs as rows (the Clubs tab's "All" circle, 3+ of them); role: mine there (a club I only follow: null) */
-  myClubs: (_rows: { org: OrgRef; role: string | null; sub: string }[]) => {},
+  myClubs: (_rows: { org: OrgRef; role: string | null; sub: string }[], _title?: string) => {},
   /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
   schedHowTo: () => {},
   /** my whole week of classes */

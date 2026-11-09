@@ -5,11 +5,11 @@
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import type { Org } from '../lib/api';
   import { t, tn } from '../lib/i18n/index.svelte';
+  import { daysLeft, roundDue } from '../lib/clubs';
   import { toggleSub } from '../lib/state/data.svelte';
   import { session } from '../lib/state/session.svelte';
   import { sheets } from '../lib/state/sheets';
   import { nameOf } from '../lib/short';
-  import { dayMonth, nowTs } from '../lib/time';
   import Button from './Button.svelte';
   import GovMark from './GovMark.svelte';
   import IconButton from './IconButton.svelte';
@@ -17,7 +17,6 @@
   import OrgLogo from './OrgLogo.svelte';
 
   let { org: o, round }: { org: Org; round: NonNullable<Org['round']> } = $props();
-  const left = $derived(Math.max(1, Math.ceil((round.closesAt - nowTs()) / 86400)));
 </script>
 
 <div class="rc surface">
@@ -30,7 +29,7 @@
     </span>
   </span>
   <span class="due">
-    <em class={{ soon: left <= 3 }}>{left <= 3 ? tn('clubs.daysLeft', left) : t('clubs.until', { when: dayMonth(round.closesAt) })}</em>
+    <em class={{ soon: daysLeft(round.closesAt) <= 3 }}>{roundDue(round.closesAt)}</em>
     <span class="act">
       {#if session.me?.student && !o.myRole}<Button kind={round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{t(round.applied ? 'clubs.applied' : 'join.apply')}</Button>
       {:else}<IconButton icon={o.subscribed ? BellCheck : Bell} size="s" on={o.subscribed} onclick={() => toggleSub(o.id)} label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} />{/if}

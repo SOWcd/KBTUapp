@@ -30,6 +30,4 @@
   button::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
   button:active { transform: none; opacity: 0.7; }
   button.on { color: var(--text); }
-  /* a narrow phone: whole labels rather than an ellipsis */
-  @media (max-width: 360px) { button { padding: 0 var(--s-1); font-size: var(--fs-cap); } }
 </style>
