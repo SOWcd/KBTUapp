@@ -11,6 +11,28 @@ from kbtu import admin, bot, config, db, texts
 from test_core import env, login  # noqa: F401  (env: the fixture)
 
 
+def test_casting_from_event(env, monkeypatch):
+    """An event turned into an offline casting: on now, in the strip, its followers not messaged; one at a time."""
+    import pytest
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    con = db.connect(cfg.db_path)
+    ann, bob = login(c, 62, "ann"), login(c, 63, "bob")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (91, 'jc', 'club', 'JC', 'JC', 'megaphone_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (91, ?, 'president', 0)", (ann["id"],))
+    con.execute("INSERT INTO subscriptions (org_id, user_id, created_at) VALUES (91, ?, 0)", (bob["id"],))
+    con.execute("""INSERT INTO events (id, org_id, title, description, place, starts_at, ends_at, status, visibility, created_by, created_at, updated_at, emoji, color)
+        VALUES (500, 91, 'Casting!', 'Come', 'Hall 1', 1, 2, 'published', 'public', ?, 0, 0, 'megaphone_3d', '#2F5BEA')""", (ann["id"],))
+    until = time.strftime("%Y-%m-%d 23:59", time.gmtime(time.time() + 5 * 3600 + 86400))
+    admin.main(["casting", "from-event", "500", until])
+    p = con.execute("SELECT * FROM posts WHERE org_id = 91").fetchone()
+    assert (p["title"], p["body"], p["casting_place"], p["author_id"], p["audience"]) == ("Casting!", "Come", "Hall 1", ann["id"], "public")
+    assert p["casting_from"] <= time.time() < p["casting_to"]
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'casting_open'").fetchone()[0] == 0
+    with pytest.raises(SystemExit):
+        admin.main(["casting", "from-event", "500", until])
+
+
 def test_announce3(env, monkeypatch, capsys):
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
