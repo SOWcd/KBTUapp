@@ -7,7 +7,7 @@
   import type { Org } from '../lib/api';
   import { t, tn } from '../lib/i18n/index.svelte';
   import { daysLeft, roundDue } from '../lib/clubs';
-  import { artOf } from '../lib/covers';
+  import { artOf, mirrors } from '../lib/covers';
   import { toggleSub } from '../lib/state/data.svelte';
   import { session } from '../lib/state/session.svelte';
   import { sheets } from '../lib/state/sheets';
@@ -27,7 +27,7 @@
 <div class="rc surface">
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
   <span class="cv" style:background={COVERS[o.cover % COVERS.length]}>
-    {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" /><i class="dim"></i>{/if}
+    {#if art}<img class={["art", { flip: mirrors(o) }]} src={art} alt="" loading="lazy" decoding="async" draggable="false" /><i class="dim"></i>{/if}
     <span class="mark">{#if o.logo}<img src={o.logo} alt="" width="96" height="96" draggable="false" />{:else}<Emoji name={o.emoji} size={112} />{/if}</span>
     <b class="clamp-2">{head}<span class="nb">{tail}{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span></b>
   </span>
@@ -45,6 +45,7 @@
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .cv { position: relative; display: block; height: 92px; overflow: hidden; color: var(--on-accent); }
   .art, .dim { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .flip { scale: -1 1; }
   .dim { background: linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.08)); } /* a light scene keeps the name readable */
   .mark { position: absolute; right: -6px; top: -10px; rotate: -9deg; display: flex; filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.28)); }
   .mark img { border-radius: var(--r-l); object-fit: cover; }
