@@ -7,7 +7,7 @@
   import { api, ApiErr, original, type Id, type Org, type OrgCategory, type OrgPatch } from '../../lib/api';
   import { say, close, open, type Overlay } from '../../lib/state/ui.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
-  import { loadMe } from '../../lib/state/session.svelte';
+  import { loadMe, session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import LookPick from '../../ui/LookPick.svelte';
@@ -89,10 +89,12 @@
   const urls = $derived(f.links.map(linkUrl));
   const links = $derived(urls.filter((u): u is string => !!u));
   const linksOk = $derived(f.links.every((d, i) => !d.v.trim() || !!urls[i]));
+  // the ✓ was given to this name: DMP or the admin renames an official club (server clubs.update_org refuses the whole save)
+  const nameLocked = $derived(!!o?.official && session.me?.role !== 'admin' && !(session.me?.oversee && session.me.student));
   const patch = $derived.by(() => {
     const p: OrgPatch = {};
     if (!o) return p;
-    if (f.name.trim() !== o.name) p.name = f.name.trim();
+    if (!nameLocked && f.name.trim() !== o.name) p.name = f.name.trim();
     if (f.abbr.trim() !== (o.abbr ?? '')) p.abbr = f.abbr.trim();
     if (f.emoji !== o.emoji) p.emoji = f.emoji;
     if (f.cover !== o.cover) p.cover = f.cover;
@@ -153,7 +155,8 @@
       </div>
 
       <Group>
-        <Row title={t('nc.name')} value={f.name.trim()} invalid={nameBad} accessory="chevron" onclick={() => page(t('nc.name'), namePage)} />
+        {#if nameLocked}<Row title={t('nc.name')} value={f.name.trim()} />
+        {:else}<Row title={t('nc.name')} value={f.name.trim()} invalid={nameBad} accessory="chevron" onclick={() => page(t('nc.name'), namePage)} />{/if}
         {#if o.kind !== 'school'}<!-- a school's comes from KBTU's site (schools.json) -->
           <Row title={t('ce.abbr')} value={f.abbr.trim()} invalid={abbrBad} accessory="chevron" onclick={() => page(t('ce.abbr'), abbrPage)} />
         {/if}

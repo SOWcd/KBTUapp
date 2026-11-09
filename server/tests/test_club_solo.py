@@ -77,6 +77,15 @@ def test_quiet_flag(env, monkeypatch):
     assert quiet() is False                                # a post wakes it
     con.execute("UPDATE posts SET created_at = 0 WHERE org_id = ?", (org,))
     assert quiet() is True
+    now = int(time.time())
+    con.execute("""INSERT INTO events (org_id, status, title, starts_at, created_at, updated_at) VALUES (?, 'published', 'e', ?, 0, 0)""", (org, now - 86400))
+    assert quiet() is False                                # an event in the 30 days wakes it
+    con.execute("UPDATE events SET starts_at = 0 WHERE org_id = ?", (org,))
+    assert quiet() is True
+    con.execute("INSERT INTO rounds (org_id, title, closes_at, status, created_at) VALUES (?, 'r', ?, 'done', 0)", (org, now - 86400))
+    assert quiet() is False                                # so does a round closed in the 30 days, not only an open one
+    con.execute("UPDATE rounds SET closes_at = 0 WHERE org_id = ?", (org,))
+    assert quiet() is True
     con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (org,))
     assert quiet() is False                                # an official club is never quiet
     con.close()
