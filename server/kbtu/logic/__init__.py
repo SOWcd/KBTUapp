@@ -55,10 +55,10 @@ from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, CREA
     find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, claim_link, claim_qr, grant, grant_link, grant_scan, open_qr, qr_code,
     BADGES, BADGE_OF, award_counts, award_people, awards_of, badge_people, badge_sessions, my_grants, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_friend_link, use_grant_link)  # noqa: F401
-from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
+from .organizing import (GALLERY_PAGE, ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
     INVITES_A_DAY, LEAD_ROLES, PHOTO_REPORT_AT, RATE_FOR, RATE_SHOW, SLIDES, UNDO, UPDATES_A_DAY, _album_room,
     _album_view, _ask_rating, _asking, _changed, _cover, _expected, _focus, _guest, _invited_leaders, _meeting_ok,
-    _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo, add_door_guest,
+    _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo, add_door_guest, gallery,
     attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
     admin_delete_event, clean_event, create_event, decline, delete_event, events_gone, undo_delete_event, delete_update, door, door_guests, event_invites, invite_friend,
     kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,

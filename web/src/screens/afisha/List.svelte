@@ -46,6 +46,7 @@
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import StoryRow from './StoryRow.svelte';
+  import GalleryCard from './GalleryCard.svelte';
 
   let openPost = $state(false);
 
@@ -76,6 +77,8 @@
   });
   // the first screenfuls come with the tab, the rest a few days per idle moment: a term's worth of events (200 rows,
   // 5k nodes) was one 2 s task at 4x CPU before the Afisha showed. Off-screen days skip layout and paint (.day)
+  // the Gallery's card: under the day of the nearest event, at the latest under the second day (never a hunt)
+  const galleryAt = $derived(days[Math.min(Math.max(days.findIndex((x) => x.items.some((i) => 'e' in i)), 0), 1)]?.d);
   const STEP = 8;
   let upto = $state(2 * STEP);
   const shownDays = $derived.by(() => {
@@ -248,6 +251,7 @@
       {#if !day.items.length}<p class="free t-foot">{t('list.freeDay')}</p>{/if}
       </div>
     {/if}
+    {#if day.d === galleryAt}<GalleryCard />{/if}
   {/each}
 
   {#if past.length}

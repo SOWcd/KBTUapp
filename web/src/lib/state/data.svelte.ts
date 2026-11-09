@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember } from '../api';
+import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
@@ -22,6 +22,7 @@ export const data = $state({
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
+  gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   orgs: [] as Org[],
   schedule: [] as ClassItem[],
   posts: [] as Post[],
@@ -53,6 +54,21 @@ export async function loadFriends(): Promise<void> {
     warm([...f.incoming, ...f.friends].slice(0, 16).map((r) => r.person.avatar), f.going.slice(0, 6).flatMap((e, i) => [e.cover?.thumb, i < 2 ? e.cover?.url : null]));
   } catch { /* the last copy stays */ }
 }
+
+/** The Gallery in the background; its card's photos fetched ahead. all: the pages after the first too (as it opens, so the
+ *  viewer swipes across all of it). ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
+export async function loadGallery(all = false): Promise<void> {
+  if (!session.me?.student) { data.gallery = []; return; }
+  try {
+    let page = await api.gallery();
+    const got = [...page.photos];
+    while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
+    data.gallery = got;
+    warm(got.slice(0, 4).map((p) => p.thumb));
+  } catch { /* the last copy stays */ }
+}
+/** Reported from the Gallery: gone for me at once. */
+export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
 
 /** My card (the Profile hero's numbers, the Awards page), in the background like friends. */
 export async function loadMyCard(): Promise<void> {

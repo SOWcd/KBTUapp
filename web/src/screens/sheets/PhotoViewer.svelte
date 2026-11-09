@@ -8,6 +8,7 @@
   // any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo (owner, Nov 3)
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import Images from '@lucide/svelte/icons/images';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Flag from '@lucide/svelte/icons/flag';
   import Trash from '@lucide/svelte/icons/trash-2';
   import { onMount, untrack } from 'svelte';
@@ -193,7 +194,7 @@
   const shrink = $derived(1 - Math.min(dy, 600) / 1500); // the pulled photo gets smaller as it goes
   const picMove = $derived(z !== 1 || x || y ? `translate(${x}px, ${y}px) scale(${z})` : dx || dy ? `translate(${dx}px, ${dy}px) scale(${shrink})` : null);
   // anything to say or do under the photo (an album's); a person's photo has the × alone
-  const acts = $derived(!!list[at] && (!!list[at].by || !list[at].mine || (!!onremove && list[at].canDelete)));
+  const acts = $derived(!!list[at] && (!!list[at].by || !!list[at].event || !list[at].mine || (!!onremove && list[at].canDelete)));
   const shown = $derived(chrome && !dy && z === 1);
 
   async function remove() {
@@ -239,7 +240,14 @@
         {/each}
       </div>
     {/if}
-    {#if list[at]?.by}<p class="by" class:low={list.length < 2}>{list[at].by}</p>{/if}
+    {#if list[at]?.by || list[at]?.event}
+      {@const ev = list[at].event}
+      <div class="by" class:low={list.length < 2}>
+        <!-- the Gallery's photos come from many events: the one this is from, a tap away -->
+        {#if ev}<button class="ev" onclick={() => sheets.event(ev.id)}><span class="ellipsis">{ev.title}</span><ChevronRight size={14} strokeWidth={2.4} /></button>{/if}
+        {#if list[at].by}<p>{list[at].by}</p>{/if}
+      </div>
+    {/if}
     {#if list[at] && !list[at].mine}<button class="tool l glass glass-pill" use:glass aria-label={t('cm.report')} onclick={report}><Flag size={20} /></button>{/if}
     {#if onremove && list[at]?.canDelete}<button class="tool r glass glass-pill danger" use:glass aria-label={t('album.remove')} onclick={remove}><Trash size={20} /></button>{/if}
   </div>
@@ -274,6 +282,9 @@
   .by { position: absolute; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 140px); text-align: center; font: 600 13px/1.2 var(--font-text);
     color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); }
   .by.low { bottom: calc(var(--safe-bottom) + 84px); }
+  .ev { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; font: 600 var(--fs-body)/1.2 var(--font-text); color: inherit; text-shadow: inherit; }
+  .ev > :global(svg) { flex: none; opacity: 0.7; }
+  .ev:active { opacity: 0.6; }
   /* report and remove at the ×'s sides, as the phone's toolbar */
   .tool { position: absolute; bottom: calc(var(--safe-bottom) + 20px); width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-full);
     color: #fff; background-color: rgba(255, 255, 255, 0.12); }
