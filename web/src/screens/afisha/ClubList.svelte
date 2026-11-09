@@ -1,7 +1,7 @@
 <script lang="ts">
   // A page pushed from the Clubs tab, live from the store. all: every club under its heading, official first, the quiet
-  // ones folded into the last row of Initiatives (search opens them up), then "Create a club"; quiet: those; schools: schools and offices; an interest: its clubs by the server's rank, the first
-  // as a wide poster, the next three on a shelf, the rest as rows (quiet clubs aren't in an interest).
+  // ones folded into the last row of Initiatives (search opens them up), then "Create a club"; quiet: those; schools:
+  // schools and offices; an interest: its clubs by the server's rank, the first as a wide poster, the next three on a shelf, the rest as rows (quiet clubs aren't in an interest).
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import type { Org, OrgCategory } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';

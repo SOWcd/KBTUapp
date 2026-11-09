@@ -1715,6 +1715,7 @@ const ru = {
   'clubs.nothingSoon': "Пока без событий",
   'clubs.search': "Найти клуб",
   'clubs.official': "Официальная организация",
+  'clubs.officialWhy': "Официальный статус даёт только университет (ДМП)",
   'club.initiative': "Студенческая инициатива",
   'club.members': {one: "{n} участник", few: "{n} участника", many: "{n} участников", other: "{n} участника"},
   'club.lead': "Руководство",

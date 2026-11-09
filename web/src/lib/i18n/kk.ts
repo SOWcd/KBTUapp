@@ -1695,6 +1695,7 @@ const kk: Dict = {
   'clubs.nothingSoon': "Әзірге іс-шара жоқ",
   'clubs.search': "Клуб іздеу",
   'clubs.official': "Ресми ұйым",
+  'clubs.officialWhy': "Ресми мәртебені тек университет (ДМП) береді",
   'club.initiative': "Студенттік бастама",
   'club.members': {one: "{n} мүше", other: "{n} мүше"},
   'club.lead': "Басшылық",

@@ -92,7 +92,7 @@
       {#if o.myRights?.includes('profile')}
         <button class="lg" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /><span class="cam"><Camera size={16} /></span></button>
       {:else}<OrgLogo org={o} size={84} />{/if}
-      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} /></span>{/if}</h2>
+      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}</h2>
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
       {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleName(o.myRole, inLang(o.myTitle, o.myTitleKk, o.myTitleEn)) })}</Tag></span>

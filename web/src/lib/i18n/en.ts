@@ -1695,6 +1695,7 @@ const en: Dict = {
   'clubs.nothingSoon': "No events yet",
   'clubs.search': "Find a club",
   'clubs.official': "Official organization",
+  'clubs.officialWhy': "Official status is given only by the university (DMP)",
   'club.initiative': "Student initiative",
   'club.members': {one: "{n} member", other: "{n} members"},
   'club.lead': "Leadership",
