@@ -743,8 +743,8 @@ def reveal(con, v: Viewer, pid: int) -> dict:
 # ---- the anonymous author's replies in the comments (Nov 3, .claude/reports/anon-reply/review.md)
 # The author of an anonymous post answers under it through the bot, so the answer doesn't carry their Telegram account.
 # No comment list in the app (other people's words are never stored): the reply goes to the thread, or to a comment
-# whose Telegram link the author pasted, checked against fchan_comments. Its own AI look, then a random wait (the time
-# it lands can't be matched to the author's "online"), then the bot sends it once. Stored without a user id: the post
+# whose Telegram link the author pasted, checked against fchan_comments. Its own AI look, then the bot sends it once
+# (no pause: owner, Nov 9). Stored without a user id: the post
 # is the only way to its author (the owner's reveal, account deletion), and the replies go with it.
 
 REPLY_GAP = 10            # seconds between an author's replies (owner, Nov 4: a minute stalled a live talk)
@@ -752,15 +752,7 @@ REPLY_GAP = 10            # seconds between an author's replies (owner, Nov 4: a
 # author's own from their account left out, or they could buy replies with them) and REPLIES_MORE on top: as many
 # answers as there are people talking, plus a few for the thread (owner, Nov 4; the per-comment cap went)
 REPLIES_MORE = 5
-# seconds, at random, from the author's tap (the AI's look inside it) to the bot's send. ponytail: owner, Nov 3: 30-120 s
-# felt too slow; 5-20 s blurs the moment less (the author's "online" in Telegram and a reply seconds later still line up
-# across many replies), the composer warns of it; widen it if timing ever narrows an author down
-REPLY_WAIT = (5, 20)
 COMMENT_LINK = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:s/)?(\w{4,32})/(\d+)/?\?(?:[^#\s]*&)?comment=(\d+)(?:[&#]\S*)?", re.I)
-
-
-def _wait(base: int | None = None) -> int:
-    return (base or _now()) + REPLY_WAIT[0] + secrets.randbelow(REPLY_WAIT[1] - REPLY_WAIT[0] + 1)
 
 
 def _my_anon_post(con, v: Viewer, pid: int):
@@ -819,12 +811,10 @@ def reply_cap(con, p) -> int:
 
 
 def reply_settle(con, rid: int, verdict: str | None) -> dict:
-    """The AI's word (ai.screen_reply): 'ok' goes out after a random wait; 'person', 'flag' or no answer wait for a moderator."""
+    """The AI's word (ai.screen_reply): 'ok' goes out; 'person', 'flag' or no answer wait for a moderator."""
     with tx(con):
         if verdict == "ok":
-            r = one(con, "SELECT created_at FROM fchan_replies WHERE id = ?", rid)
-            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'",
-                        (_wait(r["created_at"]) if r else _now(), rid))
+            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'", (_now(), rid))
         else:
             con.execute("UPDATE fchan_replies SET why = ? WHERE id = ? AND status = 'held' AND why = 'check'",
                         ({"person": "person", "flag": "ai"}.get(verdict or "", "check"), rid))
@@ -977,7 +967,7 @@ def _mod_reply(con, v: Viewer, rid: int, where: str):
 
 
 def reply_mod_decide(con, v: Viewer, rid: int, ok: object, again: object = False) -> None:
-    """A held reply goes out (after the random wait) or is removed; a live one: ok clears its reports (kept), else it
+    """A held reply goes out or is removed; a live one: ok clears its reports (kept), else it
     is taken down (out of the group after the undo minute). A lost send (may be in the group already, the bot can't
     tell) goes out again only on the moderator's explicit again=True, after looking at the comments. Audited."""
     if not isinstance(ok, bool):
@@ -987,7 +977,7 @@ def reply_mod_decide(con, v: Viewer, rid: int, ok: object, again: object = False
         if ok and r["status"] == "held" and r["why"] == "lost" and again is not True:
             raise ApiError("conflict", "lost")
         if ok and r["status"] == "held":
-            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ?", (_wait(), rid))
+            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ?", (_now(), rid))
             act = "fchan_reply_release"
         elif ok:  # the reports were wrong: cleared (a new one brings it back)
             con.execute("DELETE FROM fchan_reply_reports WHERE reply_id = ?", (rid,))
@@ -999,13 +989,13 @@ def reply_mod_decide(con, v: Viewer, rid: int, ok: object, again: object = False
 
 
 def reply_mod_restore(con, v: Viewer, rid: int) -> None:
-    """A take-down undone: inside the minute the message stays as it was; later the reply goes out anew (after the wait)."""
+    """A take-down undone: inside the minute the message stays as it was; later the reply goes out anew."""
     with tx(con):
         r = _mod_reply(con, v, rid, "r.status = 'hidden' AND r.why IN ('moderator', 'reports') AND p.status = 'live'")
         con.execute("DELETE FROM fchan_reply_reports WHERE reply_id = ?", (rid,))
         kept = bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()
         con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, drop_at = NULL, send_at = ? WHERE id = ?",
-                    (r["send_at"] if kept else _wait(), rid))
+                    (r["send_at"] if kept else _now(), rid))
         log_action(con, v.id, "fchan_reply_undo" if kept else "fchan_reply_restore", f"fchanr:{rid}")
 
 

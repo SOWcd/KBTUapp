@@ -195,7 +195,7 @@ export interface Org extends OrgRef {
   canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
   top?: boolean;                // a student initiative at the Ascent's top: an official club's tools, no ✓ (server clubs.py)
   category: OrgCategory | null; // its interest (the Clubs tab's tiles), set by its President or Vice
-  quiet: boolean;               // 30 days without an event, post or open round (official clubs never): the end of All clubs
+  quiet: boolean;               // 30 days without an event, post or round (official clubs never): folded at the end of Initiatives
   rank: number;                 // Popular's order, the server's (members and recent activity)
   friends: PersonRef[];         // up to two of my friends in it, privacy-filtered (server clubs.org_shapes)
   friendsN: number;             // how many there are

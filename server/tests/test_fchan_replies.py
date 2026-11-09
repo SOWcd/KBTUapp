@@ -1,6 +1,6 @@
 """The anonymous author's replies in the forum channel's comments (logic/fchannel.py reply_*, tgc._replies;
 .claude/reports/anon-reply/review.md): the author of an anonymous post answers the thread or a linked comment through
-the bot. Its own AI look, caps, a random wait, sent once, deleted by the author, taken down from the Admin sheet with
+the bot. Its own AI look, caps, no pause, sent once, deleted by the author, taken down from the Admin sheet with
 Undo, reportable, gone with the post and with the account; nothing ties a reply to anyone but through the post."""
 from __future__ import annotations
 
@@ -84,16 +84,13 @@ def group_sends(tg) -> list[dict]:
     return [b for b in tg.of("sendMessage") if b["chat_id"] == G and "reply_markup" not in b]  # not the rules' first comment
 
 
-def test_reply_flow_wait_and_once(env, monkeypatch):
+def test_reply_flow_and_once(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     r = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Agreed, the soup is cold", "link": w.link}).json()
     assert r["state"] == "soon" and r["comment"] == 60
     wait = w.con.execute("SELECT send_at - created_at FROM fchan_replies WHERE id = ?", (r["id"],)).fetchone()[0]
-    assert logic.fchannel.REPLY_WAIT[0] <= wait <= logic.fchannel.REPLY_WAIT[1]              # from the tap, at random
-    tick(w.cfg, w.tg, w.con)
-    assert not group_sends(w.tg)                                                             # not before the wait
-    t[0] += 21
+    assert wait == 0                                                                         # as soon as the AI allows
     tick(w.cfg, w.tg, w.con)
     tick(w.cfg, w.tg, w.con)
     s = group_sends(w.tg)
@@ -104,7 +101,6 @@ def test_reply_flow_wait_and_once(env, monkeypatch):
     # without a link: to the thread (the post's copy)
     t[0] += 61
     w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Thanks everyone"})
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert group_sends(w.tg)[-1]["reply_parameters"] == {"message_id": COPY}
     # plain text only
@@ -127,7 +123,6 @@ def test_reply_ai_held_and_released(env, monkeypatch):
     assert [x["body"] for x in q["held"]] == ["Ask Prof. Abenov, he knows"] and q["held"][0]["why"] == "person"
     assert w.c.post(f"/api/forum-replies/{r['id']}/mod", headers=tma(1), json={"ok": True}).status_code == 403  # not staff
     assert w.c.post(f"/api/forum-replies/{r['id']}/mod", headers=tma(3), json={"ok": True}).status_code == 204
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert len(group_sends(w.tg)) == 1
     assert w.con.execute("SELECT action FROM audit_log WHERE target = ?", (f"fchanr:{r['id']}",)).fetchone()[0] == "fchan_reply_release"
@@ -257,13 +252,11 @@ def test_reply_goes_with_post(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     sent = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Sent before the end"}).json()["id"]
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     t[0] += 61
     w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Not yet sent"})
     msg = w.con.execute("SELECT tg_msg FROM fchan_replies WHERE id = ?", (sent,)).fetchone()[0]
     w.con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 1")                          # banned meanwhile: nothing goes
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert len(group_sends(w.tg)) == 1
     w.con.execute("UPDATE users SET banned_at = NULL WHERE tg_id = 1")
@@ -278,7 +271,6 @@ def test_reply_send_missing_and_lost(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     r = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "To a comment soon gone", "link": w.link}).json()
-    t[0] += 21
     w.tg.say["sendMessage"] = (400, "Bad Request: message to be replied not found")
     tick(w.cfg, w.tg, w.con)
     assert w.c.get(f"/api/forum-posts/{w.pid}/replies", headers=tma(1)).json()[0]["state"] == "missing"
@@ -288,7 +280,6 @@ def test_reply_send_missing_and_lost(env, monkeypatch):
     # no answer at all: never sent twice by itself, a moderator decides
     t[0] += 61
     r = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Into the void"}).json()
-    t[0] += 21
     w.tg.say["sendMessage"] = None
     tick(w.cfg, w.tg, w.con)
     tick(w.cfg, w.tg, w.con)
@@ -302,7 +293,6 @@ def test_reply_report_answer_and_posing(env, monkeypatch):
     mod = login(w.c, 3, "mod")
     w.con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
     r = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "My anonymous answer"}).json()
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     msg = w.con.execute("SELECT tg_msg FROM fchan_replies WHERE id = ?", (r["id"],)).fetchone()[0]
     # /report on the bot's reply: into the Admin sheet, the reporter told; counted once per reporter
@@ -335,7 +325,6 @@ def test_reply_account_deletion(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Sent one here"})
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     t[0] += 61
     w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Waiting one here"})
@@ -346,7 +335,6 @@ def test_reply_account_deletion(env, monkeypatch):
 
 def sent_reply(w, t, body: str = "My anonymous answer") -> tuple[int, int]:
     rid = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": body}).json()["id"]
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     return rid, w.con.execute("SELECT tg_msg FROM fchan_replies WHERE id = ?", (rid,)).fetchone()[0]
 
@@ -422,7 +410,6 @@ def test_reply_lost_needs_explicit_again(env, monkeypatch):
     r = w.c.post(f"/api/forum-replies/{rid}/mod", headers=tma(3), json={"ok": True})
     assert r.status_code == 409
     assert w.c.post(f"/api/forum-replies/{rid}/mod", headers=tma(3), json={"ok": True, "again": True}).status_code == 204
-    t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert len([b for b in group_sends(w.tg) if b["text"].startswith("Lost on the way")]) == 1
 
@@ -432,7 +419,6 @@ def test_reply_other_not_found_keeps_reply(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     rid = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Patience please"}).json()["id"]
-    t[0] += 21
     w.tg.say["sendMessage"] = (400, "Bad Request: chat not found")
     tick(w.cfg, w.tg, w.con)
     assert w.con.execute("SELECT status, tg_msg FROM fchan_replies WHERE id = ?", (rid,)).fetchone()[:] == ("live", None)
