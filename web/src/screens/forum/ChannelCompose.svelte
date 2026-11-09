@@ -5,6 +5,7 @@
   import { channel, touched } from '../../lib/state/channel.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { nowTs } from '../../lib/time';
+  import { count } from '../../lib/stats';
   import type { ChannelFeedPost, Id } from '../../lib/api';
   import Self from './ChannelCompose.svelte';
 
@@ -16,7 +17,7 @@
   /** The writing window, out of the Forum tab's "Share with KBTU…" pill. Called in a tap: the field takes the focus in
    *  that same tap (flushSync mounts the window first), or iOS won't bring the keyboard up. */
   export function compose(draft?: Draft): void {
-    open(Self, { draft });
+    open(Self, { draft }, 'sheet.compose');
     flushSync();
     const fields = document.querySelectorAll<HTMLTextAreaElement>('.cw-text'), f = fields[fields.length - 1]; // the last: an old one may still be leaving
     f?.focus({ preventScroll: true });
@@ -141,6 +142,7 @@
     const temp = stand(text, was); haptic.select(); kept.body = ''; close(overlay.id);
     try {
       const p = await api.newChannelPost(text, was);
+      count('do.forum');
       land(temp, p, p.status === 'held' && !!p.ai);
       haptic.ok();
       if (p.status === 'live') { burst(); say(t('fc.postedSay'), 'party_popper_3d'); setTimeout(loadChannel, 5000); } // the bot sends it within seconds: its link then

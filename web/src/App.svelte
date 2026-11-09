@@ -32,6 +32,7 @@
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import { warmMap } from './lib/map';
+  import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
@@ -42,27 +43,27 @@
   // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
   const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
   // (the promise settles once it's open or given up: a queued moment waits for it, lib/moments.ts)
-  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>): Promise<void> {
+  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen): Promise<void> {
     const mine = ++want, got = loaded.get(load);
-    if (got) { open(got.default, props); return Promise.resolve(); }
+    if (got) { open(got.default, props, stat); return Promise.resolve(); }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props, stat); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
-  sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album });
+  sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album }, 'sheet.event');
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
   sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
   sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));
-  sheets.person = (id, invite) => lazy(personSheet, { id, invite });
-  sheets.club = (id) => lazy(clubSheet, { id });
+  sheets.person = (id, invite) => lazy(personSheet, { id, invite }, 'sheet.person');
+  sheets.club = (id) => lazy(clubSheet, { id }, 'sheet.club');
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
-  sheets.ticket = (id) => lazy(ticketView, { id });
+  sheets.ticket = (id) => lazy(ticketView, { id }, 'sheet.ticket');
   sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
   // named, so its chunk is kept once loaded and opens in the tap's frame (an arrow made here each call never was)
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
@@ -76,7 +77,7 @@
   sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
   // a club's Studio is for its members only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/StudioPane.svelte');
-  sheets.studio = (org) => lazy(studioPage, { org });
+  sheets.studio = (org) => lazy(studioPage, { org }, 'sheet.studio');
   const teamPage = () => import('./screens/club/Team.svelte');
   const feedPage = () => import('./screens/afisha/Feed.svelte');
   // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame
@@ -107,7 +108,7 @@
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
-  sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }));
+  sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
@@ -132,6 +133,7 @@
     mark(true); haptic.ok();
     try {
       await api.applyRound(round.id, { departments: [], answers: {}, source });
+      count('do.casting');
       burst(); void loadAfisha();
       say(t('cast.sentShares'), 'party_popper_3d', () => {
         mark(false); haptic.soft();
@@ -153,8 +155,8 @@
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
   sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
-  sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
-  sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }); };
+  sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {}, 'sheet.admin');
+  sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map'); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => void loadMe();
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
@@ -164,13 +166,13 @@
   sheets.createClub = () => lazy(() => import('./screens/sheets/CreateClubSheet.svelte'), {});
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
   sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
-  sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
+  sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {}, 'sheet.awards');
   sheets.adminAwards = sheets.give = sheets.badges = () => lazy(() => import('./screens/admin/AdminAwards.svelte'), {});
   sheets.adminClubs = (at) => lazy(() => import('./screens/admin/AdminClubs.svelte'), { at });
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
   sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
-  sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});
+  sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {}, 'sheet.week');
   sheets.forum = (ask) => lazy(() => import('./screens/forum/Forum.svelte'), { ask });
   sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
   sheets.newAsk = (onmade) => lazy(() => import('./screens/forum/NewAsk.svelte'), { onmade });
@@ -184,17 +186,17 @@
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
   sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
-  sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange });
+  sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange }, 'sheet.comments');
   sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }));
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
   sheets.celebrate = () => void celebrate();
   sheets.referral = (code) => lazy(() => import('./screens/profile/RefSheet.svelte'), { code });
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
-  sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
-  sheets.news = () => lazy(newsPage, {});
-  sheets.feed = () => lazy(feedPage, {});
-  sheets.friends = () => lazy(friendsPage, {});
+  sheets.settings = (kind) => { if (kind === 'donate') count('do.donate'); return lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind }); };
+  sheets.news = () => lazy(newsPage, {}, 'sheet.news');
+  sheets.feed = () => lazy(feedPage, {}, 'sheet.feed');
+  sheets.friends = () => lazy(friendsPage, {}, 'sheet.friends');
   sheets.team = () => lazy(teamPage, {});
   setLoginHook((after, lock) => sheets.login(after, lock));
 
@@ -234,6 +236,10 @@
     });
   }
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
+  $effect(() => { count(`tab.${ui.tab}`); });
+  // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
+  let measured = false;
+  $effect(() => { if (measured || !built[ui.tab] || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   // The top overlay that speaks decides (a Pane at rest is quiet but still the top: the capsule never names the page
@@ -412,12 +418,12 @@
     // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
     const team = (org: number) => {
       if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
-      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }).then(() => sheets.team());
+      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }, 'sheet.studio').then(() => sheets.team());
     };
     // st_<club>: the bot's "host an event with us": that club's Studio, whose To do answers it
     const studio = (org: number) => {
       if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
-      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org });
+      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }, 'sheet.studio');
     };
     // mg_<event>: the bot's "a member asks to come as a guest": the event's organizer screen, its asks on top
     const manage = (ev: number) => asStudent(() => { void eventDetails(ev).then(() => sheets.manage(ev), () => sheets.event(ev)); });
@@ -433,6 +439,7 @@
   async function checkIn(p: string, again = false): Promise<void> {
     try {
       const r = await api.qrCheckin(p);
+      count('do.qr');
       if (r.done && r.left) { haptic.ok(); say(t('ci.left', { title: r.title }), 'waving_hand_3d_default'); return; }
       if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
       if (session.me?.student) { haptic.error(); say(t('ci.notCounted', { title: r.title }), 'warning_3d'); return; } // the event didn't take it (window, members only)
@@ -618,6 +625,7 @@
   }
 
   onMount(() => {
+    count(launchedFrom(tg.startParam));
     backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing && shown(o))) close(); };

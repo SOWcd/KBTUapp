@@ -31,6 +31,8 @@
                                 the old value to the audit log); "" clears the middle name
   .venv/bin/python -m kbtu.admin fix <@username | telegram id> reset   My data's one-time corrections allowed again
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
+  .venv/bin/python -m kbtu.admin stats-usage [days]                     anonymous usage (default 7 days, today included): screens,
+                                sources, errors, open time; the numbers of the Monday message to the creator
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
   .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
@@ -83,7 +85,7 @@ import sqlite3
 import sys
 import time
 
-from . import config, db
+from . import config, db, texts
 from pathlib import Path
 
 from .logic.account import _DEL_GONE
@@ -475,6 +477,9 @@ def main(args: list[str]) -> None:
                 for uid in to:
                     notify(con, uid, "photo_call", f"ph2:{e['id']}")
         print(f"{e['title']!r}: came and not called yet {len(to)}" + (" (queued)" if args[2:] else " (dry run; --send queues)"))
+    elif cmd == "stats-usage" and len(args) <= 2 and all(a.isdigit() for a in args[1:]):
+        from .logic import stats
+        print(texts.bot_message("en", "usage_week", **stats.fields(con, int(args[1]) if args[1:] else 7))[0])
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

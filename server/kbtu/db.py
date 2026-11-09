@@ -1338,6 +1338,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       added_by INTEGER REFERENCES users(id),
       created_at INTEGER NOT NULL,
       PRIMARY KEY (session_id, user_id));"""),
+    # anonymous usage counters (logic/stats.py): daily totals only, no person in them
+    (147, """CREATE TABLE usage_days (
+      day INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      n INTEGER NOT NULL,
+      PRIMARY KEY (day, key)) WITHOUT ROWID;"""),
 ]
 
 

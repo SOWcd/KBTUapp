@@ -214,6 +214,7 @@ def stats_day(con) -> None:
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     forum_sweep(con)
+    stats.forget(con)  # the anonymous usage counters: 180 days
     mapflaws.sweep(con)
     assistant.sweep(con)
     # the answers to an event's questions at sign-up go 30 days after it (the privacy policy's promise for them)
@@ -312,7 +313,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import assistant, mapflaws  # noqa: E402
+from . import assistant, mapflaws, stats  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402
