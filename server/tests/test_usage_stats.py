@@ -102,7 +102,9 @@ def test_digest_numbers(env, monkeypatch):
     con = db.connect(DB[0])
     _people(c, con)
     set_clock(monkeypatch, lambda: at(MONDAY))
-    con.execute("UPDATE users SET seen_at = ?", (at(MONDAY - 1),))
+    con.execute("DELETE FROM visits")
+    con.executemany("INSERT INTO visits (day, user_id) SELECT ?, id FROM users WHERE id IN (SELECT id FROM users LIMIT 2)", [(MONDAY - 1,), (MONDAY - 2,)])
+    con.execute("INSERT INTO visits (day, user_id) SELECT ?, id FROM users LIMIT 1", (MONDAY,))  # today isn't in the finished week
     last = MONDAY - 1
     con.executemany("INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)", [
         (last, "sheet.event", 40), (last - 1, "sheet.event", 2), (last, "tab.afisha", 30), (last, "from.qr", 9), (last, "err.sheet.map", 4),
@@ -168,3 +170,26 @@ def test_digest_shows_length_time_and_uses(env, monkeypatch):
     assert f["day_times"].endswith("p50 ≤40m, p75 ≤40m")
     assert f["uses"].split("\n")[:2] == ["do.qr 75%", "sheet.event 25%"]
     assert all(("{%s}" % k) in texts.BOT[lang]["usage_week"][0] for lang in ("ru", "kk", "en") for k in f)
+
+
+def test_review_fixes(env, monkeypatch):
+    c, _ = env
+    stats._spent.clear()
+    stats._uniq.clear()
+    con = db.connect(DB[0])
+    post(c, 7, {"uniq.sheet.map": 1, "sheet.admin": 3, "err.sheet.admin": 1, "uniq.sheet.admin": 1})
+    for _ in range(5):
+        post(c, 7, {"uniq.sheet.map": 1})
+    assert totals(con) == {"uniq.sheet.map": 1}                            # a repeat is dropped; the admin sheet isn't counted at all
+    owner = _people(c, con)
+    set_clock(monkeypatch, lambda: at(MONDAY))
+    real = stats.notify
+    monkeypatch.setattr(stats, "notify", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    try:
+        stats.week(con)
+    except RuntimeError:
+        pass
+    assert not con.in_transaction and not con.execute("SELECT 1 FROM meta WHERE key = 'usage_week'").fetchone()  # the mark rolled back too
+    monkeypatch.setattr(stats, "notify", real)
+    stats.week(con)
+    assert [r[0] for r in _digests(con)] == [owner]

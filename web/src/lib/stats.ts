@@ -5,7 +5,7 @@ import { inTelegram, on, onAndroid, onIos, tg } from './tg';
 
 export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
   | 'sheet.event' | 'sheet.club' | 'sheet.ticket' | 'sheet.person' | 'sheet.friends' | 'sheet.compose' | 'sheet.comments'
-  | 'sheet.map' | 'sheet.week' | 'sheet.awards' | 'sheet.studio' | 'sheet.admin' | 'sheet.news' | 'sheet.feed' | 'sheet.assistant';
+  | 'sheet.map' | 'sheet.week' | 'sheet.awards' | 'sheet.studio' | 'sheet.news' | 'sheet.feed' | 'sheet.assistant';
 type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 'do.donate';
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
@@ -101,10 +101,12 @@ function shown(): void {
 
 function away(): void {
   if (shownAt) {
-    const ms = Math.max(0, Date.now() - shownAt);
+    const now = Date.now(), ms = Math.max(0, now - shownAt), midnight = (today() * 86400 - 5 * 3600) * 1000;
+    const before = Math.min(ms, Math.max(0, midnight - shownAt)); // the part of the visit before today's midnight belongs to the old day
     shownAt = 0;
+    kept.ms += before;
     roll();
-    kept.ms += ms; kept.v += ms; kept.at = Date.now();
+    kept.ms += ms - before; kept.v += ms; kept.at = now;
   }
   flush();
 }

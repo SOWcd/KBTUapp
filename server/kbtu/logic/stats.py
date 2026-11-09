@@ -4,14 +4,15 @@ of the privacy policy. The app sends batches (web/src/lib/stats.ts); the owner r
 `admin stats-usage`."""
 from __future__ import annotations
 
-from ..db import maybe
+from ..db import maybe, tx
 from . import core
 from .core import _once, one, rows
 
+# no sheet.admin: with one moderator, its error count would say who hit it
 # the one allowlist: anything else a client sends is ignored. web/src/lib/stats.ts has the same names (a test checks)
 SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.event", "sheet.club", "sheet.ticket", "sheet.person", "sheet.friends", "sheet.compose", "sheet.comments",
-           "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.admin", "sheet.news", "sheet.feed", "sheet.assistant")
+           "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant")
 ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.donate")
 SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "from.other")  # the startapp's class, never its value
 PLATFORMS = ("ios", "android", "desktop", "web")
@@ -32,6 +33,8 @@ BATCH_COST, DAY_BUDGET = 5, 600  # one person's whole day: far above a real one,
 # times WEB_CONCURRENCY; a shared table would put a person into this feature's data, the one thing it must not have
 _spent: dict[int, int] = {}
 _spent_day = 0
+# ponytail: same ceiling (per worker, in memory): who already counted a uniq.* key today; a repeat is dropped, so one client can't inflate uniques
+_uniq: set[tuple[int, str]] = set()
 
 
 def _today() -> int:
@@ -45,11 +48,13 @@ def add(con, uid: int, body: dict) -> None:
     day = _today()
     if day != _spent_day:
         _spent, _spent_day = {}, day
-    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0}
+        _uniq.clear()
+    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0 and (uid, k) not in _uniq}
     cost = sum(counts.values()) + BATCH_COST
     if not counts or _spent.get(uid, 0) + cost > DAY_BUDGET:
         return
     _spent[uid] = _spent.get(uid, 0) + cost
+    _uniq.update((uid, k) for k in counts if k.startswith("uniq."))
     maybe(con, con.executemany, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)
         ON CONFLICT (day, key) DO UPDATE SET n = n + excluded.n""", [(day, k, n) for k, n in counts.items()])
 
@@ -62,10 +67,13 @@ def week(con) -> None:
     """Monday from 9:00 (Almaty), once: the last seven days' numbers to the creator alone."""
     local = core.now() + 5 * 3600
     day = local // 86400
-    if (day + 3) % 7 or local % 86400 < 9 * 3600 or not _once(con, "usage_week", str(day)):
+    if (day + 3) % 7 or local % 86400 < 9 * 3600:
         return
-    for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND tg_id > 0"):
-        notify(con, uid, "usage_week", f"uw:{day}")
+    with tx(con):  # the mark and the queue together: a restart between them can't lose the digest
+        if not _once(con, "usage_week", str(day)):
+            return
+        for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND tg_id > 0"):
+            notify(con, uid, "usage_week", f"uw:{day}")
 
 
 def _percentile(bars: list[int], share: float, labels: tuple = BUCKETS) -> str:
@@ -82,11 +90,15 @@ def _pct(part: int, whole: int) -> str:
     return f"{round(100 * part / whole)}%"
 
 
+def _active(con, lo: int, hi: int) -> int:
+    return one(con, "SELECT COUNT(DISTINCT user_id) FROM visits WHERE day >= ? AND day < ?", lo, hi)[0]
+
+
 def _retention(con, upto: int) -> dict:
     """From what the privacy policy already allows, read only: `visits` (the days someone opened the app, kept 30 days,
     for statistics the creator alone sees) and users.created_at. Only totals leave this function."""
     lo = upto - WINDOW
-    active = lambda days: one(con, "SELECT COUNT(DISTINCT user_id) FROM visits WHERE day >= ? AND day < ?", upto - days, upto)[0]  # noqa: E731
+    active = lambda days: _active(con, upto - days, upto)  # noqa: E731
     back = []
     for n in (1, 7, 30):  # of those who joined on a day whose n-th day after it is inside the window: came back on that day
         new, came = one(con, """SELECT COUNT(*), COALESCE(SUM(EXISTS (SELECT 1 FROM visits v WHERE v.user_id = u.id AND v.day = (u.created_at + 18000) / 86400 + ?)), 0)
@@ -120,7 +132,7 @@ def fields(con, days: int, upto: int | None = None) -> dict:
     used = {k: one(con, "SELECT COALESCE(SUM(n), 0) FROM usage_days WHERE key = ? AND day >= ? AND day < ?", f"uniq.{k}", seen, upto)[0] for k in USES}
     uses = "\n".join(f"{k} {_pct(used[k], active_days)}" for k in sorted(USES, key=lambda k: -used[k])) if active_days else "—"
     return {**_retention(con, upto), "sessions": spread("sess", SESSIONS), "day_times": spread("time", DAY_TIMES), "uses": uses,
-            "days": days, "active": one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", (upto - days) * 86400 - 5 * 3600)[0],
+            "days": days, "active": _active(con, upto - days, upto),
             "top": lines(most[:10]), "bottom": lines(most[:-11:-1]), "actions": lines(ACTIONS, 3),
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),

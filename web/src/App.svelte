@@ -155,7 +155,7 @@
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
   sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
-  sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {}, 'sheet.admin');
+  sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map'); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => void loadMe();

@@ -84,4 +84,14 @@ describe('usage counters', () => {
     two.count('sheet.event'); two.flush();
     expect(sent()).toEqual([{ 'sheet.event': 1, 'uniq.sheet.event': 1 }]);
   });
+
+  it('a visit over midnight is split between the two days', async () => {
+    vi.setSystemTime(noon + 12 * 3600_000 - 10 * MIN); // 23:50 in Almaty
+    const store: Record<string, string> = {};
+    const { flush } = await launch(store);
+    vi.advanceTimersByTime(20 * MIN); hide(true);
+    flush();
+    expect(sent().flatMap(Object.entries)).toContainEqual(['time.3', 1]); // 10 min yesterday; the other 10 stay on today
+    expect(JSON.parse(store['kb-stats']).ms).toBe(10 * MIN);
+  });
 });
