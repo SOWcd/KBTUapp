@@ -6,7 +6,6 @@
   // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
   // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
   // mark by its name, the next event with how full it is, the actions as tiles, the channel's first (Vice+).
-  import Megaphone from '@lucide/svelte/icons/megaphone';
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';

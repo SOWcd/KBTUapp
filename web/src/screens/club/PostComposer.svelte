@@ -57,6 +57,7 @@
   let photo = $state<Media | null>(was?.photo ?? null);
   const wasCast = was?.casting;
   const castFixed = !!wasCast && !castingOn(wasCast); // over or cancelled: its time stays as it was
+  // svelte-ignore state_referenced_locally
   let isCasting = $state(!!wasCast || casting); // Studio's own Casting row opens with it on
   let fromDate = $state(wasCast ? dateInput(wasCast.from) : ''), fromTime = $state(wasCast ? time(wasCast.from) : '');
   let toDate = $state(wasCast ? dateInput(wasCast.to) : ''), toTime = $state(wasCast ? time(wasCast.to) : '');
