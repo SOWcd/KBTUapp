@@ -15,8 +15,10 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
 
-  let { org }: { org: Id } = $props();
+  // n: how many the club has (the profile's row says it)
+  let { org, n = $bindable() }: { org: Id; n?: number } = $props();
   let links = $state<ShortLink[]>([]);
+  $effect(() => { n = links.length; });
   let events = $state<EventCard[]>([]);
   $effect(() => {
     api.shortLinks(org).then((l) => (links = l)).catch(() => {});
@@ -56,20 +58,22 @@
 </script>
 
 <div class="sl">
-  <Group caption={t('sl.title')} footnote={t('sl.note')}>
-    {#each links as l (l.slug)}
-      <Row dense title="{host}/{l.slug}" subtitle={where(l)}>
-        {#snippet trailing()}
-          <IconButton icon={Copy} label={t('sl.copy')} kind="plain" size="s" onclick={() => copy(l.slug)} />
-          <IconButton icon={Trash} label={t('sl.drop')} kind="plain" size="s" destructive onclick={() => drop(l.slug)} />
-        {/snippet}
-      </Row>
-    {/each}
-  </Group>
+  {#if links.length}
+    <Group>
+      {#each links as l (l.slug)}
+        <Row dense title="{host}/{l.slug}" subtitle={where(l)}>
+          {#snippet trailing()}
+            <IconButton icon={Copy} label={t('sl.copy')} kind="plain" size="s" onclick={() => copy(l.slug)} />
+            <IconButton icon={Trash} label={t('sl.drop')} kind="plain" size="s" destructive onclick={() => drop(l.slug)} />
+          {/snippet}
+        </Row>
+      {/each}
+    </Group>
+  {/if}
   <form class="add" onsubmit={add}>
     <!-- engine: Field's autocapitalize / spellcheck (a slug is typed as is) -->
     <Field label="{host}/" bind:value={slug} maxlength={32} placeholder="join-us" autocomplete="off" enterkeyhint="done" />
-    <Group>
+    <Group footnote={t('sl.note')}>
       <Row title={t('sl.to')} value={targets.find((x) => x.v === to)?.label}
         menu={targets.map((x) => ({ label: x.label, checked: x.v === to, onselect: () => (to = x.v) }))} />
     </Group>

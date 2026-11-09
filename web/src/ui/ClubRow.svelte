@@ -14,7 +14,7 @@
   let { org: o, name, sub = '', hot = false, social = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; social?: boolean; end?: Snippet } = $props();
 </script>
 
-<div class="row">
+<div class="row kb-row"> <!-- kb-row: a plain Row under it draws its line -->
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
   <OrgLogo org={o} size={40} />
   <span class="txt">

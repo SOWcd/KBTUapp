@@ -23,7 +23,6 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
-  import Card from '../../ui/Card.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Notice from '../../ui/Notice.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -35,7 +34,7 @@
   import { data, toggleJoin, toggleSub } from '../../lib/state/data.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { inLang, roleName, titleOf } from '../../lib/perms';
+  import { roleLabel } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { social } from '../../lib/social';
   import { dayMonth, relDay } from '../../lib/time';
@@ -61,10 +60,8 @@
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
-  // its Telegram chats (PLAN 86): the main channel as a card with Subscribe, the rest as rows; a closed one has no way in
+  // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
-  const main = $derived(chats.find((c) => c.main && c.url));
-  const rest = $derived(chats.filter((c) => c !== main));
   const tap = (url: string) => { haptic.tap(); openLink(url); };
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   $effect(() => {
@@ -81,6 +78,7 @@
   // the second button: apply, the pending application, or "write to the club" once it's closed
   const join = $derived(!!o && joinable && !!(o.round || o.myRequest || o.recruiting || contact));
   const rowWrite = $derived(!!o && !!contact && !o.myRole && (!join || !!(o.round || o.myRequest || o.recruiting)));
+  const shut = $derived(!!o && joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest); // takes no applications
 </script>
 
 {#snippet bell()}{#if o?.subscribed}<BellCheck size={19} />{:else}<Bell size={19} />{/if}{/snippet}
@@ -92,19 +90,20 @@
       {#if o.myRights?.includes('profile')}
         <button class="lg" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /><span class="cam"><Camera size={16} /></span></button>
       {:else}<OrgLogo org={o} size={84} />{/if}
-      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} /></span>{/if}</h2>
+      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}</h2>
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
-      {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleName(o.myRole, inLang(o.myTitle, o.myTitleKk, o.myTitleEn)) })}</Tag></span>
-      {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>{/if}
+      {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleLabel({ role: o.myRole, title: o.myTitle, titleKk: o.myTitleKk, titleEn: o.myTitleEn }) })}</Tag></span>
+      {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>
+      {:else if shut && o.members}<span class="tag"><Tag>{t('club.closedTag')}</Tag></span>{/if}
     </div>
 
     <div class="body">
-      {#if o.description || (joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest)}
+      {#if o.description || (shut && !o.members)}
         <div>
           {#if o.description}<p class="t-body selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
             {#if translated(o, 'description')}<span class="trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}{/if}
-          {#if joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t(o.members ? 'join.closed' : 'join.noTeam')}</p>{/if}
+          {#if shut && !o.members}<p class="t-foot closed">{t('join.noTeam')}</p>{/if}
         </div>
       {/if}
 
@@ -121,34 +120,22 @@
 
       {#if chats.length || o.kind === 'app'}
         <Section title={t('oc.title')}>
-          {#if main}
-            <Card>
-              <div class="mc">
-                <div class="mh"><ChatAvatar title={main.title} photo={main.photo} kind={main.kind} size={52} />
-                  <span><b class="ellipsis">{main.title}</b><small>{main.members ? tn('clubs.subscribers', main.members).replace(String(main.members), compact(main.members)) : t('chats.channel')}</small></span></div>
-                {#if main.about}<p class="t-foot ab clamp-2">{main.about}</p>{/if}
-                <Button kind="primary" size="m" full icon={send} onclick={() => tap(main.url!)}>{t('oc.subscribe')}</Button>
-              </div>
-            </Card>
-          {/if}
-          {#if rest.length || o.kind === 'app'}
-            <Group>
-              {#each rest as c (c.id)}
-                {@const line = [c.closed ? t('oc.closed') : t(`chats.${c.kind}`), c.members ? tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ')}
-                <!-- closed (no url): shown, but nobody gets in from here -->
-                <Row dense title={c.title} subtitle={line} accessory={c.url ? 'external' : 'none'} onclick={c.url ? () => tap(c.url!) : undefined}>
-                  {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
-                  {#snippet detail()}{#if !c.url}<span class="lock"><Lock size={17} /></span>{/if}{/snippet}
-                </Row>
-              {/each}
-              {#if o.kind === 'app'}<Row icon={FolderPlus} title={t('oc.folder')} accessory="external" onclick={() => tap(APP_FOLDER)} />{/if}
-            </Group>
-          {/if}
+          <Group>
+            {#each chats as c (c.id)}
+              {@const line = [c.closed ? t('oc.closed') : t(`chats.${c.kind}`), c.members ? tn(c.kind === 'channel' ? 'clubs.subscribers' : 'chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ')}
+              <!-- closed (no url): shown, but nobody gets in from here -->
+              <Row dense title={c.title} subtitle={line} accessory={c.url ? 'external' : 'none'} onclick={c.url ? () => tap(c.url!) : undefined}>
+                {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
+                {#snippet detail()}{#if !c.url}<span class="lock"><Lock size={17} /></span>{/if}{/snippet}
+              </Row>
+            {/each}
+            {#if o.kind === 'app'}<Row icon={FolderPlus} title={t('oc.folder')} accessory="external" onclick={() => tap(APP_FOLDER)} />{/if}
+          </Group>
         </Section>
       {:else if fetched && o.myRights?.includes('profile')}
         <!-- none yet: shown to the club's own team, who can link them (the app's admin does it in Admin) -->
         <Section title={t('oc.title')}>
-          <Notice text={t('oc.emptyHint')} action={{ label: t('oc.linkChat'), onclick: () => sheets.clubEdit(o.id, 'chats') }} />
+          <Notice stack text={t('oc.emptyHint')} action={{ label: t('oc.linkChat'), onclick: () => sheets.clubEdit(o.id, 'chats') }} />
         </Section>
       {/if}
 
@@ -156,7 +143,7 @@
         <Section title={t('club.lead')}>
           <Group>
             {#each leaders as m (m.person.id)}
-              <Row dense title={m.person.name} subtitle={roleName(m.role, titleOf(m))} accessory="chevron" onclick={() => sheets.person(m.person.id)}>
+              <Row dense title={m.person.name} subtitle={roleLabel(m)} accessory="chevron" onclick={() => sheets.person(m.person.id)}>
                 {#snippet lead()}<Avatar person={m.person} size={36} tappable={false} />{/snippet}
               </Row>
             {/each}
@@ -203,7 +190,7 @@
 
   {#snippet footer()}
     {#if o && !o.myRole}
-      {@const sub = o.subscribed ? t('clubs.subscribed') : t('clubs.subscribe')}
+      {@const sub = t(o.subscribed ? 'club.following' : 'club.follow')}
       <div class="acts btns">
         {#if join}
           <!-- next to a join action the bell needs no words -->
@@ -251,10 +238,4 @@
   .list { display: flex; flex-direction: column; gap: var(--s-2); }
   .ph { width: 40px; height: 40px; border-radius: var(--r-xs); object-fit: cover; }
   .lock { display: inline-flex; color: var(--text-3); }
-  .mc { display: flex; flex-direction: column; gap: var(--s-3); }
-  .mh { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
-  .mh > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .mh b { font: 600 var(--fs-card)/1.25 var(--font-text); }
-  .mh small { font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
-  .ab { color: var(--text-2); }
 </style>

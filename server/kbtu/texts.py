@@ -81,15 +81,15 @@ SHARE_AWARD = {
     "en": ("My award on KBTU App", "🏅 <b>{name}</b>{tier}\nMy new award on KBTU App\n\n💎 {p}% of students have it. Can you get one too?", "🏅 See the award"),
 }
 ACH_NAMES = {
-    "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
-           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Гимн от и до", "critic": "Диванный критик"},
-    "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы",
-           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Әнұран басынан аяғына дейін", "critic": "Диван сыншысы"},
-    "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
-           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Anthem, start to finish", "critic": "Couch critic"},
+    "ru": {"regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
+           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Абсолютный слух", "critic": "Диванный критик"},
+    "kk": {"regular": "Абонемент", "streak": "Серия", "first_in": "Ерте тұрған", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
+           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы",
+           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Абсолютті есту", "critic": "Диван сыншысы"},
+    "en": {"regular": "Season ticket", "streak": "Streak", "first_in": "Early bird", "soul": "Life of the party", "season": "Season", "first50": "First 500",
+           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Perfect pitch", "critic": "Couch critic"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
     "ru": {"ru": "русский", "kk": "казахский", "en": "английский"},
