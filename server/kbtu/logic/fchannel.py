@@ -155,14 +155,16 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
     hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
+    pids = [p["id"] for p in ps if p["comments"]]
+    newest = {r["post_id"]: r["m"] for r in rows(con, f"SELECT post_id, MAX(msg_id) m FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(pids))}) GROUP BY post_id", *pids)}
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]), "nick": _nick(p),
              "sign": _anon_sign(p) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id,
-             # the comments: the students' count, and the bot's first comment (the link opens the thread there)
-             "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
+             # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
+             "comments": p["comments"], "thread": (newest.get(p["id"]) or p["rules_msg"]) if p["tg_msg"] else None,
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day

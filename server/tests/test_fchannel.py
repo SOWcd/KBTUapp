@@ -602,7 +602,7 @@ def test_post_first_comment(env, monkeypatch):
     assert [(b["reply_parameters"]["message_id"], b["reply_markup"]["inline_keyboard"][0][0]["url"].rsplit("=", 1)[1]) for b in rules()] \
         == [(55, f"fp_{p['id']}"), (56, f"fp_{q['id']}")]
     # the Forum tab's Comments row: a student's comment counts once (not its edit), a stranger's never; the link opens
-    # the thread at the bot's first comment
+    # the thread at the newest comment, at the bot's first with none yet
     def say(upd: dict) -> None:
         async def go():
             async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
@@ -616,7 +616,8 @@ def test_post_first_comment(env, monkeypatch):
     say({"message": {"message_id": 62, "from": {"id": 1}, **note, "message_thread_id": 70}})   # under the other channel's copy
     feed = {x["id"]: x for x in c.get("/api/forum-posts/feed", headers=tma(1)).json()}
     assert (feed[p["id"]]["comments"], feed[q["id"]]["comments"]) == (1, 0)
-    assert feed[p["id"]]["thread"] == con.execute("SELECT rules_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0] > 900
+    assert feed[p["id"]]["thread"] == 60
+    assert feed[q["id"]]["thread"] == con.execute("SELECT rules_msg FROM fchan_posts WHERE id = ?", (q["id"],)).fetchone()[0] > 900
     # Telegram refuses (rights lost, say): three tries, one a round, then no more; "the copy is gone": one
     sent = lambda: len(rules())  # noqa: E731
     tg.refuse = "Bad Request: not enough rights to send text messages to the chat"
@@ -709,7 +710,7 @@ def test_post_faces_and_reactions(env, monkeypatch):
     con2 = db.connect(cfg.db_path)
     con2.set_trace_callback(seen.append)
     logic.fchannel.feed(con2, logic.Viewer(id=3, role="user", student=True))
-    assert sum("fchan_comments" in s for s in seen) == 3                                    # the faces, "being discussed", popular today: one each
+    assert sum("fchan_comments" in s for s in seen) == 4                                    # the faces, "being discussed", popular today, the newest comment: one each
     con2.close()
     # reactions: Telegram's totals on the channel post (the bot asks for them), the top three on the card
     asked: list[str] = []
