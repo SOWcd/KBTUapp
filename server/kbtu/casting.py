@@ -69,7 +69,7 @@ def view(con, v: Viewer, oid: int) -> dict | None:
            if mine and mine["stage"] != "withdrawn" else None}
     if told and mine["stage"] == "no":
         out["declineText"] = r["decline_text"]
-    if told and mine["stage"] == "yes" or team:  # the group's invite: the accepted only, in the app
+    if told and mine["stage"] == "yes" and role_in(con, v, oid) and not banned(con, oid, v.id) or team:  # the group's invite: the accepted still in the club only, in the app
         out["groupLink"] = r["group_link"]
     if team:
         counts = dict(rows(con, "SELECT stage, COUNT(*) FROM round_apps WHERE round_id = ? GROUP BY stage", r["id"]))

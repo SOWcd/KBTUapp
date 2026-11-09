@@ -52,3 +52,17 @@ def test_results_sent_mid_decision_stand(env, monkeypatch, call):
     a = con.execute("SELECT stage, sent_at FROM round_apps WHERE id = ?", (apps[ANN],)).fetchone()
     member = con.execute("SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", (oid, ids[ANN])).fetchone() is not None
     assert not a["sent_at"] or (a["stage"] in ("yes", "no") and member == (a["stage"] == "yes"))
+
+
+def test_the_group_link_leaves_with_the_member(env):
+    """Accepted, then banned or removed from the club: the round no longer hands over the group's invite."""
+    con, boss, rid, apps, oid, ids = _round(env, "https://t.me/+AbC_d-12")
+    ann = logic.Viewer(ids[ANN], "user", True)
+    casting.decide(con, boss, apps[ANN], {"stage": "yes"})
+    casting.send(con, boss, rid, final=False)
+    assert casting.view(con, ann, oid)["groupLink"]
+    con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (?, ?, 0)", (oid, ids[ANN]))
+    assert "groupLink" not in casting.view(con, ann, oid)
+    con.execute("DELETE FROM org_bans")
+    logic.set_role(con, None, ids[ANN], oid, "none", "test")
+    assert "groupLink" not in casting.view(con, ann, oid)
