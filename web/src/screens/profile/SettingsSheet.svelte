@@ -49,12 +49,23 @@
   // a switch saves at once and puts itself back if the server says no
   const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
-  async function set(k: (typeof SWITCHES)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
+  // one request at a time, and a choice the server hasn't confirmed yet stays on top of any answer
+  let chain: Promise<void> = Promise.resolve();
+  const want: Record<string, boolean> = {};
+  function set(k: (typeof SWITCHES)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
     if (!me) return;
     haptic.tap();
     me.settings[k] = on;
-    try { session.me = await api.updateMe({ [k]: on }); if (!quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d'); }
-    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'warning_3d'); } // the one on screen now
+    want[k] = on;
+    chain = chain.then(async () => {
+      if (want[k] !== on) return; // tapped again meanwhile: that tap sends the latest
+      try {
+        const r = await api.updateMe({ [k]: on });
+        delete want[k];
+        session.me = { ...r, settings: { ...r.settings, ...want } };
+        if (!quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
+      } catch { if (want[k] === on) { delete want[k]; if (session.me) session.me.settings[k] = !on; } say(t('common.error'), 'warning_3d'); } // only this switch goes back
+    });
   }
 
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's

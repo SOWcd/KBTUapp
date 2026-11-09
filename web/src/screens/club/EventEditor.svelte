@@ -355,6 +355,7 @@
     });
   }
 
+  let createdId = 0;
   async function submit(kind: 'publish' | 'draft' | 'save') {
     tried = true;
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
@@ -362,7 +363,9 @@
     if (busy) return;
     busy = kind;
     try {
-      let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
+      const id = saved?.id ?? createdId; // created earlier and a later step failed: the retry updates it, never a second one
+      let e = id ? await api.updateEvent(id, input()) : await api.createEvent(org, input());
+      createdId = e.id;
       if (!saved && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
       const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
       if (pub) e = pub;
