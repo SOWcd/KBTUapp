@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 import httpx
 
@@ -64,3 +65,33 @@ def test_announce3(env, monkeypatch, capsys):
     assert ok()[ids["ann"]] == 1 and ok()[ids["ben"]] == 0
     tap(30, "an:n")
     assert ok()[ids["ann"]] == 0 and ok()[ids["dan"]] is None
+
+
+def test_meeting_new_and_call(env, monkeypatch):
+    """A DMP general meeting: published as DMP; "in an hour" once each, to students with reminders on, an hour before."""
+    import pytest
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    con = db.connect(cfg.db_path)
+    boss, ann, bob = login(c, 60, "boss"), login(c, 62, "ann"), login(c, 63, "bob")
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))
+    con.execute("UPDATE users SET can_dm = 1, n_remind = 1 WHERE id IN (?, ?)", (ann["id"], bob["id"]))
+    con.execute("UPDATE users SET n_remind = 0 WHERE id = ?", (bob["id"],))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (90, 'dmp', 'office', 'DMP', 'DM', 'megaphone_3d', 0)")
+    at = time.gmtime(time.time() + 5 * 3600 + 86400)
+    admin.main(["meeting", "new", "Law and order", time.strftime("%Y-%m-%d 17:00", at), "60", "Independence Hall", "Topics"])
+    e = con.execute("SELECT e.id, e.status, e.starts_at, o.slug FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.title = 'Law and order'").fetchone()
+    assert e["status"] == "published" and e["slug"] == "dmp"
+    q = lambda: con.execute("SELECT user_id, send_after FROM bot_outbox WHERE kind = 'meet_call'").fetchall()  # noqa: E731
+    admin.main(["meeting", "call", str(e["id"])])
+    assert q() == []
+    admin.main(["meeting", "call", str(e["id"]), "--send"]); admin.main(["meeting", "call", str(e["id"]), "--send"])
+    got = q()
+    assert ann["id"] in [r[0] for r in got] and bob["id"] not in [r[0] for r in got] and len({r[0] for r in got}) == len(got)
+    assert all(r[1] == e["starts_at"] - 3600 for r in got)
+    con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject) VALUES (?, ?, '16:00', '17:50', 'x')", (boss["id"], at.tm_wday + 1))
+    con.execute("DELETE FROM bot_outbox WHERE kind = 'meet_call'")
+    admin.main(["meeting", "call", str(e["id"]), "--send"])
+    assert boss["id"] not in [r[0] for r in q()] and ann["id"] in [r[0] for r in q()]              # a class at that hour: excused
+    with pytest.raises(SystemExit):
+        admin.main(["meeting", "call", "99999", "--send"])
