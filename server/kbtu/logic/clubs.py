@@ -88,15 +88,20 @@ def _join_qs(o: sqlite3.Row) -> list[dict]:
 
 
 CLUB_MIN = 5  # owner, Nov 8: a club of fewer isn't in the registry (official ones too)
+CLUB_QUIET = 60 * 86400  # owner, Nov 9: an initiative with no event, post or open round this long isn't in it either
 
 
 def listed(con, v: Viewer) -> list[sqlite3.Row]:
     """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet (owner,
-    Nov 7-8): off the registry for everyone but its own (the admin too: one interface; search still finds it for them); its page (org) and its events stay reachable.
+    Nov 7-8), or an initiative gone quiet (CLUB_QUIET): off the registry for everyone but its own (the admin too: one interface; search still finds it for them); its page (org) and its events stay reachable.
     One subquery for all, never per card."""
+    cut = core.now() - CLUB_QUIET
     return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
-        AND (kind != 'club' OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?
-             OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?))""", CLUB_MIN, v.id)
+        AND (kind != 'club' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?)
+             OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ? AND (o.official = 1 OR o.created_at > ?
+                 OR EXISTS (SELECT 1 FROM events e WHERE e.org_id = o.id AND e.status = 'published' AND MAX(e.created_at, COALESCE(e.starts_at, 0)) > ?)
+                 OR EXISTS (SELECT 1 FROM posts p WHERE p.org_id = o.id AND p.hidden_at IS NULL AND p.created_at > ?)
+                 OR EXISTS (SELECT 1 FROM rounds r WHERE r.org_id = o.id AND r.status = 'open')))""", v.id, CLUB_MIN, cut, cut, cut)
 
 
 def orgs(con, v: Viewer) -> list[dict]:
@@ -548,6 +553,10 @@ def ask_official(con, v: Viewer, oid: int) -> dict | None:
             raise ApiError("rate_limited")
         if not o["top_at"]:
             raise ApiError("bad_input", "steps")
+        # its President already leads an official organization: one post goes first (owner, Nov 9); DMP's own ✓ stays free
+        if one(con, """SELECT 1 FROM org_members me JOIN org_members m ON m.user_id = me.user_id AND m.role = 'president' JOIN orgs b ON b.id = m.org_id
+                WHERE me.org_id = ? AND me.role = 'president' AND b.official = 1 AND b.status = 'active' AND b.id != ?""", oid, oid):
+            raise ApiError("conflict", "president_elsewhere")
         rid = con.execute("INSERT INTO official_requests (org_id, created_at) VALUES (?, ?)", (oid, core.now())).lastrowid
         log_action(con, v.id, "opath_ask", f"opath:{rid}", json.dumps({"title": o["name"]}))
         notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL")], "club_path", f"opath:{rid}")

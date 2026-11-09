@@ -116,6 +116,10 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
     if uid == v.id or not one(con, "SELECT 1 FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ? AND m.user_id = ?", oid, uid):
         raise ApiError("not_found")
     with tx(con):  # the club's own role names stay below the President: both start plain
+        # one official organization a President (owner, Nov 9): here alone; the admin's own ways (a link, an approval) stay free
+        if one(con, """SELECT 1 FROM orgs a JOIN org_members m ON m.user_id = ? AND m.role = 'president' JOIN orgs b ON b.id = m.org_id
+                WHERE a.id = ? AND a.official = 1 AND b.official = 1 AND b.status = 'active' AND b.id != a.id""", uid, oid):
+            raise ApiError("conflict", "president_elsewhere")
         con.execute("UPDATE org_members SET role = 'vice', role_id = ? WHERE org_id = ? AND user_id = ?", (_official(con, oid, "vice"), oid, v.id))
         con.execute("UPDATE org_members SET role = 'president', role_id = NULL, probation = 0 WHERE org_id = ? AND user_id = ?", (oid, uid))
         log_action(con, v.id, "presidency_transfer", f"org:{oid}", json.dumps({"to": uid}))
