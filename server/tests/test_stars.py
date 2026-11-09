@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
+import time
 
 import httpx
 import pytest
@@ -13,8 +15,9 @@ from test_core import env, tma  # noqa: F401  (env: the fixture)
 
 class Telegram:
     """Bot API by hand: `batches` are the rounds getUpdates hands out, the last one over and over."""
-    def __init__(self, *batches):
-        self.batches, self.calls = list(batches), []
+    def __init__(self, *batches, answers=()):
+        self.batches, self.calls, self.timeouts = list(batches), [], []
+        self.answers = list(answers)  # how answerPreCheckoutQuery goes, try by try: a status, or None for a timeout; then 200
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         method = request.url.path.rsplit("/", 1)[1]
@@ -23,6 +26,12 @@ class Telegram:
             return httpx.Response(200, json={"ok": True, "result": self.batches.pop(0) if len(self.batches) > 1 else self.batches[0]})
         body = json.loads(request.content or b"{}")
         self.calls.append((method, body))
+        if method == "answerPreCheckoutQuery":
+            self.timeouts.append(request.extensions["timeout"]["read"])
+            status = self.answers.pop(0) if self.answers else 200
+            if status is None:
+                raise httpx.ReadTimeout("hung", request=request)
+            return httpx.Response(status, json={"ok": status == 200, "result": True, "description": "x"})
         return httpx.Response(200, json={"ok": True, "result": "https://t.me/$invoice"})
 
     def sent(self, method):
@@ -32,8 +41,8 @@ class Telegram:
 def hear(cfg, tg):
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
-            await bot.hear(cfg, http, 0)
-    asyncio.run(go())
+            return await bot.hear(cfg, http, 0)
+    return asyncio.run(go())
 
 
 def checkout(qid="q1", amount=50, payload="don:50", currency="XTR"):
@@ -156,3 +165,113 @@ def test_a_banned_payer_still_counts(env):
     con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 7")
     hear(cfg, Telegram([payment(charge="c2")], []))
     assert con.execute("SELECT amount FROM star_gifts WHERE charge_id = 'c2'").fetchone()[0] == 50
+
+
+def tap(uid):
+    return {"update_id": uid, "callback_query": {"id": str(uid), "from": {"id": 9}}}
+
+
+def test_a_locked_database_keeps_the_payment_for_the_next_round(env, monkeypatch):
+    """A paid transfer the write failed for: the batch stops there, the same update comes again, and the retry counts once."""
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    tapped, real = [], logic.stars.paid
+
+    async def on_tap(_cfg, _http, _con, q):
+        tapped.append(q["id"])
+
+    def locked(*_):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(bot, "_tapped", on_tap)
+    monkeypatch.setattr(logic.stars, "paid", locked)
+    batch = [tap(5), payment(6), tap(7)]
+    assert hear(cfg, Telegram(batch, [])) == 6
+    assert tapped == ["5"] and con.execute("SELECT count(*) FROM star_gifts").fetchone()[0] == 0
+    monkeypatch.setattr(logic.stars, "paid", real)
+    assert hear(cfg, Telegram(batch[1:], [])) == 8
+    assert hear(cfg, Telegram(batch[1:], [])) == 8  # delivered twice all the same
+    assert tapped == ["5", "7", "7"] and [tuple(r) for r in con.execute("SELECT charge_id, amount FROM star_gifts")] == [("c1", 50)]
+
+
+def test_a_failed_connect_leaves_no_watcher(env, monkeypatch):
+    _, cfg = env
+    tg = Telegram([tap(5)], [])
+
+    def broken(_):
+        raise sqlite3.OperationalError("unable to open database file")
+
+    monkeypatch.setattr(bot.db, "connect", broken)
+    monkeypatch.setattr(bot, "PEEK", 0.01)
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
+            with pytest.raises(sqlite3.OperationalError):
+                await bot.hear(cfg, http, 0)
+            assert asyncio.all_tasks() == {asyncio.current_task()}
+            await asyncio.sleep(0.05)
+    asyncio.run(go())
+    assert len([m for m, _ in tg.calls if m == "getUpdates"]) == 1
+
+
+@pytest.mark.parametrize("trouble", [[500], [429], [None], [500, 429, None]])
+def test_checkout_answer_retried_after_a_transient_error(env, monkeypatch, trouble):
+    _, cfg = env
+    monkeypatch.setattr(bot, "CHECKOUT_RETRY", 0.01)
+    tg = Telegram([checkout()], [], answers=trouble)
+    hear(cfg, tg)
+    assert len(tg.sent("answerPreCheckoutQuery")) == len(trouble) + 1 and "q1" in bot._checked
+    assert set(tg.timeouts) == {bot.CHECKOUT_HTTP}
+
+
+def test_checkout_refused_for_good_is_not_retried(env, monkeypatch):
+    _, cfg = env
+    monkeypatch.setattr(bot, "CHECKOUT_RETRY", 0.01)
+    tg = Telegram([checkout()], [], answers=[400])
+    hear(cfg, tg)
+    assert len(tg.sent("answerPreCheckoutQuery")) == 1 and "q1" in bot._checked
+
+
+def test_checkout_retries_stop_in_time_and_stay_unanswered(env, monkeypatch):
+    _, cfg = env
+    monkeypatch.setattr(bot, "CHECKOUT_RETRY", 0.01)
+    monkeypatch.setattr(bot, "CHECKOUT_WINDOW", 0.05)
+    tg = Telegram([checkout()], [], answers=[500] * 1000)
+    hear(cfg, tg)
+    assert len(tg.sent("answerPreCheckoutQuery")) > 1 and "q1" not in bot._checked
+
+
+def test_a_failing_checkout_lets_its_neighbour_go_first(env, monkeypatch):
+    _, cfg = env
+    monkeypatch.setattr(bot, "CHECKOUT_RETRY", 0.01)
+    tg = Telegram([checkout("a"), checkout("b")], [], answers=[500])
+    hear(cfg, tg)
+    assert [b["pre_checkout_query_id"] for b in tg.sent("answerPreCheckoutQuery")] == ["a", "b", "a"]
+
+
+def paysupport(text="/paysupport", kind="private", lang="en", uid=7):
+    return {"update_id": 1, "message": {"message_id": 3, "chat": {"id": uid, "type": kind}, "from": {"id": uid, "language_code": lang}, "date": int(time.time()), "text": text}}
+
+
+@pytest.mark.parametrize("lang", ["ru", "kk", "en"])
+def test_paysupport_is_its_own_template(env, lang):
+    _, cfg = env
+    tg = Telegram([paysupport(lang=lang)], [])
+    hear(cfg, tg)
+    [b] = tg.sent("sendMessage")
+    want = texts.bot_message(lang, "paysupport", tg_id=7)[0]
+    assert "@Sowers" in want and "<code>7</code>" in want
+    assert b["chat_id"] == 7 and "reply_markup" not in b and "@Sowers" in b["text"]
+
+
+def test_paysupport_answers_a_banned_payer_and_only_this_command(env):
+    c, cfg = env
+    c.get("/api/me", headers=tma(7, "Ann"))
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 7")
+    tg = Telegram([paysupport("/paysupport@KBTUappBot")], [])
+    hear(cfg, tg)
+    assert len(tg.sent("sendMessage")) == 1
+    tg = Telegram([paysupport("/paysupport2")], [])  # another word: still the ban skip
+    hear(cfg, tg)
+    assert tg.sent("sendMessage") == []

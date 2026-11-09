@@ -169,6 +169,7 @@ def share_event(lang: str, title: str, starts_at: int, place: str, org: str = ""
 # Bot messages (SPEC §7): kind → (HTML text, button or None). Fields: title, when, place, org, room.
 BOT = {
     "ru": {
+        "paysupport": ("💬 <b>Поддержка по платежам</b>\nЗвёзды — добровольная поддержка приложения, взамен ничего не выдаётся.\nЕсли заплатили по ошибке и хотите вернуть их, напишите в поддержку: @Sowers. Приложите чек Telegram и ваш Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Ищешь выход из КБТУ?</b>\nНажми кнопку, введи номер ближайшей аудитории — приложение доведёт до открытого выхода.", "🚪 Найти выход"),
         "welcome": ("👋 Это <b>KBTU App</b>: мероприятия и клубы КБТУ, твоё расписание и карта корпуса.\nВсё внутри приложения — открывай 👇", "🚀 Открыть KBTU App"),
         "remind_2h": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}\nБилет уже в приложении.", "🎟 Открыть билет"),
@@ -343,6 +344,7 @@ BOT = {
         "fch_appeal_many": ("🛡 {n} постов ждут твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
     },
     "kk": {
+        "paysupport": ("💬 <b>Төлем бойынша қолдау</b>\nЖұлдыздар — қосымшаны ерікті қолдау, орнына ештеңе берілмейді.\nҚателесіп төлеп, оларды қайтарғыңыз келсе, қолдауға жазыңыз: @Sowers. Telegram чегін және Telegram ID-іңізді қоса жіберіңіз: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
         "welcome": ("👋 Бұл — <b>KBTU App</b>: ҚБТУ іс-шаралары мен клубтары, сабақ кестең және корпус картасы.\nБәрі қосымшаның ішінде — аш 👇", "🚀 KBTU App ашу"),
         "remind_2h": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}\nБилет қосымшада.", "🎟 Билетті ашу"),
@@ -511,6 +513,7 @@ BOT = {
         "fch_appeal_many": ("🛡 {n} пост сенің шешіміңді күтуде: авторлары ЖИ-мен келіспейді. Ашып, әрқайсысын шеш: шығару ма, жоқ па.", "Ашу"),
     },
     "en": {
+        "paysupport": ("💬 <b>Payment support</b>\nStars here are voluntary support for the app: nothing is given in return.\nIf you paid by mistake and want them back, write to support: @Sowers. Attach Telegram's receipt and your Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
         "welcome": ("👋 This is <b>KBTU App</b>: KBTU's events and clubs, your class schedule and the campus map.\nIt's all inside the app — open it 👇", "🚀 Open KBTU App"),
         "remind_2h": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}\nYour ticket is in the app.", "🎟 Open ticket"),

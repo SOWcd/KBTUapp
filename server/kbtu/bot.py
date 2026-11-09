@@ -39,6 +39,9 @@ GAP = 0.05                  # ≤ 20 messages a second (Telegram allows about 30
 AI_GAP = 10                 # seconds between translations (ai.py): a backlog drains without a burst
 LEASE = 60                  # a taken message is free again after this, if its postman died or the network was down
 PEEK = 2                    # seconds between looks for Stars' pre-checkouts while a batch of updates runs (_checkout_watch)
+CHECKOUT_HTTP = 3          # one answerPreCheckoutQuery at most: answers go in turn, so a hung one eats its neighbours' 10 s
+CHECKOUT_RETRY = 1         # seconds between rounds of retries of the answers that failed
+CHECKOUT_WINDOW = 8        # stop retrying after this: Telegram allows 10 s, and a try started later would land too late
 _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the look and the next round see the same ones
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
@@ -1269,16 +1272,34 @@ def _wanted(cfg: Config) -> str:
                        *(["message_reaction_count"] if cfg.forum_channel else [])])
 
 
-async def _checkouts(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) -> None:
-    """Stars' pre-checkouts, answered once each: no database, nothing slow."""
-    for upd in updates:
-        q = upd.get("pre_checkout_query")
-        if not q or q["id"] in _checked:
-            continue
-        good = logic.stars.checkout_ok(q)
-        why = {} if good else {"error_message": texts.pick(texts.STARS_REFUSED, str((q.get("from") or {}).get("language_code") or ""))}
-        await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerPreCheckoutQuery", json={"pre_checkout_query_id": q["id"], "ok": good, **why})
+async def _answer_checkout(cfg: Config, http: httpx.AsyncClient, q: dict) -> bool:
+    """One try. True when there is no use in another: answered, or refused for good (a query too old, 400)."""
+    good = logic.stars.checkout_ok(q)
+    why = {} if good else {"error_message": texts.pick(texts.STARS_REFUSED, str((q.get("from") or {}).get("language_code") or ""))}
+    try:
+        r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerPreCheckoutQuery", timeout=CHECKOUT_HTTP,
+                            json={"pre_checkout_query_id": q["id"], "ok": good, **why})
+        answered = r.status_code == 200 and r.json().get("ok") is True
+    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        log.warning("checkouts: %s", type(exc).__name__)  # the type only: the URL holds the token
+        return False
+    if not answered:
+        log.warning("checkouts: %s", r.status_code)
+    if answered or (400 <= r.status_code < 500 and r.status_code != 429):
         _checked.append(q["id"])
+        return True
+    return False
+
+
+async def _checkouts(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) -> None:
+    """Stars' pre-checkouts, answered once each: no database, nothing slow. Everyone's first try comes before anyone's
+    retry, so one failing answer doesn't spend its neighbours' 10 s."""
+    todo = [q for u in updates if (q := u.get("pre_checkout_query")) and q["id"] not in _checked]
+    end = time.monotonic() + CHECKOUT_WINDOW
+    while todo := [q for q in todo if not await _answer_checkout(cfg, http, q)]:
+        if time.monotonic() + CHECKOUT_RETRY >= end:
+            return  # not marked answered: the next look tries again, and a query gone stale ends with its 400
+        await asyncio.sleep(CHECKOUT_RETRY)
 
 
 async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, done: asyncio.Event) -> None:
@@ -1292,9 +1313,11 @@ async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, don
         except asyncio.TimeoutError:
             pass
         try:
+            # ponytail: getUpdates hands out the first 100 pending updates, so a pre-checkout behind a backlog of 100+ can
+            # miss its 10 s and the donor taps again; upgrade: a webhook (a look past the batch would confirm what it hasn't run)
             r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates", params={"offset": offset, "timeout": 0, "allowed_updates": _wanted(cfg)})
             await _checkouts(cfg, http, r.json().get("result") or [])
-        except (httpx.HTTPError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - hear awaits this: nothing here may cost the batch its offset
             log.warning("checkouts: %s", type(exc).__name__)
 
 
@@ -1312,14 +1335,12 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
         log.warning("ears: %s", str(answer.get("description", r.status_code))[:200])
         await asyncio.sleep(60)
         return offset
-    try:  # Stars' pre-checkouts before all else (10 s to answer)
-        await _checkouts(cfg, http, answer["result"])
-    except httpx.HTTPError as exc:
-        log.warning("checkouts: %s", type(exc).__name__)
-    done = asyncio.Event()
-    watch = asyncio.create_task(_checkout_watch(cfg, http, offset, done)) if answer["result"] else None
+    await _checkouts(cfg, http, answer["result"])  # Stars' pre-checkouts before all else (10 s to answer)
     con = db.connect(cfg.db_path)
-    try:
+    done = asyncio.Event()
+    watch = None
+    try:  # the watcher only once connected: finally is what ends it, and a look alive past this round would clash with the next long poll (409)
+        watch = asyncio.create_task(_checkout_watch(cfg, http, offset, done)) if answer["result"] else None
         # the forum channel's comments first: a stranger's comment is gone before anything slow in the batch runs
         if mine := [u for u in answer["result"] if tgc.ours(cfg, u)]:
             try:
@@ -1345,7 +1366,15 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 msg = upd.get("message") or {}
                 if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
-                    await asyncio.to_thread(logic.stars.paid, con, payment)
+                    try:
+                        await asyncio.to_thread(logic.stars.paid, con, payment)
+                    except sqlite3.Error as exc:  # paid but unrecorded: this update again next round (paid is idempotent by the charge id)
+                        log.warning("stars paid: %s", type(exc).__name__)
+                        await asyncio.sleep(1)
+                        return upd["update_id"]
+                    continue
+                if (msg.get("chat") or {}).get("type") == "private" and str(msg.get("text") or "").split("@")[0].split()[:1] == ["/paysupport"]:  # before the ban skip: Telegram's rules want it for every payer
+                    await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "paysupport", tg_id=msg["chat"]["id"])))
                     continue
                 sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
                 group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it

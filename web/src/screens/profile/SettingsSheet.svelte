@@ -365,7 +365,7 @@
           {#each [50, 100, 500] as n (n)}
             <button type="button" class={['st', { on: giving === n }]} disabled={giving !== null} onclick={() => give(n)}><Star size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />{n}</button>
           {/each}
-          <input class="st own" bind:value={own} oninput={() => (own = own.replace(/\D/g, '').slice(0, 5))} inputmode="numeric" enterkeyhint="send" autocomplete="off" placeholder={t('don.own')} aria-label={t('don.own')} />
+          <input class="st own" bind:value={() => own, (v) => { if (/^\d{0,5}$/.test(v)) own = v; }} inputmode="numeric" enterkeyhint="send" autocomplete="off" placeholder={t('don.own')} aria-label={t('don.own')} />
           {#if ownStars}
             <button class={['send', { on: giving === ownStars }]} disabled={giving !== null}>{t('don.give')}<Star size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />{ownStars}</button>
           {/if}
