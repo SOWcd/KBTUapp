@@ -1,9 +1,10 @@
 """A club of one person is off the Clubs registry (clubs.orgs) for everyone but that person; its page still opens."""
 from __future__ import annotations
 
+import asyncio
 import time
 
-from kbtu import db, logic
+from kbtu import ai, db, logic
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 
 PRES, FAN, SECOND = 20, 30, 40
@@ -31,26 +32,86 @@ def test_solo_club_hidden(env, monkeypatch):
     assert org in ids(FAN)  # CLUB_MIN people: a club
 
 
-def test_quiet_initiative_hidden(env, monkeypatch):
+def test_quiet_flag(env, monkeypatch):
+    """Quiet clubs stay listed and carry the flag; new, active and official ones don't."""
     c, cfg = env
-    monkeypatch.setattr(logic.clubs, "CLUB_QUIET", 60 * 86400)
+    monkeypatch.setattr(logic.clubs, "CLUB_QUIET", 30 * 86400)
     for t, n in ((PRES, "pres"), (FAN, "fan")):
         login(c, t, n)
     con = db.connect(cfg.db_path)
     pres = con.execute("SELECT id FROM users WHERE tg_id = ?", (PRES,)).fetchone()[0]
     org = logic.create_org(con, None, "Quiet", "QU", "crown_3d", False)
     logic.set_role(con, None, pres, org, "president", "test")
+
+    def quiet():
+        logic.core._SHARED.clear()
+        return next(o for o in c.get("/api/orgs", headers=tma(FAN)).json() if o["id"] == org)["quiet"]
+
+    assert quiet() is False                                # a new club has its 30 days
     con.execute("UPDATE orgs SET created_at = 0 WHERE id = ?", (org,))
-    ids = lambda t: [o["id"] for o in c.get("/api/orgs", headers=tma(t)).json()]  # noqa: E731
-    logic.core._SHARED.clear()
-    assert org not in ids(FAN) and org in ids(PRES)        # quiet: gone, but not for its own
+    assert quiet() is True                                 # still listed, and marked
     con.execute("INSERT INTO posts (org_id, title, created_at) VALUES (?, 'hi', ?)", (org, int(time.time())))
-    logic.core._SHARED.clear()
-    assert org in ids(FAN)                                 # a post brings it back
+    assert quiet() is False                                # a post wakes it
     con.execute("UPDATE posts SET created_at = 0 WHERE org_id = ?", (org,))
+    assert quiet() is True
     con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (org,))
-    logic.core._SHARED.clear()
-    assert org in ids(FAN)                                 # an official club stays, quiet or not
+    assert quiet() is False                                # an official club is never quiet
+    con.close()
+
+
+def test_category_set_by_lead_and_filled_by_ai(env):
+    c, cfg = env
+    for t, n in ((PRES, "pres"), (FAN, "fan")):
+        login(c, t, n)
+    con = db.connect(cfg.db_path)
+    pres = con.execute("SELECT id FROM users WHERE tg_id = ?", (PRES,)).fetchone()[0]
+    mine = logic.create_org(con, None, "Mine", "MI", "crown_3d", False)
+    other = logic.create_org(con, None, "Other", "OT", "crown_3d", False)
+    logic.set_role(con, None, pres, mine, "president", "test")
+    assert c.patch(f"/api/orgs/{mine}", json={"category": "nonsense"}, headers=tma(PRES)).status_code >= 400
+    assert c.patch(f"/api/orgs/{mine}", json={"category": "art"}, headers=tma(FAN)).status_code >= 400  # not its lead
+    assert c.patch(f"/api/orgs/{mine}", json={"category": "art"}, headers=tma(PRES)).json()["category"] == "art"
+
+    async def said(cfg, http, msgs, **kw):
+        assert kw["check"]("it") and not kw["check"]("anything else")
+        return "IT\n", "qa"
+    original, logic_chat = ai.llm.chat, said
+    ai.llm.chat = logic_chat
+    try:
+        filled, left = asyncio.run(ai.fill_categories(con, cfg, None))
+    finally:
+        ai.llm.chat = original
+    assert (filled, left) == (con.execute("SELECT COUNT(*) FROM orgs WHERE category = 'it'").fetchone()[0], 0)
+    get = lambda i: con.execute("SELECT category FROM orgs WHERE id = ?", (i,)).fetchone()[0]  # noqa: E731
+    assert get(mine) == "art" and get(other) == "it"       # a club's own choice stays
+    con.close()
+
+
+def test_friends_in_a_club(env):
+    """Only my friends, read for the list; a club hiding its members or a friend hiding where they go shows nobody."""
+    c, cfg = env
+    for t, n in ((PRES, "pres"), (FAN, "fan"), (SECOND, "second")):
+        login(c, t, n)
+    con = db.connect(cfg.db_path)
+    uid = lambda t: con.execute("SELECT id FROM users WHERE tg_id = ?", (t,)).fetchone()[0]  # noqa: E731
+    org = logic.create_org(con, None, "Pals", "PA", "crown_3d", False)
+    logic.set_role(con, None, uid(PRES), org, "president", "test")
+    logic.set_role(con, None, uid(SECOND), org, "member", "test")
+    a, b = sorted((uid(FAN), uid(PRES)))
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (a, b))
+
+    def seen(t):
+        logic.core._SHARED.clear()
+        o = next(x for x in c.get("/api/orgs", headers=tma(t)).json() if x["id"] == org)
+        return [p["id"] for p in o["friends"]], o["friendsN"]
+
+    assert seen(FAN) == ([uid(PRES)], 1)                   # my friend, and not the stranger beside them
+    assert seen(SECOND) == ([], 0)                         # not friends with anyone there
+    con.execute("UPDATE users SET show_going = 0 WHERE id = ?", (uid(PRES),))
+    assert seen(FAN) == ([], 0)                            # hides where they go
+    con.execute("UPDATE users SET show_going = 1 WHERE id = ?", (uid(PRES),))
+    con.execute("UPDATE orgs SET members_hidden = 1 WHERE id = ?", (org,))
+    assert seen(FAN) == ([], 0)                            # the club hides its members
     con.close()
 
 

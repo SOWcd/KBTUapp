@@ -163,6 +163,8 @@ export interface ShortLink { slug: string; kind: 'club' | 'event' | 'round'; eve
 // a club's event in Admin's delete list, with what deleting it takes along
 export interface AdminEvent { id: Id; title: string; status: 'draft' | 'published' | 'cancelled'; startsAt: Ts | null; people: number; came: number; paid: number; photos: number }
 
+export type OrgCategory = 'it' | 'art' | 'sport' | 'business' | 'science' | 'volunteer';
+
 export interface Org extends OrgRef {
   description: string;
   links: string[];              // socials: Instagram, TikTok, YouTube, a site (lib/social.ts names them); never Telegram (its chats are `chats`)
@@ -187,11 +189,16 @@ export interface Org extends OrgRef {
   canBroadcast: boolean;
   canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
   top?: boolean;                // a student initiative at the Ascent's top: an official club's tools, no ✓ (server clubs.py)
+  category: OrgCategory | null; // its interest (the Clubs tab's tiles), set by its President or Vice
+  quiet: boolean;               // 30 days without an event, post or open round (official clubs never): the end of All clubs
+  rank: number;                 // Popular's order, the server's (members and recent activity)
+  friends: PersonRef[];         // up to two of my friends in it, privacy-filtered (server clubs.org_shapes)
+  friendsN: number;             // how many there are
 }
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
-export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; joinQuestions?: RoundQuestion[]; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
+export interface OrgPatch { category?: OrgCategory | null; name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; joinQuestions?: RoundQuestion[]; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
 
 /** A person as other students see them (§4): the nick if they have one, else the short name, and with a nick the short
  *  name too (`realName`: a nick is a display name, not a mask); their photo (their own or Telegram's); the founder

@@ -1,18 +1,17 @@
 <script lang="ts">
   // A club or school as one compact row (the Clubs tab's lists and "All clubs"): its mark, its name with
-  // the ✓ and the Student Government mark, one line under it, and the bell (or what the list puts there instead).
+  // the ✓ and the Student Government mark, one line under it, and › (or what the list puts there instead).
   import type { Snippet } from 'svelte';
   import OfficialMark from './OfficialMark.svelte';
-  import Bell from '@lucide/svelte/icons/bell';
-  import BellCheck from '@lucide/svelte/icons/bell-check';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import type { Org } from '../lib/api';
-  import { t } from '../lib/i18n/index.svelte';
-  import { toggleSub } from '../lib/state/data.svelte';
   import { sheets } from '../lib/state/sheets';
   import OrgLogo from './OrgLogo.svelte';
+  import FriendsLine from './FriendsLine.svelte';
   import GovMark from './GovMark.svelte';
 
-  let { org: o, name, sub = '', hot = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; end?: Snippet } = $props();
+  // social: my friends in it take the line, when there are any
+  let { org: o, name, sub = '', hot = false, social = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; social?: boolean; end?: Snippet } = $props();
 </script>
 
 <div class="row">
@@ -20,14 +19,11 @@
   <OrgLogo org={o} size={40} />
   <span class="txt">
     <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
-    {#if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
+    {#if social && o.friends.length}<small><FriendsLine org={o} /></small>
+    {:else if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
   </span>
   <span class="end">
-    {#if end}{@render end()}
-    {:else}
-      <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
-        {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
-    {/if}
+    {#if end}{@render end()}{:else}<span class="chev"><ChevronRight size={18} /></span>{/if}
   </span>
 </div>
 
@@ -45,7 +41,5 @@
   small.hot { font-weight: 650; color: var(--accent-text); }
   small.hot i { display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: #46D6FF; vertical-align: middle; }
   .end { position: relative; z-index: 2; flex: none; }
-  .bell { position: relative; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
-  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
-  .bell.on { background: var(--success-soft); color: var(--success-text); }
+  .chev { display: flex; margin-right: 2px; color: var(--text-3); opacity: 0.6; pointer-events: none; } /* the tap is the row's */
 </style>

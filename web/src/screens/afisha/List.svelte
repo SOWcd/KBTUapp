@@ -46,6 +46,9 @@
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import StoryRow from './StoryRow.svelte';
+  import PullSearch from '../../ui/PullSearch.svelte';
+  import { hit as orgHit } from '../../lib/clubs';
+  import { hit, namesOf } from '../../lib/search';
 
   let openPost = $state(false);
 
@@ -107,6 +110,11 @@
   const past = $derived(data.past); // "Past": mine that ended, newest first (the server's order)
   let allPast = $state(false);
 
+  // the pull-down search: the events held, upcoming and mine that ended, by title, place or club
+  let q = $state('');
+  const searching = $derived(!!q.trim());
+  const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
+
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
     if (d === today) return [t('common.today'), w];
@@ -161,6 +169,7 @@
 {/snippet}
 
 <div class="page scroll stagger">
+  <PullSearch bind:value={q} placeholder={t('list.search')} />
   <header class="hd">
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
       <h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
@@ -172,6 +181,12 @@
       </span>
     {/if}
   </header>
+  {#if searching}
+    <div class="past">
+      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />
+      {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
+    </div>
+  {:else}
   <StoryRow />
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
@@ -262,6 +277,7 @@
   {#if data.eventsReady && shown.length < 6}
     <!-- the first weeks of the pilot: a short list should read as "more is coming", not as an empty app -->
     <EmptyState icon={Sparkles} title={t('list.moreSoon')} text={t('list.moreSoonText')} action={{ label: t('list.toClubs'), onclick: () => { ui.tab = 'club'; } }} />
+  {/if}
   {/if}
   <div class="tail"></div>
 </div>

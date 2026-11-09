@@ -1324,6 +1324,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE posts ADD COLUMN casting_place TEXT;
     ALTER TABLE posts ADD COLUMN casting_cancelled_at INTEGER;
     CREATE INDEX posts_casting ON posts(casting_to) WHERE casting_to IS NOT NULL;"""),
+    # a club's interest (the Clubs tab's tiles): it/art/sport/business/science/volunteer, NULL none; checked in clubs.update_org
+    (143, "ALTER TABLE orgs ADD COLUMN category TEXT;"),
 ]
 
 

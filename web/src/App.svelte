@@ -81,6 +81,7 @@
   const feedPage = () => import('./screens/afisha/Feed.svelte');
   // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame
   const newsPage = () => import('./screens/afisha/News.svelte');
+  const clubListPage = () => import('./screens/afisha/ClubList.svelte');
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
@@ -98,7 +99,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -173,7 +174,8 @@
   sheets.channelReply = (post) => lazy(() => import('./screens/forum/ChannelReply.svelte'), { post });
   sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
-  sheets.myClubs = (rows) => lazy(() => import('./screens/afisha/MyClubs.svelte'), { rows });
+  sheets.clubList = (view) => lazy(clubListPage, { view });
+  sheets.myClubs = (rows, title) => lazy(() => import('./screens/afisha/MyClubs.svelte'), { rows, title });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});

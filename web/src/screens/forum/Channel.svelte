@@ -43,6 +43,8 @@
   import Button from '../../ui/Button.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
+  import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
+  import { hit } from '../../lib/search';
   import { compose } from './ChannelCompose.svelte';
 
   const CHANNEL = 'https://t.me/KBTUappForum';
@@ -65,7 +67,12 @@
   const waiting = $derived((channel.feed ?? []).filter((p) => !shown(p)).length);
   const showAll = () => { known = new Set((channel.feed ?? []).map((p) => p.id)); };
   $effect(() => { if (channel.feed && (atTop || !known.size) && (waiting || !known.size)) untrack(showAll); });
-  function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: PULL, behavior: 'smooth' }); }
+  // the pull-down search, over the posts held, by their words only (never a signature: an anonymous post has none to match)
+  // ponytail: the loaded pages only; a server search when the channel outgrows them
+  let q = $state('');
+  const searching = $derived(!!q.trim());
+  const matched = $derived(searching ? list.filter((p) => hit(q, [p.body])) : list);
 
   // the line stands above the first post seen before, when some new one is above it: "N new", how many
   const cut = $derived.by(() => {
@@ -167,7 +174,8 @@
   const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
 </script>
 
-<div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < 40; }}>
+<div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < PULL + 40; }}>
+  <PullSearch bind:value={q} placeholder={t('fc.search')} />
   <!-- new posts from the refresh while I read further down: a pill, never a jump -->
   <div class="pill">{#if waiting && !atTop}<span class="pin" transition:slide={{ duration: 220, axis: 'y' }}>
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
@@ -181,13 +189,13 @@
 
   {#if channel.feed?.length}
     <div class="feed">
-      {#each list as p, i (p.id)}
+      {#each matched as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
         {@const why = p.mine && p.human ? channel.why[p.id] : undefined}
         <!-- one element per post (flip needs it) -->
         <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
-        {#if cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
+        {#if !searching && cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
         <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
@@ -242,6 +250,7 @@
         </article>
         </div>
       {/each}
+      {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
     </div>
     {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t('fc.earlier')}</Button></div>{/if}
   {:else if channel.feed}

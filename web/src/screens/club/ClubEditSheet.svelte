@@ -4,7 +4,7 @@
   // changes asks first.
   import X from '@lucide/svelte/icons/x';
   import ImagePlus from '@lucide/svelte/icons/image-plus';
-  import { api, ApiErr, original, type Id, type Org, type OrgPatch } from '../../lib/api';
+  import { api, ApiErr, original, type Id, type Org, type OrgCategory, type OrgPatch } from '../../lib/api';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
@@ -27,6 +27,7 @@
   import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay, id, at }: { overlay: Overlay; id: Id; at?: 'chats' } = $props();
+  const CATEGORIES: OrgCategory[] = ['it', 'art', 'sport', 'business', 'science', 'volunteer'];
   // at 'chats' (the bot's "open in Studio" after linking a chat, the catalog sheet's "your club's channel?"): the
   // chats list in view once the form is there
   let chatsAt = $state<HTMLElement>();
@@ -36,9 +37,9 @@
   let o = $state<Org | null>(null);
   // the logo: one of my uploads, or null — then the emoji on its cover shows again
   let logo = $state<{ id?: Id; url: string } | null>(null);
-  let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
+  let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false, category: null as OrgCategory | null });
   $effect(() => {
-    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, abbr: x.abbr ?? '', emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden }; logo = x.logo ? { url: x.logo } : null; })
+    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, abbr: x.abbr ?? '', emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden, category: x.category }; logo = x.logo ? { url: x.logo } : null; })
       .catch(() => { say(t('common.error'), 'warning_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
@@ -70,6 +71,7 @@
     if (links.join('\n') !== o.links.join('\n')) p.links = links;
     if ((logo?.url ?? null) !== (o.logo ?? null)) p.logoId = logo?.id ?? null;
     if (f.hidden !== o.membersHidden) p.membersHidden = f.hidden;
+    if (f.category !== o.category) p.category = f.category;
     return p;
   });
   const changed = $derived(Object.keys(patch).length > 0);
@@ -140,6 +142,10 @@
         <p class="note under">{t('ce.linksNote')}</p>
         <LinksEdit bind:links={f.links} />
       </section>
+
+      <Group>
+        <Row title={t('clubs.category')} value={f.category ? t(`clubs.cat.${f.category}`) : t('clubs.noCategory')} menu={[null, ...CATEGORIES].map((c) => ({ label: c ? t(`clubs.cat.${c}`) : t('clubs.noCategory'), checked: f.category === c, onselect: () => (f.category = c) }))} />
+      </Group>
 
       <Group footnote={t('ce.hideMembersNote')}>
         <Row title={t('ce.hideMembers')} accessory="switch" checked={f.hidden} onchange={(v) => (f.hidden = v)} />

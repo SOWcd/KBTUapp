@@ -2,18 +2,18 @@
   // A section of a screen or a sheet: one header style everywhere (a --fs-sec title, a grey count, "All ›" on the right),
   // then its content.
   //   title     the section's name;  count: how many (grey, after the title; 0 hides it)
-  //   onmore    shows "All ›" (moreLabel to name it otherwise), which opens the whole list
+  //   onmore    shows "All ›" (moreLabel to name it otherwise), which opens the whole list; loud: as a filled capsule
   import type { Snippet } from 'svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { t } from '../lib/i18n/index.svelte';
 
-  let { title, count = 0, onmore, moreLabel, children }: { title: string; count?: number; onmore?: () => void; moreLabel?: string; children?: Snippet } = $props();
+  let { title, count = 0, onmore, moreLabel, loud = false, children }: { title: string; count?: number; onmore?: () => void; moreLabel?: string; loud?: boolean; children?: Snippet } = $props();
 </script>
 
 <section class="sec">
   <header class="hd">
     <h2 class="tt">{title}{#if count > 0}<span class="n num">{count}</span>{/if}</h2>
-    {#if onmore}<button class="more" onclick={onmore}>{moreLabel ?? t('common.all')}<ChevronRight size={18} strokeWidth={2.2} /></button>{/if}
+    {#if onmore}<button class={['more', { loud }]} onclick={onmore}>{moreLabel ?? t('common.all')}<ChevronRight size={18} strokeWidth={2.2} /></button>{/if}
   </header>
   {#if children}{@render children()}{/if}
 </section>
@@ -27,4 +27,6 @@
     font: 450 var(--fs-row)/1.2 var(--font-text); letter-spacing: -0.012em; }
   .more::after { content: ''; position: absolute; inset: -12px -4px; } /* 44 to the finger */
   .more:active { opacity: 0.5; transform: none; }
+  .hd:has(.loud) { align-items: center; }
+  .loud { height: 32px; margin-right: 0; padding: 0 var(--s-2) 0 13px; border-radius: var(--r-full); background: var(--accent); color: var(--on-accent); font: 600 var(--fs-sub)/1 var(--font-text); box-shadow: var(--lg-bevel), var(--lg-lift); }
 </style>
