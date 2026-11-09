@@ -298,11 +298,11 @@ def _app(con, v: Viewer, app_id: int):
 def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
     """A teammate's verdict on an application (no / maybe / next), stars and a note; the latest verdict is its stage
     until someone decides (yes into a department, or no)."""
-    a = _app(con, v, app_id)
-    verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
-    if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
-        raise ApiError("bad_input")
-    with tx(con):
+    with tx(con):  # read and written under the lock: results sent meanwhile stand
+        a = _app(con, v, app_id)
+        verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
+        if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
+            raise ApiError("bad_input")
         con.execute("""INSERT INTO round_votes (app_id, user_id, verdict, stars, note, at) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (app_id, user_id) DO UPDATE SET verdict = excluded.verdict, stars = excluded.stars, note = excluded.note, at = excluded.at""",
                     (app_id, v.id, verdict, stars, note, now()))
@@ -313,15 +313,16 @@ def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
 
 def decide(con, v: Viewer, app_id: int, body: dict) -> dict:
     """Taken into a department (any of the round's: the board may move someone to their second wish or elsewhere), or no."""
-    a = _app(con, v, app_id)
-    stage, tag = body.get("stage"), body.get("tagId")
-    deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", a["round_id"])}
-    if stage == "yes" and (tag in deps or tag is None and not deps):  # no departments: into the club, no tag
-        con.execute("UPDATE round_apps SET stage = 'yes', taken_tag = ?, updated_at = ? WHERE id = ?", (tag, now(), app_id))
-    elif stage in ("no", "next", "maybe", "new"):
-        con.execute("UPDATE round_apps SET stage = ?, taken_tag = NULL, updated_at = ? WHERE id = ?", (stage, now(), app_id))
-    else:
-        raise ApiError("bad_input")
+    with tx(con):  # read and written under the lock: a "no" sent meanwhile never turns into a "yes" with no membership
+        a = _app(con, v, app_id)
+        stage, tag = body.get("stage"), body.get("tagId")
+        deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", a["round_id"])}
+        if stage == "yes" and (tag in deps or tag is None and not deps):  # no departments: into the club, no tag
+            con.execute("UPDATE round_apps SET stage = 'yes', taken_tag = ?, updated_at = ? WHERE id = ?", (tag, now(), app_id))
+        elif stage in ("no", "next", "maybe", "new"):
+            con.execute("UPDATE round_apps SET stage = ?, taken_tag = NULL, updated_at = ? WHERE id = ?", (stage, now(), app_id))
+        else:
+            raise ApiError("bad_input")
     return {"stage": stage, "takenTag": tag if stage == "yes" else None}
 
 
