@@ -117,15 +117,17 @@ export function phrase(key: Key, vars?: Record<string, string | number>): string
   return all[Math.floor(Math.random() * all.length)];
 }
 
+let taps = 0; // a follow or a save while the lists reload: the older answer must not undo it on screen
 export async function loadAfisha(): Promise<void> {
   loadChats();
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
+    const at = taps;
     const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true), api.castings()]);
     if (castings.status === 'fulfilled') data.castings = castings.value;
     if (past.status === 'fulfilled') data.past = past.value;
-    if (events.status === 'fulfilled') data.events = events.value;
-    if (orgs.status === 'fulfilled') { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
+    if (events.status === 'fulfilled' && at === taps) data.events = events.value;
+    if (orgs.status === 'fulfilled' && at === taps) { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
     if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
     data.error = events.status === 'rejected';
@@ -325,6 +327,7 @@ export function declineInvite(id: Id, note?: string): void {
 
 export function toggleSaved(id: Id): void {
   asStudent(async () => {
+    taps++;
     const e = await cardFor(id); if (!e) return;
     const on = !e.saved;
     e.saved = on; // optimistic
@@ -360,6 +363,7 @@ export function toggleJoin(id: Id): void {
 
 export function toggleSub(id: Id): void {
   asStudent(async () => {
+    taps++;
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = !o.subscribed;
     o.subscribed = on; o.subscribers += on ? 1 : -1;

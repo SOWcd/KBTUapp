@@ -251,6 +251,7 @@
   .act > :global(.btn) { width: 100%; }
   .two { display: flex; gap: var(--s-3); width: 100%; }
   .two :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }
+  .two :global(.btn.neutral.full) { flex: 0 0 auto; }
   .quiet { --plain-ink: var(--text-3); }
   .rep { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); text-align: center; }
   .friends { text-align: center; color: var(--text-2); }

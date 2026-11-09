@@ -882,7 +882,7 @@ def reply_answered(con, msg_id: int, tg: int) -> None:
 # the bot's side (tgc.post_tick)
 
 def replies_to_send(con) -> list:
-    """Replies due now: live, their wait over, the post live in the channel, its author not banned: (id, words, the
+    """Replies due now: live, the post live in the channel, its author not banned: (id, words, the
     message to answer: the comment or the post's copy in the group, the signature: the post's nick or the plain mark)."""
     return [(r["id"], r["body"], r["comment_msg"] or int(r["root"]),
              texts.FCH_REPLY_NICK.format(nick=texts.nick(r["nick_a"], r["nick_n"])) if r["nick_a"] is not None else texts.FCH_REPLY_SIGN)

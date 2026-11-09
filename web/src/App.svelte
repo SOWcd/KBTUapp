@@ -509,7 +509,6 @@
     // back after 30 s or more: the app's data again, quietly (every loader keeps its last copy if it fails). Telegram's
     // events and the page's both land here; the first one back clears leftAt, so one return is one refresh. Not the Gallery:
     // its first page would cut the list of a viewer left open, and it reloads as it opens.
-    // ponytail: a tap in the moment of the refetch can be overwritten by the older answer until the next load; a per-list tap counter if it shows
     let leftAt = 0;
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
