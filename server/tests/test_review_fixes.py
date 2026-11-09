@@ -23,7 +23,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con = db.connect(cfg.db_path)
     keyed = {t for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
              if {r[1] for r in con.execute(f"PRAGMA table_info({t})")} & {"email", "student_id", "tg_id", "author_tg", "phone"}}
-    # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, kept for the right person
+    # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, only the row I claimed goes
     assert keyed == {"users", "students", "prefill", "prefill_rest", "qr_expected", "tgc_saved", "tgc_strangers", "tgc_comments",
                      "roster_pending"}, keyed
 
@@ -32,7 +32,15 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     from kbtu import checkin
     s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T"}, {"email": "x@kbtu.kz", "name": "Ali Testov", "studentId": "24Bali"},
                                    {"email": "y@kbtu.kz", "name": "Bek Omarov", "studentId": "24Bali"}, {"email": "dan@kbtu.kz", "name": "Dan"}])
+    aid = ali["id"]
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    for key, claimed, rejected in (("claimed", aid, None), ("turned_down", None, aid), ("someone", None, None)):
+        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, claimed_by, rejected_by, created_at)
+            VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, 0)""", (key, claimed, rejected))
     delete_now(c, cfg, tma(21, "Ali"))
+    # the row I said was mine goes and a reload doesn't bring it back; one turned down, or never claimed, is the club's
+    assert [tuple(r) for r in con.execute("SELECT key, rejected_by FROM roster_pending ORDER BY key")] == [("someone", None), ("turned_down", None)]
+    assert con.execute("SELECT 1 FROM meta WHERE key = 'roster_done:claimed'").fetchone()
     # by mail; by my ID only with my name (Bek's row with a typo of my ID is his)
     assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ? ORDER BY email", (s1,))] == ["dan@kbtu.kz", "y@kbtu.kz"]
 

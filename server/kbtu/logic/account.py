@@ -1138,7 +1138,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
+        # PLAN 95: a list row I said was mine goes with me, and a reload skips it (as after roster.join); one turned down
+        # ("not them") or never claimed is the club's, kept for the right person
+        for (key,) in rows(con, "DELETE FROM roster_pending WHERE claimed_by = ? RETURNING key", v.id):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
