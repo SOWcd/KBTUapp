@@ -137,3 +137,10 @@ def test_newest_first_pages_once_each_and_one_query(env):
     for _ in range(10):
         _photo(con, eid, c.ids[BO])
     assert count() == before == 1
+
+
+def test_photo_in_a_closed_album_too_can_still_be_reported(env):
+    c, con, oid = _setup(env)
+    fid = _photo(con, _event(con, c, oid, 'Team', visibility='members'), c.ids[HEAD])  # the closed album comes first
+    _pin(con, _event(con, c, oid), fid, c.ids[HEAD])
+    assert c.post('/api/reports', headers=tma(AL), json={'target': 'photo', 'id': fid, 'reason': 'spam'}).status_code == 204

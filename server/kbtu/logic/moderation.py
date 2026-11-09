@@ -15,6 +15,14 @@ from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, log_action,
 COMMENTS_A_MINUTE, REPORTS_A_DAY = 10, 20
 
 
+def _sees_event(con, v: Viewer, eid: int) -> bool:
+    try:
+        _thread(con, v, "event", eid)
+    except ApiError:
+        return False
+    return True
+
+
 def _thread(con, v: Viewer, kind: str, tid: int) -> sqlite3.Row:
     """The post or event a comment thread hangs under, if the viewer can see it."""
     if kind == "post":
@@ -126,10 +134,10 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     if note and len(note) > REPORT_NOTE:
         raise ApiError("bad_input")
     if target == "photo":  # an album photo (its file id): hidden for me at once, for everyone once two people reported it
-        p = one(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
-        if not p or p["added_by"] == v.id:
+        # one file can sit in several albums (the same picture added twice): any album I can see will do
+        ps = rows(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
+        if not ps or any(p["added_by"] == v.id for p in ps) or not any(_sees_event(con, v, p["event_id"]) for p in ps):
             raise ApiError("not_found")
-        _thread(con, v, "event", p["event_id"])
     elif target == "user":  # a profile: its nick, own photo and "about me"
         if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
             raise ApiError("not_found")
