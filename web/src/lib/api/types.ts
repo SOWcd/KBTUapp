@@ -168,6 +168,7 @@ export interface AdminEvent { id: Id; title: string; status: 'draft' | 'publishe
 export type OrgCategory = 'it' | 'art' | 'sport' | 'business' | 'science' | 'volunteer';
 
 export interface Org extends OrgRef {
+  small?: boolean; // under the registry's size bar: only search shows it
   description: string;
   links: string[];              // socials: Instagram, TikTok, YouTube, a site (lib/social.ts names them); never Telegram (its chats are `chats`)
   groupLink?: string | null;    // the group invite of the round that took me (api.org only, members)

@@ -42,7 +42,7 @@
 
   const SCHOOLISH = new Set(['school', 'office']);
   const clubsOnly = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
-  const found = $derived(searching ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
+  const found = $derived(searching ? [...data.orgs, ...data.small].filter((o) => hit(o, q)).sort(byWeight) : []);
   const next = $derived(nextByOrg(data.events));
 
   // My clubs: the ones I'm in (by my rank; lead: President or Vice there), then the ones I follow

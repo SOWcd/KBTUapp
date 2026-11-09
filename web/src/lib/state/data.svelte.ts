@@ -24,6 +24,7 @@ export const data = $state({
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   orgs: [] as Org[],
+  small: [] as Org[], // under the registry's size bar: search alone finds them
   schedule: [] as ClassItem[],
   posts: [] as Post[],
   castings: [] as Post[], // the Clubs tab's "recruiting" strip, read once with the Afisha (currentCastings)
@@ -124,7 +125,7 @@ export async function loadAfisha(): Promise<void> {
     if (castings.status === 'fulfilled') data.castings = castings.value;
     if (past.status === 'fulfilled') data.past = past.value;
     if (events.status === 'fulfilled') data.events = events.value;
-    if (orgs.status === 'fulfilled') data.orgs = orgs.value;
+    if (orgs.status === 'fulfilled') { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
     if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
     data.error = events.status === 'rejected';
@@ -337,7 +338,7 @@ export function toggleSaved(id: Id): void {
 /** Apply to join, or withdraw a pending application after a question (§4.5). The button answers at once. */
 export function toggleJoin(id: Id): void {
   asStudent(async () => {
-    const o = data.orgs.find((x) => x.id === id); if (!o) return;
+    const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
     if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
     // the only way in without a form of its own, and it pings the club's president: one question (a president's report, Nov 9)
@@ -359,7 +360,7 @@ export function toggleJoin(id: Id): void {
 
 export function toggleSub(id: Id): void {
   asStudent(async () => {
-    const o = data.orgs.find((x) => x.id === id); if (!o) return;
+    const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = !o.subscribed;
     o.subscribed = on; o.subscribers += on ? 1 : -1;
     haptic.tap();

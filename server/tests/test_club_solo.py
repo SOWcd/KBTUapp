@@ -19,7 +19,7 @@ def test_solo_club_hidden(env, monkeypatch):
     uid = lambda t: con.execute("SELECT id FROM users WHERE tg_id = ?", (t,)).fetchone()[0]  # noqa: E731
     org = logic.create_org(con, None, "Lonely", "LO", "crown_3d", True)
     logic.set_role(con, None, uid(PRES), org, "president", "test")
-    ids = lambda t: [o["id"] for o in c.get("/api/orgs", headers=tma(t)).json()]  # noqa: E731
+    ids = lambda t: [o["id"] for o in c.get("/api/orgs", headers=tma(t)).json() if not o["small"]]  # noqa: E731
     assert org not in ids(FAN) and org in ids(PRES)  # only its one member sees it
     assert c.get(f"/api/orgs/{org}", headers=tma(FAN)).status_code == 200  # a direct link works
     logic.set_role(con, None, uid(SECOND), org, "member", "test")

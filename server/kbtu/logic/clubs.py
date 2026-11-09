@@ -123,17 +123,19 @@ CLUB_QUIET = 30 * 86400  # no event, post or open round this long: "quiet" (_org
 CATEGORIES = ("it", "art", "sport", "business", "science", "volunteer")  # types.ts OrgCategory; the Clubs tab's tiles
 
 
-def listed(con, v: Viewer) -> list[sqlite3.Row]:
+def listed(con, v: Viewer, small: bool = False) -> list[sqlite3.Row]:
     """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet (owner,
     Nov 7-8): off the registry for everyone but its own (the admin too: one interface); its page (org) and its events
-    stay reachable. One subquery for all, never per card."""
+    stay reachable, and search finds it (owner, Nov 9: small=True, every club not hidden). One subquery for all, never per card."""
     return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
         AND (kind != 'club' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?)
-             OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?)""", v.id, CLUB_MIN)
+             OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?)""", v.id, 0 if small else CLUB_MIN)
 
 
 def orgs(con, v: Viewer) -> list[dict]:
-    found = org_shapes(con, v, listed(con, v), share=True)
+    # the registry's own, and those under its size bar marked `small`: the app keeps them for search alone
+    shown = {o["id"] for o in listed(con, v)}
+    found = [{**o, "small": o["id"] not in shown} for o in org_shapes(con, v, listed(con, v, small=True), share=True)]
     return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 

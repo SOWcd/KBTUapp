@@ -30,7 +30,7 @@
   const clubs = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
 
   let q = $state('');
-  const shown = $derived(q.trim() ? clubs.filter((o) => hit(o, q)) : clubs);
+  const shown = $derived(q.trim() ? [...clubs, ...data.small.filter((o) => !SCHOOLISH.has(o.kind))].filter((o) => hit(o, q)) : clubs);
   const parts = $derived([
     { key: 'official', title: t('clubs.headOfficial'), orgs: shown.filter((o) => o.official).sort(bySize) },
     { key: 'initiatives', title: t('clubs.headInitiatives'), orgs: shown.filter((o) => !o.official && !o.quiet).sort((a, b) => +!a.top - +!b.top || bySize(a, b)) },

@@ -68,7 +68,7 @@ def clubs(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     k = fold(q)
     if len(k) < 2:
         return []
-    found = rows(con, "SELECT * FROM orgs") if v.role == "admin" else listed(con, v)
+    found = rows(con, "SELECT * FROM orgs") if v.role == "admin" else listed(con, v, small=True)
     found = sorted((o for o in found if hit(k, names(o, "name", "short", "abbr"))), key=lambda o: fold(o["name"]))[:n]
     logos = _by_id(con, "files", (o["logo_file_id"] for o in found))
     return [org_ref(con, o, logos) for o in found]

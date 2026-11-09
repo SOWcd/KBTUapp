@@ -60,11 +60,10 @@
   .venv/bin/python -m kbtu.admin announce3 [--send|--test]   owner's one-off (Nov 7): the incubator's elective post (bot.ELECTIVE)
                                 to the 3rd years the bot can write to, with "more like it?" Yes/No; counts only; --send queues
                                 it (once per person: a second run reaches only the new ones)
-  .venv/bin/python -m kbtu.admin meeting new "<title>" "<YYYY-MM-DD HH:MM>" <minutes> "<place>" "<description>"   a DMP general meeting
-                                (Almaty time), published as DMP by the creator; prints its id
-  .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send|--reps|--send-reps]   "in an hour" (bot meet_call) to the
-                                students the bot can write to with reminders on, no class at that hour (reps: club boards instead), once each,
-                                an hour before; --test: to the creator now; no flag or --reps: counts
+  .venv/bin/python -m kbtu.admin meeting new "<title>" "<YYYY-MM-DD HH:MM>" <minutes> "<place>" "<description>"   a DMP leaders meeting
+                                (Heads and up of every club; Almaty time), published as DMP by the creator, which invites them at once; prints its id
+  .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
+                                students), once each, an hour before; --test: to the creator now; no flag: counts
   .venv/bin/python -m kbtu.admin fill-categories               clubs with no category get one from the AI (name and description only)
   .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
                                 who came, once each (ref ph2:<event>); a dry run prints how many
@@ -388,31 +387,29 @@ def main(args: list[str]) -> None:
             sys.exit("needs the creator and the dmp office")
         v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600
         e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
-                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "public"})
+                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head"})
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
-    elif cmd == "meeting" and len(args) in (3, 4) and args[1] == "call" and args[2].isdigit() and args[3:] in ([], ["--test"], ["--send"], ["--reps"], ["--send-reps"]):
-        e = one(con, """SELECT e.id, e.starts_at FROM events e JOIN orgs o ON o.id = e.org_id AND o.slug = 'dmp'
-            WHERE e.id = ? AND e.status = 'published' AND e.visibility = 'public' AND e.starts_at > ?""", int(args[2]), now())
+    elif cmd == "meeting" and len(args) in (3, 4) and args[1] == "call" and args[2].isdigit() and args[3:] in ([], ["--test"], ["--send"]):
+        from .logic.organizing import _invited_leaders
+        e = one(con, """SELECT e.* FROM events e JOIN orgs o ON o.id = e.org_id AND o.slug = 'dmp'
+            WHERE e.id = ? AND e.status = 'published' AND e.visibility = 'leaders' AND e.starts_at > ?""", int(args[2]), now())
         if not e:
-            sys.exit("no upcoming public DMP event with that id")
+            sys.exit("no upcoming DMP leaders meeting with that id")
         if args[3:] == ["--test"]:
             with db.tx(con):
                 for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1"):
                     notify(con, uid, "meet_call", f"mc:{e['id']}:test{int(time.time())}")
             print("queued to the creator")
         else:
-            t = time.gmtime(e["starts_at"] + 5 * 3600)  # those with a class at that hour are excused (the timetable they added); club boards alone with reps
-            reps = args[3:] in (["--reps"], ["--send-reps"])
-            who = """EXISTS (SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.status = 'active' WHERE m.user_id = u.id AND m.role IN ('president', 'vice', 'head'))""" if reps else \
-                f"""NOT EXISTS (SELECT 1 FROM schedule_classes c WHERE c.user_id = u.id AND c.weekday = {t.tm_wday + 1} AND c.begins <= '{t.tm_hour:02}:{t.tm_min:02}' AND c.ends > '{t.tm_hour:02}:{t.tm_min:02}')"""
-            to = [r[0] for r in rows(con, f"""SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE u.can_dm = 1 AND u.n_remind = 1
-                AND u.banned_at IS NULL AND u.tg_id > 0 AND {who} AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'meet_call' AND b.ref = ?)""", f"mc:{e['id']}")]
-            if args[3:] in (["--send"], ["--send-reps"]):
+            ref = f"mc:{e['id']}"
+            told = {r[0] for r in rows(con, "SELECT user_id FROM bot_outbox WHERE kind = 'meet_call' AND ref = ?", ref)}
+            to = [r[0] for r in _invited_leaders(con, e) if r[0] not in told]
+            if args[3:]:
                 with db.tx(con):
                     for uid in to:
-                        notify(con, uid, "meet_call", f"mc:{e['id']}", after=max(now(), e["starts_at"] - 3600))
-            print(f"students the bot can write to, not told yet: {len(to)}" + (" (queued for an hour before)" if args[3:] in (["--send"], ["--send-reps"]) else " (dry run)"))
+                        notify(con, uid, "meet_call", ref, after=max(now(), e["starts_at"] - 3600))
+            print(f"club boards invited, not told yet: {len(to)}" + (" (queued for an hour before)" if args[3:] else " (dry run)"))
     elif cmd == "fill-categories" and len(args) == 1:
         import asyncio
         import httpx
