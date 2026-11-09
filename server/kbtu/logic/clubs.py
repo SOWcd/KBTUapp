@@ -92,11 +92,11 @@ CLUB_MIN = 5  # owner, Nov 8: a club of fewer isn't in the registry (official on
 
 def listed(con, v: Viewer) -> list[sqlite3.Row]:
     """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet (owner,
-    Nov 7-8): off the registry for everyone but its own and the admin; its page (org) and its events stay reachable.
+    Nov 7-8): off the registry for everyone but its own (the admin too: one interface; search still finds it for them); its page (org) and its events stay reachable.
     One subquery for all, never per card."""
     return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
-        AND (kind != 'club' OR ? OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?
-             OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?))""", v.role == "admin", CLUB_MIN, v.id)
+        AND (kind != 'club' OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?
+             OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?))""", CLUB_MIN, v.id)
 
 
 def orgs(con, v: Viewer) -> list[dict]:

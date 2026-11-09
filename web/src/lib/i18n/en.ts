@@ -1724,6 +1724,7 @@ const en: Dict = {
   'studio.noUser': "Without one, students and other clubs can't message the club: “Message the club” goes to the president. Telegram → Settings → Username.",
   'join.closed': "The club isn't taking applications now",
   'join.noTeam': "The club hasn't joined the app yet: you can't join it here for now",
+  'join.applyAsk': 'Apply to join {name}?',
   'join.withdrawAsk': "Withdraw your application?",
   'join.withdrawText': "The club won't see it anymore.",
   'join.withdraw': "Withdraw",

@@ -301,6 +301,8 @@ export function toggleJoin(id: Id): void {
     const o = data.orgs.find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
     if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
+    // the only way in without a form of its own, and it pings the club's president: one question (a president's report, Nov 9)
+    if (on && !(await sheets.ask({ title: t('join.applyAsk', { name: o.name }), ok: t('join.apply'), cancel: t('common.cancel') }))) return;
     if (!on && !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('join.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep') }))) return;
     o.myRequest = on ? 'pending' : null;
     haptic.tap();
