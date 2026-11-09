@@ -91,6 +91,8 @@ export interface ChannelReply { id: Id; body: string; comment: number | null; st
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; helpers?: number }
+/** The check-in the capsule shows (/api/me): one I run (ScreenSheet's numbers, for its first frame), or one I help at (my QR). until: when its event is over */
+export type MyCheckin = (ScreenSession & { helper: false; until: Ts }) | { helper: true; session: Id; event: Id | null; title: string; scanner: boolean; until: Ts };
 /** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
 export interface ScreenHelper { session: Id; event: Id | null; title: string; joined: boolean; scanner: boolean }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
@@ -280,6 +282,8 @@ export interface Me {
   referrals: { count: number; code: string } | null; // students my invite link brought (signed in with KBTU), my badge's code for the link
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
+  checkin?: MyCheckin | null;   // my running check-in: the capsule
+  bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
   showcase: string[];
   settings: Settings;

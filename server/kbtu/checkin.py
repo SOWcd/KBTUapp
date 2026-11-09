@@ -31,6 +31,8 @@ CSV_TTL = 300       # the CSV link the app hands Telegram's download works this 
 LEASE = logic.profiles.QR_LEASE  # each poll of a screen showing the QR renews this: nothing showing it, its code stops this soon after
 HAND_OK = 45        # how old the helper's QR may be: it gives a whole session's QR, so a forwarded photo dies sooner than SCAN_OK's
 HAND_GRACE = 30     # the helper's QR, once its sheet closed: time to read "help run this?" and say yes
+SCREEN_SEEN = 60    # a paired screen counts as connected this long after its last poll (a closed tab says nothing: it just stops)
+NO_EVENT_LIVE = 86400  # a running session without an event leaves the capsule this long after its Start
 
 
 def _sig(key: bytes, msg: str) -> str:
@@ -62,6 +64,10 @@ def new(con, title: str, people: list[dict], org_id: int | None = None) -> int:
 # it (anyone else's scan changes nothing, so nobody can lock the organizer out). The screen then only shows: Start,
 # Finish, the CSV and "disconnect" live in the app, for any of the session's organizers (a flat phone loses nothing).
 
+# The secret lives in that browser tab alone (Screen.svelte: sessionStorage), so closing the tab ends the pairing: nothing
+# holds the secret any more. A reload or a dead network keeps it: nothing here expires a pairing for going quiet under a day.
+# ponytail: qr_screens.created_at of a paired row is its last poll, to spare a migration; a column of its own if anything else needs it
+
 def _hash(secret: str) -> str:
     return hashlib.sha256(f"kbtu-screen:{secret}".encode()).hexdigest()
 
@@ -81,9 +87,9 @@ def pair(con, key: bytes, ip: str = "") -> dict:
     """A new screen: its pairing code (public, in the QR) and its secret (stays in that browser, only its hash here)."""
     where = _where(key, ip)
     t = now()
-    # unpaired ones rotate every PAIR_TTL; a paired one goes a day after its session ended
-    con.execute("""DELETE FROM qr_screens WHERE session_id IS NULL AND created_at < ? OR session_id IN
-        (SELECT id FROM qr_sessions WHERE ended_at < ?)""", (t - PAIR_TTL, t - 86400))
+    # unpaired ones rotate every PAIR_TTL; a paired one goes a day after its session ended or its tab's last poll
+    con.execute("""DELETE FROM qr_screens WHERE session_id IS NULL AND created_at < ? OR session_id IS NOT NULL AND created_at < ? OR session_id IN
+        (SELECT id FROM qr_sessions WHERE ended_at < ?)""", (t - PAIR_TTL, t - 86400, t - 86400))
     if one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id IS NULL")[0] >= PAIR_MAX \
             or one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id IS NULL AND ip = ?", where)[0] >= PAIR_PER_IP:
         raise ApiError("rate_limited")
@@ -99,6 +105,7 @@ def screen(con, key: bytes, secret: str) -> dict:
         raise ApiError("forbidden", "screen")
     if r["session_id"] is None:
         return {"code": r["code"], "left": max(0, r["created_at"] + PAIR_TTL - now())}
+    con.execute("UPDATE qr_screens SET created_at = ? WHERE code = ? AND created_at < ?", (now(), r["code"], now() - 10))  # its last poll
     _lease(con, r["session_id"])
     return {"code": r["code"], **_state(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", r["session_id"]))}
 
@@ -107,7 +114,7 @@ def _lease(con, sid: int) -> None:
     con.execute("UPDATE qr_sessions SET lease_until = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now() + LEASE, sid))
 
 
-def _state(con, key: bytes, s) -> dict:
+def _state(con, key: bytes | None, s) -> dict:
     sid = s["id"]
     running = s["started_at"] is not None and s["ended_at"] is None
     slot = int(time.time()) // SLOT
@@ -116,7 +123,7 @@ def _state(con, key: bytes, s) -> dict:
     return {"session": sid, "event": s["event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
             "phase": s["phase"], "departed": c[2],
             "expected": one(con, "SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", sid)[0],
-            "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running else None, "next": SLOT - int(time.time()) % SLOT}
+            "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running and key else None, "next": SLOT - int(time.time()) % SLOT}
 
 
 def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
@@ -133,8 +140,8 @@ def _mine(con, v: Viewer, sid: int, cohost: bool = True):
     return s
 
 
-def _row(con, key: bytes, s) -> dict:
-    return {**_state(con, key, s), "screens": one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id = ?", s["id"])[0]}
+def _row(con, key: bytes | None, s) -> dict:
+    return {**_state(con, key, s), "screens": one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id = ? AND created_at > ?", s["id"], now() - SCREEN_SEEN)[0]}
 
 
 def sessions(con, key: bytes, v: Viewer) -> list[dict]:
@@ -147,6 +154,28 @@ def sessions(con, key: bytes, v: Viewer) -> list[dict]:
         JOIN orgs o ON o.id = x.org_id WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)})))"""
     return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY id DESC",
                                               now() - 86400, *([] if v.role == "admin" else run * 2))]
+
+
+def running(con, v: Viewer) -> dict | None:
+    """The check-in the capsule shows (/api/me, read once): the newest running one I run in my clubs, else one I help at.
+    Not every club's for the app's admin: that's Admin. Gone when it's finished or its event is over (`until`)."""
+    if not v.student:
+        return None
+    run = [o for o, r in logic._rights(con, v).items() if "events" in r]
+    end = f"COALESCE(e.ends_at, e.starts_at + {logic.DOOR_LATE}, s.started_at + {NO_EVENT_LIVE})"
+    found = rows(con, f"""SELECT s.*, {end} AS until FROM qr_sessions s LEFT JOIN events e ON e.id = s.event_id
+        WHERE s.started_at IS NOT NULL AND s.ended_at IS NULL AND COALESCE(e.status, '') != 'cancelled' AND {end} > ?
+        AND (s.org_id IN ({logic._qs(run)}) OR s.event_id IN (SELECT event_id FROM event_cohosts WHERE status = 'accepted' AND org_id IN ({logic._qs(run)}))
+             OR s.id IN (SELECT session_id FROM qr_helpers WHERE user_id = ?)) ORDER BY s.id DESC""", now(), *run, *run, v.id)
+    for s in found:
+        if _runs(con, v, s):
+            return {**_row(con, None, s), "helper": False, "until": s["until"]}
+    for s in found:
+        if logic.crew.qr_helping(con, v, s):
+            e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+            return {"session": s["id"], "event": s["event_id"], "title": _title_for(con, s, v.id, True), "helper": True,
+                    "scanner": bool(e) and logic.crew.kind(con, v, e) is not None, "until": s["until"]}
+    return None
 
 
 def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
@@ -166,7 +195,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
             raise ApiError("conflict", "pick")  # none open or several: the app asks which
         sid = live[0]["session"]
     s = _mine(con, v, sid)
-    if not con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, r["code"])).rowcount:
+    if not con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ?, created_at = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, now(), r["code"])).rowcount:
         return bind(con, key, v, code, sid)  # another scan bound it first: the session it really got, if mine (or gone: rotated)
     return _row(con, key, s)
 

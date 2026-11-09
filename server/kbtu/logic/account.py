@@ -448,6 +448,9 @@ def me(con, v: Viewer) -> dict:
         "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
+        # the capsule's running check-in, and Profile's "Big screen": pair a computer (who runs events), or a helper's own QR
+        "checkin": (c := checkin.running(con, v)),
+        "bigScreen": "pair" if any("events" in _rights_from(m["role"], m["rights"]) for m in members) else "qr" if c and c["helper"] else None,
     }
 
 

@@ -2,12 +2,14 @@
   // The organizer's side of /show (server checkin.py): a scan of the laptop's pairing QR (sh_<code>) binds it to my
   // session, and here are the controls the screen itself no longer has: Start, Finish, the list, "disconnect". Anyone
   // who doesn't run a session gets a polite no and the screen stays as it was. From an event (`event`): its own session,
-  // made on first use, with the way to the laptop. Without either: my sessions.
+  // made on first use, with the way to the laptop. `seed` (the capsule): that running session alone, there in the first
+  // frame. Without any: my sessions.
+  import { untrack } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, loadMe } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
   import { downloadFile, haptic } from '../../lib/tg';
@@ -28,8 +30,8 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import UserPlus from '@lucide/svelte/icons/user-plus';
 
-  let { overlay, code, event }: { overlay: Overlay; code?: string; event?: Id } = $props();
-  let list = $state<ScreenSession[] | null>(null);
+  let { overlay, code, event, seed }: { overlay: Overlay; code?: string; event?: Id; seed?: ScreenSession } = $props();
+  let list = $state<ScreenSession[] | null>(untrack(() => (seed ? [seed] : null)));
   let pick = $state(false);   // an unpaired screen and several open sessions: which one
   let note = $state('');      // why there's nothing to do here
   let busy = $state(0);
@@ -37,17 +39,19 @@
   const own = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
 
   // from an event, only its session stays in view
-  const refresh = () => api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : l; }).catch(() => {});
-  async function bind(session?: Id) {
+  const refresh = () => api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : seed ? l.filter((x) => x.session === seed.session) : l; }).catch(() => {});
+  async function bind(sid?: Id) {
     try {
-      const s = await api.bindScreen(code!, session);
+      const s = await api.bindScreen(code!, sid);
       pick = false; haptic.ok(); say(t('scr.paired'), 'sparkles_3d');
       list = [s, ...(await api.screens().catch(() => [])).filter((x) => x.session !== s.session)];
     } catch (e) {
       const m = e instanceof ApiErr ? e.message : '';
       if (m === 'pick') { pick = true; list = (await api.screens().catch(() => [])).filter((x) => !x.ended); return; }
       haptic.error();
-      note = m === 'pair' ? t('scr.stale') : m === 'screen' ? t('scr.notYours') : t('common.error');
+      // who runs events but has no session yet hears that, not "this isn't for you"
+      const none = m === 'screen' && session.me?.bigScreen === 'pair' && !(await api.screens().catch(() => [])).length;
+      note = m === 'pair' ? t('scr.stale') : none ? t('scr.noneOpen') : m === 'screen' ? t('scr.notYours') : t('common.error');
       list = [];
     }
   }
@@ -58,6 +62,9 @@
     const id = setInterval(refresh, 4000); // the count goes up while people scan
     return () => clearInterval(id);
   });
+
+  // finished: the capsule lets go at once, without waiting for the next refresh
+  $effect(() => { const c = session.me?.checkin; if (c && list?.some((x) => x.session === c.session && x.ended)) session.me!.checkin = null; });
 
   // who may let a helper in: the club's President or Vice (the privacy policy's door helper), or the app's admin (server checkin._hands_over)
   const board = (s: ScreenSession) => { if (session.me?.role === 'admin' && !code) return true; const ev = s.event ? eventById(s.event) : null; return !!ev && !!session.me?.memberships.some((m) => m.org.id === ev.org.id && (m.role === 'president' || m.role === 'vice')); };
@@ -71,6 +78,7 @@
     try {
       const n = await api.screenAct(s.session, a);
       list = (list ?? []).map((x) => (x.session === n.session ? n : x)); haptic.ok();
+      if (a === 'start') void loadMe(true); // the capsule
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = 0; }
   }
   async function csv(s: ScreenSession) {

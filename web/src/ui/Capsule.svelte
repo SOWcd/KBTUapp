@@ -1,5 +1,5 @@
 <script module lang="ts">
-  export type Live = { kind: 'event' | 'class'; title: string; at: number; until?: number; emoji: string; tint: string; label: string; onopen?: () => void };
+  export type Live = { kind: 'event' | 'class' | 'checkin'; title: string; at: number; until?: number; emoji: string; tint: string; label: string; onopen?: () => void };
 </script>
 
 <script lang="ts">
@@ -136,6 +136,7 @@
   .live.off { transform: translateY(-10px) scale(0.92); }
 
   .live { gap: 8px; padding: 0 12px 0 0; text-align: left; }
+  @media (max-width: 340px) { .live { padding-right: 2px; } } /* the top word still whole on the narrowest phones */
   .lv { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
   .lt { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
   .lt b { font: 700 13px/1.1 var(--font-text); letter-spacing: 0.01em; }

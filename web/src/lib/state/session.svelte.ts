@@ -30,6 +30,9 @@ export async function loadMe(quiet = false): Promise<void> {
   session.ready = true;
 }
 
+/** My running check-in, unless its event ended since the server said so. */
+export const runningCheckin = (at = Date.now() / 1000) => { const c = session.me?.checkin; return c && c.until > at ? c : null; };
+
 let loginHook: ((after: () => void, lock?: boolean) => void) | null = null;
 export function setLoginHook(fn: (after: () => void, lock?: boolean) => void): void { loginHook = fn; }
 

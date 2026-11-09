@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
@@ -59,7 +59,9 @@ export const sheets = {
   helperQr: (_session: Id, _event: Id | null, _scanner: boolean) => {},
   /** the QR an organizer shows to let someone help */
   handQr: (_session: Id) => {},
-  screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
+  screens: (_code?: string, _event?: Id, _seed?: ScreenSession) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session; seed: that session alone (the capsule)
+  /** Profile's "Big screen": the scanner for a computer's pairing QR; a helper's own QR */
+  bigScreen: () => {},
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id, _staff?: boolean) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */

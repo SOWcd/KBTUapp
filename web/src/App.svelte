@@ -4,7 +4,7 @@
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
-  import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
+  import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
@@ -15,8 +15,8 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
-  import { api, ApiErr, localize, type Id } from './lib/api';
+  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, scanQr, tg, tgTry } from './lib/tg';
+  import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
@@ -99,7 +99,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -112,7 +112,27 @@
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
-  sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
+  const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
+  sheets.screens = (code, event, seed) => lazy(screenSheet, { code, event, seed });
+  // a running check-in's controls: the organizer's sheet, a helper's own QR (so a closed one needs no second scan)
+  const openCheckin = (c: MyCheckin) => { haptic.tap(); if (c.helper) sheets.helperQr(c.session, c.event, c.scanner); else sheets.screens(undefined, undefined, c); };
+  const PAIR_QR = /[?&]startapp=sh_([0-9a-f]{16})$/; // what /show's QR says
+  sheets.bigScreen = () => {
+    if (session.me?.bigScreen !== 'pair') { // a helper has no screen to pair (only a session's organizers may: server checkin.bind): their QR
+      const c = runningCheckin();
+      if (c) openCheckin(c); else { say(t('scr.helpEnded'), 'waving_hand_3d_default'); void loadMe(true); }
+      return;
+    }
+    haptic.tap();
+    let wrong = '';
+    const can = scanQr(t('scr.aim'), (text) => {
+      const m = text.match(PAIR_QR);
+      if (m) { haptic.ok(); sheets.screens(m[1]); return true; }
+      if (text !== wrong) { wrong = text; haptic.error(); } // another QR: said once, the scanner stays up
+      return false;
+    });
+    if (!can) { sheets.screens(); say(t('give.phone'), 'pleading_face_3d'); } // no scanner in this client: the sheet says how, by the phone's camera
+  };
   sheets.manage = (id, staff) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
@@ -247,6 +267,8 @@
   let clock = $state(nowTs());
   const live = $derived.by<Live | null>(() => {
     const now = clock;
+    const running = runningCheckin(now); // wins over a class or an event while it runs
+    if (running) return { kind: 'checkin', title: running.title, at: now, emoji: 'laptop_3d', tint: 'var(--accent)', label: t('cap.checkin'), onopen: () => openCheckin(running) };
     const today = dayNo(now);
     const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now
       && (e.endsAt ?? e.startsAt) - e.startsAt < 86400); // not one of several days (a casting over a week: owner, Nov 3)
@@ -271,7 +293,7 @@
     addEventListener('pointerdown', poke, { capture: true, passive: true });
     return () => { removeEventListener('pointerdown', poke, { capture: true }); clearTimeout(restTimer); };
   });
-  const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live && resting ? null : TAB_LABEL[ui.tab]()) || null);
+  const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live && (resting || live.kind === 'checkin') ? null : TAB_LABEL[ui.tab]()) || null);
   // a spinner while a tap's work runs; a view that forgot its own icon gets the app's mark (Sparkles is the assistant's alone)
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
@@ -443,13 +465,14 @@
     }
   }
 
-  // An organizer's helper QR: the event named first, then its QR on this phone. The way back after closing it: scan again
+  // An organizer's helper QR: the event named first, then its QR on this phone. The way back after closing it: the capsule
   async function helpRun(p: string): Promise<void> {
     try {
       let h = await api.qrHelper(p);
       if (!h.joined) {
         if (!(await sheets.ask({ title: t('scr.helpAsk', { title: h.title }), text: t('scr.helpText'), ok: t('scr.helpYes'), cancel: t('scr.keep') }))) return;
         h = await api.qrHelper(p, true);
+        void loadMe(true); // the capsule: my way back to this QR
       }
       haptic.ok();
       sheets.helperQr(h.session, h.event, h.scanner);
