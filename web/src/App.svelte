@@ -109,6 +109,7 @@
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
+  sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id, staff) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
