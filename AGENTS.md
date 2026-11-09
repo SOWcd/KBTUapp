@@ -63,7 +63,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
   links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
   take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
-  reply in its comments the same way (`fchan_replies`): plain text, its own AI check, a random few seconds' wait, signed
+  reply in its comments the same way (`fchan_replies`): plain text, its own AI check, signed
   with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
   taken down from Admin. And a user's own text going back to them alone: a channel comment a moderator restored
   (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
