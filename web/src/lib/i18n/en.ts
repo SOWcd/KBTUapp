@@ -2604,7 +2604,7 @@ const en: Dict = {
   'rep.tooMany': "That's enough reports for today, more tomorrow",
   'rep.gone': "This is gone already",
   'cm.count': { one: "{n} comment", other: "{n} comments" },
-  'inv.toButton': "Invite to an event",
+  'inv.toButton': "Invite",
   'inv.toTitle': "Invite {name}",
   'inv.toSub': "Where you're going: the bot brings them an invitation with a button",
   'inv.toEmpty': "You're not going anywhere yet. Pick an event, then invite friends",

@@ -5,6 +5,7 @@
   import { achKey, achName, tierName } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
   import UserRound from '@lucide/svelte/icons/user-round';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Hero from '../profile/Hero.svelte';
   import Medal from '../../ui/Medal.svelte';
   import Pin from '../../ui/Pin.svelte';
@@ -147,7 +148,7 @@
           <p class="t-foot friends">{t('person.friendsSince', { date: shown.friendsSince ? dayMonth(shown.friendsSince) : '' })}</p>
           <div class="two">
             {#if shown.username}<Button kind="secondary" size="l" full onclick={() => openLink(`https://t.me/${encodeURIComponent(shown!.username!)}`)}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('person.writeShort')}</Button>{/if}
-            <Button kind="primary" size="l" full onclick={() => sheets.inviteTo(id, shown!.name)}>{t('inv.toButton')}</Button>
+            <Button kind="secondary" size="l" full onclick={() => sheets.inviteTo(id, shown!.name)}>{#snippet icon()}<CalendarPlus size={18} />{/snippet}{t('inv.toButton')}</Button>
           </div>
         {:else if shown.username}<!-- a teammate: straight to their Telegram chat -->
           <Button kind="secondary" size="l" full onclick={() => openLink(`https://t.me/${encodeURIComponent(shown!.username!)}`)}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('person.write')}</Button>
@@ -232,7 +233,7 @@
         <!-- a nick, an own photo or "about me" that shouldn't be there: to the admin's queue -->
         <div class="rep quiet">
           <Button kind="plain" size="s" onclick={() => sheets.report('user', id, shown.name)}>{t('person.report')}</Button>
-          {#if shown.friendship === 'friends'}<Button kind="plain" size="s" disabled={acting} onclick={unfriend}>{t('fr.remove')}</Button>{/if}
+          {#if shown.friendship === 'friends'}<Button kind="plain" size="s" destructive disabled={acting} onclick={unfriend}>{t('fr.remove')}</Button>{/if}
         </div>
       {/if}
     </div>
@@ -250,7 +251,6 @@
   .act > :global(.btn) { width: 100%; }
   .two { display: flex; gap: var(--s-3); width: 100%; }
   .two :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }
-  .two :global(.btn.full:first-child:not(:last-child)) { flex: 0 0 auto; }
   .quiet { --plain-ink: var(--text-3); }
   .rep { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); text-align: center; }
   .friends { text-align: center; color: var(--text-2); }
