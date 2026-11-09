@@ -390,13 +390,13 @@ def became_student(con, uid: int) -> None:
     """Just signed up: the scans waiting for it count now (sessions open or finished under GRACE ago)."""
     t = now()
     with tx(con):
-        due = rows(con, """SELECT s.event_id FROM qr_marks m JOIN qr_sessions s ON s.id = m.session_id WHERE m.user_id = ?
+        due = rows(con, """SELECT s.id, s.event_id, m.scanned_at FROM qr_marks m JOIN qr_sessions s ON s.id = m.session_id WHERE m.user_id = ?
             AND m.done_at IS NULL AND (s.ended_at IS NULL OR s.ended_at > ?)""", uid, t - GRACE)
         con.execute("""UPDATE qr_marks SET done_at = ? WHERE user_id = ? AND done_at IS NULL
             AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ?)""", (t, uid, t - GRACE))
         for r in due:
-            if r["event_id"]:
-                logic.screen_came(con, r["event_id"], uid, t)
+            if r["event_id"] and logic.screen_came(con, r["event_id"], uid, t):
+                _attendance(con, r, uid, r["scanned_at"])  # the scan was in time when saved; a sign-in may take longer than a QR lives
 
 
 def prefill(con, email: str | None, ms: dict | None = None) -> dict | None:
