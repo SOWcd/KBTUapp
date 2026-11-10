@@ -58,7 +58,6 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal (owner, Nov 1)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
-    ("dmp", "spiral_calendar_3d", (1, 3, 5, 10), False),  # the university's general meetings (DMP's): one a day, by the QR its giver shows
     ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU (9 levels since Nov 2)
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
@@ -72,6 +71,12 @@ CRITIC = ("critic", "couch_and_lamp_3d", (1, 5, 25, 100, 250, 500, 1000), False)
 CRITIC_ON = False
 if CRITIC_ON:
     ACHIEVEMENTS.append(CRITIC)
+# "Attendance required" (DMP's general meetings, one level a meeting, by the QR its giver shows): hidden (owner, Nov 10:
+# not needed yet, the name reads as an order); DMP_ON = True brings it back everywhere (profile, Admin, the auto grant)
+DMP = ("dmp", "spiral_calendar_3d", (1, 3, 5, 10), False)
+DMP_ON = False
+if DMP_ON:
+    ACHIEVEMENTS.insert(ACHIEVEMENTS.index(next(a for a in ACHIEVEMENTS if a[0] == "referral")), DMP)
 
 
 def critic(con, uid: int) -> int:
@@ -453,7 +458,7 @@ def my_grants(con, v: Viewer) -> list[dict]:
 
 # ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
-SHOWN = (*CREATOR_ONLY, "bugs", "dmp", *BADGES["init26"])  # as the chips go; a badge's highest variant first
+SHOWN = (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES["init26"])  # as the chips go; a badge's highest variant first
 
 
 def _badge_row(con, p) -> dict:
@@ -475,7 +480,7 @@ def award_counts(con, v: Viewer) -> dict:
     _admin(v)
     have = dict(rows(con, f"""SELECT COALESCE(CASE {' '.join(f"WHEN code IN ({','.join(repr(c) for c in vs)}) THEN '{b}'" for b, vs in BADGES.items())} END, code),
         COUNT(DISTINCT user_id) FROM achievement_grants WHERE code IN ({','.join('?' * len(GRANTABLE))}) GROUP BY 1""", *GRANTABLE))
-    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", "dmp", *BADGES)}
+    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES)}
 
 
 def award_people(con, v: Viewer, award: object) -> list[dict]:

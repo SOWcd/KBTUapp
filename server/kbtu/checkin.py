@@ -479,7 +479,7 @@ def _title_for(con, s, uid: int, student: bool) -> tuple[str, int | None]:
 
 def _attendance(con, s, uid: int, t: int) -> None:
     """A DMP office event's scan is that day's Attendance award; the batch (one session, one Almaty day) undoes it."""
-    e = one(con, "SELECT e.created_by FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND o.slug = 'dmp'", s["event_id"])
+    e = logic.profiles.DMP_ON and one(con, "SELECT e.created_by FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND o.slug = 'dmp'", s["event_id"])
     if e:
         try:
             logic._grant(con, e[0], uid, "dmp", f"q{s['id']}_{(t + 5 * 3600) // 86400}", log=False)

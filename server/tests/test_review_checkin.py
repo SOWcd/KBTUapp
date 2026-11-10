@@ -132,7 +132,7 @@ def test_phone_qr_counts_a_walk_in_once(env):
     con.close()
 
 
-def test_dmp_event_gives_attendance_once(env):
+def test_dmp_event_gives_attendance_once(env, dmp_on):
     c, cfg = env
     con = db.connect(cfg.db_path)
     _, sid, p = _phone_event(c, con, "dmp")
@@ -154,7 +154,7 @@ def test_dmp_event_gives_attendance_once(env):
     con.close()
 
 
-def test_dmp_award_waits_for_the_sign_up(env):
+def test_dmp_award_waits_for_the_sign_up(env, dmp_on):
     """A guest's scan, the sign-in done long after the QR's window: the saved scan earns it, under the scan's own day."""
     c, cfg = env
     con = db.connect(cfg.db_path)
@@ -199,7 +199,7 @@ def _reg(con, eid, uid):
     return con.execute("SELECT status, walk_in FROM registrations WHERE event_id = ? AND user_id = ?", (eid, uid)).fetchone()
 
 
-def test_dmp_leaders_meeting_counts_the_hall_and_hides_itself(env):
+def test_dmp_leaders_meeting_counts_the_hall_and_hides_itself(env, dmp_on):
     c, cfg = env
     con = db.connect(cfg.db_path)
     eid, sid, p = _phone_event(c, con, "dmp", "leaders", "head")

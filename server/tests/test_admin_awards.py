@@ -109,7 +109,7 @@ def test_session_batch_undo(env):
     con.close()
 
 
-def test_award_rows_and_holders(env):
+def test_award_rows_and_holders(env, dmp_on):
     c, cfg = env
     con, boss, adm = _staff(c, cfg)
     ann, bob = login(c, 62, "ann"), login(c, 63, "bob")
@@ -238,7 +238,7 @@ def test_badge_qr(env):
     con.close()
 
 
-def test_attendance_counts_once_a_meeting(env):
+def test_attendance_counts_once_a_meeting(env, dmp_on):
     """Attendance required adds up, one a day: a second QR the same day gives nothing; the next day's meeting is +1."""
     c, cfg = env
     con, boss, adm = _staff(c, cfg)

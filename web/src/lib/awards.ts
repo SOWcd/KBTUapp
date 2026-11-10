@@ -47,7 +47,7 @@ export const MANUAL: Manual[] = [
   { code: 'creator_laugh', emoji: 'face_with_tears_of_joy_3d', scan: true, creator: true },
   { code: 'creator_found', emoji: 'waving_hand_3d_default', scan: true, creator: true },
   { code: 'bugs', emoji: 'lady_beetle_3d', scan: false },
-  { code: 'dmp', emoji: 'spiral_calendar_3d', scan: true },
+  // 'dmp' (Attendance required) hidden, as the server's DMP_ON (owner, Nov 10)
   ...BADGES.map((b) => ({ code: b.code, emoji: b.variants[0].emoji, scan: true, variants: b.variants as Manual['variants'] })),
 ];
 /** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
