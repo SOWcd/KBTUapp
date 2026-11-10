@@ -193,7 +193,7 @@ def running(con, v: Viewer) -> dict | None:
     if s["ran"]:
         return {**_row(con, None, s), "helper": False, "until": s["until"]}
     e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
-    return {"session": s["id"], "event": s["event_id"], "title": _title_for(con, s, v.id, True), "helper": True,
+    return {"session": s["id"], "event": s["event_id"], "title": _title_for(con, s, v.id, True)[0], "helper": True,
             "scanner": bool(e) and logic.crew.kind(con, v, e) is not None, "until": s["until"]}
 
 
@@ -237,7 +237,7 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     else:
         raise ApiError("not_found")
     out = _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
-    return {**out, "title": _title_for(con, s, v.id, True)} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
+    return {**out, "title": _title_for(con, s, v.id, True)[0]} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
 
 
 def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
@@ -373,7 +373,7 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
                            (sid, v.id, by, now(), sid, s["help_gen"])).rowcount:
                 log_action(con, by, "checkin_helper", f"user:{v.id}", json.dumps({"session": sid}))
     e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
-    return {"session": sid, "event": s["event_id"], "title": _title_for(con, s, v.id, True), "joined": runs or logic.crew.qr_helping(con, v, s),
+    return {"session": sid, "event": s["event_id"], "title": _title_for(con, s, v.id, True)[0], "joined": runs or logic.crew.qr_helping(con, v, s),
             "scanner": bool(e) and logic.crew.kind(con, v, e) is not None}
 
 
@@ -387,7 +387,7 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         raise ApiError("bad_input", "qr") from None
     if not _same(_sig(key, f"ci.{sid}.{slot}"), sig):
         raise ApiError("bad_input", "qr")
-    had = one(con, "SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
+    had = one(con, "SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     # finished: only someone who scanned before Finish may still complete it, for GRACE (said before "old": a photo
     # scanned after Finish is "closed")
@@ -415,15 +415,18 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
                     _attendance(con, s, uid, t)
             if came and fresh:  # the volunteers ledger's club: a shift opens or closes, only by a scan that counted, of a QR just shown
                 logic.vol.on_scan(con, s, uid, t, out)
-    return {"title": _title_for(con, s, uid, student), "done": came, "left": out}
+    title, event = _title_for(con, s, uid, student)
+    # event: the confirmation's cover and the sheet it settles into; again: counted by an earlier scan already
+    return {"title": title, "done": came, "left": out, "event": event, "again": bool(came and not out and had and had["done_at"])}
 
 
-def _title_for(con, s, uid: int, student: bool) -> str:
-    """What the scan's toast names: a leaders' meeting keeps its title from who isn't invited (only the club's name)."""
+def _title_for(con, s, uid: int, student: bool) -> tuple[str, int | None]:
+    """What the scan's confirmation names, and its event: a leaders' meeting keeps its title (and its id) from who isn't
+    invited (only the club's name)."""
     e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
     if e and e["visibility"] == "leaders" and not logic._visible(con, Viewer(uid, "user", student), e):
-        return one(con, "SELECT name FROM orgs WHERE id = ?", e["org_id"])[0]
-    return s["title"]
+        return one(con, "SELECT name FROM orgs WHERE id = ?", e["org_id"])[0], None
+    return s["title"], s["event_id"] or None
 
 
 def _attendance(con, s, uid: int, t: int) -> None:

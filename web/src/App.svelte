@@ -32,6 +32,7 @@
   import Me from './screens/profile/Me.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
+  import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
@@ -470,17 +471,18 @@
   // now, then what the guest wanted before signing in runs
   // A scan of the big screen's QR: the server keeps it at once; a guest signs in (the sheet comes back to Telegram by
   // itself) and the same scan again shows it counted (the server counted it at the sign-up already)
+  // The answer in the middle of the screen, not a toast (owner, Nov 10: guests at the door couldn't tell they were in)
+  const ciResult = (props: { kind: CiKind; title: string; event?: number | null; onsign?: () => void }) =>
+    lazy(() => import('./screens/sheets/CheckinResult.svelte'), props);
   async function checkIn(p: string, again = false): Promise<void> {
     try {
       const r = await api.qrCheckin(p);
       count('do.qr');
-      if (r.done && r.left) { haptic.ok(); say(t('ci.left', { title: r.title }), 'waving_hand_3d_default'); return; }
-      if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
-      if (session.me?.student) { haptic.error(); say(t('ci.notCounted', { title: r.title }), 'warning_3d'); return; } // the event didn't take it (window, members only)
-      if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p, true); }
+      const kind = r.done ? (r.left ? 'left' : r.again ? 'again' : 'done') : session.me?.student ? 'no' : 'wait'; // no: the event didn't take it (window, members only)
+      if (kind === 'wait' && again) return;
+      void ciResult({ kind, title: r.title, event: r.event ?? null, onsign: () => asStudent(() => void checkIn(p, true), p, true) });
     } catch (e) {
-      haptic.error();
-      say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : e instanceof ApiErr && e.message === 'qr_not_in' ? t('ci.notIn') : t('common.error'), 'warning_3d');
+      void ciResult({ kind: !(e instanceof ApiErr) ? 'error' : e.code === 'closed' ? 'closed' : e.message === 'qr_old' ? 'old' : e.message === 'qr_not_in' ? 'notIn' : 'error', title: '' });
     }
   }
 

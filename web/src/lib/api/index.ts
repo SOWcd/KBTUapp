@@ -228,7 +228,7 @@ export interface Api {
   assistantVote(mark: string, vote: 'up' | 'down'): Promise<void>; // 👍/👎 on an answer's signed topic
   assistantSend(mark: string, pair: string, q: string, a: string): Promise<void>; // on 👎, the student's own tap: this one signed question and answer, no name
   eventFill(org: Id, text: string): Promise<{ title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number; emoji?: string; color?: string }>; // a new event from its announcement (AI); emoji and color: its cover when no photo
-  qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
+  qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean; event?: Id | null; again?: boolean }>;                  // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
   screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in' | 'show'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving; show: this phone is showing it (the lease, checkin.py)
