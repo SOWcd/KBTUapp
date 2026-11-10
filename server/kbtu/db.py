@@ -1349,6 +1349,76 @@ MIGRATIONS: list[tuple[int, str]] = [
       key TEXT NOT NULL,
       n INTEGER NOT NULL,
       PRIMARY KEY (day, key)) WITHOUT ROWID;"""),
+    # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS=<slug>): a record per volunteer apart from any account
+    # (imported people without one too), its shifts from check-in or by hand, misses, the President's edits, who may read it
+    (148, """CREATE TABLE vol_batches (
+      id INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      counts TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      undone_at INTEGER) STRICT;
+    CREATE TABLE vol_people (
+      id INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id),
+      name TEXT NOT NULL DEFAULT '',
+      tg TEXT,
+      ikey TEXT,
+      raw TEXT NOT NULL DEFAULT '{}',
+      balance INTEGER NOT NULL DEFAULT 0,
+      batch_id INTEGER REFERENCES vol_batches(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE UNIQUE INDEX vol_people_user ON vol_people(org_id, user_id) WHERE user_id IS NOT NULL;
+    CREATE UNIQUE INDEX vol_people_key ON vol_people(org_id, ikey) WHERE ikey IS NOT NULL;
+    CREATE TABLE vol_meets (
+      session_id INTEGER PRIMARY KEY REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      team INTEGER NOT NULL DEFAULT 0,
+      expected_n INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE TABLE vol_expected (
+      session_id INTEGER NOT NULL REFERENCES vol_meets(session_id) ON DELETE CASCADE,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      PRIMARY KEY (session_id, vol_id)) STRICT, WITHOUT ROWID;
+    CREATE TABLE vol_shifts (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE SET NULL,
+      in_at INTEGER NOT NULL,
+      out_at INTEGER,
+      in_by INTEGER REFERENCES users(id),
+      out_by INTEGER REFERENCES users(id),
+      gone_at INTEGER) STRICT;
+    CREATE INDEX vol_shifts_by_vol ON vol_shifts(vol_id);
+    CREATE INDEX vol_shifts_by_session ON vol_shifts(session_id);
+    CREATE TABLE vol_misses (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE SET NULL,
+      n INTEGER NOT NULL CHECK (n IN (1, -1)),
+      by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL,
+      gone_at INTEGER) STRICT;
+    CREATE INDEX vol_misses_by_vol ON vol_misses(vol_id);
+    CREATE TABLE vol_edits (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      what TEXT NOT NULL,
+      ref INTEGER,
+      old TEXT,
+      new TEXT,
+      reason TEXT NOT NULL DEFAULT '',
+      by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX vol_edits_by_vol ON vol_edits(vol_id);
+    CREATE TABLE vol_access (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      granted_by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, user_id)) STRICT;"""),
 ]
 
 

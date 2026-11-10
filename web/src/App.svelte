@@ -8,7 +8,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
@@ -106,6 +106,8 @@
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
+  sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), {});
+  sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
@@ -580,6 +582,7 @@
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
     if (session.me?.oversee) void loadRegistry();
+    if (session.me?.vol?.ledger) void loadVol();
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)

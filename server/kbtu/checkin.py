@@ -51,6 +51,7 @@ def new(con, title: str, people: list[dict], org_id: int | None = None) -> int:
         # pin_hash: the PIN went (pairing replaced it); the column is NOT NULL UNIQUE, so a random one
         sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at) VALUES (?, ?, ?, ?)",
                           (title, secrets.token_hex(32), org_id, now())).lastrowid
+        logic.vol.meet(con, sid, org_id)  # the volunteers ledger's club: its roster frozen as this session's expected list
         for p in people:
             if p.get("email"):
                 con.execute("""INSERT OR IGNORE INTO qr_expected (session_id, email, full_name, student_id, school, course, phone, tg, extra)
@@ -251,6 +252,7 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
         if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):
             con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
                         (e["title"], secrets.token_hex(32), e["org_id"], eid, now()))
+            logic.vol.meet(con, one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)[0], e["org_id"])
         return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
 
 
@@ -407,6 +409,7 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         came = student
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
+            logic.vol.on_scan(con, s, uid, t, out)  # the volunteers ledger's club: a shift opens or closes
             if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
                 came = logic.screen_came(con, s["event_id"], uid, t)
                 if came and fresh:  # never by that old link repeated on a later day (the "had" pass above)

@@ -262,6 +262,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
+    logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
     logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
@@ -302,7 +303,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
-                                   **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {})}
+                                   **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
+                                   **({"vol": x} if (x := logic.vol.summary(con, v)) else {})}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -1367,6 +1369,51 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30)
         return logic.assistant.filled(text)
 
+    # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own
+    @app.get("/api/vol")
+    def vol_ledger(con: Con, v: Me):
+        return logic.vol.ledger(con, v)
+
+    @app.get("/api/vol/mine")
+    def vol_mine(con: Con, v: Me):
+        return logic.vol.person(con, v, None)
+
+    @app.get("/api/vol/people/{vid}")
+    def vol_person(con: Con, v: Me, vid: int):
+        return logic.vol.person(con, v, vid)
+
+    @app.post("/api/vol/people/{vid}/balance")
+    def vol_balance(con: Con, v: Me, vid: int, body: dict = Body(...)):
+        return logic.vol.set_balance(con, v, vid, body)
+
+    @app.post("/api/vol/people/{vid}/link")
+    def vol_link(con: Con, v: Me, vid: int, body: dict = Body(...)):
+        return logic.vol.link(con, v, vid, body)
+
+    @app.post("/api/vol/people/{vid}/shifts")
+    def vol_add_shift(con: Con, v: Me, vid: int, body: dict = Body(...)):
+        return logic.vol.add_shift(con, v, vid, body)
+
+    @app.patch("/api/vol/shifts/{hid}")
+    def vol_edit_shift(con: Con, v: Me, hid: int, body: dict = Body(...)):
+        return logic.vol.edit_shift(con, v, hid, body)
+
+    @app.post("/api/vol/people/{vid}/misses")
+    def vol_add_miss(con: Con, v: Me, vid: int, body: dict = Body(...)):
+        return logic.vol.add_miss(con, v, vid, body)
+
+    @app.post("/api/vol/misses/{mid}/drop")
+    def vol_drop_miss(con: Con, v: Me, mid: int, body: dict = Body(...)):
+        return logic.vol.drop_miss(con, v, mid, body)
+
+    @app.post("/api/vol/meets/{sid}")
+    def vol_team(con: Con, v: Me, sid: int, body: dict = Body(...)):
+        return logic.vol.set_team(con, v, sid, body)
+
+    @app.post("/api/vol/access")
+    def vol_access(con: Con, v: Me, body: dict = Body(...)):
+        return logic.vol.set_access(con, v, body)
+
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them
     @app.post("/api/map/flaws", status_code=204)
     def map_flaw(con: Con, v: Me, request: Request, body: dict = Body(...)):
@@ -2067,9 +2114,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         # each forum's part (and the version line that names it) only with that forum on for everyone
         # the channel's comments section comes last: its number follows the forums' (11 with neither)
         tgcn = 11 + cfg.forum + (cfg.board == "all")
-        body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(tgcn + bool(cfg.tgc_chat)))  # the channel's posts: after it
+        fchn = tgcn + bool(cfg.tgc_chat)
+        body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(fchn))  # the channel's posts: after it
+        body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger: last
         for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
-                         ("ai", ai_on)):
+                         ("ai", ai_on), ("vol", bool(cfg.volunteers))):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))

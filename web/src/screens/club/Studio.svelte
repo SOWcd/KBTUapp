@@ -28,7 +28,8 @@
   import { tick, untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayNo, dayMonth } from '../../lib/time';
+  import { relDay, time, nowTs, dayNo, dayMonth, duration } from '../../lib/time';
+  import Clock from '@lucide/svelte/icons/clock';
   import { may, byRank, roleName, titleOf } from '../../lib/perms';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Poster from '../../ui/Poster.svelte';
@@ -120,6 +121,9 @@
     else path = null;
   });
   const presVice = $derived(m?.role === 'president' || m?.role === 'vice');
+  // the volunteers ledger's club (server logic/vol.py): the list for its President and whom she grants, my own hours for each volunteer
+  const vol = $derived(session.me?.vol && session.me.vol.org === m?.org.id ? session.me.vol : null);
+  const volLine = (x: { minutes: number; misses: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + tn('ledg.misses', x.misses) : '');
   async function askOfficial() {
     if (!m || !path) return;
     const was = path, org = m.org.id;
@@ -268,6 +272,13 @@
           <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
       </Row>
     </Group></div>
+
+    {#if vol && (vol.ledger || vol.mine)}
+      <Group>
+        {#if vol.ledger}<Row icon={HandHeart} title={t('ledg.title')} value={data.vol ? tn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
+        {#if vol.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
+      </Group>
+    {/if}
 
     {#if todo}
       <Group caption={t('studio.todo')}>

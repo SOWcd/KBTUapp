@@ -53,6 +53,8 @@ class Config:
     # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
     # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md
     donate_phone: str = field(default="", repr=False)
+    # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py) and its privacy section; empty: off
+    volunteers: str = ""
     seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -123,4 +125,5 @@ def load() -> Config:
         apinex_key=env.get("APINEX_API_KEY", "").strip(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
+        volunteers=env.get("VOLUNTEERS", "").strip().lower(),
     )

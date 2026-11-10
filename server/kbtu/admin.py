@@ -72,6 +72,12 @@
   .venv/bin/python -m kbtu.admin fill-categories               clubs with no category get one from the AI (name and description only)
   .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
                                 who came, once each (ref ph2:<event>); a dry run prints how many
+  .venv/bin/python -m kbtu.admin vol import <file.xlsx> [--balance "<hours column>"] [--apply --source "<who gave it, when>"]
+                                the volunteers ledger's club (VOLUNTEERS): its members and hours sheets (logic/vol.py MEMBERS, HOURS), every
+                                column kept as is, people without an account too. Without --apply a dry run: counts, headers,
+                                problems by row number (never a value). --balance: that column of the hours sheet (hours) is the
+                                starting balance; nothing else is computed. The same file twice adds nothing
+  .venv/bin/python -m kbtu.admin vol batches | vol undo <batch>   the imports; one undone (records used since stay)
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -105,6 +111,43 @@ def _user(con, who: str):
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _vol_import(con, rest: list[str]) -> None:
+    from . import xlsx
+    from .logic import vol
+    path, opts = rest[0], rest[1:]
+    flags = {"--apply": False}
+    vals: dict[str, str] = {}
+    while opts:
+        o = opts.pop(0)
+        if o == "--apply":
+            flags["--apply"] = True
+        elif o in ("--balance", "--source") and opts:
+            vals[o] = opts.pop(0)
+        else:
+            sys.exit(__doc__)
+    vol.ORG = config.load().volunteers
+    org = vol.org_id(con) or sys.exit("VOLUNTEERS is off or names no club: the privacy section comes with it, so the import waits for it")
+    try:
+        p = vol.plan(Path(path).read_bytes(), vals.get("--balance"))
+    except (OSError, xlsx.Bad) as exc:
+        sys.exit(f"can't read it: {exc}")
+    for name, info in p["sheets"].items():
+        print(f"sheet {name!r}: {info['rows']} rows, {info['new']} new people, {info['matched']} matched to the first sheet")
+        for head, role in info["headers"]:
+            print(f"   {head!r} -> {role or 'kept raw'}")
+    c = vol.counts(p)
+    print(f"people {c['people']}, with a starting balance {c['withBalance']}, formula cells (their saved value taken) {c['formulas']}")
+    for x in p["problems"]:
+        print("problem:", x)
+    if not flags["--apply"]:
+        print("dry run: nothing written (--apply --source \"...\" to import)")
+        return
+    if not vals.get("--source", "").strip():
+        sys.exit('--apply needs --source "<who gave the list, when>"')
+    got = vol.apply(con, org, p, vals["--source"].strip())
+    print(f"batch {got['batch']}: " + ("this file was imported already, nothing added" if got["again"] else f"{got['added']} added, {got['there']} already there"))
 
 
 def main(args: list[str]) -> None:
@@ -480,6 +523,20 @@ def main(args: list[str]) -> None:
     elif cmd == "stats-usage" and len(args) <= 2 and all(a.isdigit() for a in args[1:]):
         from .logic import stats
         print(texts.bot_message("en", "usage_week", **stats.fields(con, int(args[1]) if args[1:] else 7))[0])
+    elif cmd == "vol" and args[1:2] == ["import"] and len(args) >= 3:
+        _vol_import(con, args[2:])
+    elif cmd == "vol" and args[1:] == ["batches"]:
+        for b in rows(con, "SELECT * FROM vol_batches ORDER BY id"):
+            print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + 5 * 3600)), "undone" if b["undone_at"] else "", b["source"], b["counts"])
+    elif cmd == "vol" and len(args) == 3 and args[1] == "undo" and args[2].isdigit():
+        from .logic import vol
+        cfg = config.load()
+        vol.ORG = cfg.volunteers
+        org = vol.org_id(con) or sys.exit("VOLUNTEERS is off or names no club")
+        try:
+            print(vol.undo(con, org, int(args[2])))
+        except ApiError:
+            sys.exit(f"no batch {args[2]} to undo")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

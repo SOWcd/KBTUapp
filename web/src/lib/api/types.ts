@@ -283,6 +283,7 @@ export interface Me {
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   checkin?: MyCheckin | null;   // my running check-in: the capsule
+  vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
   showcase: string[];
@@ -700,3 +701,20 @@ export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accept
 export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
 export interface ForumMod { held: ModAsk[]; skills: Skill[] }
 export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }
+
+/** The volunteers ledger of one club (server logic/vol.py). minutes: the starting balance + closed shifts (one never
+ *  checked out counts 0); open: such shifts; misses: teambuildings that really ran without me, + / - the President's. */
+export interface VolMe { org: Id; ledger: boolean; edit: boolean; mine: { id: Id; minutes: number; open: number; misses: number } | null }
+export interface VolRow { id: Id; name: string; tg: string | null; person: PersonRef | null; minutes: number; open: number; misses: number }
+export interface VolShift { id: Id; session: Id | null; title: string | null; inAt: Ts; outAt: Ts | null; byHand: boolean; gone: boolean }
+export interface VolEdit { what: string; ref: Id | null; old: unknown; new: unknown; reason: string; at: Ts; by: Id | null }
+export interface VolPerson extends VolRow {
+  balance: number;
+  shifts: VolShift[];
+  missed: { session: Id; title: string; at: Ts }[];        // the teambuildings counted as missed
+  manual: { id: Id; n: 1 | -1; session: Id | null; at: Ts }[]; // the President's +1 / -1
+  raw?: Record<string, Record<string, string>>;              // readers only: every imported column, by sheet, as given
+  edits?: VolEdit[];
+}
+export interface VolMeet { session: Id; title: string; at: Ts; ended: Ts | null; team: boolean; expected: number; marked: number; held: boolean }
+export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }

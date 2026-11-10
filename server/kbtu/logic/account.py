@@ -1050,6 +1050,7 @@ _DEL_GONE = {
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
+    ("vol_people", "user_id"), ("vol_access", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
