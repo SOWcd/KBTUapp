@@ -79,7 +79,7 @@ it("every club's and school's lanyard QR ink reads on the white plate (>= 7:1)",
 // Admin → Awards: one entry per award; a badge's grant codes are its variants, never the award's own code alone
 it('lists a badge once, its variants inside', () => {
   expect(MANUAL.map((a) => a.code)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26']);
-  expect(codesOf(MANUAL[4])).toEqual(['init26p', 'init26', 'init26f']);
+  expect(codesOf(MANUAL[3])).toEqual(['init26p', 'init26', 'init26f']);
   expect(codesOf(MANUAL[2])).toEqual(['bugs']);
   for (const c of ['init26p', 'init26', 'init26f']) expect(awardOf(c).code).toBe('init26'); // a held Performer or Guest holds it
   expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26p', 'init26', 'init26f']);
