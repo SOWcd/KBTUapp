@@ -44,6 +44,8 @@
     void toast.id;
     untrack(() => {
       fresh = !pill;
+      // a phrase arriving during the exit revives the same pill: tappable again, nothing of a swipe left on it
+      if (pill?.classList.contains('going')) { pill.classList.remove('going'); unshift(pill); fling = null; }
       if (fresh) top = atTop();
       from = [pill?.offsetWidth ?? 0, pill?.offsetHeight ?? 0];
       // where the leaving line and emoji stand, read before either leaves: the emoji going out of the flow first moved
@@ -93,7 +95,7 @@
       const [x, y, vx, vy] = fling, d = T.fling / 3;
       fling = null;
       return { duration: T.fling, easing: out3, css: (k: number) => { const u = 1 - k;
-        return `translate:${x + vx * d * u}px ${y + vy * d * u}px;opacity:${k * k};--xb:${u * 4}px;--eb:${u * 4}px`; } };
+        return `${at2(x + vx * d * u, y + vy * d * u)};opacity:${k * k};--xb:${u * 4}px;--eb:${u * 4}px`; } };
     }
     if (calm()) return fade(T.fade);
     const r = node.offsetWidth - node.offsetHeight, h = node.offsetHeight / 2;
@@ -111,6 +113,18 @@
   let fling: number[] | null = null; // where the finger let go and its speed (px, px/ms), for the exit
   const free = (dy: number) => (top ? dy <= 0 : dy >= 0);
   const rubber = (d: number) => (d * 40) / (40 + Math.abs(d));
+  // the finger's offset: the `translate` property where there is one (Chrome 104+, iOS 14.1+), else composed into transform
+  const TR = CSS.supports?.('translate', '1px') ?? false;
+  const at2 = (x: number, y: number) => (TR ? `translate:${x}px ${y}px` : `transform:translate(calc(-50% + ${x}px), ${y}px)`);
+  const shift = (x: number, y: number): Record<string, string> => (TR ? { translate: `${x}px ${y}px` } : { transform: `translate(calc(-50% + ${x}px), ${y}px)` });
+  function unshift(el: HTMLElement) { for (const k of ['translate', 'transform', 'opacity']) el.style.removeProperty(k); }
+  // a finger lost (released outside before the capture, the app hidden, the window blurred) never leaves the hold on
+  function reset() {
+    if (!drag) return;
+    if (drag.on && pill) unshift(pill);
+    drag = null;
+    holdToast(false);
+  }
   function down(e: PointerEvent) {
     if (drag || !e.isPrimary || pill?.classList.contains('going')) return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, t: e.timeStamp, vx: 0, vy: 0, on: false };
@@ -124,7 +138,7 @@
     drag.vx = 0.6 * ((dx - drag.dx) / dt) + 0.4 * drag.vx;
     drag.vy = 0.6 * ((dy - drag.dy) / dt) + 0.4 * drag.vy;
     Object.assign(drag, { dx, dy, t: e.timeStamp });
-    pill.style.translate = `${dx}px ${dy}px`;
+    Object.assign(pill.style, shift(dx, dy));
     pill.style.opacity = `${1 - Math.min(0.5, Math.hypot(dx, free(dy) ? dy : 0) / 240)}`;
   }
   function up(e: PointerEvent) {
@@ -144,14 +158,18 @@
       return;
     }
     const o = pill.style.opacity || '1';
-    pill.style.removeProperty('translate'); pill.style.removeProperty('opacity');
-    pill.animate({ translate: [`${d.dx}px ${d.dy}px`, '0px 0px'], opacity: [o, '1'] }, { duration: calm() ? T.fade : T.snap, easing: SPRING });
+    unshift(pill);
+    const a = shift(d.dx, d.dy), b = shift(0, 0);
+    pill.animate(Object.fromEntries([...Object.keys(a).map((k) => [k, [a[k], b[k]]]), ['opacity', [o, '1']]]), { duration: calm() ? T.fade : T.snap, easing: SPRING });
   }
 </script>
 
+<svelte:window onpointermove={move} onpointerup={up} onpointercancel={up} onblur={reset} />
+<svelte:document onvisibilitychange={() => document.hidden && reset()} />
+
 {#if toast.text}
   <div class="toast glass glass-pill" class:top role="status" style={vars} use:glass bind:this={pill} in:grow out:shrink
-    onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
+    onpointerdown={down}>
     {#key toast.id}
       <span class="em" in:come|global={{ at: fresh ? T.bounceAt : T.swapAt }} out:leave><span class:bounce={fresh}><Emoji name={toast.emoji} size={26} /></span></span>
       <span class="tx" in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave>{toast.text}</span>
