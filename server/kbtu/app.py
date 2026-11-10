@@ -1430,12 +1430,17 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     async def question_vec(body: dict):
         """DOCS=hybrid: the question's embedding for the documents' search, from Cloudflare, only where the policy names
-        Cloudflare for the assistant's questions (ai_on); slow or failed: None, the words' search alone."""
-        if cfg.docs != "hybrid" or not ai_on or "cf" not in assist_only or not (cfg.cf_account_id and cfg.cf_ai_token):
+        Cloudflare for the assistant's questions (ai_on) and the docs file has vectors to compare it with; 3 s at most in
+        all, else None: the words' search alone."""
+        ix = logic.assistant.DOCS
+        if cfg.docs != "hybrid" or not ai_on or "cf" not in assist_only or not (cfg.cf_account_id and cfg.cf_ai_token) \
+                or not ix or not await run_in_threadpool(ix.ready) or not ix.vectors:
             return None
         try:
-            return (await run_in_threadpool(docs.embed, [logic.assistant.docs_query(body)], cfg.cf_account_id, cfg.cf_ai_token, 3))[0]
-        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            async with asyncio.timeout(3):
+                r = await ai_http().post(**docs.request([logic.assistant.docs_query(body)], cfg.cf_account_id, cfg.cf_ai_token))
+            return docs.vectors(r)[0]
+        except (TimeoutError, httpx.HTTPError, KeyError, TypeError, ValueError, IndexError) as exc:
             log.warning("docs: no question embedding (%s)", type(exc).__name__)
             return None
 

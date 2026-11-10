@@ -89,5 +89,6 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`),
   with its privacy section and a consent version suffix (`+fch3`). `FORUM_GROUP`: its discussion group.
 - `DOCS=1`: the assistant answers from the university's documents (`kbtu/docs.py`, a separate file at `DOCS_DB`, default
-  next to the database; built by hand, README); `DOCS=hybrid`: plus the question's embedding from Cloudflare.
+  next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
+  embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
