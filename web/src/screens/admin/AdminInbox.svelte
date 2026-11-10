@@ -36,6 +36,7 @@
   import Tag from '../../ui/Tag.svelte';
   import Field from '../../ui/Field.svelte';
   import ForumWho, { whyLine } from './ForumWho.svelte';
+  import ForumPics from './ForumPics.svelte';
 
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
@@ -193,6 +194,7 @@
                 ? [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', whoReported(r), t('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
                 : `${reasons(r)}${r.count > 1 ? ' · ' + tn('adm.reports', r.count) : ''}`}</i>
             </button>
+            <ForumPics photos={r.photos} />
             {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
             {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
             {:else if r.target === 'photo' && data.galleryPost}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
@@ -251,6 +253,7 @@
             <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
             {#if p.why}<i class="meta">{whyLine(p.why, p.aiWhy)}</i>{/if}
             <p class="text selectable">{p.body}</p>
+            <ForumPics photos={p.photos} />
             {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
             {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
               t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}

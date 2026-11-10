@@ -1065,6 +1065,7 @@ _DEL_GONE = {
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
+    ("fchan_photos", "user_id"),  # my photos picked for a post and never posted (posted ones go with their post)
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)

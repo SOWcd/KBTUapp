@@ -1521,6 +1521,28 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;
     ALTER TABLE member_tags ADD COLUMN sync INTEGER NOT NULL DEFAULT 0;"""),
+    # photos on forum channel posts (fchannel.add_photo, owner Nov 5): a re-encoded upload (no EXIF) under a random name;
+    # user_id: the uploader while it is on no post (then NULL: the post says whose). A row leaving by any way (the
+    # author's delete, the sweep, a cascade) queues its files for the disk (fchpic:<path>, the bot's round drops them).
+    # tg_unpost.photo: a photo message, edited to a blank picture when Telegram won't delete it
+    (152, """CREATE TABLE fchan_photos (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      n          INTEGER NOT NULL DEFAULT 0,
+      path       TEXT NOT NULL,
+      width      INTEGER NOT NULL,
+      height     INTEGER NOT NULL,
+      color      TEXT,
+      msg        INTEGER,
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE INDEX fchan_photos_by_post ON fchan_photos(post_id, n);
+    CREATE INDEX fchan_photos_by_user ON fchan_photos(user_id);
+    CREATE INDEX fchan_photos_by_msg ON fchan_photos(msg) WHERE msg > 0;
+    CREATE TRIGGER fchan_photo_gone AFTER DELETE ON fchan_photos BEGIN
+      INSERT OR IGNORE INTO meta (key, value) VALUES ('fchpic:' || OLD.path, '1');
+    END;
+    ALTER TABLE tg_unpost ADD COLUMN photo INTEGER NOT NULL DEFAULT 0;"""),
 ]
 
 

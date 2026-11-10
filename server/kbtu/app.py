@@ -15,6 +15,7 @@ import json
 import logging
 import mimetypes
 import re
+import secrets
 import sqlite3
 import time
 from collections.abc import AsyncIterator, Iterator
@@ -2066,6 +2067,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
             raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
         return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
+
+    @app.post("/api/forum-posts/photos")
+    async def fchan_photo(request: Request, con: Con, v: FChanWrite):
+        """A photo for my next post (the file itself is the body), re-encoded (no EXIF) under a random name, never the
+        content hash: the same picture as an avatar must not tell an anonymous author (fchannel.add_photo)."""
+        data = await read_upload(request)
+        await run_in_threadpool(F.photo_room, con, v)  # before the work, not only after it
+        saved = await _picture(media.save, data, photos, secrets.token_bytes(32))
+        return await run_in_threadpool(F.add_photo, con, v, saved)
 
     @app.post("/api/forum-posts/{pid}/appeal")
     def fchan_appeal(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):

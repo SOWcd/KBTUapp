@@ -64,7 +64,7 @@ export interface AuditRow { id: Id; actor: PersonRef | null; action: string; tar
 export type Nick = [number, number] | null;
 /** A post of mine in the forum channel (server logic/fchannel.py): live (in the channel, or seconds from it), held for
  *  a moderator, hidden (a moderator removed it). */
-export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; status: 'live' | 'held' | 'hidden'; at: Ts; ai?: boolean /* held by the AI's word: why() tells */ }
+export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; status: 'live' | 'held' | 'hidden'; at: Ts; ai?: boolean /* held by the AI's word: why() tells */; photos?: Media[] }
 /** Why the AI refused or held my post or reply, in its own words (server ai.explain): quote an exact piece of my text
  *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
 export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
@@ -77,7 +77,8 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
   faces: { avatar: string | null; name: string }[]
   /** Telegram's top reactions on the channel post; a custom emoji as "custom:<id>", a paid one as "paid" */
   reactions: { emoji: string; n: number }[]
-  hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */ }
+  hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */
+  photos: Media[] /* up to 4, in order (an album in the channel) */ }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { own?: boolean /* mine, and I'm not the founder: another moderator decides */; why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
@@ -128,7 +129,8 @@ export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'p
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name
-  removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; rule?: TgcRule | null /* the AI's guess at the clause broken */; reporters?: { right: number; wrong: number; days: number | null }[] }
+  removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; rule?: TgcRule | null /* the AI's guess at the clause broken */; reporters?: { right: number; wrong: number; days: number | null }[]
+  photos?: Media[] /* fpost: its photos (two people's reports take such a post out of the channel at once) */ }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }

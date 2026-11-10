@@ -45,9 +45,10 @@ def drop(root: Path, paths) -> None:
             (root / f"{rel}{ext}").unlink(missing_ok=True)
 
 
-def save(data: bytes, root: Path) -> dict:
+def save(data: bytes, root: Path, key: bytes | None = None) -> dict:
+    """key: what names the files instead of the upload's bytes (a random one: no hash that matches the same picture elsewhere)."""
     with _busy:
-        return store(_decode(data), data, root)
+        return store(_decode(data), key or data, root)
 
 
 def decode(data: bytes) -> Image.Image:
@@ -93,6 +94,14 @@ def store(im: Image.Image, data: bytes, root: Path) -> dict:
     r, g, b = im.resize((1, 1), Image.Resampling.BOX).getpixel((0, 0))  # the average colour, for the sheet tint
     return {"sha256": sha, "path": rel, "width": big.width, "height": big.height,
             "bytes": (root / f"{rel}.webp").stat().st_size, "color": f"#{r:02x}{g:02x}{b:02x}"}
+
+
+@functools.lru_cache(maxsize=1)
+def blank_jpg() -> bytes:
+    """A plain grey picture: what a removed photo in the channel is edited to once Telegram won't delete it (48 h)."""
+    out = io.BytesIO()
+    Image.new("RGB", (320, 320), (142, 142, 147)).save(out, "JPEG", quality=70)
+    return out.getvalue()
 
 
 @functools.lru_cache(maxsize=64)

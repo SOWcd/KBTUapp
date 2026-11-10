@@ -125,7 +125,9 @@ def _shape(p) -> dict:
 def mine(con, v: Viewer) -> list[dict]:
     """My posts, newest first: published, under review, removed (the ones I deleted are gone)."""
     need_student(v)
-    return [_shape(p) for p in rows(con, "SELECT * FROM fchan_posts WHERE user_id = ? AND status != 'gone' ORDER BY id DESC LIMIT 30", v.id)]
+    ps = rows(con, "SELECT * FROM fchan_posts WHERE user_id = ? AND status != 'gone' ORDER BY id DESC LIMIT 30", v.id)
+    pics = _photos(con, [p["id"] for p in ps])
+    return [_shape(p) | {"photos": pics.get(p["id"], [])} for p in ps]
 
 
 FEED_MAX = 50  # a page; the next one by the cursor (before: the last id shown), "Show earlier" in the app
@@ -155,6 +157,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
     hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
+    pics = _photos(con, [p["id"] for p in ps])
     pids = [p["id"] for p in ps if p["comments"]]
     newest = {r["post_id"]: r["m"] for r in rows(con, f"SELECT post_id, MAX(msg_id) m FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(pids))}) GROUP BY post_id", *pids)}
     out = []
@@ -162,7 +165,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]), "nick": _nick(p),
              "sign": _anon_sign(p) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
-             "mine": p["user_id"] == v.id,
+             "mine": p["user_id"] == v.id, "photos": pics.get(p["id"], []),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
              "comments": p["comments"], "thread": (newest.get(p["id"]) or p["rules_msg"]) if p["tg_msg"] else None,
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
@@ -234,9 +237,13 @@ def reserve(con, v: Viewer, body: dict) -> int:
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""
     need_student(v)
     anon = body.get("anon", False)
-    if not isinstance(anon, bool):
+    pics = body.get("photos") or []
+    if not isinstance(anon, bool) or not isinstance(pics, list) or len(pics) > PHOTOS_MAX or len(set(pics)) < len(pics) \
+            or not all(isinstance(x, int) and not isinstance(x, bool) for x in pics):
         raise ApiError("bad_input")
     text = _clean(body.get("body"))
+    if pics and len(text) > CAPTION_MAX:  # a caption: Telegram's 1024 with the signature under it
+        raise ApiError("bad_input", "long")
     if not _meaningful(text):
         raise ApiError("bad_input", "short")
     with tx(con):
@@ -250,8 +257,81 @@ def reserve(con, v: Viewer, body: dict) -> int:
             raise ApiError("bad_input", "duplicate")
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         a, n = pick_nick(con) if anon else (None, None)
-        return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
-                           (v.id, text, int(anon), _now(), sign, a, n)).lastrowid
+        # the photos: my own uploads on no post yet; they take the post's author (user_id off: one link, the post's)
+        if pics and one(con, f"SELECT COUNT(*) FROM fchan_photos WHERE user_id = ? AND post_id IS NULL AND id IN ({','.join('?' * len(pics))})", v.id, *pics)[0] < len(pics):
+            raise ApiError("bad_input", "photos")
+        pid = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
+                          (v.id, text, int(anon), _now(), sign, a, n)).lastrowid
+        for i, x in enumerate(pics):
+            con.execute("UPDATE fchan_photos SET post_id = ?, n = ?, user_id = NULL WHERE id = ?", (pid, i, x))
+        return pid
+
+
+# Photos on a post (owner, Nov 5): up to PHOTOS_MAX, re-encoded by media (EXIF and every other byte of the phone's file
+# gone) under a random name (the content hash would match the same picture elsewhere, an avatar: an anonymous author's).
+# Uploaded first, each on its own (add_photo), then named in the post. A named post goes out as any (the AI reads the
+# words; it can't judge pictures); an anonymous one with photos always waits for a moderator (settle).
+PHOTOS_MAX = 4
+CAPTION_MAX = 900       # the words under photos (Telegram's caption is 1024, the signature goes under them)
+PHOTO_UPLOADS = 12      # uploads an hour on no post yet (the decode is the costly part): past it, wait
+PHOTO_FRESH = 3600      # an upload on no post this long is swept (picked, then not posted)
+PHOTO_HIDE_AT = 2       # distinct people's open reports that take a post with photos out at once (organizing.PHOTO_SHOWN's two)
+
+
+def photo_room(con, v: Viewer) -> None:
+    """Before the decode: a student, under the hour's uploads."""
+    need_student(v)
+    if one(con, "SELECT COUNT(*) FROM fchan_photos WHERE user_id = ? AND post_id IS NULL AND created_at > ?", v.id, _now() - PHOTO_FRESH)[0] >= PHOTO_UPLOADS:
+        raise ApiError("rate_limited", "photos")
+
+
+def add_photo(con, v: Viewer, saved: dict) -> dict:
+    """A processed upload (media.store under a random name) waiting for my post: its id to name, its picture to show."""
+    photo_room(con, v)
+    fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                      (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
+    return {"id": fid} | _pic(saved)
+
+
+def _pic(r) -> dict:
+    """types.ts Media."""
+    return {"url": f"media/{r['path']}.webp", "thumb": f"media/{r['path']}.t.webp", "w": r["width"], "h": r["height"], "blur": "", "color": r["color"]}
+
+
+def _photos(con, ids) -> dict[int, list[dict]]:
+    """The posts' photos in order, one query for all of them."""
+    ids = list(ids)
+    out: dict[int, list[dict]] = {}
+    for r in rows(con, f"SELECT * FROM fchan_photos WHERE post_id IN ({','.join('?' * len(ids))}) ORDER BY post_id, n", *ids) if ids else []:
+        out.setdefault(r["post_id"], []).append(_pic(r))
+    return out
+
+
+def _has_photos(con, pid: int) -> bool:
+    return one(con, "SELECT 1 FROM fchan_photos WHERE post_id = ?", pid) is not None
+
+
+def pics_gone(con) -> list[str]:
+    """Photo files whose rows left (the trigger of migration 149): for the disk now (the bot's round)."""
+    if not one(con, "SELECT 1 FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;'"):  # a read: a DELETE takes the write lock every round
+        return []
+    return [k[7:] for (k,) in rows(con, "DELETE FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;' RETURNING key")]
+
+
+def reported(con, pid: int) -> None:
+    """moderation.report on a post with photos: PHOTO_HIDE_AT distinct people's open reports, and no moderator kept it
+    before, take it out of the channel at once (a picture can't wait for the queue); the reports stay open, the
+    moderator's call removes it for good or brings it back (moderation.resolve_report). Words alone wait as before."""
+    if not _has_photos(con, pid) or one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'dismissed'", pid):
+        return
+    if one(con, "SELECT COUNT(DISTINCT reporter_id) FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'open'", pid)[0] < PHOTO_HIDE_AT:
+        return
+    p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live'", pid)
+    if p:
+        _unpost(con, p, "moderator")
+        _post_off(con, pid)
+        con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'reports', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
+        log_action(con, None, "fchan_auto_hide", f"fchan:{pid}")
 
 
 NICK_FRESH = 800  # a new nick is none of the last this many anonymous posts' (review: no false links, no drawing another's)
@@ -283,7 +363,9 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
                 con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL, refused = ? WHERE id = ?",
                             (verdict, _refused(pid, p["body"]), pid))
                 return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
-            if verdict == "ok":
+            if verdict == "ok" and p["anon"] and _has_photos(con, pid):  # the AI can't judge pictures: a person looks first
+                status, why = "held", "photo"
+            elif verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", _now() - 3600)[0] >= CHANNEL_AN_HOUR
                 status, why = ("held", "busy") if busy else ("live", None)
             else:
@@ -381,9 +463,11 @@ def said(con, table: str, rid: int, got: dict | None) -> None:
 
 
 def _unpost(con, p, why: str, delay: int = 0) -> None:
-    """Its channel message (if it went out) to the bot's round: deleted there, or edited to a template."""
-    if p["tg_msg"]:
-        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (p["tg_msg"], why, _now() + delay))
+    """Its channel messages (if it went out: the words, or each photo of an album) to the bot's round: deleted there, or
+    edited to a template (a photo to a blank picture)."""
+    pics = [r[0] for r in rows(con, "SELECT msg FROM fchan_photos WHERE post_id = ? AND msg > 0", p["id"])]
+    for m in dict.fromkeys(([p["tg_msg"]] if p["tg_msg"] else []) + pics):
+        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at, photo) VALUES (?, ?, ?, ?)", (m, why, _now() + delay, int(bool(pics))))
 
 
 def delete(con, v: Viewer, pid: int) -> None:
@@ -396,6 +480,7 @@ def delete(con, v: Viewer, pid: int) -> None:
         _unpost(con, p, "author")
         _post_off(con, pid)
         con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, refused = NULL WHERE id = ?", (pid,))
+        con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
         _notes_off(con, pid)
 
 
@@ -410,9 +495,9 @@ def resigns(con) -> list:
     the deleted account's signature), a few a round; one whose post is gone meanwhile leaves the queue."""
     out = []
     for (k,) in rows(con, "SELECT key FROM meta WHERE key >= 'fch_resign:' AND key < 'fch_resign;' LIMIT 5"):
-        p = one(con, "SELECT body, sign FROM fchan_posts WHERE tg_msg = ? AND status = 'live'", int(k[11:]))
+        p = one(con, "SELECT id, body, sign FROM fchan_posts WHERE tg_msg = ? AND status = 'live'", int(k[11:]))
         if p:
-            out.append((int(k[11:]), p["body"], p["sign"]))
+            out.append((int(k[11:]), p["body"], p["sign"], _has_photos(con, p["id"])))
         else:
             resigned(con, int(k[11:]))
     return out
@@ -426,8 +511,9 @@ def resigned(con, msg: int) -> None:
 
 def to_send(con) -> list:
     """Live posts not in the channel yet, oldest first, with their signature: the one fixed when written (signature(),
-    never a @username) or the anonymous line."""
-    return [(p["id"], p["body"], _sign(con, p)) for p in rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")]
+    never a @username) or the anonymous line; and their photos' files (media paths), in order."""
+    ps = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")
+    return [(p["id"], p["body"], _sign(con, p), [r[0] for r in rows(con, "SELECT path FROM fchan_photos WHERE post_id = ? ORDER BY n", p["id"])]) for p in ps]
 
 
 def anon_sign(body: str) -> str:
@@ -457,10 +543,13 @@ def sending(con, pid: int) -> bool:
     return con.execute("UPDATE fchan_posts SET tg_msg = 0 WHERE id = ? AND status = 'live' AND tg_msg IS NULL", (pid,)).rowcount > 0
 
 
-def sent(con, pid: int, msg_id: int) -> None:
-    """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
-    right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
+def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
+    """The bot sent it: its message id kept (an album's first, and each photo's own); deleted or taken down meanwhile,
+    the messages go right back out (with the right words if it's past 48 h: a moderator's take-down isn't the
+    author's delete)."""
     if con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
+        for n, m in enumerate(pics or []):
+            con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
         # only after a moderator let it out (owner, Nov 5: the AI's yes is instant, the app already says so)
         a = one(con, """SELECT f.user_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND u.tg_id > 0
@@ -474,7 +563,8 @@ def sent(con, pid: int, msg_id: int) -> None:
     else:
         p = one(con, "SELECT status FROM fchan_posts WHERE id = ?", pid)
         why = "moderator" if p and p["status"] == "hidden" else "author"
-        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (msg_id, why, _now()))
+        for m in dict.fromkeys([msg_id] + (pics or [])):
+            con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at, photo) VALUES (?, ?, ?, ?)", (m, why, _now(), int(bool(pics))))
 
 
 def unsend(con, pid: int) -> None:
@@ -591,6 +681,7 @@ def sweep(con) -> None:
     # (an appealed one stays its day from the appeal: appeals_left counts it)
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 86400, _now() - 30 * 86400))
+    con.execute("DELETE FROM fchan_photos WHERE post_id IS NULL AND created_at < ?", (_now() - PHOTO_FRESH,))  # picked, never posted
     con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
         AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
@@ -599,7 +690,7 @@ def sweep(con) -> None:
 
 def unposts(con) -> list:
     """Channel messages due to leave now, oldest first."""
-    return rows(con, "SELECT msg_id, why FROM tg_unpost WHERE at <= ? ORDER BY at LIMIT 20", _now())
+    return rows(con, "SELECT msg_id, why, photo FROM tg_unpost WHERE at <= ? ORDER BY at LIMIT 20", _now())
 
 
 def unpost_later(con, msg_id: int) -> None:
@@ -634,6 +725,7 @@ def unposted(con, msg_id: int) -> None:
     con.execute("DELETE FROM tg_unpost WHERE msg_id = ?", (msg_id,))
     con.execute("DELETE FROM meta WHERE key = ?", (f"fchmoved:{msg_id}",))
     con.execute("UPDATE fchan_posts SET tg_msg = NULL, rules_msg = NULL, comments = 0 WHERE tg_msg = ? AND status = 'hidden'", (msg_id,))
+    con.execute("UPDATE fchan_photos SET msg = NULL WHERE msg = ? AND post_id IN (SELECT id FROM fchan_posts WHERE status = 'hidden')", (msg_id,))
 
 
 # ---- moderators: held posts, recent live ones; the owner's reveal
@@ -658,7 +750,8 @@ def mod_queue(con, v: Viewer) -> dict:
     ids = {p["user_id"] for p in held + live + removed if not p["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v)
-    shape = lambda p: _shape(p) | {"own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    pics = _photos(con, {p["id"] for p in held + live + removed})
+    shape = lambda p: _shape(p) | {"photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
@@ -697,13 +790,17 @@ def mod_restore(con, v: Viewer, pid: int) -> None:
     deleted, or edited to the template). Same rules as mod_decide: not their own, audited."""
     _mod(v)
     with tx(con):
-        p = one(con, "SELECT user_id, tg_msg FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why = 'moderator'", pid)
+        p = one(con, "SELECT user_id, tg_msg FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why IN ('moderator', 'reports')", pid)
         if not p:
             raise ApiError("not_found")
         if p["user_id"] == v.id and not _owner(con, v):
             raise ApiError("forbidden")
         # only a delete not yet due is dropped: one the bot already took is under way, so the post goes out anew
         kept = bool(p["tg_msg"]) and con.execute("DELETE FROM tg_unpost WHERE msg_id = ? AND at > ?", (p["tg_msg"], _now())).rowcount > 0
+        if kept:  # an album's other photos stay with it
+            con.execute("DELETE FROM tg_unpost WHERE at > ? AND msg_id IN (SELECT msg FROM fchan_photos WHERE post_id = ?)", (_now(), pid))
+        else:  # anew: its photos' old messages leave as they were going to
+            con.execute("UPDATE fchan_photos SET msg = NULL WHERE post_id = ?", (pid,))
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (p["tg_msg"] if kept else None, pid))
         log_action(con, v.id, "fchan_undo" if kept else "fchan_restore", f"fchan:{pid}")
 
@@ -720,6 +817,7 @@ def mod_republish(con, v: Viewer, pid: int) -> None:
         _unpost(con, p, "moderator")
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')", (f"fchmoved:{p['tg_msg']}",))
         con.execute("UPDATE fchan_posts SET tg_msg = NULL, rules_msg = NULL, comments = 0 WHERE id = ?", (pid,))
+        con.execute("UPDATE fchan_photos SET msg = NULL WHERE post_id = ?", (pid,))
         log_action(con, v.id, "fchan_republish", f"fchan:{pid}")
 
 

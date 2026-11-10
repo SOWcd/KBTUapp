@@ -214,7 +214,8 @@ export interface Api {
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
   channelFeed(before?: number): Promise<import('./types').ChannelFeedPost[]>;            // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
-  newChannelPost(body: string, anon: boolean): Promise<import('./types').ChannelPost>;   // one a day; the AI first, live: the bot posts it
+  newChannelPost(body: string, anon: boolean, photos?: Id[]): Promise<import('./types').ChannelPost>;   // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
+  uploadChannelPhoto(file: Blob): Promise<Media & { id: Id }>;                           // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
   appealChannelPost(id: Id, body: string): Promise<import('./types').ChannelPost>;    // refused by the AI: to a moderator (3 a day), the words given back
   channelPostWhy(id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }>; // the AI's reason for my refused or held post, once
   channelReplyWhy(id: Id): Promise<{ explain: import('./types').ForumWhy | null }>;      // the same for my held reply

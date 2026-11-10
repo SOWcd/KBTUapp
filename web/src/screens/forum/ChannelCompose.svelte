@@ -6,13 +6,15 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { nowTs } from '../../lib/time';
   import { count } from '../../lib/stats';
-  import type { ChannelFeedPost, Id } from '../../lib/api';
+  import type { ChannelFeedPost, Id, Media } from '../../lib/api';
   import Self from './ChannelCompose.svelte';
 
-  export type Draft = { body: string; anon: boolean; why?: string };
-  // the words not posted yet: closing the window keeps them, posting clears them. ponytail: in memory only, as the
-  // feed (the posts' words stay out of storage): a relaunch starts empty; localStorage if students ask for more
-  const kept = { body: '', anon: false };
+  /** a photo picked for the post: the server's once uploaded (id), till then the phone's own preview */
+  export type Pic = Media & { id?: Id };
+  export type Draft = { body: string; anon: boolean; photos?: Pic[]; why?: string };
+  // the words (and photos) not posted yet: closing the window keeps them, posting clears them. ponytail: in memory
+  // only, as the feed (the posts' words stay out of storage): a relaunch starts empty; localStorage if students ask
+  const kept: { body: string; anon: boolean; photos: Pic[] } = { body: '', anon: false, photos: [] };
 
   /** The writing window, out of the Forum tab's "Share with KBTU…" pill. Called in a tap: the field takes the focus in
    *  that same tap (flushSync mounts the window first), or iOS won't bring the keyboard up. */
@@ -32,10 +34,10 @@
   }
 
   /** A stand-in on top of the feed while the server answers (a tap answers in the same frame) */
-  export function stand(text: string, was: boolean, human = false): ChannelFeedPost {
+  export function stand(text: string, was: boolean, human = false, photos: Media[] = []): ChannelFeedPost {
     const me = session.me;
     const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : signOf(), mine: true,
-      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false };
+      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false, photos };
     channel.feed = [temp, ...(channel.feed ?? [])];
     return temp;
   }
@@ -61,6 +63,9 @@
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
+  import ImagePlus from '@lucide/svelte/icons/image-plus';
+  import X from '@lucide/svelte/icons/x';
+  import { shrink } from '../../lib/photo';
   import { api, ApiErr } from '../../lib/api';
   import { loadChannel } from '../../lib/state/channel.svelte';
   import { close, hideChrome, removeOverlay, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -76,14 +81,36 @@
 
   let { overlay, draft }: { overlay: Overlay; draft?: Draft } = $props();
   let body = $state(untrack(() => draft?.body ?? kept.body)), anon = $state(untrack(() => draft?.anon ?? kept.anon));
+  // the photos (up to 4): each uploads as it's picked, its preview at once (the phone's own) till the server's comes
+  let pics = $state<Pic[]>(untrack(() => draft?.photos ?? kept.photos));
+  const PICS = 4;
   let revealed = $state<number | null>(null);
   onMount(() => { api.channelRevealed().then((r) => (revealed = r.revealed)).catch(() => {}); });
-  $effect(() => { kept.body = body; kept.anon = anon; });
+  $effect(() => { kept.body = body; kept.anon = anon; kept.photos = pics; });
   $effect(() => { overlay.title = t('fc.new'); overlay.icon = SquarePen; });
   const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
-  const MAX = 1000;
+  const MAX = $derived(pics.length ? 900 : 1000);  // under photos: a caption (the server's CAPTION_MAX)
   const rule = $derived(broken(body));
-  const ready = $derived(body.trim().length >= 2 && !rule);
+  const ready = $derived(body.trim().length >= 2 && body.length <= MAX && !rule && pics.every((p) => p.id));
+
+  async function pick(ev: Event) {
+    const el = ev.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, PICS - pics.length);
+    el.value = '';
+    for (const file of files) {
+      if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); continue; }
+      const url = URL.createObjectURL(file), mine: Pic = { url, thumb: url, w: 1, h: 1, blur: '' };
+      pics = [...pics, mine];
+      try {
+        const got = await api.uploadChannelPhoto(await shrink(file));
+        pics = pics.map((p) => (p.url === url ? got : p));
+      } catch {
+        haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d');
+        pics = pics.filter((p) => p.url !== url);
+      }
+      URL.revokeObjectURL(url);
+    }
+  }
+  const unpick = (p: Pic) => { haptic.select(); pics = pics.filter((x) => x.url !== p.url); };
   const HINT: Record<Rule, Key> = { link: 'fc.noLink', mention: 'fc.noMention', phone: 'fc.noPhone', signature: 'fc.signature' };
   const sign = $derived(session.me ? signOf() : '');
 
@@ -131,17 +158,17 @@
   });
 
   function reason(e: unknown): string {
-    const why: Key = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : e.message === 'short' ? 'fc.short' : e.message === 'duplicate' ? 'fc.dup' : 'common.error') : 'common.error';
+    const why: Key = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'long' ? 'fc.long' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : e.message === 'short' ? 'fc.short' : e.message === 'duplicate' ? 'fc.dup' : 'common.error') : 'common.error';
     return t(why);
   }
 
   async function post() {
     if (!ready || sent) return;  // once: a second tap while it closes sends nothing
     sent = true;
-    const text = body.trim(), was = anon;
-    const temp = stand(text, was); haptic.select(); kept.body = ''; close(overlay.id);
+    const text = body.trim(), was = anon, photos = $state.snapshot(pics) as Pic[];
+    const temp = stand(text, was, false, photos); haptic.select(); kept.body = ''; kept.photos = []; close(overlay.id);
     try {
-      const p = await api.newChannelPost(text, was);
+      const p = await api.newChannelPost(text, was, photos.map((x) => x.id!));
       count('do.forum');
       land(temp, p, p.status === 'held' && !!p.ai);
       haptic.ok();
@@ -151,11 +178,11 @@
         if (p.ai) api.channelPostWhy(p.id, text).then((x) => { if (x.explain) channel.why[p.id] = x.explain; }).catch(() => {});
       }
     } catch (e) {
-      unstand(temp); haptic.error(); kept.body = text; kept.anon = was;  // not gone: the words wait in the window
+      unstand(temp); haptic.error(); kept.body = text; kept.anon = was; kept.photos = photos;  // not gone: the words wait in the window
       const d = e instanceof ApiErr ? e.data : {};
       if (e instanceof ApiErr && (e.message === 'noise' || e.message === 'ad') && typeof d.post === 'number')
         open(ChannelRefused, { body: text, anon: was, refused: { post: d.post, kind: e.message === 'ad' ? 'ad' : 'noise', appeal: d.appeal === true } });
-      else compose({ body: text, anon: was, why: reason(e) });
+      else compose({ body: text, anon: was, photos, why: reason(e) });
     }
   }
   // Ctrl/Cmd+Enter sends (a computer); a plain Enter is a new line
@@ -189,6 +216,13 @@
       {#if rule}<span class="hint" role="status">{t(HINT[rule])}</span>{/if}
       {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
     </div>{/if}
+    <!-- the photos picked, each with its x; the add tile while there's room -->
+    <div class="pics">
+      {#each pics as p (p.url)}<span class="pic" class:up={!p.id}><img src={p.thumb} alt="" />
+        <button class="off" onclick={() => unpick(p)} aria-label={t('fc.photoOff')}><X size={14} strokeWidth={2.6} /></button></span>{/each}
+      {#if pics.length < PICS}<label class="pic add" aria-label={t('fc.addPhoto')}><ImagePlus size={22} strokeWidth={2} /><input type="file" accept="image/*" multiple onchange={pick} /></label>{/if}
+    </div>
+    {#if anon && pics.length}<p class="note">{t('fc.photoAnon')}</p>{/if}
     <p class="note">{anon ? t('fc.asAnon') : t('fc.rules')}</p>
     {#if anon && revealed !== null}<p class="note">{t('fc.revealed', { n: revealed })}</p>{/if}
   </div>
@@ -242,6 +276,16 @@
   .cw-text.bad { caret-color: var(--danger); }
   .cw-text::placeholder { color: var(--text-3); }
   .cw-text:focus { outline: none; }
+  .pics { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); }
+  .pic { position: relative; width: 64px; height: 64px; border-radius: var(--r-s); overflow: hidden; background: var(--fill-2); flex: none; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pic.up img { opacity: 0.5; animation: up 1s var(--ease) infinite alternate; }
+  @keyframes up { to { opacity: 0.8; } }
+  .off { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    background: rgb(0 0 0 / 0.55); color: white; }
+  .off::after { content: ''; position: absolute; inset: -8px; } /* a bigger target */
+  .add { display: grid; place-items: center; color: var(--text-2); cursor: pointer; }
+  .add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .foot { display: flex; align-items: baseline; gap: var(--s-2); padding: 0 var(--s-4) var(--s-2); font: 500 var(--fs-sub)/1.3 var(--font-text); }
   .hint { flex: 1; color: var(--danger-text); }
   .count { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -250,7 +294,7 @@
   .note::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
 
   @media (prefers-reduced-motion: reduce) {
-    .face { animation: none; }
+    .face, .pic.up img { animation: none; }
     .scrim, .who, .ghost, .send, .ic, .rest { transition-duration: 1ms !important; transition-delay: 0s !important; }
   }
 </style>

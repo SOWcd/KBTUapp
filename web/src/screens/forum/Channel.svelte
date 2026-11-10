@@ -218,6 +218,9 @@
             {:else if live && !p.mine}<span class="end"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
           </div>
           <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} quote={why?.quote} /></p>
+          <!-- the photos (up to 4, the channel's album): a tap shows them whole -->
+          {#if p.photos?.length}<div class="pics n{p.photos.length}">{#each p.photos as ph, i (i)}<button class="ph" aria-label={t('fc.photo')}
+            onclick={() => sheets.photos(p.photos.map((x, j) => ({ ...x, id: j + 1, by: null, mine: p.mine, canDelete: false })), i)}><img src={ph.thumb} alt="" loading="lazy" decoding="async" /></button>{/each}</div>{/if}
           {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
           <!-- my post the AI passed to a moderator: why, in its words once they come (to me alone), else the plain line -->
           {#if p.mine && p.human}
@@ -321,6 +324,14 @@
   @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
+  .pics { display: grid; gap: 2px; margin-top: var(--s-3); border-radius: var(--r-m); overflow: hidden; }
+  .pics.n2, .pics.n4 { grid-template-columns: 1fr 1fr; }
+  .pics.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+  .pics.n3 .ph:first-child { grid-row: span 2; }
+  .ph { display: block; aspect-ratio: 4 / 3; background: var(--surface-2); overflow: hidden; }
+  .pics.n1 .ph { aspect-ratio: 16 / 10; }
+  .pics.n3 .ph { aspect-ratio: auto; min-height: 90px; }
+  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .tx { margin-top: var(--s-2); font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
     max-height: 5.9em; overflow: hidden; transition: max-height 420ms var(--ease); }
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }

@@ -167,6 +167,8 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
                 (v.id, target, tid, reason, note, core.now()))
     if target == "event":
         _urgent_event(con, tid)
+    if target == "fpost":  # one with photos leaves the channel at two people's reports
+        fchannel.reported(con, tid)
 
 
 EVENT_ALARM = 3  # different people's open reports of an event: the moderators hear at once (owner, Nov 6: it isn't hidden)
@@ -188,6 +190,9 @@ def _about(con, target: str, tid: int) -> int | None:
          else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask"
          else one(con, "SELECT user_id FROM fchan_posts WHERE id = ?", tid) if target == "fpost" else None)
     return r[0] if r else None
+
+
+FPOST_UP = "(status = 'live' OR status = 'hidden' AND why = 'reports')"  # in the channel, or out by its reports (fchannel.reported) and waiting
 
 
 def report_queue(con, v: Viewer) -> list[dict]:
@@ -212,8 +217,9 @@ def report_queue(con, v: Viewer) -> list[dict]:
             a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
         elif r["target"] == "fpost":  # a forum channel post: its words, and the way to it in the channel (an anonymous one names nobody)
-            p = one(con, "SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND status = 'live'", r["target_id"])
+            p = one(con, f"SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND {FPOST_UP}", r["target_id"])
             text, where = (p["body"], ("fpost", r["target_id"], p["tg_msg"])) if p else (None, None)
+            photos = fchannel._photos(con, [r["target_id"]]).get(r["target_id"], [])
         elif r["target"] == "post":
             # no post screen of its own to open: its words are the thing to judge, title and body
             p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
@@ -229,7 +235,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
         # what the reporters wrote, newest first, never who wrote it
         notes = [{"reason": n["reason"], "note": n["note"], "at": n["created_at"]} for n in rows(con, """SELECT reason, note, created_at FROM reports
             WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
-        out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1], **({"msg": where[2]} if len(where) > 2 else {})}, "count": r["n"],
+        out.append({**({"photos": photos} if r["target"] == "fpost" else {}), "target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1], **({"msg": where[2]} if len(where) > 2 else {})}, "count": r["n"],
                     "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
     # and the channel's comments in Telegram; those the reports removed first (a person waits for the verdict)
     return sorted(out + tgcomments.queue_items(con, v), key=lambda x: (not x.get("removed"), x["at"]))
@@ -240,7 +246,7 @@ def close_gone(con) -> None:
     gone = {"comment": "SELECT 1 FROM comments WHERE id = ? AND deleted_at IS NULL", "user": "SELECT 1 FROM users WHERE id = ?",
             "photo": """SELECT 1 FROM files f WHERE f.id = ? AND (EXISTS (SELECT 1 FROM event_photos WHERE file_id = f.id)
                         OR EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = f.id))""", "ask": "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')",
-            "fpost": "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live'", "post": "SELECT 1 FROM posts WHERE id = ? AND hidden_at IS NULL",
+            "fpost": f"SELECT 1 FROM fchan_posts WHERE id = ? AND {FPOST_UP}", "post": "SELECT 1 FROM posts WHERE id = ? AND hidden_at IS NULL",
             "event": "SELECT 1 FROM events WHERE id = ? AND hidden_at IS NULL"}
     with tx(con):
         for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"):
@@ -259,7 +265,13 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
         raise core.decided(con, f"{target}:{tid}")  # another moderator came first (or it went by itself)
     if target == "fpost":  # the channel's own take-down (its audit line fchan_hide, the minute's Undo) and its reports close, as one
         with tx(con):
-            if remove:
+            out = one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why = 'reports'", tid)
+            if out and remove:  # out by its reports already: the moderator's take-down now (its Undo as any)
+                con.execute("UPDATE fchan_posts SET why = 'moderator' WHERE id = ?", (tid,))
+                log_action(con, v.id, "fchan_hide", f"fchan:{tid}")
+            elif out:  # kept: back in the channel (a new message), its photos with it
+                fchannel.mod_restore(con, v, tid)
+            elif remove:
                 fchannel.mod_decide(con, v, tid, False)  # joins this transaction
             if not con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = 'fpost' AND target_id = ? AND status = 'open'",
                                ("actioned" if remove else "dismissed", v.id, core.now(), tid)).rowcount:

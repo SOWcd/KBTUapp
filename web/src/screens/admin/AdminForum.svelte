@@ -18,6 +18,7 @@
   import Group from '../../ui/Group.svelte';
   import ForumMod from '../forum/ForumMod.svelte';
   import ForumWho, { whyLine } from './ForumWho.svelte';
+  import ForumPics from './ForumPics.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
@@ -92,6 +93,7 @@
     <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
     <span class="mm">{ago(p.at)}{kind === 'held' && p.why ? ' · ' + whyLine(p.why, p.aiWhy) : ''}</span>
     <p class="mt selectable">{p.body}</p>
+    <ForumPics photos={p.photos} />
     <span class="mb">
       {#if p.own}<i class="mm">{t('fc.ownPost')}</i>
       {:else}

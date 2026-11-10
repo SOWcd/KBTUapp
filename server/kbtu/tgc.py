@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import logging
 import re
+from pathlib import Path
 
 import httpx
 
-from . import ai, db, logic, texts
+from . import ai, db, logic, media, texts
 from .config import Config
 from .logic import now, one
 from .logic import tgcomments as rules
@@ -256,6 +258,27 @@ async def _premium_send(cfg: Config, http: httpx.AsyncClient, body: dict) -> dic
     return r
 
 
+async def _upload(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict) -> dict:
+    """A Bot API call with files (multipart), answered like _call."""
+    try:
+        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", data=body, files=files)).json()
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("tgc %s: %s", method, type(exc).__name__)
+        return {"ok": False}
+    if not r.get("ok"):
+        log.warning("tgc %s: %s", method, str(r.get("description"))[:200])
+    return r
+
+
+async def _send_photos(cfg: Config, http: httpx.AsyncClient, text: str, jpgs: list[bytes]) -> dict:
+    """A post with photos: one photo with the words as its caption, or an album (the caption on its first)."""
+    if len(jpgs) == 1:
+        return await _upload(cfg, http, "sendPhoto", {"chat_id": cfg.forum_channel, "caption": text, "parse_mode": "HTML"}, {"photo": jpgs[0]})
+    album = [{"type": "photo", "media": f"attach://p{i}", **({"caption": text, "parse_mode": "HTML"} if i == 0 else {})} for i in range(len(jpgs))]
+    return await _upload(cfg, http, "sendMediaGroup", {"chat_id": cfg.forum_channel, "media": json.dumps(album)},
+                         {f"p{i}": b for i, b in enumerate(jpgs)})
+
+
 def _gone(r: dict) -> bool:
     """Telegram says the message isn't there (deleted already): nothing left to take down."""
     return r.get("error_code") == 400 and "not found" in str(r.get("description")).lower()
@@ -266,9 +289,11 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     taken down, a deleted account's), then their copies in the discussion group, then what the AI or a moderator let
     out, then the bot's first comment under each. The words go escaped (only the signature under them is italic), no
     preview. The bot needs in the channel: post, edit and delete others' messages."""
+    F = logic.fchannel
+    root = Path(cfg.db_path).resolve().parent / "media"
+    media.drop(root, F.pics_gone(con))  # photos whose rows left (deleted, swept, never posted): off the disk, the feature on or off
     if not cfg.forum_channel:
         return
-    F = logic.fchannel
     await asyncio.to_thread(F.lost, con)  # (in a thread: an UPDATE takes the write lock) a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
     for u in F.unposts(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"]})
@@ -277,16 +302,22 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         elif r.get("error_code") == 400:  # too old to delete (48 h), or rights lost: its words edited away (edits sync to the copy)
             kind = "fch_moved" if F.moved(con, u["msg_id"]) else "fch_gone" if u["why"] == "author" else "fch_removed"
             text = texts.bot_message("ru", kind)[0]
-            e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
+            if u["photo"]:  # a photo stays a photo: a blank one in its place, the template as its caption
+                e = await _upload(cfg, http, "editMessageMedia", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"],
+                                                                  "media": json.dumps({"type": "photo", "media": "attach://x", "caption": text})}, {"x": media.blank_jpg()})
+            else:
+                e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
             if not (e.get("ok") or _gone(e) or "not modified" in str(e.get("description"))):
                 F.unpost_later(con, u["msg_id"])  # still public: tried again in 10 minutes (the warning is in the log)
                 continue
         else:
             break  # the network, a flood wait: next round
         F.unposted(con, u["msg_id"])
-    for msg, body, sign in F.resigns(con):  # a deleted account's named post: its name off the signature, the words stay
-        r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML",
-                                                       "text": f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>", "link_preview_options": {"is_disabled": True}})
+    for msg, body, sign, photo in F.resigns(con):  # a deleted account's named post: its name off the signature, the words stay
+        text = f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>"
+        r = await _call(cfg, http, "editMessageCaption", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML", "caption": text}) if photo else \
+            await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML",
+                                                       "text": text, "link_preview_options": {"is_disabled": True}})
         if r.get("ok") or _gone(r) or "not modified" in str(r.get("description")):
             F.resigned(con, msg)
         elif r.get("error_code") == 400:  # Telegram won't edit it (rights lost, too old): not tried forever, the owner told
@@ -302,17 +333,19 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             if not (r.get("ok") or _gone(r)):
                 break
         F.copy_done(con, key, root)
-    for pid, body, sign in F.to_send(con):
+    for pid, body, sign, pics in F.to_send(con):
+        jpgs = [(root / f"{p}.jpg").read_bytes() for p in pics if (root / f"{p}.jpg").exists()]
         if not F.sending(con, pid):  # marked "sending" (tg_msg 0, committed) before it goes; deleted meanwhile: skipped
             continue
         # no buttons on the post: a channel post with an inline keyboard loses Telegram's "Comments" bar (the way back
         # into the app is the bot's first comment, below). The words first, the signature under them like a quote's
         # (owner, Nov 2: Telegram can't right-align; italic and the dash come closest); both escaped, never markup
-        r = await _call(cfg, http, "sendMessage", {
-            "chat_id": cfg.forum_channel, "text": f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>", "parse_mode": "HTML",
-            "link_preview_options": {"is_disabled": True}})
+        text = f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>"
+        r = await _send_photos(cfg, http, text, jpgs) if jpgs else await _call(cfg, http, "sendMessage", {
+            "chat_id": cfg.forum_channel, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}})
         if r.get("ok"):
-            F.sent(con, pid, r["result"]["message_id"])
+            ids = [m["message_id"] for m in r["result"]] if isinstance(r["result"], list) else [r["result"]["message_id"]]
+            F.sent(con, pid, ids[0], ids if jpgs else None)
         elif r.get("error_code"):  # Telegram said no: it isn't in the channel, the next round tries again
             F.unsend(con, pid)
             break
