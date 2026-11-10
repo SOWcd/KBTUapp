@@ -121,13 +121,17 @@ def _by_tg(con, org: int, uid: int) -> int | None:
 
 
 def autolink(con, org: int) -> int:
-    """Every member of the club with a student account and an unlinked import record by their Telegram username: linked
-    (as the President's link would, merging a record a check-in made). The count."""
+    """Every member of the club, a verified student with no record yet, and an unlinked import record by their Telegram
+    username: linked. The admin's command, run by hand (an unlink by the President stays: nothing links again by itself);
+    never a merge (a member with a record of their own is the President's to link). The count.
+    ponytail: a wrong link the President undoes keeps its vol_ties row (deleting that account still takes the record);
+    upgrade: drop the tie on an unlink of an auto link with nothing done under it."""
     n = 0
     with tx(con):
-        for (uid,) in rows(con, """SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ?""", org):
+        for (uid,) in rows(con, """SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id AND s.manual = 0
+                WHERE m.org_id = ?""", org):
             vid = _by_tg(con, org, uid)
-            if vid and not one(con, "SELECT 1 FROM vol_people WHERE org_id = ? AND user_id = ? AND raw != '{}'", org, uid):
+            if vid and not one(con, "SELECT 1 FROM vol_people WHERE org_id = ? AND user_id = ?", org, uid):
                 _attach(con, None, org, vid, uid)
                 n += 1
     return n
@@ -140,9 +144,6 @@ def _record(con, org: int, uid: int) -> int | None:
         return r[0]
     if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", org, uid):
         return None
-    if (vid := _by_tg(con, org, uid)) and one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
-        _attach(con, None, org, vid, uid)  # the import's row by my Telegram username
-        return vid
     vid = con.execute("INSERT INTO vol_people (org_id, user_id, created_at) VALUES (?, ?, ?)", (org, uid, now())).lastrowid
     _tie(con, vid, uid)
     return vid
