@@ -6,7 +6,7 @@ import dataclasses
 
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, db, logic
+from kbtu import app as server, casting, db, logic
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 ADMIN, PRES, STUDENT, MEMBER = 70, 71, 72, 73
@@ -116,6 +116,32 @@ def test_small_club_is_off_the_strip_for_everyone(env, monkeypatch):
     monkeypatch.setattr(logic.clubs, "CLUB_MIN", 5)
     assert _strip(c) == [] and _strip(c, PRES) == [] and _strip(c, ADMIN) == []
     assert pid in _club_page(c, oid)  # its own page still has it, as any post
+
+
+def test_small_club_castings_go_by_link_only(env, monkeypatch):
+    """Under CLUB_MIN a club may still recruit (owner, Nov 10), by direct link: its offline casting is in no one's general
+    feed but its own people's and followers'; its in-app round opens and takes an application from its link, and the
+    registry marks the club small (the Clubs tab's strip and the Afisha leave it out); 5 members bring both back."""
+    c, con, clock, oid = _setup(env, monkeypatch)
+    pid = _new(c, oid).json()["id"]
+    clock[0] = casting.now()  # casting.py reads the real clock
+    monkeypatch.setattr(logic.clubs, "CLUB_MIN", 5)
+    feed = lambda who: [p["id"] for p in c.get("/api/posts", params={"scope": "all"}, headers=tma(who)).json()]  # noqa: E731
+    assert pid not in feed(STUDENT) and pid in feed(MEMBER)
+    c.put(f"/api/orgs/{oid}/subscription", headers=tma(STUDENT))
+    assert pid in feed(STUDENT)
+    c.delete(f"/api/orgs/{oid}/subscription", headers=tma(STUDENT))
+    rnd = c.post(f"/api/orgs/{oid}/round", headers=tma(PRES), json={"title": "Fall", "closesAt": casting.now() + 7 * 24 * HOUR, "departments": []})
+    assert rnd.status_code == 200
+    r = c.get(f"/api/orgs/{oid}/round", headers=tma(STUDENT)).json()  # the direct link
+    assert r["open"] and c.post(f"/api/rounds/{r['id']}/apply", headers=tma(STUDENT), json={"departments": [], "answers": {}}).status_code == 200
+    me = next(o for o in c.get("/api/orgs", headers=tma(STUDENT)).json() if o["id"] == oid)
+    assert me["small"] and me["round"]["id"] == r["id"]
+    for i in range(3):
+        con.execute("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", (8000 + i,))
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT ?, id, 'member', 0 FROM users WHERE tg_id = ?", (oid, 8000 + i))
+    assert pid in feed(STUDENT) and _strip(c) == [pid]
+    assert not next(o for o in c.get("/api/orgs", headers=tma(STUDENT)).json() if o["id"] == oid)["small"]
 
 
 def test_one_live_casting_per_club(env, monkeypatch):

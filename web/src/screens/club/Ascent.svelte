@@ -21,8 +21,9 @@
   const later = $derived(!!req?.againAt && req.againAt > nowTs());
   const canAsk = $derived(path.steps.top && req?.status !== 'pending' && !later);
   const foot = $derived(later ? t('op.again', { when: dayMonth(req!.againAt!) }) : canAsk && !presVice ? t('op.byPres') : t('op.check'));
-  // an open step's count: members toward a ready profile, events with guests toward the top
-  const count = (k: PathStep) => k === 'profile' ? t('op.members', { n: Math.min(path.members, 5) }) : k === 'top' ? t('op.events', { n: Math.min(path.events, 2) }) : '';
+  // an open step's count: members toward a ready profile; toward the top, events with 5 guests and different guests in all
+  const count = (k: PathStep) => k === 'profile' ? t('op.members', { n: Math.min(path.members, 5) })
+    : k === 'top' ? `${t('op.events', { n: Math.min(path.events, 2) })} · ${t('op.guests', { n: Math.min(path.guests, 10) })}` : '';
 </script>
 
 <section class="asc" id="ascent">

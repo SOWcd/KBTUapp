@@ -80,6 +80,11 @@ def posts(con, v: Viewer, scope: str) -> list[dict]:
         elif scope == "all":
             sql += f" AND (featured_until > ? OR {_REACH})"  # a featured post is for everyone
             args += [core.now(), v.id, v.id]
+            # a casting of a club under CLUB_MIN goes by direct link only (owner, Nov 10): its own and its followers still see it
+            sql += """ AND (casting_to IS NULL OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
+                OR org_id IN (SELECT org_id FROM org_members WHERE user_id = ?) OR org_id IN (SELECT id FROM orgs o WHERE kind != 'club'
+                OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?))"""
+            args += [v.id, v.id, clubs.CLUB_MIN]
         else:
             raise ApiError("bad_input")
     return post_shapes(con, v, rows(con, sql + " ORDER BY pinned DESC, created_at DESC LIMIT 100", *args))
