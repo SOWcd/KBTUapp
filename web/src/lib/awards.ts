@@ -377,7 +377,7 @@ export function lookVars(look: Look): string {
     // the strap: two lines set tight (as their own mock does), a long word a size smaller, else as the others
     ['sf', lines.length > 1 ? '5.6px' : long > 9 ? '5.2px' : long > 7 ? '6.5px' : long <= 3 ? '11px' : '7.5px'], ['sfw', long <= 3 ? '900' : '800'], ['sl', lines.length > 1 || long > 7 ? '0.06em' : long <= 3 ? '0.02em' : '0.12em'],
     ['slh', lines.length > 1 ? '7.5px' : '26px'],
-    ['ink', c.ink?.[0] ?? 'white'], ['ink2', c.ink?.[1] ?? 'rgba(255, 255, 255, 0.8)'], ['tsh', c.ink ? 'none' : '0 1px 2px rgba(0, 0, 0, 0.3)'], ['hs', c.ink ? '0.2' : '0.45']]
+    ['ink', c.ink?.[0] ?? 'white'], ['ink2', c.ink?.[1] ?? 'rgba(255, 255, 255, 0.8)'], ['tsh', c.ink ? 'none' : '0 1px 2px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 0, 0, 0.35)'], ['hs', c.ink ? '0.2' : '0.45']]
     .map(([k, v]) => `--${k}: ${v}`).join('; ');
 }
 export const banded = (look: Look) => look !== 'sower';

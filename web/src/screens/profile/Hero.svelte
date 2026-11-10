@@ -357,7 +357,8 @@
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
   .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
-  .id { display: block; flex: 1; min-width: 0; }
+  /* a soft shadow under the light text on every look's art (owner, Nov 10: hard to read); a look sets its own below */
+  .id { display: block; flex: 1; min-width: 0; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 0, 0, 0.35); }
   .nm, .id > .role { padding-right: 54px; } /* the medallion: 14 + 52 in from the edge, less the row's 18 px, and a gap */
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
   .nick, .role, .meta { display: block; }
