@@ -77,6 +77,7 @@
                                 column kept as is, people without an account too. Without --apply a dry run: counts, headers,
                                 problems by row number (never a value). --balance: that column of the hours sheet (hours) is the
                                 starting balance; nothing else is computed. The same file twice adds nothing
+  .venv/bin/python -m kbtu.admin vol autolink       the import's records linked to the club's members by their current Telegram username
   .venv/bin/python -m kbtu.admin vol batches | vol undo <batch>   the imports; one undone (records used since stay)
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
@@ -530,6 +531,9 @@ def main(args: list[str]) -> None:
         print(texts.bot_message("en", "usage_week", **stats.fields(con, int(args[1]) if args[1:] else 7))[0])
     elif cmd == "vol" and args[1:2] == ["import"] and len(args) >= 3:
         _vol_import(con, args[2:])
+    elif cmd == "vol" and args[1:] == ["autolink"]:
+        org = vol.org_id(con) or sys.exit("VOLUNTEERS is off or names no club")
+        print(f"linked {vol.autolink(con, org)}")
     elif cmd == "vol" and args[1:] == ["batches"]:
         for b in rows(con, "SELECT * FROM vol_batches ORDER BY id"):
             print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + 5 * 3600)), "undone" if b["undone_at"] else "", b["source"], b["counts"])

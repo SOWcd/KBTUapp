@@ -277,6 +277,22 @@ def test_link_merge_and_own_view(zz):
     assert c.get("/api/vol/mine", headers=tma(3)).status_code == 404 and "vol" not in c.get("/api/me", headers=tma(3)).json()
 
 
+def test_autolink_by_telegram_username(zz):
+    c, _, con, org = zz
+    vol.apply(con, org, vol.plan(_book()), "list")
+    aru = con.execute("SELECT id FROM vol_people WHERE tg = 'aru_t'").fetchone()[0]
+    uid = _member(c, con, org, 3, "aru")
+    other = _member(c, con, org, 4, "bek")
+    con.execute("UPDATE users SET tg_username = 'Aru_T' WHERE id = ?", (uid,))
+    con.execute("UPDATE users SET tg_username = 'nobody_here' WHERE id = ?", (other,))
+    stray = login(c, 6, "x") and _uid(c, 6)  # not a member: never linked
+    con.execute("UPDATE users SET tg_username = 'bek_test' WHERE id = ?", (stray,))
+    assert vol.autolink(con, org) == 1 and vol.autolink(con, org) == 0
+    assert con.execute("SELECT user_id FROM vol_people WHERE id = ?", (aru,)).fetchone()[0] == uid
+    assert con.execute("SELECT user_id FROM vol_people WHERE tg = 'bek_test'").fetchone()[0] is None
+    assert con.execute("SELECT actor_id FROM audit_log WHERE action = 'vol_link'").fetchone()[0] is None
+
+
 def test_deleting_an_account_takes_its_record(zz):
     c, cfg, con, org = zz
     vol.apply(con, org, vol.plan(_book()), "list")

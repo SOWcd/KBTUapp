@@ -86,6 +86,53 @@ def _tie(con, vid: int, uid: int) -> None:
     con.execute("INSERT OR IGNORE INTO vol_ties (vol_id, user_id) VALUES (?, ?)", (vid, uid))
 
 
+def _attach(con, by: int | None, org: int, vid: int, uid: int) -> None:
+    """Record vid to the account uid (by: who, None the app itself). The member's own record, if any (made by a check-in
+    or another row of the import), merges into this one: its shifts, misses and columns move here."""
+    y = one(con, "SELECT * FROM vol_people WHERE org_id = ? AND user_id = ? AND id != ?", org, uid, vid)
+    if y:
+        p = one(con, "SELECT raw FROM vol_people WHERE id = ?", vid)
+        raw = json.loads(p["raw"])
+        for k, x in json.loads(y["raw"]).items():
+            raw[k if k not in raw else f"{k} ({y['id']})"] = x
+        con.execute("UPDATE vol_shifts SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
+        con.execute("UPDATE vol_misses SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
+        con.execute("UPDATE vol_edits SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
+        con.execute("UPDATE vol_keys SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))  # its import keys stay as aliases
+        con.execute("UPDATE vol_ties SET vol_id = ? WHERE vol_id = ? AND user_id NOT IN (SELECT user_id FROM vol_ties WHERE vol_id = ?)", (vid, y["id"], vid))
+        con.execute("INSERT OR IGNORE INTO vol_expected (session_id, vol_id) SELECT session_id, ? FROM vol_expected WHERE vol_id = ?", (vid, y["id"]))
+        con.execute("UPDATE vol_people SET raw = ?, balance = balance + ?, name = CASE WHEN name = '' THEN ? ELSE name END, tg = COALESCE(tg, ?) WHERE id = ?",
+                    (json.dumps(raw, ensure_ascii=False), y["balance"], y["name"], y["tg"], vid))
+        con.execute("DELETE FROM vol_people WHERE id = ?", (y["id"],))
+        con.execute("INSERT INTO vol_edits (vol_id, what, ref, old, new, reason, by, at) VALUES (?, 'merge', ?, NULL, ?, '', ?, ?)",
+                    (vid, y["id"], json.dumps({"balance": y["balance"]}), by, now()))
+    con.execute("UPDATE vol_people SET user_id = ? WHERE id = ?", (uid, vid))
+    _tie(con, vid, uid)
+    log_action(con, by, "vol_link", f"user:{uid}", json.dumps({"vol": vid, **({} if by else {"auto": "tg"})}))
+
+
+def _by_tg(con, org: int, uid: int) -> int | None:
+    """The one unlinked record of the import whose Telegram username is this member's current one (none, or two: None).
+    ponytail: a username is trusted as Telegram holds it now; a swapped username links the wrong record (the President
+    unlinks it); upgrade: ask the member to confirm."""
+    r = rows(con, """SELECT p.id FROM vol_people p JOIN users u ON u.id = ? AND lower(u.tg_username) = p.tg
+        WHERE p.org_id = ? AND p.user_id IS NULL AND p.tg IS NOT NULL""", uid, org)
+    return r[0][0] if len(r) == 1 else None
+
+
+def autolink(con, org: int) -> int:
+    """Every member of the club with a student account and an unlinked import record by their Telegram username: linked
+    (as the President's link would, merging a record a check-in made). The count."""
+    n = 0
+    with tx(con):
+        for (uid,) in rows(con, """SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ?""", org):
+            vid = _by_tg(con, org, uid)
+            if vid and not one(con, "SELECT 1 FROM vol_people WHERE org_id = ? AND user_id = ? AND raw != '{}'", org, uid):
+                _attach(con, None, org, vid, uid)
+                n += 1
+    return n
+
+
 def _record(con, org: int, uid: int) -> int | None:
     """My record in the club; a member without one gets an empty one (people who joined in the app after the import)."""
     r = one(con, "SELECT id FROM vol_people WHERE org_id = ? AND user_id = ?", org, uid)
@@ -93,6 +140,9 @@ def _record(con, org: int, uid: int) -> int | None:
         return r[0]
     if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", org, uid):
         return None
+    if (vid := _by_tg(con, org, uid)) and one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
+        _attach(con, None, org, vid, uid)  # the import's row by my Telegram username
+        return vid
     vid = con.execute("INSERT INTO vol_people (org_id, user_id, created_at) VALUES (?, ?, ?)", (org, uid, now())).lastrowid
     _tie(con, vid, uid)
     return vid
@@ -386,24 +436,7 @@ def link(con, v: Viewer, vid: int, body: dict) -> dict:
             raise ApiError("bad_input", "user")
         if p["user_id"] not in (None, uid):
             raise ApiError("conflict", "linked")
-        y = one(con, "SELECT * FROM vol_people WHERE org_id = ? AND user_id = ? AND id != ?", org, uid, vid)
-        if y:
-            raw = json.loads(p["raw"])
-            for k, x in json.loads(y["raw"]).items():
-                raw[k if k not in raw else f"{k} ({y['id']})"] = x
-            con.execute("UPDATE vol_shifts SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
-            con.execute("UPDATE vol_misses SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
-            con.execute("UPDATE vol_edits SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
-            con.execute("UPDATE vol_keys SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))  # its import keys stay as aliases
-            con.execute("UPDATE vol_ties SET vol_id = ? WHERE vol_id = ? AND user_id NOT IN (SELECT user_id FROM vol_ties WHERE vol_id = ?)", (vid, y["id"], vid))
-            con.execute("INSERT OR IGNORE INTO vol_expected (session_id, vol_id) SELECT session_id, ? FROM vol_expected WHERE vol_id = ?", (vid, y["id"]))
-            con.execute("UPDATE vol_people SET raw = ?, balance = balance + ?, name = CASE WHEN name = '' THEN ? ELSE name END, tg = COALESCE(tg, ?) WHERE id = ?",
-                        (json.dumps(raw, ensure_ascii=False), y["balance"], y["name"], y["tg"], vid))
-            con.execute("DELETE FROM vol_people WHERE id = ?", (y["id"],))
-            _edit(con, v, vid, "merge", y["id"], None, {"balance": y["balance"]}, "")
-        con.execute("UPDATE vol_people SET user_id = ? WHERE id = ?", (uid, vid))
-        _tie(con, vid, uid)
-        log_action(con, v.id, "vol_link", f"user:{uid}", json.dumps({"vol": vid}))
+        _attach(con, v.id, org, vid, uid)
     return person(con, v, vid)
 
 
