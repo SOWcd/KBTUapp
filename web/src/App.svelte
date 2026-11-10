@@ -10,6 +10,7 @@
   import { channel, loadChannel } from './lib/state/channel.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
+  import { hiNow, nextUp, opened } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
@@ -17,7 +18,7 @@
   import { classesLeft } from './lib/classes';
   import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, scanQr, tg, tgTry } from './lib/tg';
   import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
-  import { dayNo, nowTs, parts, time, at } from './lib/time';
+  import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
   import Nav from './ui/Nav.svelte';
@@ -337,12 +338,13 @@
   });
 
   // ---- greeting ----
+  opened(nowTs()); // every launch counts for "welcome back", a deep link's too
   function greet() {
-    const h = parts(nowTs()).h;
-    const first = session.me?.student?.firstName;
-    const name = first ? ', ' + first : '';
-    const key = h < 5 ? 'say.hi.night' : h < 12 ? 'say.hi.morning' : h < 18 ? 'say.hi.day' : 'say.hi.evening';
-    say(phrase(key, { name }), h < 5 ? 'crescent_moon_3d' : h < 12 ? 'sparkles_3d' : h < 18 ? 'waving_hand_3d_default' : 'partying_face_3d');
+    const now = nowTs(), first = session.me?.student?.firstName;
+    const slots = classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(dayNo(now), x.c)));
+    const next = nextUp(now, slots, data.events, (c) => subjectOf(c) + (c.room ? ' · ' + c.room : ''), classEmoji);
+    const hi = hiNow(now, first ? ', ' + first : '', next, time);
+    if (hi) say(phrase(hi.key, hi.vars), hi.emoji);
   }
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
