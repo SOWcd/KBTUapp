@@ -362,8 +362,10 @@
     if (busy) return;
     busy = kind;
     try {
+      const first = !saved;
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
-      if (!saved && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
+      if (first) saved = e; // a later step may fail: the retry is an edit of this one (a changed cover too), never a second event
+      if (first && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
       const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
       if (pub) e = pub;
       const moved = live && e.taken > 0 && (saved!.startsAt !== e.startsAt || saved!.place !== e.place);

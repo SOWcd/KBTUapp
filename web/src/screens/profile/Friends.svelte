@@ -46,15 +46,19 @@
     data.friends = { ...was, incoming: was.incoming.filter((x) => x.person.id !== r.person.id), friends: yes ? [{ ...r, at: nowTs() }, ...was.friends] : was.friends };
     if (yes) { haptic.ok(); burst(); say(t('fr.accepted', { name: r.person.name }), 'partying_face_3d'); }
     else { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }
-    try { data.friends = await api.answerFriend(r.person.id, yes); forgetPeople(); void loadMe(); } // the dot on the Profile tab
-    catch { data.friends = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    try {
+      // only this person's row from the answer: a reply to an earlier tap can land after a later one
+      const s = await api.answerFriend(r.person.id, yes), c = data.friends, row = s.friends.find((x) => x.person.id === r.person.id);
+      if (c) data.friends = { ...c, going: s.going, friends: row ? c.friends.map((x) => x.person.id === row.person.id ? row : x) : c.friends };
+      forgetPeople(); void loadMe(); } // the dot on the Profile tab
+    catch { const c = data.friends; if (c) data.friends = { ...c, incoming: was.incoming.some((x) => x.person.id === r.person.id) && !c.incoming.some((x) => x.person.id === r.person.id) ? [r, ...c.incoming] : c.incoming, friends: yes ? c.friends.filter((x) => x.person.id !== r.person.id) : c.friends }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function takeBack(r: FriendRow) {
     const was = data.friends; if (!was) return;
     data.friends = { ...was, outgoing: was.outgoing.filter((x) => x.person.id !== r.person.id) };
     haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default');
     try { await api.takeBackRequest(r.person.id); forgetPeople(); }
-    catch { data.friends = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch { const c = data.friends; if (c && !c.outgoing.some((x) => x.person.id === r.person.id)) data.friends = { ...c, outgoing: [r, ...c.outgoing] }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 
