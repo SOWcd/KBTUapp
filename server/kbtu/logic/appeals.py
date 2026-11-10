@@ -29,7 +29,6 @@ DUE_DAYS = 5                            # working days to answer
 KEEP_CLOSED, KEEP_MAX = 90 * 86400, 180 * 86400
 FEW = 5                                 # a topic's month with fewer authors goes into "other" in SG's numbers
 ALMATY = dt.timezone(dt.timedelta(hours=5))
-MODE = ""                               # config APPEALS ("all" | "staff"), set by app.create; staff: no consent asked (a pilot)
 
 
 def is_sg(con, uid: int) -> bool:
@@ -43,7 +42,7 @@ def on(con, mode: str, v: Viewer) -> bool:
 
 def summary(con, v: Viewer) -> dict:
     """/api/me's part: agreed to the section yet, and SG's queue mine to open."""
-    return {"consent": MODE == "staff" or one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT) is not None,
+    return {"consent": one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT) is not None,
             "sg": is_sg(con, v.id)}
 
 
@@ -57,13 +56,21 @@ def due(t: int) -> int:
 
 
 def _agree(con, v: Viewer, body: dict) -> None:
-    """The section agreed to once; the app sends `consent` with the first send after asking. The staff pilot
-    (APPEALS=staff) asks nothing: its section isn't written yet (Codex writes it), as BOARD=staff asks nothing."""
-    if MODE == "staff" or one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT):
+    """The section agreed to once (the staff pilot too: the section promises its own consent); the app sends `consent`
+    with the first send or AI help after asking."""
+    if one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT):
         return
     if body.get("consent") != CONSENT:
         raise ApiError("forbidden", "consent")
     con.execute("INSERT OR REPLACE INTO appeal_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT, core.now()))
+
+
+def agree_given(con, v: Viewer, body: dict) -> None:
+    """The helplines' path (app.py, before every limit): a first consent sent with it is kept too, as the app now
+    counts it given; nothing else is required there."""
+    if v.student and body.get("consent") == CONSENT:
+        with tx(con):
+            _agree(con, v, body)
 
 
 def _text(x: object) -> str:

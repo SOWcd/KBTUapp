@@ -58,7 +58,7 @@ def test_staff_pilot(env):
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 404                    # a student: not in the pilot
     appeals.grant(con, None, _uid(c, SG), True)
     assert c.get("/api/appeals", headers=tma(SG)).status_code == 200
-    assert c.get("/api/me", headers=tma(SG)).json()["appeals"] == {"consent": True, "sg": True}  # the pilot asks none
+    assert c.get("/api/me", headers=tma(SG)).json()["appeals"] == {"consent": False, "sg": True}
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (_uid(c, ANN),))
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 200                    # staff try it
     page = c.get("/privacy?lang=ru").text
@@ -249,17 +249,27 @@ def test_distress_before_any_limit(ap, monkeypatch):
     assert c.post("/api/appeals/help", headers=tma(BEK), json={"text": "where", "lang": "en", "consent": appeals.CONSENT}).status_code == 429
 
 
-def test_staff_pilot_asks_no_consent(env):
-    """APPEALS=staff: the section is still a placeholder, so nobody is asked to agree to it."""
+def test_staff_pilot_asks_consent_too(env):
+    """APPEALS=staff: the section's own consent is asked and kept as with APPEALS=1; /api/me says so honestly."""
     _, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, appeals="staff")))
     login(c, SG, "sec")
     con = db.connect(cfg.db_path)
     appeals.grant(con, None, _uid(c, SG), True)
+    assert c.get("/api/me", headers=tma(SG)).json()["appeals"]["consent"] is False
+    assert c.post("/api/appeals", headers=tma(SG), json={"text": "pilot"}).status_code == 403
+    assert _send(c, SG, "pilot").status_code == 200
     assert c.get("/api/me", headers=tma(SG)).json()["appeals"]["consent"] is True
-    assert c.post("/api/appeals", headers=tma(SG), json={"text": "pilot"}).status_code == 200
-    assert not con.execute("SELECT 1 FROM appeal_consents").fetchone()
     con.close()
+
+
+def test_distress_keeps_a_first_consent(ap):
+    """The helplines' answer with a first consent: kept, so the next send works without asking again."""
+    c, _, con = ap
+    assistant._HITS.clear()
+    r = c.post("/api/appeals/help", headers=tma(BEK), json={"text": "I want to die", "lang": "en", "consent": appeals.CONSENT})
+    assert r.status_code == 200 and r.json()["care"]
+    assert c.post("/api/appeals", headers=tma(BEK), json={"text": "next"}).status_code == 200
 
 
 def test_months_merge_small_topics(ap):
