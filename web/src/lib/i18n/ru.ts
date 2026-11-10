@@ -275,7 +275,7 @@ const ru = {
   'aw.takeAllAsk': "Забрать «{award}» у {n} человек?",
   'aw.oneMore': "Ещё одну",
   'aw.bulk': "Выдано {n}: {title}",
-  'bdg.sessions': "Всем отмеченным на чекине",
+  'bdg.sessions': "Выдать отметившимся на чекине",
   'bdg.counted': "отмечено {n}",
   'ach.anthem.name': "Абсолютный слух",
   'ach.anthem.how': "Прослушал гимн КБТУ от начала до конца без перемотки.",

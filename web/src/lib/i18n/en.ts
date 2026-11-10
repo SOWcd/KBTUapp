@@ -275,7 +275,7 @@ const en: Dict = {
   'aw.takeAllAsk': "Take “{award}” back from {n} people?",
   'aw.oneMore': "One more",
   'aw.bulk': "Given to {n}: {title}",
-  'bdg.sessions': "Everyone counted at a check-in",
+  'bdg.sessions': "Give to everyone counted at a check-in",
   'bdg.counted': "{n} counted",
   'ach.anthem.name': "Perfect pitch",
   'ach.anthem.how': "Listened to KBTU's anthem start to finish without skipping.",

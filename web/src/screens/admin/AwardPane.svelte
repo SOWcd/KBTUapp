@@ -4,7 +4,7 @@
   // rotating code the hall scans), Scan (the camera stays open: each card QR is one grant, the person's face with a
   // tick, this run's people below, each undoable) and Link (up
   // to N people for some days; sent as the bot's card). Under them its links with who used each, the owner's "everyone
-  // checked in", and who has it (a tap: their profile, or take it back).
+  // checked in" (folded to one row), and who has it (a tap: their profile, or take it back).
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -134,10 +134,11 @@
   }
 
   // ---- everyone counted at a check-in (the owner), one Undo for all
+  let sessOpen = $state(false);
   let bulk = $state<{ n: number; batch: string; title: string; code: Code } | null>(null);
   async function giveAll(s: BadgeSession) {
     if (!(await sheets.ask({ title: t('scr.grantAsk', { variant: manualName(code) }), text: t('scr.grantText', { n: s.done }), ok: t('scr.grant'), cancel: t('scr.keep') }))) return;
-    try { const r = await api.screenGrant(s.id, code); bulk = { n: r.granted, batch: r.batch, title: s.title, code }; haptic.ok(); say(t('scr.granted', { n: r.granted }), 'party_popper_3d'); changed(); }
+    try { const r = await api.screenGrant(s.id, code); sessOpen = false; bulk = { n: r.granted, batch: r.batch, title: s.title, code }; haptic.ok(); say(t('scr.granted', { n: r.granted }), 'party_popper_3d'); changed(); }
     catch { fail(); }
   }
   async function undoAll() {
@@ -231,10 +232,14 @@
       {/if}
 
       {#if owner && checkins.length}
-        <Group caption={t('bdg.sessions')}>
-          {#each checkins as s (s.id)}
-            <Row dense tone="action" title={s.title} subtitle={`${dayMonth(s.at)} · ${t('bdg.counted', { n: s.done })}`} disabled={!s.done} onclick={() => giveAll(s)} />
-          {/each}
+        <!-- folded (owner, Nov 10: clutter): one quiet row; the sessions show only when it's opened -->
+        <Group>
+          <Row dense title={t('bdg.sessions')} accessory="disclosure" open={sessOpen} onclick={() => { haptic.select(); sessOpen = !sessOpen; }} />
+          {#if sessOpen}
+            {#each checkins as s (s.id)}
+              <Row dense tone="action" title={s.title} subtitle={`${dayMonth(s.at)} · ${t('bdg.counted', { n: s.done })}`} disabled={!s.done} onclick={() => giveAll(s)} />
+            {/each}
+          {/if}
           {#if bulk && bulk.code === code}<Row dense tone="destructive" title={t('aw.undo')} subtitle={t('aw.bulk', { n: bulk.n, title: bulk.title })} onclick={undoAll} />{/if}
         </Group>
       {/if}
