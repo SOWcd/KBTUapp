@@ -1918,6 +1918,10 @@ const kk: Dict = {
   // the academic calendar (SPEC §4.11)
   'acad.title': "Академиялық күнтізбе",
   'acad.sub': "2026–2027 оқу жылы · бакалавриат",
+  'acad.subM': "2026–2027 оқу жылы · магистратура",
+  'acad.summerNoteM': "6 апта",
+  'acad.orient': "Бейімделу",
+  'acad.thesis': "Диссертация, жоба: плагиатқа тексеру, рецензиялар",
   'acad.fall': "Күзгі семестр",
   'acad.spring': "Көктемгі семестр",
   'acad.summer': "Жазғы семестр",

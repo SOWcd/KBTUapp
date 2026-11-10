@@ -1918,6 +1918,10 @@ const en: Dict = {
   // the academic calendar (SPEC §4.11)
   'acad.title': "Academic calendar",
   'acad.sub': "2026–2027 academic year · bachelor's",
+  'acad.subM': "2026–2027 academic year · master's",
+  'acad.summerNoteM': "6 weeks",
+  'acad.orient': "Orientation",
+  'acad.thesis': "Dissertation, project: plagiarism check, reviews",
   'acad.fall': "Fall semester",
   'acad.spring': "Spring semester",
   'acad.summer': "Summer semester",

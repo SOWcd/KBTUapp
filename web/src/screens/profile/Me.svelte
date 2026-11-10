@@ -27,7 +27,7 @@
   import { photosFirst } from '../../lib/faces';
   import { sheets } from '../../lib/state/sheets';
   import { api, type PersonCard } from '../../lib/api';
-  import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
+  import { nextUp, nameOf, whenOf, semester, termsOf, MASTER, PSYCHOLOGIST } from '../../lib/academic';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
   import { dateInput, dayMonth, nowTs } from '../../lib/time';
   import { onMount } from 'svelte';
@@ -46,7 +46,9 @@
   // today: Me stays mounted and the app can stay open for days, so it moves on when the app comes back
   let today = $state(dateInput(nowTs()));
   onMount(() => on('activated', () => (today = dateInput(nowTs()))));
-  const up = $derived(nextUp(today)), sem = $derived(semester(today));
+  // my calendar by my student ID's letter (master's: M)
+  const terms = $derived(termsOf(session.me?.student?.studentId));
+  const up = $derived(nextUp(today, terms)), sem = $derived(semester(today, terms));
   // the strip's month under its first week, in the app's language
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   const me = $derived(session.me);
@@ -317,7 +319,7 @@
       </button>
       {#if up}<Row icon={CalendarDays} title={nameOf(up)} subtitle={whenOf(up)} accessory="chevron" onclick={() => sheets.academic()} />{/if}
     {:else}
-      <Row icon={CalendarDays} title={t('acad.title')} subtitle={up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')} accessory="chevron" onclick={() => sheets.academic()} />
+      <Row icon={CalendarDays} title={t('acad.title')} subtitle={up ? `${nameOf(up)} · ${whenOf(up)}` : t(terms === MASTER ? 'acad.subM' : 'acad.sub')} accessory="chevron" onclick={() => sheets.academic()} />
     {/if}
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <Row icon={MessageCircleHeart} title={t('psy.kbtu')}>{#snippet trailing()}
