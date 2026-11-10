@@ -409,11 +409,12 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         came = student
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
-            logic.vol.on_scan(con, s, uid, t, out)  # the volunteers ledger's club: a shift opens or closes
             if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
                 came = logic.screen_came(con, s["event_id"], uid, t)
                 if came and fresh:  # never by that old link repeated on a later day (the "had" pass above)
                     _attendance(con, s, uid, t)
+            if came and fresh:  # the volunteers ledger's club: a shift opens or closes, only by a scan that counted, of a QR just shown
+                logic.vol.on_scan(con, s, uid, t, out)
     return {"title": _title_for(con, s, uid, student), "done": came, "left": out}
 
 

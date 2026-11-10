@@ -190,7 +190,7 @@ def board_writer(request: Request, v: Board, con: Con) -> Viewer:
     """Writing on the forum: also agreed to the policy in force (its section on the forum, the AI's cross-border look);
     the app asks first, the server holds it too. Staff trying it (BOARD=staff) are on the policy they have."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
-    if request.app.state.cfg.board == "all" and s and s[0] not in (request.app.state.policy, "staff", "admin"):
+    if request.app.state.cfg.board == "all" and s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
         raise ApiError("forbidden", "consent")
     return v
 
@@ -215,12 +215,29 @@ def fchan_writer(request: Request, v: FChan, con: Con) -> Viewer:
     s = logic.one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", v.id)
     if not s or s["manual"]:
         raise ApiError("need_student")
-    if s["consent_version"] not in (request.app.state.policy, "admin"):
+    if not logic.account.on_policy(s["consent_version"], request.app.state.policy) and s["consent_version"] != "admin":
         raise ApiError("forbidden", "consent")
     return v
 
 
 FChanWrite = Annotated[Viewer, Depends(fchan_writer)]
+
+
+def policy_for(con, v: Viewer, policy: str) -> str:
+    """The policy version this person is asked to agree to: with the volunteers ledger's section only for those it concerns."""
+    return policy + logic.account.CONSENT_VOL if logic.vol.concerned(con, v) else policy
+
+
+def vol_viewer(request: Request, v: Me, con: Con) -> Viewer:
+    """The volunteers ledger (logic/vol.py): someone it concerns uses it only once agreed to its section (+vol1)."""
+    s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
+    want = policy_for(con, v, request.app.state.policy)
+    if s and want != request.app.state.policy and s[0] not in (want, "staff", "admin"):
+        raise ApiError("forbidden", "consent")
+    return v
+
+
+VolMe = Annotated[Viewer, Depends(vol_viewer)]
 
 
 def create(cfg: config.Config | None = None) -> FastAPI:
@@ -263,6 +280,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
+    logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
     logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
@@ -299,7 +317,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v) | {"consentNow": policy, "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
+        return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
@@ -321,7 +339,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/consent")
     def consent(con: Con, v: Me, body: dict = Body(...)):
-        return logic.consent(con, v, body.get("version"), policy)
+        return logic.consent(con, v, body.get("version"), policy_for(con, v, policy))
 
     @app.post("/api/me/dm")
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
@@ -376,7 +394,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
                  for m, k in (("first", "firstName"), ("last", "lastName"))]
         first, last = (mine or typed for mine, typed in names)
-        if consent != policy:
+        if not logic.account.on_policy(consent, policy):
             raise ApiError("bad_input", "consent")  # an app opened before the policy changed: it says to reopen
         if not (all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
@@ -1371,47 +1389,47 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own
     @app.get("/api/vol")
-    def vol_ledger(con: Con, v: Me):
+    def vol_ledger(con: Con, v: VolMe):
         return logic.vol.ledger(con, v)
 
     @app.get("/api/vol/mine")
-    def vol_mine(con: Con, v: Me):
+    def vol_mine(con: Con, v: VolMe):
         return logic.vol.person(con, v, None)
 
     @app.get("/api/vol/people/{vid}")
-    def vol_person(con: Con, v: Me, vid: int):
+    def vol_person(con: Con, v: VolMe, vid: int):
         return logic.vol.person(con, v, vid)
 
     @app.post("/api/vol/people/{vid}/balance")
-    def vol_balance(con: Con, v: Me, vid: int, body: dict = Body(...)):
+    def vol_balance(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.set_balance(con, v, vid, body)
 
     @app.post("/api/vol/people/{vid}/link")
-    def vol_link(con: Con, v: Me, vid: int, body: dict = Body(...)):
+    def vol_link(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.link(con, v, vid, body)
 
     @app.post("/api/vol/people/{vid}/shifts")
-    def vol_add_shift(con: Con, v: Me, vid: int, body: dict = Body(...)):
+    def vol_add_shift(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.add_shift(con, v, vid, body)
 
     @app.patch("/api/vol/shifts/{hid}")
-    def vol_edit_shift(con: Con, v: Me, hid: int, body: dict = Body(...)):
+    def vol_edit_shift(con: Con, v: VolMe, hid: int, body: dict = Body(...)):
         return logic.vol.edit_shift(con, v, hid, body)
 
     @app.post("/api/vol/people/{vid}/misses")
-    def vol_add_miss(con: Con, v: Me, vid: int, body: dict = Body(...)):
+    def vol_add_miss(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.add_miss(con, v, vid, body)
 
     @app.post("/api/vol/misses/{mid}/drop")
-    def vol_drop_miss(con: Con, v: Me, mid: int, body: dict = Body(...)):
+    def vol_drop_miss(con: Con, v: VolMe, mid: int, body: dict = Body(...)):
         return logic.vol.drop_miss(con, v, mid, body)
 
     @app.post("/api/vol/meets/{sid}")
-    def vol_team(con: Con, v: Me, sid: int, body: dict = Body(...)):
+    def vol_team(con: Con, v: VolMe, sid: int, body: dict = Body(...)):
         return logic.vol.set_team(con, v, sid, body)
 
     @app.post("/api/vol/access")
-    def vol_access(con: Con, v: Me, body: dict = Body(...)):
+    def vol_access(con: Con, v: VolMe, body: dict = Body(...)):
         return logic.vol.set_access(con, v, body)
 
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them

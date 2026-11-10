@@ -85,6 +85,8 @@ A role counts once the person has signed in with KBTU or is staff (only students
 the audit log. Prints Telegram names only, never the KBTU profile."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
 import sqlite3
@@ -151,7 +153,10 @@ def _vol_import(con, rest: list[str]) -> None:
 
 
 def main(args: list[str]) -> None:
-    con = db.connect(config.load().db_path)
+    cfg = config.load()
+    con = db.connect(cfg.db_path)
+    from .logic import vol
+    vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
     cmd = args[0] if args else ""
     if cmd == "roster" and len(args) == 4 and args[1] == "load":
         from . import roster

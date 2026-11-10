@@ -101,8 +101,10 @@ export async function loadTeam(org: Id): Promise<void> {
 }
 
 /** DMP's registry for this month (the overseers' main page), in the background; false when the server said no. */
-export async function loadVol(): Promise<void> {
-  try { data.vol = await api.volLedger(); } catch { /* the last copy stays */ }
+/** false: no longer mine to see (access taken back, the switch off): the copy goes too, and the sheets close */
+export async function loadVol(): Promise<boolean> {
+  try { data.vol = await api.volLedger(); return true; }
+  catch (e) { if (e instanceof ApiErr && (e.code === 'forbidden' || e.code === 'not_found')) { data.vol = null; return false; } return true; /* offline: the last copy stays */ }
 }
 
 export async function loadRegistry(): Promise<boolean> {

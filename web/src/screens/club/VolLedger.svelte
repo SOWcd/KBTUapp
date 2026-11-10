@@ -3,7 +3,7 @@
   // misses, a row opens the person. Its sessions (a teambuilding counts misses) and who else may read it: the President's.
   // Loaded with the app (data.vol), refreshed as it opens.
   import { api, type Id, type VolLedger } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, loadVol } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -21,7 +21,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
-  $effect(() => { void loadVol(); });
+  $effect(() => { void loadVol().then((ok) => { if (!ok) close(overlay.id, false); }); });
   const v = $derived(data.vol);
   let q = $state('');
   const people = $derived((v?.people ?? []).filter((p) => !q.trim() || hit(q, [p.name, p.tg ?? '', p.person?.name ?? ''])));

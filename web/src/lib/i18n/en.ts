@@ -1983,6 +1983,7 @@ const en: Dict = {
   'consent.textTgc': "Only students comment in the forum's Telegram channel; the bot deletes others' comments and keeps their text for its author 1 hour.\nReported comments are checked by AI; their copies and the reports are kept 30 days.",
   'consent.textFch': "The bot publishes posts from the app in the public channel @KBTUappForum.\nAn anonymous post shows no author; only the app's creator can find out, in an extreme case, and every such look is logged.\nAI checks the text before publishing.\nUnder a post the app shows the photos of the students who commented on it and its reaction counts.\nThe author of an anonymous post can reply in its comments through the bot, without showing their account.",
   'consent.textAi': "Texts to check and questions to the assistant go to Munito, or Groq or Cloudflare when it's busy: no name or ID, never used for training.",
+  'consent.textVol': "Your club keeps its volunteers ledger in the app: your hours, shifts and misses are seen by its President and whom she allows.",
   'consent.textBoard':"An anonymous forum author is seen only by the app's creator, and only for a broken rule.\nForum texts and questions to the assistant are processed by AI; it gets your school, year and classes, no name or ID.\nAnswers to organizers' questions are deleted 30 days after the event.\nAssistant ratings and unanswered question topics are kept 30 days, no name.",
   'consent.ok': "Accept",
   'me.guestLang': "Language",

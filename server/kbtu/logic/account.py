@@ -918,9 +918,17 @@ def policy(cfg) -> str:
     return out + (CONSENT_AI if ai_on(cfg) else "")
 
 
+CONSENT_VOL = "+vol1"  # with VOLUNTEERS: the ledger's section, agreed to only by the people it concerns (logic/vol.py concerned)
+
+
+def on_policy(version: object, current: str) -> bool:
+    """A consent to the policy in force: with or without the volunteers ledger's section, which only some are asked."""
+    return version in (current, current + CONSENT_VOL)
+
+
 def agreed(s, cfg) -> bool:
     """This student row is on the policy in force (or an admin's own row)."""
-    return bool(s) and s["consent_version"] in (policy(cfg), "admin")
+    return bool(s) and (on_policy(s["consent_version"], policy(cfg)) or s["consent_version"] == "admin")
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
@@ -1050,7 +1058,7 @@ _DEL_GONE = {
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
-    ("vol_people", "user_id"), ("vol_access", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
+    ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -1183,6 +1191,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
+        from . import vol
+        vol.gone(con, v.id)  # every volunteers-ledger record ever linked to me, unlinked since or not
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))

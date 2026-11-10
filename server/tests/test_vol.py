@@ -38,6 +38,13 @@ def _club(c, con):
     return org
 
 
+def _agree(c, tg):
+    """The policy as this person is asked it (with the ledger's +vol1 when it concerns them)."""
+    v = c.get("/api/me", headers=tma(tg)).json()["consentNow"]
+    assert c.post("/api/me/consent", headers=tma(tg), json={"version": v}).status_code == 200
+    return v
+
+
 def _uid(c, tg):
     return c.get("/api/me", headers=tma(tg)).json()["id"]
 
@@ -53,7 +60,9 @@ def zz(env):
     c0, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, volunteers="zhzh")))
     con = db.connect(cfg.db_path)
-    yield c, cfg, con, _club(c, con)
+    org = _club(c, con)
+    _agree(c, P)
+    yield c, cfg, con, org
     con.close()
 
 
@@ -82,7 +91,7 @@ def test_import_dry_run_apply_again_undo(zz):
     assert any("on no row of the members sheet" in x for x in p["problems"])
     assert not any("Aru" in x or "+7" in x for x in p["problems"])                             # row numbers, never a value
     got = vol.apply(con, org, p, "list given by the club's president on 2026-11-06, evening")
-    assert got == {"batch": got["batch"], "again": False, "added": 4, "there": 0}
+    assert got == {"batch": got["batch"], "again": False, "added": 4, "there": 0, "deleted": 0}
     aru = con.execute("SELECT * FROM vol_people WHERE tg = 'aru_t'").fetchone()
     assert aru["balance"] == 750 and aru["user_id"] is None                                   # 12,5 h; no account linked by itself
     raw = __import__("json").loads(aru["raw"])
@@ -182,6 +191,7 @@ def test_hours_from_check_in_and_out(zz):
     con.execute("UPDATE vol_shifts SET in_at = in_at - 5400 WHERE id = ?", (h["id"],))       # arrived 1.5 h ago
     c.post(f"/api/screens/{sid}/out", headers=tma(P))
     assert _scan(c, 3, p).status_code == 200
+    _agree(c, 3)
     mine = c.get("/api/vol/mine", headers=tma(3)).json()
     assert mine["minutes"] == 90 and mine["open"] == 0 and len(mine["shifts"]) == 1 and "raw" not in mine
     login(c, 4, "guest")                                                                      # not in the club: no record
@@ -215,6 +225,7 @@ def test_who_reads_and_who_edits(zz):
     assert c.post("/api/vol/access", headers=tma(5), json={"user": me3, "on": True}).status_code == 403
     assert c.post("/api/vol/access", headers=tma(P), json={"user": _uid(c, 6), "on": True}).status_code == 400  # not in the club
     assert c.post("/api/vol/access", headers=tma(P), json={"user": vice, "on": True}).status_code == 200
+    _agree(c, 5)
     seen = c.get(f"/api/vol/people/{vid}", headers=tma(5)).json()
     assert seen["raw"][MEM][KURS] == "3"                                          # granted: reads, columns included
     shift = {"inAt": int(time.time()) - 7200, "outAt": int(time.time()) - 3600, "reason": "camera broke"}
@@ -256,6 +267,7 @@ def test_link_merge_and_own_view(zz):
     con.execute("UPDATE vol_people SET balance = 60 WHERE id = ?", (nobody,))
     assert c.post(f"/api/vol/people/{nobody}/link", headers=tma(P), json={"user": uid}).status_code == 200   # the duplicate row merges
     assert con.execute("SELECT COUNT(*) FROM vol_people WHERE id IN (?, ?)", (aru, nobody)).fetchone()[0] == 1
+    _agree(c, 3)
     mine = c.get("/api/vol/mine", headers=tma(3)).json()
     assert mine["minutes"] == 60 + 20 and "raw" not in mine and "edits" not in mine
     other = con.execute("SELECT id FROM vol_people WHERE tg = 'bek_test'").fetchone()[0]
@@ -303,3 +315,127 @@ def test_admin_command(zz, monkeypatch, tmp_path, capsys):
     bid = capsys.readouterr().out.split()[0]
     admin.main(["vol", "undo", bid])
     assert "'gone': 4" in capsys.readouterr().out and con.execute("SELECT COUNT(*) FROM vol_people").fetchone()[0] == 0
+
+
+def test_consent_only_for_whom_it_concerns(zz):
+    """+vol1: asked of the people the ledger concerns (linked, granted, the President), nobody else; the routes hold it."""
+    c, _, con, org = zz
+    plain = c.get("/api/me", headers=tma(P)).json()["consentNow"]
+    assert plain.endswith(logic.account.CONSENT_VOL)
+    uid = _member(c, con, org, 3, "aru")
+    login(c, 4, "other")
+    assert not c.get("/api/me", headers=tma(4)).json()["consentNow"].endswith("+vol1")      # an ordinary student: nothing new
+    assert not c.get("/api/me", headers=tma(3)).json()["consentNow"].endswith("+vol1")      # a member not linked yet: neither
+    vid = con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, 'A', 0)", (org,)).lastrowid
+    assert c.post(f"/api/vol/people/{vid}/link", headers=tma(P), json={"user": uid}).status_code == 200
+    asked = c.get("/api/me", headers=tma(3)).json()["consentNow"]
+    assert asked.endswith("+vol1")
+    r = c.get("/api/vol/mine", headers=tma(3))
+    assert r.status_code == 403 and r.json()["message"] == "consent"                         # held server-side until agreed
+    _agree(c, 3)
+    assert c.get("/api/vol/mine", headers=tma(3)).status_code == 200
+
+
+def test_unlinked_before_deletion_still_goes(zz):
+    c, cfg, con, org = zz
+    vol.apply(con, org, vol.plan(_book()), "list")
+    aru = con.execute("SELECT id FROM vol_people WHERE tg = 'aru_t'").fetchone()[0]
+    uid = _member(c, con, org, 3, "aru")
+    c.post(f"/api/vol/people/{aru}/link", headers=tma(P), json={"user": uid})
+    c.post(f"/api/vol/people/{aru}/link", headers=tma(P), json={"user": None})                # unlinked just before
+    delete_now(c, cfg, tma(3))
+    assert con.execute("SELECT COUNT(*) FROM vol_people WHERE id = ?", (aru,)).fetchone()[0] == 0
+    got = vol.apply(con, org, vol.plan(_book([["Eve Test", "1", "", "@eve_test"]])), "a later list")  # back on a newer list?
+    assert got["deleted"] == 1 and got["added"] == 1                                            # never: only Eve is new
+    assert con.execute("SELECT COUNT(*) FROM vol_people WHERE tg = 'aru_t'").fetchone()[0] == 0
+    assert "aru" not in str([tuple(r) for r in con.execute("SELECT * FROM vol_gone")])         # a keyed hash, not the key
+
+
+def test_access_ends_with_membership(zz):
+    c, _, con, org = zz
+    uid = _member(c, con, org, 5, "vice", "vice")
+    c.post("/api/vol/access", headers=tma(P), json={"user": uid, "on": True})
+    con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (org, uid))
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, uid))  # back by a link
+    assert con.execute("SELECT COUNT(*) FROM vol_access").fetchone()[0] == 0
+    assert c.get("/api/vol", headers=tma(5)).status_code == 403
+
+
+def test_namesake_with_another_telegram_stays_apart():
+    book = xlsx.write({MEM: [[FIO_LAT, TG], ["Aru Test", "@aru_t"]], HRS: [[FIO, TG2], ["Aru Test", "@aru_other"]]})
+    assert len(vol.plan(book)["people"]) == 2
+
+
+def test_merge_keeps_aliases(zz):
+    c, _, con, org = zz
+    vol.apply(con, org, vol.plan(_book(), "Total"), "list")
+    aru, nobody = (con.execute("SELECT id FROM vol_people WHERE tg = ?", (x,)).fetchone()[0] for x in ("aru_t", "nobody1"))
+    uid = _member(c, con, org, 3, "aru")
+    c.post(f"/api/vol/people/{aru}/link", headers=tma(P), json={"user": uid})
+    c.post(f"/api/vol/people/{nobody}/link", headers=tma(P), json={"user": uid})               # merged: one record
+    n = con.execute("SELECT COUNT(*) FROM vol_people").fetchone()[0]
+    got = vol.apply(con, org, vol.plan(_book([["Eve Test", "1", "", "@eve_test"]]), "Total"), "a later list")
+    assert (got["added"], got["there"]) == (1, 4) and con.execute("SELECT COUNT(*) FROM vol_people").fetchone()[0] == n + 1  # Aru's row isn't back
+    assert c.get("/api/vol/people/" + str(nobody), headers=tma(P)).json()["balance"] == 750 + 120    # her balances once each
+
+
+def test_overlapping_shifts_count_once(zz):
+    c, _, con, org = zz
+    vid = con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, 'V', 0)", (org,)).lastrowid
+    a, b = _meet(c, con, org, team=False, title="A"), _meet(c, con, org, team=False, title="B")
+    con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at) VALUES (?, ?, 0, 3600)", (vid, a))
+    con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at) VALUES (?, ?, 1800, 5400)", (vid, b))
+    con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at) VALUES (?, NULL, 600, 1200)", (vid,))
+    assert c.get(f"/api/vol/people/{vid}", headers=tma(P)).json()["minutes"] == 90
+
+
+def test_a_deletion_never_flips_a_held_teambuilding(zz):
+    c, cfg, con, org = zz
+    for i in range(3):
+        con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, ?, 0)", (org, f"P{i}"))
+    uid = _member(c, con, org, 3, "aru")
+    sid = _meet(c, con, org)                                                   # 5 expected: 3 needed
+    ids = [r[0] for r in con.execute("SELECT vol_id FROM vol_expected WHERE session_id = ? ORDER BY vol_id", (sid,))]
+    mine = con.execute("SELECT id FROM vol_people WHERE user_id = ?", (uid,)).fetchone()[0]
+    for x in [mine] + [i for i in ids if i != mine][:2]:
+        _present(con, sid, x)
+    _finish(con, sid, vol.GRACE + 60)
+    assert sum(_misses(c).values()) == 2
+    delete_now(c, cfg, tma(3))                                                 # one of the three who came
+    assert sum(_misses(c).values()) == 2
+
+
+def test_old_or_refused_scan_opens_no_shift(zz):
+    c, cfg, con, org = zz
+    uid = _member(c, con, org, 3, "vika")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    c.post(f"/api/screens/{sid}/start", headers=tma(P))
+    p = c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]
+    assert _scan(c, 3, p).status_code == 200
+    c.post(f"/api/screens/{sid}/out", headers=tma(P))
+    assert _scan(c, 3, c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]).status_code == 200
+    c.post(f"/api/screens/{sid}/in", headers=tma(P))
+    _, s, slot, sig = p.split("_")
+    old = f"ci_{s}_{int(slot) - 100}_{checkin._sig(cfg.token_key, f'ci.{s}.{int(slot) - 100}')}"
+    _scan(c, 3, old)                                                           # an old link from the chat
+    assert con.execute("SELECT COUNT(*) FROM vol_shifts h JOIN vol_people v ON v.id = h.vol_id WHERE v.user_id = ?", (uid,)).fetchone()[0] == 1
+
+
+def test_zip_bombs_refused():
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:                 # one part named by many sheets
+        ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+        z.writestr("xl/workbook.xml", f"<workbook {ns}><sheets>" + "".join(f'<sheet name="s{i}" r:id="r1"/>' for i in range(500)) + "</sheets></workbook>")
+        z.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="r1" Target="worksheets/sheet1.xml"/></Relationships>')
+        z.writestr("xl/worksheets/sheet1.xml", f"<worksheet {ns}><sheetData/></worksheet>")
+    with pytest.raises(xlsx.Bad):
+        xlsx.read(buf.getvalue())
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:                 # small packed, huge unpacked
+        z.writestr("xl/workbook.xml", "<workbook/>")
+        z.writestr("xl/big.xml", b"\0" * (xlsx.MAX_ALL + 1))
+    with pytest.raises(xlsx.Bad):
+        xlsx.read(buf.getvalue())

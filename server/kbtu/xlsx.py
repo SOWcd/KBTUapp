@@ -10,6 +10,9 @@ import xml.etree.ElementTree as ET
 
 MAX_FILE = 5 << 20       # the file itself
 MAX_PART = 30 << 20      # one part of it unpacked
+MAX_ALL = 60 << 20       # all its parts unpacked together
+MAX_SHEETS = 20
+MAX_TEXT = 20_000_000    # characters of all cells together (one shared string named by many cells)
 MAX_ROWS = 3000          # rows per sheet
 MAX_COLS = 200
 MAX_CELL = 1000          # characters a cell keeps
@@ -50,18 +53,24 @@ def read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
     except zipfile.BadZipFile:
         raise Bad("not an xlsx") from None
     names = set(z.namelist())
+    if sum(i.file_size for i in z.infolist()) > MAX_ALL:
+        raise Bad("too big unpacked")
     if "xl/workbook.xml" not in names:
         raise Bad("not an xlsx")
     shared: list[str] = []
     if "xl/sharedStrings.xml" in names:
         shared = ["".join(t.text or "" for t in si.iter(f"{{{_NS['m']}}}t")) for si in _xml(z, "xl/sharedStrings.xml").findall("m:si", _NS)]
     rels = {r.get("Id"): r.get("Target") for r in _xml(z, "xl/_rels/workbook.xml.rels").findall("p:Relationship", _NS)}
-    out, formulas = {}, 0
-    for sh in _xml(z, "xl/workbook.xml").find("m:sheets", _NS):
+    out, formulas, seen, chars = {}, 0, set(), 0
+    sheets = list(_xml(z, "xl/workbook.xml").find("m:sheets", _NS))
+    if len(sheets) > MAX_SHEETS:
+        raise Bad(f"more than {MAX_SHEETS} sheets")
+    for sh in sheets:
         target = rels.get(sh.get(f"{{{_NS['r']}}}id"), "")
         path = target.lstrip("/") if target.startswith("/") else "xl/" + target
-        if path not in names:
-            continue
+        if path not in names or path in seen:
+            continue  # a part named twice is read once: no amplifying one part by many sheets
+        seen.add(path)
         grid: list[list[str]] = []
         for row in _xml(z, path).iter(f"{{{_NS['m']}}}row"):
             if len(grid) >= MAX_ROWS:
@@ -86,6 +95,9 @@ def read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
                     text = v.text
                 cells += [""] * (i + 1 - len(cells))
                 cells[i] = text.strip()[:MAX_CELL]
+                chars += len(cells[i])
+                if chars > MAX_TEXT:
+                    raise Bad("too much text")
             r = int(row.get("r") or len(grid) + 1) - 1
             if r >= MAX_ROWS:
                 raise Bad(f"{sh.get('name')}: more than {MAX_ROWS} rows")

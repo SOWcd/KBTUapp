@@ -10,3 +10,5 @@ export const CONSENT_TGC = '+tgc1';
 export const CONSENT_FCH = '+fch4'; // fch3 until Nov 4 (the check's explanation, appeals, reply limits), fch2 until Nov 3 (the anonymous author's replies), fch1 until Nov 2 (the feed's commenters' faces and reactions)
 // with any of those on the server adds this last: students' texts to more AI providers (the policy's section 5)
 export const CONSENT_AI = '+ai1';
+// with VOLUNTEERS on, after all of that, only for the people a club's volunteers ledger concerns (server logic/vol.py concerned)
+export const CONSENT_VOL = '+vol1';

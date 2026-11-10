@@ -12,17 +12,18 @@ shown raw, nothing is computed from them until the club explains them. Nothing h
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 
 from ..db import tx
 from .core import PERSON_COLS, ApiError, Viewer, log_action, now, one, person_ref, rows, _qs
 
-# ponytail: v1 shortcuts, each with its upgrade: overlapping shifts aren't refused (check on add/edit if hand edits pile up);
-# a teambuilding's "held" is computed live, so a deleted account's mark can un-hold it later (freeze it once GRACE passes);
-# grants survive a new President (have her re-confirm them); a scan that waits for a sign-in (checkin.became_student)
-# opens no shift (hook it there); a record deleted with its account comes back if a later, different file lists it
-# (keep a keyed hash of deleted keys); only the club's own sessions count, not other clubs' events it helps at (the request flow).
+# ponytail: v1 shortcuts, each with its upgrade: grants survive a new President (have her re-confirm them); a scan that
+# waits for a sign-in (checkin.became_student) opens no shift (hook it there); only the club's own sessions count, not
+# other clubs' events it helps at (the request flow); a teambuilding's validity is frozen only when an account is deleted
+# (freeze_held), live until then so the President's corrections still count.
+KEY = b""                # keys the hashes of deleted people's import keys (app.create, admin: from TOKEN_KEY)
 ORG = ""                 # the club's slug (config VOLUNTEERS, set by app.create); empty: all of this is off
 GRACE = 30 * 60          # as checkin.GRACE: a late sign-in may still complete a scan this long after Finish
 REASON_MAX = 200
@@ -80,6 +81,11 @@ def _edit(con, v: Viewer, vid: int, what: str, ref: int | None, old, new, reason
 
 # ------------------------------------------------------------ the roster and its sessions
 
+def _tie(con, vid: int, uid: int) -> None:
+    """Every account a record was ever linked to: deleting that account deletes the record, unlinked since or not."""
+    con.execute("INSERT OR IGNORE INTO vol_ties (vol_id, user_id) VALUES (?, ?)", (vid, uid))
+
+
 def _record(con, org: int, uid: int) -> int | None:
     """My record in the club; a member without one gets an empty one (people who joined in the app after the import)."""
     r = one(con, "SELECT id FROM vol_people WHERE org_id = ? AND user_id = ?", org, uid)
@@ -87,7 +93,34 @@ def _record(con, org: int, uid: int) -> int | None:
         return r[0]
     if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", org, uid):
         return None
-    return con.execute("INSERT INTO vol_people (org_id, user_id, created_at) VALUES (?, ?, ?)", (org, uid, now())).lastrowid
+    vid = con.execute("INSERT INTO vol_people (org_id, user_id, created_at) VALUES (?, ?, ?)", (org, uid, now())).lastrowid
+    _tie(con, vid, uid)
+    return vid
+
+
+def concerned(con, v: Viewer) -> bool:
+    """The ledger holds this account's data or shows it others' (linked, granted, the President): its policy section
+    must be agreed to (app.py: consent +vol1). Nobody else is asked."""
+    org = org_id(con)
+    return bool(org and v.student and (_president(con, v, org) or one(con, """SELECT 1 FROM vol_people WHERE org_id = ? AND user_id = ?
+        UNION ALL SELECT 1 FROM vol_access WHERE org_id = ? AND user_id = ?""", org, v.id, org, v.id)))
+
+
+def _khash(org: int, key: str) -> str:
+    return hmac.new(KEY, f"vol-gone {org} {key}".encode(), hashlib.sha256).hexdigest()
+
+
+def gone(con, uid: int) -> None:
+    """An account being deleted (account.delete_me, before its rows go): every record ever tied to it goes with its
+    shifts and misses, its import keys kept only as keyed hashes so a later list can't bring the person back; the club's
+    teambuildings that already ran keep their validity (freeze_held)."""
+    vids = [r[0] for r in rows(con, "SELECT vol_id FROM vol_ties WHERE user_id = ? UNION SELECT id FROM vol_people WHERE user_id = ?", uid, uid)]
+    if not vids:
+        return
+    freeze_held(con)
+    for org, key in rows(con, f"SELECT org_id, ikey FROM vol_keys WHERE vol_id IN ({_qs(vids)})", *vids):
+        con.execute("INSERT OR IGNORE INTO vol_gone (org_id, khash) VALUES (?, ?)", (org, _khash(org, key)))
+    con.execute(f"DELETE FROM vol_people WHERE id IN ({_qs(vids)})", vids)
 
 
 def meet(con, sid: int, org: int | None) -> None:
@@ -123,17 +156,35 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
 # ------------------------------------------------------------ the numbers, each read once for all rows
 
 def _minutes(con, org: int, vid: int | None = None) -> dict[int, tuple[int, int]]:
-    """{volunteer: (minutes of closed shifts, open shifts)}; an open shift (never checked out) counts 0. A teambuilding's
-    shifts give no hours (owner, Nov 10: hours are for volunteering at events; a teambuilding only counts for misses)."""
-    return {r[0]: (r[1] // 60, r[2]) for r in rows(con, f"""SELECT h.vol_id, COALESCE(SUM(CASE WHEN h.out_at > h.in_at THEN h.out_at - h.in_at END), 0),
-        COUNT(*) FILTER (WHERE h.out_at IS NULL) FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
-        WHERE p.org_id = ? AND h.gone_at IS NULL AND NOT EXISTS (SELECT 1 FROM vol_meets m WHERE m.session_id = h.session_id AND m.team = 1) {'AND h.vol_id = ?' if vid else ''} GROUP BY h.vol_id""", org, *([vid] if vid else []))}
+    """{volunteer: (minutes of closed shifts, open shifts)}; an open shift (never checked out) counts 0, and time in two
+    shifts at once counts once (the union). A teambuilding's shifts give no hours (owner, Nov 10: hours are for
+    volunteering at events; a teambuilding only counts for misses)."""
+    out: dict[int, list] = {}
+    end: dict[int, int] = {}
+    for r in rows(con, f"""SELECT h.vol_id, h.in_at, h.out_at FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+            WHERE p.org_id = ? AND h.gone_at IS NULL AND NOT EXISTS (SELECT 1 FROM vol_meets m WHERE m.session_id = h.session_id AND m.team = 1)
+            {'AND h.vol_id = ?' if vid else ''} ORDER BY h.vol_id, h.in_at""", org, *([vid] if vid else [])):
+        x = out.setdefault(r[0], [0, 0])
+        if r[2] is None:
+            x[1] += 1
+        elif r[2] > r[1]:
+            a = max(r[1], end.get(r[0], 0))
+            x[0] += max(0, r[2] - a)
+            end[r[0]] = max(end.get(r[0], 0), r[2])
+    return {k: (s // 60, n) for k, (s, n) in out.items()}
 
 
 # a teambuilding that really ran: Finished, GRACE ago, at least max(3, ceil(expected / 4)) of its expected people marked
-_HELD = """m.team = 1 AND s.ended_at IS NOT NULL AND s.ended_at <= ? AND (SELECT COUNT(DISTINCT y.vol_id) FROM vol_expected y
-    JOIN vol_shifts h ON h.vol_id = y.vol_id AND h.session_id = y.session_id AND h.gone_at IS NULL WHERE y.session_id = m.session_id)
-    >= MAX(3, (m.expected_n + 3) / 4)"""
+# (frozen in vol_meets.held once an account is deleted: its marks going can't flip a past result, freeze_held)
+_LIVE = """(SELECT COUNT(DISTINCT y.vol_id) FROM vol_expected y JOIN vol_shifts h ON h.vol_id = y.vol_id AND h.session_id = y.session_id
+    AND h.gone_at IS NULL WHERE y.session_id = m.session_id) >= MAX(3, (m.expected_n + 3) / 4)"""
+_HELD = f"""m.team = 1 AND s.ended_at IS NOT NULL AND s.ended_at <= ? AND COALESCE(m.held, {_LIVE})"""
+
+
+def freeze_held(con) -> None:
+    """Every teambuilding past GRACE keeps its validity as it is now (counts only, no person)."""
+    con.execute(f"""UPDATE vol_meets AS m SET held = {_LIVE} WHERE held IS NULL AND team = 1 AND session_id IN
+        (SELECT id FROM qr_sessions WHERE ended_at IS NOT NULL AND ended_at <= ?)""", (now() - GRACE,))
 
 
 def _missed(con, org: int, vid: int | None = None) -> list:
@@ -343,12 +394,15 @@ def link(con, v: Viewer, vid: int, body: dict) -> dict:
             con.execute("UPDATE vol_shifts SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
             con.execute("UPDATE vol_misses SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
             con.execute("UPDATE vol_edits SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
+            con.execute("UPDATE vol_keys SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))  # its import keys stay as aliases
+            con.execute("UPDATE vol_ties SET vol_id = ? WHERE vol_id = ? AND user_id NOT IN (SELECT user_id FROM vol_ties WHERE vol_id = ?)", (vid, y["id"], vid))
             con.execute("INSERT OR IGNORE INTO vol_expected (session_id, vol_id) SELECT session_id, ? FROM vol_expected WHERE vol_id = ?", (vid, y["id"]))
             con.execute("UPDATE vol_people SET raw = ?, balance = balance + ?, name = CASE WHEN name = '' THEN ? ELSE name END, tg = COALESCE(tg, ?) WHERE id = ?",
                         (json.dumps(raw, ensure_ascii=False), y["balance"], y["name"], y["tg"], vid))
             con.execute("DELETE FROM vol_people WHERE id = ?", (y["id"],))
             _edit(con, v, vid, "merge", y["id"], None, {"balance": y["balance"]}, "")
         con.execute("UPDATE vol_people SET user_id = ? WHERE id = ?", (uid, vid))
+        _tie(con, vid, uid)
         log_action(con, v.id, "vol_link", f"user:{uid}", json.dumps({"vol": vid}))
     return person(con, v, vid)
 
@@ -454,7 +508,10 @@ def plan(data: bytes, balance: str | None = None) -> dict:
             keys = [k for k in (tg and f"tg:{tg}", _norm(nm) and f"n:{_norm(nm)}") if k]
             if not keys:
                 out["problems"].append(f"{name} row {r}: no name and no Telegram (kept, unkeyed)")
-            rec = next((recs[k] for k in keys if k in recs), None)
+            rec = recs.get(keys[0]) if tg and keys else None
+            if rec is None and keys:
+                byname = recs.get(keys[-1])
+                rec = byname if byname is not None and not (tg and byname["tg"] and byname["tg"] != tg) else None
             if rec and want in rec["sheets"]:
                 out["problems"].append(f"{name} row {r}: repeats row {rec['sheets'][want]} (kept apart)")
                 rec = None
@@ -498,16 +555,21 @@ def apply(con, org: int, p: dict, source: str) -> dict:
             return {"batch": old[0], "again": True, "added": 0, "there": len(p["people"])}
         bid = con.execute("INSERT INTO vol_batches (org_id, source, sha, counts, created_at) VALUES (?, ?, ?, ?, ?)",
                           (org, source, p["sha"], json.dumps(counts(p)), now())).lastrowid
-        added = there = 0
+        added = there = deleted = 0
         for r in p["people"]:
-            if r["key"] and one(con, "SELECT 1 FROM vol_people WHERE org_id = ? AND ikey = ?", org, r["key"]):
+            if r["key"] and one(con, "SELECT 1 FROM vol_keys WHERE org_id = ? AND ikey = ?", org, r["key"]):
                 there += 1
                 continue
-            con.execute("INSERT INTO vol_people (org_id, name, tg, ikey, raw, balance, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (org, r["name"], r["tg"], r["key"], json.dumps(r["raw"], ensure_ascii=False), r["balance"], bid, now()))
+            if r["key"] and one(con, "SELECT 1 FROM vol_gone WHERE org_id = ? AND khash = ?", org, _khash(org, r["key"])):
+                deleted += 1  # deleted on their request: never back from a list
+                continue
+            vid = con.execute("INSERT INTO vol_people (org_id, name, tg, raw, balance, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                              (org, r["name"], r["tg"], json.dumps(r["raw"], ensure_ascii=False), r["balance"], bid, now())).lastrowid
+            if r["key"]:
+                con.execute("INSERT INTO vol_keys (org_id, ikey, vol_id) VALUES (?, ?, ?)", (org, r["key"], vid))
             added += 1
-        log_action(con, None, "vol_import", f"org:{org}", json.dumps({"batch": bid, "added": added, "there": there}))
-    return {"batch": bid, "again": False, "added": added, "there": there}
+        log_action(con, None, "vol_import", f"org:{org}", json.dumps({"batch": bid, "added": added, "there": there, "deleted": deleted}))
+    return {"batch": bid, "again": False, "added": added, "there": there, "deleted": deleted}
 
 
 def undo(con, org: int, bid: int) -> dict:
@@ -515,7 +577,7 @@ def undo(con, org: int, bid: int) -> dict:
     with tx(con):
         if not one(con, "SELECT 1 FROM vol_batches WHERE id = ? AND org_id = ? AND undone_at IS NULL", bid, org):
             raise ApiError("not_found")
-        used = """user_id IS NOT NULL OR EXISTS (SELECT 1 FROM vol_shifts WHERE vol_id = p.id) OR EXISTS (SELECT 1 FROM vol_misses WHERE vol_id = p.id)
+        used = """user_id IS NOT NULL OR EXISTS (SELECT 1 FROM vol_ties WHERE vol_id = p.id) OR EXISTS (SELECT 1 FROM vol_shifts WHERE vol_id = p.id) OR EXISTS (SELECT 1 FROM vol_misses WHERE vol_id = p.id)
             OR EXISTS (SELECT 1 FROM vol_edits WHERE vol_id = p.id)"""
         kept = one(con, f"SELECT COUNT(*) FROM vol_people p WHERE batch_id = ? AND ({used})", bid)[0]
         gone = con.execute(f"DELETE FROM vol_people AS p WHERE batch_id = ? AND NOT ({used})", (bid,)).rowcount

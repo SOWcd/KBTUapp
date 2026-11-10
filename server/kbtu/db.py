@@ -1365,18 +1365,32 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER REFERENCES users(id),
       name TEXT NOT NULL DEFAULT '',
       tg TEXT,
-      ikey TEXT,
       raw TEXT NOT NULL DEFAULT '{}',
       balance INTEGER NOT NULL DEFAULT 0,
       batch_id INTEGER REFERENCES vol_batches(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL) STRICT;
     CREATE UNIQUE INDEX vol_people_user ON vol_people(org_id, user_id) WHERE user_id IS NOT NULL;
-    CREATE UNIQUE INDEX vol_people_key ON vol_people(org_id, ikey) WHERE ikey IS NOT NULL;
+    CREATE TABLE vol_keys (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ikey TEXT NOT NULL,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, ikey)) STRICT;
+    CREATE INDEX vol_keys_by_vol ON vol_keys(vol_id);
+    CREATE TABLE vol_ties (
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      PRIMARY KEY (vol_id, user_id)) STRICT, WITHOUT ROWID;
+    CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
+    CREATE TABLE vol_gone (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      khash TEXT NOT NULL,
+      PRIMARY KEY (org_id, khash)) STRICT, WITHOUT ROWID;
     CREATE TABLE vol_meets (
       session_id INTEGER PRIMARY KEY REFERENCES qr_sessions(id) ON DELETE CASCADE,
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       team INTEGER NOT NULL DEFAULT 0,
       expected_n INTEGER NOT NULL DEFAULT 0,
+      held INTEGER,
       created_at INTEGER NOT NULL) STRICT;
     CREATE TABLE vol_expected (
       session_id INTEGER NOT NULL REFERENCES vol_meets(session_id) ON DELETE CASCADE,
@@ -1418,7 +1432,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER NOT NULL REFERENCES users(id),
       granted_by INTEGER REFERENCES users(id),
       at INTEGER NOT NULL,
-      PRIMARY KEY (org_id, user_id)) STRICT;"""),
+      PRIMARY KEY (org_id, user_id)) STRICT;
+    CREATE TRIGGER vol_access_gone AFTER DELETE ON org_members BEGIN
+      DELETE FROM vol_access WHERE org_id = OLD.org_id AND user_id = OLD.user_id;
+    END;"""),
 ]
 
 
