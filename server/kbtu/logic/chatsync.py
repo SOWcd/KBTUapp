@@ -190,6 +190,7 @@ async def step(con, call, bot_id: int, n: int = STEP) -> bool:
             now_link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL AND sweep IS NOT NULL", chat)
             if not now_link or not seen or now_link["last_update"] != seen[0]:
                 return True  # paused or unlinked, or an update came while we asked: this one is asked again
+            con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (chat, u["id"]))  # a fresh look replaces any older one
             if _eligible(con, u["id"]) and (op := _wants(con, now_link, u["id"], inside)):
                 con.execute("INSERT OR REPLACE INTO chat_sync_todo (chat_id, user_id, op) VALUES (?, ?, ?)", (chat, u["id"], op))
             con.execute("UPDATE chat_sync SET sweep_pos = ? WHERE chat_id = ?", (u["id"], chat))
@@ -237,8 +238,9 @@ async def ask_step(con, call) -> bool:
             now_link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL", link[0])
             if not now_link or now_link["last_update"] != seen[0]:
                 return True
+            # a fresh look supersedes a sweep's older finding, even when it changes nothing
+            con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (link[0], uid))
             if _eligible(con, uid) and (op := _wants(con, now_link, uid, inside)):
-                con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (link[0], uid))
                 _do(con, now_link, uid, op)
     con.execute("DELETE FROM chat_sync_ask WHERE user_id = ?", (uid,))
     return True

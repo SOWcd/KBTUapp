@@ -195,7 +195,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
             (SELECT COUNT(*) FROM member_tags mt JOIN org_members m ON m.user_id = mt.user_id AND m.org_id = g.org_id WHERE mt.tag_id = g.id) AS n
             FROM org_tags g WHERE g.org_id = ? ORDER BY g.id""", oid)],
         "myDepts": depts_of(con, oid, v.id, own=True),  # the departments I manage as a Head
-        "inDept": bool(depts_of(con, oid, v.id)),  # in any department: a Head's meetings only for myDepts then (maybe none)
+        "inDept": depts_scope(con, oid, v.id) is not None,  # in any department: a Head's meetings only for myDepts then (maybe none)
     }
     if can(con, v, oid, "team"):
         link = _team_link(con, oid)
@@ -454,9 +454,14 @@ def may_dept(con, v: Viewer, oid: int, uid: int, d: int) -> bool:
 
 
 def depts_scope(con, oid: int, uid: int) -> list[int] | None:
-    """A Head's meeting scope (PLAN 35): None, in no department at all (the whole club, as before departments); else the
-    departments given them by hand, maybe none (one only the chat sync gave narrows the scope, never widens it)."""
-    return depts_of(con, oid, uid, own=True) if depts_of(con, oid, uid) else None
+    """A Head's meeting scope (PLAN 35): the departments given them by hand, maybe none, while they are in any department
+    or the chat sync took their last one (losing it never widens the scope). None, the whole club: in no department and
+    never taken out of one by the sync (none ever, or a Vice+ took the last one by hand)."""
+    if depts_of(con, oid, uid):
+        return depts_of(con, oid, uid, own=True)
+    last = one(con, """SELECT json_extract(data, '$.sync') AS s FROM audit_log WHERE target = ? AND action = 'member_dept'
+        AND json_extract(data, '$.org') = ? ORDER BY id DESC LIMIT 1""", f"user:{uid}", oid)
+    return [] if last and last["s"] is not None else None
 
 
 def set_dept(con, actor: int | None, oid: int, uid: int, tag: int, on: bool, sync: int | None = None) -> bool:

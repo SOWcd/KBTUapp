@@ -391,3 +391,41 @@ def test_joined_before_consent_caught_up(club):
     assert ("chat_sync_ask", "user_id") in logic._DEL_GONE
     assert c.post("/api/me/consent", headers=tma(2), json={"version": logic.CONSENT}).status_code == 200  # the app's route queues it
     assert con.execute("SELECT 1 FROM chat_sync_ask WHERE user_id = ?", (uid(con, 2),)).fetchone()
+
+
+# ---------------------------------------------------------------- Codex's re-check
+
+def test_sync_taking_the_last_department_keeps_the_scope_narrow(club):
+    """A Head of Media leaves the Media chat: the sync takes their last department, and they still call no meeting for
+    the whole club; a Head whose department a Vice+ took by hand is club-wide again, as one never in any."""
+    c, cfg, con, org = club
+    media = tag(con, "Media")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', 0)", (org, uid(con, 1)))
+    assert c.patch(f"/api/orgs/{org}/members/{uid(con, 1)}", headers=tma(V), json={"addDept": media}).status_code == 200
+    feed(con, upd(DEPT, 1, "member", "left"))
+    assert logic.depts_of(con, org, uid(con, 1)) == []
+    meet = {"title": "All", "place": "305", "startsAt": logic.core.now() + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": None,
+            "visibility": "members", "meeting": True}
+    assert c.post(f"/api/orgs/{org}/events", headers=tma(1), json=meet).json().get("message") == "dept"
+    assert c.get(f"/api/orgs/{org}/team", headers=tma(1)).json()["inDept"] is True
+    assert c.patch(f"/api/orgs/{org}/members/{uid(con, 1)}", headers=tma(V), json={"addDept": media}).status_code == 200
+    assert c.patch(f"/api/orgs/{org}/members/{uid(con, 1)}", headers=tma(V), json={"dropDept": media}).status_code == 200
+    assert c.post(f"/api/orgs/{org}/events", headers=tma(1), json=meet).status_code == 200
+
+
+def test_fresh_look_supersedes_a_staged_finding(club):
+    """A sweep staged "drop" for a Head; a fresh look (the catch-up) finds them in the chat and changes nothing: the old
+    finding goes with it, so the sweep's end keeps them. The same for a staged "add" a fresh look doesn't confirm."""
+    c, cfg, con, org = club
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', 0)", (org, uid(con, 1)))
+    chatsync.start(con, MAIN, True)
+    asyncio.run(chatsync.step(con, tg_api({P: "creator", V: "member", 2: "member"}), BOT_ID, 4))  # P, V, 1 (drop), 2 (add)
+    assert {r[0] for r in con.execute("SELECT op FROM chat_sync_todo")} == {"drop", "add"}
+    with db.tx(con):
+        chatsync.check_later(con, uid(con, 1))
+        chatsync.check_later(con, uid(con, 2))
+    while asyncio.run(chatsync.ask_step(con, tg_api({P: "creator", V: "member", 1: "member"}))):
+        pass
+    assert not con.execute("SELECT 1 FROM chat_sync_todo").fetchone()
+    sweep(con, tg_api({P: "creator", V: "member", 1: "member"}))
+    assert role(con, org, 1) == "head" and role(con, org, 2) is None
