@@ -14,6 +14,18 @@ import { capped, measure } from '../lib/frames';
 export const LOW = /;\s*LOW\)/.test(navigator.userAgent);
 
 const lit = new Set<HTMLElement>();
+// only the lit elements on screen are written each frame: a hidden tab's badge or a card scrolled away was restyled with
+// every move of the phone, its animated layers sampled on the main thread with it (perf, Nov 10). One coming into view
+// takes the light where it is.
+const seen = new Set<HTMLElement>();
+const shine = (n: HTMLElement) => { n.style.setProperty('--gx', light.x.toFixed(2)); n.style.setProperty('--gy', light.y.toFixed(2)); };
+const io = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((es) => {
+  for (const e of es) {
+    const n = e.target as HTMLElement;
+    if (!e.isIntersecting) seen.delete(n);
+    else if (lit.has(n)) { seen.add(n); if (light.shown) shine(n); }
+  }
+});
 const light = { x: 0, y: 0, tx: 0, ty: 0, n: null as number[] | null, at: 0, raf: 0, started: false, shown: '' };
 const TAU = 3000; // ms: how fast neutral follows a new pose
 
@@ -27,7 +39,7 @@ function paintLight() {
   const x = light.x.toFixed(2), y = light.y.toFixed(2);
   if (`${x},${y}` !== light.shown) {
     light.shown = `${x},${y}`;
-    for (const n of lit) { n.style.setProperty('--gx', x); n.style.setProperty('--gy', y); }
+    for (const n of io ? seen : lit) { n.style.setProperty('--gx', x); n.style.setProperty('--gy', y); }
   }
   if (Math.abs(light.tx - light.x) + Math.abs(light.ty - light.y) > 0.01) light.raf = requestAnimationFrame(paintLight);
 }
@@ -99,11 +111,12 @@ export function bloomAt(node: HTMLElement, e: PointerEvent) {
 /** Svelte action for every glass element: tilt light, plus the touch bloom when `bloom` is set. */
 export function glass(node: HTMLElement, opts: { bloom?: boolean } = {}) {
   lit.add(node);
-  if (light.shown) { node.style.setProperty('--gx', light.x.toFixed(2)); node.style.setProperty('--gy', light.y.toFixed(2)); }
+  io?.observe(node);
+  if (light.shown) shine(node);
   startTilt();
   const down = (e: PointerEvent) => bloomAt(node, e);
   if (opts.bloom) node.addEventListener('pointerdown', down, { passive: true });
-  return { destroy() { lit.delete(node); node.removeEventListener('pointerdown', down); } };
+  return { destroy() { lit.delete(node); seen.delete(node); io?.unobserve(node); node.removeEventListener('pointerdown', down); } };
 }
 
 /** Edge displacement map for a pill: pixels near the rim are pushed along the edge normal. */

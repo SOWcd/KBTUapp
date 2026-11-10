@@ -322,6 +322,8 @@
   /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
      parallax) through its parent's hidden backface, mirrored over the other side (JCC, Nov 3) */
   .card.sb .badge, .card:not(.sb) .back { visibility: hidden; }
+  /* and its loops wait: the back's SITE sweep ran unseen behind the face all the time (perf, Nov 10) */
+  .card.sb .badge :global(*), .card:not(.sb) .back :global(*) { animation-play-state: paused; }
   .back { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: 22px; transform: rotateY(180deg);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75); }
   .bshade { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; border-radius: inherit; background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }

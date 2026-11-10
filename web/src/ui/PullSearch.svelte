@@ -16,7 +16,9 @@
     const page = field.closest('.scroll');
     if (!page) return;
     let touching = false, timer: ReturnType<typeof setTimeout> | undefined;
-    page.scrollTop = PULL;
+    // set in the next frame's own layout, not here mid-mount: written now it laid out the half-built tab once more
+    // inside the start's first task (perf, Nov 10: ~85 ms at 4x CPU on the Afisha); the frame isn't painted before it
+    const raf = requestAnimationFrame(() => { if (!page.scrollTop) page.scrollTop = PULL; }); // unless scrolled since
     // a tab built while away has no layout yet: shut it the first time it is on screen
     const io = new IntersectionObserver(([e]) => { if (!e.isIntersecting) return; io.disconnect(); if (!value) page.scrollTop = PULL; });
     io.observe(field);
@@ -32,7 +34,7 @@
     page.addEventListener('touchstart', down, { passive: true });
     page.addEventListener('touchend', up, { passive: true });
     return () => {
-      io.disconnect(); clearTimeout(timer);
+      cancelAnimationFrame(raf); io.disconnect(); clearTimeout(timer);
       page.removeEventListener('scroll', onscroll);
       page.removeEventListener('touchstart', down);
       page.removeEventListener('touchend', up);
