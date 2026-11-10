@@ -12,7 +12,6 @@ import mkCrown from '../assets/lanyards/mk-crown.webp';
 import crystal from '../assets/lanyards/crystal.webp';
 import speRoundel from '../assets/lanyards/spe-roundel.webp';
 import aicheFlask from '../assets/lanyards/aiche-flask.webp';
-import bclColor from '../assets/lanyards/bcl-color.webp';
 import arthouse from '../assets/lanyards/arthouse.webp';
 import qairymColor from '../assets/lanyards/qairym-people-color.webp';
 import shadeBrush from '../assets/lanyards/shade-brush-red.webp'; // their red brush on their cream (round 5: the official logo)
@@ -262,8 +261,6 @@ export const CLUB_LOOKS = {
     straps: ['#0B2A55', '#2D5C94', '#D4E3F2'], holo: ['#D4E3F2', '#9AB7D6', '#0B2A55'], role: '#B4CDE6', qr: ['#0D2D5A', '#1A467E'], plate: ['#FFFFFF', '#FFFFFF'], mark: speRoundel },
   aichekbtu: { strap: 'AICHE', strip: 'AICHE', bg: ['#1767B2', '#0A4A85', '#052A52'],
     straps: ['#0A4A85', '#2A7BC8', '#FFFFFF'], holo: ['#FFFFFF', '#DCE9F5', '#0A4A85'], role: '#C2E0FF', qr: ['#0A4A85', '#062F5A'], plate: ['#2A7BC8', '#0A4A85'], mark: aicheFlask },
-  bigcitylightskbtu: { strap: 'BIG CITY\nLIGHTS', strip: 'BIG CITY LIGHTS', bg: ['#260A46', '#1A0A33', '#0B0418'],
-    straps: ['#8C33C9', '#E8457A', '#FFFFFF'], holo: ['#FFFFFF', '#F1E4FF', '#6A22B8'], role: '#FFB8E0', qr: ['#9A1F52', '#4E1CA0'], plate: ['#FFFFFF', '#FFFFFF'], mark: bclColor },
   arthousekbtu: { strap: 'ARTHOUSE', strip: 'ARTHOUSE', bg: ['#3A0A16', '#12030A', '#120408'],
     straps: ['#4A1424', '#8A2E45', '#F6E3C8'], holo: ['#F6E3C8', '#D9B27C', '#3A0F1E'], role: '#FFD29A', qr: ['#6B1A2E', '#3A0F1E'], plate: ['#8A2E45', '#3A0F1E'], mark: arthouse },
   qairymdylyqkbtu: { strap: 'QAIRYMDYLYQ', strip: 'QAIRYMDYLYQ', bg: ['#46103A', '#4A0F2C', '#2A0818'],

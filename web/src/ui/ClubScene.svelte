@@ -66,10 +66,6 @@
          its liquid glowing, bubbles rising in it, the light through it thrown on the card as caustics -->
     <i class="tide"></i><img class="l z far" src={L('ai-mol')} alt="" /><i class="pane"></i>
     <span class="flw z"><img class="l" src={L('ai-flask')} alt="" /><span class="bub"><i></i><i></i><i></i></span></span>
-  {:else if look === 'bigcitylightskbtu'}
-    <!-- the city at night: neon in the haze, a skyline, its windows, some lighting up; the lights out of focus in front -->
-    <i class="neon"></i><img class="l" src={L('bcl-city')} alt="" /><img class="l win" src={L('bcl-win')} alt="" />
-    <img class="l z near" src={L('bcl-bokeh')} alt="" />
   {:else if look === 'arthousekbtu'}
     <!-- the card (round 6, owner: round 5 was childish): an empty stage before the show, the house curtain's folds at the
          side, a grand piano lid up in one follow-spot, its light pooled on the boards. The badge's band: the stage with
@@ -258,13 +254,6 @@
   .bub i:nth-child(3) { left: 0; width: 2.5px; height: 2.5px; animation-delay: 4s; }
   @keyframes aibub { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 80% { opacity: 0.9; } 100% { opacity: 0; transform: translate(2px, -28px); } }
 
-  /* ---- Big City Lights: night, neon in the haze ---- */
-  .bigcitylightskbtu { background: linear-gradient(180deg, rgb(14, 6, 34), rgb(38, 10, 70) 55%, rgb(92, 20, 110) 80%, rgb(170, 40, 120)); }
-  .neon { inset: 0; background: radial-gradient(60% 45% at 78% 100%, rgba(255, 70, 160, 0.55), transparent 70%), radial-gradient(50% 40% at 30% 100%, rgba(150, 70, 255, 0.45), transparent 70%); }
-  .sc:not(.wide) .neon { background: radial-gradient(70% 55% at 50% 100%, rgba(255, 70, 160, 0.55), transparent 70%), radial-gradient(50% 40% at 15% 100%, rgba(150, 70, 255, 0.45), transparent 70%); }
-  .win { opacity: 0; animation: bcwin 11s ease-in-out infinite alternate; } /* windows lighting up, slowly, then out */
-  @keyframes bcwin { 0%, 30% { opacity: 0; } 70%, 100% { opacity: 1; } }
-
   /* ---- ArtHouse: a stage ---- */
   .arthousekbtu { background: linear-gradient(180deg, rgb(58, 10, 22), rgb(34, 6, 14) 60%, rgb(18, 3, 8)); }
   /* the velvet's folds, deepest at the edges */
@@ -381,9 +370,8 @@
   .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals, .fall, .ash { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }
-  :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, :global(html.lowfx) .win,
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash { animation: none; } .spark { display: none; } }
+  :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, 
   :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash { animation: none; }
-  :global(html.lowfx) .win { opacity: 0.6; }
   :global(html.lowfx) .spark { display: none; }
 </style>

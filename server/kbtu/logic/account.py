@@ -484,7 +484,7 @@ FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", 
 # the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
 # not (owner, Nov 2). The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
-            "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
+            "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
             "choice", "teentertainmentkbtu", "klubanimeshnikov",
             "kbtumag",  # kbtu.mag: matched by its name (SKINNED)
             "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu")  # round 10

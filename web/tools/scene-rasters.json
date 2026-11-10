@@ -3,9 +3,6 @@
  "scenes/ah-stage-card.svg": "2408a21c4b98",
  "scenes/ai-flask-card.svg": "b9dc888d0d18",
  "scenes/ai-mol-card.svg": "f48467feda7f",
- "scenes/bcl-bokeh-card.svg": "1cbb46a8e7e2",
- "scenes/bcl-city-card.svg": "8045edb08ff6",
- "scenes/bcl-win-card.svg": "99eb4ab0b9a4",
  "scenes/ch-crest-card.svg": "4d85c7a235e9",
  "scenes/ch-shield-card.svg": "1d3fca8ddf5d",
  "scenes/cr-facets-card.svg": "f9d350ef24f5",
@@ -86,5 +83,5 @@
  "sower/near-card.svg": "dc3b0a142eed",
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
- "minis": "24f112986fb9"
+ "minis": "a46388b51221"
 }
