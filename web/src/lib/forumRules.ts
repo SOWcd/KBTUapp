@@ -28,14 +28,29 @@ const longNumber = (s: string) => [...s.matchAll(DIGITS)].some((m) => {
 // the line breaks Python's splitlines() knows (the server's _clean joins the lines on them)
 const LINES = /\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/;
 
-/** The first rule the words break, or null. */
-export function broken(raw: string): Rule | null {
+/** Every rule the words break, in order (the composer says them all at once). */
+export function brokenAll(raw: string): Rule[] {
   const s = raw.replace(/‍/g, '').replace(HIDDEN, '').trim();
   const seen = s.normalize('NFKC').replace(/[。｡．]/g, '.').replace(BRACKET_DOT, '.');
-  if (LINK.test(seen) || SPACED.test(seen)) return 'link';
-  if (MENTION.test(seen)) return 'mention';
-  if (PHONE.test(seen) || longNumber(seen)) return 'phone';
+  const out: Rule[] = [];
+  if (LINK.test(seen) || SPACED.test(seen)) out.push('link');
+  if (MENTION.test(seen)) out.push('mention');
+  if (PHONE.test(seen) || longNumber(seen)) out.push('phone');
   const lines = s.split(LINES).map((l) => l.trimEnd());
   const last = lines.length > 1 ? lines[lines.length - 1].normalize('NFKC').trimStart() : '';
-  return last && SIGNED.test(last) ? 'signature' : null;
+  if (last && SIGNED.test(last)) out.push('signature');
+  return out;
+}
+
+/** The first rule the words break, or null. */
+export const broken = (raw: string): Rule | null => brokenAll(raw)[0] ?? null;
+
+// the server's _meaningful: words as letters only, each run of one letter as one; a word is two letters or more with a
+// vowel; a post needs two words, or one and ten letters in all ("who is here?" passes, "hello" is a comment)
+const VOWELS = new Set('aeiouy\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f\u04d9\u04e9\u04af\u04b1\u0456');
+export function meaningful(s: string): boolean {
+  const words = (s.toLowerCase().match(/[\p{L}\p{Nl}\p{No}]+/gu) ?? []).map((w) => [...w.replace(/(.)\1+/gu, '$1')]);
+  const letters = words.reduce((n, w) => n + w.length, 0);
+  const real = words.filter((w) => w.length >= 2 && w.some((c) => VOWELS.has(c))).length;
+  return real >= 2 || (real >= 1 && letters >= 10);
 }

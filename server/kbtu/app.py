@@ -2053,7 +2053,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/forum-posts/revealed")
     def fchan_revealed(con: Con, v: FChan):
-        return {"revealed": F.revealed(con)}
+        return {"revealed": F.revealed(con), "next": F.next_post(con, v.id)}  # next: when I may post again (the pace), null: now
 
     @app.get("/api/forum-posts/feed")
     def fchan_feed(con: Con, v: FChan, before: int | None = None):

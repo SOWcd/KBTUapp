@@ -17,12 +17,13 @@
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Flag from '@lucide/svelte/icons/flag';
+  import MessageCircleReply from '@lucide/svelte/icons/message-circle-reply';
   import { menu } from '../../ui/menu';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Avatar from '../../ui/Avatar.svelte';
@@ -56,7 +57,8 @@
   const SEEN = 'kb-fc-seen';
   function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
   let since = $state(0);
-  const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && !p.mine && !!p.msg;
+  // my own anonymous post gets it as anyone's: leaving it out would tell whose it is (Codex review, Nov 10)
+  const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && (!p.mine || p.anon) && !!p.msg;
 
   // what's on screen: the posts already shown (known), the older pages under them, mine; a refresh's others wait for
   // the pill (or come in by themselves while I'm at the top). known empty: the first look, all of it
@@ -128,10 +130,17 @@
   // a reaction as plain text (the heart's label): a custom emoji (only its id comes) and a paid star as their nearest
   const glyph = (e: string) => e.startsWith('custom:') ? '✨' : e === 'paid' ? '⭐' : e;
 
-  // my own post's mark beside the time: on its way (the AI looking), under review, removed, else simply "mine"
+  // my own post's mark beside the time while only I see it: on its way (the AI looking), under review, removed, being
+  // published (out, the channel's message not back yet). Once in the channel: none, a card like anyone's (Codex review,
+  // Nov 10: "Mine" by a mask outs its author to whoever looks at the screen)
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'quiet', key: 'fc.checking' } as const
     : p.status === 'held' ? (p.human ? { tone: 'warning', key: 'fc.human' } as const : { tone: 'quiet', key: 'fc.checking' } as const)
-    : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : { tone: 'accent', key: 'fc.mine' } as const;
+    : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : !p.msg ? { tone: 'quiet', key: 'fc.publishing' } as const : null;
+  // my held post's why, to me alone: I sent it to a moderator, it has photos and a mask, or the AI's words (kept by the
+  // server: a reload keeps them; channel.why: this session's, as soon as they come)
+  const heldWhy = (p: ChannelFeedPost) => p.review?.kind === 'appeal' ? { reason: t('fc.appealedWhy'), fix: null }
+    : p.review?.kind === 'photo' ? { reason: t('fc.photoWhy'), fix: null }
+    : { reason: (channel.why[p.id] ?? p.review?.explain)?.reason ?? t('fc.humanWhy'), fix: (channel.why[p.id] ?? p.review?.explain)?.fix ?? null };
 
   // a long post starts at four lines with a fade and a quiet "More" that opens it in place (its height glides to the
   // full one); a short one shows whole. long/full: measured while clamped, per post
@@ -165,9 +174,13 @@
     try { await api.deleteChannelPost(p.id); } catch (e) { channel.feed = before; fail(e); }
   }
 
-  // someone else's post: ⋯ → Report (the app's report sheet; into the admin's queue, whose it is stays hidden)
+  // every post in the channel: ⋯, the same on every card. Someone else's: Report (into the admin's queue, whose it is
+  // stays hidden); mine: answer as the mask (an anonymous one) and Delete, inside it, so nothing on the card says whose
   function more(e: MouseEvent, p: ChannelFeedPost) {
-    menu(e.currentTarget as Element, [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
+    menu(e.currentTarget as Element, p.mine ? [
+      ...(p.anon ? [{ label: t('fcr.entry'), icon: MessageCircleReply, onselect: () => sheets.channelReply({ id: p.id, body: p.body }) }] : []),
+      { label: t('fc.delete'), icon: Trash2, destructive: true, onselect: () => drop(p) },
+    ] : [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
   }
 
   // the comments, in Telegram: its button alone opens them
@@ -192,7 +205,8 @@
       {#each matched as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
-        {@const why = p.mine && p.human ? channel.why[p.id] : undefined}
+        {@const why = p.mine && p.human ? heldWhy(p) : undefined}
+        {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
         <!-- one element per post (flip needs it) -->
         <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
         {#if !searching && cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
@@ -214,23 +228,23 @@
                 {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
                 {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}</span>
             </span>
-            {#if p.mine && p.id > 0}<span class="end"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
-            {:else if live && !p.mine}<span class="end"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
+            {#if live}<span class="end"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>
+            {:else if p.mine && p.id > 0}<span class="end"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>{/if}
           </div>
-          <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} quote={why?.quote} /></p>
+          <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} {quote} /></p>
           <!-- the photos (up to 4, the channel's album): a tap shows them whole -->
-          {#if p.photos?.length}<div class="pics n{p.photos.length}">{#each p.photos as ph, i (i)}<button class="ph" aria-label={t('fc.photo')}
+          {#if p.photos?.length}<div class="pics n{p.photos.length}" style:--ar={p.photos.length === 1 ? Math.min(2, Math.max(0.75, p.photos[0].w / p.photos[0].h)) : null}>{#each p.photos as ph, i (i)}<button class="ph" aria-label={t('fc.photo')}
             onclick={() => sheets.photos(p.photos.map((x, j) => ({ ...x, id: j + 1, by: null, mine: p.mine, canDelete: false })), i)}><img src={ph.thumb} alt="" loading="lazy" decoding="async" /></button>{/each}</div>{/if}
           {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
-          <!-- my post the AI passed to a moderator: why, in its words once they come (to me alone), else the plain line -->
-          {#if p.mine && p.human}
+          <!-- my post waiting for a moderator: why, one quiet line (to me alone), the AI's tip under it -->
+          {#if why}
             <div class="held">
-              <p>{why?.reason ?? t('fc.humanWhy')}</p>
-              {#if why?.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{why.fix}</span></p>{/if}
+              <p>{why.reason}</p>
+              {#if why.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{why.fix}</span></p>{/if}
             </div>
           {/if}
           <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
-          {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
+          {#if p.id < 0 || (p.mine && p.status === 'live' && !p.msg)}<div class="chk" role="progressbar" aria-label={t(p.id < 0 ? 'fc.checking' : 'fc.publishing')}><span></span></div>{/if}
           {#if live}
             <div class="acts">
               <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
@@ -240,15 +254,9 @@
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="talk"><Button kind="tinted" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
-                {#snippet icon()}<TelegramMark size={16} />{/snippet}{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}
+                {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
               </Button></span>
             </div>
-            <!-- my anonymous post: answering in its comments as the mask, through the bot (ChannelReply): a row of the card -->
-            {#if p.mine && p.anon}<button class="areply" onclick={() => { haptic.tap(); sheets.channelReply({ id: p.id, body: p.body }); }}>
-              <span class="ai" aria-hidden="true"><VenetianMask size={17} strokeWidth={2} /></span>
-              <span class="al">{t('fcr.entry')}</span>
-              <ChevronRight size={18} strokeWidth={2} aria-hidden="true" />
-            </button>{/if}
           {/if}
         </article>
         </div>
@@ -288,7 +296,6 @@
   .post { position: relative; display: flex; flex-direction: column; padding: var(--s-3) var(--s-4) var(--s-4);
     animation: rise 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */ }
   .post:has(.acts) { padding-bottom: var(--s-2); }
-  .post:has(.areply) { padding-bottom: 0; }
   /* the line between the new and the seen: a word on a hairline in the accent, between the cards */
   .nw { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-1) var(--s-2) var(--s-3);
     font: 600 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); letter-spacing: 0.02em; }
@@ -329,7 +336,7 @@
   .pics.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
   .pics.n3 .ph:first-child { grid-row: span 2; }
   .ph { display: block; aspect-ratio: 4 / 3; background: var(--surface-2); overflow: hidden; }
-  .pics.n1 .ph { aspect-ratio: 16 / 10; }
+  .pics.n1 .ph { aspect-ratio: var(--ar, 4 / 3); } /* one: whole, its own shape (between 3:4 and 2:1) */
   .pics.n3 .ph { aspect-ratio: auto; min-height: 90px; }
   .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .tx { margin-top: var(--s-2); font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
@@ -337,9 +344,8 @@
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
   .tx.open { max-height: var(--h); }
   .more { display: flex; margin: 0 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-2); }
-  /* my held post's why: a quiet tinted block under the words */
-  .held { margin-top: var(--s-3); padding: var(--s-3); border-radius: var(--r-m); background: var(--warning-soft);
-    font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
+  /* my held post's why: a quiet line under the words, the mark's tone */
+  .held { margin-top: var(--s-2); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
   .held .fix { display: flex; gap: 6px; margin-top: var(--s-2); color: var(--text); }
   .held .fix :global(svg) { flex: none; margin-top: 1px; color: var(--warning-text); }
 
@@ -358,18 +364,9 @@
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
   .talk { flex: none; display: flex; margin-left: auto; }
   .faces + .talk { margin-left: 0; }
+  .go { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; } /* ↗: it leaves the app, for Telegram */
   .n { margin-left: 2px; opacity: 0.7; font-variant-numeric: tabular-nums; }
-  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } } /* 320: the top reaction, the button */
-
-  /* my anonymous post's way into its comments: the card's last row, under a hairline (a Settings row's grammar) */
-  .areply { position: relative; display: flex; align-items: center; gap: var(--s-3); width: calc(100% + 2 * var(--s-4)); min-height: 48px;
-    margin: var(--s-1) calc(-1 * var(--s-4)) 0; padding: 0 var(--s-3) 0 var(--s-4); border-radius: 0 0 var(--r-l) var(--r-l); text-align: left;
-    color: var(--accent-text); font: 500 var(--fs-body)/1.2 var(--font-text); transition: background var(--t-base) var(--ease); }
-  .areply::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
-  .areply:active { background: var(--fill); transition-duration: 60ms; }
-  .ai { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); }
-  .al { flex: 1; min-width: 0; }
-  .areply > :global(svg:last-child) { flex: none; color: var(--text-3); }
+  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } .faces + .talk { margin-left: auto; } } /* 320: the top reaction, the button on the right */
 
   .earlier { display: flex; justify-content: center; padding: var(--s-3) 0; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }

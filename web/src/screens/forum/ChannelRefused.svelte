@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A post the AI refused (no message in it, an ad): the verdict, at once: "Not published", the words, Edit (back into
+  // A post the AI refused (no message in it, an ad): the verdict, at once ("Not published" once: the capsule's title), the words, Edit (back into
   // the writing window, ChannelCompose) and Send to a moderator (fchannel.appeal, three a day) usable right away; the
   // AI's own reason, the piece it stopped at marked and what to change come in when they're ready (/why, phase 2:
   // nobody waits on it).
@@ -17,10 +17,10 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Marked from './Marked.svelte';
   import Self from './ChannelRefused.svelte';
-  import { compose, land, signOf, stand, unstand } from './ChannelCompose.svelte';
+  import { compose, land, signOf, stand, unstand, type Pic } from './ChannelCompose.svelte';
 
   type Refused = { post: Id; kind: 'noise' | 'ad'; appeal: boolean };
-  let { overlay, body, anon, refused }: { overlay: Overlay; body: string; anon: boolean; refused: Refused } = $props();
+  let { overlay, body, anon, photos = [], refused }: { overlay: Overlay; body: string; anon: boolean; photos?: Pic[]; refused: Refused } = $props();
   let ex = $state<ForumWhy | null>(null), asking = $state(true);
 
   // the verdict's reason in the AI's words, asked once the verdict is on screen; none: the template stays
@@ -29,26 +29,26 @@
   // the AI was wrong: a human decides (held, in the moderators' queue); the post stands in the feed "with a moderator"
   async function appeal() {
     const r = refused, text = body.trim(), was = anon;
-    const temp = stand(text, was, true); haptic.select(); close(overlay.id);
+    const temp = stand(text, was, true, photos); haptic.select(); close(overlay.id);
     try {
-      const p = await api.appealChannelPost(r.post, text);
-      land(temp, p, true); haptic.ok(); say(t('fc.appealedSay'), 'thinking_face_3d');
+      const p = await api.appealChannelPost(r.post, text, photos.map((x) => x.id!));  // the refusal gave its photos back: named again
+      land(temp, p, true, { kind: 'appeal', explain: null }); haptic.ok(); say(t('fc.appealedSay'), 'thinking_face_3d');
     } catch (e) {
       unstand(temp); haptic.error();
       const out = e instanceof ApiErr && e.code === 'rate_limited';
       say(t(out ? 'fc.appealsOut' : 'common.error'), 'pleading_face_3d');
-      open(Self, { body: text, anon: was, refused: { ...r, appeal: !out && !(e instanceof ApiErr && e.code === 'not_found') } });
+      open(Self, { body: text, anon: was, photos, refused: { ...r, appeal: !out && !(e instanceof ApiErr && e.code === 'not_found') } });
     }
   }
 
-  function edit() { haptic.tap(); close(overlay.id); compose({ body, anon }); }
+  // back to the window with the words, the photos and the AI's reason and advice (until I change the words)
+  function edit() { haptic.tap(); close(overlay.id); compose({ body, anon, photos, tip: ex }); }
 </script>
 
 <Sheet {overlay} icon={ShieldAlert} title={t('fc.refused')}>
   <!-- the verdict: at once, in plain words; the AI's own reason replaces the template once it comes -->
   <div class="verdict">
     <span class="seal" aria-hidden="true"><ShieldAlert size={22} strokeWidth={2} /></span>
-    <h2>{t('fc.refused')}</h2>
     <p class="reason" aria-live="polite">{ex?.reason ?? t(refused.kind === 'ad' ? 'fc.ad' : 'fc.noise')}</p>
     {#if asking}<p class="wait">{t('fc.whyLoading')}</p>{/if}
   </div>
@@ -59,13 +59,14 @@
       <span class="who"><b class="ellipsis">{anon ? t('fc.nickSoon') : signOf()}</b><span class="sub">{t('fc.toChannel')}</span></span>
     </div>
     <p class="words"><Marked text={body} quote={ex?.quote} /></p>
+    {#if photos.length}<div class="pics">{#each photos as p (p.url)}<img src={p.thumb} alt="" />{/each}</div>{/if}
     {#if ex?.fix}<p class="fix"><Lightbulb size={16} strokeWidth={2} aria-hidden="true" /><span>{ex.fix}</span></p>{/if}
   </div>
-  {#if refused.appeal}<p class="note">{t('fc.appealNote')}</p>{/if}
   {#snippet footer()}
+    <!-- Edit is the way; a moderator is the other, quieter one (three a day, said when they run out) -->
     <div class="two">
-      {#if refused.appeal}<Button kind="secondary" size="l" full onclick={appeal}>{t('fc.appeal')}</Button>{/if}
       <Button kind="filled" size="l" full onclick={edit}>{t('fc.edit')}</Button>
+      {#if refused.appeal}<Button kind="plain" size="m" full onclick={appeal}>{t('fc.appeal')}</Button>{/if}
     </div>
   {/snippet}
 </Sheet>
@@ -79,14 +80,14 @@
   .who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .sub { font: 450 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
-  .note { margin: var(--s-3) var(--s-4) 0; font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .pics { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); }
+  .pics img { width: 56px; height: 56px; border-radius: var(--r-s); object-fit: cover; }
 
   /* the verdict: a seal, the word, the reason; calm, centred, no alarm red */
   .verdict { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4) var(--s-2); text-align: center; }
   .seal { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--warning-soft); color: var(--warning-text);
     animation: seal 520ms var(--ease-bounce) backwards; }
   @keyframes seal { from { transform: scale(0.5); opacity: 0; } }
-  .verdict h2 { margin-top: var(--s-1); font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
   .reason { max-width: 34ch; font: 450 var(--fs-body)/1.42 var(--font-text); color: var(--text-2); animation: fade 300ms var(--ease); }
   @keyframes fade { from { opacity: 0; } }
   .wait { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); animation: pulse 1.4s ease-in-out infinite; }

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import base64
 import colorsys
+import io
 import json
 import os
 import subprocess
@@ -138,6 +139,17 @@ def seed(path: str) -> None:
                                                                    5 if anon else None, 11 if anon else None, reason, now - 600 if why == "noise" else None))
     con.execute("""INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at, ai_reason)
         VALUES (2, 603, 'Thanks! And the reading room on the third floor, is it open too?', 'held', 'ai', ?, 'It may read as a jab at someone.')""", (now - 700,))
+    con.execute("UPDATE fchan_posts SET posted_at = created_at WHERE status = 'live'")  # when the channel got them (the feed's time)
+    con.execute("UPDATE fchan_posts SET ai_quote = 'physics teacher', ai_fix = 'Say what happened, not who it was.' WHERE id = 4")
+    # photos on the forum: Bota's umbrella post, one picture (an umbrella-ish shape on a desk colour), and one on Ali's
+    for pid, n, bg, fg in ((3, 0, (52, 58, 72), (20, 22, 30)), (1, 0, (90, 140, 220), (240, 240, 245)), (1, 1, (240, 200, 90), (60, 60, 70))):
+        im = Image.new("RGB", (1200, 900), bg)
+        im.paste(Image.new("RGB", (500, 300), fg), (350, 300))
+        raw = io.BytesIO()
+        im.save(raw, "JPEG")
+        saved = media.save(raw.getvalue(), Path(path).resolve().parent / "media", os.urandom(32))
+        con.execute("INSERT INTO fchan_photos (post_id, n, path, width, height, color, msg, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (pid, n, saved["path"], saved["width"], saved["height"], saved["color"], 100 + pid if n == 0 else 900 + pid, now))
     con.close()
 
 

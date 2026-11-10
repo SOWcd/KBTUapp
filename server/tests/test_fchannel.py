@@ -136,7 +136,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     q = c.get("/api/forum-posts/mod", headers=M).json()
     assert [x["id"] for x in q["held"]] == [p["id"]] and q["held"][0]["author"] is None and q["held"][0]["why"] == "ai"
     assert c.get("/api/forum-posts/mod", headers=A).status_code == 403
-    assert c.get("/api/forum-posts/revealed", headers=A).json() == {"revealed": 0}
+    assert c.get("/api/forum-posts/revealed", headers=A).json() == {"revealed": 0, "next": None}
     # only the owner reveals, and it's in the audit log
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=M).status_code == 403
     login(c, 5, "adm")  # an admin who isn't the owner: no
@@ -144,7 +144,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=tma(5)).status_code == 403
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=X).json()["id"] == ann["id"]
     assert [r[0] for r in con.execute("SELECT target FROM audit_log WHERE action = 'reveal_anon'")] == [f"fchan:{p['id']}"]
-    assert c.get("/api/forum-posts/revealed", headers=A).json() == {"revealed": 1}
+    assert c.get("/api/forum-posts/revealed", headers=A).json() == {"revealed": 1, "next": None}
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
@@ -411,6 +411,8 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    for col in ("posted_at", "ai_fix", "ai_quote"):  # 153's
+        con.execute(f"ALTER TABLE fchan_posts DROP COLUMN {col}")
     con.execute("DROP TABLE fchan_photos")  # 152's (its trigger with it)
     con.execute("ALTER TABLE tg_unpost DROP COLUMN photo")
     con.execute("DROP TABLE chat_sync_todo")  # 151's
@@ -532,7 +534,8 @@ def test_post_feed(env, monkeypatch):
     assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}  # no user id
+        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}  # no user id
+        assert "review" not in p or p["mine"]                                                    # why mine waits: to me alone
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -669,7 +672,7 @@ def test_post_faces_and_reactions(env, monkeypatch):
         login(c, i, n)
     con = db.connect(cfg.db_path)
     tg = Telegram()
-    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Who is going to the hackathon?", "anon": True}).json()
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Who is going to the hackathon?"}).json()  # named: an anonymous post shows no faces (test_fchannel_ui)
     q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Quiet post"}).json()
     tick(cfg, tg, con)
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
@@ -882,6 +885,8 @@ def test_post_rules_shared():
         except logic.ApiError as e:
             got = {"links": kind if kind in ("link", "mention", "phone") else "links", "signature": "signature"}[e.message]
         assert got == kind, text
+    for text, ok in json.loads(pathlib.Path(__file__).with_name("fchannel_rules.json").read_text())["meaningful"]:
+        assert logic.fchannel._meaningful(text) == ok, text
 
 
 def test_post_author_told(env, monkeypatch):

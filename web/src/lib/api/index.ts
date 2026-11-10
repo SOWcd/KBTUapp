@@ -216,11 +216,11 @@ export interface Api {
   channelFeed(before?: number): Promise<import('./types').ChannelFeedPost[]>;            // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
   newChannelPost(body: string, anon: boolean, photos?: Id[]): Promise<import('./types').ChannelPost>;   // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
   uploadChannelPhoto(file: Blob): Promise<Media & { id: Id }>;                           // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
-  appealChannelPost(id: Id, body: string): Promise<import('./types').ChannelPost>;    // refused by the AI: to a moderator (3 a day), the words given back
+  appealChannelPost(id: Id, body: string, photos?: Id[]): Promise<import('./types').ChannelPost>;    // refused by the AI: to a moderator (3 a day), the words given back
   channelPostWhy(id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }>; // the AI's reason for my refused or held post, once
   channelReplyWhy(id: Id): Promise<{ explain: import('./types').ForumWhy | null }>;      // the same for my held reply
   deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
-  channelRevealed(): Promise<{ revealed: number }>;                                      // how many anonymous authors were ever revealed (a count)
+  channelRevealed(): Promise<{ revealed: number; next: number | null /* when I may post again (the pace); null: now */ }>;                                      // how many anonymous authors were ever revealed (a count)
   channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live
   channelModDecide(id: Id, ok: boolean): Promise<void>;                                 // held: out or removed; live: only removed
   channelModRepublish(id: Id): Promise<void>;                                           // a live post sent anew (its message lost in Telegram)

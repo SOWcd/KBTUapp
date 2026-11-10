@@ -78,7 +78,9 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
   /** Telegram's top reactions on the channel post; a custom emoji as "custom:<id>", a paid one as "paid" */
   reactions: { emoji: string; n: number }[]
   hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */
-  photos: Media[] /* up to 4, in order (an album in the channel) */ }
+  photos: Media[] /* up to 4, in order (an album in the channel) */
+  /** my held post (to me alone): why it waits: I sent it to a moderator, anonymous with photos, or the AI's own words (kept: a reload keeps them) */
+  review?: { kind: 'appeal' | 'photo' | 'ai'; explain: ForumWhy | null } }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { own?: boolean /* mine, and I'm not the founder: another moderator decides */; why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };

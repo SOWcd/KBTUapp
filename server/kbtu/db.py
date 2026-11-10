@@ -1543,6 +1543,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       INSERT OR IGNORE INTO meta (key, value) VALUES ('fchpic:' || OLD.path, '1');
     END;
     ALTER TABLE tg_unpost ADD COLUMN photo INTEGER NOT NULL DEFAULT 0;"""),
+    # the forum UI rework (Nov 10): posted_at, when the channel got the post (the time the app shows everyone: the
+    # writing time told when a held anonymous post was written); the AI's tip and the words it stopped at, kept with its
+    # reason so the author's held post still says them after a reload
+    (153, """ALTER TABLE fchan_posts ADD COLUMN posted_at INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN ai_fix TEXT;
+    ALTER TABLE fchan_posts ADD COLUMN ai_quote TEXT;"""),
 ]
 
 

@@ -155,7 +155,9 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
               cursor, FEED_MAX, v.id, cursor, FEED_MAX, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
-    faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
+    # people for students alone (a guest: none); never under an anonymous post: its author's face among them, or left
+    # out of them, would tell (Codex review, Nov 10)
+    faces = _faces(con, [p["id"] for p in ps if p["comments"] and not p["anon"]]) if v.student else {}
     hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
     pics = _photos(con, [p["id"] for p in ps])
     pids = [p["id"] for p in ps if p["comments"]]
@@ -163,7 +165,9 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
-        out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]), "nick": _nick(p),
+        # at: when it went out (posted_at), never when it was written: a held anonymous post's writing time is the
+        # author's moment in the app; mine not out yet: when I wrote it
+        out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["posted_at"] or p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]), "nick": _nick(p),
              "sign": _anon_sign(p) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id, "photos": pics.get(p["id"], []),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
@@ -172,8 +176,17 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day
              # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
-             "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check"})
+             "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check",
+             # why my held post waits, to me alone (it survives a reload): I sent it to a moderator, it has photos and
+             # is anonymous, or the AI's own words (reason, its tip, the piece it stopped at) once it gave them
+             **({"review": _review(p)} if p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check" else {})})
     return out
+
+
+def _review(p) -> dict:
+    kind = "appeal" if p["appealed_at"] else "photo" if p["why"] == "photo" else "ai"
+    ex = {"quote": p["ai_quote"], "reason": p["ai_reason"], "fix": p["ai_fix"]} if p["ai_reason"] else None
+    return {"kind": kind, "explain": ex}
 
 
 HOT = 5  # comments in the last hour that make a post "being discussed" (the feed's label)
@@ -237,10 +250,9 @@ def reserve(con, v: Viewer, body: dict) -> int:
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""
     need_student(v)
     anon = body.get("anon", False)
-    pics = body.get("photos") or []
-    if not isinstance(anon, bool) or not isinstance(pics, list) or len(pics) > PHOTOS_MAX or len(set(pics)) < len(pics) \
-            or not all(isinstance(x, int) and not isinstance(x, bool) for x in pics):
+    if not isinstance(anon, bool):
         raise ApiError("bad_input")
+    pics = _pics(body)
     text = _clean(body.get("body"))
     if pics and len(text) > CAPTION_MAX:  # a caption: Telegram's 1024 with the signature under it
         raise ApiError("bad_input", "long")
@@ -250,21 +262,32 @@ def reserve(con, v: Viewer, body: dict) -> int:
         # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
         # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (owner, Nov 6: a
         # delete refunds nothing, else post-delete-post floods the channel)
-        n = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE user_id = ? AND created_at > ? AND why IS NOT 'noise'", v.id, _now() - POST_GAP)[0]
-        if n >= POSTS_A_GAP:
-            raise ApiError("rate_limited", "posts")
+        if nxt := next_post(con, v.id):
+            raise ApiError("rate_limited", "posts", {"retry": nxt})
         if _repeat(con, v.id, text):
             raise ApiError("bad_input", "duplicate")
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         a, n = pick_nick(con) if anon else (None, None)
-        # the photos: my own uploads on no post yet; they take the post's author (user_id off: one link, the post's)
-        if pics and one(con, f"SELECT COUNT(*) FROM fchan_photos WHERE user_id = ? AND post_id IS NULL AND id IN ({','.join('?' * len(pics))})", v.id, *pics)[0] < len(pics):
-            raise ApiError("bad_input", "photos")
         pid = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
                           (v.id, text, int(anon), _now(), sign, a, n)).lastrowid
-        for i, x in enumerate(pics):
-            con.execute("UPDATE fchan_photos SET post_id = ?, n = ?, user_id = NULL WHERE id = ?", (pid, i, x))
+        _attach(con, v.id, pid, pics)
         return pid
+
+
+def _pics(body: dict) -> list[int]:
+    """The photo ids a post names: up to PHOTOS_MAX distinct ints."""
+    pics = body.get("photos") or []
+    if not isinstance(pics, list) or len(pics) > PHOTOS_MAX or len(set(pics)) < len(pics) or not all(isinstance(x, int) and not isinstance(x, bool) for x in pics):
+        raise ApiError("bad_input")
+    return pics
+
+
+def _attach(con, uid: int, pid: int, pics: list[int]) -> None:
+    """My own uploads on no post yet onto this one, in order; they take the post's author (user_id off: one link, the post's)."""
+    if pics and one(con, f"SELECT COUNT(*) FROM fchan_photos WHERE user_id = ? AND post_id IS NULL AND id IN ({','.join('?' * len(pics))})", uid, *pics)[0] < len(pics):
+        raise ApiError("bad_input", "photos")
+    for i, x in enumerate(pics):
+        con.execute("UPDATE fchan_photos SET post_id = ?, n = ?, user_id = NULL WHERE id = ?", (pid, i, x))
 
 
 # Photos on a post (owner, Nov 5): up to PHOTOS_MAX, re-encoded by media (EXIF and every other byte of the phone's file
@@ -334,6 +357,13 @@ def reported(con, pid: int) -> None:
         log_action(con, None, "fchan_auto_hide", f"fchan:{pid}")
 
 
+def next_post(con, uid: int) -> int | None:
+    """When I may post again under the pace (two in any ten minutes; a post the AI called noise doesn't count); None: now."""
+    got = [r[0] for r in rows(con, "SELECT created_at FROM fchan_posts WHERE user_id = ? AND created_at > ? AND why IS NOT 'noise' ORDER BY created_at DESC LIMIT ?",
+                              uid, _now() - POST_GAP, POSTS_A_GAP)]
+    return got[-1] + POST_GAP if len(got) >= POSTS_A_GAP else None
+
+
 NICK_FRESH = 800  # a new nick is none of the last this many anonymous posts' (review: no false links, no drawing another's)
 
 
@@ -362,6 +392,8 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
             if verdict in ("noise", "ad"):  # no message in it, or an ad: refused, its author told (the route), the words wiped
                 con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL, refused = ? WHERE id = ?",
                             (verdict, _refused(pid, p["body"]), pid))
+                # its photos back to me, on no post (Edit or the appeal names them again; unused, swept in the hour)
+                con.execute("UPDATE fchan_photos SET user_id = ?, post_id = NULL, created_at = ? WHERE post_id = ?", (p["user_id"], _now(), pid))
                 return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
             if verdict == "ok" and p["anon"] and _has_photos(con, pid):  # the AI can't judge pictures: a person looks first
                 status, why = "held", "photo"
@@ -412,6 +444,7 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
             raise ApiError("bad_input", "duplicate")
         sign = None if p["anon"] else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         con.execute("UPDATE fchan_posts SET status = 'held', body = ?, sign = ?, appealed_at = ?, refused = NULL WHERE id = ?", (text, sign, _now(), pid))
+        _attach(con, v.id, pid, _pics(body))
         # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref);
         # all of them, an appealing moderator too (review: the one who got no notice was the anonymous author)
         from .tgcomments import _mods
@@ -460,6 +493,8 @@ def said(con, table: str, rid: int, got: dict | None) -> None:
         # the words, and the reason (it often quotes them) must not land after it (review)
         live = "status = 'held'" if table == "fchan_replies" else "(status = 'held' OR status = 'gone' AND refused IS NOT NULL)"
         con.execute(f"UPDATE {table} SET ai_reason = ? WHERE id = ? AND {live}", (got["reason"], rid))  # table: the route's own literal
+        if table == "fchan_posts":  # the tip and the marked words too: the author's held post keeps them across a reload
+            con.execute(f"UPDATE fchan_posts SET ai_fix = ?, ai_quote = ? WHERE id = ? AND {live}", (got.get("fix"), got.get("quote"), rid))
 
 
 def _unpost(con, p, why: str, delay: int = 0) -> None:
@@ -479,7 +514,8 @@ def delete(con, v: Viewer, pid: int) -> None:
             raise ApiError("not_found")
         _unpost(con, p, "author")
         _post_off(con, pid)
-        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, refused = NULL WHERE id = ?", (pid,))
+        con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
+                       ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
         con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
         _notes_off(con, pid)
 
@@ -547,7 +583,7 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
     """The bot sent it: its message id kept (an album's first, and each photo's own); deleted or taken down meanwhile,
     the messages go right back out (with the right words if it's past 48 h: a moderator's take-down isn't the
     author's delete)."""
-    if con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
+    if con.execute("UPDATE fchan_posts SET tg_msg = ?, posted_at = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, _now(), pid, msg_id)).rowcount:
         for n, m in enumerate(pics or []):
             con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
@@ -593,7 +629,7 @@ def found(con, msg_id: int, text: str) -> None:
     hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
             AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{p['body']}", f"{p['body']}\n\n— {_sign(con, p)}")]
     if len(hits) == 1:
-        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (msg_id, hits[0]))
+        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = COALESCE(posted_at, ?) WHERE id = ?", (msg_id, _now(), hits[0]))
 
 
 RULES_LATE = 7 * 86400  # a post older than this gets no first comment (its copy never came: no group linked, updates lost)

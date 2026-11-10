@@ -301,7 +301,7 @@ export const server: Api = {
   channelFeed: (before) => call('GET', `/forum-posts/feed${before ? `?before=${before}` : ''}`),
   newChannelPost: (body, anon, photos = []) => call('POST', '/forum-posts', { body, anon, photos }),
   uploadChannelPhoto: (file) => call('POST', '/forum-posts/photos', file),
-  appealChannelPost: (id, body) => call('POST', `/forum-posts/${id}/appeal`, { body }),
+  appealChannelPost: (id, body, photos = []) => call('POST', `/forum-posts/${id}/appeal`, { body, photos }),
   channelPostWhy: (id, body) => call('POST', `/forum-posts/${id}/why`, { body }),
   channelReplyWhy: (id) => call('POST', `/forum-replies/${id}/why`),
   deleteChannelPost: (id) => call('DELETE', `/forum-posts/${id}`),
