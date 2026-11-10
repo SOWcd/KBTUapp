@@ -7,10 +7,12 @@ export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
   | 'sheet.event' | 'sheet.club' | 'sheet.ticket' | 'sheet.person' | 'sheet.friends' | 'sheet.compose' | 'sheet.comments'
   | 'sheet.map' | 'sheet.week' | 'sheet.awards' | 'sheet.studio' | 'sheet.news' | 'sheet.feed' | 'sheet.assistant';
 type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 'do.donate';
+// the appeals composer's funnel (server stats.APPEALS): counts only, never a word
+type Appeal = 'apl.open' | 'apl.typed' | 'apl.ai' | 'apl.sent' | 'apl.drop' | 'apl.del';
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
-type Key = Screen | Action | Source | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
+type Key = Screen | Action | Appeal | Source | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
   | `open.${'ios' | 'android' | 'desktop' | 'web'}.${Bucket}`;
 
 const EVERY = 60_000, GAP = 30_000; // GAP: hidden this long, the next showing is a new session

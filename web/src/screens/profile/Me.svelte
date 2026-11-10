@@ -17,6 +17,8 @@
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Music from '@lucide/svelte/icons/music';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
+  import Inbox from '@lucide/svelte/icons/inbox';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
@@ -328,6 +330,9 @@
     {#if session.me?.bigScreen}<Row icon={MonitorUp} title={t('scr.big')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
+    <!-- appeals to the Student Government (APPEALS): the composer and my appeals; SG's people, their queue too -->
+    {#if session.me?.appeals}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
+    {#if session.me?.appeals?.sg}<Row icon={Inbox} title={t('apl.sgRow')} count={data.sg?.items.filter((a) => a.status === 'new').length ?? 0} accessory="chevron" onclick={() => { haptic.tap(); sheets.sgQueue(); }} />{/if}
   </Group></div>
 
   <AppCard />

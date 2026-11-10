@@ -55,6 +55,8 @@ class Config:
     donate_phone: str = field(default="", repr=False)
     # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py) and its privacy section; empty: off
     volunteers: str = ""
+    # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
+    appeals: str = ""
     seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -126,4 +128,5 @@ def load() -> Config:
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
+        appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
     )

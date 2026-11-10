@@ -1049,6 +1049,7 @@ _DEL_GONE = {
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
+    ("appeal_authors", "user_id"), ("appeal_sends", "user_id"), ("appeal_consents", "user_id"), ("appeal_staff", "user_id"),  # my appeals go first (delete_me)
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
@@ -1195,6 +1196,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         from . import vol
         vol.gone(con, v.id)  # every volunteers-ledger record ever linked to me, unlinked since or not
         fks = _user_fks(con)
+        # my appeals to SG, their words and answers with them (their author links go in the loop below)
+        con.execute("DELETE FROM appeals WHERE id IN (SELECT appeal_id FROM appeal_authors WHERE user_id = ?)", (v.id,))
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))
         for t, c, notnull in fks:

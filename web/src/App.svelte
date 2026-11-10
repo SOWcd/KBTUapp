@@ -8,7 +8,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, opened } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -109,6 +109,10 @@
   sheets.scanner = (id, names, qr) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
+  sheets.appeals = () => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), {}));
+  sheets.myAppeal = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id });
+  sheets.sgQueue = () => lazy(() => import('./screens/appeals/SgQueue.svelte'), {});
+  sheets.sgAppeal = (id) => lazy(() => import('./screens/appeals/SgAppeal.svelte'), { id });
   sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), { vol: true });
   sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine, vol: true });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
@@ -385,7 +389,8 @@
     }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
-    if (p === 'me') { ui.tab = 'profile'; return; }   // the bot: "keep my account"
+    if (p === 'me') { ui.tab = 'profile'; return; }
+    if (p === 'apl') { ui.tab = 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
@@ -590,6 +595,8 @@
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
     if (session.me?.oversee) void loadRegistry();
     if (session.me?.vol?.ledger) void loadVol();
+    if (session.me?.appeals) void loadAppeals();
+    if (session.me?.appeals?.sg) void loadSg();
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)

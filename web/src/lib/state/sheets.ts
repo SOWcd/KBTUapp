@@ -64,6 +64,11 @@ export const sheets = {
   scannerOnly: (_id: Id) => {},
   crew: (_id: Id, _onchange?: (n: number) => void) => {},
   /** a club's volunteers ledger (server logic/vol.py): the list (its President and whom she grants), one volunteer (mine: my own) */
+  /** appeals to the Student Government: the composer and my appeals; one of mine; SG's queue and one appeal in it */
+  appeals: () => {},
+  myAppeal: (_id: Id) => {},
+  sgQueue: () => {},
+  sgAppeal: (_id: Id) => {},
   volLedger: () => {},
   volPerson: (_id: Id, _mine?: boolean) => {}, // an event's door helpers (a running club's President or Vice)
   attendees: (_id: Id) => {},

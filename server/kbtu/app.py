@@ -240,6 +240,16 @@ def vol_viewer(request: Request, v: Me, con: Con) -> Viewer:
 VolMe = Annotated[Viewer, Depends(vol_viewer)]
 
 
+def appeals_viewer(request: Request, v: Me, con: Con) -> Viewer:
+    """Appeals to SG (logic/appeals.py): APPEALS=1 everyone, staff the admins, moderators and SG's people; off: not here."""
+    if not logic.appeals.on(con, request.app.state.cfg.appeals, v):
+        raise ApiError("not_found")
+    return v
+
+
+Appeals = Annotated[Viewer, Depends(appeals_viewer)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
@@ -322,7 +332,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
-                                   **({"vol": x} if (x := logic.vol.summary(con, v)) else {})}
+                                   **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
+                                   **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {})}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -1341,6 +1352,46 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         except TimeoutError:
             raise ApiError("unavailable", "assistant") from None
 
+    # appeals to the Student Government (logic/appeals.py): mine, a new one, delete mine; AI help on a draft; SG's queue
+    @app.get("/api/appeals")
+    def my_appeals(con: Con, v: Appeals):
+        return logic.appeals.mine(con, v)
+
+    @app.post("/api/appeals")
+    def new_appeal(con: Con, v: Appeals, body: dict = Body(...)):
+        return logic.appeals.send(con, v, body)
+
+    @app.delete("/api/appeals/{aid}", status_code=204)
+    def drop_appeal(con: Con, v: Appeals, aid: int):
+        logic.appeals.delete(con, v, aid)
+
+    @app.post("/api/appeals/help")
+    async def appeal_help(con: Con, v: Appeals, request: Request, body: dict = Body(...)):
+        """2-3 tips on what's missing, never a rewrite; the AI down: 503 and sending still works (the app says so).
+        Signs of self-harm: the helplines, with or without the model."""
+        lang = body.get("lang") if body.get("lang") in ("ru", "kk", "en") else "ru"
+        text = await run_in_threadpool(logic.appeals.help_ok, con, v, body)
+        try:
+            answer = await eu_ai(con, logic.appeals.help_prompt(text, lang), whole=40, max_tokens=400, temperature=0.2,
+                                 check=logic.appeals.tips_usable, timeout=20, race=True)
+        except ApiError:
+            if logic.assistant.distress(text):
+                return {"tips": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
+            raise
+        return await run_in_threadpool(logic.appeals.help_reply, con, answer, text, lang)
+
+    @app.get("/api/sg/appeals")
+    def sg_queue(con: Con, v: Appeals):
+        return logic.appeals.queue(con, v)
+
+    @app.get("/api/sg/appeals/{aid}")
+    def sg_appeal(con: Con, v: Appeals, aid: int):
+        return logic.appeals.detail(con, v, aid)
+
+    @app.post("/api/sg/appeals/{aid}")
+    def sg_act(con: Con, v: Appeals, aid: int, body: dict = Body(...)):
+        return logic.appeals.act(con, v, aid, body)
+
     # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
     @app.post("/api/assistant")
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
@@ -2135,9 +2186,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         tgcn = 11 + cfg.forum + (cfg.board == "all")
         fchn = tgcn + bool(cfg.tgc_chat)
         body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(fchn))  # the channel's posts: after it
-        body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger: last
+        body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger
+        body = body.replace("{{apln}}", str(fchn + bool(cfg.forum_channel) + bool(cfg.volunteers)))  # appeals to SG: last
         for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
-                         ("ai", ai_on), ("vol", bool(cfg.volunteers))):
+                         ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals))):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))

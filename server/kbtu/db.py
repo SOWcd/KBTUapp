@@ -1436,6 +1436,35 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER vol_access_gone AFTER DELETE ON org_members BEGIN
       DELETE FROM vol_access WHERE org_id = OLD.org_id AND user_id = OLD.user_id;
     END;"""),
+    # appeals to the Student Government (logic/appeals.py, APPEALS): the appeal without its author, the author link apart
+    # (never shown to SG for an anonymous one), the day's sends for the quota, the section's consent, SG's people
+    (149, """CREATE TABLE appeals (
+      id INTEGER PRIMARY KEY,
+      topic TEXT,
+      body TEXT NOT NULL,
+      anon INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'work', 'closed')),
+      answer TEXT,
+      created_at INTEGER NOT NULL,
+      due_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      closed_at INTEGER,
+      nonce TEXT) STRICT;
+    CREATE TABLE appeal_authors (
+      appeal_id INTEGER PRIMARY KEY REFERENCES appeals(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id)) STRICT;
+    CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
+    CREATE TABLE appeal_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);
+    CREATE TABLE appeal_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE appeal_staff (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

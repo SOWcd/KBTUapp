@@ -141,6 +141,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "fch_appeal":  # fq:<hour>, to moderators: refused posts their authors sent for a look, waiting in Admin
         n = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'held' AND appealed_at IS NOT NULL")[0]
         return (*texts.bot_message(lang, _appeal_kind(n), n=n), "capps") if n else None
+    if kind == "appeal_answer":  # apl:<appeal>, to its author: SG answered (a template, never the words); gone: nothing
+        mine = one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, kind), "apl") if mine else None
     if kind == "sid_check":  # sc:<student id>, to its holder: someone else typed it; quiet once they changed theirs
         held = one(con, "SELECT 1 FROM students WHERE user_id = ? AND student_id = ?", m["user_id"], ref[1])
         return (*texts.bot_message(lang, kind, sid=ref[1]), "me") if held else None

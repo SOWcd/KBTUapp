@@ -15,12 +15,15 @@ SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant")
 ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.donate")
 SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "from.other")  # the startapp's class, never its value
+# the appeals' funnel (logic/appeals.py): opened the composer, started typing, asked the AI, sent, closed without
+# sending, deleted one; counts only, never a word (the draft stays on the phone)
+APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint
 SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
 DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
 USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
-KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
+KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
                   *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
 ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps

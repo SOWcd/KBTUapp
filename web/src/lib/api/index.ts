@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, GalleryPage, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule, VolLedger, VolPerson } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, GalleryPage, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule, VolLedger, VolPerson, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -128,6 +128,14 @@ export interface Api {
   cohostAnswer(id: Id, yes: boolean, mute?: boolean): Promise<CohostInvite[]>; // mute: "don't suggest again" (that host club)
   cohostUnmute(org: Id, host: Id): Promise<void>;
   /** the volunteers ledger (server logic/vol.py): readers the list, a volunteer their own; edits the President's, each with a reason */
+  /** appeals to the Student Government (server logic/appeals.py); consent: the section's version, on the first send or AI help */
+  appeals(): Promise<Appeal[]>;
+  sendAppeal(a: { text: string; topic: AppealTopic | null; anon: boolean; key: string; consent?: string }): Promise<Appeal>;
+  dropAppeal(id: Id): Promise<void>;
+  appealHelp(text: string, lang: string, consent?: string): Promise<AppealHelp>;
+  sgQueue(): Promise<SgQueue>;
+  sgAppeal(id: Id): Promise<Appeal>;
+  sgAct(id: Id, change: { status?: AppealStatus; answer?: string }): Promise<Appeal>;
   volLedger(): Promise<VolLedger>;
   volMine(): Promise<VolPerson>;
   volPerson(id: Id): Promise<VolPerson>;

@@ -283,6 +283,7 @@ export interface Me {
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   checkin?: MyCheckin | null;   // my running check-in: the capsule
+  appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
@@ -717,4 +718,13 @@ export interface VolPerson extends VolRow {
   edits?: VolEdit[];
 }
 export interface VolMeet { session: Id; title: string; at: Ts; ended: Ts | null; team: boolean; expected: number; marked: number; held: boolean }
+/** an appeal to the Student Government (server logic/appeals.py): new Received, work In progress, closed Closed (with an answer);
+ *  overdue: no answer by `due` (5 working days), whatever the status since */
+export type AppealTopic = 'study' | 'dorm' | 'food' | 'campus' | 'events' | 'money' | 'other';
+export type AppealStatus = 'new' | 'work' | 'closed';
+export interface Appeal { id: Id; topic: AppealTopic | null; text: string; anon: boolean; status: AppealStatus; answer: string | null;
+  at: Ts; due: Ts; answeredAt: Ts | null; closedAt: Ts | null; overdue: boolean;
+  author?: string | null }      // SG's view of a named one: the short name only; an anonymous one never has it
+export interface SgQueue { items: Appeal[]; months: { month: string; total: number; topics: Partial<Record<AppealTopic, number>> }[] }
+export interface AppealHelp { tips: string[]; care?: boolean; help?: string } // help: the helplines (signs of self-harm)
 export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }

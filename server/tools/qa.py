@@ -58,6 +58,15 @@ def seed(path: str) -> None:
     for uid in (2, 3):
         con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
             VALUES (2, ?, 'going', ?, ?, ?)""", (uid, f"QA-T{uid}", now, now))
+    # appeals to SG (APPEALS): the third person has SG's queue; an anonymous appeal overdue, a named one answered
+    con.execute("INSERT INTO appeal_staff (user_id, at) VALUES (3, ?)", (now,))
+    for aid, uid, topic, body, anon, at, status, answer in (
+            (1, 2, "dorm", "\u0412 \u043e\u0431\u0449\u0435\u0436\u0438\u0442\u0438\u0438 \u2116 2 \u043d\u0435\u0442 \u0433\u043e\u0440\u044f\u0447\u0435\u0439 \u0432\u043e\u0434\u044b \u0441 \u043f\u043e\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u0438\u043a\u0430.", 1, now - 9 * day, "work", None),
+            (2, 1, "food", "\u0412 \u0441\u0442\u043e\u043b\u043e\u0432\u043e\u0439 \u043d\u0430 2 \u044d\u0442\u0430\u0436\u0435 \u043d\u0435\u0442 \u0432\u0435\u0433\u0435\u0442\u0430\u0440\u0438\u0430\u043d\u0441\u043a\u0438\u0445 \u0431\u043b\u044e\u0434.", 0, now - 2 * day, "closed", "\u0421\u043f\u0430\u0441\u0438\u0431\u043e! \u0421 \u043f\u043e\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u0438\u043a\u0430 \u0431\u0443\u0434\u0435\u0442 \u043e\u0432\u043e\u0449\u043d\u043e\u0439 \u0441\u0443\u043f.")):
+        con.execute("""INSERT INTO appeals (id, topic, body, anon, status, answer, created_at, due_at, answered_at, closed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (aid, topic, body, anon, status, answer, at, logic.appeals.due(at),
+                                                   at + day if answer else None, at + day if status == "closed" else None))
+        con.execute("INSERT INTO appeal_authors (appeal_id, user_id) VALUES (?, ?)", (aid, uid))
     # Ali has today's timetable (made up), so the List's live stack shows its class card: one on now, two after it
     t0 = time.gmtime(now + 5 * 3600)  # Almaty, UTC+5
     base = min(max(t0.tm_hour * 60 + t0.tm_min, 20), 24 * 60 - 180)  # late at night the day still fits (classes end 23:59 at most)
@@ -153,6 +162,8 @@ def fake_ai_app():
             post = json.loads(q)["post"]
             return json.dumps({"quote": post.split()[0], "reason": "QA: no model here, so the first word is marked.",
                                "fix": "QA: say what you need in a sentence."}), "qa"
+        if "Student Government" in msgs[0]["content"]:  # appeals' "Help me clarify": made-up tips (Russian, as the seed's people)
+            return json.dumps({"tips": ["\u0413\u0434\u0435 \u0438\u043c\u0435\u043d\u043d\u043e \u044d\u0442\u043e \u0441\u043b\u0443\u0447\u0438\u043b\u043e\u0441\u044c?", "\u0421 \u043a\u0430\u043a\u043e\u0433\u043e \u0434\u043d\u044f?", "\u0427\u0435\u0433\u043e \u0442\u044b \u0445\u043e\u0447\u0435\u0448\u044c \u0432 \u0438\u0442\u043e\u0433\u0435?"], "care": assistant.distress(q)}), "qa"
         care = assistant.distress(q)
         return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
                            "actions": [], "known": False, "topic": "qa made up topic", "care": care}), "qa"
@@ -171,7 +182,8 @@ def main() -> None:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
-           "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002")}  # the student forum on, as it will be after its policy part
+           "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002"),
+           "APPEALS": os.environ.get("APPEALS", "1")}  # the student forum on, as it will be after its policy part
     subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 

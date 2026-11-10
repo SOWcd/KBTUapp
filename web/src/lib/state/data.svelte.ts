@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger } from '../api';
+import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { close, overlays, say } from './ui.svelte';
@@ -34,6 +34,8 @@ export const data = $state({
   news: null as { casts: Post[]; posts: Post[] } | null, // tab 2 → News for club members: broadcasts, then my clubs' posts
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
+  appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
+  sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
   inbox: null as Inbox | null,                // the staff's Admin → Inbox: loaded with the app, again each time Admin opens
@@ -107,6 +109,13 @@ export function volGone(e: unknown): boolean {
   data.vol = null;
   for (const o of overlays) if (o.props.vol) close(o.id, false);
   return true;
+}
+
+export async function loadAppeals(): Promise<void> {
+  try { data.appeals = await api.appeals(); } catch { /* offline: the last copy stays */ }
+}
+export async function loadSg(): Promise<void> {
+  try { data.sg = await api.sgQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.sg = null; }
 }
 
 export async function loadVol(): Promise<void> {

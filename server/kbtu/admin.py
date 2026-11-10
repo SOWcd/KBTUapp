@@ -79,6 +79,11 @@
                                 starting balance; nothing else is computed. The same file twice adds nothing
   .venv/bin/python -m kbtu.admin vol autolink       the import's records linked to the club's members by their current Telegram username
   .venv/bin/python -m kbtu.admin vol batches | vol undo <batch>   the imports; one undone (records used since stay)
+  .venv/bin/python -m kbtu.admin appeals grant|revoke <@username | telegram id>   SG's queue of appeals (logic/appeals.py):
+                                a right of its own, never a club role; at once, in the audit log
+  .venv/bin/python -m kbtu.admin appeals list                    who has it
+  .venv/bin/python -m kbtu.admin appeals reveal <appeal id>      the author (an anonymous one's too): the creator alone, audited
+  .venv/bin/python -m kbtu.admin appeals funnel [days]           the composer's anonymous counters and the months' topics
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -546,6 +551,31 @@ def main(args: list[str]) -> None:
             print(vol.undo(con, org, int(args[2])))
         except ApiError:
             sys.exit(f"no batch {args[2]} to undo")
+    elif cmd == "appeals" and len(args) >= 2:
+        from .logic import appeals, stats
+        owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
+        if not owner:
+            sys.exit("no owner (the founder admin) yet: the audit log needs who did it")
+        if args[1] in ("grant", "revoke") and len(args) == 3:
+            u = _user(con, args[2])
+            appeals.grant(con, owner[0], u["id"], args[1] == "grant")
+            print(f"{args[1]}: @{u['tg_username'] or '-'} {u['tg_first_name']}")
+        elif args[1] == "list":
+            for u in rows(con, "SELECT u.tg_id, u.tg_username, u.tg_first_name FROM appeal_staff a JOIN users u ON u.id = a.user_id ORDER BY a.at"):
+                print(f"{u['tg_id']:>12}  @{u['tg_username'] or '-':<20} {u['tg_first_name']}")
+        elif args[1] == "reveal" and len(args) == 3 and args[2].isdigit():
+            p = appeals.reveal(con, owner[0], int(args[2])) or sys.exit(f"appeal {args[2]}: none (deleted, or its author deleted the account)")
+            u = one(con, "SELECT tg_id, tg_username FROM users WHERE id = ?", p["id"])
+            print(f"appeal {args[2]}: {p['first_name'] or p['tg_first_name']} {p['last_name'] or ''}  @{u['tg_username'] or '-'}  tg {u['tg_id']}")
+        elif args[1] == "funnel" and len(args) <= 3 and all(a.isdigit() for a in args[2:]):
+            days = int(args[2]) if args[2:] else 30
+            day = stats._today() + 1
+            for k in stats.APPEALS:
+                print(f"{k:<10} {one(con, 'SELECT COALESCE(SUM(n), 0) FROM usage_days WHERE key = ? AND day >= ?', k, day - days)[0]}")
+            for m in appeals.months(con):
+                print(m["month"], m["total"], " ".join(f"{k} {n}" for k, n in sorted(m["topics"].items())))
+        else:
+            sys.exit(__doc__)
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"
