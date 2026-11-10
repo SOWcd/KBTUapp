@@ -2,9 +2,9 @@
   // One volunteer of the club's ledger (server logic/vol.py): hours, shifts, misses. Readers also see the club's own
   // columns and the edits; the President alone edits (her own record too), each change with a reason. `mine`: my own
   // record, from Studio's "My hours" (hours, shifts and misses only).
-  import { api, ApiErr, type Id, type VolPerson, type VolShift } from '../../lib/api';
-  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, loadVol } from '../../lib/state/data.svelte';
+  import { api, type Id, type VolPerson, type VolShift } from '../../lib/api';
+  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { data, loadVol, volGone } from '../../lib/state/data.svelte';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
@@ -19,12 +19,12 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
 
-  let { overlay, id, mine = false }: { overlay: Overlay; id: Id; mine?: boolean } = $props();
+  let { overlay, id, mine = false }: { overlay: Overlay; id: Id; mine?: boolean; vol?: boolean /* App: closes with the ledger */ } = $props();
   // the list's row shows at once; the rest (shifts, misses) as it comes
   const seed = data.vol?.people.find((x) => x.id === id);
   let p = $state<VolPerson | null>(seed ? { ...seed, balance: 0, shifts: [], missed: [], manual: [] } : null);
   // no longer mine to see: nothing of it stays on screen
-  $effect(() => { (mine ? api.volMine() : api.volPerson(id)).then((x) => (p = x)).catch((e) => { if (e instanceof ApiErr && (e.code === 'forbidden' || e.code === 'not_found')) { p = null; close(overlay.id, false); } }); });
+  $effect(() => { (mine ? api.volMine() : api.volPerson(id)).then((x) => (p = x)).catch((e) => { if (volGone(e)) p = null; }); });
   const edit = $derived(!!session.me?.vol?.edit && !mine);
 
   // the President's form: one at a time

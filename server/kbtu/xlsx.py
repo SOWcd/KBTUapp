@@ -59,7 +59,8 @@ def read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
         raise Bad("not an xlsx")
     shared: list[str] = []
     if "xl/sharedStrings.xml" in names:
-        shared = ["".join(t.text or "" for t in si.iter(f"{{{_NS['m']}}}t")) for si in _xml(z, "xl/sharedStrings.xml").findall("m:si", _NS)]
+        # cut once here, not again at each cell naming it
+        shared = ["".join(t.text or "" for t in si.iter(f"{{{_NS['m']}}}t")).strip()[:MAX_CELL] for si in _xml(z, "xl/sharedStrings.xml").findall("m:si", _NS)]
     rels = {r.get("Id"): r.get("Target") for r in _xml(z, "xl/_rels/workbook.xml.rels").findall("p:Relationship", _NS)}
     out, formulas, seen, chars = {}, 0, set(), 0
     sheets = list(_xml(z, "xl/workbook.xml").find("m:sheets", _NS))

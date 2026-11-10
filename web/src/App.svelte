@@ -106,8 +106,9 @@
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
-  sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), {});
-  sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine });
+  // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
+  sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), { vol: true });
+  sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine, vol: true });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));

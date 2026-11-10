@@ -477,6 +477,8 @@ def plan(data: bytes, balance: str | None = None) -> dict:
     book, formulas = xlsx.read(data)
     out = {"sha": hashlib.sha256(data).hexdigest(), "formulas": formulas, "sheets": {}, "problems": [], "people": []}
     recs: dict[str, dict] = {}
+    used: set[str] = set()       # the records' keys
+    ambiguous: set[str] = set()  # names two people have
     for want, hint in ((MEMBERS, "\u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a"), (HOURS, "\u0447\u0430\u0441")):
         name = _sheet(book, want, hint)
         if name is None:
@@ -505,27 +507,36 @@ def plan(data: bytes, balance: str | None = None) -> dict:
             tg = _tg(cells[col["tg"]]) if col["tg"] is not None else None
             if col["tg"] is not None and cells[col["tg"]] and not tg:
                 out["problems"].append(f"{name} row {r}: Telegram not a username (kept raw)")
-            keys = [k for k in (tg and f"tg:{tg}", _norm(nm) and f"n:{_norm(nm)}") if k]
-            if not keys:
-                out["problems"].append(f"{name} row {r}: no name and no Telegram (kept, unkeyed)")
-            rec = recs.get(keys[0]) if tg and keys else None
-            if rec is None and keys:
-                byname = recs.get(keys[-1])
+            tgk, nk = tg and f"tg:{tg}", _norm(nm) and f"n:{_norm(nm)}"
+            if not tgk and not nk:
+                out["problems"].append(f"{name} row {r}: no name and no Telegram (kept, keyed by its cells)")
+            rec = recs.get(tgk) if tgk else None
+            if rec is None and nk and nk not in ambiguous:  # by the name only while one person has it
+                byname = recs.get(nk)
                 rec = byname if byname is not None and not (tg and byname["tg"] and byname["tg"] != tg) else None
             if rec and want in rec["sheets"]:
                 out["problems"].append(f"{name} row {r}: repeats row {rec['sheets'][want]} (kept apart)")
                 rec = None
-                keys = []
             if rec is None:
-                rec = {"name": nm, "tg": tg, "key": keys[0] if keys else None, "raw": {}, "sheets": {}, "balance": 0}
+                if nk in recs:
+                    ambiguous.add(nk)  # a namesake: from now on that name matches nobody
+                # every record keyed, a repeat too (its n-th time), so a deletion's marker covers it on any later list
+                base = tgk if tgk and tgk not in used else nk if nk and nk not in used else tgk or nk or \
+                    "raw:" + hashlib.sha256(json.dumps(row, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:32]
+                key, n = base, 2
+                while key in used:
+                    key, n = f"{base}#{n}", n + 1
+                used.add(key)
+                rec = {"name": nm, "tg": tg, "key": key, "raw": {}, "sheets": {}, "balance": 0}
                 out["people"].append(rec)
                 info["new"] += 1
                 if want == HOURS and out["sheets"].get(_sheet(book, MEMBERS, "\u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a") or "", {}).get("rows"):
                     out["problems"].append(f"{name} row {r}: on no row of the members sheet (a person of its own; the President may link both to one account)")
             else:
                 info["matched"] += 1
-            for k in keys:
-                recs.setdefault(k, rec)
+            for k in (tgk, nk):
+                if k:
+                    recs.setdefault(k, rec)
             rec["sheets"][want] = r
             rec["raw"][name] = row
             rec["name"] = rec["name"] or nm

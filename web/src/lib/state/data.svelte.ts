@@ -3,7 +3,7 @@
 import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
-import { say } from './ui.svelte';
+import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
 import { sheets } from './sheets';
 import { onTeam } from '../perms';
@@ -101,10 +101,16 @@ export async function loadTeam(org: Id): Promise<void> {
 }
 
 /** DMP's registry for this month (the overseers' main page), in the background; false when the server said no. */
-/** false: no longer mine to see (access taken back, the switch off): the copy goes too, and the sheets close */
-export async function loadVol(): Promise<boolean> {
-  try { data.vol = await api.volLedger(); return true; }
-  catch (e) { if (e instanceof ApiErr && (e.code === 'forbidden' || e.code === 'not_found')) { data.vol = null; return false; } return true; /* offline: the last copy stays */ }
+/** The ledger is no longer mine to see (access taken back, unlinked, the switch off): the copy goes and every sheet of it closes. */
+export function volGone(e: unknown): boolean {
+  if (!(e instanceof ApiErr && (e.code === 'forbidden' || e.code === 'not_found'))) return false; // offline: the last copy stays
+  data.vol = null;
+  for (const o of overlays) if (o.props.vol) close(o.id, false);
+  return true;
+}
+
+export async function loadVol(): Promise<void> {
+  try { data.vol = await api.volLedger(); } catch (e) { volGone(e); }
 }
 
 export async function loadRegistry(): Promise<boolean> {

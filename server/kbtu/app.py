@@ -339,7 +339,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/consent")
     def consent(con: Con, v: Me, body: dict = Body(...)):
-        return logic.consent(con, v, body.get("version"), policy_for(con, v, policy))
+        logic.consent(con, v, body.get("version"), policy_for(con, v, policy))
+        return get_me(con, v)  # all of /api/me (its vol part too): the app replaces its copy with this
 
     @app.post("/api/me/dm")
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):

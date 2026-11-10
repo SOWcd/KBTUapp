@@ -439,3 +439,27 @@ def test_zip_bombs_refused():
         z.writestr("xl/big.xml", b"\0" * (xlsx.MAX_ALL + 1))
     with pytest.raises(xlsx.Bad):
         xlsx.read(buf.getvalue())
+
+
+def test_a_deleted_duplicate_row_stays_gone(zz):
+    """A repeated row of the sheet is a record of its own with its own key: deleted with an account, never back."""
+    c, cfg, con, org = zz
+    dup = [["Aru Test", "2", "+70000000009", "@aru_t"]]
+    vol.apply(con, org, vol.plan(_book(dup)), "list")
+    second = con.execute("SELECT id FROM vol_people WHERE raw LIKE '%+70000000009%'").fetchone()[0]
+    uid = _member(c, con, org, 3, "aru")
+    c.post(f"/api/vol/people/{second}/link", headers=tma(P), json={"user": uid})
+    delete_now(c, cfg, tma(3))
+    got = vol.apply(con, org, vol.plan(_book(dup + [["Eve Test", "1", "", "@eve_test"]])), "a later list")
+    assert (got["added"], got["deleted"]) == (1, 1)
+    assert con.execute("SELECT COUNT(*) FROM vol_people WHERE raw LIKE '%+70000000009%'").fetchone()[0] == 0
+
+
+def test_an_ambiguous_name_matches_nobody():
+    """Two Aru Tests on the members sheet (the first without a Telegram): hours by @ go to the right one, by name to neither."""
+    book = xlsx.write({MEM: [[FIO_LAT, TG], ["Aru Test", ""], ["Aru Test", "@aru_two"]],
+                       HRS: [[FIO, TG2, "Total"], ["Aru Test", "@aru_two", "10"], ["Aru Test", "", "3"]]})
+    p = vol.plan(book, "Total")
+    by = {(r["tg"], tuple(sorted(r["sheets"]))): r["balance"] for r in p["people"]}
+    assert len(p["people"]) == 3 and by[("aru_two", tuple(sorted((HRS, MEM))))] == 600
+    assert by[(None, (MEM,))] == 0 and by[(None, (HRS,))] == 180
