@@ -9,6 +9,7 @@
   import { MANUAL, addsUp, codesOf, manualMedal, manualName, manualTitle, type Manual } from '../../lib/awards';
   import { say } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
+  import { data } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -29,11 +30,11 @@
   });
   const set = (codes: Code[]) => (mine = MANUAL.flatMap(codesOf).filter((c) => codes.includes(c)));
 
-  function give(code: Code) {
+  function give(code: Code, org?: number) {
     const was = held ?? [];
     set([...was, code]); // the chip answers in the same frame
     haptic.tap();
-    api.giveGrant(person.id, code).then(() => { haptic.ok(); say(t('aw.given', { award: manualName(code) }), 'party_popper_3d'); }).catch((e) => { set(was); haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('common.error'), 'pleading_face_3d'); });
+    api.giveGrant(person.id, code, org).then(() => { haptic.ok(); say(t('aw.given', { award: manualName(code) }), 'party_popper_3d'); }).catch((e) => { set(was); haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('common.error'), 'pleading_face_3d'); });
   }
   async function take(code: Code) {
     if (!(await sheets.ask({ title: t('adm.takeBackAsk', { award: manualName(code), name: person.name }), ok: t('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
@@ -50,6 +51,13 @@
       return;
     }
     const code = a.code as Code;
+    if (code === 'club_founder' && !held?.includes(code)) {
+      // its club first: an official one or one at the Ascent's top (the server checks the same)
+      const clubs = [...data.orgs, ...data.small].filter((o) => o.kind === 'club' && (o.official || o.top)).sort((x, y) => x.name.localeCompare(y.name));
+      if (!clubs.length) { say(t('aw.noClub'), 'pleading_face_3d'); return; }
+      menu(e.currentTarget as Element, clubs.map((o) => ({ label: o.name, onselect: () => give(code, o.id) })));
+      return;
+    }
     if (!held?.includes(code)) give(code);
     else if (addsUp(code)) menu(e.currentTarget as Element, [
       { label: t('aw.oneMore'), onselect: () => give(code) },

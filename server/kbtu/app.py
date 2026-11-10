@@ -1718,7 +1718,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/grants")
     def grant(con: Con, v: Me, body: dict = Body(...)):
-        return logic.grant(con, v, body.get("userId"), body.get("code"))
+        return logic.grant(con, v, body.get("userId"), body.get("code"), body.get("orgId"))
 
     @app.get("/api/admin/staff")
     def staff(con: Con, v: Me):
@@ -2002,7 +2002,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind == "aw":  # an achievement of mine (§4.11): the reader's button opens their own progress toward it
             code = body.get("code")
-            a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student else None
+            a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student and code not in logic.PRIVATE else None
             if not a:
                 raise ApiError("bad_input")
             title, text, button = texts.share_award(lang, a.get("variant") or code, a["level"], len(a["levels"]), a["levels"][a["level"] - 1]["rarity"])
@@ -2260,6 +2260,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                          ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals)), ("chs", cfg.chat_sync)):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
+        body = re.sub(r"<!-- TODO\(legal.*?-->\n?", "", body, flags=re.S)  # notes for whoever writes the text, never served
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
         other = "terms" if doc == "privacy" else "privacy"
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

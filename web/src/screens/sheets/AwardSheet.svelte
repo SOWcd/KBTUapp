@@ -225,6 +225,7 @@
   {#if a}
     {#if a.now}<p class="tier">{tn('ach.streakNow', a.now)}</p>{/if}
     <p class="t-callout how up">{seen ? variantHow(a.code, seen) : achHow(a)}</p>
+    {#if a.org}<p class="t-foot got">{a.org.name}</p>{/if}
     {#if a.variants}
       <!-- one badge, its variants side by side: mine lit, the others dim; a tap tells what each one means -->
       <div class="vars up">
@@ -240,7 +241,8 @@
     {#if !hidden}
       {#if a.level && !tiers}
         <!-- earned, one level: the day and how rare, one quiet line (owner, Nov 1: the boxed card looked clunky) -->
-        <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}</p>
+        <!-- Fuel: no share of students (the server counts no givers) -->
+        <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')}{#if a.code !== 'supporter'} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}{/if}</p>
       {:else if next}
         <div class="prog up">
           <div class="row"><b>{t('ach.progress', { count: a.count, need: next.need })}</b>{#if tiers}<span>{t('aw.toLevel', { tier: tierOf(a.levels.indexOf(next)) })}</span>{/if}</div>
@@ -280,10 +282,10 @@
   {/if}
 
   <!-- small glass pills in the medal's metal, right under it (owner, Nov 1: the wide blue button at the bottom was ugly) -->
-  {#if ref || (mine && a && a.level > 0)}
+  {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter')}<!-- Fuel: not shared ("can you get one too?" would ask for money) -->
     <div class="acts up" style:--glow={glow || GLOW[0]}>
       {#if ref}<button class="pill glass glass-pill main" use:glass disabled={inviting} onclick={invite}><Megaphone size={17} />{t('ref.invite')}</button>{/if}
-      {#if mine && a && a.level > 0}
+      {#if mine && a && a.level > 0 && a.code !== 'supporter'}
         <button class="pill glass glass-pill" class:main={!ref} use:glass disabled={sharing} onclick={shareIt}><Share size={17} />{t('aw.share')}</button>
       {/if}
     </div>

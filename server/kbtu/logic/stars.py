@@ -1,6 +1,8 @@
 """Telegram Stars for "Support the app" (owner, Nov 9): one more way beside the banks, a gift and never a purchase. The
 app asks for an invoice, Telegram's own window takes the Stars, the bot records the charge. Nothing about the payer is
-kept, so this is no new personal data: no policy section, no consent version, nothing for an account's deletion to reach."""
+kept on the gift. A new gift gives its payer the award Fuel (Nov 10, reviews: for Stars only, never a bank transfer;
+no amount, no level): that one fact sits on their account (achievement_grants, gone with it) and needs the privacy
+policy's line (TODO(legal) there)."""
 from __future__ import annotations
 
 import logging
@@ -11,7 +13,9 @@ import httpx
 
 from .. import texts
 from ..config import Config
-from .core import ApiError, now
+from ..db import tx
+from . import profiles
+from .core import ApiError, now, one
 
 log = logging.getLogger(__name__)
 LEAST, MOST = 1, 10000
@@ -60,11 +64,22 @@ def checkout_ok(q: dict) -> bool:
     return bool(m) and q.get("currency") == "XTR" and q.get("total_amount") == int(m[1]) and _ok(int(m[1]))
 
 
-def paid(con, payment: dict) -> None:
+def paid(con, payment: dict, payer: object = None) -> None:
     """A successful_payment message: a replayed update counts once (the charge id is the key). The Stars have already
-    arrived, so a payload we don't recognise is recorded too.
+    arrived, so a payload we don't recognise is recorded too. A new gift gives its payer (`payer`: the message's from.id)
+    the award Fuel, if they are a student and haven't it yet; the payer is never written next to the gift.
     ponytail: no payer on the row, so a refund (refundStarPayment wants the user id and the charge id) needs the payer's
-    Telegram id from them; upgrade: a user column here, with its privacy section and a _DEL_GONE entry."""
+    Telegram id from them, and Fuel isn't taken back by itself: the creator takes it back by hand (Admin, take_back).
+    Upgrade: a user column here, with its privacy section and a _DEL_GONE entry.
+    ponytail: the gift's time is kept to the day, so it doesn't line up with Fuel's grant to the second; a day with one
+    gift still says who gave how much to someone reading the database. Drop the amounts if that ever matters.
+    ponytail: a payer who signs in with KBTU only later gets no Fuel (the creator can give it by hand)."""
     charge, amount = payment.get("telegram_payment_charge_id"), payment.get("total_amount")
-    if payment.get("currency") == "XTR" and isinstance(charge, str) and charge and isinstance(amount, int) and amount > 0:
-        con.execute("INSERT OR IGNORE INTO star_gifts (charge_id, amount, created_at) VALUES (?, ?, ?)", (charge, amount, now()))
+    if not (payment.get("currency") == "XTR" and isinstance(charge, str) and charge and isinstance(amount, int) and amount > 0):
+        return
+    with tx(con):
+        day = (now() + 5 * 3600) // 86400 * 86400 - 5 * 3600  # Almaty's
+        new = con.execute("INSERT OR IGNORE INTO star_gifts (charge_id, amount, created_at) VALUES (?, ?, ?)", (charge, amount, day)).rowcount
+        u = one(con, "SELECT s.user_id FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", payer) if new and type(payer) is int else None
+        if u and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'supporter'", u[0]):
+            profiles._grant(con, None, u[0], "supporter", log=False)  # no audit row either: it would say who gave

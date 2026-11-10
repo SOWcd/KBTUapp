@@ -264,7 +264,7 @@ export interface Api {
   decideOfficial(id: Id, approve: boolean, reason?: string): Promise<OfficialRequest>; // admin
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
   /** Admin → Awards: give a person a manual award (the bot sends them its card); undo: ungrant(its id) */
-  giveGrant(userId: Id, code: GrantItem['code']): Promise<GrantItem>;
+  giveGrant(userId: Id, code: GrantItem['code'], orgId?: Id): Promise<GrantItem>; // orgId: Club founder's club
   /** the scanner: a person's card QR is one grant; `run` names this opening of the camera for undoBatch('s_' + run) */
   grantScan(qr: string, code: GrantItem['code'], run?: string): Promise<GrantItem>;
   /** undo one of my grants, at any time */

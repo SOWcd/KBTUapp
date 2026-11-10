@@ -63,6 +63,8 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
     ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
     ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
+    ("supporter", "fire_3d", (1,), False),  # "Fuel": a new Stars gift (stars.paid), or the creator by hand; others see it only on the showcase
+    ("club_founder", "rocket_3d", (1,), False),  # founded a club (official or at the Ascent's top): by hand in Admin, the club on the grant's note
 ]
 # Couch critic (awards plan, Nov 3): the forum channel's posts I commented under, each once (critic()). Off until the
 # privacy policy says the bot's record of my comments (its section on forum channel posts) also counts toward my award:
@@ -105,6 +107,7 @@ def _counts(con, uid: int) -> dict[str, int]:
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
             "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
+            "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0),
             "critic": critic(con, uid) if CRITIC_ON else 0}
 
 
@@ -137,7 +140,8 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
         if level > before[code]:
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at""", (uid, code, level, core.now()))
-            notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
+            if code not in PRIVATE:  # a gift of money is never told in the bot's chat
+                notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
 
 def sync_levels(con) -> None:
@@ -184,21 +188,25 @@ def sync_levels(con) -> None:
 BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
-GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p")  # the manual ones (§4.11); "First 500" is given at verification
+GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
-CREATOR_ONLY = ("creator_laugh", "creator_found")  # about the creator himself: he alone gives them (owner, Nov 3)
+CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter")  # about the creator himself (owner, Nov 3), and Fuel: he alone gives them
+PRIVATE = ("supporter",)  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
+ONE_BY_ONE = ("supporter", "club_founder")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
 LINK_DAYS = (1, 3, 7, 14)
 CARD_WAIT = 45  # a manual award's bot card waits this long, so an Undo stops it before it goes
 
 
-def _giver(con, v: Viewer, code: object) -> str:
-    """Who may give `code`: an admin; the creator's own two only the creator."""
+def _giver(con, v: Viewer, code: object, bulk: bool = False) -> str:
+    """Who may give `code`: an admin; CREATOR_ONLY only the creator. `bulk`: a scan, a link, a shown QR (not ONE_BY_ONE)."""
     _admin(v)
     if type(code) is not str or code not in GRANTABLE:
         raise ApiError("bad_input")
     if code in CREATOR_ONLY and not _owner(con, v):
         raise ApiError("forbidden")
+    if bulk and code in ONE_BY_ONE:
+        raise ApiError("bad_input")
     return code
 
 
@@ -208,25 +216,32 @@ def _item(con, gid: int) -> dict:
     return {"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
 
 
-def grant(con, v: Viewer, uid: object, code: object) -> dict:
+def grant(con, v: Viewer, uid: object, code: object, org: object = None) -> dict:
     """The admin gives a manual award to a person picked in the app: "Bug hunter" one more time, the rest once.
-    Celebrated like any new level (the bot's card with a button, the unlock moment); audited. Undo: ungrant(id)."""
+    Celebrated like any new level (the bot's card with a button, the unlock moment); audited. Undo: ungrant(id).
+    Club founder names its club (`org`): an official one or one at the Ascent's top; the award stays whatever the club
+    does later (a new President, hidden). ponytail: one per person; a founder of two clubs needs a grant per club."""
     code = _giver(con, v, code)
     if not isinstance(uid, int) or isinstance(uid, bool) or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
         raise ApiError("bad_input")
+    note = None
+    if code == "club_founder":
+        if type(org) is not int or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind = 'club' AND (official = 1 OR top_at IS NOT NULL)", org):
+            raise ApiError("bad_input", "club")
+        note = f"org:{org}"
     with tx(con):
-        gid = _grant(con, v.id, uid, code)
+        gid = _grant(con, v.id, uid, code, note=note)
     return _item(con, gid)
 
 
-def _grant(con, by: int, uid: int, code: str, batch: str | None = None, log: bool = True) -> int:
+def _grant(con, by: int | None, uid: int, code: str, batch: str | None = None, log: bool = True, note: str | None = None) -> int:
     # a meeting counts once: a second QR opened for it, a card scanned twice. Almaty's day (no meetings table to name it)
     since = (core.now() + 5 * 3600) // 86400 * 86400 - 5 * 3600 if code == "dmp" else 0
     if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ? AND created_at >= ?", uid, code, since):
         raise ApiError("conflict")
     before = _levels(con, uid)
-    gid = con.execute("INSERT INTO achievement_grants (user_id, code, granted_by, created_at, batch) VALUES (?, ?, ?, ?, ?)",
-                      (uid, code, by, core.now(), batch)).lastrowid
+    gid = con.execute("INSERT INTO achievement_grants (user_id, code, granted_by, created_at, batch, note) VALUES (?, ?, ?, ?, ?, ?)",
+                      (uid, code, by, core.now(), batch, note)).lastrowid
     if log:  # a link's use is logged as that (use_grant_link), not as the maker's own grant
         log_action(con, by, "grant", f"user:{uid}", json.dumps({"code": code, **({"batch": batch} if batch else {})}))
     _celebrate(con, uid, before, core.now() + CARD_WAIT)
@@ -237,7 +252,7 @@ def grant_scan(con, v: Viewer, raw: object, code: object, run: object = None) ->
     """Admin → Awards' scanner: a person's own card QR is one grant of `code`; the app keeps the camera open for the
     next one. `run`: the app's id for this opening of the camera, so "Undo all from this run" is one call. Not Bug
     hunter: it adds up, so a QR seen twice would give it twice."""
-    code = _giver(con, v, code)
+    code = _giver(con, v, code, bulk=True)
     b = PROFILE_QR.search(str(raw or ""))
     if code == "bugs" or (run is not None and not (type(run) is str and BATCH.fullmatch(run))):
         raise ApiError("bad_input")
@@ -251,7 +266,7 @@ def grant_scan(con, v: Viewer, raw: object, code: object, run: object = None) ->
 def grant_link(con, v: Viewer, code: object, uses: object = 1, days: object = 7) -> str:
     """An award link for people the admin can't pick in the app (a bug report in a chat, a crowd on stage): up to
     `uses` people (None: no cap), each once, for `days`. Made when the share card is sent (app.py /api/share)."""
-    code = _giver(con, v, code)
+    code = _giver(con, v, code, bulk=True)
     if code == "dmp":  # you have to be in the hall: a link can be forwarded and kept for another day
         raise ApiError("bad_input")
     if type(days) is not int or days not in LINK_DAYS or uses is not None and (type(uses) is not int or not 1 <= uses <= 1000):
@@ -276,7 +291,7 @@ def use_grant_link(con, v: Viewer, token: str, qr: bool = False) -> dict:
             FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
             WHERE g.token = ? AND (g.multi = 1 OR g.used_at IS NULL) AND g.expires_at > ? AND g.qr = ? AND (g.qr = 0 OR g.lease_until > ?)""",
                 token, core.now(), int(qr), core.now())
-        if not r or (r["code"] in CREATOR_ONLY and not r["is_founder"]):
+        if not r or (r["code"] in CREATOR_ONLY and not r["is_founder"]) or r["code"] in ONE_BY_ONE:
             raise ApiError("closed")  # a shown QR's bare token (from a photo of it) is no link: closed too
         if one(con, "SELECT 1 FROM grant_link_uses WHERE token = ? AND user_id = ?", token, v.id):
             if qr:  # the QR's scanner wants to hear it: "you have it already"
@@ -315,7 +330,7 @@ def _qr_sig(token: str, slot: int) -> str:
 
 def open_qr(con, v: Viewer, code: object) -> dict:
     """The giver opens the screen for `code` (not Bug hunter: it adds up; the creator's own two: him alone)."""
-    code = _giver(con, v, code)
+    code = _giver(con, v, code, bulk=True)
     if code == "bugs":
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
@@ -361,7 +376,7 @@ def claim_link(con, code: str, until: int) -> str:
     """admin claim new (the CLI): a link many students open for `code` (not Bug hunter), given by the owner, until
     `until`, no cap. The app's links are grant_link's."""
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
-    if not owner or code not in GRANTABLE or code in ADDS_UP or until <= core.now():
+    if not owner or code not in GRANTABLE or code in ADDS_UP or code in ONE_BY_ONE or until <= core.now():
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
     con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi) VALUES (?, ?, ?, ?, ?, 1)",
@@ -458,11 +473,12 @@ def my_grants(con, v: Viewer) -> list[dict]:
 
 # ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
-SHOWN = (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES["init26"])  # as the chips go; a badge's highest variant first
+SHOWN = (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES["init26"], "club_founder")  # as the chips go; a badge's highest variant first
 
 
-def _badge_row(con, p) -> dict:
-    has = sorted((r[0] for r in rows(con, f"SELECT DISTINCT code FROM achievement_grants WHERE user_id = ? AND code IN ({','.join('?' * len(GRANTABLE))})", p["id"], *GRANTABLE)), key=SHOWN.index)
+def _badge_row(con, p, owner: bool) -> dict:
+    has = sorted((r[0] for r in rows(con, f"SELECT DISTINCT code FROM achievement_grants WHERE user_id = ? AND code IN ({','.join('?' * len(GRANTABLE))})", p["id"], *GRANTABLE)
+                  if owner or r[0] not in PRIVATE), key=SHOWN.index)
     return {"person": person_ref(p), "username": p["tg_username"], "has": has}
 
 
@@ -480,13 +496,15 @@ def award_counts(con, v: Viewer) -> dict:
     _admin(v)
     have = dict(rows(con, f"""SELECT COALESCE(CASE {' '.join(f"WHEN code IN ({','.join(repr(c) for c in vs)}) THEN '{b}'" for b, vs in BADGES.items())} END, code),
         COUNT(DISTINCT user_id) FROM achievement_grants WHERE code IN ({','.join('?' * len(GRANTABLE))}) GROUP BY 1""", *GRANTABLE))
-    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES)}
+    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES, "club_founder") if a not in PRIVATE or _owner(con, v)}
 
 
 def award_people(con, v: Viewer, award: object) -> list[dict]:
     """Who has an award, newest first: each person's latest grant of it (a badge: their variant), to take back."""
     _admin(v)
     codes = _codes(award)
+    if award in PRIVATE and not _owner(con, v):
+        raise ApiError("forbidden")
     return [{"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
             for g in rows(con, f"""SELECT g.id AS gid, g.code, g.created_at, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
                 LEFT JOIN students s ON s.user_id = u.id WHERE g.id IN (SELECT MAX(id) FROM achievement_grants WHERE code IN ({','.join('?' * len(codes))}) GROUP BY user_id, code)
@@ -499,7 +517,7 @@ def awards_of(con, v: Viewer, uid: object) -> dict:
     p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + " WHERE u.id = ? AND s.user_id IS NOT NULL", uid) if type(uid) is int else None
     if not p:
         raise ApiError("not_found")
-    return _badge_row(con, p)
+    return _badge_row(con, p, _owner(con, v))
 
 
 def badge_people(con, v: Viewer, q: object) -> list[dict]:
@@ -511,7 +529,8 @@ def badge_people(con, v: Viewer, q: object) -> list[dict]:
         raise ApiError("bad_input")
     found = search.people(rows(con, PERSON.replace("SELECT ", "SELECT u.tg_username, s.student_id, ", 1)
                                + " WHERE s.user_id IS NOT NULL ORDER BY s.last_name, s.first_name"), q)
-    return [_badge_row(con, p) for p in found]
+    owner = _owner(con, v)
+    return [_badge_row(con, p, owner) for p in found]
 
 
 def badge_sessions(con, v: Viewer) -> list[dict]:
@@ -611,7 +630,7 @@ def _rarity(con) -> tuple[int, dict, dict]:
     # out of students only: staff take no card and no "First 500", counted they made it "95%"
     total = max(1, one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0])
     at_level = {(r[0], r[1]): r[2] for r in rows(con, """SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
-        JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""")}
+        JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""") if r[0] not in PRIVATE}
     badges = {b: one(con, f"""SELECT COUNT(DISTINCT l.user_id) FROM achievement_levels l JOIN students s ON s.user_id = l.user_id
         WHERE s.consent_version != 'staff' AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total for b, vs in BADGES.items()}
     _RARITY[:] = [time.monotonic() + 60, (total, at_level, badges)]
@@ -667,8 +686,14 @@ def person(con, v: Viewer, uid: int) -> dict:
     if not close:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
-    ach = [a if close else {**a, "at": None} for a in achievements(con, uid)]
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # an old "init26f" is the badge now
+    # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
+    ach = [a if close else {**a, "at": None} for a in achievements(con, uid)
+           if a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)]
+    for a in ach:  # the club a founder founded, to those who see someone's clubs
+        if a["code"] == "club_founder" and a["level"] and close:
+            o = one(con, "SELECT o.* FROM achievement_grants g JOIN orgs o ON 'org:' || o.id = g.note WHERE g.user_id = ? AND g.code = 'club_founder' ORDER BY g.id DESC", uid)
+            a["org"] = org_ref(con, o) if o else None
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
         roles = _roles(con, v)

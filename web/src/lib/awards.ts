@@ -39,8 +39,9 @@ export const BADGES: { code: string; variants: { code: string; emoji: string }[]
   { code: 'init26', variants: [{ code: 'init26p', emoji: 'medal_init26p_2' }, { code: 'init26', emoji: 'medal_init26_2' }, { code: 'init26f', emoji: 'medal_init26f_2' }] },
 ];
 /** the manual awards staff give, one entry per award (a badge's variants inside it, the highest first): `scan` false
- *  for Bug hunter (it adds up, a QR seen twice would give it twice); `creator` ones the creator alone gives */
-export type Manual = { code: string; emoji: string; scan: boolean; creator?: boolean; variants?: { code: GrantItem['code']; emoji: string }[] };
+ *  for Bug hunter (it adds up, a QR seen twice would give it twice); `creator` ones the creator alone gives; `one` ones
+ *  only to a person picked by hand, never by a link or a check-in session (the server's ONE_BY_ONE) */
+export type Manual = { code: string; emoji: string; scan: boolean; creator?: boolean; one?: boolean; variants?: { code: GrantItem['code']; emoji: string }[] };
 /** one grant is +1, not "held" (the server's ADDS_UP): given again and again, never to a whole check-in session */
 export const addsUp = (code: string): boolean => code === 'bugs' || code === 'dmp';
 export const MANUAL: Manual[] = [
@@ -49,6 +50,8 @@ export const MANUAL: Manual[] = [
   { code: 'bugs', emoji: 'lady_beetle_3d', scan: false },
   // 'dmp' (Attendance required) hidden, as the server's DMP_ON (owner, Nov 10)
   ...BADGES.map((b) => ({ code: b.code, emoji: b.variants[0].emoji, scan: true, variants: b.variants as Manual['variants'] })),
+  { code: 'club_founder', emoji: 'rocket_3d', scan: false, one: true }, // given with its club picked
+  { code: 'supporter', emoji: 'fire_3d', scan: false, creator: true, one: true }, // Fuel: a Stars gift gives it; by hand the creator alone
 ];
 /** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
 export const manualMedal = (code: string, emoji: string, held = true): Achievement =>
@@ -134,6 +137,8 @@ export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 
   headphone_3d: { field: '#3A2A9A', glyph: 'anthem', metal: 'g' },
   face_with_tears_of_joy_3d: { field: '#0E7A86', glyph: 'laugh', metal: 'g' },
   waving_hand_3d_default: { field: '#D2483A', glyph: 'wave', metal: 'g' },
+  fire_3d: { field: '#B4501A', glyph: 'fuel', metal: 'g' },       // Fuel: a flame of light rising from a drop, warm gold
+  rocket_3d: { field: '#1E5A8A', glyph: 'stone', metal: 's' },    // Club founder: the cornerstone laid, its keystone lit, silver
 };
 /** the year a pin shows small: its moment's, else the one it was earned in (Almaty) */
 export const yearOf = (at: number | null | undefined, fixed?: number): number | undefined =>

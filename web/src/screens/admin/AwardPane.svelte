@@ -44,7 +44,7 @@
   const loadLinks = () => api.grantLinks().then((l) => (links = l)).catch(() => {});
   const loadHolders = () => api.awardPeople(a.code).then((l) => (holders = l)).catch(() => (holders = []));
   void loadLinks(); void loadHolders();
-  $effect(() => { if (owner && !addsUp(a.code)) api.badgeSessions().then((l) => (checkins = l)).catch(() => {}); });
+  $effect(() => { if (owner && !addsUp(a.code) && !a.one) api.badgeSessions().then((l) => (checkins = l)).catch(() => {}); });
   const changed = () => { void loadHolders(); onchange?.(); };
 
   // ---- the scanner: our camera on the page; Telegram's popup only when ours is refused or missing
@@ -197,7 +197,7 @@
         {#if a.scan}<Button kind="filled" full onclick={() => { haptic.tap(); sheets.badgeQr(a, code); }}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('aw.show')}</Button>{/if}
         <div class="btns">
           {#if a.scan}<Button kind="tinted" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
-          {#if a.code !== 'dmp'}<Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>{/if}
+          {#if a.code !== 'dmp' && !a.one}<Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>{/if}
         </div>
         {#if mode === 'link'}
           <div class="form" transition:fold>

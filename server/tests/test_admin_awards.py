@@ -115,7 +115,7 @@ def test_award_rows_and_holders(env, dmp_on):
     ann, bob = login(c, 62, "ann"), login(c, 63, "bob")
     give = lambda uid, code: c.post("/api/admin/grants", headers=tma(60), json={"userId": uid, "code": code})  # noqa: E731
     give(ann["id"], "init26p"); give(ann["id"], "init26"); give(bob["id"], "init26f"); give(bob["id"], "bugs"); give(bob["id"], "bugs")
-    assert c.get("/api/admin/awards", headers=tma(61)).json() == {"creator_laugh": 0, "creator_found": 0, "bugs": 1, "dmp": 0, "init26": 2}  # a badge once a person
+    assert c.get("/api/admin/awards", headers=tma(61)).json() == {"creator_laugh": 0, "creator_found": 0, "bugs": 1, "dmp": 0, "init26": 2, "club_founder": 0}  # a badge once a person
     who = c.get("/api/admin/awards/init26/people", headers=tma(61)).json()
     assert sorted((w["person"]["id"], w["code"]) for w in who) == sorted([(ann["id"], "init26p"), (ann["id"], "init26"), (bob["id"], "init26f")])
     assert len(c.get("/api/admin/awards/bugs/people", headers=tma(61)).json()) == 1                  # the latest bug, one row

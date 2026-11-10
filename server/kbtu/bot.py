@@ -1387,7 +1387,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 msg = upd.get("message") or {}
                 if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
                     try:
-                        await asyncio.to_thread(logic.stars.paid, con, payment)
+                        await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"))
                     except sqlite3.Error as exc:  # paid but unrecorded: this update again next round (paid is idempotent by the charge id)
                         log.warning("stars paid: %s", type(exc).__name__)
                         await asyncio.sleep(1)

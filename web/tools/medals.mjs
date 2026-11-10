@@ -453,6 +453,20 @@ const zpin = (name, k, colors, nodes, ties, web, orbits) => {
     `M${near[0][0]} ${near[0][1]}L${far[0][0]} ${far[0][1]}M${near[0][0]} ${near[0][1]}L${far[1][0]} ${far[1][1]}M${near[1][0]} ${near[1][1]}L${far[2][0]} ${far[2][1]}M${near[1][0]} ${near[1][1]}L${far[3][0]} ${far[3][1]}`,
     `<circle cx="${C}" cy="${C}" r="108"/><circle cx="${C}" cy="${C}" r="166"/>`);
 })();
+// Fuel (a Stars gift): a flame of light round the core, a smaller flame inside it, on warm ember enamel
+(() => {
+  const n = [[256, 96, 15], [334, 250, 14], [338, 352, 14], [256, 408, 16], [174, 352, 14], [178, 250, 14], [256, 196, 12]];
+  zpin('fuel', 'g', ['#D86A2A', '#7A2A0A', '#2A0C02'], n,
+    'M256 96Q300 176 334 250Q366 316 338 352Q306 408 256 408Q206 408 174 352Q146 316 178 250Q212 176 256 96ZM256 196Q290 250 288 300Q284 336 256 340Q228 336 224 300Q222 250 256 196',
+    `M256 96L${C} ${C}M174 352L${C} ${C}M338 352L${C} ${C}`, `<circle cx="${C}" cy="${C}" r="176"/>`);
+})();
+// Club founder: an arch of stones, its keystone lit over the core, two footings on the ground line
+(() => {
+  const arch = [180, 150, 120, 90, 60, 30, 0].map((a) => [f(256 + 150 * Math.cos((a * Math.PI) / 180)), f(352 - 150 * Math.sin((a * Math.PI) / 180)), a === 90 ? 17 : 13]);
+  zpin('stone', 's', ['#3A7AB0', '#163A5C', '#06141F'], [...arch, [106, 412, 13], [406, 412, 13]],
+    `M106 412L106 352A150 150 0 0 1 406 352L406 412M232 178H280L270 222H242ZM256 222L${C} ${C}`,
+    'M106 412H406M106 352L256 202L406 352', `<circle cx="${C}" cy="${C}" r="176"/>`);
+})();
 
 // the files this tool owns are rewritten whole: drop the ones a rename left behind
 for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !n.startsWith("vb-") && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));

@@ -346,7 +346,7 @@ export const server: Api = {
   askOfficial: (org) => call<{ path: OfficialPath | null }>('POST', `/orgs/${org}/official-path`).then((r) => r.path),
   decideOfficial: (id, approve, reason) => call('POST', `/admin/official-requests/${id}`, { approve, reason: reason ?? '' }),
   feature: (postId, days) => call('POST', '/admin/feature', { postId, days }),
-  giveGrant: (userId, code) => call('POST', '/admin/grants', { userId, code }),
+  giveGrant: (userId, code, orgId) => call('POST', '/admin/grants', { userId, code, orgId }),
   grantScan: (qr, code, run) => call('POST', '/admin/grants/scan', { qr, code, run }),
   undoBatch: (batch) => call('POST', '/admin/grants/undo', { batch }),
   awardCounts: () => call('GET', '/admin/awards'),
