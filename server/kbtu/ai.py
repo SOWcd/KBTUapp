@@ -337,7 +337,7 @@ async def fill_categories(con, cfg, http: httpx.AsyncClient) -> tuple[int, int]:
         try:
             said, _ = await llm.chat(cfg, http, [{"role": "system", "content": CATEGORY_PROMPT},
                                                  {"role": "user", "content": json.dumps({"name": o["name"], "description": o["description"]}, ensure_ascii=False)}],
-                                     max_tokens=200, temperature=0, con=con, check=lambda a: a.strip().lower() in (*CATEGORIES, "none"))
+                                     max_tokens=200, temperature=0, con=con, only=PUBLIC_PROVIDERS, check=lambda a: a.strip().lower() in (*CATEGORIES, "none"))
         except llm.BadAnswers:
             left += 1
             continue
