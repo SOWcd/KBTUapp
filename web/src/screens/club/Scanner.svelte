@@ -12,8 +12,10 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import { api, type CheckinResult, type DoorPerson, type EventFull, type Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { sheets, doorMode } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
@@ -30,7 +32,9 @@
   import EmptyState from '../../ui/EmptyState.svelte';
 
   // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
-  let { overlay, id, names = false, only = false }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean } = $props();
+  // qr: the registration mode (owner, Nov 10): one door screen, this scanner or the event's QR on this phone, switched in place
+  let { overlay, id, names = false, only = false, qr = false }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean; qr?: boolean } = $props();
+  const toQr = () => { haptic.tap(); doorMode('qr'); close(overlay.id); sheets.eventQr(id, true); };
 
   let detail = $state<EventFull | null>(null);
   $effect(() => { api.event(id).then((d) => (detail = d)).catch(() => {}); });
@@ -174,6 +178,8 @@
         <Button kind="secondary" size="l" type="submit" loading={busy} disabled={!code.trim()}>{t('scan.mark')}</Button>
       </form>
     {/if}
+
+    {#if qr}<Button kind="secondary" size="l" full onclick={toQr}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('scr.showQr')}</Button>{/if}
 
     {#if only}{:else if !byName}
       <Button kind="secondary" size="l" full onclick={openByName}>{#snippet icon()}<UserSearch size={18} />{/snippet}{t('door.byName')}</Button>

@@ -487,7 +487,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/checkin")
     def checkin_scan(con: Con, v: Me, body: dict = Body(...)):
-        return qr.mark(con, cfg.token_key, v.id, v.student, str(body.get("p") or ""))
+        return qr.mark(con, cfg.token_key, v, str(body.get("p") or ""))
 
     @app.post("/api/ms/start")
     def ms_start(v: Me):

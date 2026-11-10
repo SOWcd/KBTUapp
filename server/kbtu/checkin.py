@@ -150,11 +150,27 @@ def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
         or bool(cohost and s["event_id"] and logic.co_runs(con, v, s["event_id"]))
 
 
-def _door(con, v: Viewer, s) -> bool:
+def _guests(con, e, sid: int | None) -> bool:
+    """An ordinary public event's door, the one a member may show the QR at: never a team-only one, a meeting, a
+    partner's, or the volunteers ledger's club (its scans count hours and misses: its organizers' alone)."""
+    return e["visibility"] == "public" and not e["meeting"] and not e["guest_host"] and e["org_id"] != logic.vol.org_id(con) \
+        and not (sid and one(con, "SELECT 1 FROM vol_meets WHERE session_id = ?", sid))
+
+
+def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
     """An event's session: every member who works its door (the ticket scanner) may also start and show its QR, for a
-    guest who can't open a ticket (owner, Nov 10); finishing, the CSV and the screens stay the organizers'."""
-    e = s and s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
-    return bool(e) and can(con, v, e["org_id"], "door") and not logic.door_shut(e, now())  # only while its door is open, as the scanner
+    guest who can't open a ticket (owner, Nov 10), at an ordinary public event while its door is open; Start from T-30
+    only (a President's early opening doesn't move the tier line). Finishing, the CSV and the screens stay the
+    organizers'. Raises why not: forbidden (an organizers' session), closed (with when it opens)."""
+    if not e or not can(con, v, e["org_id"], "door"):
+        raise ApiError("forbidden", "screen")
+    if not _guests(con, e, sid):
+        raise ApiError("forbidden", "door_staff")
+    at = max(logic.door_at(e), e["starts_at"] - logic.DOOR_AUTO) if start else logic.door_at(e)
+    if now() < at and e["status"] == "published" and not e["hidden_at"]:
+        raise ApiError("closed", "not_open", {"at": at})
+    if e["status"] != "published" or e["hidden_at"] or logic.door_shut(e, now()):
+        raise ApiError("closed", "closed")
 
 
 def _mine(con, v: Viewer, sid: int, cohost: bool = True):
@@ -228,8 +244,12 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not (act == "show" and s and logic.crew.qr_helping(con, v, s) or act in ("start", "show") and _door(con, v, s)):  # a helper only keeps the QR showing (hand, below)
-        s = _mine(con, v, sid, cohost=act in ("start", "show"))  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
+    door = act in ("start", "show")
+    if not (act == "show" and s and logic.crew.qr_helping(con, v, s)):  # a helper only keeps the QR showing (hand, below)
+        if not door or not s or _runs(con, v, s):  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
+            s = _mine(con, v, sid, cohost=door)
+        else:  # a member at the event's door
+            _door(con, v, s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]), sid, act == "start")
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
@@ -244,6 +264,9 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     else:
         raise ApiError("not_found")
     out = _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
+    if act == "show":  # who the last counted scan was: the phone at the door sees a guest's own name, not a screenshot of a toast
+        m = one(con, "SELECT user_id, done_at FROM qr_marks WHERE session_id = ? AND done_at IS NOT NULL ORDER BY done_at DESC LIMIT 1", sid)
+        out["last"] = m and {"name": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", m[0])), "at": m[1]}
     return {**out, "title": _title_for(con, s, v.id, True)} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
 
 
@@ -255,6 +278,9 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
         raise ApiError("forbidden", "screen")
     if e["status"] != "published" or e["guest_host"]:  # a paid one too: a ticket held is checked in by the scan (organizing.screen_came)
         raise ApiError("closed", "screen")
+    if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # not its organizer (_runs): a member at its door
+        x = one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)
+        _door(con, v, e, x and x[0])
     with tx(con):
         if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):
             con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -386,7 +412,8 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
 
 # ------------------------------------------------------------ the student's scan
 
-def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
+def mark(con, key: bytes, v: Viewer, p: str) -> dict:
+    uid, student = v.id, v.student
     try:
         _, sid, slot, sig = str(p).split("_")
         sid, slot = int(sid), int(slot)
@@ -409,6 +436,17 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
     if out and not had:  # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
         raise ApiError("bad_input", "qr_not_in")
     t = now()
+    e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+    if e and out and _guests(con, e, sid) and (logic.door_shut(e, t) == "not_open" or logic.door_shut(e, t - GRACE) == "closed"):
+        raise ApiError("closed", "qr")  # leaving an event too: within its door's window (GRACE for the crowd leaving at the end)
+    if e and not out and _guests(con, e, sid):
+        if can(con, v, e["org_id"], "door") and not logic.cohosts.runs(con, v, e):  # as the scanner: a door member doesn't check themselves in
+            raise ApiError("forbidden", "own")
+        r = e["price"] and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
+        if r and r["checked_in_at"] and not had:  # this ticket came in already (a screenshot at the scanner): the door must see it
+            return {"title": s["title"], "done": False, "left": False, "already": r["checked_in_at"]}
+        if r and not r["checked_in_at"] and logic.organizing.flagged(con, r["id"]):  # the scanner shows the flag: that's where it goes
+            return {"title": s["title"], "done": False, "left": False, "flagged": True}
     with tx(con):
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
         if out:  # leaving: the last time counts (out and back in, out again)

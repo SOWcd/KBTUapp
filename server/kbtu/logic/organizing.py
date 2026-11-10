@@ -722,6 +722,8 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
                         (eid, uid, _ticket_code(con, eid), t, t))
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r["checked_in_at"]:
+        if e["price"] and flagged(con, r["id"]):  # a flagged receipt goes by the scanner, where the door sees the flag
+            return False
         _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
     return True
 
@@ -755,8 +757,12 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
         came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
         return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
                 "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and one(  # a helper sees the person only (crew.py)
-                    con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
+                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"])}  # a helper sees the person only (crew.py)
+
+
+def flagged(con, rid: int) -> bool:
+    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first."""
+    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
@@ -1017,8 +1023,12 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
         came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
         return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", uid)),
                 "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and one(  # a helper sees the person only (crew.py)
-                    con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
+                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"])}  # a helper sees the person only (crew.py)
+
+
+def flagged(con, rid: int) -> bool:
+    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first."""
+    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", rid) is not None
 
 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:

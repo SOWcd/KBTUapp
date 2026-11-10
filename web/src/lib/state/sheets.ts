@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
@@ -20,6 +20,19 @@ export function copyCap(): CapCopy | null {
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
+
+/** The registration mode's half last used (scanner or QR): the row opens there, no extra tap. */
+export function doorMode(mode?: 'scan' | 'qr'): 'scan' | 'qr' {
+  try { if (mode) localStorage.setItem('door.mode', mode); return localStorage.getItem('door.mode') === 'qr' ? 'qr' : 'scan'; } catch { return mode ?? 'scan'; }
+}
+
+/** The registration mode (owner, Nov 10): the door scanner and the event's QR on this phone, one switch apart, opened
+ *  where it was left. A member's QR: an ordinary public event only, never the volunteers ledger's club `vol` (server
+ *  checkin._guests: those scans count hours and misses), so there the scanner has no switch. runs: its organizers. */
+export function registration(e: EventCard, runs: boolean, vol?: Id): void {
+  const qr = !e.guestHost && (runs || (!e.meeting && e.visibility !== 'members' && e.visibility !== 'leaders' && e.org.id !== vol));
+  if (qr && doorMode() === 'qr') sheets.eventQr(e.id, true); else sheets.scanner(e.id, false, qr);
+}
 
 export const sheets = {
   /** invite: opened by their invite link r_<code> (its landing: "Add as a friend", one tap) */
@@ -46,7 +59,7 @@ export const sheets = {
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id) => {},
-  scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
+  scanner: (_id: Id, _names?: boolean, _qr?: boolean) => {}, // names: a club's own event, marked by name (no tickets); qr: its switch to the event's QR (EventQr)
   // only: a scanner-only door helper (server crew.py): tickets, no list by name
   scannerOnly: (_id: Id) => {},
   crew: (_id: Id, _onchange?: (n: number) => void) => {},
@@ -57,7 +70,7 @@ export const sheets = {
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */
-  eventQr: (_event: Id) => {},
+  eventQr: (_event: Id, _door?: boolean) => {}, // door: the registration mode's other half, its switch back to the scanner
   /** the same screen for someone an organizer let help (server checkin.py); scanner: the event's door scanner too */
   helperQr: (_session: Id, _event: Id | null, _scanner: boolean) => {},
   /** the QR an organizer shows to let someone help */

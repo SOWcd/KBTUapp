@@ -20,7 +20,7 @@
   import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs } from '../../lib/time';
@@ -203,7 +203,7 @@
         {/if}
         {#if live && !e.guestHost && !staff}<!-- a partner's event has no door; Admin never works the door -->
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
-          {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
+          {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, head, session.me?.vol?.org)} />{/if}<!-- the scanner and the QR, one switch apart (EventSheet's) -->
         {/if}
         {#if head}
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
@@ -211,7 +211,7 @@
           {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
             <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
           {/if}
-          {#if live && !e.guestHost}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} /><!-- the door's QR on this phone (owner, Nov 10) -->
+          {#if live && !e.guestHost}{#if inner(e)}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}<!-- a public one's is in the registration mode -->
             <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}

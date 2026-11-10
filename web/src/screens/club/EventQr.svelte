@@ -7,8 +7,10 @@
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { QR_TONE } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
-  import { sheets } from '../../lib/state/sheets';
-  import { loadMe } from '../../lib/state/session.svelte';
+  import { sheets, doorMode } from '../../lib/state/sheets';
+  import { loadMe, session } from '../../lib/state/session.svelte';
+  import { eventById } from '../../lib/state/data.svelte';
+  import { time } from '../../lib/time';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
@@ -18,8 +20,10 @@
   import Button from '../../ui/Button.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
 
-  let { overlay, event, sess, hand = false, scanner = false }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean } = $props();
+  // `door`: the registration mode's QR half (Scanner.svelte's switch): its scanner button swaps back in place
+  let { overlay, event, sess, hand = false, scanner = false, door = false }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean; door?: boolean } = $props();
   $effect(() => { overlay.title = t(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 
   let q = $state<ScreenSession | null>(null), note = $state('');
@@ -38,10 +42,18 @@
     q = r;
     if (!r.ended) timer = setTimeout(poll, Math.min(r.next, 3) * 1000 + 300); // the next code as the slot turns, the count meanwhile
   }
+  // why the server refused (checkin._door): not open yet (when), closed, an organizers' QR; else as before
+  function why(e: unknown): string {
+    if (!(e instanceof ApiErr)) return t('common.error');
+    if (e.message === 'not_open' && typeof e.data.at === 'number') return t('scr.doorAt', { time: time(e.data.at) });
+    if (e.code === 'closed') return t('scr.closed');
+    if (e.message === 'door_staff') return t('scr.staffOnly');
+    return t(sess && e.code === 'forbidden' ? 'scr.helpEnded' : 'common.error');
+  }
   function stop(e: unknown) {
     if (gone) return;
-    const no = e instanceof ApiErr && e.code === 'forbidden';
-    if (!q || no) { q = null; note = t(sess && no ? 'scr.helpEnded' : 'common.error'); if (no) void loadMe(true); return; } // (the capsule goes too)
+    const no = e instanceof ApiErr && (e.code === 'forbidden' || e.code === 'closed');
+    if (!q || no) { q = null; note = why(e); if (e instanceof ApiErr && e.code === 'forbidden') void loadMe(true); return; } // (the capsule goes too)
     timer = setTimeout(poll, 3000); // a blip of the network: try again
   }
   async function open() {
@@ -51,6 +63,10 @@
     if (!s.started) { await api.screenAct(sid, 'start'); void loadMe(true); } // the capsule
     got(await api.screenAct(sid, 'show'));
   }
+
+  const toScanner = () => { haptic.tap(); if (door) { doorMode('scan'); close(overlay.id); sheets.scanner(event!, false, true); } else sheets.scannerOnly(event!); };
+  // who may let a helper in: the club's President or Vice, or the app's admin (server checkin._hands_over), here at the event's QR
+  const board = $derived(!sess && !hand && !!event && (session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === eventById(event)?.org.id && (m.role === 'president' || m.role === 'vice'))));
 
   async function handsOff() {
     if (!(await sheets.ask({ title: t('scr.handOffAsk'), text: t('scr.handOffText'), ok: t('scr.handOff'), cancel: t('scr.keep') }))) return;
@@ -99,9 +115,12 @@
     {:else if q}
       {#if q.param}<p class="hint">{t(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
       <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>
+      {#if q.last && !out}<p class="hint">{t('scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
       {#if q.pending}<p class="hint">{t('scr.joining', { n: q.pending })}</p>{/if}
-      {#if sess && scanner && q.param && event}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.scannerOnly(event); }}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
+      {#if event && !door && sess && scanner && q.param}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
+      {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
     {/if}
+    {#if door && event}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
   </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>

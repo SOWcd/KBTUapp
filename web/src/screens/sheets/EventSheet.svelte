@@ -58,7 +58,7 @@
   import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, registration } from '../../lib/state/sheets';
   import { focusPos } from '../../lib/photo';
   import { nameOf } from '../../lib/short';
   import Group from '../../ui/Group.svelte';
@@ -105,6 +105,8 @@
   const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
+  const doorOver = $derived(!!e && (e.endsAt ?? e.startsAt + 6 * 3600) <= nowTs()); // the server's door (DOOR_LATE without an end)
+  const register = (runs: boolean) => e && registration(e, runs, session.me?.vol?.org);
   const shut = $derived(started && !e?.lateSignup); // late sign-up: "Going" stays until the end (over comes first)
   // the student's classes around the event that day: the last one before, any that overlap, the first one
   // after — so they see at once whether they make it
@@ -495,19 +497,18 @@
       <Group>
         {#if crew}
           {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
-          {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
-          <!-- the scanner's other half: the event's QR on this phone, for a guest who can't open a ticket (owner, Nov 10); a member's once the door opens (server checkin._door) -->
-          {#if !e.guestHost && !over && (head || (e.doorAt ?? e.startsAt - 1800) <= nowTs())}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
+            {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
+          <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
+          {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => register(head)} />{/if}
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {/if}
         {/if}
         {#if coCrew}
-          <Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />
+          <Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => register(true)} />
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {#if !over}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />
-            <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          {#if !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
         {/if}
         {#if helper}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id))} />{/if}
         {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}

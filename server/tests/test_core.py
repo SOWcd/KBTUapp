@@ -6864,7 +6864,7 @@ def test_event_screen(env):
     assert not c.post("/api/checkin", headers=tma(1), json={"p": qp}).json()["done"]       # no ticket, no way in
     assert [tuple(r) for r in con.execute("SELECT user_id FROM registrations WHERE event_id = 2 AND checked_in_at IS NOT NULL").fetchall()] == [(bob["id"],)]
     con.execute("UPDATE events SET starts_at = ? WHERE id = 2", (t0 + 86400,))              # the door not open yet: a member can't
-    assert c.post(f"/api/screens/{q['session']}/show", headers=tma(7)).status_code == 403
+    assert c.post(f"/api/screens/{q['session']}/show", headers=tma(7)).json()["message"] == "not_open"  # said when it opens
     s = c.post("/api/events/1/screen", headers=tma(9)).json()
     assert (s["event"], s["title"]) == (1, "Initiation") and c.post("/api/events/1/screen", headers=tma(9)).json()["session"] == s["session"]
     p = c.post(f"/api/screens/{s['session']}/start", headers=tma(9)).json()["param"]

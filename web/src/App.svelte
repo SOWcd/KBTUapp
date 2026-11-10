@@ -105,7 +105,7 @@
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
-  sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
+  sheets.scanner = (id, names, qr) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
   sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), { vol: true });
@@ -114,7 +114,7 @@
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
-  sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
+  sheets.eventQr = (event, door) => lazy(() => import('./screens/club/EventQr.svelte'), { event, door });
   sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
@@ -476,11 +476,12 @@
       count('do.qr');
       if (r.done && r.left) { haptic.ok(); say(t('ci.left', { title: r.title }), 'waving_hand_3d_default'); return; }
       if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
+      if (r.already || r.flagged) { haptic.error(); say(r.already ? t('ci.already', { time: time(r.already) }) : t('ci.flagged'), 'warning_3d'); return; } // a ticket used already, a receipt to check: the scanner
       if (session.me?.student) { haptic.error(); say(t('ci.notCounted', { title: r.title }), 'warning_3d'); return; } // the event didn't take it (window, members only)
       if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p, true); }
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : e instanceof ApiErr && e.message === 'qr_not_in' ? t('ci.notIn') : t('common.error'), 'warning_3d');
+      say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : e instanceof ApiErr && e.message === 'qr_not_in' ? t('ci.notIn') : e instanceof ApiErr && e.message === 'own' ? t('ci.own') : t('common.error'), 'warning_3d');
     }
   }
 
