@@ -29,3 +29,13 @@ it('keeps the older pages under a refresh, and "more" by the page size', async (
   next = loadChannel(); answer(ids(201, PAGE)); await next;              // a new post on top: nothing below is lost
   expect(channel.feed!.map((p) => p.id)).toEqual(ids(201, PAGE + 4).map((p) => p.id));  // 201..152, 151 kept, 150..148
 });
+
+it('leaves the feed as it is when a refresh brings the same posts (no rebuild, no flip measuring)', async () => {
+  channel.feed = null;
+  let next = loadChannel(); answer([post(2), post(1)]); await next;
+  const before = channel.feed;
+  next = loadChannel(); answer([post(2), post(1)]); await next;
+  expect(channel.feed).toBe(before);
+  next = loadChannel(); answer([{ ...post(2), comments: 1 }, post(1)]); await next;  // a count moved: set
+  expect(channel.feed).not.toBe(before);
+});

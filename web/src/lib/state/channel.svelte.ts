@@ -26,7 +26,10 @@ export async function loadChannel(): Promise<void> {
     const got = await api.channelFeed(); if (at !== gen) return;
     const floor = got.length ? key(got[got.length - 1]) : 0;
     const older = (channel.feed ?? []).filter((p) => p.id > 0 && key(p) < floor);
-    channel.feed = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got, ...older];
+    const next = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got, ...older];
+    // the same posts (most refreshes: on the tab's open, every 30 s): nothing is set, so the list isn't rebuilt and its
+    // flip doesn't measure every post (a forced layout of the whole feed each time; perf, Nov 10)
+    if (!channel.feed || JSON.stringify(next) !== JSON.stringify($state.snapshot(channel.feed))) channel.feed = next;
     if (!older.length) channel.more = got.length >= PAGE;
   } catch { if (!channel.feed) channel.feed = []; }
 }

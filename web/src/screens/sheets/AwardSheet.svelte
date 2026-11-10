@@ -172,7 +172,7 @@
       gl = 'wait'; landed = false;
       // three.js is parsed once the scrim has faded in (its parse took frames from the opening on Android)
       new Promise((ok) => setTimeout(ok, 300)).then(() => (dead ? Promise.reject() : import('../../ui/coin3d')))
-        .then((m) => m.mountCoin(host, { src: `emoji/${art}.webp`, tint: edge, ribbon: RIBBON[art] ?? [edge, NAVY, NAVY, edge, NAVY, NAVY, edge], size: SIZE, state: () => ({ x: tiltOf('--gx'), y: tiltOf('--gy'), spin }), onLand: () => { landed = true; haptic.soft(); } }))
+        .then((m) => m.mountCoin(host, { src: `emoji/${art}.webp`, tint: edge, ribbon: RIBBON[art] ?? [edge, NAVY, NAVY, edge, NAVY, NAVY, edge], size: SIZE, state: () => ({ x: tiltOf('--gx'), y: tiltOf('--gy'), spin }), watch: stage, onLand: () => { landed = true; haptic.soft(); } }))
         .then((f) => { if (dead) f(); else { off = f; gl = 'on'; } })
         .catch(() => { gl = ''; landed = true; }); // no WebGL: the flat medal
     }

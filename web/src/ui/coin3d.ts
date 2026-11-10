@@ -29,7 +29,7 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
 const canvas2d = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')!] as const; };
 
 /** Mounts the medal into `host`; resolves once the first frame is drawn. Throws without WebGL. */
-export async function mountCoin(host: HTMLElement, o: { src: string; tint: string; ribbon: string[]; size: number; state: CoinState; onLand?: () => void }): Promise<() => void> {
+export async function mountCoin(host: HTMLElement, o: { src: string; tint: string; ribbon: string[]; size: number; state: CoinState; onLand?: () => void; watch?: HTMLElement }): Promise<() => void> {
   const renderer = new WebGLRenderer({ antialias: !onAndroid, alpha: true, powerPreference: 'low-power' });
   renderer.setPixelRatio(Math.min(onAndroid ? 2 : 3, devicePixelRatio || 1)); // Android: 3x + MSAA lost the medal's face and the page's layers (video, Nov 6) // 3x phones too: at 2 the edge stepped (owner, Nov 3: "no pixels")
   const w = Math.round(o.size * W), up = Math.round(o.size * UP), h = up + Math.round(o.size * DOWN);
@@ -238,6 +238,9 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
     const turn = 540 * (1 - Math.min(1, t / 1.05)) ** 3;
     const glint = t > 0.45 && t < 1.25 ? Math.sin(((t - 0.45) / 0.8) * Math.PI) : 0;
     springStep(sz, -s.x * 5, k); springStep(sx, s.y * 5, k); // by the time passed: the same swing at 60 and 120 Hz
+    // still (the entrance over, the pendulum at rest where the tilt pulls it): the loop sleeps until `watch` changes
+    // (the tilt light and the finger's spin are written there as styles); it ran every frame while the sheet was open
+    if (o.watch && t > 1.6 && Math.max(Math.abs(sz.v), Math.abs(sx.v), Math.abs(sz.x + s.x * 5), Math.abs(sx.x - s.y * 5)) < 1e-4) { cancelAnimationFrame(raf); raf = 0; }
     const yaw = s.x * 26 + s.spin + turn;
     const key = `${sz.x.toFixed(2)},${sx.x.toFixed(2)},${yaw.toFixed(2)},${s.y.toFixed(3)},${drop.toFixed(3)},${glint.toFixed(3)}`;
     if (key === shown) return; // nothing moved: no draw
@@ -253,7 +256,10 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
     renderer.render(scene, camera);
   };
   frame();
+  const mo = new MutationObserver(() => { if (!raf) { prev = performance.now() - 1000 / 60; raf = requestAnimationFrame(frame); } });
+  if (o.watch) mo.observe(o.watch, { attributes: true, attributeFilter: ['style'], subtree: true });
   return () => {
+    mo.disconnect();
     cancelAnimationFrame(raf);
     for (const x of [coinGeo, lugGeo, ringGeo, foldGeo, strapBase, ...straps.map((s) => s.g), rim, top, bottom, steel, satin, foldSatin, none, ...tex, env, pmrem, renderer]) x.dispose();
     room.dispose();
