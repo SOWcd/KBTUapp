@@ -27,6 +27,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
+  import SettingsMode from './SettingsMode.svelte';
   import { say, overlays, moment, backTo } from '../../lib/state/ui.svelte';
   import CardBack from '../../ui/CardBack.svelte';
   import { burst } from '../../ui/burst';
@@ -91,8 +92,10 @@
   // the lanyard's own motion (LanyardBand's loops) runs only while the card is on screen and its tab open: a hidden tab
   // and a card scrolled away would animate for nobody
   let seen = $state(true);
-  // and while a full-screen overlay (one with a mark in the capsule: the QR, the map) covers my card
-  const covered = $derived(mine && overlays.some((o) => !o.closing && o.icon));
+  // and while a full-screen overlay (one with a mark in the capsule: the QR, the map) covers my card. Not Me's settings:
+  // they have a mark too but open under the card, which stays in sight (owner, Nov 10: the tilted card snapped flat
+  // and its loops froze on the tap, a twitch)
+  const covered = $derived(mine && overlays.some((o) => !o.closing && o.icon && o.component !== SettingsMode));
   $effect(() => {
     const io = new IntersectionObserver(([e]) => (seen = e.isIntersecting));
     io.observe(swing);
