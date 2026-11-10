@@ -1,7 +1,7 @@
 """The volunteers ledger of one club (VOLUNTEERS=<slug>; Zhyly Zhurek first, owner Nov 9-10): its spreadsheet as an app.
 
 A volunteer is a record of the club, apart from any account (people never in the app are on it too); the President
-links one to an account and back. Hours: real check-in and check-out at the club's sessions (checkin.mark), or shifts
+links one to an account and back. Hours: real check-in and check-out at the club's sessions (checkin.mark), never a teambuilding's, or shifts
 the President enters; a check-in never checked out counts 0 minutes, the attendance stays. Misses: a session the
 President marks as a teambuilding; its expected list (the whole roster) is frozen when the session is made. A miss
 counts only once that session really ran: Finished, GRACE after it, and at least max(3, ceil(expected / 4)) of the
@@ -123,10 +123,11 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
 # ------------------------------------------------------------ the numbers, each read once for all rows
 
 def _minutes(con, org: int, vid: int | None = None) -> dict[int, tuple[int, int]]:
-    """{volunteer: (minutes of closed shifts, open shifts)}; an open shift (never checked out) counts 0."""
+    """{volunteer: (minutes of closed shifts, open shifts)}; an open shift (never checked out) counts 0. A teambuilding's
+    shifts give no hours (owner, Nov 10: hours are for volunteering at events; a teambuilding only counts for misses)."""
     return {r[0]: (r[1] // 60, r[2]) for r in rows(con, f"""SELECT h.vol_id, COALESCE(SUM(CASE WHEN h.out_at > h.in_at THEN h.out_at - h.in_at END), 0),
         COUNT(*) FILTER (WHERE h.out_at IS NULL) FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
-        WHERE p.org_id = ? AND h.gone_at IS NULL {'AND h.vol_id = ?' if vid else ''} GROUP BY h.vol_id""", org, *([vid] if vid else []))}
+        WHERE p.org_id = ? AND h.gone_at IS NULL AND NOT EXISTS (SELECT 1 FROM vol_meets m WHERE m.session_id = h.session_id AND m.team = 1) {'AND h.vol_id = ?' if vid else ''} GROUP BY h.vol_id""", org, *([vid] if vid else []))}
 
 
 # a teambuilding that really ran: Finished, GRACE ago, at least max(3, ceil(expected / 4)) of its expected people marked

@@ -189,6 +189,19 @@ def test_hours_from_check_in_and_out(zz):
     assert con.execute("SELECT COUNT(*) FROM vol_people WHERE user_id = ?", (_uid(c, 4),)).fetchone()[0] == 0
 
 
+def test_teambuilding_gives_no_hours(zz):
+    """Owner, Nov 10: hours are for volunteering at events; a teambuilding counts for misses only."""
+    c, _, con, org = zz
+    vid = con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, 'V', 0)", (org,)).lastrowid
+    tb, ev = _meet(c, con, org), _meet(c, con, org, team=False, title="Concert")
+    for sid in (tb, ev):
+        con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at) VALUES (?, ?, 0, 3600)", (vid, sid))
+    p = c.get(f"/api/vol/people/{vid}", headers=tma(P)).json()
+    assert p["minutes"] == 60 and len(p["shifts"]) == 2                       # the event's hour; the teambuilding's 0
+    assert c.post(f"/api/vol/meets/{ev}", headers=tma(P), json={"team": True}).status_code == 200
+    assert c.get(f"/api/vol/people/{vid}", headers=tma(P)).json()["minutes"] == 0
+
+
 def test_who_reads_and_who_edits(zz):
     c, _, con, org = zz
     vol.apply(con, org, vol.plan(_book()), "list")
