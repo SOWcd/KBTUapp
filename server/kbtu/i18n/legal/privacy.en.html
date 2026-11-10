@@ -173,11 +173,16 @@
 
 <!--apl-->
 <h2>{{apln}}. Appeals to the Student Government</h2>
-<!-- TODO(legal, Codex): this section's text (APPEALS, logic/appeals.py, consent apl1): what is kept (text, optional topic,
-anonymous or not, status, SG's answer, times; the author link apart), who reads it (SG's granted people: the name of a named
-appeal only; never the author of an anonymous one; the app's creator may reveal one, audited), AI help (section 5's
-providers, only on the button, nothing kept), helplines on signs of self-harm, the bot's template message, anonymous
-funnel counters without text, monthly topic counts (groups under 5 authors merged), retention (90 days after closing,
-180 at most), deleting one's appeal and the account (section 7), that the content itself may identify the author. -->
-<p>…</p>
+<p>A student who has confirmed their KBTU account can send an appeal to the KBTU Student Government through the app, under their name or anonymously. This is optional. The legal basis is your separate consent to this section. The app asks before your first send, or before AI help if you ask for that first. We keep the consent version and time.</p>
+<ul>
+<li><b>What we keep</b>: the text, topic (if you picked one), anonymous flag, status, the Student Government's answer, the time sent, the answer deadline, and the times of the first answer and closing. The link between the appeal and your account is kept separately, so you can see your appeals, delete them and get an answer notification. For the daily limit, sending times linked to your account are kept for a day.</li>
+<li><b>Who reads it</b>: you and the Student Government people the app's creator grants access to. They read appeals, change their status and answer. For a named appeal, the only author details shown are your first name and last initial, without your ID, profile or contacts. A club role, moderator or administrator status does not itself grant access.</li>
+<li><b>Anonymity</b>: for an anonymous appeal the Student Government sees no author, ID, profile or contacts. Only the app's creator (section 1) can find out the author through the separate account link. He does so only in an extreme case (threats, breaking the law) or on a lawful request of a state body. Every such look is recorded in the audit log. Views of appeals, status changes, answers and granting or revoking access are also logged, without the appeal's or answer's text.</li>
+<li><b>AI help</b>: only when you tap the help button does the text go to the services of section 5: Munito, Groq and Cloudflare Workers AI, in the order described there. Your profile is not added to the request, but names, contacts and other data inside the text stay. The AI suggests what to clarify; it can be wrong, does not rewrite the text and does not decide whether you can send the appeal. We do not keep the text sent for tips or the tips themselves. The request time is kept for 2 days to count the limit. Signs of self-harm or immediate danger bring up helplines; only the total weekly count of displays is kept, without who saw them or why.</li>
+<li><b>Drafts and the bot</b>: an unsent draft stays on your device and is not saved on the server. When you ask for help, its text is sent to the AI as described above. When the first answer appears, the bot sends you a template message with a button into the app, if it may write to you. It contains neither the appeal's text nor the answer.</li>
+<li><b>Counters</b>: to improve the form we count, by day, openings, starting to type, requests for AI help, sends, closing without sending and deletions. These are totals without text or a link to a person, kept for 180 days. From the appeals still kept, the Student Government and the app's creator see monthly topic counts without names or text: one author counts once per topic per month. Topics with fewer than five authors in a month are merged into "other".</li>
+<li><b>How long and how to delete</b>: the appeal, answer and account link are deleted 90 days after closing, and no later than 180 days after sending. You can delete your appeal at any time. Deleting your account deletes all your appeals with their answers and account links (section 7). The backup periods of section 6 apply.</li>
+</ul>
+<p>These AI services are outside Kazakhstan. By agreeing to this section you also agree to sending them the text abroad if you ask for AI help.</p>
+<p>Confidentiality cannot protect against screenshots and copies kept by people who read an appeal. The text itself, the circumstances described or your writing style may identify the author of an anonymous appeal. This queue is not an emergency service: in immediate danger, seek emergency help without waiting for an answer here.</p>
 <!--/apl-->
