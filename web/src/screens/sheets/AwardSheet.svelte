@@ -378,6 +378,11 @@
   @supports (opacity: calc(sin(1deg))) {
     .edge::after { opacity: calc(var(--d) + 0.4 * (1 - max(0, -1 * var(--c) * sin(var(--gx, 0) * 26deg + var(--spin, 0deg))))); }
   }
+  /* the coin's body: a solid disc of the edge's metal under the art, front and back, out to the facets' circle. A seal
+     paints its disc smaller (106.5 of 110 px): without it the gap to the edge showed through when tilted (Codex review) */
+  .coin .face { isolation: isolate; }
+  .coin :is(.face, .back)::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 50%;
+    background: linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), rgb(var(--edge)); }
   .coin .face > :global(:first-child), .coin :is(.face, .back) :global(img) { box-shadow: none; filter: none; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
