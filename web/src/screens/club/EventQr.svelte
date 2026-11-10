@@ -8,6 +8,7 @@
   import { QR_TONE } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { loadMe } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
@@ -40,14 +41,14 @@
   function stop(e: unknown) {
     if (gone) return;
     const no = e instanceof ApiErr && e.code === 'forbidden';
-    if (!q || no) { q = null; note = t(sess && no ? 'scr.helpEnded' : 'common.error'); return; }
+    if (!q || no) { q = null; note = t(sess && no ? 'scr.helpEnded' : 'common.error'); if (no) void loadMe(true); return; } // (the capsule goes too)
     timer = setTimeout(poll, 3000); // a blip of the network: try again
   }
   async function open() {
     if (sess) { sid = sess; got(await fetchQr()); return; }
     const s = await api.eventScreen(event!);
     sid = s.session;
-    if (!s.started) await api.screenAct(sid, 'start');
+    if (!s.started) { await api.screenAct(sid, 'start'); void loadMe(true); } // the capsule
     got(await api.screenAct(sid, 'show'));
   }
 

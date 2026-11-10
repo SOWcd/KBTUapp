@@ -3,7 +3,8 @@
   // no controls (owner, Oct 29 night: a PIN typed in view of the hall opened Finish and the CSV to anyone): it shows a
   // pairing QR until an organizer scans it in the app, then the session the app runs: the rotating check-in QR, the
   // count going up live. A small QR stays in the corner so another organizer can reach the controls (a flat phone).
-  // The screen's secret stays in this browser (localStorage: a reload or a closed tab keeps the pairing).
+  // The screen's secret stays in this tab (sessionStorage): a reload or a dead network keeps the pairing, so the screen
+  // can't fall off mid-event; closing the tab ends it, a new tab pairs again.
   import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import Qr from '../ui/Qr.svelte';
@@ -19,7 +20,7 @@
   let st = $state<State | null>(null);
   let pairing = false;
 
-  try { secret = localStorage.getItem(KEEP) ?? ''; } catch { /* no storage: a new pairing after a reload */ }
+  try { secret = sessionStorage.getItem(KEEP) ?? ''; localStorage.removeItem(KEEP); /* the old place: a closed tab's secret must not linger */ } catch { /* no storage: a new pairing after a reload */ }
 
   async function pair() {
     if (pairing) return;
@@ -29,16 +30,17 @@
       if (r.ok) {
         const p = await r.json();
         secret = p.secret;
-        try { localStorage.setItem(KEEP, secret); } catch { /* fine */ }
+        try { sessionStorage.setItem(KEEP, secret); } catch { /* fine */ }
         st = { code: p.code, left: p.ttl };
       }
-    } finally { pairing = false; }
+    } catch { /* offline: the next poll */ } finally { pairing = false; }
   }
   async function poll() {
     if (!secret) { await pair(); return; }
     try {
       const r = await fetch('/api/screen', { headers: { 'X-Screen': secret } });
-      if (r.status === 403) { secret = ''; await pair(); return; } // unpaired from the app, or long gone
+      // only our server's own no (unpaired from the app, or long gone): a campus proxy's 403 is a blip, not a lost pairing
+      if (r.status === 403 && (await r.json().catch(() => null))?.message === 'screen') { secret = ''; await pair(); return; }
       if (!r.ok) return;
       st = await r.json();
       if (st && st.session == null && !st.left) await pair(); // nobody scanned it in time: a fresh code
@@ -47,7 +49,7 @@
   // whoever stands at the laptop starts over (another club's organizer bound it first, or the wrong session): this
   // browser forgets its secret and shows a fresh pairing code; the old pairing goes with its session
   async function again() {
-    try { localStorage.removeItem(KEEP); } catch { /* fine */ }
+    try { sessionStorage.removeItem(KEEP); } catch { /* fine */ }
     secret = ''; st = null;
     await pair();
   }

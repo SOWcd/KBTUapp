@@ -16,6 +16,7 @@
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Music from '@lucide/svelte/icons/music';
+  import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
@@ -321,6 +322,8 @@
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <Row icon={MessageCircleHeart} title={t('psy.kbtu')}>{#snippet trailing()}
       <Button kind="secondary" size="s" onclick={() => openLink(PSYCHOLOGIST)}><span class="bk">{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></span></Button>{/snippet}</Row>
+    <!-- who has something to run (server account.me): pairs the computer showing /show -->
+    {#if session.me?.bigScreen}<Row icon={MonitorUp} title={t('scr.big')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
   </Group></div>
