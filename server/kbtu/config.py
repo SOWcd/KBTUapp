@@ -61,7 +61,12 @@ class Config:
     gallery: str = ""
     # CHAT_SYNC=1: clubs' members mirrored from their linked Telegram chats (logic/chatsync.py) and its privacy section; off: none of it runs
     chat_sync: bool = False
-    seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
+    # DOCS=1: the assistant answers from the university's documents too (kbtu/docs.py, a separate file at DOCS_DB, next
+    # to the database by default); DOCS=hybrid: and the question's own embedding from Cloudflare, only where the policy
+    # names Cloudflare for the assistant's questions (app.py); empty: off
+    docs: str = ""
+    docs_db: str = ""
+    seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
 def _dotenv() -> dict[str, str]:
@@ -135,4 +140,6 @@ def load() -> Config:
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
         gallery={"1": "all", "staff": "staff"}.get(env.get("GALLERY", "").strip(), ""),
         chat_sync=env.get("CHAT_SYNC", "").strip() == "1",
+        docs={"1": "fts", "hybrid": "hybrid"}.get(env.get("DOCS", "").strip(), ""),
+        docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
     )

@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -296,6 +296,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
+    logic.assistant.DOCS = docs.Index(cfg.docs_db) if cfg.docs else None  # the university's documents (DOCS; kbtu/docs.py)
+    if cfg.docs and not logic.assistant.DOCS.ready():
+        log.warning("DOCS is on but %s doesn't open: the assistant answers without the documents", cfg.docs_db)
     logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
 
     # ------------------------------------------------------------ errors
@@ -1425,12 +1428,25 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def sg_act(con: Con, v: Appeals, aid: int, body: dict = Body(...)):
         return logic.appeals.act(con, v, aid, body)
 
+    async def question_vec(body: dict):
+        """DOCS=hybrid: the question's embedding for the documents' search, from Cloudflare, only where the policy names
+        Cloudflare for the assistant's questions (ai_on); slow or failed: None, the words' search alone."""
+        if cfg.docs != "hybrid" or not ai_on or "cf" not in assist_only or not (cfg.cf_account_id and cfg.cf_ai_token):
+            return None
+        try:
+            return (await run_in_threadpool(docs.embed, [logic.assistant.docs_query(body)], cfg.cf_account_id, cfg.cf_ai_token, 3))[0]
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            log.warning("docs: no question embedding (%s)", type(exc).__name__)
+            return None
+
     # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
     @app.post("/api/assistant")
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         try:
             msgs, rooms, events = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
+            if logic.assistant.DOCS:
+                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body))
             text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):

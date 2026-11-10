@@ -42,6 +42,12 @@ cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.t
 
 Checks: `cd server && .venv/bin/python -m pytest -q tests`, `cd web && npm run check && npm test`.
 
+## The assistant's documents
+
+The university's documents never go in the repo. Rebuild: `scp -r docs/ sowcloud:<the kbtu volume>/docs-src`; in the
+container `cd /app/server && python -m kbtu.docs build /var/lib/kbtu/docs-src /var/lib/kbtu/docs.db` (scans via tesseract,
+embeddings with `CF_ACCOUNT_ID`/`CF_AI_TOKEN`; `.doc` → `.docx` first), delete `docs-src`; `DOCS=1` (or `hybrid`) turns it on.
+
 ## Contributing
 
 Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
