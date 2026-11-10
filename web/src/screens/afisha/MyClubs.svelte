@@ -70,7 +70,7 @@
 
 <Pane {overlay} title={title ?? t('clubs.mineTitle')} icon={TAB_ICON.club}>
   <div class="list" onclickcapture={click} role="presentation"><Group>
-    {#each shown as x (x.org.id)}
+    {#each shown as x (`${x.org.id}:${x.sub}`)}<!-- a club with both a casting and a round is two rows: one key each crashed the list -->
       {@const dx = offset(x.org.id)}
       <div class={['slide', { out: dx < 0 }]} role="presentation" onpointerdown={(e) => down(e, x.org.id)} onpointermove={move} onpointerup={up} onpointercancel={up}>
         {#if leavable(x.org.id)}<button class="act" onclick={() => leave(x.org.id)}>{t('clubs.leave')}</button>{/if}
