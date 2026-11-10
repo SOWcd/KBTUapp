@@ -126,11 +126,11 @@
   const isMeeting = $derived(f.teamOnly && f.meeting);
   let tags = $state<import('../../lib/api').ClubTag[]>([]);
   // a Head with departments calls only those (PLAN 35): the first is picked, the rest of the club's aren't offered
-  let ownDepts = $state<Id[]>([]);
-  const deptOnly = $derived(ownDepts.length > 0 && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
+  let ownDepts = $state<Id[]>([]), inDept = $state(false); // in a department only the chat sync gave: none to call
+  const deptOnly = $derived(inDept && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
   // "For whom" (owner, Nov 4): any team-only event, required or not; picking a department doesn't make it required
   let tagsRead = $state(false);
-  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDepts = s.myDepts ?? []; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDepts[0]; }).catch(() => {});
+  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDepts = s.myDepts ?? []; inDept = !!s.inDept; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDepts[0] ?? null; }).catch(() => {});
   $effect(() => { if (f.teamOnly && !tagsRead) readTags(); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
@@ -602,7 +602,7 @@
             value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
         {/if}
         <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
-        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0]; f.forBoard = false; } }} />{/if}
+        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
       {/if}
       {#if tickets}
         <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />

@@ -36,6 +36,7 @@ def ms_link(con, uid: int, who: dict) -> None:
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], core.now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
+    chatsync.check_later(con, uid)  # verified: a club chat they're in already counts (once they agree to the policy in force)
     # the freshmen list's row for this mail (typed at registration, so a classmate's by mistake is possible): mine only
     # when the name matches too. Mine: what my row lacks, the initiation badge, then gone. Not mine: nothing, it stays.
     # Mine, the owner hears (ids only) what to check: another ID than the row's, the row's ID held. Not mine, silence: nothing
@@ -944,6 +945,7 @@ def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
         raise ApiError("bad_input")
     con.execute("UPDATE students SET consent_version = ?, consent_at = ? WHERE user_id = ? AND consent_version NOT IN ('staff', 'admin')",
                 (version, core.now(), v.id))
+    chatsync.check_later(con, v.id)  # agreed: a club chat they're in already counts now
     return me(con, v)
 
 
@@ -1066,7 +1068,7 @@ _DEL_GONE = {
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
-    ("chat_sync_todo", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
+    ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -1394,3 +1396,4 @@ def support(con) -> list[dict]:
         LEFT JOIN students s ON s.user_id = u.id WHERE lower(u.tg_username) IN ({",".join("?" * len(SUPPORT))}) AND u.banned_at IS NULL""",
         *(n.lower() for n in SUPPORT))}
     return [{**person_ref(p), "username": p["tg_username"]} for n in SUPPORT if (p := found.get(n.lower()))]
+from . import chatsync  # noqa: E402  (ms_link, consent: a look in the linked chats)

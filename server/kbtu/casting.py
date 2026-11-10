@@ -17,6 +17,7 @@ import json
 import re
 
 from .db import tx
+from .logic.teams import may_dept
 from .logic import PERSON_COLS, ApiError, Viewer, _may, _once, _qs, banned, can, joined, need_student, notify, now, one, person_ref, role_in, rows
 
 KINDS = ("short", "long", "one", "many", "link")
@@ -326,6 +327,10 @@ def decide(con, v: Viewer, app_id: int, body: dict) -> dict:
     return {"stage": stage, "takenTag": tag if stage == "yes" else None}
 
 
+def is_dept(con, oid: int, tag: int) -> bool:
+    return bool(one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ? AND department = 1", tag, oid))
+
+
 def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
     """The results decided so far, in one tap: the accepted are members at once with their department's tag, the
     declined hear the club's own words (or the app's); each applicant is told once, the undecided wait for a later send
@@ -346,9 +351,11 @@ def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
             AND slot_id IN (SELECT id FROM round_slots WHERE starts_at > ?)""", (rid, now()))
         for a in rows(con, f"SELECT * FROM round_apps WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}", rid):
             if a["stage"] == "yes" and not banned(con, oid, a["user_id"]):
-                con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now()))
+                new = con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now())).rowcount
                 joined(con, oid, a["user_id"])
-                if a["taken_tag"]:  # departments are a set: one already in another keeps it too
+                # departments are a set: a newcomer lands in it; one in the club already gets it only as Team would give
+                # it by the sender's hand (a Head can't approve their own way into another department's powers)
+                if a["taken_tag"] and (new or not is_dept(con, oid, a["taken_tag"]) or may_dept(con, v, oid, a["user_id"], a["taken_tag"])):
                     con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) VALUES (?, ?)", (a["taken_tag"], a["user_id"]))
                 con.execute("UPDATE round_apps SET sent_at = ? WHERE id = ?", (now(), a["id"]))
                 notify(con, a["user_id"], "round_yes", f"ry:{a['id']}")

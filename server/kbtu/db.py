@@ -1493,7 +1493,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
     # a club's members mirrored from its Telegram chats (logic/chatsync.py, CHAT_SYNC): the main chat is the membership,
     # a department's chat that department. Linked by the app's creator alone (admin chatsync). A sweep's findings wait in
-    # chat_sync_todo until it ends (an implausible drop pauses instead of removing). member_tags.sync: a department the
+    # chat_sync_todo until it ends (an implausible drop pauses instead of removing); last_update/last_date: the newest
+    # chat_member update applied (a replay after a restart is skipped; a sweep's reply older than it is dropped);
+    # chat_sync_ask: someone just verified or agreed, to look up in the linked chats once. member_tags.sync: a department the
     # sync gave, which never makes its Head a manager of it (only a department given by hand does)
     (151, """CREATE TABLE chat_sync (
       chat_id INTEGER PRIMARY KEY,
@@ -1504,6 +1506,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       sweep TEXT CHECK (sweep IN ('dry', 'apply', 'night')),
       sweep_pos INTEGER NOT NULL DEFAULT 0,
       result TEXT,
+      last_update INTEGER NOT NULL DEFAULT 0,
+      last_date INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       CHECK ((kind = 'dept') = (tag_id IS NOT NULL))) STRICT;
     CREATE UNIQUE INDEX chat_sync_main ON chat_sync(org_id) WHERE kind = 'main';
@@ -1513,6 +1517,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       op TEXT NOT NULL CHECK (op IN ('add', 'drop')),
       PRIMARY KEY (chat_id, user_id)) STRICT, WITHOUT ROWID;
     CREATE INDEX chat_sync_todo_user ON chat_sync_todo(user_id);
+    CREATE TABLE chat_sync_ask (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
     ALTER TABLE member_tags ADD COLUMN sync INTEGER NOT NULL DEFAULT 0;"""),
 ]
 

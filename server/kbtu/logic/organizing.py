@@ -240,8 +240,8 @@ def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | No
         raise ApiError("bad_input")
     if (f["meeting"] or f["meeting_tag"] or f["for_board"]) and (f["meeting"], f["meeting_tag"], f["for_board"]) != was \
             and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
-        own = depts_of(con, oid, v.id, own=True)
-        if own and f["meeting_tag"] not in own:
+        own = depts_scope(con, oid, v.id)
+        if own is not None and f["meeting_tag"] not in own:
             raise ApiError("forbidden", "dept")
 
 
@@ -1168,4 +1168,4 @@ from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402
 from .seats import _event, _remind, _ticket_code, end_of, notify, promote, unregister  # noqa: E402
-from .teams import depts_of, team  # noqa: E402
+from .teams import depts_scope, team  # noqa: E402

@@ -1374,7 +1374,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
                     try:
-                        logic.chatsync.member_update(con, cm)
+                        logic.chatsync.member_update(con, cm, upd["update_id"])
                     except sqlite3.Error as exc:
                         log.warning("chat sync: %s", type(exc).__name__)
                         await asyncio.sleep(1)
@@ -1487,7 +1487,7 @@ async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
     while True:
         try:
             _sync_live = logic.chatsync.live(con)
-            if not await logic.chatsync.step(con, call, bot_id):
+            if not await logic.chatsync.ask_step(con, call) and not await logic.chatsync.step(con, call, bot_id):
                 await asyncio.sleep(30)
         except Exception:  # noqa: BLE001 - the loop must outlive one bad round
             log.exception("chat sync")

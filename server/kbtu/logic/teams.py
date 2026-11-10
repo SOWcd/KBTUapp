@@ -195,6 +195,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
             (SELECT COUNT(*) FROM member_tags mt JOIN org_members m ON m.user_id = mt.user_id AND m.org_id = g.org_id WHERE mt.tag_id = g.id) AS n
             FROM org_tags g WHERE g.org_id = ? ORDER BY g.id""", oid)],
         "myDepts": depts_of(con, oid, v.id, own=True),  # the departments I manage as a Head
+        "inDept": bool(depts_of(con, oid, v.id)),  # in any department: a Head's meetings only for myDepts then (maybe none)
     }
     if can(con, v, oid, "team"):
         link = _team_link(con, oid)
@@ -423,15 +424,8 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
             d = body[key]
             if not isinstance(d, int) or isinstance(d, bool) or not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ? AND department = 1", d, oid):
                 raise ApiError("bad_input")
-            if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"]:
-                if not can(con, v, oid, "people") or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
-                    raise ApiError("forbidden")
-            else:  # a Head: below them, not themselves, only a department they were given by hand
-                if uid == v.id:
-                    raise ApiError("forbidden")
-                _below(con, v, oid, uid, "people")
-                if d not in depts_of(con, oid, v.id, own=True):
-                    raise ApiError("forbidden")
+            if not may_dept(con, v, oid, uid, d):
+                raise ApiError("forbidden")
             set_dept(con, v.id, oid, uid, d, key == "addDept")
         if "probation" in body:
             on = body["probation"]
@@ -443,6 +437,26 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
             if was and not on:
                 notify(con, uid, "probation_passed", f"pp:{oid}:{core.now() // 86400}")
     return team(con, v, oid)
+
+
+def may_dept(con, v: Viewer, oid: int, uid: int, d: int) -> bool:
+    """May I give or take department d on this member (update_member's rule; a casting's results too): a Vice+ with
+    "people" on anyone; a Head on those strictly below them, never themselves, only a department given them by hand."""
+    if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
+        return False
+    if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"]:
+        return can(con, v, oid, "people")
+    try:
+        _below(con, v, oid, uid, "people")
+    except ApiError:
+        return False
+    return uid != v.id and d in depts_of(con, oid, v.id, own=True)
+
+
+def depts_scope(con, oid: int, uid: int) -> list[int] | None:
+    """A Head's meeting scope (PLAN 35): None, in no department at all (the whole club, as before departments); else the
+    departments given them by hand, maybe none (one only the chat sync gave narrows the scope, never widens it)."""
+    return depts_of(con, oid, uid, own=True) if depts_of(con, oid, uid) else None
 
 
 def set_dept(con, actor: int | None, oid: int, uid: int, tag: int, on: bool, sync: int | None = None) -> bool:

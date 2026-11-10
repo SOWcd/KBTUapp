@@ -47,6 +47,12 @@ def _student(con, tg_id: int) -> int | None:
     return r[0] if r else None
 
 
+def _eligible(con, uid: int) -> bool:
+    """Still someone the sync may act on, checked inside the transaction that acts (deleted, banned, consent taken back
+    while a lookup was in flight: nothing)."""
+    return bool(one(con, f"SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ? AND {OK}", uid, *_consents()))
+
+
 def _held(con, link, uid: int) -> int:
     """When the club last took them out by hand, if that was the last change by anyone (0: not held). A department's:
     its last hand-made "off"."""
@@ -123,22 +129,30 @@ def bot_status(con, chat: int, status: str | None) -> None:
         pause(con, chat, "the bot is not an admin")
 
 
-def member_update(con, upd: dict) -> None:
-    """A chat_member update: someone joined or left a linked chat. Strangers, bots and changes inside the chat are ignored."""
+def member_update(con, upd: dict, update_id: int) -> None:
+    """A chat_member update: someone joined or left a linked chat. Strangers, bots and changes inside the chat are ignored.
+    Applied once: the chat's newest applied update (id and date) is kept in the same transaction, so a batch replayed
+    after a restart is skipped (Telegram picks a random id after a week of silence: a newer date still counts), and a
+    sweep's lookup that was in flight meanwhile is dropped (its version moved)."""
     if not POLICY:
         return
     chat = (upd.get("chat") or {}).get("id")
     new, old = upd.get("new_chat_member") or {}, upd.get("old_chat_member") or {}
-    user = new.get("user") or {}
-    link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL", chat) if chat else None
-    if not link or user.get("is_bot") or in_chat(old) == in_chat(new):
-        return
-    uid = _student(con, int(user.get("id") or 0))
-    if not uid:
+    user, date = new.get("user") or {}, int(upd.get("date") or 0)
+    if not chat:
         return
     with tx(con):
-        con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (link["chat_id"], uid))  # newer than a sweep's look
-        if op := _wants(con, link, uid, in_chat(new), int(upd.get("date") or 0)):
+        link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ?", chat)
+        if not link or update_id <= link["last_update"] and date <= link["last_date"]:
+            return
+        con.execute("UPDATE chat_sync SET last_update = ?, last_date = max(last_date, ?) WHERE chat_id = ?", (update_id, date, chat))
+        if link["paused"] or user.get("is_bot") or in_chat(old) == in_chat(new):
+            return
+        uid = _student(con, int(user.get("id") or 0))
+        if not uid:
+            return
+        con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (chat, uid))  # newer than a sweep's look
+        if op := _wants(con, link, uid, in_chat(new), date):
             _do(con, link, uid, op)
 
 
@@ -168,25 +182,65 @@ async def step(con, call, bot_id: int, n: int = STEP) -> bool:
         return True
     batch = _candidates(con, link, link["sweep_pos"], n)
     for u in batch:
-        r = await call("getChatMember", {"chat_id": chat, "user_id": u["tg_id"]})
-        if r is None:
-            return True
-        if r.get("ok"):
-            inside = in_chat(r.get("result") or {})
-        elif any(g in str(r.get("description")).lower() for g in GONE):
-            inside = False
-        else:
-            pause(con, chat, f"getChatMember: {str(r.get('description'))[:80]}")
+        seen = one(con, "SELECT last_update FROM chat_sync WHERE chat_id = ?", chat)
+        inside = await _look(con, call, chat, u["tg_id"])
+        if inside is None:
             return True
         with tx(con):
             now_link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL AND sweep IS NOT NULL", chat)
-            if not now_link:  # paused or unlinked meanwhile
-                return True
-            if op := _wants(con, now_link, u["id"], inside):
+            if not now_link or not seen or now_link["last_update"] != seen[0]:
+                return True  # paused or unlinked, or an update came while we asked: this one is asked again
+            if _eligible(con, u["id"]) and (op := _wants(con, now_link, u["id"], inside)):
                 con.execute("INSERT OR REPLACE INTO chat_sync_todo (chat_id, user_id, op) VALUES (?, ?, ?)", (chat, u["id"], op))
             con.execute("UPDATE chat_sync SET sweep_pos = ? WHERE chat_id = ?", (u["id"], chat))
     if len(batch) < n:
         finish(con, chat)
+    return True
+
+
+async def _look(con, call, chat: int, tg_id: int) -> bool | None:
+    """Whether they are in the chat by getChatMember; None: not known (the network, or a refusal that paused the link)."""
+    r = await call("getChatMember", {"chat_id": chat, "user_id": tg_id})
+    if r is None:
+        return None
+    if r.get("ok"):
+        return in_chat(r.get("result") or {})
+    if any(g in str(r.get("description")).lower() for g in GONE):
+        return False
+    pause(con, chat, f"getChatMember: {str(r.get('description'))[:80]}")
+    return None
+
+
+def check_later(con, uid: int) -> None:
+    """Someone just became someone the sync acts on (verified, agreed): looked up in the linked chats once (ask_step),
+    so a join from before their sign-up counts. Inside the caller's transaction."""
+    if POLICY and one(con, "SELECT 1 FROM chat_sync WHERE paused IS NULL"):
+        con.execute("INSERT OR IGNORE INTO chat_sync_ask (user_id, at) VALUES (?, ?)", (uid, core.now()))
+
+
+async def ask_step(con, call) -> bool:
+    """One queued person against every live link, the main chats first (a department needs the club): each change as an
+    update would make it, but a hand-made removal holds (no join time is known). False: nobody waiting."""
+    a = one(con, "SELECT user_id FROM chat_sync_ask ORDER BY at LIMIT 1") if POLICY else None
+    if not a:
+        return False
+    uid = a[0]
+    u = one(con, "SELECT tg_id FROM users WHERE id = ?", uid)
+    for link in rows(con, "SELECT chat_id FROM chat_sync WHERE paused IS NULL ORDER BY kind DESC, chat_id"):  # 'main' > 'dept'
+        if not u or not _eligible(con, uid):
+            break
+        seen = one(con, "SELECT last_update FROM chat_sync WHERE chat_id = ?", link[0])
+        inside = await _look(con, call, link[0], u[0])
+        if inside is None:
+            return True  # asked again later (a paused link is skipped then)
+        with tx(con):
+            now_link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL", link[0])
+            if not now_link or now_link["last_update"] != seen[0]:
+                return True
+            if _eligible(con, uid) and (op := _wants(con, now_link, uid, inside)):
+                con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (link[0], uid))
+                _do(con, now_link, uid, op)
+    con.execute("DELETE FROM chat_sync_ask WHERE user_id = ?", (uid,))
     return True
 
 
@@ -208,7 +262,7 @@ def finish(con, chat: int) -> str | None:
         else:
             done = {"add": 0, "drop": 0}
             for t in todo:
-                if _wants(con, link, t["user_id"], t["op"] == "add") == t["op"] and _do(con, link, t["user_id"], t["op"]):
+                if _eligible(con, t["user_id"]) and _wants(con, link, t["user_id"], t["op"] == "add") == t["op"] and _do(con, link, t["user_id"], t["op"]):
                     done[t["op"]] += 1
             result = f"{link['sweep']}: added {done['add']}, removed {done['drop']}"
         con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ?", (chat,))
