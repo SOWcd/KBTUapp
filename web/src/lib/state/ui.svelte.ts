@@ -108,6 +108,13 @@ export function say(text: string, emoji = 'sparkles_3d', undo?: () => void): voi
   if (vt) { vt.then(() => say(text, emoji, undo)); return; }
   untrack(() => { if (text === t('common.error')) count(`err.${[...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const)}`); });
   toast.text = text; toast.emoji = emoji; toast.undo = undo ?? null; toast.id++;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.text = ''), undo ? 5000 : 2600); // an Undo stays long enough to reach
+  hideToast(undo ? 5000 : 2600); // an Undo stays long enough to reach
+}
+let held = false; // a new phrase under the finger waits for the finger too
+const hideToast = (ms: number) => { clearTimeout(toastTimer); if (!held) toastTimer = setTimeout(() => (toast.text = ''), ms); };
+/** a finger on the toast holds it; let go, it stays a moment more to be read (ui/Toast.svelte) */
+export function holdToast(hold: boolean): void {
+  held = hold;
+  if (hold) clearTimeout(toastTimer);
+  else if (toast.text) hideToast(toast.undo ? 3000 : 1600);
 }
