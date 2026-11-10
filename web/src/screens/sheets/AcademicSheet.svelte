@@ -5,7 +5,8 @@
   import { fold } from '../../ui/fold';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { TERMS, ONLINE, span, nameOf, whenOf } from '../../lib/academic';
+  import { termsOf, MASTER, ONLINE, span, nameOf, whenOf } from '../../lib/academic';
+  import { session } from '../../lib/state/session.svelte';
   import { dateInput, dayRange, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
@@ -16,7 +17,9 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   const today = dateInput(nowTs());
-  const terms = TERMS.map((x) => ({ ...x, rows: [...x.rows].sort((a, b) => span(a)[0].localeCompare(span(b)[0])) }));
+  // my calendar by my student ID's letter (master's: M); the sheet opens fresh each time
+  const mine = termsOf(session.me?.student?.studentId), master = mine === MASTER;
+  const terms = mine.map((x) => ({ ...x, rows: [...x.rows].sort((a, b) => span(a)[0].localeCompare(span(b)[0])) }));
   const pastCount = terms.reduce((n, x) => n + x.rows.filter((r) => span(r)[1] < today).length, 0);
   let showPast = $state(false);
   const rowsOf = (rows: (typeof terms)[number]['rows']) => (showPast ? rows : rows.filter((r) => span(r)[1] >= today));
@@ -24,13 +27,13 @@
 </script>
 
 <Sheet {overlay} icon={GraduationCap} tall title={t('acad.title')}>
-  <p class="t-foot">{t('acad.sub')}</p>
+  <p class="t-foot">{t(master ? 'acad.subM' : 'acad.sub')}</p>
   {#if pastCount}
     <div class="pastq"><Button kind="plain" size="s" onclick={() => (showPast = !showPast)}>{showPast ? t('acad.hidePast') : t('acad.showPast', { n: pastCount })}</Button></div>
   {/if}
   <div class="terms">
     {#each terms.filter((x) => rowsOf(x.rows).length) as term (term.key)}
-      <Group caption={t(`acad.${term.key}` as 'acad.fall') + (term.key === 'summer' ? ' · ' + t('acad.summerNote') : '')}>
+      <Group caption={t(`acad.${term.key}` as 'acad.fall') + (term.key === 'summer' ? ' · ' + t(master ? 'acad.summerNoteM' : 'acad.summerNote') : '')}>
         {#each rowsOf(term.rows) as r (r.key + r.at + (r.who ?? ''))}
           {@const [a, b] = span(r)}
           <!-- engine: ui/Group draws its lines only between Rows that are siblings; a row folding in place needs a wrapper -->

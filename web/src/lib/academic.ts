@@ -5,8 +5,9 @@ import { t } from './i18n/index.svelte';
 import { dateInput, dayRange, nowTs } from './time';
 
 export type Row = { key: string; at: string; who?: 'ise' | 'y1' | 'y12' | 'y24' | 'site' };
+export type Terms = { key: 'fall' | 'spring' | 'summer'; rows: Row[] }[];
 
-export const TERMS: { key: 'fall' | 'spring' | 'summer'; rows: Row[] }[] = [
+export const TERMS: Terms = [
   { key: 'fall', rows: [
     { key: 'schedule', at: '2026-08-17/2026-08-29' }, { key: 'orientation', at: '2026-08-17/2026-08-31', who: 'y1' },
     { key: 'adddrop', at: '2026-08-31/2026-09-04' }, { key: 'study', at: '2026-09-01/2026-12-12' },
@@ -39,13 +40,46 @@ export const TERMS: { key: 'fall' | 'spring' | 'summer'; rows: Row[] }[] = [
   ] },
 ];
 
+// The master's calendar 2026-2027 (scientific-pedagogical and profile), the same council's: a student ID with the
+// letter M (26MD0335) gets it, any other letter the bachelor's above (as server core.course_cap reads the letter).
+// ponytail: MBA has a calendar of its own we don't have, and its ID letter is unknown; add it here when both are known.
+export const MASTER: Terms = [
+  { key: 'fall', rows: [
+    { key: 'adddrop', at: '2026-09-01/2026-09-05' }, { key: 'schedule', at: '2026-09-01/2026-09-05' }, { key: 'orient', at: '2026-09-01/2026-09-05' },
+    { key: 'study', at: '2026-09-07/2026-12-19' }, { key: 'holiday', at: '2026-10-25' },
+    { key: 'midterm', at: '2026-10-26/2026-10-31' }, { key: 'regSpring', at: '2026-10-26/2026-11-08', who: 'y1' },
+    { key: 'thesis', at: '2026-12-01/2026-12-26' }, { key: 'holiday', at: '2026-12-16' },
+    { key: 'exams', at: '2026-12-21/2027-01-08' }, { key: 'fx', at: '2027-01-11/2027-01-12' },
+    { key: 'break', at: '2027-01-11/2027-01-17' }, { key: 'final', at: '2027-01-11/2027-02-05' },
+  ] },
+  { key: 'spring', rows: [
+    { key: 'adddrop', at: '2027-01-11/2027-01-16' }, { key: 'schedule', at: '2027-01-11/2027-01-16' }, { key: 'orient', at: '2027-01-13/2027-01-15' },
+    { key: 'study', at: '2027-01-18/2027-05-01' }, { key: 'midterm', at: '2027-03-09/2027-03-13' },
+    { key: 'regYear', at: '2027-03-01/2027-03-31' }, { key: 'thesis', at: '2027-04-01/2027-05-29' },
+    { key: 'holiday', at: '2027-01-01/2027-01-02' }, { key: 'holiday', at: '2027-01-07' }, { key: 'holiday', at: '2027-03-08' },
+    { key: 'holiday', at: '2027-03-15' }, { key: 'holiday', at: '2027-03-22/2027-03-24' }, { key: 'holiday', at: '2027-05-01' },
+    { key: 'holiday', at: '2027-05-07' }, { key: 'holiday', at: '2027-05-09' },
+    { key: 'exams', at: '2027-05-11/2027-05-22' }, { key: 'fx', at: '2027-05-24/2027-05-26' },
+    { key: 'final', at: '2027-05-31/2027-06-19' }, { key: 'final', at: '2027-05-31/2027-06-25', who: 'site' },
+    { key: 'break', at: '2027-05-24/2027-08-31' },
+  ] },
+  { key: 'summer', rows: [
+    { key: 'adddrop', at: '2027-05-11/2027-05-23' }, { key: 'study', at: '2027-06-07/2027-07-17' },
+    { key: 'holiday', at: '2027-07-06' }, { key: 'fx', at: '2027-07-19/2027-07-22' },
+  ] },
+];
+
+/** the signed-in student's calendar by their ID's letter */
+export const termsOf = (sid?: string | null): Terms => (/^\d{2}M/.test(sid ?? '') ? MASTER : TERMS);
+
 /** classes on these days are held online, asynchronously (the PDF's footnote) */
 export const ONLINE = ['2026-10-26', '2026-12-16', '2027-01-07', '2027-03-08', '2027-03-15', '2027-03-22/2027-03-24', '2027-05-01', '2027-07-06'];
 
 /** no classes in rooms that day: a holiday, or a day whose classes are online and asynchronous (owner, Oct 26: the
- * app showed a class "now" on the Oct 26 day off) */
-export const noClasses = (day: string): boolean =>
-  [...ONLINE, ...TERMS.flatMap((x) => x.rows.filter((r) => r.key === 'holiday' && !r.who).map((r) => r.at))]
+ * app showed a class "now" on the Oct 26 day off). Both calendars have the same days off (a test holds it), so the
+ * timetable keeps the default. */
+export const noClasses = (day: string, terms: Terms = TERMS): boolean =>
+  [...ONLINE, ...terms.flatMap((x) => x.rows.filter((r) => r.key === 'holiday' && !r.who).map((r) => r.at))]
     .some((at) => { const [a, b = a] = at.split('/'); return a <= day && day <= b; });
 
 /** first and last day of a row (both the deadline for "until") */
@@ -60,14 +94,14 @@ export const nameOf = (r: Row): string => {
 };
 export function whenOf(r: Row): string { const [a, b] = span(r); return r.at.startsWith('/') ? t('acad.until', { date: dayRange(b, b) }) : dayRange(a, b); }
 /** what is on now or comes next for everyone, past the long teaching period: the line under the row in Me */
-export const nextUp = (today = dateInput(nowTs())): Row | undefined =>
-  TERMS.flatMap((x) => x.rows).filter((r) => !r.who && r.key !== 'study' && span(r)[1] >= today).sort((a, b) => span(a)[0].localeCompare(span(b)[0]))[0];
+export const nextUp = (today = dateInput(nowTs()), terms: Terms = TERMS): Row | undefined =>
+  terms.flatMap((x) => x.rows).filter((r) => !r.who && r.key !== 'study' && span(r)[1] >= today).sort((a, b) => span(a)[0].localeCompare(span(b)[0]))[0];
 
 const days = (a: string, b: string): number => (Date.parse(b) - Date.parse(a)) / 864e5;
 /** Where today is in a fall or spring term, for the strip in Me: teaching weeks (Monday to Sunday, week 1 holds the first
  *  day of "study"), the midterm weeks, how many weeks to the exams; from the first day of study to the last day of exams. */
-export function semester(today = dateInput(nowTs())) {
-  for (const x of TERMS) {
+export function semester(today = dateInput(nowTs()), terms: Terms = TERMS) {
+  for (const x of terms) {
     if (x.key === 'summer') continue;
     const row = (k: string) => x.rows.find((r) => r.key === k && !r.who);
     const study = row('study'), exams = row('exams'), mid = row('midterm');
