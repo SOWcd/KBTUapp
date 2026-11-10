@@ -1385,7 +1385,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
         # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
-        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30)
+        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True)  # a person waits: a slow first host races another
         return logic.assistant.filled(text)
 
     # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own

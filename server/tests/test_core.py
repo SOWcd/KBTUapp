@@ -7039,16 +7039,17 @@ def test_event_fill(env, monkeypatch):
     _board_on(c, cfg)
 
     async def fake(cfg_, http, msgs, **kw):
-        assert kw["only"] == ai.EU_ONLY and msgs[1]["content"] == text
+        assert kw["only"] == ai.EU_ONLY and msgs[1]["content"] == text and kw["race"]
         return json.dumps({"title": "Open mic", "date": "2026-11-10", "start": "18:00", "end": "25:00", "place": "256",
-                           "description": "Bring friends!", "price": 1000, "seats": 5}), "x"
+                           "description": "Bring friends!", "price": 1000, "seats": 5, "emoji": "microphone_3d", "color": "violet"}), "x"
     monkeypatch.setattr(llm, "chat", fake)
     assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(1), json={"text": text}).status_code == 403    # not their club
     r = c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": text}).json()
-    assert r == {"title": "Open mic", "date": "2026-11-10", "start": "18:00", "place": "256", "description": "Bring friends!", "price": 1000}
+    assert r == {"title": "Open mic", "date": "2026-11-10", "start": "18:00", "place": "256", "description": "Bring friends!", "price": 1000,
+                 "emoji": "microphone_3d", "color": "#7C4DFF"}
     assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": "short"}).status_code == 400
     from kbtu.logic import assistant
-    assert assistant.filled('{"date": "2026-02-31", "price": true, "title": 5}') == {} and assistant.filled("nope") == {}
+    assert assistant.filled('{"date": "2026-02-31", "price": true, "title": 5, "emoji": "bomb", "color": "#000000"}') == {} and assistant.filled("nope") == {}
     # what counts as the model's answer (else the next model is asked): its form, even all empty; not junk
     assert [assistant.fill_answered(x) for x in ('{"title": null, "date": null}', "{}", "```json\n{\"place\": \"256\"}\n```",
                                                  '{"error": "busy"}', "[]", "sorry", '{"title": ')] == [True, True, True, False, False, False, False]

@@ -395,8 +395,9 @@
     touch(); filling = true;
     try {
       const x = await api.eventFill(org, text);
-      const { price, ...rest } = x; // the server sends only the fields it found, named as the form's
+      const { price, emoji, color, ...rest } = x; // the server sends only the fields it found, named as the form's
       Object.assign(f, rest);
+      if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
       if (price && canPrice) { f.paid = true; f.price = String(price); }
       const got = Object.keys(x).length > 0;
       if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
