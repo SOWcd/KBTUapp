@@ -45,8 +45,10 @@ def spawn(coro, chain: str = "tgc") -> None:
 
 async def settle() -> None:
     """Every job spawned so far, done (tests; a job's own failure is logged, not raised)."""
-    while _tasks:
-        await asyncio.gather(*list(_tasks), return_exceptions=True)
+    # the pending ones only: gather over finished tasks completes without yielding, so the done callbacks that empty
+    # _tasks would never run and this would spin forever
+    while pending := [t for t in _tasks if not t.done()]:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 def ours(cfg: Config, upd: dict) -> bool:
