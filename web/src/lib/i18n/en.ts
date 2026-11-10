@@ -1056,6 +1056,7 @@ const en: Dict = {
   'ci.notCounted': "This scan doesn't count you for “{title}”: talk to the organizers",
   'scr.title': "Check-in screen",
   'scr.start': "Start check-in",
+  'scr.showQr': "Show the check-in QR",
   'scr.finish': "Finish",
   'scr.csv': "Download the list",
   'scr.scan': "Point your phone camera at the QR",

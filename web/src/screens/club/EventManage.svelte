@@ -6,6 +6,7 @@
   // ponytail: no "message the participants" yet (no such API; the questions thread and the bot's changes cover it).
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import UserCheck from '@lucide/svelte/icons/user-check';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -210,7 +211,8 @@
           {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
             <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
           {/if}
-          {#if live && !price && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          {#if live && !price && !e.guestHost}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} /><!-- the door's QR on this phone (owner, Nov 10) -->
+            <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
           {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}

@@ -17,6 +17,7 @@
   import UserCheck from '@lucide/svelte/icons/user-check';
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Hourglass from '@lucide/svelte/icons/hourglass';
@@ -503,7 +504,8 @@
         {#if coCrew}
           <Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {#if !e.price && !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          {#if !e.price && !over}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />
+            <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
         {/if}
         {#if helper}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id))} />{/if}
         {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}
