@@ -101,13 +101,13 @@
   $effect(() => { if (kind === 'tag' && fid != null && !data.team[org]) void loadTeam(org); });
   const mayTag = (x: TeamMember) => x.person.id === session.me?.id ? head : head && (RANK[mine ?? 'member'] >= RANK.vice || isAbove(m, x.role));
   let tagging = $state<Id | null>(null);
-  // a department: one per person, so ticking moves them here (a Head moves people in their own one, in Team's card)
+  // a department: a person may be in several, ticking adds or takes this one (a Head does their own in Team's card)
   const mayDept = $derived(head && RANK[mine ?? 'member'] >= RANK.vice);
   async function tagPerson(x: TeamMember, tag: Id, on: boolean) {
     tagging = x.person.id; haptic.select();
     try {
       const saved = !!setup?.tags.find((g) => g.id === tag)?.department; // as the server has it, not the unsaved switch
-      data.team[org] = await api.updateMember(org, x.person.id, saved ? { dept: on ? tag : null }
+      data.team[org] = await api.updateMember(org, x.person.id, saved ? (on ? { addDept: tag } : { dropDept: tag })
         : { tags: on ? [...(x.tags ?? []), tag] : (x.tags ?? []).filter((g) => g !== tag) });
       void load(); onchange?.();
     } catch (e) { oops(e); } finally { tagging = null; }

@@ -2793,9 +2793,9 @@ def test_free_first_needs_a_new_ms_account(env):
 
 
 def test_departments(env):
-    """Departments (PLAN item 47): a tag marked department, one per person or none. A Vice+ puts anyone anywhere; a
-    Head moves those below them into or out of their own department only, never themselves; plain tags leave the
-    department alone."""
+    """Departments (PLAN item 47): tags marked department, a person in several or none, each given or taken alone. A
+    Vice+ gives and takes any on anyone; a Head only their own (given by hand) on those below them, never themselves;
+    plain tags leave the departments alone."""
     c, cfg = env
     for tg, name in ((20, "pres"), (21, "vic"), (22, "hed"), (23, "hed2"), (10, "ann"), (11, "bob")):
         login(c, tg, name)
@@ -2805,50 +2805,54 @@ def test_departments(env):
         con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, ?, 0 FROM users WHERE tg_id = ?", (role, tg))
     uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (20, 21, 22, 23, 10, 11)}
     put = lambda by, tg, body: c.patch(f"/api/orgs/1/members/{uid[tg]}", headers=tma(by), json=body)  # noqa: E731
-    dept = lambda tg: next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[tg])["dept"]  # noqa: E731
+    depts = lambda tg: next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[tg])["depts"]  # noqa: E731
     tags = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": True}).json()["tags"]
     smm = tags[0]["id"]
     assert tags[0]["department"] is True
     dev = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "Dev", "color": "#2FBF71", "department": True}).json()["tags"][1]["id"]
     star = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "Star", "color": "#FFB23D"}).json()["tags"][2]["id"]
-    assert put(21, 22, {"dept": smm}).status_code == 200 and put(21, 23, {"dept": dev}).status_code == 200
-    assert put(21, 10, {"dept": star}).status_code == 400                       # a plain tag isn't a department
-    assert put(22, 10, {"dept": smm}).status_code == 200 and dept(10) == smm     # a Head: into their own
-    assert put(22, 10, {"dept": dev}).status_code == 403                        # not into another's
-    assert put(23, 10, {"dept": None}).status_code == 403                       # not out of another's
-    assert put(22, 22, {"dept": None}).status_code == 403                       # not themselves
-    assert put(22, 23, {"dept": smm}).status_code == 403                        # not a peer
-    assert put(21, 10, {"dept": dev}).status_code == 200 and dept(10) == dev     # a Vice+: anywhere, one at a time
-    assert con.execute("SELECT COUNT(*) FROM member_tags WHERE user_id = ?", (uid[10],)).fetchone()[0] == 1
-    assert put(21, 10, {"tags": [star]}).status_code == 200 and dept(10) == dev  # tags leave the department alone
+    assert put(21, 22, {"addDept": smm}).status_code == 200 and put(21, 23, {"addDept": dev}).status_code == 200
+    assert put(21, 10, {"addDept": star}).status_code == 400                    # a plain tag isn't a department
+    assert put(21, 10, {"dept": smm}).status_code == 400                        # the one-department field is gone
+    assert put(22, 10, {"addDept": smm}).status_code == 200 and depts(10) == [smm]  # a Head: into their own
+    assert put(22, 10, {"addDept": dev}).status_code == 403                     # not into another's
+    assert put(23, 10, {"dropDept": smm}).status_code == 403                    # not out of another's
+    assert put(22, 22, {"dropDept": smm}).status_code == 403                    # not themselves
+    assert put(22, 23, {"addDept": smm}).status_code == 403                     # not a peer
+    assert put(23, 10, {"addDept": dev}).status_code == 200 and depts(10) == sorted([smm, dev])  # several at once
+    assert put(21, 10, {"tags": [star]}).status_code == 200 and depts(10) == sorted([smm, dev])  # tags leave departments alone
+    assert put(23, 10, {"dropDept": dev}).status_code == 200 and depts(10) == [smm]  # the other one stays
     meet = {"title": "SMM sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": None, "visibility": "members", "meeting": True}
     assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": dev}).json().get("message") == "dept"  # PLAN 35
     assert c.post("/api/orgs/1/events", headers=tma(22), json=meet).json().get("message") == "dept"                # not the whole club
     assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": smm}).status_code == 200
     assert c.post("/api/orgs/1/events", headers=tma(21), json=meet).status_code == 200                              # a Vice calls anyone
-    assert c.get("/api/orgs/1/team", headers=tma(22)).json()["myDept"] == smm
-    assert put(23, 10, {"dept": None}).status_code == 200 and dept(10) is None   # out of the Head's own
-    assert put(22, 11, {"dept": smm}).status_code == 200
+    assert c.get("/api/orgs/1/team", headers=tma(22)).json()["myDepts"] == [smm]
+    # a department the chat sync gave a Head is theirs, but gives no powers over it
+    con.execute("INSERT INTO member_tags (tag_id, user_id, sync) VALUES (?, ?, 1)", (dev, uid[22]))
+    assert depts(22) == sorted([smm, dev]) and c.get("/api/orgs/1/team", headers=tma(22)).json()["myDepts"] == [smm]
+    assert put(22, 11, {"addDept": dev}).status_code == 403
+    assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": dev}).json().get("message") == "dept"
+    assert c.post("/api/orgs/1/invites", headers=tma(22), json={"dept": dev}).status_code == 403
+    assert put(21, 22, {"addDept": dev}).status_code == 200 and c.get("/api/orgs/1/team", headers=tma(22)).json()["myDepts"] == sorted([smm, dev])  # by hand: now theirs
+    assert put(21, 22, {"dropDept": dev}).status_code == 200
+    assert put(22, 11, {"addDept": smm}).status_code == 200
     assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM", "color": "#18A9DB", "department": False}).status_code == 403  # Vice+ only
     assert c.post("/api/orgs/1/tags", headers=tma(22), json={"name": "Mine", "color": "#18A9DB", "department": True}).status_code == 403
     assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM team", "color": "#18A9DB", "department": True}).status_code == 200  # a rename is fine
-    con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (dev, uid[11]))  # two departments from before
-    assert put(22, 11, {"dept": None}).status_code == 200                       # the Head takes out of their own only
-    assert dept(11) == dev
     c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": False})
-    put(21, 11, {"dept": None}); con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (smm, uid[11]))
-    assert dept(11) is None and smm in next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[11])["tags"]
+    assert depts(11) == [] and smm in next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[11])["tags"]
     login(c, 12, "cat"); login(c, 13, "dan")                                     # a link straight into a department
     assert c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": star}).status_code == 400
     assert c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": "x"}).status_code == 400
     tok = c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": dev}).json()["token"]
     assert c.post(f"/api/invites/{tok}", headers=tma(12)).status_code == 200
     uid[12] = con.execute("SELECT id FROM users WHERE tg_id = 12").fetchone()[0]
-    assert dept(12) == dev
+    assert depts(12) == [dev]
     tok = c.post("/api/orgs/1/invites", headers=tma(21)).json()["token"]                # no department, as before
     assert c.post(f"/api/invites/{tok}", headers=tma(13)).status_code == 200
     uid[13] = con.execute("SELECT id FROM users WHERE tg_id = 13").fetchone()[0]
-    assert dept(13) is None
+    assert depts(13) == []
 
 
 def test_team_two(env):

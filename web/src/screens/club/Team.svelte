@@ -71,17 +71,18 @@
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
   const otherTags = $derived((setup?.tags ?? []).filter((g) => !g.department));
   const dept = $derived(typeof filter === 'number' ? depts.find((g) => g.id === filter) ?? null : null);
-  // who may put this person in a department: a Vice+ anyone; a Head those below them, in or out of the Head's own
-  const myDept = $derived((list ?? []).find((x) => x.person.id === me)?.dept ?? null);
+  // a person may be in several departments, each a toggle: a Vice+ any of them on anyone; a Head those below them, only
+  // the departments the Head was given by hand (the server's myDepts: one the chat sync gave adds no powers)
+  const myDepts = $derived(setup?.myDepts ?? []);
   const deptChoices = (x: TeamMember) => {
     if (!depts.length || !may(m, 'people')) return [];
     if (RANK[m?.role ?? 'member'] >= RANK.vice) return depts;
-    if (x.person.id === me || !isAbove(m, x.role) || myDept == null || (x.dept != null && x.dept !== myDept)) return [];
-    return depts.filter((g) => g.id === myDept);
+    if (x.person.id === me || !isAbove(m, x.role)) return [];
+    return depts.filter((g) => myDepts.includes(g.id));
   };
-  const setDept = (x: TeamMember, d: number | null) =>
-    run(() => api.updateMember(org(), x.person.id, { dept: d }),
-      d == null ? t('team.deptNone', { name: x.person.name }) : t('team.deptSet', { name: x.person.name, dept: tagOf.get(d)?.name ?? '' }), 'raising_hands_3d_default');
+  const setDept = (x: TeamMember, d: number, on: boolean) =>
+    run(() => api.updateMember(org(), x.person.id, on ? { addDept: d } : { dropDept: d }),
+      t(on ? 'team.deptSet' : 'team.deptOff', { name: x.person.name, dept: tagOf.get(d)?.name ?? '' }), 'raising_hands_3d_default');
 
   // a role of my own level on myself, a name only; tags are picked in the tag (TeamSetupSheet)
   const ownLevel = $derived((setup?.roles ?? []).filter((r) => r.level === m?.role && r.rights.every((k) => may(m, k))));
@@ -177,9 +178,9 @@
     <span class="t-cap">{t('team.dept')}</span>
     <div class="ar">
       {#each choices as g (g.id)}
-        <Chip selected={x.dept === g.id} onclick={() => !busy && x.dept !== g.id && setDept(x, g.id)}>{@render dot(g.color)}{g.name}</Chip>
+        {@const on = !!x.depts?.includes(g.id)}
+        <Chip selected={on} onclick={() => !busy && setDept(x, g.id, !on)}>{@render dot(g.color)}{g.name}</Chip>
       {/each}
-      <Chip selected={x.dept == null} onclick={() => !busy && x.dept != null && setDept(x, null)}>{t('team.noDept')}</Chip>
     </div>
   {/if}
 {/snippet}
@@ -231,7 +232,7 @@
           <div class="chips">
             <Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>
             {#each depts as g (g.id)}
-              <Chip selected={filter === g.id} onclick={() => (filter = filter === g.id ? null : g.id)}>{@render dot(g.color)}{g.name}<span class="n num">{list.filter((x) => x.dept === g.id).length}</span></Chip>
+              <Chip selected={filter === g.id} onclick={() => (filter = filter === g.id ? null : g.id)}>{@render dot(g.color)}{g.name}<span class="n num">{list.filter((x) => x.depts?.includes(g.id)).length}</span></Chip>
             {/each}
           </div>
         {/if}

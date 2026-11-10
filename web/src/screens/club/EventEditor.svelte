@@ -125,12 +125,12 @@
   // a club meeting (§2b): team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
   const isMeeting = $derived(f.teamOnly && f.meeting);
   let tags = $state<import('../../lib/api').ClubTag[]>([]);
-  // a Head with a department calls only their department (PLAN 35): that one is picked, the rest aren't offered
-  let ownDept = $state<Id | null>(null);
-  const deptOnly = $derived(ownDept != null && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
+  // a Head with departments calls only those (PLAN 35): the first is picked, the rest of the club's aren't offered
+  let ownDepts = $state<Id[]>([]);
+  const deptOnly = $derived(ownDepts.length > 0 && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
   // "For whom" (owner, Nov 4): any team-only event, required or not; picking a department doesn't make it required
   let tagsRead = $state(false);
-  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDept = s.myDept ?? null; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDept; }).catch(() => {});
+  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDepts = s.myDepts ?? []; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDepts[0]; }).catch(() => {});
   $effect(() => { if (f.teamOnly && !tagsRead) readTags(); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
@@ -474,7 +474,7 @@
     ...(deptOnly && f.meeting ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null && !f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = false; } }]),
     // the board (Head+, from roles; owner, Nov 4): built in, no tag to make
     ...(deptOnly ? [] : [{ label: t('ed.meetingBoard'), checked: f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = true; } }]),
-    ...tags.filter((g) => !deptOnly || g.id === ownDept).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
+    ...tags.filter((g) => !deptOnly || ownDepts.includes(g.id)).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
     ...(tags.length ? [] : [{ label: t('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
   ]);
   const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
@@ -602,7 +602,7 @@
             value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
         {/if}
         <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
-        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDept; f.forBoard = false; } }} />{/if}
+        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0]; f.forBoard = false; } }} />{/if}
       {/if}
       {#if tickets}
         <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />

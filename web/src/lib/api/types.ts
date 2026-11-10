@@ -533,7 +533,7 @@ export interface TeamMember {
   quiet?: boolean;              // Vice+: 60 days without a check-in
   roleId?: Id | null; title?: string | null; titleKk?: string | null; titleEn?: string | null; titleColor?: string | null; // the club's own role (§2b)
   tags?: Id[];                  // the club's tags on them
-  dept?: Id | null;             // their department: one of those tags marked department (PLAN 47)
+  depts?: Id[];                 // their departments: those of the tags marked department (PLAN 47; a person may be in several)
   probation?: boolean; // for the club's Head+ and the person
   brought?: number;    // Head+: came by their link to the club's events in 60 days
 }
@@ -544,9 +544,9 @@ export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn
 export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null; ban: boolean; note: string; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }
-export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDept?: Id | null; removals?: RemovalRequest[]; bans?: ClubBan[]; teamLink?: { expiresAt: Ts } | null }
+export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDepts?: Id[]; removals?: RemovalRequest[]; bans?: ClubBan[]; teamLink?: { expiresAt: Ts } | null }
 /** One person in Team, only what is sent: a level or a club role (Vice+), tags (Head+), probation (on: Head+, off: Vice+). */
-export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; dept?: Id | null; probation?: boolean }
+export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; addDept?: Id; dropDept?: Id; probation?: boolean }
 
 export interface JoinRequest { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null; createdAt: Ts;
   answers?: { q: string; a: string | string[] }[] } // to the club's questions, each with the question's text as it was

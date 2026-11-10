@@ -28,14 +28,15 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
     found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, {core.TITLES}, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
-        (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept,
+        (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS depts,
         (SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE e.org_id = m.org_id AND r.invited_by = u.id AND r.checked_in_at > ? AND r.checked_in_by IS NOT u.id) AS brought
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
         WHERE m.org_id = ?""", core.now() - QUIET_FOR, oid)
     return sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "username": p["tg_username"],
                     "role": p["role"], "roleId": p["role_id"], **core.titled(p), "titleColor": p["title_color"],
-                    "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
+                    "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x),
+                    "depts": sorted(int(x) for x in (p["depts"] or "").split(",") if x), "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < core.now() - QUIET_FOR,
                     **({"brought": p["brought"]} if head else {}),  # Head+: who came by their link in these 60 days (a member's KPI)
                     # theirs, and Head+ strictly above them (the rank rule; audit L10: a Head saw the Vice's)
@@ -50,7 +51,8 @@ def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.
     _may(con, v, oid, "team")
     found = rows(con, f"""SELECT s.last_name, s.first_name, s.last_lat, s.first_lat, u.tg_username, s.course, s.school,
             m.role, m.joined_at, {core.TITLES},
-            (SELECT g.name FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department ORDER BY g.id LIMIT 1) AS dept
+            (SELECT group_concat(name, ', ') FROM (SELECT g.name FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
+                WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department ORDER BY g.id)) AS dept
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
         WHERE m.org_id = ? ORDER BY s.last_name, s.first_name""", oid)
     found.sort(key=lambda p: -RANK[p["role"]])  # stable: highest role first, by name within
@@ -69,11 +71,11 @@ def _below(con, v: Viewer, oid: int, uid: int, right: str) -> str:
     return mine
 
 
-def dept_of(con, oid: int, uid: int) -> int | None:
-    """Their department in the club: a tag marked department (one per person; several from before: the first)"""
-    r = one(con, """SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
-        WHERE g.org_id = ? AND mt.user_id = ? AND g.department = 1""", oid, uid)
-    return r[0] if r else None
+def depts_of(con, oid: int, uid: int, own: bool = False) -> list[int]:
+    """Their departments in the club (tags marked department; a person may be in several). own: only those given by
+    hand, the ones a Head manages; one the chat sync gave (member_tags.sync) never adds to a Head's powers."""
+    return [r[0] for r in rows(con, f"""SELECT g.id FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
+        WHERE g.org_id = ? AND mt.user_id = ? AND g.department = 1 {"AND mt.sync = 0" if own else ""} ORDER BY g.id""", oid, uid)]
 
 
 def _manage(con, v: Viewer, oid: int, uid: int) -> str:
@@ -81,7 +83,7 @@ def _manage(con, v: Viewer, oid: int, uid: int) -> str:
     return _below(con, v, oid, uid, "team")
 
 
-def _remove(con, actor: int, oid: int, uid: int, ban: bool, by: str) -> None:
+def _remove(con, actor: int | None, oid: int, uid: int, ban: bool, by: str, extra: dict | None = None) -> None:
     """Someone is out of the club: their tags and open removal requests there go too; banned, they can't come
     back by an application or the link until a Vice+ lifts it (§2b)."""
     con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, uid))
@@ -92,7 +94,7 @@ def _remove(con, actor: int, oid: int, uid: int, ban: bool, by: str) -> None:
         con.execute("INSERT OR REPLACE INTO org_bans (org_id, user_id, by_id, created_at) VALUES (?, ?, ?, ?)", (oid, uid, actor, core.now()))
         con.execute("UPDATE join_requests SET status = 'rejected', decided_by = ?, decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'",
                     (actor, core.now(), oid, uid))
-    log_action(con, actor, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": "none", "by": by, **({"ban": True} if ban else {})}))
+    log_action(con, actor, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": "none", "by": by, **({"ban": True} if ban else {}), **(extra or {})}))
 
 
 def remove_member(con, v: Viewer, oid: int, uid: int) -> None:
@@ -192,7 +194,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
         "tags": [{"id": g["id"], "name": g["name"], "color": g["color"], "count": g["n"], "department": bool(g["department"])} for g in rows(con, """SELECT g.*,
             (SELECT COUNT(*) FROM member_tags mt JOIN org_members m ON m.user_id = mt.user_id AND m.org_id = g.org_id WHERE mt.tag_id = g.id) AS n
             FROM org_tags g WHERE g.org_id = ? ORDER BY g.id""", oid)],
-        "myDept": dept_of(con, oid, v.id),
+        "myDepts": depts_of(con, oid, v.id, own=True),  # the departments I manage as a Head
     }
     if can(con, v, oid, "team"):
         link = _team_link(con, oid)
@@ -393,11 +395,11 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
     level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights);
     `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power, the
-    President and the Vice tag each other; departments in it are left as they are); `dept` — the department (a tag
-    marked so) or null for none (PLAN 47): Vice+ on anyone; a Head on those below them, only into or out of the Head's
-    own department, never their own; `probation` — Head+ put someone
+    President and the Vice tag each other; departments in it are left as they are); `addDept` / `dropDept` — one
+    department (a tag marked so; a person may be in several) given or taken, the others stay: Vice+ on anyone; a Head
+    on those below them, only the departments the Head was given by hand, never their own; `probation` — Head+ put someone
     below them on it, only the President or Vice take it off (passed: the bot congratulates)."""
-    if not body or not set(body) <= {"role", "roleId", "tags", "dept", "probation"}:
+    if not body or not set(body) <= {"role", "roleId", "tags", "addDept", "dropDept", "probation"}:
         raise ApiError("bad_input")
     with tx(con):
         if "role" in body or "roleId" in body:
@@ -415,25 +417,22 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
             depts = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ? AND department = 1", oid)}
             con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ? AND department = 0)", (uid, oid))
             con.executemany("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", [(t, uid) for t in set(tags) - depts])
-        if "dept" in body:
-            d = body["dept"]
-            depts = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ? AND department = 1", oid)}
-            if d is not None and (not isinstance(d, int) or isinstance(d, bool) or d not in depts):
+        for key in ("addDept", "dropDept"):
+            if key not in body:
+                continue
+            d = body[key]
+            if not isinstance(d, int) or isinstance(d, bool) or not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ? AND department = 1", d, oid):
                 raise ApiError("bad_input")
             if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"]:
                 if not can(con, v, oid, "people") or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
                     raise ApiError("forbidden")
-            else:  # a Head: their own department's people only, and not themselves
+            else:  # a Head: below them, not themselves, only a department they were given by hand
                 if uid == v.id:
                     raise ApiError("forbidden")
                 _below(con, v, oid, uid, "people")
-                own = dept_of(con, oid, v.id)
-                if own is None or dept_of(con, oid, uid) not in (None, own) or d not in (None, own):
+                if d not in depts_of(con, oid, v.id, own=True):
                     raise ApiError("forbidden")
-            gone = depts if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"] else {own}  # a Head touches their own only
-            con.execute(f"DELETE FROM member_tags WHERE user_id = ? AND tag_id IN ({','.join('?' * len(gone)) or 'NULL'})", (uid, *gone))
-            if d is not None:
-                con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (d, uid))
+            set_dept(con, v.id, oid, uid, d, key == "addDept")
         if "probation" in body:
             on = body["probation"]
             if not isinstance(on, bool):
@@ -444,6 +443,20 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
             if was and not on:
                 notify(con, uid, "probation_passed", f"pp:{oid}:{core.now() // 86400}")
     return team(con, v, oid)
+
+
+def set_dept(con, actor: int | None, oid: int, uid: int, tag: int, on: bool, sync: int | None = None) -> bool:
+    """One department given or taken, audited (the chat sync reads a hand-made "off" as: don't add them back until they
+    rejoin the chat). By hand a given department counts as the club's own (sync = 0) even if the sync gave it first.
+    sync: the chat that did it. True: something changed."""
+    if on:
+        n = con.execute("""INSERT INTO member_tags (tag_id, user_id, sync) VALUES (?, ?, ?)
+            ON CONFLICT (tag_id, user_id) DO UPDATE SET sync = 0 WHERE excluded.sync = 0 AND sync = 1""", (tag, uid, int(sync is not None))).rowcount
+    else:
+        n = con.execute("DELETE FROM member_tags WHERE tag_id = ? AND user_id = ?", (tag, uid)).rowcount
+    if n:
+        log_action(con, actor, "member_dept", f"user:{uid}", json.dumps({"org": oid, "tag": tag, "on": on, **({"sync": sync} if sync is not None else {})}))
+    return bool(n)
 
 
 def _ask_removal(con, oid: int, uid: int, by: int | None, ban: bool, note: str) -> None:
@@ -513,7 +526,7 @@ def invite(con, v: Viewer, oid: int, dept: object = None) -> dict:
     if dept is not None:
         if not isinstance(dept, int) or isinstance(dept, bool) or not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ? AND department = 1", dept, oid):
             raise ApiError("bad_input")
-        if RANK[role_in(con, v, oid) or "member"] < RANK["vice"] and dept != dept_of(con, oid, v.id):
+        if RANK[role_in(con, v, oid) or "member"] < RANK["vice"] and dept not in depts_of(con, oid, v.id, own=True):
             raise ApiError("forbidden", "dept")
     token = secrets.token_hex(12)
     con.execute("INSERT INTO org_invites (token, org_id, role, created_by, created_at, expires_at, dept_id) VALUES (?, ?, 'member', ?, ?, ?, ?)",
@@ -602,7 +615,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
         if member:
             con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (o["id"], v.id, core.now()))
             joined(con, o["id"], v.id)
-            if r["dept_id"] and dept_of(con, o["id"], v.id) is None:
+            if r["dept_id"]:  # departments are a set: the link's adds to any they have
                 con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) SELECT id, ? FROM org_tags WHERE id = ? AND department = 1", (v.id, r["dept_id"]))
         else:
             oversight.set_role(con, r["created_by"], v.id, o["id"], "president", "link")

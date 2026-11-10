@@ -84,6 +84,11 @@
   .venv/bin/python -m kbtu.admin appeals list                    who has it
   .venv/bin/python -m kbtu.admin appeals reveal <appeal id>      the author (an anonymous one's too): the creator alone, audited
   .venv/bin/python -m kbtu.admin appeals funnel [days]           the composer's anonymous counters and the months' topics
+  .venv/bin/python -m kbtu.admin chatsync link <club slug> <chat id> main | dept "<department tag>"   a club's Telegram chat
+                                mirrored into its members (CHAT_SYNC=1; the bot an admin there): main = the membership, dept =
+                                that department (logic/chatsync.py). chatsync list | chatsync unlink <chat id>
+  .venv/bin/python -m kbtu.admin chatsync run <chat id> [--apply]   a sweep by the server's bot (resumes after a restart; a
+                                paused link runs again): without --apply a dry run; waits and prints counts only, never names
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -156,6 +161,35 @@ def _vol_import(con, rest: list[str]) -> None:
         sys.exit('--apply needs --source "<who gave the list, when>"')
     got = vol.apply(con, org, p, vals["--source"].strip())
     print(f"batch {got['batch']}: " + ("this file was imported already, nothing added" if got["again"] else f"{got['added']} added, {got['there']} already there"))
+
+
+def _chatsync(con, cfg, rest: list[str]) -> None:
+    from .logic import account, chatsync
+    if not cfg.chat_sync:
+        sys.exit("CHAT_SYNC is off: its privacy section comes with it, so the sync waits for it")
+    chatsync.POLICY = account.policy(cfg)
+    sub, ids = rest[:1], [int(x) for x in rest[1:3] if re.fullmatch(r"-?\d+", x)]
+    try:
+        if sub == ["list"] and len(rest) == 1:
+            for c in chatsync.links(con):
+                print(c["chat_id"], c["slug"], c["kind"], c["tag"] or "", f"paused ({c['paused']})" if c["paused"] else "live",
+                      f"sweep {c['sweep']} at {c['sweep_pos']}" if c["sweep"] else "", c["result"] or "")
+        elif sub == ["link"] and len(rest) in (4, 5) and re.fullmatch(r"-?\d+", rest[2]) and (rest[3:] == ["main"] or rest[3] == "dept" and rest[4:]):
+            chatsync.link(con, rest[1], int(rest[2]), rest[3], rest[4] if rest[4:] else None)
+            print("linked: chatsync run", rest[2], "for a dry run")
+        elif sub == ["unlink"] and len(rest) == 2 and ids:
+            print("unlinked" if chatsync.unlink(con, ids[0]) else "no such link")
+        elif sub == ["run"] and ids and rest[2:] in ([], ["--apply"]):
+            if not chatsync.start(con, ids[0], bool(rest[2:])):
+                sys.exit("no such link")
+            print("queued: the server's bot runs it (Ctrl-C stops waiting, not the sweep)")
+            while (c := one(con, "SELECT sweep, result FROM chat_sync WHERE chat_id = ?", ids[0])) and c["sweep"]:
+                time.sleep(5)
+            print(c["result"] if c else "unlinked meanwhile")
+        else:
+            sys.exit(__doc__)
+    except ApiError as e:
+        sys.exit(f"{e.code} {e.message}".strip())
 
 
 def main(args: list[str]) -> None:
@@ -576,6 +610,8 @@ def main(args: list[str]) -> None:
                 print(m["month"], m["total"], " ".join(f"{k} {n}" for k, n in sorted(m["topics"].items())))
         else:
             sys.exit(__doc__)
+    elif cmd == "chatsync":
+        _chatsync(con, cfg, args[1:])
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

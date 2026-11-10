@@ -17,7 +17,7 @@ import json
 import re
 
 from .db import tx
-from .logic import PERSON_COLS, ApiError, Viewer, _may, dept_of, _once, _qs, banned, can, joined, need_student, notify, now, one, person_ref, role_in, rows
+from .logic import PERSON_COLS, ApiError, Viewer, _may, _once, _qs, banned, can, joined, need_student, notify, now, one, person_ref, role_in, rows
 
 KINDS = ("short", "long", "one", "many", "link")
 VERDICTS = ("no", "maybe", "next")
@@ -348,7 +348,7 @@ def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
             if a["stage"] == "yes" and not banned(con, oid, a["user_id"]):
                 con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now()))
                 joined(con, oid, a["user_id"])
-                if a["taken_tag"] and not dept_of(con, oid, a["user_id"]):  # one already in a department stays there
+                if a["taken_tag"]:  # departments are a set: one already in another keeps it too
                     con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) VALUES (?, ?)", (a["taken_tag"], a["user_id"]))
                 con.execute("UPDATE round_apps SET sent_at = ? WHERE id = ?", (now(), a["id"]))
                 notify(con, a["user_id"], "round_yes", f"ry:{a['id']}")

@@ -45,6 +45,8 @@ CHECKOUT_WINDOW = 8        # stop retrying after this: Telegram allows 10 s, and
 _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the look and the next round see the same ones
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
+SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
+_sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
 
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
@@ -547,6 +549,7 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
     """Our bot added to a chat or taken out of it (my_chat_member). Added by someone who may edit a club's chats, to a
     chat on its page: the bot keeps that card from now on (a group added by Studio's link says which: its /start)."""
     chat, status = upd.get("chat") or {}, (upd.get("new_chat_member") or {}).get("status")
+    logic.chatsync.bot_status(con, chat.get("id"), status)  # a linked chat where the bot isn't an admin any more: paused
     if status in ("left", "kicked"):
         logic.bot_left(con, chat["id"])
         return
@@ -1167,6 +1170,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     if new := msg.get("migrate_to_chat_id"):
         con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
+        con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         return
     words = str(msg.get("text") or "").split()
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
@@ -1275,7 +1279,9 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
 def _wanted(cfg: Config) -> str:
     return json.dumps(["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
                        # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
-                       *(["message_reaction_count"] if cfg.forum_channel else [])])
+                       *(["message_reaction_count"] if cfg.forum_channel else []),
+                       # someone joining or leaving a club's linked chat (logic/chatsync.py; sent only where the bot is an admin)
+                       *(["chat_member"] if _sync_live else [])])
 
 
 async def _answer_checkout(cfg: Config, http: httpx.AsyncClient, q: dict) -> bool:
@@ -1366,6 +1372,14 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 offset = upd["update_id"] + 1
                 if "edited_message" in upd or "pre_checkout_query" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group; pre-checkouts are answered (above)
                     continue
+                if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
+                    try:
+                        logic.chatsync.member_update(con, cm)
+                    except sqlite3.Error as exc:
+                        log.warning("chat sync: %s", type(exc).__name__)
+                        await asyncio.sleep(1)
+                        return upd["update_id"]
+                    continue
                 if rc := upd.get("message_reaction_count"):
                     if (rc.get("chat") or {}).get("id") == cfg.forum_channel:
                         logic.fchannel.reacted(con, rc)
@@ -1447,6 +1461,37 @@ async def _postman(cfg: Config, http: httpx.AsyncClient) -> None:
         except Exception:  # a bug in one round must not stop the postman
             log.exception("bot round")
         await asyncio.sleep(POLL)
+
+
+async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
+    """Clubs mirrored from their chats (CHAT_SYNC, logic/chatsync.py): whether to ask Telegram for chat_member updates, and
+    the sweeps, a step at a time at about 4 calls a second; a 429 waits as told. Never inside a request or the postman."""
+    global _sync_live
+    bot_id = int(cfg.bot_token.split(":")[0])
+
+    async def call(method: str, params: dict) -> dict | None:
+        for _ in range(5):
+            await asyncio.sleep(SYNC_GAP)
+            try:
+                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)
+                answer = r.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                log.warning("chat sync: %s", type(exc).__name__)  # the type only: the URL holds the token
+                await asyncio.sleep(10)  # the network: the same people again in a while, not in a tight loop
+                return None
+            if r.status_code != 429:
+                return answer
+            await asyncio.sleep(float((answer.get("parameters") or {}).get("retry_after", 5)))
+        return None
+    con = db.connect(cfg.db_path)
+    while True:
+        try:
+            _sync_live = logic.chatsync.live(con)
+            if not await logic.chatsync.step(con, call, bot_id):
+                await asyncio.sleep(30)
+        except Exception:  # noqa: BLE001 - the loop must outlive one bad round
+            log.exception("chat sync")
+            await asyncio.sleep(30)
 
 
 async def _videos(cfg: Config) -> None:
@@ -1554,4 +1599,5 @@ async def run(cfg: Config) -> None:
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
-            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg))
+            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
+                                 *([_chat_sync(cfg, http)] if cfg.chat_sync else []))

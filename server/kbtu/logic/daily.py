@@ -226,6 +226,7 @@ def stats_day(con) -> None:
     con.execute("""DELETE FROM qr_expected WHERE session_id IN (SELECT id FROM qr_sessions WHERE ended_at < ?
         OR (ended_at IS NULL AND created_at < ?))""", (core.now() - 30 * 86400, core.now() - 90 * 86400))
     _prune_deletion_log(con)
+    chatsync.night(con)  # linked clubs: their members against their chats again (updates missed while down)
     roles_backfill(con)  # club roles from before the typed-once title: a batch a night into the translator's queue
 
 
@@ -314,7 +315,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, mapflaws, stats  # noqa: E402
+from . import appeals, assistant, chatsync, mapflaws, stats  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

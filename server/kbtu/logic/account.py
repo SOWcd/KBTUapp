@@ -902,6 +902,7 @@ CONSENT_BOARD = "2026-11-v15"  # with BOARD=1 alone: the student forum's section
 CONSENT_BOTH = "2026-11-v16"  # (v12, v8, v6 before) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
 CONSENT_FCH = "+fch4"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch3 until Nov 4: the check's explanation, appeals, reply limits; fch2 until Nov 3: the anonymous author's replies; fch1 until Nov 2: commenters' faces and reactions)
+CONSENT_CHS = "+chs1"         # with CHAT_SYNC: added after those (app.py), the section on clubs' members mirrored from their Telegram chats
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
 
 
@@ -918,6 +919,7 @@ def policy(cfg) -> str:
            (True, True): CONSENT_BOTH}[(bool(cfg.forum), cfg.board == "all")]
     out += CONSENT_TGC if cfg.tgc_chat else ""
     out += CONSENT_FCH if cfg.forum_channel else ""
+    out += CONSENT_CHS if cfg.chat_sync else ""
     return out + (CONSENT_AI if ai_on(cfg) else "")
 
 
@@ -1064,6 +1066,7 @@ _DEL_GONE = {
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
+    ("chat_sync_todo", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 

@@ -59,6 +59,8 @@ class Config:
     appeals: str = ""
     # GALLERY=1: everyone posts to the Gallery (logic/gallery.py: KBTU's own photos beside the albums); staff: admins and moderators
     gallery: str = ""
+    # CHAT_SYNC=1: clubs' members mirrored from their linked Telegram chats (logic/chatsync.py) and its privacy section; off: none of it runs
+    chat_sync: bool = False
     seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -132,4 +134,5 @@ def load() -> Config:
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
         gallery={"1": "all", "staff": "staff"}.get(env.get("GALLERY", "").strip(), ""),
+        chat_sync=env.get("CHAT_SYNC", "").strip() == "1",
     )

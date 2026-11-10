@@ -291,6 +291,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
+    logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
@@ -2220,7 +2221,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger
         body = body.replace("{{apln}}", str(fchn + bool(cfg.forum_channel) + bool(cfg.volunteers)))  # appeals to SG: last
         for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
-                         ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals))):
+                         ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals)), ("chs", cfg.chat_sync)):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
