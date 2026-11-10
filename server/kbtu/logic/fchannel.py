@@ -184,7 +184,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
 
 
 def _review(p) -> dict:
-    kind = "appeal" if p["appealed_at"] else "photo" if p["why"] == "photo" else "ai"
+    kind = "appeal" if p["appealed_at"] else "photo" if p["why"] == "photo" else "tg" if p["why"] == "tgno" else "ai"
     ex = {"quote": p["ai_quote"], "reason": p["ai_reason"], "fix": p["ai_fix"]} if p["ai_reason"] else None
     return {"kind": kind, "explain": ex}
 
@@ -302,15 +302,25 @@ PHOTO_HIDE_AT = 2       # distinct people's open reports that take a post with p
 
 
 def photo_room(con, v: Viewer) -> None:
-    """Before the decode: a student, under the hour's uploads."""
+    """Before the decode: a student, and one of the hour's uploads taken, in one statement (two at once can't both
+    pass the last one). Its own count (Codex review): putting photos on a post, deleting them or a failed upload give
+    nothing back. ponytail: an hour's bucket, so up to twice PHOTO_UPLOADS across its edge; a sliding window if abused"""
     need_student(v)
-    if one(con, "SELECT COUNT(*) FROM fchan_photos WHERE user_id = ? AND post_id IS NULL AND created_at > ?", v.id, _now() - PHOTO_FRESH)[0] >= PHOTO_UPLOADS:
+    n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
+                    RETURNING CAST(value AS INTEGER)""", f"fchup:{v.id}:{_now() // 3600}")[0]
+    if n > PHOTO_UPLOADS:
         raise ApiError("rate_limited", "photos")
 
 
+PHOTO_RATIO = 20  # Telegram's sendPhoto: neither side more than 20 times the other (a thin strip is refused for good)
+
+
 def add_photo(con, v: Viewer, saved: dict) -> dict:
-    """A processed upload (media.store under a random name) waiting for my post: its id to name, its picture to show."""
-    photo_room(con, v)
+    """A processed upload (media.store under a random name) waiting for my post: its id to name, its picture to show.
+    The route took the hour's slot (photo_room) and drops the files if this refuses."""
+    need_student(v)
+    if max(saved["width"], saved["height"]) > PHOTO_RATIO * min(saved["width"], saved["height"]):
+        raise ApiError("bad_input", "photo_shape")
     fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                       (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
     return {"id": fid} | _pic(saved)
@@ -335,7 +345,7 @@ def _has_photos(con, pid: int) -> bool:
 
 
 def pics_gone(con) -> list[str]:
-    """Photo files whose rows left (the trigger of migration 151): for the disk now (the bot's round)."""
+    """Photo files whose rows left (the trigger of migration 152): for the disk now (the bot's round)."""
     if not one(con, "SELECT 1 FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;'"):  # a read: a DELETE takes the write lock every round
         return []
     return [k[7:] for (k,) in rows(con, "DELETE FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;' RETURNING key")]
@@ -603,6 +613,12 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
             con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at, photo) VALUES (?, ?, ?, ?)", (m, why, _now(), int(bool(pics))))
 
 
+def refused_send(con, pid: int) -> None:
+    """Telegram refused it for good (400: a picture's shape or size): not in the channel; a moderator decides (release
+    tries once more, take-down tells its author). The round goes on to the next posts."""
+    con.execute("UPDATE fchan_posts SET status = 'held', why = 'tgno', tg_msg = NULL WHERE id = ? AND tg_msg = 0", (pid,))
+
+
 def unsend(con, pid: int) -> None:
     """Telegram refused it (it isn't in the channel): the next round tries again."""
     con.execute("UPDATE fchan_posts SET tg_msg = NULL WHERE id = ? AND tg_msg = 0", (pid,))
@@ -630,6 +646,10 @@ def found(con, msg_id: int, text: str) -> None:
             AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{p['body']}", f"{p['body']}\n\n— {_sign(con, p)}")]
     if len(hits) == 1:
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = COALESCE(posted_at, ?) WHERE id = ?", (msg_id, _now(), hits[0]))
+        # an album: the caption is on its first photo, and Telegram numbers one album's messages in a row, so photo n
+        # is this one plus n; each then leaves with the post (Codex review: only the first did). ponytail: consecutive
+        # ids are how Telegram sends a media group; match the copies' media_group_id if that ever changes
+        con.execute("UPDATE fchan_photos SET msg = ? + n WHERE post_id = ?", (msg_id, hits[0]))
 
 
 RULES_LATE = 7 * 86400  # a post older than this gets no first comment (its copy never came: no group linked, updates lost)
@@ -718,6 +738,8 @@ def sweep(con) -> None:
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 86400, _now() - 30 * 86400))
     con.execute("DELETE FROM fchan_photos WHERE post_id IS NULL AND created_at < ?", (_now() - PHOTO_FRESH,))  # picked, never posted
+    con.execute("DELETE FROM meta WHERE key >= 'fchup:' AND key < 'fchup;' AND CAST(substr(key, length(rtrim(key, '0123456789')) + 1) AS INTEGER) < ?",
+                (_now() // 3600 - 1,))  # the upload counts of past hours
     con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
         AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)

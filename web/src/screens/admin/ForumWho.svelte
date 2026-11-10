@@ -5,7 +5,7 @@
   // verdict's own word, always; the reason the AI gave its author (ai.explain, kept on the row) after it in quotes, never
   // in its place (review: the post's words steer that model, so an injected "a false alarm" could hide the verdict)
   const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost',
-    noise: 'fc.whyNoise', ad: 'fc.whyAd', reports: 'fcr.whyReports', photo: 'fc.whyPhoto' };
+    noise: 'fc.whyNoise', ad: 'fc.whyAd', reports: 'fcr.whyReports', photo: 'fc.whyPhoto', tgno: 'fc.whyTg' };
   const AI = new Set(['ai', 'person', 'noise', 'ad']);
   export function whyLine(why: string | null | undefined, aiWhy?: string | null, reply = false): string {
     if (!why) return '';

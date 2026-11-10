@@ -140,6 +140,7 @@
   // server: a reload keeps them; channel.why: this session's, as soon as they come)
   const heldWhy = (p: ChannelFeedPost) => p.review?.kind === 'appeal' ? { reason: t('fc.appealedWhy'), fix: null }
     : p.review?.kind === 'photo' ? { reason: t('fc.photoWhy'), fix: null }
+    : p.review?.kind === 'tg' ? { reason: t('fc.tgWhy'), fix: null }
     : { reason: (channel.why[p.id] ?? p.review?.explain)?.reason ?? t('fc.humanWhy'), fix: (channel.why[p.id] ?? p.review?.explain)?.fix ?? null };
 
   // a long post starts at four lines with a fade and a quiet "More" that opens it in place (its height glides to the

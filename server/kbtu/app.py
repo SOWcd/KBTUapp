@@ -2073,9 +2073,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """A photo for my next post (the file itself is the body), re-encoded (no EXIF) under a random name, never the
         content hash: the same picture as an avatar must not tell an anonymous author (fchannel.add_photo)."""
         data = await read_upload(request)
-        await run_in_threadpool(F.photo_room, con, v)  # before the work, not only after it
+        await run_in_threadpool(F.photo_room, con, v)  # the hour's slot taken before the work
         saved = await _picture(media.save, data, photos, secrets.token_bytes(32))
-        return await run_in_threadpool(F.add_photo, con, v, saved)
+        try:
+            return await run_in_threadpool(F.add_photo, con, v, saved)
+        except BaseException:  # refused (its shape), or the write failed: no files without a row (nothing would find them)
+            media.drop(photos, [saved["path"]])
+            raise
 
     @app.post("/api/forum-posts/{pid}/appeal")
     def fchan_appeal(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):

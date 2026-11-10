@@ -70,6 +70,8 @@ const en: Dict = {
   'fc.publishing': "Publishing…",
   'fc.appealedWhy': "You sent it to a moderator",
   'fc.photoWhy': "A moderator checks anonymous posts with photos",
+  'fc.whyTg': "Telegram refused the post",
+  'fc.tgWhy': "Telegram refused the post (often a photo too narrow). A moderator will look at it",
   'fc.photo': "Photo",
   'fc.addPhoto': "Add a photo",
   'fc.photoOff': "Remove the photo",

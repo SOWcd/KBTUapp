@@ -290,8 +290,8 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     out, then the bot's first comment under each. The words go escaped (only the signature under them is italic), no
     preview. The bot needs in the channel: post, edit and delete others' messages."""
     F = logic.fchannel
-    root = Path(cfg.db_path).resolve().parent / "media"
-    media.drop(root, F.pics_gone(con))  # photos whose rows left (deleted, swept, never posted): off the disk, the feature on or off
+    pics_dir = Path(cfg.db_path).resolve().parent / "media"  # never `root`: the copies' loop below names its own (Codex review)
+    media.drop(pics_dir, F.pics_gone(con))  # photos whose rows left (deleted, swept, never posted): off the disk, the feature on or off
     if not cfg.forum_channel:
         return
     await asyncio.to_thread(F.lost, con)  # (in a thread: an UPDATE takes the write lock) a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
@@ -334,7 +334,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
                 break
         F.copy_done(con, key, root)
     for pid, body, sign, pics in F.to_send(con):
-        jpgs = [(root / f"{p}.jpg").read_bytes() for p in pics if (root / f"{p}.jpg").exists()]
+        jpgs = [(pics_dir / f"{p}.jpg").read_bytes() for p in pics if (pics_dir / f"{p}.jpg").exists()]
         if not F.sending(con, pid):  # marked "sending" (tg_msg 0, committed) before it goes; deleted meanwhile: skipped
             continue
         # no buttons on the post: a channel post with an inline keyboard loses Telegram's "Comments" bar (the way back
@@ -346,7 +346,9 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         if r.get("ok"):
             ids = [m["message_id"] for m in r["result"]] if isinstance(r["result"], list) else [r["result"]["message_id"]]
             F.sent(con, pid, ids[0], ids if jpgs else None)
-        elif r.get("error_code"):  # Telegram said no: it isn't in the channel, the next round tries again
+        elif r.get("error_code") == 400:  # refused for good (a picture's shape, its size): to a moderator, the rest still go
+            F.refused_send(con, pid)
+        elif r.get("error_code"):  # a flood wait, a server error: it isn't in the channel, the next round tries again
             F.unsend(con, pid)
             break
         else:  # no answer: it may be in the channel or not; F.lost hands it to a moderator next round
