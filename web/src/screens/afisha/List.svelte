@@ -132,7 +132,7 @@
                   {@const k = lessonKind(it.c.kind)}
                   <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
                   {@const isLive = it.key === live?.key}
-                  <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
+                  <div class="row cl" class:done={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
                        onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
                     <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
                     <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
@@ -368,7 +368,7 @@
 
   /* a class: its times in the covers' column, the room at the row's end */
   .cl { min-height: 56px; padding: 8px 0; cursor: pointer; }
-  .cl.past, .cl.skip { opacity: 0.5; }
+  .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
   .cl.skip .cl-s b { text-decoration: line-through; }
   /* the class on now: its times in the accent, what's left, a thin line of how far it's gone under the text */
   .cl.live .cl-t b { color: var(--accent-text); }
