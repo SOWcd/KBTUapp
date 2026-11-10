@@ -1191,6 +1191,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")
         from . import vol
         vol.gone(con, v.id)  # every volunteers-ledger record ever linked to me, unlinked since or not
         fks = _user_fks(con)

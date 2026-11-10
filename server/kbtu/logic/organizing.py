@@ -1026,11 +1026,6 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
                 "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"])}  # a helper sees the person only (crew.py)
 
 
-def flagged(con, rid: int) -> bool:
-    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first."""
-    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", rid) is not None
-
-
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
     """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
     that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left

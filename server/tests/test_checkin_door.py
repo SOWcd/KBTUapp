@@ -167,3 +167,21 @@ def test_volunteer_sessions_stay_the_organizers(zz):
     c.post(f"/api/screens/{sid}/out", headers=tma(P))
     assert _scan(c, 3, c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]).json()["left"]
     _agree(c, 3)
+
+
+def test_plain_member_checks_in_as_a_guest(env):
+    """Re-check (Opus): a plain member at their club's public event is a guest: they scan the organizer's screen and count.
+    Only who fetched the code at the door can't use it on themselves."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    eid = _ev(con, org, int(time.time()) - 60)
+    _mem(c, con, org, 7, "mia")
+    _mem(c, con, org, 8, "max")
+    sid = c.post(f"/api/events/{eid}/screen", headers=tma(9)).json()["session"]
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
+    assert c.post("/api/checkin", headers=tma(7), json={"p": p}).json()["done"]            # Mia came as a guest
+    q = c.post(f"/api/screens/{sid}/show", headers=tma(8)).json()["param"]                  # Max shows it at the door
+    r = c.post("/api/checkin", headers=tma(8), json={"p": q})
+    assert r.status_code == 403                                                             # ... but not on himself
+    con.close()

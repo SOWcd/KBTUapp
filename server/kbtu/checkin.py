@@ -248,8 +248,9 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     if not (act == "show" and s and logic.crew.qr_helping(con, v, s)):  # a helper only keeps the QR showing (hand, below)
         if not door or not s or _runs(con, v, s):  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
             s = _mine(con, v, sid, cohost=door)
-        else:  # a member at the event's door
+        else:  # a member at the event's door; who showed this code can't check themselves in with it (mark)
             _door(con, v, s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]), sid, act == "start")
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{sid}:{v.id}",))
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
@@ -286,6 +287,8 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
             con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
                         (e["title"], secrets.token_hex(32), e["org_id"], eid, now()))
             logic.vol.meet(con, one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)[0], e["org_id"])
+        if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # the code goes to this member: mark's "own"
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{one(con, 'SELECT id FROM qr_sessions WHERE event_id = ?', eid)[0]}:{v.id}",))
         return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
 
 
@@ -440,7 +443,7 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
     if e and out and _guests(con, e, sid) and (logic.door_shut(e, t) == "not_open" or logic.door_shut(e, t - GRACE) == "closed"):
         raise ApiError("closed", "qr")  # leaving an event too: within its door's window (GRACE for the crowd leaving at the end)
     if e and not out and _guests(con, e, sid):
-        if can(con, v, e["org_id"], "door") and not logic.cohosts.runs(con, v, e):  # as the scanner: a door member doesn't check themselves in
+        if one(con, "SELECT 1 FROM meta WHERE key = ?", f"qrshow:{sid}:{uid}") and not logic.cohosts.runs(con, v, e):  # as the scanner: who works the door doesn't check themselves in (a plain member who came as a guest does)
             raise ApiError("forbidden", "own")
         r = e["price"] and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
         if r and r["checked_in_at"] and not had:  # this ticket came in already (a screenshot at the scanner): the door must see it
