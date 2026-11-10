@@ -150,6 +150,13 @@ def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
         or bool(cohost and s["event_id"] and logic.co_runs(con, v, s["event_id"]))
 
 
+def _door(con, v: Viewer, s) -> bool:
+    """An event's session: every member who works its door (the ticket scanner) may also start and show its QR, for a
+    guest who can't open a ticket (owner, Nov 10); finishing, the CSV and the screens stay the organizers'."""
+    e = s and s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+    return bool(e) and can(con, v, e["org_id"], "door") and not logic.door_shut(e, now())  # only while its door is open, as the scanner
+
+
 def _mine(con, v: Viewer, sid: int, cohost: bool = True):
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     if not s or not _runs(con, v, s, cohost):
@@ -221,7 +228,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not (act == "show" and s and logic.crew.qr_helping(con, v, s)):  # a helper only keeps the QR showing (hand, below)
+    if not (act == "show" and s and logic.crew.qr_helping(con, v, s) or act in ("start", "show") and _door(con, v, s)):  # a helper only keeps the QR showing (hand, below)
         s = _mine(con, v, sid, cohost=act in ("start", "show"))  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
@@ -244,9 +251,9 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
     """An event's own session (its organizer's "Check-in screen" in the app), made on first use: its title, its club. A
     paid event keeps its tickets at the door, a partner's has no door (Oct 29)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-    if not e or not can(con, v, e["org_id"], "events") and not logic.co_runs(con, v, eid) and v.role != "admin":
+    if not e or not can(con, v, e["org_id"], "door") and not logic.co_runs(con, v, eid) and v.role != "admin":
         raise ApiError("forbidden", "screen")
-    if e["status"] != "published" or e["price"] or e["guest_host"]:
+    if e["status"] != "published" or e["guest_host"]:  # a paid one too: a ticket held is checked in by the scan (organizing.screen_came)
         raise ApiError("closed", "screen")
     with tx(con):
         if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):

@@ -496,6 +496,8 @@
         {#if crew}
           {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
+          <!-- the scanner's other half: the event's QR on this phone, for a guest who can't open a ticket (owner, Nov 10); a member's once the door opens (server checkin._door) -->
+          {#if !e.guestHost && !over && (head || (e.doorAt ?? e.startsAt - 1800) <= nowTs())}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
@@ -504,7 +506,7 @@
         {#if coCrew}
           <Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {#if !e.price && !over}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />
+          {#if !over}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />
             <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
         {/if}
         {#if helper}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id))} />{/if}

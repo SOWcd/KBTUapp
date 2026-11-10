@@ -6838,7 +6838,7 @@ def test_screen_pairing(env, monkeypatch):
 
 def test_event_screen(env):
     """An event's own check-in screen (Oct 30): its organizers make it in the app (one per event); a counted scan is
-    that event's check-in (a walk-in on a free public event, the ticket checked in, nothing on a paid one); a paid or
+    that event's check-in (a walk-in on a free public event, the ticket checked in, nothing on a paid one without one); a
     partner's event keeps its door."""
     from kbtu import checkin
     c, cfg = env
@@ -6851,8 +6851,20 @@ def test_event_screen(env):
             created_by, created_at, updated_at) VALUES (?, ?, 'published', 'Initiation', 'Hall', ?, 'trophy_3d', '#3B6BFF', ?, ?, ?, ?, 1, 0, 0)""",
                     (eid, org, t0 + 600, price, price and "Dana S.", price and "+77071234567", host))
     assert c.post("/api/events/1/screen", headers=tma(1)).status_code == 403                 # a guest at it, not its organizer
-    for eid in (2, 3):
-        assert c.post(f"/api/events/{eid}/screen", headers=tma(9)).status_code == 409        # tickets / no door
+    assert c.post("/api/events/3/screen", headers=tma(9)).status_code == 409                # a partner's: no door
+    # a paid one too, from any member at its door (owner, Nov 10): a guest who can't open the ticket scans this QR instead
+    mem = login(c, 7, "mia")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, mem["id"]))
+    q = c.post("/api/events/2/screen", headers=tma(7)).json()
+    assert c.post(f"/api/screens/{q['session']}/start", headers=tma(7)).status_code == 200
+    qp = c.post(f"/api/screens/{q['session']}/show", headers=tma(7)).json()["param"]
+    assert c.post(f"/api/screens/{q['session']}/finish", headers=tma(7)).status_code == 403  # finishing stays the organizers'
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (2, ?, 'going', 'T2', 0, 0)", (bob["id"],))
+    assert c.post("/api/checkin", headers=tma(2), json={"p": qp}).json()["done"]           # Bob's paid ticket
+    assert not c.post("/api/checkin", headers=tma(1), json={"p": qp}).json()["done"]       # no ticket, no way in
+    assert [tuple(r) for r in con.execute("SELECT user_id FROM registrations WHERE event_id = 2 AND checked_in_at IS NOT NULL").fetchall()] == [(bob["id"],)]
+    con.execute("UPDATE events SET starts_at = ? WHERE id = 2", (t0 + 86400,))              # the door not open yet: a member can't
+    assert c.post(f"/api/screens/{q['session']}/show", headers=tma(7)).status_code == 403
     s = c.post("/api/events/1/screen", headers=tma(9)).json()
     assert (s["event"], s["title"]) == (1, "Initiation") and c.post("/api/events/1/screen", headers=tma(9)).json()["session"] == s["session"]
     p = c.post(f"/api/screens/{s['session']}/start", headers=tma(9)).json()["param"]
@@ -6872,7 +6884,7 @@ def test_event_screen(env):
     # far from the door's window (a session started a week early): the scan counts in the list, nobody "came"
     con.execute("UPDATE events SET starts_at = starts_at + 7 * 86400 WHERE id = 1")
     login(c, 5, "eve")
-    k = _paired(c, 9)                                                                        # a laptop on the event's session
+    k = _paired(c, 9, s["session"])                                                          # a laptop on the event's session
     assert not c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]}).json()["done"]  # not told "checked in"
     assert not con.execute("SELECT 1 FROM registrations r JOIN users u ON u.id = r.user_id WHERE u.tg_id = 5").fetchone()
     assert con.execute("SELECT done_at FROM qr_marks m JOIN users u ON u.id = m.user_id WHERE u.tg_id = 5").fetchone()[0]
