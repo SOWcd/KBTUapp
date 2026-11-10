@@ -335,7 +335,7 @@ def _has_photos(con, pid: int) -> bool:
 
 
 def pics_gone(con) -> list[str]:
-    """Photo files whose rows left (the trigger of migration 149): for the disk now (the bot's round)."""
+    """Photo files whose rows left (the trigger of migration 151): for the disk now (the bot's round)."""
     if not one(con, "SELECT 1 FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;'"):  # a read: a DELETE takes the write lock every round
         return []
     return [k[7:] for (k,) in rows(con, "DELETE FROM meta WHERE key >= 'fchpic:' AND key < 'fchpic;' RETURNING key")]
