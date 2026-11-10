@@ -490,14 +490,15 @@ def undo_club_refusal(con, v: Viewer, aid: int) -> None:
 # ---------------------------------------------------------------- the Ascent (owner, Nov 6; was the path to the ✓)
 # A student initiative's checklist, any order, each read live when Studio opens (one query, every fact once). It never
 # locks a tool (owner, Nov 6): a checklist and a reward. A collab with an official club puts that event in the afisha
-# (its co-host's right); the top (every step, and two events with guests) gives the full tools of an official club but
+# (its co-host's right); the top (every step, and two events with outside guests: _path_guests) gives the full tools of an official club but
 # no ✓ (orgs.top_at, kept once reached; the owner makes its lanyard by hand). The ✓ is DMP's own decision: a club at the
 # top may ask (ask_official), the path never asks for it.
 
 PATH_STEPS = ("profile", "round", "channel", "collab", "top")
 PATH_MEMBERS = 5   # members in the app for a ready profile
-PATH_GUESTS = 3    # people outside the team scanned at the door for an event to count
+PATH_GUESTS = 5    # outside guests scanned at the door for an own event to count (owner, Nov 10)
 PATH_EVENTS = 2    # such events for the top
+PATH_REACH = 10    # different outside guests across those two
 
 
 def _path_facts(con, oid: int) -> sqlite3.Row:
@@ -511,22 +512,42 @@ def _path_facts(con, oid: int) -> sqlite3.Row:
         EXISTS (SELECT 1 FROM event_cohosts c JOIN events e ON e.id = c.event_id
           JOIN orgs x ON x.id = CASE WHEN e.org_id = :o THEN c.org_id ELSE e.org_id END
           WHERE c.status = 'accepted' AND :o IN (e.org_id, c.org_id) AND x.official = 1 AND e.status = 'published' AND e.hidden_at IS NULL) AS collab,
-        -- own events over, with people scanned at the door who weren't in the club when it started (joining after counts)
-        (SELECT COUNT(*) FROM events e WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
-          AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND (SELECT COUNT(*) FROM registrations g WHERE g.event_id = e.id
-            AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0 AND NOT EXISTS (SELECT 1 FROM org_members m
-              WHERE m.org_id = :o AND m.user_id = g.user_id AND m.joined_at < e.starts_at)) >= :g) AS events,
         (SELECT top_at FROM orgs WHERE id = :o) AS top_at""",
-        {"o": oid, "t": core.now(), "g": PATH_GUESTS}).fetchone()
+        {"o": oid}).fetchone()
 
 
-def _path_steps(con, oid: int) -> tuple[dict[str, bool], sqlite3.Row]:
+def _path_guests(con, oid: int) -> tuple[int, int]:
+    """(own events over with PATH_GUESTS outside guests, the most different guests any two of them drew). A guest: scanned
+    at the door (not ticked by hand), not the event's creator or helper, never in the club or its co-host before it began
+    (current and former members alike: org_history keeps who left; joining after counts). One query for all events.
+    ponytail: no anti-cheat review (owner, Nov 10: proven cheating cancels the top); add a staff undo of top_at when needed."""
+    by: dict[int, set[int]] = {}
+    for eid, uid in con.execute("""SELECT e.id, g.user_id FROM events e JOIN registrations g ON g.event_id = e.id
+            WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
+            AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0
+            AND g.user_id IS NOT e.created_by
+            AND NOT EXISTS (SELECT 1 FROM event_crew w WHERE w.event_id = e.id AND w.user_id = g.user_id)
+            AND NOT EXISTS (SELECT 1 FROM (SELECT org_id, joined_at AS at FROM org_members WHERE user_id = g.user_id
+                UNION ALL SELECT org_id, since FROM org_history WHERE user_id = g.user_id) h
+              WHERE h.at < e.starts_at AND (h.org_id IN (e.org_id, e.co_org_id)
+                OR h.org_id IN (SELECT org_id FROM event_cohosts WHERE event_id = e.id AND status = 'accepted')))""",
+            {"o": oid, "t": core.now()}).fetchall():
+        by.setdefault(eid, set()).add(uid)
+    ok = [s for s in by.values() if len(s) >= PATH_GUESTS]
+    reach = max((len(a | b) for i, a in enumerate(ok) for b in ok[i + 1:]), default=max(map(len, ok), default=0))  # ponytail: pairs, O(n^2) on a club's few events
+    return len(ok), reach
+
+
+def _path_steps(con, oid: int) -> tuple[dict[str, bool], dict]:
     """Each step done or not, any order; the top needs every other one too (and, once reached, stays)."""
-    f = _path_facts(con, oid)
+    f = dict(_path_facts(con, oid))
     out = {"profile": bool(f["look"]) and f["members"] >= PATH_MEMBERS, "round": bool(f["round"]), "channel": bool(f["channel"]),
            "collab": bool(f["collab"])}
-    out["top"] = all(out.values()) and f["events"] >= PATH_EVENTS
-    return ({k: True for k in out} if f["top_at"] is not None else out), f
+    if f["top_at"] is not None:
+        return {k: True for k in (*out, "top")}, {**f, "events": PATH_EVENTS, "guests": PATH_REACH}
+    f["events"], f["guests"] = _path_guests(con, oid)
+    out["top"] = all(out.values()) and f["events"] >= PATH_EVENTS and f["guests"] >= PATH_REACH
+    return out, f
 
 
 def path_top(con, oid: int) -> bool:
@@ -567,7 +588,7 @@ def official_path(con, v: Viewer, oid: int) -> dict | None:
     if steps["top"] and not o["top_at"]:
         _reached_top(con, oid)
     last = one(con, "SELECT * FROM official_requests WHERE org_id = ? ORDER BY id DESC LIMIT 1", oid)
-    return {"steps": steps, "members": f["members"], "events": f["events"], "request": _official_request(last)}
+    return {"steps": steps, "members": f["members"], "events": f["events"], "guests": f["guests"], "request": _official_request(last)}
 
 
 def ask_official(con, v: Viewer, oid: int) -> dict | None:

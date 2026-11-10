@@ -1,6 +1,6 @@
 """The Ascent (logic/clubs.py, official_path): a checklist in any order that locks nothing (a ready profile, a round
 that took someone, a Telegram channel, a collab with an official club; the top: all of them and two events with
-guests, an official club's tools without the ✓, the owner told once). At the top the President or a Vice may ask for the ✓, once, again 30 days
+outside guests (5 at each, 10 different), an official club's tools without the ✓, the owner told once). At the top the President or a Vice may ask for the ✓, once, again 30 days
 after a no; only the admin decides; Undo takes it back."""
 from __future__ import annotations
 
@@ -65,6 +65,11 @@ def _came(con, eid, uid, manual=0):
         VALUES (?, ?, 'going', ?, 0, 0, ?, ?)""", (eid, uid, f"t{eid}-{uid}", logic.now(), manual))
 
 
+def _guests(con, n):
+    """n students from outside the club, users only (a door scan needs no more)."""
+    return [con.execute("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", (9000 + i,)).lastrowid for i in range(n)]
+
+
 def _all_done(con, ids, oid):
     """Every level, the quick way (each one's own test is below)."""
     con.execute("UPDATE org_members SET joined_at = 0 WHERE org_id = ?", (oid,))
@@ -73,10 +78,11 @@ def _all_done(con, ids, oid):
     _round(con, ids, oid)
     _channel(con, oid)
     off = logic.create_org(con, None, "Debate", "DB", "crown_3d", True)
-    for _ in range(2):
+    g = _guests(con, 10)
+    for part in (g[:5], g[5:]):
         eid = _event(con, oid)
-        for tg in (A, B, C):
-            _came(con, eid, ids[tg])
+        for u in part:
+            _came(con, eid, u)
     con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (eid, off))
 
 
@@ -121,22 +127,43 @@ def test_each_level(env):
     con.execute("DELETE FROM event_cohosts")  # the other way round: we co-host an official club's event
     con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (_event(con, other), oid))
     assert _steps(c, oid)["collab"]
-    # 4. the top: two events over with 3 outsiders scanned each: the team, a check-in by hand, one still to come don't count
+    # 4. the top: two events over, 5 outside guests scanned at each and 10 different across the two (owner, Nov 10). Not
+    # guests: the team, a check-in by hand, a member from before, a former member, the creator, a helper, a co-host's people
+    g = _guests(con, 12)
     eid = _event(con, oid)
-    for tg in (PRES, VICE, HEAD, A, B):
+    for tg in (PRES, VICE, HEAD):
         _came(con, eid, ids[tg])
-    _came(con, eid, ids[C], manual=1)
-    for tg in (A, B, C):
-        _came(con, later, ids[tg])
-    assert _path(c, oid)["events"] == 0
+    _came(con, eid, ids[B], manual=1)
+    for u in g[:4]:
+        _came(con, eid, u)
+    for u in g[:5]:
+        _came(con, later, u)  # still to come
     _came(con, eid, ids[D])  # D joined the club before the event: a member, not a guest
     con.execute("UPDATE org_members SET joined_at = 0 WHERE user_id = ?", (ids[D],))
     assert _path(c, oid)["events"] == 0
+    con.execute("INSERT INTO org_history (user_id, org_id, role, since, until) VALUES (?, ?, 'member', 0, 1)", (g[4], oid))  # left long ago
+    con.execute("UPDATE events SET created_by = ? WHERE id = ?", (g[5], eid))
+    con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, created_at) VALUES (?, ?, ?, 'scan', 0)", (eid, g[6], oid))
+    co = logic.create_org(con, None, "Go", "GO", "crown_3d", False)
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (eid, co))
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (co, g[7]))
+    con.execute("UPDATE org_history SET since = 0 WHERE user_id = ?", (g[7],))
+    for u in g[4:8]:
+        _came(con, eid, u)
+    assert _path(c, oid)["events"] == 0
     con.execute("UPDATE org_members SET joined_at = ? WHERE user_id = ?", (logic.now(), ids[D]))  # joined after: counts
-    assert _path(c, oid)["events"] == 1 and not _steps(c, oid)["top"]
+    con.execute("UPDATE org_history SET since = ? WHERE user_id = ? AND org_id = ?", (logic.now(), ids[D], oid))
+    p = _path(c, oid)
+    assert p["events"] == 1 and p["guests"] == 5 and not p["steps"]["top"]
     two = _event(con, oid)
-    for tg in (A, B, C):
-        _came(con, two, ids[tg])
+    for u in (ids[D], *g[:4]):
+        _came(con, two, u)  # the same five again: two events, but 5 different, not 10
+    p = _path(c, oid)
+    assert p["events"] == 2 and p["guests"] == 5 and not p["steps"]["top"]
+    for u in g[8:12]:
+        _came(con, two, u)
+    assert _path(c, oid)["guests"] == 9 and not _steps(c, oid)["top"]
+    _came(con, two, ids[C])
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_top'").fetchone()[0] == 0
     assert _steps(c, oid)["top"]
     # the top is kept: the founder hears once, the clubs list shows it, losing a member takes nothing back
