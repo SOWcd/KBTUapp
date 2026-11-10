@@ -1495,6 +1495,7 @@ const en: Dict = {
   'aw.holders': "Who has it",
   'aw.links': "Links",
   'staff.role': "Role",
+  'staff.noUsername': "No @username on Telegram",
   'adm.evDeleted': "Deleted. Undo in Done for a day",
   'adm.lead': "Clubs and their teams. Roles go by @username or Telegram ID: the person must have opened the app once, and the role works after they sign in with KBTU.",
   'st.users': "opened the app",

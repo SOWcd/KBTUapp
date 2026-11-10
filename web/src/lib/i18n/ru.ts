@@ -1515,6 +1515,7 @@ const ru = {
   'aw.holders': "У кого есть",
   'aw.links': "Ссылки",
   'staff.role': "Роль",
+  'staff.noUsername': "Нет @username в Telegram",
   'adm.evDeleted': "Удалено. Сутки можно отменить в «Сделано»",
   'adm.lead': "Клубы и их команды. Роль даётся по @username или Telegram ID: человек должен хоть раз открыть приложение, а роль заработает после входа через KBTU.",
   'st.users': "открыли приложение",

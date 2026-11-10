@@ -219,7 +219,7 @@
               onclick={() => { haptic.select(); openLink = openLink === l.token ? null : l.token; }} />
             {#if openLink === l.token}
               {#each l.people as g (g.id)}
-                <Row dense title={g.person.name} onclick={(e) => menu(e.currentTarget as Element, [{ label: t('adm.takeBack'), destructive: true, onselect: () => takeOne(l, g) }])}>
+                <Row dense title={g.person.name} onclick={(e) => menu(e.currentTarget as Element, [{ label: t('tab.profile'), onselect: () => sheets.person(g.person.id) }, { label: t('adm.takeBack'), destructive: true, onselect: () => takeOne(l, g) }])}>
                   {#snippet lead()}<Avatar person={g.person} size={32} tappable={false} />{/snippet}
                 </Row>
               {/each}

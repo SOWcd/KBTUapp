@@ -7,7 +7,8 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import { fold } from '../../ui/fold';
   import Pane from '../../ui/Pane.svelte';
   import Group from '../../ui/Group.svelte';
@@ -50,6 +51,13 @@
         {#if p.owner}<Tag tone="accent">{t('staff.owner')}</Tag>{:else if banned}<Tag tone="danger">{t('staff.banned')}</Tag>{/if}
       </span>
     </div>
+
+    <!-- staff reach anyone from here, always (owner, Nov 10); without an @username Telegram has no link to open -->
+    {#if p.username}
+      <Button kind="filled" size="l" full onclick={() => openLink(`https://t.me/${encodeURIComponent(p.username!)}`)}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('person.write')}</Button>
+    {:else}
+      <Button kind="secondary" size="l" full disabled>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('staff.noUsername')}</Button>
+    {/if}
 
     <Group footnote={touchable ? undefined : p.owner ? t('staff.ownerNote') : p.person.id === session.me?.id ? t('staff.selfNote') : t('staff.adminNote')}>
       <Row title={t('staff.role')} value={t(`staff.role.${p.role}`)} disabled={!touchable || !iOwn || banned || busy}
