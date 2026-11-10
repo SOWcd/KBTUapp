@@ -10,19 +10,11 @@
   // Settings under my lanyard (Me's gear or my photo; Me runs the way in and out, this is the list). The phone's own
   // way (owner, Oct 30: "like Apple"): a short label, its value in grey, an end mark: › a page or a sheet, ⇅ a menu at
   // the row, ↗ out of the app, an accent label with no mark does it now. No subtitles; few words.
-  // Sections (each a unit Me animates, [data-unit]), what students look for first on top (owner, Nov 6: nobody found
-  // where to change the name): the lanyard first (its editor opens here in place, under the badge: `editing`, Me runs
-  // it), my data (photo, name, nick, school, course, city, phone), the app, then privacy and about. A guest: the app and about.
-  import ImageIcon from '@lucide/svelte/icons/image';
-  import AtSign from '@lucide/svelte/icons/at-sign';
-  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
-  import School from '@lucide/svelte/icons/school';
+  // Sections (each a unit Me animates, [data-unit]), what students look for first on top (owner, Nov 10: the student ID
+  // hid in "Name", Privacy at the very bottom): the lanyard first (its editor opens here in place, under the badge:
+  // `editing`, Me runs it); me (About me: my data a page deeper, Privacy, Notifications); the app; about. A guest: the
+  // app and about.
   import User from '@lucide/svelte/icons/user';
-  import MapPin from '@lucide/svelte/icons/map-pin';
-  import Phone from '@lucide/svelte/icons/phone';
-  import { cityName } from '../../lib/i18n/cities';
-  import { fmtPhone, kzPhone } from '../../lib/phone';
-  import { schoolShort } from '../../lib/short';
   import Languages from '@lucide/svelte/icons/languages';
   import Bell from '@lucide/svelte/icons/bell';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
@@ -33,16 +25,17 @@
   import IdCard from '@lucide/svelte/icons/id-card';
   import Info from '@lucide/svelte/icons/info';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import { api, ApiErr, type Me, type Settings } from '../../lib/api';
+  import { api, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { data, phrase } from '../../lib/state/data.svelte';
-  import { say, ui } from '../../lib/state/ui.svelte';
+  import { data, phrase, dropSchedule } from '../../lib/state/data.svelte';
+  import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
   import { haptic, openLink, on } from '../../lib/tg';
-  import { menu, type MenuItem } from '../../ui/menu';
+  import { menu } from '../../ui/menu';
+  import { photoItems } from './mine';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import ThemeGlyph, { glyph } from './ThemeGlyph.svelte';
@@ -52,55 +45,10 @@
   let { editing = false, onlanyard }: { editing?: boolean; onlanyard: () => void } = $props();
   const me = $derived(session.me);
   const s = $derived(me?.settings);
-  const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
-  // the course is picked a tap deeper while it can still be (the ID's year up to the 6th), else it's just shown
-  const courseFix = $derived(!!me?.student?.fixable?.includes('course') && (me.student.courseMin ?? 6) < 6);
   const bells = $derived(s ? [s.nRemind, s.nNewEvents].filter(Boolean).length : 0);
-
   const wornName = $derived(lookData().wornName);
-  let busy = false;
-
-  function oops(e: unknown) {
-    haptic.error();
-    say(e instanceof ApiErr && e.message === 'nick' ? t('look.badNick') : e instanceof ApiErr && e.message === 'not_an_image' ? t('look.badPhoto') : t('common.error'), 'warning_3d');
-  }
-  // one change of my photo or nick at a time; `word`: what the capsule says meanwhile (an upload takes a moment)
-  async function work(job: () => Promise<Me>, msg: (m: Me) => string, word = '') {
-    if (busy) return;
-    busy = true; ui.busy = word;
-    try { const m = await job(); session.me = m; haptic.ok(); say(msg(m), 'sparkles_3d'); } catch (e) { oops(e); } finally { busy = false; ui.busy = ''; }
-  }
-
-  // ---- the photo: Telegram's (it refreshes by itself) or my own ----
-  let file = $state<HTMLInputElement>();
-  async function upload(f: File | undefined) {
-    if (file) file.value = '';  // the same photo picked again opens the crop again
-    const cut = f && await sheets.cropPhoto(f);
-    if (cut) void work(() => api.uploadMyPhoto(cut), () => t('look.photoSet'), t('look.uploading'));
-  }
-  async function dropOwn() {
-    if (await sheets.ask({ title: t('look.dropOwn'), ok: t('look.dropOwn'), cancel: t('common.cancel'), danger: true })) void work(() => api.deleteMyPhoto(), () => t('look.photoGone'));
-  }
-  // the photo's menu: at its row (Row opens it) or at my photo on the lanyard (Me)
-  const photoItems = (): MenuItem[] => {
-    if (!me) return [];
-    const { telegram, own } = me.photo;
-    return [
-      { label: t('look.fromTg'), checked: telegram, onselect: () => { if (!telegram) void work(() => api.updateMe({ avatarTg: true }), () => t('look.tgOn')); } },
-      ...(own ? [{ label: t('look.own'), checked: !telegram, onselect: () => { if (telegram) void work(() => api.updateMe({ avatarTg: false }), () => t('look.photoSet')); } }] : []),
-      // instant: the file picker opens inside the tap itself (iOS opens none from a later task)
-      { label: t('look.upload'), instant: true, onselect: () => file?.click() },
-      ...(own ? [{ label: t('look.dropOwn'), destructive: true, onselect: () => void dropOwn() }] : []),
-    ];
-  };
+  // my photo's menu at my photo on the lanyard (Me); About me has the same at its row
   export function photoMenu(at: Element, align?: 'start' | 'end') { if (me) menu(at, photoItems(), align); }
-
-  // ---- the nick: lists and feeds show it instead of my name, my profile shows both (the nick rule, Nov 2) ----
-  async function editNick() {
-    const v = await sheets.askText({ title: t('look.nick'), placeholder: t('look.nickPh'), max: 24, line: true, value: me?.nick ?? '', ok: t('common.save'), cancel: t('common.cancel') });
-    if (v != null && v !== (me?.nick ?? '')) setNick(v);
-  }
-  const setNick = (v: string | null) => void work(() => api.updateMe({ nick: v }), (m) => t(m.nick ? 'look.nickSet' : 'look.nickOff'));
 
   // ---- the app ----
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
@@ -138,6 +86,16 @@
     try { cal = await api.calendarFeed(); } catch { say(t('common.error'), 'warning_3d'); return; }
     openLink(cal.page);
   }
+  // the calendar's address leaked (sent to someone, a shared screen): the old one stops, a new subscribe makes a new one
+  async function resetCal() {
+    if (!(await sheets.ask({ title: t('set.calResetAsk'), text: t('set.calResetText'), ok: t('set.calResetOk'), cancel: t('common.cancel'), danger: true }))) return;
+    try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  // my week off the server, here too and not only in the Week sheet (owner, Nov 1)
+  async function dropWeek() {
+    if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
+  }
   $effect(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
   // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
   // no "added" within a few seconds -> say where to allow it (owner, Nov 2: "the button does nothing")
@@ -156,21 +114,15 @@
     <div data-unit class="first"><LookPage /></div>
   {:else}
   {#if me?.student}
-    <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
+    {@const st = me.student}
     <div data-unit class="first">
       <Group><Row icon={IdCard} title={t('look.lanyard')} value={wornName} accessory="chevron" onclick={() => { haptic.tap(); onlanyard(); }} /></Group>
     </div>
     <div data-unit class="sec">
-      <Group caption={t('set.myData')} footnote={t('look.nickFoot')}>
-        <Row icon={ImageIcon} title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
-        <Row icon={User} title={t('set.name')} value={[me.student.firstName, me.student.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('name'); }} />
-        {#if me.nick}<Row icon={AtSign} title={t('look.nick')} value={me.nick} menu={[{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]} />
-        {:else}<Row icon={AtSign} title={t('look.nick')} value={t('look.noNick')} accessory="chevron" onclick={() => { haptic.tap(); void editNick(); }} />{/if}
-        <Row icon={School} title={t('look.school')} value={schoolShort(me.student.school) || t('look.noSchool')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('school'); }} />
-        {#if courseFix}<Row icon={GraduationCap} title={t('pd.course')} value={String(me.student.course ?? '')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('course'); }} />
-        {:else if me.student.course}<Row icon={GraduationCap} title={t('pd.course')} value={String(me.student.course)} />{/if}
-        <Row icon={MapPin} title={t('pd.city')} value={me.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('city'); }} />
-        {#if phone}<Row icon={Phone} title={t('pd.phoneShort')} value={phone} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('phone'); }} />{/if}
+      <Group>
+        <Row icon={User} title={t('set.aboutMe')} value={[st.firstName, st.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('me'); }} />
+        <Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />
+        <Row icon={Bell} title={t('me.notifications')} value={bells === 2 ? t('set.on') : bells ? `${bells}/2` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
       </Group>
     </div>
   {:else}
@@ -182,9 +134,11 @@
       <Row icon={Languages} title={t('me.guestLang')} value={LANG_FULL[i18n.lang]} menu={LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))} />
       <Row icon={ThemeGlyph} title={t('me.guestTheme')} value={t(`theme.${theme.current}`)} menu={(['dark', 'light'] as const).map((x) => ({ label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, glyph.el) }))} />
       {#if me?.student}
-        <Row icon={Bell} title={t('me.notifications')} value={bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
-        <Row icon={CalendarPlus} title={t(data.schedule.length ? 'sched.update' : 'sched.cardTitle')} accessory="chevron" onclick={() => { haptic.tap(); sheets.schedHowTo(); }} />
-        <Row icon={CalendarDays} title={t('set.calShort')} accessory="external" onclick={() => { haptic.tap(); void subscribe(); }} />
+        <!-- updating and deleting the timetable, subscribing and resetting the calendar: each at its own row -->
+        {#if data.schedule.length && !me.deleteAt}<Row icon={CalendarPlus} title={t('set.schedule')} menu={[{ label: t('sched.update'), onselect: () => sheets.schedHowTo() }, { label: t('sched.del'), destructive: true, onselect: () => void dropWeek() }]} />
+        {:else}<Row icon={CalendarPlus} title={t('set.schedule')} accessory="chevron" onclick={() => { haptic.tap(); sheets.schedHowTo(); }} />{/if}
+        {#if me.deleteAt}<Row icon={CalendarDays} title={t('set.calShort')} accessory="external" onclick={() => { haptic.tap(); void subscribe(); }} />
+        {:else}<Row icon={CalendarDays} title={t('set.calShort')} menu={[{ label: t('set.calSub'), onselect: () => void subscribe() }, { label: t('set.calReset'), destructive: true, onselect: () => void resetCal() }]} />{/if}
       {/if}
       <Row icon={BatteryMedium} title={t('power.title')} value={t(`power.${power.mode}`)} menu={POWER_MODES.map((m) => ({ label: t(`power.${m}`), checked: power.mode === m,
         onselect: () => { if (power.mode !== m) { setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } } }))} />
@@ -194,7 +148,6 @@
 
   <div data-unit class="sec">
     <Group>
-      {#if me?.student}<Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />{/if}
       <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
       <!-- the voluntary support page: this row is its only way in, no banners or reminders anywhere (donate-review.md) -->
       {#if session.donate}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}

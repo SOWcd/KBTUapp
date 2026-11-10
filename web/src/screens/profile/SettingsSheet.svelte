@@ -1,8 +1,8 @@
 <script lang="ts">
   // A page pushed in from the right (ui/Pane) from the settings under my lanyard (Me), the phone's own way: the
-  // notification switches with a footnote under each; my name and ID (Settings' "My data" opens it, its school,
-  // course, city and phone pages too); Privacy (whether friends see where I'm going; who sees what; the policy;
-  // deleting the account) and About.
+  // notification switches with a footnote under each; About me (my data, each its own row: the name a page deeper,
+  // the student ID, school, course, city, phone pages); Privacy (whether friends see where I'm going, my city; who
+  // sees what; the policy; deleting the account) and About.
   // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
   import Lock from '@lucide/svelte/icons/lock';
   import Bell from '@lucide/svelte/icons/bell';
@@ -16,12 +16,12 @@
   import Check from '@lucide/svelte/icons/check';
   import { fitTitle } from '../../ui/title';
   import Button from '../../ui/Button.svelte';
-  import { schoolOf, shortOf } from '../../lib/short';
+  import { schoolOf, shortOf, schoolShort } from '../../lib/short';
   import { CITIES, cityName } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { onMount } from 'svelte';
-  import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
+  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
@@ -34,14 +34,15 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
+  import { photoItems, editNick, setNick } from './mine';
   // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
   onMount(() => void loadMe());
 
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
+  type Kind = 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
-  const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], name: ['set.nameId', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
+  const TITLE: Record<Kind, [Key, typeof Lock]> = { me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
     sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
   const me = $derived(session.me);
@@ -90,7 +91,6 @@
     ['middle', 'middleName', 'middleLat', 'pd.middleLat']];
   const part = $derived(PARTS.find((p) => p[0] === kind));
   const LAT: Fixable[] = ['lastLat', 'firstLat', 'middleLat'];
-  const ALL = PARTS.length * 2 + 3; // every Fixable (the parts', the ID, course, school): one fixed, the "through support" footnote
   const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'pd.sidTaken', sid_tries: 'pd.sidTries', fixed: 'pd.support' };
   async function fix(k: Typed, label: Key) {
     const was = me?.student?.[k] ?? '';
@@ -159,16 +159,10 @@
     try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); close(overlay.id); }
     catch { say(t('common.error'), 'warning_3d'); }
   }
-  // the calendar's address leaked (sent to someone, a shared screen): the old one stops, Calendar makes a new one
-  async function resetCal() {
-    if (!(await sheets.ask({ title: t('set.calResetAsk'), text: t('set.calResetText'), ok: t('set.calResetOk'), cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
-  // my week off the server, here too and not only in the Week sheet (owner, Nov 1)
-  async function dropWeek() {
-    if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
-  }
+  // a hand-added staff row's student ID is made up: never shown as a real one
+  const real = $derived(me?.student?.consent !== 'staff' && me?.student?.consent !== 'admin');
+  // the course is picked a tap deeper while it can still be (the ID's year up to the 6th), else it's just shown
+  const courseFix = $derived(!!me?.student?.fixable?.includes('course') && (me.student.courseMin ?? 6) < 6);
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
     const a = data.myCard?.awards;
@@ -246,33 +240,56 @@
       <div class:sw={i > 0}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
     <p class="foot always">{t('set.always')}</p>
+  {:else if kind === 'me' && me?.student}
+    {@const st = me.student}
+    <!-- About me: what I gave the app and can see, nothing of anyone else's, no roles. Who I am; KBTU's facts (the ID,
+         email, school, course: corrected once, then support); how to reach me; my card -->
+    <Group footnote={t('look.nickFoot')}>
+      <Row title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
+      {@render link(t('set.name'), () => sheets.settings('name'), [st.firstName, st.lastName].filter(Boolean).join(' '))}
+      {#if me.nick}<Row title={t('look.nick')} value={me.nick} menu={[{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]} />
+      {:else}{@render link(t('look.nick'), () => void editNick(), t('look.noNick'))}{/if}
+    </Group>
+    <div class="gap">
+      <Group footnote={real && !st.fixable?.includes('studentId') ? t('pd.support') : undefined}>
+        {#if real}
+          {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
+          {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
+        {/if}
+        <!-- the email is the Microsoft login, never edited; whole, on two lines if it must (owner, Oct 31) -->
+        {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
+        {@render link(t('look.school'), () => sheets.settings('school'), schoolShort(st.school) || t('look.noSchool'))}
+        {#if courseFix}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
+        {:else if st.course}<Row title={t('pd.course')} value={String(st.course)} />{/if}
+      </Group>
+    </div>
+    <div class="gap"><Group>
+      {@render link(t('pd.city'), () => sheets.settings('city'), me.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone'))}
+      {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}
+      {:else}{@render link(t('pd.phoneShort'), () => void editPhone(), t('pd.phoneAdd'))}{/if}
+      {#if me.tg.username}<Row title="Telegram" value="@{me.tg.username}" />{/if}
+    </Group></div>
+    <!-- the card's number as the lanyard shows it: the order of the first KBTU sign-in, the Creator's 0 -->
+    {#if me.no != null}<div class="gap"><Group><Row title={t('pd.cardNo')} value="№ {String(me.no).padStart(5, '0')}" /></Group></div>{/if}
   {:else if kind === 'name' && me?.student}
     {@const st = me.student}
     <!-- who I am: each name part one row, its Latin form under it; correctable once (›), then a plain row -->
-    <Group>
+    <Group footnote={st.consent !== 'staff' && PARTS.some(([, c, l]) => !st.fixable?.includes(c) || !st.fixable?.includes(l)) ? t('pd.support') : undefined}>
       {#each PARTS as [p, cyr, lat] (p)}
         {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
         {#if can}<Row title={t(TITLE[p][0])} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings(p); }}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>
         {:else if st[cyr] || st[lat]}<Row title={t(TITLE[p][0])}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>{/if}
       {/each}
     </Group>
-    <div class="gap">
-      <Group footnote={st.fixable.length < ALL && st.consent !== 'staff' ? t('pd.support') : undefined}>
-        <!-- the ID once too; the email is the Microsoft login, never edited -->
-        {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
-        {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
-        <!-- the email whole, on two lines if it must (owner, Oct 31) -->
-        {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
-      </Group>
-    </div>
   {:else if kind === 'privacy'}
-    <!-- my data moved up to Settings' first group (owner, Nov 6); here what others see of me -->
+    <!-- what others see of me (my data: About me) -->
     {#if me?.student}
       <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing); and off, nobody can
            send me a friend request (my friends and the requests waiting stay) -->
       <div class="gap"><Group>
         <Row title={t('set.showGoing')} accessory="switch" checked={me.settings.showGoing} onchange={(on) => set('showGoing', on, true)} />
         <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
+        {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
       </Group></div>
     {/if}
     <div class:gap={me?.student}><Group>
@@ -280,7 +297,6 @@
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </Group></div>
     {#if me?.student && !me.deleteAt}
-      <div class="gap"><Group>{@render act(t('set.calReset'), resetCal, true)}{#if data.schedule.length}{@render act(t('sched.del'), dropWeek, true)}{/if}</Group></div>
       <div class="gap"><Group>{@render act(t('me.deleteData'), deleteData, true)}</Group></div>
     {/if}
   {:else if kind === 'phone'}
