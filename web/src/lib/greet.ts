@@ -2,13 +2,24 @@
 // within the hour or my event today > a holiday or a KBTU date > back after a long absence > the day of the week >
 // the time of day. At most once per 3 hours, so it stays a small surprise. Each key is a `|` list (phrase()).
 import type { Key } from './i18n/index.svelte';
-import { parts } from './time';
+import type { ClassItem, EventCard } from './api';
+import type { Slot } from './classes';
+import { dayNo, parts } from './time';
 
 export const EVERY = 3 * 3600; // at most one greeting per this many seconds
 const AWAY = 7 * 86400;        // "welcome back" after a week without opening the app
 
-/** The live capsule's next thing (App.svelte `live`): a class or an event of mine. */
+/** What's next for me: a class or an event of mine. */
 export interface Next { kind: string; title: string; at: number; emoji: string | null }
+
+/** My next class within the hour, else my event later today: only what's still ahead (a running class isn't news,
+ *  the capsule's choice would hide a later one). `slots`: today's classes left, without the ones I'll skip. */
+export function nextUp(now: number, slots: Slot[], events: EventCard[], title: (c: ClassItem) => string, emoji: (c: ClassItem) => string): Next | null {
+  const c = slots.find((x) => x.b > now && x.b - now <= 3600);
+  if (c) return { kind: 'class', title: title(c.c), at: c.b, emoji: emoji(c.c) };
+  const e = events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && e.startsAt > now && dayNo(e.startsAt) === dayNo(now));
+  return e ? { kind: 'event', title: e.title, at: e.startsAt, emoji: e.emoji ?? e.org.emoji ?? null } : null;
+}
 export interface Hi { key: Key; vars: Record<string, string>; emoji: string }
 
 // ponytail: fixed Gregorian dates; the exam weeks are rough. Add the year's real dates here if the owner wants them exact.
@@ -51,10 +62,19 @@ export function pickHi(now: number, name: string, next: Next | null, lastOpen: n
 const get = (k: string): number | null => { try { return Number(localStorage.getItem(k)) || null; } catch { return null; } };
 const put = (k: string, v: number) => { try { localStorage.setItem(k, String(v)); } catch { /* private mode: greet every time */ } };
 
-/** pickHi with the last open and the last greeting kept on the phone; records this open either way. */
-export function hiNow(now: number, name: string, next: Next | null, time: (ts: number) => string): Hi | null {
-  const hi = pickHi(now, name, next, get('kb-open'), get('kb-hi'), time);
+let prevOpen: number | null | undefined; // the launch before this one, read once per launch
+
+/** Records this launch (every launch, a deep link's too) and keeps the one before it for the absence check. */
+export function opened(now: number): void {
+  if (prevOpen !== undefined) return;
+  prevOpen = get('kb-open');
   put('kb-open', now);
+}
+
+/** pickHi with the launch before this one and the last greeting kept on the phone. */
+export function hiNow(now: number, name: string, next: Next | null, time: (ts: number) => string): Hi | null {
+  opened(now);
+  const hi = pickHi(now, name, next, prevOpen ?? null, get('kb-hi'), time);
   if (hi) put('kb-hi', now);
   return hi;
 }

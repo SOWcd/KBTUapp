@@ -10,7 +10,7 @@
   import { channel, loadChannel } from './lib/state/channel.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
-  import { hiNow } from './lib/greet';
+  import { hiNow, nextUp, opened } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
@@ -338,9 +338,12 @@
   });
 
   // ---- greeting ----
+  opened(nowTs()); // every launch counts for "welcome back", a deep link's too
   function greet() {
-    const first = session.me?.student?.firstName;
-    const hi = hiNow(nowTs(), first ? ', ' + first : '', live?.kind === 'class' || live?.kind === 'event' ? live : null, time);
+    const now = nowTs(), first = session.me?.student?.firstName;
+    const slots = classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(dayNo(now), x.c)));
+    const next = nextUp(now, slots, data.events, (c) => subjectOf(c) + (c.room ? ' · ' + c.room : ''), classEmoji);
+    const hi = hiNow(now, first ? ', ' + first : '', next, time);
     if (hi) say(phrase(hi.key, hi.vars), hi.emoji);
   }
 

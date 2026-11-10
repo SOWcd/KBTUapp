@@ -1,5 +1,6 @@
-import { expect, test } from 'vitest';
-import { pickHi, EVERY, type Next } from './greet';
+import { expect, test, vi } from 'vitest';
+import { pickHi, nextUp, EVERY, type Next } from './greet';
+import type { ClassItem, EventCard } from './api';
 import { at } from './time';
 
 const hhmm = () => '18:00';
@@ -25,6 +26,34 @@ test('useful facts first, then special days, absence, weekday, time of day', () 
   expect([2, 6, 9, 14, 20, 23].map((h) => key(at(2026, 10, 10, h))))
     .toEqual(['say.hi.late', 'say.hi.early', 'say.hi.morning', 'say.hi.day', 'say.hi.evening', 'say.hi.night']);
   expect(key(at(2027, 0, 1, 3))).toBe('say.hi.late'); // a holiday doesn't greet at 3 a.m.
+});
+
+test('what is next: a future class within the hour, else my event later today, never a running class', () => {
+  const now = at(2026, 10, 10, 13);
+  const c = (b: number) => ({ c: { subject: 'Calculus' } as ClassItem, b, e: b + 3000 });
+  const ev = (startsAt: number, status = 'going') =>
+    ({ title: 'Open mic', startsAt, status: 'published', my: { status }, emoji: 'microphone_3d', org: { emoji: null } }) as unknown as EventCard;
+  const up = (slots: ReturnType<typeof c>[], events: EventCard[]) => nextUp(now, slots, events, (x) => x.subject, () => 'books_3d');
+  expect(up([c(now - 600), c(now + 1800)], [])).toMatchObject({ kind: 'class', at: now + 1800 }); // the running one skipped
+  expect(up([c(now - 600)], [ev(now + 5 * 3600)])).toMatchObject({ kind: 'event', title: 'Open mic', at: now + 5 * 3600 });
+  expect(up([c(now + 2 * 3600)], [ev(now - 600), ev(now + 3600, 'hold'), ev(now + 12 * 3600)])).toBeNull(); // started, not mine, tomorrow
+});
+
+test('every launch is recorded; the absence counts from the launch before', async () => {
+  const store = new Map<string, string>([['kb-open', String(at(2026, 10, 1, 12))]]);
+  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+  const launch = async () => { vi.resetModules(); return import('./greet'); };
+  const now = at(2026, 10, 10, 13);
+  (await launch()).opened(now - 3600); // a deep-link launch after 9 days: no greeting, still recorded
+  expect(store.get('kb-open')).toBe(String(now - 3600));
+  const g = await launch();
+  g.opened(now);
+  expect(g.hiNow(now + 5, '', null, hhmm)?.key).toBe('say.hi.day'); // not "long time no see"
+  store.set('kb-open', String(now - 8 * 86400)); store.delete('kb-hi');
+  const h = await launch();
+  h.opened(now); // at mount; the greeting later in the same launch still sees the launch before
+  expect(h.hiNow(now + 5, '', null, hhmm)?.key).toBe('say.hi.back');
+  vi.unstubAllGlobals();
 });
 
 test('at most once per three hours', () => {
