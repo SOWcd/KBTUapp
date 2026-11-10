@@ -151,6 +151,14 @@ def test_each_level(env):
     for u in g[4:8]:
         _came(con, eid, u)
     assert _path(c, oid)["events"] == 0
+    # a helper the QR screen added (checkin.py's qr_helpers) isn't a guest either
+    sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, event_id, created_at) VALUES ('Blitz', 'h', ?, 0)", (eid,)).lastrowid
+    con.execute("INSERT INTO qr_helpers (session_id, user_id, created_at) VALUES (?, ?, 0)", (sid, ids[E]))
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (ids[E],))
+    con.execute("UPDATE org_history SET since = ? WHERE user_id = ?", (logic.now(), ids[E]))
+    _came(con, eid, ids[E])
+    assert _path(c, oid)["events"] == 0
+    _members(con, ids, oid, E)
     con.execute("UPDATE org_members SET joined_at = ? WHERE user_id = ?", (logic.now(), ids[D]))  # joined after: counts
     con.execute("UPDATE org_history SET since = ? WHERE user_id = ? AND org_id = ?", (logic.now(), ids[D], oid))
     p = _path(c, oid)

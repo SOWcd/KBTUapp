@@ -518,15 +518,18 @@ def _path_facts(con, oid: int) -> sqlite3.Row:
 
 def _path_guests(con, oid: int) -> tuple[int, int]:
     """(own events over with PATH_GUESTS outside guests, the most different guests any two of them drew). A guest: scanned
-    at the door (not ticked by hand), not the event's creator or helper, never in the club or its co-host before it began
+    at the door (not ticked by hand), not the event's creator or helper (Studio's or the QR screen's), never in the club or its co-host before it began
     (current and former members alike: org_history keeps who left; joining after counts). One query for all events.
-    ponytail: no anti-cheat review (owner, Nov 10: proven cheating cancels the top); add a staff undo of top_at when needed."""
+    ponytail: no anti-cheat review (owner, Nov 10: proven cheating cancels the top); add a staff undo of top_at when needed.
+    Helpers (event_crew, qr_helpers) and co-hosts are read as they are now: one removed after the event counts as a guest;
+    keep their history if that gets abused."""
     by: dict[int, set[int]] = {}
     for eid, uid in con.execute("""SELECT e.id, g.user_id FROM events e JOIN registrations g ON g.event_id = e.id
             WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
             AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0
             AND g.user_id IS NOT e.created_by
             AND NOT EXISTS (SELECT 1 FROM event_crew w WHERE w.event_id = e.id AND w.user_id = g.user_id)
+            AND NOT EXISTS (SELECT 1 FROM qr_helpers q JOIN qr_sessions x ON x.id = q.session_id WHERE x.event_id = e.id AND q.user_id = g.user_id)
             AND NOT EXISTS (SELECT 1 FROM (SELECT org_id, joined_at AS at FROM org_members WHERE user_id = g.user_id
                 UNION ALL SELECT org_id, since FROM org_history WHERE user_id = g.user_id) h
               WHERE h.at < e.starts_at AND (h.org_id IN (e.org_id, e.co_org_id)
