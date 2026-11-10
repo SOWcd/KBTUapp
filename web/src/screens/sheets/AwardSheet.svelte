@@ -97,13 +97,24 @@
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
   const lit = $derived((round || !!it.staff || (!!a && isDrawnPin(a))) && !!glow); // a shield stands in the light as a coin does, without its edge
-  const EDGE = Array.from({ length: 22 }, (_, i) => i + 1); // 22 discs 1 px apart: ~10% of the 220 px coin, a real coin's thickness
   const SIZE = 220;
+  // the edge: one band of N flat facets round the coin, each a small plane square to the face (owner, Nov 10: the old
+  // 22 stacked discs read as moiré stripes and broke into a striped slit edge-on). A facet spans the whole thickness,
+  // so the band is solid at every angle and meets the face (z 0) and the back (z -THICK) exactly. Each carries its
+  // place on the circle: the light from above is baked in (--d), the turn's light follows --spin/--gx in CSS (--c)
+  const FACETS = 32, THICK = 23; // ~10% of the 220 px coin, a real coin's thickness; 32: the outline stays within 0.5 px of the circle
+  const EDGE = Array.from({ length: FACETS }, (_, i) => {
+    const a = (i * 2 * Math.PI) / FACETS;
+    return { i, a: (i * 360) / FACETS, c: +Math.cos(a).toFixed(4), d: +(0.34 + 0.2 * Math.sin(a)).toFixed(3) }; // y down: the top (sin -1) lightest
+  });
+  const APO = (SIZE / 2) * Math.cos(Math.PI / FACETS); // the corners on the face's circle
+  const FACET = 2 * APO * Math.tan(Math.PI / FACETS) + 1; // +1: neighbours overlap half a pixel, no hairline between them
   // Android (a user's video, Nov 2): the CSS coin flickered between its face and its milled edge many times a second
   // at rest, and the capsule's title blinked empty with it. Its 24 composited 3D planes (22 edge discs, face, back,
   // each 660 px square at 3x) re-sorted and re-rastered on every tilt step overran the WebView's GPU budget, so tiles
   // went missing frame by frame. There the coin is one flat layer that tilts; the 3D (three.js) medals are one canvas
-  // and keep their spin. ponytail: no edge on Android; a rim drawn into the face (one layer) is the upgrade
+  // and keep their spin. ponytail: no edge on Android; the facet band (32 small planes, not 22 full discs) is the
+  // upgrade to try there on a real phone
   const layered = $derived(!!edge && !onAndroid);
   // a drawn medal's back: the owner's coins' reverse in its own metal, the letter of its rim file (the temporary vb set
   // has none: gold, no ribbon). The rest (the coins without WebGL, the seals) keep the mirrored face
@@ -206,7 +217,7 @@
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if lit}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if lit}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" class:struck={!!drawn} aria-hidden="true">{#if drawn}{#if rim}<img class="rib" src={`medals/ribbon-${rim}.svg`} alt="" draggable="false" />{/if}<canvas bind:this={backCanvas}></canvas><span class="shine"></span>{:else}<Award it={shown} size={SIZE} />{/if}</span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} style:--fl={`${FACET.toFixed(2)}px`} style:--ap={`${APO.toFixed(2)}px`} style:--th={`${THICK}px`} bind:this={big}>{#if layered && !gl}{#each EDGE as f (f.i)}<i class="edge" style:--a={`${f.a}deg`} style:--c={f.c} style:--d={f.d}></i>{/each}<span class="back" class:struck={!!drawn} aria-hidden="true">{#if drawn}{#if rim}<img class="rib" src={`medals/ribbon-${rim}.svg`} alt="" draggable="false" />{/if}<canvas bind:this={backCanvas}></canvas><span class="shine"></span>{:else}<Award it={shown} size={SIZE} />{/if}</span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -347,18 +358,26 @@
   .face { position: relative; display: inline-flex; }
   .coin .face { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
   .back { position: absolute; inset: 0; display: inline-flex; -webkit-backface-visibility: hidden; backface-visibility: hidden;
-    transform: translateZ(-23px) rotateY(180deg) scaleX(-1); }
+    transform: translateZ(calc(var(--th) * -1)) rotateY(180deg) scaleX(-1); }
   .coin .back:not(.struck) > :global(:first-child) { filter: grayscale(0.55) brightness(0.62) contrast(1.15); }
   .back canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); } /* .back mirrors: the relief's light stays on its upper left */
   .back .rib { position: absolute; left: 0; top: 0; width: 100%; height: 125%; }
   .back::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 -1px 2px rgba(255, 255, 255, 0.18); }
-  /* the edge: discs of the metal stacked 1 px apart behind the face (at 26 deg a step projects to under 0.5 px: no gaps);
-     the rim shows on the side the coin turns away from, as on a real coin. Darker than the face's rim, lit from above,
-     with fine radial ridges (a conic stripe on every disc lines up into the milled edge). The face's own drop shadow
-     would fall on its edge: off here */
-  .edge { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; transform: translateZ(calc(var(--z) * -1px));
-    background: repeating-conic-gradient(rgba(0, 0, 0, 0.32) 0 0.9deg, rgba(255, 255, 255, 0.14) 0.9deg 1.8deg),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.55)), linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), rgb(var(--edge)); }
+  /* the edge: a facet stands on the circle, square to the face, across the full thickness (its width runs into the
+     depth, its height along the rim). The milling runs across it, six ridges a facet (so they tile round the coin),
+     soft: no shimmer when a facet is seen at a glance. Its edges, where it meets the face and the back, catch a little
+     light. A facet turned away is never drawn */
+  .edge { position: absolute; left: 50%; top: 50%; width: var(--th); height: var(--fl); margin: calc(var(--fl) / -2) 0 0 calc(var(--th) / -2);
+    pointer-events: none; -webkit-backface-visibility: hidden; backface-visibility: hidden;
+    transform: translateZ(calc(var(--th) / -2)) rotate(var(--a)) translateX(var(--ap)) rotateY(90deg);
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.2) 0 50%, rgba(255, 255, 255, 0.1) 50%) 0 0 / 100% calc(100% / 6),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent 12% 88%, rgba(255, 255, 255, 0.28)), rgb(var(--edge)); }
+  /* its shade: the light from above, baked in; where trig in calc() runs (iOS 15.4+, Chrome 111+), also how squarely
+     it faces me as the coin turns: darker as it slides to the glance, brightest head on */
+  .edge::after { content: ''; position: absolute; inset: 0; background: rgb(0, 0, 0); opacity: calc(var(--d) + 0.12); }
+  @supports (opacity: calc(sin(1deg))) {
+    .edge::after { opacity: calc(var(--d) + 0.4 * (1 - max(0, -1 * var(--c) * sin(var(--gx, 0) * 26deg + var(--spin, 0deg))))); }
+  }
   .coin .face > :global(:first-child), .coin :is(.face, .back) :global(img) { box-shadow: none; filter: none; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
