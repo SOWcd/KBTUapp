@@ -6870,7 +6870,9 @@ def test_event_screen(env):
     p = c.post(f"/api/screens/{s['session']}/start", headers=tma(9)).json()["param"]
     c.post("/api/events/1/registration", headers=tma(2), json={})                            # Bob has a ticket
     for u in (1, 2):
-        assert c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["done"]
+        r = c.post("/api/checkin", headers=tma(u), json={"p": p}).json()
+        assert r["done"] and r["event"] == 1 and not r["again"]
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["again"]             # the same scan twice: "already"
     came = dict(con.execute("SELECT user_id, walk_in FROM registrations WHERE event_id = 1 AND checked_in_at IS NOT NULL").fetchall())
     assert came == {ann["id"]: 1, bob["id"]: 0}                                              # Ann walked in, Bob's ticket
     # a scan before the sign-up counts for the event once that person is a student
