@@ -3,9 +3,9 @@
 import type { Component } from 'svelte';
 import Ticket from '@lucide/svelte/icons/ticket';
 import MessagesSquare from '@lucide/svelte/icons/messages-square';
-import UsersRound from '@lucide/svelte/icons/users-round';
+import ClubsIcon from './ClubsIcon.svelte';
 import CircleUserRound from '@lucide/svelte/icons/circle-user-round';
 import type { Tab } from '../lib/state/ui.svelte';
 
-/** the tabs, in the bar and in the capsule's inline title (Clubs: people, owner Nov 1; not `landmark`, which reads "government") */
-export const TAB_ICON: Record<Tab, Component<any>> = { afisha: Ticket, forum: MessagesSquare, club: UsersRound, profile: CircleUserRound };
+/** the tabs, in the bar and in the capsule's inline title (Clubs: three people, owner Nov 10; not `landmark`, which reads "government") */
+export const TAB_ICON: Record<Tab, Component<any>> = { afisha: Ticket, forum: MessagesSquare, club: ClubsIcon, profile: CircleUserRound };
