@@ -108,7 +108,10 @@
     if ((e.target as Element).closest?.('textarea, [role=slider]')) return; // a long text scrolls itself (dragging it closed the memo); a slider drags its own way
     startX = e.touches[0].clientX; startY = lastY = e.touches[0].clientY; lastT = performance.now(); v = 0;
     dragging = true; decided = false; currentY = 0;
+    // blocking only while a pull may start: a passive scroll everywhere else (Android waited on every move, the scroll lagged)
+    panel.addEventListener('touchmove', onMove, { passive: false });
   }
+  const stop = () => { dragging = false; panel.removeEventListener('touchmove', onMove); };
   function onMove(e: TouchEvent) {
     if (!dragging) return;
     const y = e.touches[0].clientY, dy = y - startY;
@@ -116,7 +119,7 @@
       const dx = e.touches[0].clientX - startX;
       if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
       decided = true;
-      if (dy < 0 || Math.abs(dx) > Math.abs(dy)) { dragging = false; return; } // upward: let the content scroll; sideways: a swipe of its own (a comment's reply)
+      if (dy < 0 || Math.abs(dx) > Math.abs(dy)) { stop(); return; } // upward: let the content scroll; sideways: a swipe of its own (a comment's reply)
     }
     if (e.cancelable) e.preventDefault();
     const now = performance.now();
@@ -127,7 +130,7 @@
   }
   function onEnd() {
     if (!dragging) return;
-    dragging = false;
+    stop();
     if (!decided) return;
     if (currentY > 120 || v > 0.6) { haptic.soft(); close(overlay.id, true); return; }
     panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
@@ -146,7 +149,6 @@
     const ro = new ResizeObserver(resized);
     ro.observe(panel);
     panel.addEventListener('touchstart', onStart, { passive: true });
-    panel.addEventListener('touchmove', onMove, { passive: false });
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
     panel.addEventListener('focusin', guard.focusin);
