@@ -106,7 +106,7 @@
   }
 </script>
 
-<Sheet {overlay} heading={t('apl.row')} icon={Megaphone} full>
+<Sheet {overlay} title={t('apl.row')} icon={Megaphone} full>
   <div class="page">
     <div class="chips" role="group" aria-label={t('apl.row')}>
       {#each TOPICS as k (k)}

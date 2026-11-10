@@ -1439,7 +1439,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # appeals to the Student Government (logic/appeals.py, APPEALS): the appeal without its author, the author link apart
     # (never shown to SG for an anonymous one), the day's sends for the quota, the section's consent, SG's people
     (149, """CREATE TABLE appeals (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: SG's answer to a deleted one can't land on the next one
       topic TEXT,
       body TEXT NOT NULL,
       anon INTEGER NOT NULL DEFAULT 0,

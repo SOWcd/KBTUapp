@@ -24,7 +24,7 @@
   const shown = $derived((data.sg?.items ?? []).filter((a) => (f === 'closed' ? a.status === 'closed' : f === 'overdue' ? late(a) : a.status !== 'closed')));
 </script>
 
-<Sheet {overlay} heading={t('apl.sgRow')} icon={Inbox} full>
+<Sheet {overlay} title={t('apl.sgRow')} icon={Inbox} full>
   <div class="page">
     <Segmented bind:value={f} items={(['open', 'overdue', 'closed'] as F[]).map((v) => ({ value: v, label: t(`apl.f.${v}`) }))} />
     {#if shown.length}

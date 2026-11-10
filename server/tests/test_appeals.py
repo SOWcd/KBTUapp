@@ -58,11 +58,11 @@ def test_staff_pilot(env):
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 404                    # a student: not in the pilot
     appeals.grant(con, None, _uid(c, SG), True)
     assert c.get("/api/appeals", headers=tma(SG)).status_code == 200
-    assert c.get("/api/me", headers=tma(SG)).json()["appeals"] == {"consent": False, "sg": True}
+    assert c.get("/api/me", headers=tma(SG)).json()["appeals"] == {"consent": True, "sg": True}  # the pilot asks none
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (_uid(c, ANN),))
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 200                    # staff try it
     page = c.get("/privacy?lang=ru").text
-    assert "<!--apl" not in page and "{{apln}}" not in page and "TODO(legal" in page   # the placeholder until Codex writes it
+    assert "<!--apl" not in page and "{{apln}}" not in page                            # the section shows with the switch
     con.close()
 
 
@@ -213,6 +213,53 @@ def test_funnel_counters_carry_no_words(ap):
     got = {r[0]: r[1] for r in con.execute("SELECT key, n FROM usage_days")}
     assert set(got) == set(stats.APPEALS) - {"apl.sent"} and all(n == 1 for n in got.values())
     assert [c[1] for c in con.execute("PRAGMA table_info(usage_days)")] == ["day", "key", "n"]
+
+
+def test_ids_never_reused(ap):
+    """An author deletes the newest appeal; the next one (another student's) gets a new id, so SG's answer meant for
+    the deleted one can't land on it."""
+    c, _, con = ap
+    gone = _send(c, ANN, anon=True).json()["id"]
+    assert c.delete(f"/api/appeals/{gone}", headers=tma(ANN)).status_code == 204
+    new = _send(c, BEK, anon=True).json()["id"]
+    assert new != gone
+    assert c.post(f"/api/sg/appeals/{gone}", headers=tma(SG), json={"answer": "for the deleted one"}).status_code == 404
+    assert c.get("/api/appeals", headers=tma(BEK)).json()[0]["answer"] is None
+
+
+def test_months_never_link_authors(ap):
+    """A named and an anonymous appeal of one person count as two, exactly as two people's would."""
+    c, _, con = ap
+    _send(c, ANN, "named", topic="food"); _send(c, ANN, "anon", topic="food", anon=True)
+    one_person = c.get("/api/sg/appeals", headers=tma(SG)).json()["months"]
+    con.execute("DELETE FROM appeals")
+    _send(c, BEK, "named", topic="food"); _send(c, SG, "anon", topic="food", anon=True)
+    two_people = c.get("/api/sg/appeals", headers=tma(SG)).json()["months"]
+    assert one_person == two_people == [{"month": one_person[0]["month"], "total": 2, "topics": {"other": 2}}]
+
+
+def test_distress_before_any_limit(ap, monkeypatch):
+    """Over the AI allowance and without the section agreed: a crisis text still gets the helplines."""
+    c, _, con = ap
+    assistant._HITS.clear()
+    for _ in range(assistant.A_DAY):
+        con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (_uid(c, BEK), logic.now()))
+    r = c.post("/api/appeals/help", headers=tma(BEK), json={"text": "I want to die", "lang": "en"})
+    assert r.status_code == 200 and r.json()["help"] == texts.HELP_CARD["en"]
+    assert c.post("/api/appeals/help", headers=tma(BEK), json={"text": "where", "lang": "en", "consent": appeals.CONSENT}).status_code == 429
+
+
+def test_staff_pilot_asks_no_consent(env):
+    """APPEALS=staff: the section is still a placeholder, so nobody is asked to agree to it."""
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, appeals="staff")))
+    login(c, SG, "sec")
+    con = db.connect(cfg.db_path)
+    appeals.grant(con, None, _uid(c, SG), True)
+    assert c.get("/api/me", headers=tma(SG)).json()["appeals"]["consent"] is True
+    assert c.post("/api/appeals", headers=tma(SG), json={"text": "pilot"}).status_code == 200
+    assert not con.execute("SELECT 1 FROM appeal_consents").fetchone()
+    con.close()
 
 
 def test_months_merge_small_topics(ap):

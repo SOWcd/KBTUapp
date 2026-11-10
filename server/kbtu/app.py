@@ -289,6 +289,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
+    logic.appeals.MODE = cfg.appeals  # APPEALS: staff asks no consent (logic/appeals.py _agree)
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
@@ -1370,6 +1371,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """2-3 tips on what's missing, never a rewrite; the AI down: 503 and sending still works (the app says so).
         Signs of self-harm: the helplines, with or without the model."""
         lang = body.get("lang") if body.get("lang") in ("ru", "kk", "en") else "ru"
+        if logic.assistant.distress(body.get("text")):  # first, past every limit and the consent: the helplines (nothing kept)
+            return {"tips": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
         text = await run_in_threadpool(logic.appeals.help_ok, con, v, body)
         try:
             answer = await eu_ai(con, logic.appeals.help_prompt(text, lang), whole=40, max_tokens=400, temperature=0.2,

@@ -29,6 +29,7 @@ DUE_DAYS = 5                            # working days to answer
 KEEP_CLOSED, KEEP_MAX = 90 * 86400, 180 * 86400
 FEW = 5                                 # a topic's month with fewer authors goes into "other" in SG's numbers
 ALMATY = dt.timezone(dt.timedelta(hours=5))
+MODE = ""                               # config APPEALS ("all" | "staff"), set by app.create; staff: no consent asked (a pilot)
 
 
 def is_sg(con, uid: int) -> bool:
@@ -42,7 +43,7 @@ def on(con, mode: str, v: Viewer) -> bool:
 
 def summary(con, v: Viewer) -> dict:
     """/api/me's part: agreed to the section yet, and SG's queue mine to open."""
-    return {"consent": one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT) is not None,
+    return {"consent": MODE == "staff" or one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT) is not None,
             "sg": is_sg(con, v.id)}
 
 
@@ -56,8 +57,9 @@ def due(t: int) -> int:
 
 
 def _agree(con, v: Viewer, body: dict) -> None:
-    """The section agreed to once; the app sends `consent` with the first send after asking."""
-    if one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT):
+    """The section agreed to once; the app sends `consent` with the first send after asking. The staff pilot
+    (APPEALS=staff) asks nothing: its section isn't written yet (Codex writes it), as BOARD=staff asks nothing."""
+    if MODE == "staff" or one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT):
         return
     if body.get("consent") != CONSENT:
         raise ApiError("forbidden", "consent")
@@ -78,7 +80,8 @@ def _shape(a, t: int) -> dict:
 
 
 def help_ok(con, v: Viewer, body: dict) -> str:
-    """Before the AI looks at a draft: a verified student, the section agreed to, the text in limits, the day's AI allowance."""
+    """Before the AI looks at a draft: a verified student, the section agreed to, the text in limits, the day's AI
+    allowance. A text with signs of crisis never gets here (app.py: the helplines come first, past every limit)."""
     from .assistant import _spend
     need_student(v)
     text = _text(body.get("text"))
@@ -238,18 +241,20 @@ def act(con, v: Viewer, aid: int, body: dict) -> dict:
 
 
 def months(con) -> list[dict]:
-    """Sent appeals a month by topic (Almaty months, no words, no people); a topic with fewer than FEW authors that
-    month goes into "other" (none chosen counts as other)."""
-    got: dict[str, dict[str, set]] = {}
-    for r in rows(con, "SELECT a.created_at, a.topic, w.user_id FROM appeals a LEFT JOIN appeal_authors w ON w.appeal_id = a.id"):
+    """Sent appeals a month by topic (Almaty months); a topic with fewer than FEW appeals that month goes into "other"
+    (none chosen counts as other). Read from the appeals alone, never their authors: the numbers say nothing the queue
+    doesn't (counting authors told SG when a named and an anonymous appeal were one person's; Codex, Nov 10)."""
+    got: dict[str, dict[str, int]] = {}
+    for r in rows(con, "SELECT created_at, topic FROM appeals"):
         m = dt.datetime.fromtimestamp(r["created_at"], ALMATY).strftime("%Y-%m")
-        got.setdefault(m, {}).setdefault(r["topic"] or "other", set()).add(r["user_id"] or -r["created_at"])
+        t = got.setdefault(m, {})
+        t[r["topic"] or "other"] = t.get(r["topic"] or "other", 0) + 1
     out = []
     for m in sorted(got, reverse=True):
         counts: dict[str, int] = {}
-        for topic, who in got[m].items():
-            k = topic if topic != "other" and len(who) >= FEW else "other"
-            counts[k] = counts.get(k, 0) + len(who)  # ponytail: counts authors, not appeals (a person's 3 on one topic is 1)
+        for topic, n in got[m].items():
+            k = topic if n >= FEW else "other"
+            counts[k] = counts.get(k, 0) + n
         out.append({"month": m, "total": sum(counts.values()), "topics": counts})
     return out
 
