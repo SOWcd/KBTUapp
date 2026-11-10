@@ -2219,7 +2219,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         fchn = tgcn + bool(cfg.tgc_chat)
         body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(fchn))  # the channel's posts: after it
         body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger
-        body = body.replace("{{apln}}", str(fchn + bool(cfg.forum_channel) + bool(cfg.volunteers)))  # appeals to SG: last
+        apln = fchn + bool(cfg.forum_channel) + bool(cfg.volunteers)
+        body = body.replace("{{apln}}", str(apln)).replace("{{chsn}}", str(apln + bool(cfg.appeals)))  # appeals to SG, then the chat sync: last
         for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
                          ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals)), ("chs", cfg.chat_sync)):
             off = f"no{part}" if on else part
