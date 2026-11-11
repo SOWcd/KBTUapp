@@ -72,6 +72,7 @@
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
   sheets.album = (list, onremove, ongone, add, adding, look) => lazy(albumGrid, { list, onremove, ongone, add, adding, ...look });
+  sheets.galleryAdd = (files) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });

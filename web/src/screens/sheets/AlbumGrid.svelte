@@ -13,12 +13,13 @@
   import Pane from '../../ui/Pane.svelte';
   import Button from '../../ui/Button.svelte';
 
-  // title, note: the Afisha's Gallery uses this same grid under its own name, with one line over it
+  // title, note: the Afisha's Gallery uses this same grid under its own name, with one line over it (when I can't post)
   let { overlay, list, onremove, ongone, add, adding = () => 0, title, note }: {
     overlay: Overlay; list: () => AlbumPhoto[]; onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>; ongone?: (p: AlbumPhoto) => void;
-    add?: (at: Element) => void; adding?: () => number; title?: string; note?: string;
+    add?: () => void; adding?: () => number; title?: string; note?: string;
   } = $props();
-  // the Gallery (a title of its own) is newest first: its Add sits on top, by the new ones; an album's after its last
+  // the Gallery (a title of its own) is newest first: its Add is the grid's first square, mine land right after it;
+  // an album's is the button after its last
   const addTop = $derived(!!title);
 
   const photos = $derived(list());
@@ -42,9 +43,12 @@
 
 <Pane {overlay} icon={Images} title={photos.length ? `${title ?? t('album.title')} · ${photos.length}` : (title ?? t('album.title'))}>
   {#if note}<p class="note t-foot">{note}</p>{/if}
-  {#if add && addTop}<div class="add top">{@render addButton(add)}</div>{/if}
   <!-- div[role=button], not button: Pane's swipe from the left edge starts anywhere but on a button -->
   <div class="grid" bind:this={grid}>
+    {#if add && addTop}
+      <div class="c plus" role="button" tabindex="0" aria-label={t('album.addMine')} onclick={add}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); add(); } }}><ImagePlus size={26} strokeWidth={1.8} /></div>
+    {/if}
     {#each photos as p, i (p.id)}
       <!-- mine still uploading: the phone's own copy, dimmed, not to be opened yet -->
       <div class="c" class:wait={p.pending} role="button" tabindex="0" data-id={p.id} style:background-color={p.color ?? 'var(--surface-2)'}
@@ -54,12 +58,10 @@
     {/each}
     {#each { length: adding() } as _, i (i)}<span class="c wait"></span>{/each}
   </div>
-  {#if add && !addTop}<div class="add">{@render addButton(add)}</div>{/if}
+  {#if add && !addTop}
+    <div class="add"><Button kind="tinted" size="l" full disabled={adding() > 0} onclick={add}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{t('album.addMine')}</Button></div>
+  {/if}
 </Pane>
-
-{#snippet addButton(go: (at: Element) => void)}
-  <Button kind="tinted" size="l" full disabled={adding() > 0} onclick={(e) => go(e.currentTarget as Element)}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{t('album.addMine')}</Button>
-{/snippet}
 
 <style>
   /* edge to edge, out of the page's gutters, as the phone's grid */
@@ -72,10 +74,11 @@
   .c img:global(.in) { opacity: 1; }
   .c:active img { opacity: 0.72; transition-duration: 0ms; }
   .c:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .plus { display: grid; place-items: center; background: var(--surface-2); color: var(--accent); }
+  .plus:active { opacity: 0.6; }
   .wait { background: var(--surface-2); animation: g-wait 1.1s ease-in-out infinite; }
   @keyframes g-wait { 50% { opacity: 0.5; } }
   .add { margin-top: var(--s-4); }
   .note { margin-bottom: var(--s-3); color: var(--text-2); }
-  .add.top { margin: 0 0 var(--s-3); }
   @media (prefers-reduced-motion: reduce) { .c img { transition: none; } .wait { animation: none; } }
 </style>

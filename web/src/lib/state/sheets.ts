@@ -55,7 +55,9 @@ export const sheets = {
   //   from: the thumbnail it grows out of and shrinks back into (one element, or one per photo: the grid's, the mosaic's)
   photos: (_photos: AlbumPhoto[], _start: number, _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _from?: Element | ((p: AlbumPhoto) => Element | null | undefined)) => {},
   /** every photo of an album at once, a grid as in the phone's Photos (live: `list` and `adding` are read as they change) */
-  album: (_list: () => AlbumPhoto[], _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _add?: (at: Element) => void, _adding?: () => number, _look?: { title: string; note: string }) => {},
+  album: (_list: () => AlbumPhoto[], _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _add?: () => void, _adding?: () => number, _look?: { title: string; note?: string }) => {},
+  /** my chosen photos into the Gallery: the preview, where to, Publish (GALLERY) */
+  galleryAdd: (_files: File[]) => {},
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id) => {},

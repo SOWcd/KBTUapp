@@ -1,38 +1,27 @@
 <script lang="ts">
   // The Afisha's way into the Gallery (owner, Nov 9): the freshest photos on one wide card, a tap opens them all on the
-  // album's own grid. With GALLERY on, mine go in from that grid: which of my events first (if I went to any), then up
-  // to 10 from the phone, on the grid at once (the store uploads them). Not a student, or nothing to show or do: no card.
+  // album's own grid. With GALLERY on, mine go in from that grid's first square: up to 10 from the phone, then one sheet
+  // (GalleryAdd: the preview, where to, Publish). Not a student, or nothing to show or do: no card.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import type { Id } from '../../lib/api';
-  import { data, deleteGallery, galleryGone, loadGallery, postGallery } from '../../lib/state/data.svelte';
+  import { data, deleteGallery, galleryGone, loadGallery } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { menu } from '../../ui/menu';
   import Card from '../../ui/Card.svelte';
 
   const pics = $derived(data.gallery.slice(0, 4));
   let picker = $state<HTMLInputElement>();
-  let to: Id | undefined;
 
-  // instant: the menu's tap still counts as the person's own, so the phone's picker may open from it
-  function add(at: Element) {
-    const pick = (id?: Id) => { to = id; picker?.click(); };
-    const events = data.galleryPost?.events ?? [];
-    if (!events.length) { pick(); return; }
-    menu(at, [{ label: t('gallery.kbtu'), instant: true, onselect: () => pick() },
-      ...events.map((e) => ({ label: e.title, instant: true, onselect: () => pick(e.id) }))]);
-  }
   function picked(e: Event) {
-    const el = e.currentTarget as HTMLInputElement, files = [...(el.files ?? [])];
+    const el = e.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, 10); // at once, as the store takes
     el.value = '';
-    if (files.length) void postGallery(files, to);
+    if (files.length) sheets.galleryAdd(files);
   }
   function open() {
     void loadGallery(true);
     const post = !!data.galleryPost;
-    sheets.album(() => data.gallery, post ? deleteGallery : undefined, galleryGone, post ? add : undefined, undefined,
-      { title: t('gallery.title'), note: t(post ? 'gallery.noteOn' : 'gallery.note') });
+    sheets.album(() => data.gallery, post ? deleteGallery : undefined, galleryGone, post ? () => picker?.click() : undefined, undefined,
+      { title: t('gallery.title'), note: post ? undefined : t('gallery.note') });
   }
 </script>
 
