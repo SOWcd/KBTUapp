@@ -2821,6 +2821,7 @@ const en: Dict = {
   'ledg.empty': "No one yet",
   'ledg.saved': "Saved",
   'apl.row': "Appeal to the Student Government",
+  'apl.rowSub': "Private, anonymous if you like. An answer in 5 working days",
   'apl.sg': "Student Government",
   'apl.sgRow': "Students' appeals",
   'apl.t.study': "Studies",

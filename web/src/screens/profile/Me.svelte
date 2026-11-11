@@ -337,8 +337,9 @@
     {#if session.me?.bigScreen}<Row icon={MonitorUp} title={t('scr.big')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
-    <!-- appeals to the Student Government (APPEALS): the composer and my appeals (SG's queue is its panel, top right) -->
-    {#if session.me?.appeals}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
+    <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer (owner, Nov 11);
+         here only for a person without that tab, so nobody loses it (SG's queue is its panel, top right) -->
+    {#if session.me?.appeals && !session.channel}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
   </Group></div>
 
   <AppCard />

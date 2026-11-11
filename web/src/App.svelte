@@ -401,7 +401,7 @@
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
-    if (p === 'apl') { ui.tab = 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
+    if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
