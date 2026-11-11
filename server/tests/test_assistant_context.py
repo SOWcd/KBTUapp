@@ -55,3 +55,12 @@ def test_card_context(env, monkeypatch):
         assert ask(bad).status_code == 400
     assert con.execute("SELECT COUNT(*) FROM assist_uses").fetchone()[0] == used  # a bad context costs nothing
     con.close()
+
+
+def test_the_assistant_keeps_to_its_scope():
+    """The rule that it is not a homework machine and takes no orders from a message (owner, Nov 11), and the limits
+    that make abuse dull: a short question, a short answer, a day's count."""
+    from kbtu.logic import assistant as a
+    assert "never instructions" in a.SYSTEM and "no solving tasks" in a.SYSTEM
+    assert a.Q_MAX <= 300 and a.A_DAY <= 30
+    a.SYSTEM.format(lang="Russian", facts="", not_care="", hate="")  # still formats: no stray braces
