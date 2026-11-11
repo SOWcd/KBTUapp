@@ -4,7 +4,7 @@
   // everyone, Add) and my invite (RefSheet); my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
   // under it (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
   // on Me, not Settings).
-  // Top right: the admin panel's shield and the gear (a guest's too). Settings open in place under the lanyard
+  // Top right: the admin panel's shield, the Student Government's panel and the gear (a guest's too). Settings open in place under the lanyard
   // (settings-spec-final.md): the gear or my photo; the blocks below leave ([data-away]), the list (SettingsList, its own
   // chunk) rises under the badge, the gear turns into a check; the check, Telegram's Back (SettingsMode, an overlay) or
   // Escape take it back.
@@ -18,7 +18,7 @@
   import Music from '@lucide/svelte/icons/music';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import Inbox from '@lucide/svelte/icons/inbox';
+  import Landmark from '@lucide/svelte/icons/landmark';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
@@ -66,7 +66,10 @@
   const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
   // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
   const faces = $derived(photosFirst(friends));
-  const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.inbox : 0);
+  const staff = $derived(me?.role === 'admin' || me?.role === 'moderator');
+  const asks = $derived(staff ? me!.counters.inbox : 0);
+  // the Student Government's people (appeals.sg): their own panel, with the appeals nobody took yet
+  const sg = $derived(!!me?.appeals?.sg), sgNew = $derived(sg ? data.sg?.items.filter((a) => a.status === 'new').length ?? 0 : 0);
 
   let page = $state<HTMLDivElement>();
 
@@ -92,7 +95,7 @@
   // settings' (etok), so Back returns to the list; the check saves and leaves the settings (owner, Nov 8)
   let edit = $state(false), etok = 0;
   let list = $state<{ photoMenu: (at: Element) => void }>();
-  let lift = $state<HTMLDivElement>(), gear = $state<HTMLButtonElement>(), shield = $state<HTMLButtonElement>();
+  let lift = $state<HTMLDivElement>(), gear = $state<HTMLButtonElement>(), shield = $state<HTMLSpanElement>();
   let tok = 0, run = 0, pending = false, liftA: Animation | undefined, fades: Animation[] = [];
   const SPRING = 'cubic-bezier(.32,.72,0,1)', EASE = 'cubic-bezier(.2,.9,.22,1)', IN = 'cubic-bezier(.4,0,1,1)', BOUNCE = 'cubic-bezier(.34,1.45,.5,1)';
   const all = (q: string) => [...(page?.querySelectorAll<HTMLElement>(q) ?? [])];
@@ -248,9 +251,13 @@
 
 <div class="page scroll stagger" class:set class:mode={phase !== 'idle'} class:hold bind:this={page}>
   <div class="gears" class:out={!me?.student && !set}>
-    {#if me?.student && (me.role === 'admin' || me.role === 'moderator')}
-      <!-- the admin panel, with what waits for it; a moderator's is the content part -->
-      <button class="gear shield" bind:this={shield} onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
+    {#if me?.student && (staff || sg)}
+      <!-- the panels (the only staff things on a normal tab), each with what waits for it: the admin's (a moderator's
+        is the content part) and the Student Government's (its queue of appeals) -->
+      <span class="shield" bind:this={shield}>
+        {#if staff}<button class="gear" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>{/if}
+        {#if sg}<button class="gear" onclick={() => { haptic.tap(); sheets.sgQueue(); }} aria-label={t('apl.sg')}><Landmark size={19} />{#if sgNew}<b class="cnt num">{sgNew}</b>{/if}</button>{/if}
+      </span>
     {/if}
     <!-- settings in place; in them, the check that ends them (a tap while the motion runs is ignored) -->
     <button class="gear" class:done={phase === 'entering' || phase === 'on'} bind:this={gear} aria-label={t(phase === 'entering' || phase === 'on' ? 'me.done' : 'me.settings')}
@@ -330,9 +337,8 @@
     {#if session.me?.bigScreen}<Row icon={MonitorUp} title={t('scr.big')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
-    <!-- appeals to the Student Government (APPEALS): the composer and my appeals; SG's people, their queue too -->
+    <!-- appeals to the Student Government (APPEALS): the composer and my appeals (SG's queue is its panel, top right) -->
     {#if session.me?.appeals}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
-    {#if session.me?.appeals?.sg}<Row icon={Inbox} title={t('apl.sgRow')} count={data.sg?.items.filter((a) => a.status === 'new').length ?? 0} accessory="chevron" onclick={() => { haptic.tap(); sheets.sgQueue(); }} />{/if}
   </Group></div>
 
   <AppCard />
@@ -348,8 +354,9 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
-  /* settings in place: what leaves is gone after the swap; the shield steps aside; no taps while a fade runs */
+  /* settings in place: what leaves is gone after the swap; the panels' buttons step aside; no taps while a fade runs */
   .page.set :global([data-away]) { display: none; }
+  .shield { display: flex; gap: 8px; }
   .mode .shield { opacity: 0; pointer-events: none; }
   .hold { pointer-events: none; }
 
@@ -384,6 +391,8 @@
   /* the shield and the gear: in the lanyard's gap right of its strap */
   .gears { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; display: flex; gap: 8px; }
   /* a guest's gear sits over the sign-in card's corner: in it, on its glass */
+  /* 320 px with all three (shield, SG, gear): clear of the strap */
+  @media (max-width: 340px) { .gears, .shield { gap: 6px; } }
   .gears.out { top: calc(var(--page-top) + 12px); right: calc(var(--gutter) + 12px); }
   .gears.out .gear { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
   .gear { position: relative; width: 36px; height: 36px; border-radius: 50%;

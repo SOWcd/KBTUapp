@@ -2826,6 +2826,7 @@ const en: Dict = {
   'ledg.empty': "No one yet",
   'ledg.saved': "Saved",
   'apl.row': "Appeal to the Student Government",
+  'apl.sg': "Student Government",
   'apl.sgRow': "Students' appeals",
   'apl.t.study': "Studies",
   'apl.t.dorm': "Dorm",

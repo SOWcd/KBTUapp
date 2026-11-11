@@ -1,8 +1,9 @@
 <script lang="ts">
-  // SG's queue of appeals (its granted people only, server appeals.queue): open, overdue, closed; an anonymous one never
+  // The Student Government's panel (opened by its round button on the profile); for now its one tool, the queue of appeals (its granted people only, server appeals.queue): open, overdue, closed; an anonymous one never
   // says who; the months' counts by topic (small ones merged by the server). Loaded with the app, fresh on open.
   import { onMount } from 'svelte';
   import Inbox from '@lucide/svelte/icons/inbox';
+  import Landmark from '@lucide/svelte/icons/landmark';
   import type { Appeal } from '../../lib/api';
   import { data, loadSg } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -24,7 +25,7 @@
   const shown = $derived((data.sg?.items ?? []).filter((a) => (f === 'closed' ? a.status === 'closed' : f === 'overdue' ? late(a) : a.status !== 'closed')));
 </script>
 
-<Sheet {overlay} title={t('apl.sgRow')} icon={Inbox} full>
+<Sheet {overlay} title={t('apl.sg')} icon={Landmark} full>
   <div class="page">
     <Segmented bind:value={f} items={(['open', 'overdue', 'closed'] as F[]).map((v) => ({ value: v, label: t(`apl.f.${v}`) }))} />
     {#if shown.length}
