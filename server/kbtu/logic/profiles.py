@@ -730,7 +730,7 @@ def friendship(con, me: int, uid: int) -> str:
     """'friends' | 'requested' (mine, waiting; a quiet decline looks the same for 30 days) | 'incoming' | 'none'."""
     if one(con, "SELECT 1 FROM friendships WHERE a = ? AND b = ?", min(me, uid), max(me, uid)):
         return "friends"
-    if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND (status = 'pending' OR (status = 'declined' AND decided_at > ?))",
+    if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND (status = 'pending' OR (status = 'declined' AND decided_at > ? AND hidden = 0))",
            me, uid, core.now() - REASK_AFTER):
         return "requested"
     if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", uid, me):
@@ -778,7 +778,7 @@ def friends(con, v: Viewer) -> dict:
         WHERE r.to_id = ? AND r.status = 'pending' ORDER BY r.created_at DESC""", v.id)]
     outgoing = [_friend_row(p, p["at"], False) for p in rows(con, f"""SELECT {cols}, r.created_at AS at FROM friend_requests r
         JOIN users u ON u.id = r.to_id JOIN students s ON s.user_id = u.id
-        WHERE r.from_id = ? AND (r.status = 'pending' OR (r.status = 'declined' AND r.decided_at > ?)) ORDER BY r.created_at DESC""",
+        WHERE r.from_id = ? AND (r.status = 'pending' OR (r.status = 'declined' AND r.decided_at > ? AND r.hidden = 0)) ORDER BY r.created_at DESC""",
         v.id, core.now() - REASK_AFTER)]
     roles = _roles(con, v)
     going = [e for e in rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id JOIN users u ON u.id = r.user_id
@@ -825,6 +825,9 @@ def ask_friend(con, v: Viewer, uid: int) -> dict:
             _befriend(con, v.id, uid)
             notify(con, uid, "friend_new", f"fn:{v.id}:{core.now() // 86400}")
         state = "friends"
+    elif state == "none" and con.execute("UPDATE friend_requests SET hidden = 0 WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
+                                         (v.id, uid, core.now() - REASK_AFTER)).rowcount:
+        state = "requested"  # one I took back after a quiet decline, asked again inside its 30 days: waiting again for me, nobody is told
     elif state == "none":
         if not _can_friend(con, uid):
             raise ApiError("closed")
@@ -853,9 +856,12 @@ def answer_friend(con, v: Viewer, uid: int, accept: bool) -> dict:
 
 
 def take_back_request(con, v: Viewer, uid: int) -> None:
-    """Cancel my waiting request (a quietly declined one stays: it still holds the 30 days)."""
+    """Cancel my waiting request. A quietly declined one looks the same to me, so it goes from my list the same way
+    (it came back on the next load, which also told me I was declined: a student's report, Nov 11); its row stays,
+    hidden, and still holds the 30 days."""
     need_student(v)
     con.execute("DELETE FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", (v.id, uid))
+    con.execute("UPDATE friend_requests SET hidden = 1 WHERE from_id = ? AND to_id = ? AND status = 'declined'", (v.id, uid))
 
 
 def unfriend(con, v: Viewer, uid: int) -> None:

@@ -985,6 +985,13 @@ def test_friends(env):
     assert c.get(f"/api/users/{ali['id']}", headers=D).json()["friendship"] == "requested"
     assert c.post("/api/friends/requests", headers=D, json={"userId": ali["id"]}).json()["friendship"] == "requested"
     assert c.get("/api/friends", headers=A).json()["incoming"] == []
+    # taking it back after the quiet decline: gone from my list for good (it came back on the next load), the 30 days still
+    # held: asking again shows "requested" to me and tells Ali nothing
+    assert [r["person"]["id"] for r in c.get("/api/friends", headers=D).json()["outgoing"]] == [ali["id"]]
+    assert c.delete(f"/api/friends/requests/{ali['id']}", headers=D).status_code == 204
+    assert c.get("/api/friends", headers=D).json()["outgoing"] == [] and c.get(f"/api/users/{ali['id']}", headers=D).json()["friendship"] == "none"
+    assert c.post("/api/friends/requests", headers=D, json={"userId": ali["id"]}).json()["friendship"] == "requested"
+    assert c.get("/api/friends", headers=A).json()["incoming"] == [] and len(c.get("/api/friends", headers=D).json()["outgoing"]) == 1
     # asking someone who already asked me is the answer
     c.post("/api/friends/requests", headers=Z, json={"userId": dana["id"]})
     assert c.post("/api/friends/requests", headers=D, json={"userId": zhan["id"]}).json()["friendship"] == "friends"

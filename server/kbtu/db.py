@@ -1551,6 +1551,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE fchan_posts ADD COLUMN ai_quote TEXT;"""),
     # the old one-time fr_ friend links: none issued since Nov 2 (one link, r_), the last died on Nov 9
     (154, "DROP TABLE IF EXISTS friend_links;"),
+    # a request its sender took back after a quiet decline: out of the sender's list, the 30 days still held (profiles.take_back_request)
+    (155, "ALTER TABLE friend_requests ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 
