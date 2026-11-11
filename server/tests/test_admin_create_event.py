@@ -183,3 +183,22 @@ def test_from_the_server(env, monkeypatch, capsys):
     assert refused(["event", "publish", eid]) == "refused: conflict"   # out already
     assert refused(["event", "publish", "999"]) == "no such event"
     assert len(_lines(con, "staff_event")) == 1
+
+
+def test_admin_fills_it_from_the_announcement(env, monkeypatch):
+    """Nov 11: the admin's new event for a club fills from the club's announcement as an organizer's own does (the
+    flag on that club's fill route alone); nothing is stored, so nothing is logged."""
+    from kbtu import llm
+    from test_core import _board_on
+    c, con, ids = _setup(env)
+    _board_on(c, env[1])
+    text = "Open mic on November 10 at 18:00 in room 256. Bring friends, it will be loud!"
+
+    async def fake(cfg_, http, msgs, **kw):
+        return json.dumps({"title": "Open mic", "place": "256"}), "x"
+    monkeypatch.setattr(llm, "chat", fake)
+    assert c.post("/api/orgs/1/events/fill", headers=tma(60), json={"text": text}).status_code == 403  # no flag
+    assert c.post("/api/orgs/1/events/fill", headers=_org(60, 2), json={"text": text}).status_code == 403  # another club's flag
+    assert c.post("/api/orgs/1/events/fill", headers=_org(61), json={"text": text}).status_code == 403  # not the admin
+    r = c.post("/api/orgs/1/events/fill", headers=_org(60), json={"text": text})
+    assert r.status_code == 200 and r.json()["title"] == "Open mic", r.text

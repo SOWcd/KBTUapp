@@ -563,7 +563,7 @@
       <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
     {#if staff}<Notice icon={ShieldCheck} title={clubNames[0]} text={t('mg.asStaff')} />{/if}
-    {#if !id && session.board && !staff}
+    {#if !id && session.board}
       <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
     {/if}
 
