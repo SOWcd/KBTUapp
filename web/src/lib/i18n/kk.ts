@@ -709,6 +709,7 @@ const kk: Dict = {
   'event.myLink': "Менің сілтемем",
   'event.myLinkSent': "Ол арқылы жазылғандар саған есептеледі",
   'event.external': 'Сайтта тіркелу',
+  'event.externalTg': 'Билет сатып алу',
   'event.with': 'Серіктес: {host}',
   'event.partner': 'Серіктес',
   'event.notKbtu': 'ҚБТУ ұйым­дастыр­маған',

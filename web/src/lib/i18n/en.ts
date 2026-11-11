@@ -709,6 +709,7 @@ const en: Dict = {
   'event.myLink': "My link",
   'event.myLinkSent': "Whoever signs up by it counts for you",
   'event.external': 'Register on the website',
+  'event.externalTg': 'Buy a ticket',
   'event.with': 'With {host}',
   'event.partner': 'Partner',
   'event.notKbtu': 'Not organized by KBTU',

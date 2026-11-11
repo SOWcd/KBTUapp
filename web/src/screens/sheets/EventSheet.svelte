@@ -597,7 +597,7 @@
         {:else if over}
           <Button kind="neutral" size="l" full disabled>{t('event.over')}</Button>
         {:else if e.externalUrl}
-          <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('event.external')}</Button>
+          <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t(e.externalUrl.startsWith('https://t.me/') ? 'event.externalTg' : 'event.external')}</Button>
         {:else if teamOnly && askable && e.teamAsk === 'pending'}
           <Button kind="neutral" size="l" full onclick={teamUnask}>{#snippet icon()}<Hourglass size={18} />{/snippet}{t('ta.pending')}</Button>
         {:else if teamOnly && askable}

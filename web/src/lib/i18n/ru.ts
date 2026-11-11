@@ -709,6 +709,7 @@ const ru = {
   'event.myLink': "Моя ссылка",
   'event.myLinkSent': "Кто запишется по ней — засчитают тебе",
   'event.external': 'Регистрация на сайте',
+  'event.externalTg': 'Купить билет',
   'event.with': 'Партнёр: {host}',
   'event.partner': 'Партнёр',
   'event.notKbtu': 'Организатор не КБТУ',

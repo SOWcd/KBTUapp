@@ -129,7 +129,7 @@
 
       <div class="side">
         {#if e.externalUrl}
-          <button class="act go" onclick={() => openLink(e.externalUrl!)} aria-label={t('event.external')}><span class="ring"><Plus size={26} strokeWidth={2.4} /></span></button>
+          <button class="act go" onclick={() => openLink(e.externalUrl!)} aria-label={t(e.externalUrl.startsWith('https://t.me/') ? 'event.externalTg' : 'event.external')}><span class="ring"><Plus size={26} strokeWidth={2.4} /></span></button>
         {:else}
           <button class="act go" class:on={st === 'going'} class:wait={full || st === 'waitlist'} class:busy={goingBusy.has(e.id)} aria-busy={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}
                   aria-label={st === 'going' ? t('event.cancelReg') : full ? t('event.notify') : t('event.go')}>
