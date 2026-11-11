@@ -263,6 +263,16 @@ def appeals_viewer(request: Request, v: Me, con: Con) -> Viewer:
 Appeals = Annotated[Viewer, Depends(appeals_viewer)]
 
 
+def reports_viewer(request: Request, v: Me) -> Viewer:
+    """Clubs' event reports (logic/evreports.py): REPORTS=1; off, not here (their policy clause comes first)."""
+    if not request.app.state.cfg.reports:
+        raise ApiError("not_found")
+    return v
+
+
+Reports = Annotated[Viewer, Depends(reports_viewer)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
@@ -347,6 +357,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def get_me(con: Con, v: Me):
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
+                                   **({"reports": True} if app.state.cfg.reports else {}),  # Studio's event reports (REPORTS)
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
@@ -1073,6 +1084,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/events/{eid}/crew/{uid}")
     def crew_drop(eid: int, uid: int, con: Con, v: Me):
         return logic.crew.drop(con, v, eid, uid)
+
+    # a club's report after its event (logic/evreports.py, REPORTS=1): the club's people with the "reports" right
+    @app.get("/api/events/{eid}/report")
+    def report_get(eid: int, con: Con, v: Reports):
+        return logic.evreports.get(con, v, eid)
+
+    @app.patch("/api/events/{eid}/report")
+    def report_save(eid: int, con: Con, v: Reports, body: dict = Body(...)):
+        return logic.evreports.save(con, v, eid, body)
+
+    @app.put("/api/events/{eid}/report/marks/{uid}")
+    def report_mark(eid: int, uid: int, con: Con, v: Reports, body: dict = Body(...)):
+        return logic.evreports.mark(con, v, eid, uid, body.get("status"))
 
     @app.get("/api/orgs/{oid}/cohosts")
     def cohost_invites(oid: int, con: Con, v: Me):

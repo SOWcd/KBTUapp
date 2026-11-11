@@ -66,6 +66,9 @@ class Config:
     # names Cloudflare for the assistant's questions (app.py); empty: off
     docs: str = ""
     docs_db: str = ""
+    # REPORTS=1: clubs' event reports (logic/evreports.py: who of the team came, how many guests); off until the privacy
+    # policy names the attendance marks: the routes answer 404 and the app shows nothing of it
+    reports: bool = False
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -142,4 +145,5 @@ def load() -> Config:
         chat_sync=env.get("CHAT_SYNC", "").strip() == "1",
         docs={"1": "fts", "hybrid": "hybrid"}.get(env.get("DOCS", "").strip(), ""),
         docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
+        reports=env.get("REPORTS", "").strip() == "1",
     )

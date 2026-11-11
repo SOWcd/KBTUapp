@@ -1573,6 +1573,26 @@ MIGRATIONS: list[tuple[int, str]] = [
     # rebuild. NULL: an event's photo, or one posted before topics (read as "other").
     # 157: 155 is the friends branch's, 156 the volunteers' (it lands first; until then the numbers have a gap).
     (157, "ALTER TABLE gallery_photos ADD COLUMN topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other'));"),
+    # (Nov 11) a club's report after its event (logic/evreports.py, REPORTS=1): which department ran it (a tag marked
+    # department, the club's own), the guests counted by hand, a note; who filled it first and who edited it last.
+    # report_marks: a team member's attendance at it, one status each. A Vice's role with its own toggles gets the new
+    # "reports" right, as a Vice without them has it (core.OWN_FROM); again on a replay, it isn't added twice.
+    (158, """CREATE TABLE event_reports (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL,
+      guests INTEGER CHECK (guests BETWEEN 0 AND 100000),
+      note TEXT NOT NULL DEFAULT '',
+      filled_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      filled_at INTEGER NOT NULL,
+      edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      edited_at INTEGER NOT NULL) STRICT;
+    CREATE TABLE report_marks (
+      event_id INTEGER NOT NULL REFERENCES event_reports(event_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('present', 'late', 'absent', 'excused')),
+      PRIMARY KEY (event_id, user_id)) STRICT;
+    CREATE INDEX report_marks_by_user ON report_marks(user_id);
+    UPDATE org_roles SET rights = rights || ',reports' WHERE level = 'vice' AND rights IS NOT NULL AND ',' || rights || ',' NOT LIKE '%,reports,%';"""),
 ]
 
 

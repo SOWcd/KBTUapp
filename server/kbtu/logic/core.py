@@ -20,8 +20,13 @@ RANK = {"member": 1, "head": 2, "vice": 3, "president": 4}
 # A club role's rights (SPEC §2): the toggles of its editor. Each needs a level; the
 # highest one a role has is its level, which ranks it for the rank rule (whom it acts on). A level without a club role,
 # and a role made before the toggles, has its level's rights; the President has them all.
-RIGHTS = {"door": "member", "events": "head", "posts": "head", "people": "head", "casting": "head", "team": "vice", "money": "vice", "memo": "vice", "profile": "vice"}
-LEVEL_RIGHTS = {lv: frozenset(r for r, need in RIGHTS.items() if RANK[need] <= RANK[lv]) for lv in RANK}
+RIGHTS = {"door": "member", "events": "head", "posts": "head", "people": "head", "casting": "head", "team": "vice", "money": "vice", "memo": "vice", "profile": "vice",
+          "reports": "member"}
+# a right that ranks a role no higher than its level above, yet comes with a level only from this one: "reports" (event
+# reports, logic/evreports.py) is the Vice's and the President's by default, and a club gives it to its HR role by hand
+# without making those people Heads or Vices
+OWN_FROM = {"reports": "vice"}
+LEVEL_RIGHTS = {lv: frozenset(r for r, need in RIGHTS.items() if RANK[OWN_FROM.get(r, need)] <= RANK[lv]) for lv in RANK}
 PROFILE_QR = re.compile(r"\bu_(\d+)_([A-Z2-7]{10})\b")  # a badge QR: …?startapp=u_<id>_<code> (§4.4)
 TWO_GIS = re.compile(r"^https://(?:[a-z]+\.)?2gis\.(?:kz|ru|com)/", re.I)
 SEASON_MONTHS = (2, 8)  # a season starts in February and in August (§4.11)
