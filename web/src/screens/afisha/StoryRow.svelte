@@ -1,14 +1,16 @@
 <script lang="ts">
   // The news on top of Afisha's List, as a row of circles (PLAN 46): the broadcasts (DMP, KBTU App),
   // every club I'm in or follow that posted in the last 30 days, and every club with a new event (lib/posts.ts); a ring while something is unread. A tap plays that
-  // club's posts full screen (Stories.svelte), then the next clubs'. The first circle, "News", opens every post (News).
+  // club's posts full screen (Stories.svelte), then the next clubs'. The first circle, "News", opens every post (News); the second, the Gallery.
   import Newspaper from '@lucide/svelte/icons/newspaper';
+  import Images from '@lucide/svelte/icons/images';
   import { t } from '../../lib/i18n/index.svelte';
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { OrgRef } from '../../lib/api';
   import { data, loadNews } from '../../lib/state/data.svelte';
   import { ui } from '../../lib/state/ui.svelte';
+  import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
@@ -39,6 +41,13 @@
     <span class="ring"><span class="in all"><Newspaper size={24} strokeWidth={2} /></span></span>
     <b class="ellipsis">{t('page.news')}</b>
   </button>
+  <!-- the Gallery right after it (owner, Nov 11: the card lower in the list was not found); shown as that card is -->
+  {#if session.me?.student && (data.gallery.length || data.galleryPost)}
+    <button class="s news" onclick={() => sheets.gallery()}>
+      <span class="ring"><span class="in all"><Images size={24} strokeWidth={2} /></span></span>
+      <b class="ellipsis">{t('gallery.title')}</b>
+    </button>
+  {/if}
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
       <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>

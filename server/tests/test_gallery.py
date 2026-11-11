@@ -138,7 +138,7 @@ def test_newest_first_pages_once_each_and_one_query(env):
     before = count()
     for _ in range(10):
         _photo(con, eid, c.ids[BO])
-    assert count() == before == 1
+    assert count() == before == 2  # the feed and the albums (the first page), one query each
 
 
 def test_photo_in_a_closed_album_too_can_still_be_reported(env):

@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue } from '../api';
 import { joinClasses } from '../classes';
 import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
@@ -25,6 +25,7 @@ export const data = $state({
   past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
+  galleryAlbums: [] as GalleryAlbum[], // the events' albums on its shelf, the newest first (with the first page)
   galleryPost: null as { events: { id: Id; title: string }[] } | null, // I may post (GALLERY), and to which of my events
   orgs: [] as Org[],
   small: [] as Org[], // under the registry's size bar: search alone finds them
@@ -65,15 +66,25 @@ export async function loadFriends(): Promise<void> {
 /** The Gallery in the background; its card's photos fetched ahead. all: the pages after the first too (as it opens, so the
  *  viewer swipes across all of it). ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
 export async function loadGallery(all = false): Promise<void> {
-  if (!session.me?.student) { data.gallery = []; data.galleryPost = null; return; }
+  if (!session.me?.student) { data.gallery = []; data.galleryAlbums = []; data.galleryPost = null; return; }
   try {
     let page = await api.gallery();
     data.galleryPost = page.post ?? null;
+    data.galleryAlbums = page.albums ?? [];
     const got = [...page.photos];
     while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
     data.gallery = [...data.gallery.filter((p) => p.pending), ...got]; // mine still uploading stay on top
     warm(got.slice(0, 4).map((p) => p.thumb));
   } catch { /* the last copy stays */ }
+}
+/** A theme's first page into the same list (the Gallery's filter shows what is here at once; this brings what the
+ *  list hasn't reached yet). Newest first stays: a file's id is the order. */
+export async function loadGalleryTheme(topic: GalleryTopic | 'events'): Promise<void> {
+  try {
+    const got = (await api.gallery(undefined, topic)).photos, have = new Set(data.gallery.map((p) => p.id));
+    const fresh = got.filter((p) => !have.has(p.id));
+    if (fresh.length) data.gallery = [...data.gallery.filter((p) => p.pending), ...[...data.gallery.filter((p) => !p.pending), ...fresh].sort((a, b) => b.id - a.id)];
+  } catch { /* what is here stays */ }
 }
 /** Reported from the Gallery: gone for me at once. */
 export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
@@ -81,16 +92,17 @@ export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.galler
 /** My photos into the Gallery (to an event's album too): each on top of the grid at once from the phone's own copy,
  *  dimmed while it uploads (one after another), then the server's; a refused one goes, with a toast. */
 let pendingId = -1;
-export async function postGallery(files: File[], event?: Id): Promise<void> {
+export async function postGallery(files: File[], event?: Id, topic?: GalleryTopic): Promise<void> {
+  const to = data.galleryPost?.events.find((e) => e.id === event); // under its theme at once
   const mine = files.slice(0, 10).map((f) => {
     const url = URL.createObjectURL(f);
-    return { id: pendingId--, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: null, mine: true, pending: true } satisfies AlbumPhoto;
+    return { id: pendingId--, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: null, mine: true, pending: true, ...(to ? { event: to } : { topic }) } satisfies AlbumPhoto;
   });
   data.gallery = [...mine, ...data.gallery];
   let added = 0;
   for (const [i, p] of mine.entries()) {
     try {
-      const got = await api.postGalleryPhoto(await shrink(files[i]), event);
+      const got = await api.postGalleryPhoto(await shrink(files[i]), event, topic);
       data.gallery = [got, ...data.gallery.filter((x) => x.id !== p.id && x.id !== got.id)];
       added++;
     } catch (err) {

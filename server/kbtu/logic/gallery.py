@@ -14,6 +14,7 @@ MODE = ""                # app.create sets it from GALLERY: "all", "staff" or ""
 PAGE = 60
 A_DAY = 30               # uploads one person starts in a day (attempts: deleting doesn't give any back)
 TOPICS = ("campus", "study", "life", "other")  # what a photo of no event is about (gallery_photos.topic); "events": the feed's filter for the rest
+ALBUMS = 60              # the albums the Gallery lists
 MY_EVENTS = 5            # the events a photo may go to, offered in the picker's menu (the newest)
 
 
@@ -33,10 +34,32 @@ def _shape(f, v: Viewer) -> dict:
                if f["event_id"] else {})}
 
 
+def _open() -> str:
+    """SQL: the event `e` of the club `o` shows its album in the Gallery (args: on_afisha_args, my id)."""
+    return f"""e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.meeting = 0 AND o.status != 'hidden'
+            AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)"""
+
+
+def albums(con, v: Viewer) -> list[dict]:
+    """The events' albums the feed draws from, the one with the newest photo first: its cover (the event's own, else its
+    newest photo) and how many photos I see in it, in one query for all rows."""
+    # ponytail: the ALBUMS newest, all at once (the shelf and "All"); page it when there are more albums than that
+    found = rows(con, f"""WITH a AS (
+            SELECT e.id AS eid, e.title, e.i18n, e.cover_file_id, e.cover_focus, COUNT(*) AS n, MAX(f.id) AS newest
+            FROM event_photos p JOIN files f ON f.id = p.file_id JOIN events e ON e.id = p.event_id JOIN orgs o ON o.id = e.org_id
+            WHERE {_open()} AND {PHOTO_SHOWN} GROUP BY e.id)
+        SELECT a.eid, a.title, a.i18n, a.n, a.cover_file_id, a.cover_focus, c.* FROM a JOIN files c ON c.id = COALESCE(a.cover_file_id, a.newest)
+        ORDER BY a.newest DESC LIMIT ?""", *on_afisha_args(v), v.id, v.id, ALBUMS)
+    return [{"id": a["eid"], "title": a["title"], "n": a["n"],
+             "cover": {**media_shape(a), "focus": [float(c) for c in a["cover_focus"].split(",")] if a["cover_file_id"] and a["cover_focus"] else None},
+             **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(a["i18n"]).items()}} if a["i18n"] else {})} for a in found]
+
+
 def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: str | None = None) -> dict:
     """A page, newest first (a file id is the page mark), in one query for all rows. An album's photo only from what is
     open to every student and on their general afisha (stricter than _visible on purpose, for the staff and a club's
-    own people too); a file in two albums once, in the newer. The first page also says where I may post. topic: one of TOPICS (photos of no event about it) or
+    own people too); a file in two albums once, in the newer. The first page of everything also has the albums (albums) and
+    says where I may post. topic: one of TOPICS (photos of no event about it) or
     "events" (the albums alone)."""
     if topic is not None and topic not in TOPICS + ("events",):
         raise ApiError("bad_input", "topic")
@@ -46,8 +69,7 @@ def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: st
     found = rows(con, f"""WITH x AS (
             SELECT p.file_id, MAX(p.event_id) AS event_id, p.added_by AS uid
             FROM event_photos p JOIN events e ON e.id = p.event_id JOIN orgs o ON o.id = e.org_id
-            WHERE e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.meeting = 0 AND o.status != 'hidden'
-            AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0) AND ?
+            WHERE {_open()} AND ?
             GROUP BY p.file_id
             UNION ALL
             SELECT g.file_id, NULL, g.user_id FROM gallery_photos g
@@ -59,6 +81,8 @@ def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: st
         ORDER BY f.id DESC LIMIT ?""", *on_afisha_args(v), v.id, int(topic in (None, "events")),
                  int(on(v) and topic != "events"), topic, v.id, before if before is not None else 1 << 62, n + 1)
     out = {"photos": [_shape(f, v) for f in found[:n]], "more": len(found) > n}
+    if before is None and topic is None:
+        out["albums"] = albums(con, v)
     if before is None and on(v):
         out["post"] = {"events": my_events(con, v)}
     return out
@@ -81,10 +105,10 @@ def _day_key(v: Viewer) -> str:
 
 def check(con, v: Viewer, eid: int | None = None, topic: str | None = None) -> None:
     """May I post to the Gallery (to this event's album, or about this topic)? Asked before the upload is decoded, and
-    again as it is saved. A topic is a photo of no event's alone."""
+    again as it is saved. A photo of no event says its topic; an event's never does."""
     if not on(v):
         raise ApiError("not_found")
-    if topic is not None and (eid is not None or topic not in TOPICS):
+    if (topic is None) == (eid is None) or topic is not None and topic not in TOPICS:  # one of the two, never both
         raise ApiError("bad_input", "topic")
     if eid is not None and _album_room(con, v, _event(con, v, eid)) <= 0:
         raise ApiError("forbidden")
@@ -105,8 +129,6 @@ def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None) ->
 def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None = None) -> dict:
     """A processed upload (media.save) into the Gallery under my name, and into the event's album when given; of no
     event, about a topic."""
-    # ponytail: no topic said is "other" (the picker before topics sends none); require it once every client sends one
-    topic = None if eid is not None and topic is None else topic or "other"
     with tx(con):
         check(con, v, eid, topic)
         f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], v.id)

@@ -72,7 +72,9 @@
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
-  sheets.album = (list, onremove, ongone, add, adding, look) => lazy(albumGrid, { list, onremove, ongone, add, adding, ...look });
+  sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
+  const galleryPage = () => import('./screens/afisha/Gallery.svelte');
+  sheets.gallery = (albums) => lazy(galleryPage, { albums });
   sheets.galleryAdd = (files) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
@@ -104,7 +106,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
@@ -547,7 +549,7 @@
   // The effect reads only the lists' references and data.kept (a tap's change inside a list): no deep read before the
   // paint; the JSON is made when the app is idle, and again as it goes to the background.
   // ponytail: a change deep inside a list that bumps no data.kept waits for the next reload or the background; bump it there if one matters
-  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.filter((p) => !p.pending).slice(0, 4), galleryPost: data.galleryPost, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
+  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.filter((p) => !p.pending).slice(0, 4), galleryAlbums: data.galleryAlbums.slice(0, 4), galleryPost: data.galleryPost, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
   const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
@@ -685,6 +687,7 @@
       session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       data.gallery = snap.gallery ?? [];
+      data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       localize(data); localize(session.me); // cached in another language, maybe
     }

@@ -1,33 +1,19 @@
 <script lang="ts">
-  // The Afisha's way into the Gallery (owner, Nov 9): the freshest photos on one wide card, a tap opens them all on the
-  // album's own grid. With GALLERY on, mine go in from that grid's first square: up to 10 from the phone, then one sheet
-  // (GalleryAdd: the preview, where to, Publish). Not a student, or nothing to show or do: no card.
+  // The Afisha's way into the Gallery (owner, Nov 9): the freshest photos on one wide card, a tap opens the Gallery
+  // (Gallery.svelte). Not a student, or nothing to show or do: no card.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import { data, deleteGallery, galleryGone, loadGallery } from '../../lib/state/data.svelte';
+  import { data } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import Card from '../../ui/Card.svelte';
 
   const pics = $derived(data.gallery.slice(0, 4));
-  let picker = $state<HTMLInputElement>();
-
-  function picked(e: Event) {
-    const el = e.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, 10); // at once, as the store takes
-    el.value = '';
-    if (files.length) sheets.galleryAdd(files);
-  }
-  function open() {
-    void loadGallery(true);
-    const post = !!data.galleryPost;
-    sheets.album(() => data.gallery, post ? deleteGallery : undefined, galleryGone, post ? () => picker?.click() : undefined, undefined,
-      { title: t('gallery.title'), note: post ? undefined : t('gallery.note') });
-  }
 </script>
 
 {#if session.me?.student && (pics.length || data.galleryPost)}
   <div class="gallery">
-    <Card onclick={open}>
+    <Card onclick={() => sheets.gallery()}>
       <span class="top"><b>{t('gallery.title')}</b><ChevronRight size={20} strokeWidth={2.2} /></span>
       {#if pics.length}
         <span class="pics" style:--n={pics.length}>
@@ -37,7 +23,6 @@
     </Card>
   </div>
 {/if}
-<input type="file" accept="image/*" multiple hidden bind:this={picker} onchange={picked} />
 
 <style>
   .gallery { margin-top: 22px; }

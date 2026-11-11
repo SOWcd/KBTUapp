@@ -33,7 +33,9 @@ def _jpeg(seed=0):
 
 
 def _post(c, who, seed=0, **params):
-    return c.post("/api/gallery", headers=tma(who), content=_jpeg(seed), params=params)
+    if "event" not in params:
+        params.setdefault("topic", "other")  # a photo of no event says its topic; topic=None: none said
+    return c.post("/api/gallery", headers=tma(who), content=_jpeg(seed), params={k: x for k, x in params.items() if x is not None})
 
 
 def _came(con, c, eid, who, code):
@@ -207,13 +209,40 @@ def test_topic_of_a_photo_of_no_event(env):
     assert files() == [] and not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()  # refused before the work
     for n, topic in enumerate(logic.gallery.TOPICS):
         assert _post(c, AL, n, topic=topic).json()["topic"] == topic
-    assert _post(c, AL, 8).json()["topic"] == "other"  # the picker before topics: none said
+    assert _post(c, AL, 8, topic=None).status_code == 400  # of no event and no topic said
+    assert len(_feed(c)) == len(logic.gallery.TOPICS)  # nothing of it stored
     ev = _post(c, AL, 9, event=eid).json()
     assert "topic" not in ev and ev["event"]["id"] == eid  # the event flow as before
     assert con.execute("SELECT topic FROM gallery_photos WHERE file_id = ?", (ev["id"],)).fetchone()[0] is None
     assert _post(c, 999, 1, topic="campus").status_code == 404  # not a student
     logic.gallery.MODE = "staff"
     assert _post(c, AL, 10, topic="campus").status_code == 404
+
+
+def test_albums_on_the_first_page(env):
+    """The shelf: each open event's album once, the one with the newest photo first, its count as I see it and its cover
+    (the event's own, else its newest photo); closed events and reported photos stay out; in one query."""
+    c, con, oid = _app(env)
+    a, b, closed = _event(con, c, oid, "A"), _event(con, c, oid, "B"), _event(con, c, oid, "Closed", visibility="members")
+    a1, a2 = _photo(con, a, c.ids[AL]), _photo(con, a, c.ids[AL])
+    b1 = _photo(con, b, c.ids[BO])
+    _photo(con, closed, c.ids[BO])
+    cover = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
+        VALUES ('cv', 'event_cover', 'image/webp', 1, 10, 10, 'cv', ?, ?, '#000000')""", (c.ids[HEAD], NOW)).lastrowid
+    con.execute("UPDATE events SET cover_file_id = ?, cover_focus = '0.5,0.2' WHERE id = ?", (cover, a))
+    _post(c, AL, 1, topic="campus")  # of no event: no album
+    got = c.get("/api/gallery", headers=tma(CY)).json()["albums"]
+    assert [(x["id"], x["title"], x["n"], x["cover"]["id"], x["cover"]["focus"]) for x in got] == [(b, "B", 1, b1, None), (a, "A", 2, cover, [0.5, 0.2])]
+    assert c.post("/api/reports", headers=tma(CY), json={"target": "photo", "id": a2, "reason": "rules"}).status_code == 204
+    assert [(x["id"], x["n"]) for x in c.get("/api/gallery", headers=tma(CY)).json()["albums"]] == [(b, 1), (a, 1)]  # gone for the reporter
+    for params in ({"topic": "events"}, {"before": 1 << 40}):
+        assert "albums" not in c.get("/api/gallery", headers=tma(CY), params=params).json()  # the first page of everything alone
+    assert "albums" not in c.get("/api/gallery", headers=tma(999)).json()  # a guest: nothing
+    seen = []
+    con.set_trace_callback(seen.append)
+    logic.gallery.albums(con, logic.core.Viewer(c.ids[CY], "user", True))
+    con.set_trace_callback(None)
+    assert len([q for q in seen if q.lstrip().upper().startswith(("SELECT", "WITH"))]) == 1
 
 
 def test_feed_mixes_both_newest_first_and_filters(env):

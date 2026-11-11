@@ -145,7 +145,9 @@ export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | '
 export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; topic?: GalleryTopic; at?: Ts; uid?: Id; pending?: boolean } // topic: a Gallery post of no event; by: who added it (nick or "First L."); event: in the Gallery; at, uid: a Gallery post's time and author (their profile); pending: mine, still uploading
 export type GalleryTopic = 'campus' | 'study' | 'life' | 'other'; // what a photo of no event is about (the server's gallery.TOPICS)
 export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
-export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
+/** An event's album on the Gallery's shelf: its cover (the event's own, else its newest photo) and how many photos I see in it. */
+export interface GalleryAlbum { id: Id; title: string; n: number; cover: Media; i18n?: GalleryEvent['i18n'] }
+export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; albums?: GalleryAlbum[] /* the first page of everything: newest first */; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
 
 /** An event's video (server video.py): our own compressed copy, its poster a photo; `error`: too_long | not_a_video. */
 export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'ready' | 'failed'; url: string | null; duration: number | null;
