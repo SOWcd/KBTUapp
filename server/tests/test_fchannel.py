@@ -421,7 +421,7 @@ def test_old_board_cleaned_up(env):
     con.execute("DROP TABLE chat_sync_ask")
     con.execute("DROP TABLE chat_sync")
     con.execute("ALTER TABLE member_tags DROP COLUMN sync")
-    con.execute("DROP TABLE gallery_photos")  # 150's (its reports rebuild runs again as is)
+    con.execute("DROP TABLE gallery_photos")  # 150's (its reports rebuild runs again as is), 157's topic column with it
     for t in ("appeal_staff", "appeal_consents", "appeal_sends", "appeal_authors", "appeals"):  # 149's
         con.execute(f"DROP TABLE IF EXISTS {t}")
     con.execute("DROP TRIGGER vol_access_gone")  # 148's
