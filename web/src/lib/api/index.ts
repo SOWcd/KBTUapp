@@ -8,7 +8,7 @@ import type { Graph } from '../route';
 
 export * from './types';
 export { ApiErr } from './errors';
-export { localize, original, staffEvents, translated } from './client';
+export { localize, original, staffEvents, staffOrg, translated } from './client';
 
 export interface Api {
   me(): Promise<Me>;

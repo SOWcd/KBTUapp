@@ -366,6 +366,20 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     return full(con, v, e)
 
 
+def staff_create_event(con, v: Viewer, oid: int, body: dict, via: str = "admin") -> dict:
+    """A club's draft made for it by the app's admin (Admin, X-Staff-Org) or the operator (kbtu.admin, via "server"):
+    v carries staff_org = oid. Every rule is create_event's; never the money (the club sets its price and Kaspi details
+    itself in Studio), whatever v's own role in the club. The owner's log names who, the club and the event."""
+    if v.role != "admin" or v.staff_org != oid:
+        raise ApiError("forbidden", "staff")
+    if any(body.get(k) is not None for k in ("price", "payToName", "payPhone", "freeFirst")):
+        raise ApiError("forbidden", "price")
+    with tx(con):
+        e = create_event(con, v, oid, body)
+        log_action(con, v.id, "staff_create", f"event:{e['id']}", json.dumps({"org": oid, "via": via}))
+    return e
+
+
 SLIDES = 9   # photos after the cover (PLAN 33): ten in all, as an Instagram or TikTok photo post
 
 

@@ -229,8 +229,8 @@ def _rights(con, v: Viewer) -> dict[int, frozenset[str]]:
 
 
 def organizes(con, v: Viewer) -> bool:
-    """Runs events in some club: may upload covers and photos."""
-    return any("events" in r for r in _rights(con, v).values())
+    """Runs events in some club: may upload covers and photos. Or the admin making a club's event (X-Staff-Org)."""
+    return bool(v.staff_org) or any("events" in r for r in _rights(con, v).values())
 
 
 def _roles(con, v: Viewer) -> dict[int, str]:

@@ -105,6 +105,16 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         raise ApiError("forbidden", "init_data")
     request.state.tg = tg
     v = _upsert(con, tg, cfg.admins)
+    if (oid := request.headers.get("x-staff-org")) is not None:
+        # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
+        # without a role in it. Only these two routes; the draft is then run through X-Staff-Event like any other
+        o = logic.one(con, "SELECT id FROM orgs WHERE id = ?", int(oid)) if oid.isascii() and oid.isdigit() and len(oid) < 12 else None
+        route = (request.method, request.scope["route"].path)
+        if v.role != "admin" or not o or "x-staff-event" in request.headers or not (
+                route == ("POST", "/api/photos") or route == ("POST", "/api/orgs/{oid}/events") and str(request.path_params.get("oid")) == oid):
+            raise ApiError("forbidden", "staff")
+        yield Viewer(v.id, v.role, v.student, staff_org=o["id"])
+        return
     if (eid := request.headers.get("x-staff-event")) is None:
         yield v
         return
@@ -971,7 +981,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/orgs/{oid}/events")
     def create_event(oid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.create_event(con, v, oid, body if board_on(app.state.cfg, v) else {k: x for k, x in body.items() if k != "form"})  # questions: BOARD's policy
+        body = body if board_on(app.state.cfg, v) else {k: x for k, x in body.items() if k != "form"}  # questions: BOARD's policy
+        return (logic.staff_create_event if v.staff_org else logic.create_event)(con, v, oid, body)
 
     @app.patch("/api/events/{eid}")
     def update_event(eid: int, con: Con, v: Me, body: dict = Body(...)):

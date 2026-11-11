@@ -20,7 +20,11 @@ function first(path: string): Promise<Response> | undefined {
 /** Events the admin opened from Admin: their own routes go as their organizers' (server app.viewer, X-Staff-Event),
  *  each write in the owner's log. Only Admin adds to it. */
 export const staffEvents = new Set<Id>();
-const staffOf = (path: string): Record<string, string> => {
+/** Admin → "an event for a club": while that editor is open, the new event and its cover go as the admin's for this club
+ *  (server app.viewer, X-Staff-Org: those two routes alone). Only that editor sets it. */
+export const staffOrg = { id: 0 as Id };
+const staffOf = (method: string, path: string): Record<string, string> => {
+  if (staffOrg.id && method === 'POST' && (path === '/photos' || path === `/orgs/${staffOrg.id}/events`)) return { 'X-Staff-Org': String(staffOrg.id) };
   const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
   return id && staffEvents.has(+id) ? { 'X-Staff-Event': id } : {};
 };
@@ -31,7 +35,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(path), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(method, path), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     }));
   } catch {

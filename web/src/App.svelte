@@ -107,7 +107,7 @@
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
-  sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
+  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
   sheets.scanner = (id, names, qr) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)

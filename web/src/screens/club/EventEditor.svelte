@@ -42,16 +42,17 @@
   import Row from '../../ui/Row.svelte';
   import Field from '../../ui/Field.svelte';
   import Notice from '../../ui/Notice.svelte';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Tag from '../../ui/Tag.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import type { MenuItem } from '../../ui/menu';
   import { check, type Finding } from '../../lib/eventCheck';
-  import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type Video } from '../../lib/api';
+  import { api, ApiErr, original, staffEvents, staffOrg, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type Video } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import { nameOf } from '../../lib/short';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, studioChanged, phrase } from '../../lib/state/data.svelte';
+  import { data, eventById, studioChanged, phrase } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -70,7 +71,11 @@
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
 
-  let { overlay, org, id }: { overlay: Overlay; org: Id; id?: Id } = $props();
+  // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
+  // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
+  // its money, its videos or the AI's fill, which stay the club's own
+  let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
+  $effect(() => { if (!staff) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
@@ -92,7 +97,7 @@
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
-  const canPrice = $derived((full || !!saved?.price) && may(mine, 'money'));
+  const canPrice = $derived(!staff && (full || !!saved?.price) && may(mine, 'money'));
   // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
   const canPartner = $derived(full || oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
@@ -364,6 +369,7 @@
     try {
       const first = !saved;
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
+      if (first && staff) staffEvents.add(e.id); // from here on it is run as Admin runs any event
       if (first) saved = e; // a later step may fail: the retry is an edit of this one (a changed cover too), never a second event
       if (first && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
       const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
@@ -376,6 +382,7 @@
       if (kind === 'publish') { burst(); say(pub?.told === undefined || !initiative ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
       else say(kind === 'draft' ? phrase('say.draftSaved') : moved ? t('say.eventMoved') : phrase('say.eventSaved'), 'sparkles_3d');
       close(overlay.id);
+      if (staff) { if (!eventById(e.id)) data.opened.push(e); sheets.manage(e.id, true); } // on to Admin's own view of it
     } catch (x) {
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
@@ -553,7 +560,8 @@
       <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
       <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
-    {#if !id && session.board}
+    {#if staff}<Notice icon={ShieldCheck} title={clubNames[0]} text={t('mg.asStaff')} />{/if}
+    {#if !id && session.board && !staff}
       <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
     {/if}
 
@@ -611,7 +619,7 @@
     </Group>
 
     <Group caption={t('ex.more')}>
-      <Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />
+      {#if !staff}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
       {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}

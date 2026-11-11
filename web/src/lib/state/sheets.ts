@@ -60,7 +60,7 @@ export const sheets = {
   galleryAdd: (_files: File[]) => {},
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
-  editor: (_org: Id, _id?: Id) => {},
+  editor: (_org: Id, _id?: Id, _staff?: boolean) => {}, // staff: Admin's "an event for a club"
   scanner: (_id: Id, _names?: boolean, _qr?: boolean) => {}, // names: a club's own event, marked by name (no tickets); qr: its switch to the event's QR (EventQr)
   // only: a scanner-only door helper (server crew.py): tickets, no list by name
   scannerOnly: (_id: Id) => {},

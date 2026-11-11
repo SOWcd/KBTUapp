@@ -68,6 +68,12 @@
                                 (Heads and up of every club; Almaty time), published as DMP by the creator, which invites them at once; prints its id
   .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
                                 students), once each, an hour before; --test: to the creator now; no flag: counts
+  .venv/bin/python -m kbtu.admin event create <club slug> < event.json   a club's event made for it, no role given: one JSON object,
+                                the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, guestHost,
+                                externalUrl, ...) and "cover": "<base64 jpg/png>"; a DRAFT by the creator, never a price (the
+                                club sets it in Studio), in the audit log; prints `draft <id>`
+  .venv/bin/python -m kbtu.admin event publish <event id>   that draft (any draft) out by the usual rules (followers hear by
+                                the weekly rule), in the audit log; prints `published <id>`
   .venv/bin/python -m kbtu.admin casting from-event <event id> "<YYYY-MM-DD HH:MM>"   its text, cover and place as the club's offline casting, from now to that time (Almaty); tells nobody
   .venv/bin/python -m kbtu.admin fill-categories               clubs with no category get one from the AI (name and description only)
   .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
@@ -117,6 +123,9 @@ _UNSAFE, _print = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u
 
 def print(*a, **k) -> None:  # noqa: A001
     _print(*(_UNSAFE.sub("?", str(x)) for x in a), **k)
+
+
+EVENT_STDIN = 8 << 20  # `event create`: the JSON with its cover in base64
 
 
 def _user(con, who: str):
@@ -508,6 +517,46 @@ def main(args: list[str]) -> None:
                                           "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head"})
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
+    elif cmd == "event" and len(args) == 3 and args[1] in ("create", "publish"):
+        import base64
+        from . import media
+        from .logic import add_photo, publish_event, staff_create_event
+        boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
+        if not boss:
+            sys.exit("needs the creator (`founder`)")
+        try:
+            if args[1] == "publish":
+                e = one(con, "SELECT org_id FROM events WHERE id = ?", int(args[2])) if args[2].isascii() and args[2].isdigit() else None
+                if not e:
+                    sys.exit("no such event")
+                with db.tx(con):
+                    publish_event(con, Viewer(boss[0], "admin", True, staff_org=e["org_id"]), int(args[2]))
+                    log_action(con, boss[0], "staff_event", f"event:{int(args[2])}", json.dumps({"do": "publish", "via": "server"}))
+                print(f"published {int(args[2])}")
+                return
+            org = one(con, "SELECT id FROM orgs WHERE slug = ?", args[2])
+            if not org:
+                sys.exit(f"no club {args[2]!r} (see `orgs`)")
+            raw = sys.stdin.buffer.read(EVENT_STDIN + 1)
+            try:
+                body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
+            except ValueError:  # not JSON, not UTF-8
+                body = None
+            if not isinstance(body, dict):
+                sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
+            v, cover = Viewer(boss[0], "admin", True, staff_org=org[0]), body.pop("cover", None)
+            if cover is not None:  # as an upload: POST /api/photos, then the editor's coverId
+                try:
+                    data = base64.b64decode(cover, validate=True)
+                    if not data or len(data) > media.MAX_BYTES:
+                        raise ValueError
+                    saved = media.save(data, Path(cfg.db_path).resolve().parent / "media")
+                except (TypeError, ValueError, media.BadImage):
+                    sys.exit("cover: not a base64 picture")
+                body["coverId"] = add_photo(con, v, saved)["id"]
+            print(f"draft {staff_create_event(con, v, org[0], body, 'server')['id']}")
+        except ApiError as exc:  # the code alone: its message may be a field's name, never the event's words
+            sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
     elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():
         # a club that made its offline casting an event (owner, Nov 9): the same words, cover and place as a casting post, from now on.
         # Silent: a club's own casting tells its followers, this one was never asked to
