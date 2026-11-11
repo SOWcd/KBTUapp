@@ -330,7 +330,9 @@ def _door_view(con, s, lead: bool) -> dict:
     if lead:
         r = one(con, "SELECT user_id FROM vol_hands WHERE session_id = ? AND revoked_at IS NULL AND created_at > ?", s["id"], now() - HAND_MAX)
         hand = r and {"holder": r[0] and _names(con, [r]).get(r[0])}
-    return {"session": s["id"], "lead": lead, "ended": s["ended_at"], "hand": hand,
+    # the link's holder: who handed the door to them
+    by = None if lead else one(con, "SELECT made_by AS user_id FROM vol_hands WHERE session_id = ? AND revoked_at IS NULL", s["id"])
+    return {"session": s["id"], "lead": lead, "ended": s["ended_at"], "hand": hand, "by": by and by[0] and _names(con, [by]).get(by[0]),
             "unmarked": [{"id": h["hid"], "name": _name(h, who.get(h["user_id"])), "person": who.get(h["user_id"]), "inAt": h["in_at"], "outAt": h["out_at"],
                           "end": _end(h["in_at"], s["ended_at"], s["id"], s["started_at"])} for h in hs]}
 
@@ -554,9 +556,10 @@ def person(con, v: Viewer, vid: int | None) -> dict:
     why = {r[0]: r[1] for r in rows(con, "SELECT ref, reason FROM vol_edits WHERE vol_id = ? AND what = 'shift' AND json_extract(new, '$.gone') ORDER BY id", vid)}
     out["shifts"] = [{"id": h["id"], "session": h["session_id"], "title": h["title"], "inAt": h["in_at"],
                       "outAt": h["out_at"] and _end(h["in_at"], h["out_at"], h["session_id"], h["started_at"]),
-                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None, "unmarked": h["id"] in unm,
+                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None, "unmarked": h["id"] in unm, "team": bool(h["team"]),
                       **({"goneReason": why.get(h["id"], "")} if h["gone_at"] is not None else {})}
-                     for h in rows(con, """SELECT h.*, s.title, s.started_at FROM vol_shifts h LEFT JOIN qr_sessions s ON s.id = h.session_id
+                     for h in rows(con, """SELECT h.*, s.title, s.started_at, EXISTS (SELECT 1 FROM vol_meets m WHERE m.session_id = h.session_id AND m.team = 1) AS team
+                        FROM vol_shifts h LEFT JOIN qr_sessions s ON s.id = h.session_id
                         WHERE h.vol_id = ? ORDER BY h.in_at DESC""", vid)]
     out["missed"] = [{"session": r[1], "title": r[2], "at": r[3]} for r in _missed(con, org, vid)]
     out["manual"] = [{"id": r["id"], "n": r["n"], "session": r["session_id"], "at": r["at"]}

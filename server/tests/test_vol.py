@@ -672,6 +672,7 @@ def test_the_door_handed_over_by_a_link(zz):
     assert _shift(con, u3, sid)["out_at"] == end
     door = c.get(f"/api/vol/meets/{sid}/door", headers=tma(3)).json()
     assert [x["id"] for x in door["unmarked"]] == [h4["id"]] and door["hand"] is None and not door["lead"]
+    assert door["by"]["id"] == _uid(c, P)                                                       # who handed it to me
     assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(3), json={"left": end - 60}).status_code == 200
     assert c.post(f"/api/vol/meets/{sid}/hand", headers=tma(P)).status_code == 409      # finished: no new link
     # it ends GRACE after Finish

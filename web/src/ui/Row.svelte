@@ -10,7 +10,8 @@
   //   title      17 px (menu-like rows: Settings, the admin hub, pickers); dense: 15/600 for data rows (classes,
   //              events, people), 44 high without a tile. It wraps, never "…"
   //   subtitle   a second grey line: CONTENT only (a person's course, an event's time), never a hint
-  //   value      grey, before the end mark ("Russian", "2/3")
+  //   value      grey, before the end mark ("Russian", "2/3");  whole: it never gives way, the title and subtitle wrap
+  //              instead (a number that means nothing cut: "3 h 45 min")
   //   icon       a plain grey line glyph, Settings' row exactly (base.css: 20 px icon in 24, 50 high, the line from
   //              the label); the default for forms and lists;  with tile: a 30 px tile of one flat colour with a white glyph (Settings' top level only);
   //              lead: anything else at the start (an avatar, a content emoji, a club's logo)
@@ -37,14 +38,14 @@
   import { t } from '../lib/i18n/index.svelte';
 
   type Props = {
-    title: string; subtitle?: string; value?: string; dense?: boolean;
+    title: string; subtitle?: string; value?: string; whole?: boolean; dense?: boolean;
     icon?: Component<any>; tile?: Tile; placeholder?: string; invalid?: boolean; lead?: Snippet; detail?: Snippet; count?: number;
     accessory?: 'chevron' | 'external' | 'check' | 'switch' | 'disclosure' | 'none';
     checked?: boolean; open?: boolean; menu?: MenuItem[]; trailing?: Snippet;
     tone?: 'action' | 'add' | 'destructive'; disabled?: boolean;
     onclick?: (e: MouseEvent) => void; onchange?: (on: boolean) => void;
   };
-  let { title, subtitle, value, dense = false, icon: Icon, tile, placeholder, invalid = false, lead, detail, count = 0, accessory = 'none', checked = false, open = false,
+  let { title, subtitle, value, whole = false, dense = false, icon: Icon, tile, placeholder, invalid = false, lead, detail, count = 0, accessory = 'none', checked = false, open = false,
     menu, trailing, tone, disabled = false, onclick, onchange }: Props = $props();
 
   const id = `row${++seq}`;
@@ -62,7 +63,7 @@
   {:else if Icon && tile}<span class="tile" style:background="var(--tile-{tile})"><Icon size={18} strokeWidth={2.2} /></span>
   {:else if Icon}<span class="li"><Icon size={20} strokeWidth={2} /></span>
   {:else if lead}<span class="lead">{@render lead()}</span>{/if}
-  <span class="body" class:hv={!!shown || !!menu}>
+  <span class="body" class:hv={(!!shown || !!menu) && !whole} class:whole>
     <span class="txt"><span class="tt" class:ph={!title} {id}>{title || placeholder}</span>{#if subtitle}<span class="st">{subtitle}</span>{/if}</span>
     {#if detail}<span class="end">{@render detail()}</span>{/if}
     {#if menu}
@@ -111,6 +112,7 @@
   .st { font: 450 var(--fs-body)/1.3 var(--font-text); letter-spacing: -0.008em; color: var(--text-3); overflow-wrap: break-word; }
   .dense .st { font: 450 var(--fs-sub)/1.3 var(--font-text); letter-spacing: 0; }
   .val { flex: 0 1 auto; min-width: 0; margin-left: auto; color: var(--text-3); font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .whole .val, .whole .menu { flex: none; }
   .tile { flex: none; width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--on-accent); }
   .li { flex: none; width: 24px; display: grid; place-items: center; color: var(--text-2); }
   .ph { color: var(--text-3); }

@@ -56,7 +56,7 @@
       <Group caption={tn('ledg.count', v.people.length)}>
         {#each people as p (p.id)}
           <Row dense title={p.name || (p.tg ? '@' + p.tg : '—')} subtitle={[p.person ? null : t('ledg.noAccount'), p.misses ? tn('ledg.misses', p.misses) : null, p.unmarked ? t('ledg.unmarkedN', { n: p.unmarked }) : null].filter(Boolean).join(' · ') || undefined}
-            value={duration(p.minutes * 60)} accessory="chevron" onclick={() => sheets.volPerson(p.id)}>
+            value={duration(p.minutes * 60)} whole accessory="chevron" onclick={() => sheets.volPerson(p.id)}>
             {#snippet lead()}{#if p.person}<Avatar person={p.person} size={32} tappable={false} />{:else}<span class="blank" aria-hidden="true"></span>{/if}{/snippet}
           </Row>
         {:else}
@@ -67,8 +67,8 @@
       {#if v.meets.length}
         <Group caption={t('ledg.meets')} footnote={v.edit ? t('ledg.teamNote') : undefined}>
           {#each v.meets as m (m.session)}
-            <Row dense title={m.title} subtitle={[dayMonth(m.at), t('ledg.marked', { m: m.marked, n: m.expected }), m.held ? t('ledg.held') : null].filter(Boolean).join(' · ')}
-              value={!v.edit && m.team ? t('ledg.team') : undefined} accessory={v.edit ? 'switch' : 'none'} checked={m.team} onchange={(on) => team(m.session, on)} />
+            <Row dense title={m.title} subtitle={[dayMonth(m.at), t('ledg.marked', { m: m.marked, n: m.expected }), m.team ? t('ledg.team') : null, m.held ? t('ledg.held') : null].filter(Boolean).join(' · ')}
+              accessory={v.edit ? 'switch' : 'none'} checked={m.team} onchange={(on) => team(m.session, on)} />
             <!-- who left without checking out waits for the President's or Vice's answer: the session's door -->
             {#if v.edit && m.unresolved}<Row dense tone="action" title={t('ledg.unresolvedN', { n: m.unresolved })} accessory="chevron" onclick={() => sheets.volDoor(m.session, m.title)} />{/if}
           {/each}

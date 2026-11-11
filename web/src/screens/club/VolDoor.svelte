@@ -91,7 +91,7 @@
             {:else}
               <div class="acts">
                 <Button kind="secondary" size="m" full onclick={() => answer(x, null)}>{t('ledg.tillEnd')}</Button>
-                <Button kind="secondary" size="m" full onclick={() => { haptic.tap(); hm = ''; pick = x.id; }}>{t('ledg.leftAt')}</Button>
+                <Button kind="secondary" size="m" full onclick={() => { haptic.tap(); hm = time(x.end); pick = x.id; }}>{t('ledg.leftAt')}</Button>
               </div>
             {/if}
           {:else}
@@ -137,9 +137,11 @@
 <style>
   .body { display: flex; flex-direction: column; gap: var(--s-4); margin-top: var(--s-2); }
   .blank { display: block; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); }
-  .acts { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); }
+  /* a pair side by side while whole labels fit, else a line each (320 px) */
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); }
+  .acts :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }
   .own { padding: 0 var(--s-4) var(--s-3); }
   /* Field's look for the time input it can't take (as MemoAsks) */
-  .at { flex: 1 1 0; min-width: 0; min-height: var(--ctl-m); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+  .at { flex: 1 1 9em; min-width: 0; min-height: var(--ctl-m); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
     font: 450 var(--fs-row)/1.35 var(--font-text); }
 </style>

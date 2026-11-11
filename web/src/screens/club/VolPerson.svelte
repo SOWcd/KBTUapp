@@ -74,6 +74,7 @@
     s.gone ? { label: t('ledg.restore'), onselect: () => void gone(s, false) } : { label: t('ledg.remove'), destructive: true, onselect: () => void gone(s, true) },
   ];
   const span = (s: VolShift) => `${dayMonth(s.inAt)}, ${time(s.inAt)}–${s.outAt ? time(s.outAt) : '…'}`;
+  const foot = $derived(p ? [p.misses ? tn('ledg.misses', p.misses) : null, p.unmarked ? t('ledg.unmarkedN', { n: p.unmarked }) : null, p.tg && !mine ? '@' + p.tg : null].filter(Boolean).join(' · ') : '');
   const editName = (what: string) => t(('ledg.e.' + what) as Key);
 </script>
 
@@ -83,7 +84,7 @@
       <div class="hero">
         {#if p.person && !mine}<Avatar person={p.person} size={44} tappable={false} />{/if}
         <span class="txt"><b class="num">{duration(p.minutes * 60)}</b>
-          <span class="t-foot">{tn('ledg.misses', p.misses)}{p.unmarked ? ' · ' + t('ledg.unmarkedN', { n: p.unmarked }) : ''}{p.tg && !mine ? ' · @' + p.tg : ''}</span></span>
+          {#if foot}<span class="t-foot">{foot}</span>{/if}</span>
       </div>
 
       {#if edit}
@@ -118,8 +119,8 @@
       {#if p.shifts.length}
         <Group caption={t('ledg.shifts')} footnote={p.open ? t('ledg.openNote') : undefined}>
           {#each p.shifts as s (s.id)}
-            <Row dense title={s.title ?? t('ledg.byHand')} subtitle={[span(s), s.byHand && s.title && !s.unmarked ? t('ledg.byHand') : null, s.unmarked ? t('ledg.unmarkedTag') : null, s.gone ? t('ledg.removed') + (s.goneReason ? ': ' + s.goneReason : '') : null].filter(Boolean).join(' · ')}
-              value={s.gone ? undefined : s.outAt ? duration(s.outAt - s.inAt) : t('ledg.noOut')} menu={edit ? shiftMenu(s) : undefined} />
+            <Row dense title={s.title ?? t('ledg.byHand')} subtitle={[span(s), s.byHand && s.title && !s.unmarked ? t('ledg.byHand') : null, s.unmarked ? t('ledg.unmarkedTag') : null, s.team && !s.gone ? t('ledg.teamTag') : null, s.gone ? t('ledg.removed') + (s.goneReason ? ': ' + s.goneReason : '') : null].filter(Boolean).join(' · ')}
+              value={s.gone || s.team ? undefined : s.outAt ? duration(s.outAt - s.inAt) : t('ledg.noOut')} whole menu={edit ? shiftMenu(s) : undefined} />
           {/each}
         </Group>
       {/if}

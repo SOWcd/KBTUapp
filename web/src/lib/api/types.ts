@@ -713,10 +713,10 @@ export interface AskInput { kind: Ask['kind']; title: string; body: string; skil
  *  unmarked: shifts I left without checking out of (someone answered for them after Finish). edit: the President or a Vice. */
 export interface VolMe { org: Id; ledger: boolean; edit: boolean; mine: { id: Id; minutes: number; open: number; misses: number; unmarked: number } | null }
 export interface VolRow { id: Id; name: string; tg: string | null; person: PersonRef | null; minutes: number; open: number; misses: number; unmarked: number }
-export interface VolShift { id: Id; session: Id | null; title: string | null; inAt: Ts; outAt: Ts | null; byHand: boolean; gone: boolean; unmarked: boolean; goneReason?: string /* taken out: why, shown to its volunteer too */ }
+export interface VolShift { id: Id; session: Id | null; title: string | null; inAt: Ts; outAt: Ts | null; byHand: boolean; gone: boolean; unmarked: boolean; team: boolean /* a teambuilding's: no hours */; goneReason?: string /* taken out: why, shown to its volunteer too */ }
 /** One session's door, for who runs it (the President, a Vice, the hand-over link's holder). unmarked: after Finish, every
  *  shift nobody checked out of (outAt null: still to answer for; answered: the President or a Vice may change it), for a week. hand (lead only): the live link, and who opened it. */
-export interface VolDoor { session: Id; lead: boolean; ended: Ts | null; hand: { holder: PersonRef | null } | null;
+export interface VolDoor { session: Id; lead: boolean; ended: Ts | null; hand: { holder: PersonRef | null } | null; by: PersonRef | null /* the holder's view: who handed the door to them */;
   unmarked: { id: Id; name: string; person: PersonRef | null; inAt: Ts; outAt: Ts | null; end: Ts /* the latest it may end: Finish, 12 h at most */ }[] }
 export interface VolEdit { what: string; ref: Id | null; old: unknown; new: unknown; reason: string; at: Ts; by: Id | null }
 export interface VolPerson extends VolRow {
