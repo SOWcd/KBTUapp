@@ -866,14 +866,14 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
     if not v.student:
         return {"photos": [], "canAddPhotos": False}
     head = can(con, v, e["org_id"], "events")
-    # at: when it was taken (a Gallery post's EXIF), uid: a Gallery post's author, posted under their name (gallery.py)
-    ps = rows(con, f"""SELECT f.*, p.added_by, g.user_id AS poster, COALESCE(g.taken_at, f.created_at) AS at, s.first_name, s.last_name, u.nick
+    # a Gallery post: its author (posted under their name, gallery.py) and when it was posted
+    ps = rows(con, f"""SELECT f.*, p.added_by, g.user_id AS poster, g.created_at AS posted, s.first_name, s.last_name, u.nick
         FROM event_photos p JOIN files f ON f.id = p.file_id LEFT JOIN gallery_photos g ON g.file_id = p.file_id
         LEFT JOIN users u ON u.id = p.added_by LEFT JOIN students s ON s.user_id = p.added_by WHERE p.event_id = ?
         AND {PHOTO_SHOWN}
         ORDER BY p.sort""", e["id"], v.id)
-    return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": _photo_by(f), "mine": f["added_by"] == v.id, "at": f["at"],
-                        **({"uid": f["poster"]} if f["poster"] else {})} for f in ps],
+    return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": _photo_by(f), "mine": f["added_by"] == v.id,
+                        **({"uid": f["poster"], "at": f["posted"]} if f["poster"] else {})} for f in ps],
             "canAddPhotos": _album_room(con, v, e) > 0}
 
 
@@ -920,7 +920,8 @@ def remove_album_photo(con, v: Viewer, eid: int, fid: int) -> tuple[dict, list[s
     if p["added_by"] != v.id and v.role != "admin" and not can(con, v, e["org_id"], "events"):
         raise ApiError("forbidden")
     con.execute("DELETE FROM event_photos WHERE event_id = ? AND file_id = ?", (eid, fid))
-    con.execute("DELETE FROM gallery_photos WHERE file_id = ? AND event_id = ?", (fid, eid))  # a Gallery post of this event: out of the Gallery too
+    # a student's Gallery post of this event stays theirs: a plain KBTU photo now
+    con.execute("UPDATE gallery_photos SET event_id = NULL WHERE file_id = ? AND event_id = ?", (fid, eid))
     return full(con, v, e), _drop_unused(con, fid)
 
 

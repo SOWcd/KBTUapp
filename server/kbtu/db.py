@@ -1466,14 +1466,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;"""),
     # (Nov 11) the Gallery (logic/gallery.py): a photo a student posted under their name, of KBTU or of an event they went
-    # to (that one is in its album too, event_photos); taken_at from the photo's EXIF, read before re-encoding strips it.
+    # to (that one is in its album too, event_photos).
     # And a photo's two report reasons ("breaks the rules", "I'm in it and against it"): the CHECK takes them, rebuilt as 114.
     # renumbered at ship: other branches take 150-152 too
     (150, """CREATE TABLE gallery_photos (
       file_id    INTEGER PRIMARY KEY REFERENCES files(id),
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      event_id   INTEGER REFERENCES events(id) ON DELETE CASCADE,
-      taken_at   INTEGER NOT NULL,
+      event_id   INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- its event gone: still the student's, a plain KBTU photo
       created_at INTEGER NOT NULL) STRICT;
     CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
     CREATE TABLE reports6 (

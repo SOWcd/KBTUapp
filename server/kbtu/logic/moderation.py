@@ -127,9 +127,9 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    # a photo's own two (the Gallery): "breaks the rules", "I'm in it and against it"
+    # a photo's own two with the Gallery on (GALLERY): "breaks the rules", "I'm in it and against it"
     if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") \
-            or reason not in (("rules", "me") if target == "photo" else ()) + ("spam", "insult", "danger", "other") \
+            or reason not in (("rules", "me") if target == "photo" and gallery.on(v) else ()) + ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
@@ -274,8 +274,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                 con.execute("UPDATE comments SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL", (core.now(), v.id, tid))
             elif target in ("post", "event"):
                 con.execute(f"UPDATE {target}s SET hidden_at = ? WHERE id = ? AND hidden_at IS NULL", (core.now(), tid))
-            elif target == "photo" and gallery.is_post(con, tid):  # a Gallery post: Delete erases it, its files too (owner, Nov 11)
-                photos = gallery.erase(con, tid)
+            elif target == "photo" and gallery.take_down(con, tid):  # a Gallery post: out, kept 30 days for an undo like an album photo
+                pass
             elif target == "photo":  # out of the album; the row and the file kept 30 days for an undo (purge_takedowns)
                 for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
@@ -356,7 +356,9 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             k = one(con, "DELETE FROM takedowns WHERE id = (SELECT MAX(id) FROM takedowns WHERE target = ? AND target_id = ?) RETURNING *", target, tid)
             n = 1 if k else 0
             d = json.loads(k["data"]) if k else {}
-            if k and target == "photo" and one(con, "SELECT 1 FROM events WHERE id = ?", d["event_id"]):
+            if k and target == "photo" and "gallery" in d:  # a Gallery post (gallery.take_down)
+                gallery.restore(con, d)
+            elif k and target == "photo" and one(con, "SELECT 1 FROM events WHERE id = ?", d["event_id"]):
                 con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",
                             (d["event_id"], d["file_id"], d["sort"], d["added_by"]))
             elif k and target == "user":

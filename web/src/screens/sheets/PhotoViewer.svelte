@@ -18,6 +18,7 @@
   import type { AlbumPhoto } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { data } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { glass } from '../../ui/glass';
@@ -202,7 +203,7 @@
 
   async function remove() {
     const p = list[at];
-    if (!p || !onremove || !(await sheets.ask({ title: t('album.removeAsk'), ok: t('album.remove'), cancel: t('common.cancel'), danger: true }))) return;
+    if (!p || !onremove || !(await sheets.ask({ title: t(data.galleryPost ? 'gallery.deleteAsk' : 'album.removeAsk'), ok: t(data.galleryPost ? 'gallery.delete' : 'album.remove'), cancel: t('common.cancel'), danger: true }))) return;
     const left = await onremove(p);
     if (!left) return;
     haptic.soft();
@@ -215,7 +216,7 @@
     if (!p) return;
     menu(e.currentTarget as Element, [
       ...(!p.mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),
-      ...(onremove && p.canDelete ? [{ label: t('album.remove'), icon: Trash, destructive: true, onselect: remove }] : []),
+      ...(onremove && p.canDelete ? [{ label: t('gallery.delete'), icon: Trash, destructive: true, onselect: remove }] : []),
     ], 'end');
   }
   // the day it was taken; the year too when it isn't this one
@@ -264,8 +265,14 @@
         {#if p.by || p.at}<p>{#if p.by && p.uid}{@const uid = p.uid}<button class="who" onclick={() => sheets.person(uid)}>{p.by}</button>{:else if p.by}{p.by}{/if}{#if p.by && p.at}{' · '}{/if}{#if p.at}{when(p.at)}{/if}</p>{/if}
       </div>
     {/if}
-    {#if list[at] && (!list[at].mine || (onremove && list[at].canDelete))}
-      <button class="tool r glass glass-pill" use:glass aria-label={t('common.more')} onclick={more}><Ellipsis size={22} /></button>
+    {#if data.galleryPost}
+      {#if list[at] && (!list[at].mine || (onremove && list[at].canDelete))}
+        <button class="tool r glass glass-pill" use:glass aria-label={t('common.more')} onclick={more}><Ellipsis size={22} /></button>
+      {/if}
+    {:else}
+      <!-- the Gallery off (GALLERY): report and remove at the ×'s sides, as before -->
+      {#if list[at] && !list[at].mine}<button class="tool l glass glass-pill" use:glass aria-label={t('cm.report')} onclick={report}><Flag size={20} /></button>{/if}
+      {#if onremove && list[at]?.canDelete}<button class="tool r glass glass-pill danger" use:glass aria-label={t('album.remove')} onclick={remove}><Trash size={20} /></button>{/if}
     {/if}
   </div>
   <div class="chrome" class:off={!chrome || !!dy}><CloseX onclick={() => close(overlay.id)} /></div>
@@ -302,13 +309,15 @@
   .ev { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; font: 600 var(--fs-body)/1.2 var(--font-text); color: inherit; text-shadow: inherit; }
   .ev > :global(svg) { flex: none; opacity: 0.7; }
   .ev:active { opacity: 0.6; }
-  .who { display: inline; padding: 0; font: inherit; color: #fff; text-shadow: inherit; }
+  .who { display: inline; padding: 0; font: inherit; color: inherit; text-shadow: inherit; }
   .who:active { opacity: 0.6; }
   /* ⋯ (report, delete) at the ×'s side, as the phone's toolbar */
   .tool { position: absolute; bottom: calc(var(--safe-bottom) + 20px); width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-full);
     color: #fff; background-color: rgba(255, 255, 255, 0.12); }
   .tool > :global(svg) { position: relative; }
+  .tool.l { left: 24px; }
   .tool.r { right: 24px; }
   .tool:active { transform: scale(0.94); }
+  .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
   @media (prefers-reduced-motion: reduce) { .pic, .chrome { transition: none; } }
 </style>

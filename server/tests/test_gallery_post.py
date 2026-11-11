@@ -1,6 +1,6 @@
 """Posting to the Gallery (logic/gallery.py, GALLERY): KBTU's own photos beside the albums, under the author's name, at
-once; an event only one I went to; 30 a day; three people's reports hide a photo, the reporter's at once; a moderator's
-Delete and my own erase the files; my account's deletion takes my photos and their reports."""
+once; an event's album only on the album's own rules; 30 uploads a day (attempts); three people's reports hide a photo,
+the reporter's at once; a moderator's Delete is kept 30 days for an undo; my own Delete and my account's deletion erase."""
 from __future__ import annotations
 
 import dataclasses
@@ -12,7 +12,7 @@ from PIL import Image
 
 from kbtu import app as server, db, logic
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
-from test_gallery import ADMIN, AL, BO, CY, HEAD, NOW, _event, _ids
+from test_gallery import ADMIN, AL, BO, CY, HEAD, NOW, _event, _ids, _photo
 
 
 def _app(env, mode="all"):
@@ -26,21 +26,23 @@ def _app(env, mode="all"):
     return c, con, oid
 
 
-def _jpeg(seed=0, taken=None):
-    raw, ex = io.BytesIO(), Image.Exif()
-    if taken:
-        ex.get_ifd(0x8769)[36867] = taken
-    Image.new("RGB", (64, 48), (seed % 256, 90, 160)).save(raw, "JPEG", exif=ex.tobytes())
+def _jpeg(seed=0):
+    raw = io.BytesIO()
+    Image.new("RGB", (64, 48), (seed * 23 % 256, seed * 7 % 256, 160)).save(raw, "JPEG")  # far apart: near colours encode alike
     return raw.getvalue()
 
 
-def _post(c, who, seed=0, taken=None, **params):
-    return c.post("/api/gallery", headers=tma(who), content=_jpeg(seed, taken), params=params)
+def _post(c, who, seed=0, **params):
+    return c.post("/api/gallery", headers=tma(who), content=_jpeg(seed), params=params)
 
 
-def _going(con, c, eid, who, code):
-    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, 0, 0)",
-                (eid, c.ids[who], code))
+def _came(con, c, eid, who, code):
+    con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at, checked_in_at)
+        VALUES (?, ?, 'going', ?, 0, 0, ?)""", (eid, c.ids[who], code, NOW - 3600))
+
+
+def _path(con, fid):
+    return con.execute("SELECT path FROM files WHERE id = ?", (fid,)).fetchone()[0]
 
 
 def test_flag_off_staff_everyone(env):
@@ -55,47 +57,81 @@ def test_flag_off_staff_everyone(env):
         con.execute("DELETE FROM gallery_photos")
 
 
-def test_shows_at_once_under_my_name_newest_taken_first(env):
+def test_off_nothing_new(env):
+    """GALLERY unset: production as before, but for the third reporter."""
+    c, con, oid = _app(env, "")
+    eid = _event(con, c, oid)
+    fid = _photo(con, eid, c.ids[AL])
+    assert c.delete(f"/api/gallery/{fid}", headers=tma(AL)).status_code == 404  # my album photo stays
+    rep = lambda reason: c.post("/api/reports", headers=tma(BO), json={"target": "photo", "id": fid, "reason": reason}).status_code  # noqa: E731
+    assert rep("me") == rep("rules") == 400 and rep("spam") == 204
+    p = c.get("/api/gallery", headers=tma(AL)).json()["photos"][0]
+    assert p["canDelete"] is False and "at" not in p and "uid" not in p and "post" not in c.get("/api/gallery", headers=tma(AL)).json()
+
+
+def test_shows_at_once_under_my_name_newest_first(env):
     c, con, _ = _app(env)
-    old = _post(c, AL, 1, taken="2024:09:01 10:00:00").json()
-    new = _post(c, BO, 2).json()  # no EXIF: the upload's time
-    assert old["by"] == "P82 T" and old["uid"] == c.ids[AL] and old["mine"] and old["canDelete"] and "event" not in old
-    assert old["at"] == 1725166800  # 10:00 in Almaty
+    old = _post(c, AL, 1).json()
+    new = _post(c, BO, 2).json()
+    assert old["by"] == "P82 T" and old["uid"] == c.ids[AL] and old["mine"] and old["canDelete"] and "event" not in old and old["at"] >= NOW
     feed = c.get("/api/gallery", headers=tma(CY)).json()["photos"]
     assert [p["id"] for p in feed] == [new["id"], old["id"]] and not feed[0]["mine"] and not feed[0]["canDelete"]
     page = c.get("/api/gallery", params={"limit": 1, "before": new["id"]}, headers=tma(CY)).json()
     assert [p["id"] for p in page["photos"]] == [old["id"]] and page["more"] is False
-    assert _post(c, AL, 1, taken="2024:09:01 10:00:00").json()["id"] == old["id"] and len(_ids(c)) == 2  # the same photo again
-    assert _post(c, AL, 3, taken="1970:01:01 00:00:00").json()["at"] > 1725166800  # a camera's unset clock: now
+    assert _post(c, AL, 1).json()["id"] == old["id"] and len(_ids(c)) == 2  # the same photo again: the one there
 
 
-def test_attach_only_to_events_i_went_to(env):
+def test_attach_on_the_albums_rules(env):
     c, con, oid = _app(env)
     went, other = _event(con, c, oid, "Went"), _event(con, c, oid, "Other")
     ahead = _event(con, c, oid, "Ahead", starts_at=NOW + 86400, ends_at=NOW + 90000)
-    _going(con, c, went, AL, "G-1")
-    _going(con, c, ahead, AL, "G-2")
-    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [{"id": went, "title": "Went"}]}  # begun ones only
-    assert _post(c, AL, 1, event=other).status_code == 403 and _post(c, AL, 1, event=ahead).status_code == 403
-    assert _post(c, BO, 1, event=went).status_code == 403  # not signed up
+    old = _event(con, c, oid, "Old", starts_at=NOW - 30 * 86400, ends_at=NOW - 29 * 86400)
+    _came(con, c, went, AL, "G-1")
+    _came(con, c, old, AL, "G-3")
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'G-2', 0, 0)",
+                (ahead, c.ids[AL]))
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'G-4', 0, 0)",
+                (went, c.ids[BO]))  # signed up, never came
+    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [{"id": went, "title": "Went"}]}  # its album open now
+    for eid in (other, ahead, old):
+        assert _post(c, AL, 1, event=eid).status_code == 403
+    assert _post(c, BO, 1, event=went).status_code == 403  # a no-show
     p = _post(c, AL, 1, event=went).json()
     assert p["event"] == {"id": went, "title": "Went"}
     album = c.get(f"/api/events/{went}", headers=tma(CY)).json()["photos"]
     assert [(x["id"], x["uid"]) for x in album] == [(p["id"], c.ids[AL])]  # in its album too
     assert _ids(c, CY) == [p["id"]]  # once in the feed
-    # out of the album by the club's Head: out of the Gallery too (never left as a general photo)
+    # the guest's album share (10) counts these too
+    con.execute("UPDATE meta SET value = '0' WHERE key LIKE 'gal:%'")
+    for n in range(2, 11):
+        assert _post(c, AL, n, event=went).status_code == 200
+    assert _post(c, AL, 11, event=went).status_code == 403
+    # out of the album by the club's Head: still the student's, a plain KBTU photo
     assert c.delete(f"/api/events/{went}/photos/{p['id']}", headers=tma(HEAD)).status_code == 200
-    assert _ids(c, CY) == [] and not con.execute("SELECT 1 FROM gallery_photos").fetchone()
+    assert p["id"] in _ids(c, CY) and con.execute("SELECT event_id FROM gallery_photos WHERE file_id = ?", (p["id"],)).fetchone()[0] is None
+    # the event deleted: the posts stay, plain
+    logic.organizing._delete_event(con, went)
+    assert len(_ids(c, CY)) == 10 and not con.execute("SELECT 1 FROM gallery_photos WHERE event_id IS NOT NULL").fetchone()
 
 
-def test_a_day_limit(env, monkeypatch):
+def test_a_day_counts_attempts(env, monkeypatch):
     c, con, _ = _app(env)
     monkeypatch.setattr(logic.gallery, "A_DAY", 2)
-    assert _post(c, AL, 1).status_code == _post(c, AL, 2).status_code == 200
+    first = _post(c, AL, 1).json()["id"]
+    assert _post(c, AL, 2).status_code == 200
+    assert c.delete(f"/api/gallery/{first}", headers=tma(AL)).status_code == 204
     r = _post(c, AL, 3)
-    assert r.status_code == 429 and r.json()["message"] == "gallery"
-    con.execute("UPDATE gallery_photos SET created_at = created_at - 86401")
+    assert r.status_code == 429 and r.json()["message"] == "gallery"  # a deleted one gives nothing back
+    con.execute("UPDATE meta SET key = 'gal:0:0' WHERE key LIKE 'gal:%'")  # the next day
     assert _post(c, AL, 3).status_code == 200
+
+
+def test_a_refused_upload_leaves_no_file(env, monkeypatch):
+    c, con, _ = _app(env)
+    files = lambda: sorted(p.name for p in c.media.rglob("*.webp")) if c.media.exists() else []  # noqa: E731
+    before = files()
+    monkeypatch.setattr(logic.gallery, "post", lambda *a: (_ for _ in ()).throw(logic.ApiError("forbidden")))
+    assert _post(c, AL, 1).status_code == 403 and files() == before
 
 
 def test_three_reports_hide_reporter_at_once_moderator_decides(env):
@@ -111,40 +147,44 @@ def test_three_reports_hide_reporter_at_once_moderator_decides(env):
     assert [(r["id"], r["where"], r["reasons"]) for r in q] == [(fid, {"kind": "gallery", "id": fid}, {"me": 2, "rules": 1})]
     assert c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": False}).status_code == 204  # Return
     assert _ids(c, ADMIN) == [fid] and _ids(c, AL) == [fid]
-    # Delete: erased, its files from disk too
-    path = con.execute("SELECT path FROM files WHERE id = ?", (fid,)).fetchone()[0]
-    assert (c.media / f"{path}.webp").exists()
+    # Delete: out, its files kept 30 days for the undo
     assert rep(CY) == 204 and c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": True}).status_code == 204
-    assert _ids(c, ADMIN) == [] and not (c.media / f"{path}.webp").exists() and not (c.media / f"{path}.t.webp").exists()
-    assert not con.execute("SELECT 1 FROM files WHERE id = ?", (fid,)).fetchone()
+    assert _ids(c, ADMIN) == [] and (c.media / f"{_path(con, fid)}.webp").exists()
+    assert [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=tma(ADMIN)).json()] == [("photo", fid)]
+    assert c.post(f"/api/admin/taken-down/photo/{fid}/restore", headers=tma(ADMIN)).status_code == 204
+    assert _ids(c, CY) == [fid] and c.get("/api/gallery", headers=tma(CY)).json()["photos"][0]["uid"] == c.ids[BO]
 
 
 def test_off_a_general_photo_cannot_be_reported(env):
     c, con, _ = _app(env)
     fid = _post(c, BO, 1).json()["id"]
     logic.gallery.MODE = ""
-    assert c.post("/api/reports", headers=tma(AL), json={"target": "photo", "id": fid, "reason": "rules"}).status_code == 404
+    assert c.post("/api/reports", headers=tma(AL), json={"target": "photo", "id": fid, "reason": "spam"}).status_code == 404
     assert _ids(c, AL) == []
 
 
-def test_delete_mine_erases_files(env):
+def test_delete_mine_erases_files_and_reports(env):
     c, con, _ = _app(env)
     fid = _post(c, AL, 1).json()["id"]
-    path = con.execute("SELECT path FROM files WHERE id = ?", (fid,)).fetchone()[0]
+    path = _path(con, fid)
+    assert c.post("/api/reports", headers=tma(BO), json={"target": "photo", "id": fid, "reason": "me"}).status_code == 204
     assert c.delete(f"/api/gallery/{fid}", headers=tma(BO)).status_code == 404  # not another's
     assert c.delete(f"/api/gallery/{fid}", headers=tma(AL)).status_code == 204
     assert _ids(c) == [] and not (c.media / f"{path}.webp").exists()
+    # the next file may take its id: it inherits no reports
+    assert not con.execute("SELECT 1 FROM reports WHERE target = 'photo' AND target_id = ?", (fid,)).fetchone()
 
 
 def test_account_deletion_takes_my_photos_and_their_reports(env):
     c, con, oid = _app(env)
     eid = _event(con, c, oid)
-    _going(con, c, eid, AL, "G-1")
+    _came(con, c, eid, AL, "G-1")
     general, attached = _post(c, AL, 1).json()["id"], _post(c, AL, 2, event=eid).json()["id"]
     assert c.post("/api/reports", headers=tma(BO), json={"target": "photo", "id": general, "reason": "me"}).status_code == 204
-    paths = [r[0] for r in con.execute("SELECT path FROM files WHERE id IN (?, ?)", (general, attached))]
+    paths = [_path(con, general), _path(con, attached)]
     _, photos = logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
     assert sorted(photos) == sorted(paths)
     assert _ids(c, BO) == [] and not con.execute("SELECT 1 FROM gallery_photos UNION ALL SELECT 1 FROM event_photos").fetchone()
     assert not con.execute("SELECT 1 FROM reports WHERE target = 'photo'").fetchone()
+    assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()
     assert ("gallery_photos", "user_id") in logic._DEL_GONE

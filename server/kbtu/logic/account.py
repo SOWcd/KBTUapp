@@ -824,6 +824,8 @@ def _drop_photo(con, fid: int | None) -> list[str]:
     if not f:
         return []
     con.execute("DELETE FROM files WHERE id = ?", (f["id"],))
+    # its reports go with it: the next file may get this id (a plain INTEGER PRIMARY KEY), and must not inherit them
+    con.execute("DELETE FROM reports WHERE target = 'photo' AND target_id = ?", (f["id"],))
     return [] if one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else [f["path"]]
 
 

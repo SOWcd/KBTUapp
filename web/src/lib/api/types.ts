@@ -140,7 +140,7 @@ export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgR
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
 
 /** A photo in an event's album: the one who added it or the club's Head+ may take it out. */
-export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; at?: Ts; uid?: Id; pending?: boolean } // by: who added it (nick or "First L."); event: in the Gallery; at: when it was taken; uid: a Gallery post's author (their profile); pending: mine, still uploading
+export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; at?: Ts; uid?: Id; pending?: boolean } // by: who added it (nick or "First L."); event: in the Gallery; at, uid: a Gallery post's time and author (their profile); pending: mine, still uploading
 export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
 export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
 

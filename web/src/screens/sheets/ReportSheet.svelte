@@ -5,6 +5,7 @@
   import { api, ApiErr, type Id, type ReportReason } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { data } from '../../lib/state/data.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -15,8 +16,8 @@
   type Target = 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost';
   let { overlay, target, id, about = '', onsent }: { overlay: Overlay; target: Target; id: Id; about?: string; onsent?: () => void } = $props();
 
-  // a photo's own two (the Gallery): it breaks the rules, or I'm in it and against it
-  const REASONS = $derived<ReportReason[]>(target === 'photo' ? ['rules', 'me'] : ['spam', 'insult', 'danger', 'other']);
+  // a photo's own two with the Gallery on (GALLERY): it breaks the rules, or I'm in it and against it
+  const REASONS = $derived<ReportReason[]>(target === 'photo' && data.galleryPost ? ['rules', 'me'] : ['spam', 'insult', 'danger', 'other']);
   let reason = $state<ReportReason | null>(null), note = $state(''), busy = $state(false);
 
   async function send() {

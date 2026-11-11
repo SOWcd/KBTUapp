@@ -97,11 +97,9 @@
     const text = abuse ? t('adm.abuse') : t(remove ? (r.target === 'tgc' ? 'adm.act.tg_confirm' : 'adm.act.report_remove') : r.removed ? 'adm.act.tg_restore' : 'adm.act.report_keep');
     void decide(it, text, remove ? repTarget(r) : undefined, () => api.resolveReport(r.target, r.id, remove, abuse || undefined, r.target === 'tgc' && remove ? ruleOf(r) : undefined));
   }
-  // a photo: Delete asks first (a Gallery post's files are erased, no Undo); Return keeps it, for everyone again
+  // a photo with the Gallery on: Delete asks first (Done's Undo has it for 30 days); Return keeps it, for everyone again
   async function dropPhoto(it: InboxItem, r: ReportItem) {
-    const gallery = r.where.kind === 'gallery';
-    if (await sheets.ask({ title: t('adm.photoDeleteAsk'), text: gallery ? t('adm.photoDeleteText') : undefined, ok: t('adm.photoDelete'), cancel: t('common.cancel'), danger: true }))
-      resolve(it, r, true);
+    if (await sheets.ask({ title: t('adm.photoDeleteAsk'), ok: t('adm.photoDelete'), cancel: t('common.cancel'), danger: true })) resolve(it, r, true);
   }
   function look(r: ReportItem) {
     if (r.target === 'comment') sheets.comments(r.where.kind as 'post' | 'event', r.where.id, r.text);
@@ -197,7 +195,7 @@
             </button>
             {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
             {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
-            {:else if r.target === 'photo'}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
+            {:else if r.target === 'photo' && data.galleryPost}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
             {:else}{@render two(t('adm.takeDown'), () => resolve(it, r, true), t('adm.keep'), () => resolve(it, r, false))}{/if}
           </div>
         {:else if it.kind === 'capp'}

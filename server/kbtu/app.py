@@ -584,13 +584,28 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def gallery(con: Con, v: Me, before: int | None = Query(None, ge=0, lt=1 << 62), limit: int = Query(logic.gallery.PAGE, ge=1, le=logic.gallery.PAGE)):
         return logic.gallery.feed(con, v, before, limit)
 
+    posting: set[int] = set()  # people with a Gallery upload under way
+
     @app.post("/api/gallery")
     async def post_gallery_photo(request: Request, con: Con, v: Me, event: int | None = Query(None, ge=1, lt=1 << 62)):
         """A photo into the Gallery (GALLERY), the file is the body as in /api/photos; `event`: into its album too."""
-        data = await read_upload(request)
-        logic.gallery.check(con, v, event)  # before the work, not only after it
-        saved = await _picture(media.save, data, photos)
-        return await run_in_threadpool(logic.gallery.post, con, v, saved, event)
+        # one at a time per person (the picture workers are shared with receipts and avatars), counted before the work
+        # ponytail: per worker process; a meta row as the lock if one person's parallel uploads over workers ever matter
+        if v.id in posting:
+            raise ApiError("rate_limited", "busy")
+        posting.add(v.id)
+        try:
+            data = await read_upload(request)
+            await run_in_threadpool(logic.gallery.attempt, con, v, event)
+            saved = await _picture(media.save, data, photos)
+            try:
+                return await run_in_threadpool(logic.gallery.post, con, v, saved, event)
+            except ApiError:  # refused on the second look (the flag, the album filled): no file left behind without a row
+                if logic.photo_free(con, saved["path"]):
+                    media.drop(photos, [saved["path"]])
+                raise
+        finally:
+            posting.discard(v.id)
 
     @app.delete("/api/gallery/{fid}", status_code=204)
     def drop_gallery_photo(fid: int, con: Con, v: Me):
