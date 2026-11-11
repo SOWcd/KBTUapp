@@ -941,8 +941,8 @@ def channel_post(title: str, org: str, starts: int, ends: int | None, place: str
     """A public event's post in the events channel (HTML), in no language at all (owner, Nov 4: three languages on
     every line was ugly): the title as the club wrote it, the club, then numbers and marks everyone reads, the date
     as 06.11 and the time as 17:00 (an end too: 17:00-19:00; several days: 06.11-08.11), the place as typed (none
-    while it's to be confirmed), 🆓 or 💳 and the price. The title links to the app's sign-up: not a button, Telegram
-    hides a post's comments under one. A cancelled one is struck through."""
+    while it's to be confirmed), 🎟 and the price or Free, then a line linking to the app's sign-up: not a button, Telegram
+    hides a post's comments under one. A cancelled one is struck through and has no link."""
     t = time.gmtime(starts + 5 * 3600)
     u = time.gmtime(ends + 5 * 3600) if ends else None
     day, at = f"{t.tm_mday:02d}.{t.tm_mon:02d}", f"{t.tm_hour:02d}:{t.tm_min:02d}"
@@ -951,11 +951,12 @@ def channel_post(title: str, org: str, starts: int, ends: int | None, place: str
     elif u and ends > starts:
         at += f"–{u.tm_hour:02d}:{u.tm_min:02d}"
     name = html.escape(title)
-    if link and not cancelled:
-        name = f'<a href="{html.escape(link)}">{name}</a>'
     lines = [f"❌ <b><s>{name}</s></b>" if cancelled else f"<b>{name}</b>", html.escape(org), "", f"🗓 {day} · {at}",
              *([f"📍 {html.escape(re.sub(r'(?i)^(?:room|rm\.?|ауд(?:\.|итория)?|каб(?:\.|инет)?)\s*(?=\d)', '', place))}"] if place else []),  # "Room 222": 222
-             "💳 " + f"{price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else "🆓"]
+             "🎟 " + (f"{price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else "Free"),
+             # the sign-up as a line of its own (owner, Nov 11: the title as a link read as greyed-out text and the lone
+             # emoji square looked odd); still no button: Telegram hides a post's comments under one
+             *(["", f'<a href="{html.escape(link)}">KBTU App →</a>'] if link and not cancelled else [])]
     return "\n".join(lines)
 
 
