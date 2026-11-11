@@ -159,6 +159,11 @@ POST_PROMPT = ("You check a post a university student wants to publish in the st
                "name (first and last) or an @username together with anything negative is always PERSON. A first name, or a "
                "name with an initial, alone is fine when the post is neutral, friendly or about the author's own life "
                "(\"sorry Bakhtiyar, I declined your friend request by accident\", \"I walked with my friend Vova\"): that is OK. "
+               "One exception: the people who make this app, named by their role (the creator, the developer, the admin or "
+               "the team of KBTU App, \"\u0441\u043e\u0437\u0434\u0430\u0442\u0435\u043b\u044c\", \"\u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\", \"\u0430\u0434\u043c\u0438\u043d \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f\"), are fair game: jokes, teasing, "
+               "banter, rudeness, criticism and complaints about them or the app are OK, never PERSON or FLAG, however "
+               "cheeky (the creator asked for this himself). Still FLAG a real threat of violence, explicit sexual "
+               "content, or their private data (address, phone, documents). "
                "Else OK. Answer exactly OK, PERSON, FLAG, AD or NOISE.") + LANG_NOTE
 POST_WORDS = ("OK", "PERSON", "FLAG", "AD", "NOISE")  # AD: refused at once, the author told (owner, Nov 3: no ads in the forum)
 
