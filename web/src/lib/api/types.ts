@@ -93,7 +93,7 @@ export interface ChannelReply { id: Id; body: string; comment: number | null; st
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; paired: number; helpers?: number; last?: { name: string; at: Ts } | null /* show: the last one counted */ }
+export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; next: number; screens: number; paired: number; vol?: boolean /* the volunteers ledger's session: its door (VolDoor) */; helpers?: number; last?: { name: string; at: Ts } | null /* show: the last one counted */ }
 /** The check-in the capsule shows (/api/me): one I run (ScreenSheet's numbers, for its first frame), or one I help at (my QR). until: when its event is over */
 export type MyCheckin = (ScreenSession & { helper: false; until: Ts }) | { helper: true; session: Id; event: Id | null; title: string; scanner: boolean; until: Ts };
 /** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
@@ -706,10 +706,15 @@ export interface ForumMod { held: ModAsk[]; skills: Skill[] }
 export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }
 
 /** The volunteers ledger of one club (server logic/vol.py). minutes: the starting balance + closed shifts (one never
- *  checked out counts 0); open: such shifts; misses: teambuildings that really ran without me, + / - the President's. */
-export interface VolMe { org: Id; ledger: boolean; edit: boolean; mine: { id: Id; minutes: number; open: number; misses: number } | null }
-export interface VolRow { id: Id; name: string; tg: string | null; person: PersonRef | null; minutes: number; open: number; misses: number }
-export interface VolShift { id: Id; session: Id | null; title: string | null; inAt: Ts; outAt: Ts | null; byHand: boolean; gone: boolean }
+ *  checked out counts 0); open: such shifts; misses: teambuildings that really ran without me, + / - the President's;
+ *  unmarked: shifts I left without checking out of (someone answered for them after Finish). edit: the President or a Vice. */
+export interface VolMe { org: Id; ledger: boolean; edit: boolean; mine: { id: Id; minutes: number; open: number; misses: number; unmarked: number } | null }
+export interface VolRow { id: Id; name: string; tg: string | null; person: PersonRef | null; minutes: number; open: number; misses: number; unmarked: number }
+export interface VolShift { id: Id; session: Id | null; title: string | null; inAt: Ts; outAt: Ts | null; byHand: boolean; gone: boolean; unmarked: boolean }
+/** One session's door, for who runs it (the President, a Vice, the hand-over link's holder). unmarked: after Finish, every
+ *  shift nobody checked out of (outAt null: still to answer for). hand (lead only): the live link, and who opened it. */
+export interface VolDoor { session: Id; lead: boolean; ended: Ts | null; hand: { holder: PersonRef | null } | null;
+  unmarked: { id: Id; name: string; person: PersonRef | null; inAt: Ts; outAt: Ts | null }[] }
 export interface VolEdit { what: string; ref: Id | null; old: unknown; new: unknown; reason: string; at: Ts; by: Id | null }
 export interface VolPerson extends VolRow {
   balance: number;
@@ -719,7 +724,7 @@ export interface VolPerson extends VolRow {
   raw?: Record<string, Record<string, string>>;              // readers only: every imported column, by sheet, as given
   edits?: VolEdit[];
 }
-export interface VolMeet { session: Id; title: string; at: Ts; ended: Ts | null; team: boolean; expected: number; marked: number; held: boolean }
+export interface VolMeet { session: Id; title: string; at: Ts; ended: Ts | null; team: boolean; expected: number; marked: number; held: boolean; unresolved: number }
 /** an appeal to the Student Government (server logic/appeals.py): new Received, work In progress, closed Closed (with an answer);
  *  overdue: no answer by `due` (5 working days), whatever the status since */
 export type AppealTopic = 'study' | 'dorm' | 'food' | 'campus' | 'events' | 'money' | 'other';

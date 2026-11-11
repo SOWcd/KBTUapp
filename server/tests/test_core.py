@@ -6822,9 +6822,9 @@ def test_screen_pairing(env, monkeypatch):
     sid3 = checkin.new(con, "Third", [], vol)
     race = c.post("/api/screen/pair").json()
     real = checkin._mine
-    def first_wins(con_, v, s_id, cohost=True):  # the other request binds it between our read and our write
+    def first_wins(con_, v, s_id, cohost=True, door=False):  # the other request binds it between our read and our write
         con_.execute("UPDATE qr_screens SET session_id = ? WHERE code = ?", (sid2, race["code"]))
-        return real(con_, v, s_id, cohost)
+        return real(con_, v, s_id, cohost, door)
     monkeypatch.setattr(checkin, "_mine", first_wins)
     assert c.post("/api/screens/bind", headers=tma(9), json={"code": race["code"], "session": sid3}).json()["session"] == sid2
     monkeypatch.setattr(checkin, "_mine", real)

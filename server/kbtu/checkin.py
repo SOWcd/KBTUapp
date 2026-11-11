@@ -124,7 +124,7 @@ def _paired_by_runs(con, uid: int | None, s) -> bool:
     """Who paired the screen may still bind it (bind: _mine), as app.viewer would see them; a deleted account (NULL) can't."""
     u = uid and one(con, """SELECT u.id, u.role, EXISTS (SELECT 1 FROM students WHERE user_id = u.id AND manual = 0) AS student
         FROM users u WHERE u.id = ? AND u.banned_at IS NULL""", uid)
-    return bool(u) and _runs(con, Viewer(u["id"], u["role"], bool(u["student"])), s)
+    return bool(u) and _doors(con, Viewer(u["id"], u["role"], bool(u["student"])), s)
 
 
 def _lease(con, sid: int) -> None:
@@ -150,6 +150,12 @@ def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
         or bool(cohost and s["event_id"] and logic.co_runs(con, v, s["event_id"]))
 
 
+def _doors(con, v: Viewer, s) -> bool:
+    """Who works this session's door: its organizers, or whom the volunteers ledger's link handed it to (logic/vol.py
+    holds): Start, the QR (a phone or a paired screen), leaving, Finish. The CSV, the helpers and unpairing stay _runs'."""
+    return _runs(con, v, s) or logic.vol.holds(con, v, s)
+
+
 def _guests(con, e, sid: int | None) -> bool:
     """An ordinary public event's door, the one a member may show the QR at: never a team-only one, a meeting, a
     partner's, or the volunteers ledger's club (its scans count hours and misses: its organizers' alone)."""
@@ -173,9 +179,9 @@ def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
         raise ApiError("closed", "closed")
 
 
-def _mine(con, v: Viewer, sid: int, cohost: bool = True):
+def _mine(con, v: Viewer, sid: int, cohost: bool = True, door: bool = False):
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not s or not _runs(con, v, s, cohost):
+    if not s or not (_runs(con, v, s, cohost) or door and logic.vol.holds(con, v, s)):
         raise ApiError("forbidden", "screen")
     return s
 
@@ -183,19 +189,20 @@ def _mine(con, v: Viewer, sid: int, cohost: bool = True):
 def _row(con, key: bytes | None, s) -> dict:
     c = one(con, "SELECT COUNT(*) FILTER (WHERE created_at > ?), COUNT(*) FILTER (WHERE created_at >= ?) FROM qr_screens WHERE session_id = ?",
             now() - SCREEN_SEEN, now() - SCREEN_IDLE, s["id"])
-    return {**_state(con, key, s), "screens": c[0], "paired": c[1]}  # screens: polling now; paired: "disconnect" still has something to cut
+    # screens: polling now; paired: "disconnect" still has something to cut; vol: the volunteers ledger's session (its door: GET /api/vol/meets/<id>/door)
+    return {**_state(con, key, s), "screens": c[0], "paired": c[1], "vol": bool(one(con, "SELECT 1 FROM vol_meets WHERE session_id = ?", s["id"]))}
 
 
 def sessions(con, key: bytes, v: Viewer) -> list[dict]:
     """The sessions I run: open ones and those finished in the last day (for the list), newest first."""
     run = [o for o, r in logic._rights(con, v).items() if "events" in r]  # my rights read once, not a query per session
-    if v.role != "admin" and not run:
-        return []
-    # and the events we co-host (cohosts.py)
+    # and the events we co-host (cohosts.py), and a door of the volunteers ledger handed to me (checked row by row: holds)
     mine = "" if v.role == "admin" else f"""AND (org_id IN ({logic._qs(run)}) OR event_id IN (SELECT x.event_id FROM event_cohosts x
-        JOIN orgs o ON o.id = x.org_id WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)})))"""
+        JOIN orgs o ON o.id = x.org_id WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)}))
+        OR id IN (SELECT session_id FROM vol_hands WHERE user_id = ? AND revoked_at IS NULL))"""
     return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY id DESC",
-                                              now() - 86400, *([] if v.role == "admin" else run * 2))]
+                                              now() - 86400, *([] if v.role == "admin" else [*run * 2, v.id]))
+            if v.role == "admin" or s["org_id"] in run or _doors(con, v, s)]
 
 
 def running(con, v: Viewer) -> dict | None:
@@ -227,7 +234,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
     if not r or r["session_id"] is None and r["created_at"] < now() - PAIR_TTL:
         raise ApiError("not_found", "pair")  # rotated away: scan the screen again
     if r["session_id"] is not None:
-        return _row(con, key, _mine(con, v, r["session_id"]))
+        return _row(con, key, _mine(con, v, r["session_id"], door=True))
     if sid is None:
         mine = sessions(con, key, v)
         live = [x for x in mine if x["ended"] is None]
@@ -236,7 +243,8 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
         if len(live) != 1:
             raise ApiError("conflict", "pick")  # none open or several: the app asks which
         sid = live[0]["session"]
-    s = _mine(con, v, sid)
+    s = _mine(con, v, sid, door=True)
+    logic.vol.ran(con, s, v)
     if not con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ?, created_at = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, now(), r["code"])).rowcount:
         return bind(con, key, v, code, sid)  # another scan bound it first: the session it really got, if mine (or gone: rotated)
     return _row(con, key, s)
@@ -245,19 +253,25 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     door = act in ("start", "show")
+    work = act in ("start", "show", "out", "in", "finish")  # the door's work: the volunteers ledger's link hands these over (vol.holds)
     if not (act == "show" and s and logic.crew.qr_helping(con, v, s)):  # a helper only keeps the QR showing (hand, below)
-        if not door or not s or _runs(con, v, s):  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
-            s = _mine(con, v, sid, cohost=door)
+        if not door or not s or _runs(con, v, s) or logic.vol.holds(con, v, s):  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
+            s = _mine(con, v, sid, cohost=door, door=work)
         else:  # a member at the event's door; who showed this code can't check themselves in with it (mark)
             _door(con, v, s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]), sid, act == "start")
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{sid}:{v.id}",))
+    if work:
+        logic.vol.ran(con, s, v)  # the ledger's club: its President, Vice or the link's holder runs this door
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
         _lease(con, sid)
     elif act == "finish":
-        con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now(), sid))
-        con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,))
+        with tx(con):
+            t = now()
+            if con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (t, sid)).rowcount:
+                logic.vol.finished(con, s, t)  # who ran the door: there to the end; every other open shift waits for an answer
+            con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,))
     elif act == "unpair":  # every screen of it goes back to its pairing QR
         con.execute("DELETE FROM qr_screens WHERE session_id = ?", (sid,))
     elif act in ("out", "in"):  # the same QR marks leaving now (a running session), or arriving again
@@ -279,9 +293,11 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
         raise ApiError("forbidden", "screen")
     if e["status"] != "published" or e["guest_host"]:  # a paid one too: a ticket held is checked in by the scan (organizing.screen_came)
         raise ApiError("closed", "screen")
+    x = one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid)
+    if x and logic.vol.holds(con, v, x):  # the volunteers ledger's door, handed to me: its session as it is
+        return _row(con, key, x)
     if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # not its organizer (_runs): a member at its door
-        x = one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)
-        _door(con, v, e, x and x[0])
+        _door(con, v, e, x and x["id"])
     with tx(con):
         if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):
             con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -290,6 +306,11 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
         if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # the code goes to this member: mark's "own"
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{one(con, 'SELECT id FROM qr_sessions WHERE event_id = ?', eid)[0]}:{v.id}",))
         return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
+
+
+def handed(con, key: bytes, v: Viewer, token: object) -> dict:
+    """The volunteers ledger's hand-over link opened (logic/vol.py take): that session, mine to run."""
+    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", logic.vol.take(con, v, token)))
 
 
 def grant_all(con, v: Viewer, sid: int, code: object) -> dict:
@@ -436,7 +457,8 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
     fresh = 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT and (s["lease_until"] is None or s["lease_until"] >= now())
     if (out or not had) and not fresh:
         raise ApiError("bad_input", "qr_old")
-    if out and not had:  # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
+    if out and not had and not logic.vol.on_shift(con, s, uid):  # (who runs the ledger's door came by marking others in: their check-out counts)
+        # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
         raise ApiError("bad_input", "qr_not_in")
     t = now()
     e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])

@@ -116,6 +116,7 @@
   sheets.sgQueue = () => lazy(() => import('./screens/appeals/SgQueue.svelte'), {});
   sheets.sgAppeal = (id) => lazy(() => import('./screens/appeals/SgAppeal.svelte'), { id });
   sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), { vol: true });
+  sheets.volDoor = (sid, title) => lazy(() => import('./screens/club/VolDoor.svelte'), { sid, title });
   sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine, vol: true });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
@@ -427,6 +428,8 @@
     if (p === 'news') { ui.tab = 'afisha'; sheets.news(); return; } // every post: Afisha's "All" 
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     if (/^hq_\d+_\d+_\d+_[0-9a-f]{16}$/.test(p)) { asStudent(() => void helpRun(p), p); return; } // an organizer's "help me mark people" QR
+    const vh = p.match(/^vh_([0-9a-f]{32})$/); // the volunteers ledger's hand-over link: that session's door, mine to run (server vol.take)
+    if (vh) { asStudent(() => void takeDoor(vh[1]), p); return; }
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
@@ -498,6 +501,14 @@
     } catch (e) {
       const own = e instanceof ApiErr && e.message === 'own';
       void ciResult({ kind: !(e instanceof ApiErr) ? 'error' : own ? 'no' : e.code === 'closed' ? 'closed' : e.message === 'qr_old' ? 'old' : e.message === 'qr_not_in' ? 'notIn' : 'error', title: '', text: own ? t('ci.own') : undefined });
+    }
+  }
+
+  async function takeDoor(token: string): Promise<void> {
+    try { const s = await api.volTake(token); haptic.ok(); sheets.screens(undefined, undefined, s); }
+    catch (e) {
+      haptic.error();
+      say(t(!(e instanceof ApiErr) ? 'common.error' : e.message === 'member' ? 'ledg.handNotMember' : e.code === 'not_found' || e.code === 'conflict' ? 'ledg.handDead' : 'common.error'), 'pleading_face_3d');
     }
   }
 

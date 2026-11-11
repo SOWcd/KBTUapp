@@ -1553,6 +1553,19 @@ MIGRATIONS: list[tuple[int, str]] = [
     (154, "DROP TABLE IF EXISTS friend_links;"),
     # a request its sender took back after a quiet decline: out of the sender's list, the 30 days still held (profiles.take_back_request)
     (155, "ALTER TABLE friend_requests ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;"),
+    # the volunteers ledger's door handed over by a one-time link (logic/vol.py hand, take): only the token's hash;
+    # user_id: the first eligible account that opened it. One live link a session
+    (156, """CREATE TABLE vol_hands (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      made_by INTEGER REFERENCES users(id),
+      user_id INTEGER REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      taken_at INTEGER,
+      revoked_at INTEGER) STRICT;
+    CREATE UNIQUE INDEX vol_hands_live ON vol_hands(session_id) WHERE revoked_at IS NULL;
+    CREATE INDEX vol_hands_by_user ON vol_hands(user_id);"""),
 ]
 
 

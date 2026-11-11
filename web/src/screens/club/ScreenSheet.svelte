@@ -5,7 +5,7 @@
   // made on first use, with the way to the laptop. `seed` (the capsule): that running session alone, there in the first
   // frame. Without any: my sessions.
   import { untrack } from 'svelte';
-  import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
+  import { api, ApiErr, type Id, type ScreenSession, type VolDoor } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
@@ -29,6 +29,7 @@
   import LogIn from '@lucide/svelte/icons/log-in';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import UserPlus from '@lucide/svelte/icons/user-plus';
+  import DoorOpen from '@lucide/svelte/icons/door-open';
 
   let { overlay, code, event, seed }: { overlay: Overlay; code?: string; event?: Id; seed?: ScreenSession } = $props();
   let list = $state<ScreenSession[] | null>(untrack(() => (seed ? [seed] : null)));
@@ -59,12 +60,21 @@
     if (code) void bind();
     else if (event) api.eventScreen(event).then((s) => (list = [s])).catch(() => { haptic.error(); note = t('common.error'); list = []; });
     else void refresh();
-    const id = setInterval(refresh, 4000); // the count goes up while people scan
+    const id = setInterval(() => { void refresh(); for (const k of Object.keys(doors)) void loadDoor(Number(k)); }, 4000); // the count goes up while people scan; a door of mine: answers given in its sheet
     return () => clearInterval(id);
   });
 
   // finished: the capsule lets go at once, without waiting for the next refresh
   $effect(() => { const c = session.me?.checkin; if (c && list?.some((x) => x.session === c.session && x.ended)) session.me!.checkin = null; });
+
+  // the volunteers ledger's sessions (s.vol): their door, when it is mine (its President, a Vice, the hand-over link's
+  // holder; nobody else gets one): who left without checking out, the link. Read as such a session appears or finishes
+  let doors = $state<Record<Id, VolDoor>>({});
+  const volKey = $derived((list ?? []).filter((s) => s.vol).map((s) => `${s.session}:${s.ended ?? 0}`).join());
+  const loadDoor = (id: Id) => api.volDoor(id).then((x) => (doors[id] = x)).catch(() => { delete doors[id]; });
+  $effect(() => { if (volKey) for (const k of volKey.split(',')) void loadDoor(Number(k.split(':')[0])); });
+  const waiting = (s: ScreenSession) => doors[s.session]?.unmarked.filter((x) => x.outAt === null).length ?? 0;
+  const handed = (s: ScreenSession) => !!doors[s.session] && !doors[s.session].lead; // the link's holder: the door's work, not the list or the screens
 
   // who may let a helper in: the club's President or Vice (the privacy policy's door helper), or the app's admin (server checkin._hands_over)
   const board = (s: ScreenSession) => { if (session.me?.role === 'admin' && !code) return true; const ev = s.event ? eventById(s.event) : null; return !!ev && !!session.me?.memberships.some((m) => m.org.id === ev.org.id && (m.role === 'president' || m.role === 'vice')); };
@@ -79,6 +89,10 @@
       const n = await api.screenAct(s.session, a);
       list = (list ?? []).map((x) => (x.session === n.session ? n : x)); haptic.ok();
       if (a === 'start') void loadMe(true); // the capsule
+      if (a === 'finish' && n.vol) { // who left without checking out: answered for right away
+        const door = await api.volDoor(n.session).catch(() => null);
+        if (door) { doors[n.session] = door; if (door.unmarked.some((x) => x.outAt === null)) sheets.volDoor(n.session, n.title); }
+      }
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = 0; }
   }
   async function csv(s: ScreenSession) {
@@ -113,8 +127,9 @@
           {#if s.started && !s.ended && board(s)}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
-          {#if s.started && own(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
-          {#if s.paired && own(s)}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
+          {#if doors[s.session] && (waiting(s) || (doors[s.session].lead && (!s.ended || doors[s.session].hand)))}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.volDoor(s.session, s.title); }}>{#snippet icon()}<DoorOpen size={17} />{/snippet}{waiting(s) ? t('ledg.unresolvedN', { n: waiting(s) }) : t('ledg.hand')}</Button>{/if}
+          {#if s.started && own(s) && !handed(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
+          {#if s.paired && own(s) && !handed(s)}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
         {/if}
       </div>
     </div>

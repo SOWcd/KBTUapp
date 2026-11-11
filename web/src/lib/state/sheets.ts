@@ -72,6 +72,7 @@ export const sheets = {
   sgQueue: () => {},
   sgAppeal: (_id: Id) => {},
   volLedger: () => {},
+  volDoor: (_session: Id, _title: string) => {}, // a session's door: who left without checking out, the hand-over link
   volPerson: (_id: Id, _mine?: boolean) => {}, // an event's door helpers (a running club's President or Vice)
   attendees: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card

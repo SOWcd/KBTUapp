@@ -1,12 +1,18 @@
 """The volunteers ledger of one club (VOLUNTEERS=<slug>; Zhyly Zhurek first, owner Nov 9-10): its spreadsheet as an app.
 
 A volunteer is a record of the club, apart from any account (people never in the app are on it too); the President
-links one to an account and back. Hours: real check-in and check-out at the club's sessions (checkin.mark), never a teambuilding's, or shifts
-the President enters; a check-in never checked out counts 0 minutes, the attendance stays. Misses: a session the
+links one to an account and back. Hours come only from scans (the club's President with the owner, Nov 11: nobody types
+hours): real check-in and check-out at the club's sessions (checkin.mark), never a teambuilding's; the shifts once entered
+by hand stay as recorded. A check-in never checked out counts 0 minutes, the attendance stays; after Finish whoever ran
+the door answers for each such shift (resolve: "until the end", or the time they left, between the check-in and Finish),
+and the volunteer's "left without checking out" counter grows; no minutes are taken off. Who runs the door (a President,
+a Vice, the holder of the hand-over link: ran) is on shift from the first volunteer they mark in until their own
+check-out or Finish. The door of one session can be handed to a club member by a one-time link (hand, take). Misses: a session the
 President marks as a teambuilding; its expected list (the whole roster) is frozen when the session is made. A miss
 counts only once that session really ran: Finished, GRACE after it, and at least max(3, ceil(expected / 4)) of the
 expected people marked. Readers: the club's President and whom she grants (club members); each volunteer sees only
-their own hours and misses. Only the President edits (her own too), with a reason, every edit in vol_edits (numbers
+their own hours and misses. "The President" here is the President or a Vice-president (_president), the same in
+everything. Only they edit (misses, links, a shift taken out), with a reason, every edit in vol_edits (numbers
 and times, never a contact). The import's columns are kept as they were (`raw`); the monthly "deposit" columns are
 shown raw, nothing is computed from them until the club explains them. Nothing here is deleted by itself."""
 from __future__ import annotations
@@ -15,6 +21,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 
 from ..db import tx
 from .core import PERSON_COLS, ApiError, Viewer, log_action, now, one, person_ref, rows, _qs
@@ -22,12 +29,14 @@ from .core import PERSON_COLS, ApiError, Viewer, log_action, now, one, person_re
 # ponytail: v1 shortcuts, each with its upgrade: grants survive a new President (have her re-confirm them); a scan that
 # waits for a sign-in (checkin.became_student) opens no shift (hook it there); only the club's own sessions count, not
 # other clubs' events it helps at (the request flow); a teambuilding's validity is frozen only when an account is deleted
-# (freeze_held), live until then so the President's corrections still count.
+# (freeze_held), live until then so the President's corrections still count; the hand-over link's holder gets no capsule
+# (checkin.running): the link itself is the way back; nobody answers for their own unmarked shift, so a club with one
+# President and no Vice needs her to press Finish or check out herself (upgrade: the app's admin answers from Admin).
 KEY = b""                # keys the hashes of deleted people's import keys (app.create, admin: from TOKEN_KEY)
 ORG = ""                 # the club's slug (config VOLUNTEERS, set by app.create); empty: all of this is off
 GRACE = 30 * 60          # as checkin.GRACE: a late sign-in may still complete a scan this long after Finish
 REASON_MAX = 200
-SHIFT_MAX = 24 * 3600    # one shift by hand: a day at most
+HAND_MAX = 14 * 86400    # a hand-over link dies this long after it was made, opened or not (a session never finished)
 MEMBERS, HOURS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"   # the club's sheets (plan, Nov 6), matched loosely below
 
 
@@ -44,7 +53,8 @@ def _org(con) -> int:
 
 
 def _president(con, v: Viewer, org: int) -> bool:
-    return v.student and bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role = 'president'", org, v.id))
+    """The President or a Vice-president: one and the same for the whole ledger (Nov 11); decided here alone."""
+    return v.student and bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", org, v.id))
 
 
 def _reader(con, v: Viewer, org: int) -> bool:
@@ -200,8 +210,173 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
     if not out:
         if not last or last["out_at"] is not None:
             con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, in_by) VALUES (?, ?, ?, ?)", (vid, s["id"], t, uid))
+            for r in _runners(con, s) if s["ended_at"] is None else ():  # whoever runs the door is here from the first volunteer they mark in
+                rv = r != uid and _record(con, org, r)
+                if rv and not one(con, "SELECT 1 FROM vol_shifts WHERE vol_id = ? AND session_id = ? AND gone_at IS NULL", rv, s["id"]):
+                    con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, in_by) VALUES (?, ?, ?, ?)", (rv, s["id"], t, r))
     elif last:
         con.execute("UPDATE vol_shifts SET out_at = ?, out_by = ? WHERE id = ?", (t, uid, last["id"]))
+
+
+# ------------------------------------------------------------ who runs a session's door (checkin calls these)
+
+def _held(con, uid: int, s) -> bool:
+    """The hand-over link's holder, while it lasts: not taken back, still a member and a student, until GRACE after Finish."""
+    t = now()
+    return (s["ended_at"] is None or s["ended_at"] > t - GRACE) and bool(one(con, """SELECT 1 FROM vol_hands h
+        JOIN vol_meets m ON m.session_id = h.session_id JOIN org_members x ON x.org_id = m.org_id AND x.user_id = h.user_id
+        JOIN students st ON st.user_id = h.user_id AND st.manual = 0
+        WHERE h.session_id = ? AND h.user_id = ? AND h.revoked_at IS NULL AND h.created_at > ?""", s["id"], uid, t - HAND_MAX))
+
+
+def holds(con, v: Viewer, s) -> bool:
+    """This session's door was handed to me (take): I may start it, show its QR, switch to leaving, finish, and answer
+    for the unmarked. Nothing else of it (the CSV, the helpers, another session) is mine."""
+    return bool(ORG and v.student and _held(con, v.id, s))
+
+
+def ran(con, s, v: Viewer) -> None:
+    """Someone started, showed, switched or finished this session, or paired its screen: a President, a Vice or the link's
+    holder is noted as running its door (the same meta mark as a member showing an event's QR, checkin.control)."""
+    org = s["org_id"]
+    if org and org == org_id(con) and (_president(con, v, org) or holds(con, v, s)):
+        con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{s['id']}:{v.id}",))
+
+
+def on_shift(con, s, uid: int) -> bool:
+    """An open shift of mine at this session of the club (checkin.mark: who ran the door has no scan of their own to leave by)."""
+    return bool(s["org_id"] and s["org_id"] == org_id(con) and one(con, """SELECT 1 FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+        WHERE p.user_id = ? AND h.session_id = ? AND h.out_at IS NULL AND h.gone_at IS NULL""", uid, s["id"]))
+
+
+def _runners(con, s) -> list[int]:
+    """Who ran this door (ran) and still may: a role or a link lost since doesn't count."""
+    k = f"qrshow:{s['id']}:"
+    return [u for u in (int(r[0][len(k):]) for r in rows(con, "SELECT key FROM meta WHERE key >= ? AND key < ?", k, k[:-1] + ";"))
+            if _held(con, u, s) or one(con, """SELECT 1 FROM org_members m JOIN students st ON st.user_id = m.user_id AND st.manual = 0
+                WHERE m.org_id = ? AND m.user_id = ? AND m.role IN ('president', 'vice')""", s["org_id"], u)]
+
+
+def finished(con, s, t: int) -> None:
+    """Finish (inside checkin.control's transaction, after ran): who ran the door was there to the end, their own open
+    shift closes now. Every other open shift stays open, 0 minutes, until someone answers for it (resolve)."""
+    org = s["org_id"]
+    if not org or org != org_id(con):
+        return
+    for u in _runners(con, s):
+        con.execute("""UPDATE vol_shifts SET out_at = ?, out_by = ? WHERE session_id = ? AND out_at IS NULL AND gone_at IS NULL AND in_at < ?
+            AND vol_id IN (SELECT id FROM vol_people WHERE org_id = ? AND user_id = ?)""", (t, u, s["id"], t, org, u))
+
+
+def _thash(token: object) -> str:
+    return hashlib.sha256(f"kbtu-vol-hand:{token}".encode("utf-8", "replace")).hexdigest()
+
+
+def _door(con, v: Viewer, sid: object):
+    """(session, am I the President or a Vice) of a session of the club whose door is mine; raises otherwise."""
+    org = _org(con)
+    s = isinstance(sid, int) and one(con, "SELECT s.* FROM qr_sessions s JOIN vol_meets m ON m.session_id = s.id WHERE s.id = ? AND m.org_id = ?", sid, org)
+    if not s:
+        raise ApiError("not_found")
+    lead = _president(con, v, org)
+    if not lead and not holds(con, v, s):
+        raise ApiError("forbidden")
+    return s, lead
+
+
+def _door_view(con, s, lead: bool) -> dict:
+    """After Finish: every shift nobody checked out of, answered for or not yet. For the President and Vice: the link."""
+    hs = [] if s["ended_at"] is None else rows(con, """SELECT h.id AS hid, h.in_at, h.out_at, p.* FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+        WHERE h.session_id = ? AND h.gone_at IS NULL AND (h.out_at IS NULL OR EXISTS (SELECT 1 FROM vol_edits e WHERE e.vol_id = h.vol_id
+        AND e.what = 'resolve' AND e.ref = h.id)) ORDER BY h.out_at IS NOT NULL, h.in_at, h.id""", s["id"])
+    who = _names(con, hs)
+    hand = None
+    if lead:
+        r = one(con, "SELECT user_id FROM vol_hands WHERE session_id = ? AND revoked_at IS NULL AND created_at > ?", s["id"], now() - HAND_MAX)
+        hand = r and {"holder": r[0] and _names(con, [r]).get(r[0])}
+    return {"session": s["id"], "lead": lead, "ended": s["ended_at"], "hand": hand,
+            "unmarked": [{"id": h["hid"], "name": _name(h, who.get(h["user_id"])), "person": who.get(h["user_id"]), "inAt": h["in_at"], "outAt": h["out_at"]} for h in hs]}
+
+
+def door(con, v: Viewer, sid: int) -> dict:
+    return _door_view(con, *_door(con, v, sid))
+
+
+def resolve(con, v: Viewer, hid: int, body: dict) -> dict:
+    """Someone left without checking out: who ran the door says "until the end" (left: null) or when they left (a time
+    from their check-in to Finish, to the minute); the app counts the minutes. Never one's own shift. Logged in vol_edits
+    (left_unmarked), which is also the volunteer's counter. Answered wrongly: answered again, the same way."""
+    org = _org(con)
+    with tx(con):
+        h = one(con, """SELECT h.*, p.user_id FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+            WHERE h.id = ? AND p.org_id = ? AND h.gone_at IS NULL AND h.session_id IS NOT NULL""", hid, org)
+        if not h:
+            raise ApiError("not_found")
+        s, lead = _door(con, v, h["session_id"])
+        if s["ended_at"] is None:
+            raise ApiError("closed")
+        if h["user_id"] == v.id:
+            raise ApiError("forbidden", "own")
+        if h["out_at"] is not None and not one(con, "SELECT 1 FROM vol_edits WHERE vol_id = ? AND what = 'resolve' AND ref = ?", h["vol_id"], hid):
+            raise ApiError("conflict")  # checked out by a scan: nothing to answer for
+        end = max(s["ended_at"], h["in_at"])  # a sign-in completed under GRACE opens a shift after Finish: 0 minutes
+        left = body.get("left")
+        if left is not None and (not isinstance(left, int) or isinstance(left, bool) or not h["in_at"] // 60 * 60 <= left <= end):
+            raise ApiError("bad_input", "left")
+        out = end if left is None else max(left, h["in_at"])  # the check-in's own minute: from the check-in
+        con.execute("UPDATE vol_shifts SET out_at = ?, out_by = ? WHERE id = ?", (out, v.id, hid))
+        _edit(con, v, h["vol_id"], "resolve", hid, {"out": h["out_at"]}, {"out": out, "left_unmarked": True, "until_end": left is None}, "")
+    return _door_view(con, s, lead)
+
+
+def hand(con, v: Viewer, sid: int) -> dict:
+    """The President or a Vice makes the one-time link to this session's door (a new one ends the last). The token is
+    given once, here; only its hash is kept, and it is never logged."""
+    s, lead = _door(con, v, sid)
+    if not lead:
+        raise ApiError("forbidden")
+    if s["ended_at"] is not None:
+        raise ApiError("closed")
+    token = secrets.token_hex(16)
+    with tx(con):
+        con.execute("UPDATE vol_hands SET revoked_at = ? WHERE session_id = ? AND revoked_at IS NULL", (now(), s["id"]))
+        con.execute("INSERT INTO vol_hands (session_id, token, made_by, created_at) VALUES (?, ?, ?, ?)", (s["id"], _thash(token), v.id, now()))
+        log_action(con, v.id, "vol_hand", f"qr:{s['id']}")
+    return {**_door_view(con, s, True), "token": token}
+
+
+def unhand(con, v: Viewer, sid: int) -> dict:
+    """Taken back: the link and its holder's right end at once."""
+    s, lead = _door(con, v, sid)
+    if not lead:
+        raise ApiError("forbidden")
+    with tx(con):
+        if con.execute("UPDATE vol_hands SET revoked_at = ? WHERE session_id = ? AND revoked_at IS NULL", (now(), s["id"])).rowcount:
+            log_action(con, v.id, "vol_hand_off", f"qr:{s['id']}")
+    return _door_view(con, s, True)
+
+
+def take(con, v: Viewer, token: object) -> int:
+    """The link opened: the first verified student of the club to open it holds the session's door (its id); the same
+    person again: still theirs; anyone after: refused. A President or a Vice opening it takes nothing (theirs already)."""
+    org = _org(con)
+    if not v.student:
+        raise ApiError("forbidden", "student")
+    t = now()
+    h = one(con, """SELECT h.id, h.session_id, h.user_id, s.ended_at FROM vol_hands h JOIN vol_meets m ON m.session_id = h.session_id
+        JOIN qr_sessions s ON s.id = h.session_id WHERE h.token = ? AND m.org_id = ? AND h.revoked_at IS NULL AND h.created_at > ?""", _thash(token), org, t - HAND_MAX)
+    if not h or h["ended_at"] is not None and h["ended_at"] <= t - GRACE:
+        raise ApiError("not_found", "hand")
+    if _president(con, v, org):
+        return h["session_id"]
+    if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", org, v.id):
+        raise ApiError("forbidden", "member")
+    with tx(con):
+        if con.execute("UPDATE vol_hands SET user_id = ?, taken_at = ? WHERE id = ? AND user_id IS NULL AND revoked_at IS NULL", (v.id, t, h["id"])).rowcount:
+            log_action(con, v.id, "vol_hand_taken", f"qr:{h['session_id']}")
+        elif not one(con, "SELECT 1 FROM vol_hands WHERE id = ? AND user_id = ? AND revoked_at IS NULL", h["id"], v.id):
+            raise ApiError("conflict", "taken")
+    return h["session_id"]
 
 
 # ------------------------------------------------------------ the numbers, each read once for all rows
@@ -256,14 +431,25 @@ def _misses(con, org: int, vid: int | None = None) -> dict[int, int]:
     return {k: max(0, x) for k, x in n.items()}
 
 
+def _unmarked(con, org: int, vid: int | None = None) -> dict[int, int]:
+    """{volunteer: shifts they left without checking out of}: the ones someone had to answer for (resolve)."""
+    return {r[0]: r[1] for r in rows(con, f"""SELECT h.vol_id, COUNT(*) FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+        WHERE p.org_id = ? AND h.gone_at IS NULL AND EXISTS (SELECT 1 FROM vol_edits e WHERE e.vol_id = h.vol_id AND e.what = 'resolve' AND e.ref = h.id)
+        {'AND h.vol_id = ?' if vid else ''} GROUP BY h.vol_id""", org, *([vid] if vid else []))}
+
+
 def _names(con, ps) -> dict[int, dict]:
     ids = [p["user_id"] for p in ps if p["user_id"]]
     return {r["id"]: person_ref(r) for r in rows(con, f"SELECT {PERSON_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id IN ({_qs(ids)})", *ids)}
 
 
-def _row(p, who: dict | None, mins: tuple[int, int], misses: int) -> dict:
-    return {"id": p["id"], "name": p["name"] or (who or {}).get("realName") or (who or {}).get("name") or "", "tg": p["tg"], "person": who,
-            "minutes": p["balance"] + mins[0], "open": mins[1], "misses": misses}
+def _name(p, who: dict | None) -> str:
+    return p["name"] or (who or {}).get("realName") or (who or {}).get("name") or ""
+
+
+def _row(p, who: dict | None, mins: tuple[int, int], misses: int, unmarked: int) -> dict:
+    return {"id": p["id"], "name": _name(p, who), "tg": p["tg"], "person": who,
+            "minutes": p["balance"] + mins[0], "open": mins[1], "misses": misses, "unmarked": unmarked}
 
 
 def summary(con, v: Viewer) -> dict | None:
@@ -279,7 +465,8 @@ def summary(con, v: Viewer) -> dict | None:
     mine = None
     if me:
         mins = _minutes(con, org, me["id"]).get(me["id"], (0, 0))
-        mine = {"id": me["id"], "minutes": me["balance"] + mins[0], "open": mins[1], "misses": _misses(con, org, me["id"]).get(me["id"], 0)}
+        mine = {"id": me["id"], "minutes": me["balance"] + mins[0], "open": mins[1], "misses": _misses(con, org, me["id"]).get(me["id"], 0),
+                "unmarked": _unmarked(con, org, me["id"]).get(me["id"], 0)}
     return {"org": org, "ledger": ledger, "edit": pres, "mine": mine}
 
 
@@ -288,14 +475,16 @@ def ledger(con, v: Viewer) -> dict:
     if not _reader(con, v, org):
         raise ApiError("forbidden")
     ps = rows(con, "SELECT * FROM vol_people WHERE org_id = ?", org)
-    who, mins, miss = _names(con, ps), _minutes(con, org), _misses(con, org)
-    people = sorted((_row(p, who.get(p["user_id"]), mins.get(p["id"], (0, 0)), miss.get(p["id"], 0)) for p in ps), key=lambda x: x["name"].lower())
+    who, mins, miss, unm = _names(con, ps), _minutes(con, org), _misses(con, org), _unmarked(con, org)
+    people = sorted((_row(p, who.get(p["user_id"]), mins.get(p["id"], (0, 0)), miss.get(p["id"], 0), unm.get(p["id"], 0)) for p in ps), key=lambda x: x["name"].lower())
     t = now()
     held = {r[0] for r in rows(con, f"SELECT m.session_id FROM vol_meets m JOIN qr_sessions s ON s.id = m.session_id WHERE m.org_id = ? AND {_HELD}", org, t - GRACE)}
     meets = [{"session": r["session_id"], "title": r["title"], "at": r["started_at"] or r["created_at"], "ended": r["ended_at"], "team": bool(r["team"]),
-              "expected": r["expected_n"], "marked": r["marked"], "held": r["session_id"] in held}
+              "expected": r["expected_n"], "marked": r["marked"], "held": r["session_id"] in held,
+              "unresolved": r["unresolved"] if r["ended_at"] is not None else 0}
              for r in rows(con, """SELECT m.*, s.title, s.started_at, s.ended_at, (SELECT COUNT(DISTINCT h.vol_id) FROM vol_shifts h
-                JOIN vol_expected y ON y.vol_id = h.vol_id AND y.session_id = h.session_id WHERE h.session_id = m.session_id AND h.gone_at IS NULL) AS marked
+                JOIN vol_expected y ON y.vol_id = h.vol_id AND y.session_id = h.session_id WHERE h.session_id = m.session_id AND h.gone_at IS NULL) AS marked,
+                (SELECT COUNT(*) FROM vol_shifts h WHERE h.session_id = m.session_id AND h.gone_at IS NULL AND h.out_at IS NULL) AS unresolved
                 FROM vol_meets m JOIN qr_sessions s ON s.id = m.session_id WHERE m.org_id = ? ORDER BY m.session_id DESC LIMIT 40""", org)]
     access = []
     if _president(con, v, org):
@@ -317,10 +506,11 @@ def person(con, v: Viewer, vid: int | None) -> dict:
     if not reader and not (v.student and p["user_id"] == v.id):
         raise ApiError("forbidden")
     who = _names(con, [p]).get(p["user_id"])
-    out = _row(p, who, _minutes(con, org, vid).get(vid, (0, 0)), _misses(con, org, vid).get(vid, 0))
+    out = _row(p, who, _minutes(con, org, vid).get(vid, (0, 0)), _misses(con, org, vid).get(vid, 0), _unmarked(con, org, vid).get(vid, 0))
     out["balance"] = p["balance"]
+    unm = {r[0] for r in rows(con, "SELECT ref FROM vol_edits WHERE vol_id = ? AND what = 'resolve'", vid)}
     out["shifts"] = [{"id": h["id"], "session": h["session_id"], "title": h["title"], "inAt": h["in_at"], "outAt": h["out_at"],
-                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None}
+                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None, "unmarked": h["id"] in unm}
                      for h in rows(con, """SELECT h.*, s.title FROM vol_shifts h LEFT JOIN qr_sessions s ON s.id = h.session_id
                         WHERE h.vol_id = ? AND (h.gone_at IS NULL OR ?) ORDER BY h.in_at DESC""", vid, reader)]
     out["missed"] = [{"session": r[1], "title": r[2], "at": r[3]} for r in _missed(con, org, vid)]
@@ -333,64 +523,22 @@ def person(con, v: Viewer, vid: int | None) -> dict:
     return out
 
 
-# ------------------------------------------------------------ the President's edits (each with a reason, in vol_edits)
-
-def _when(x: object, field: str) -> int:
-    if not isinstance(x, int) or isinstance(x, bool) or not 1577836800 <= x <= now() + 600:  # 2020 .. now: never ahead
-        raise ApiError("bad_input", field)
-    return x
-
-
-def _span(i: int, o: int | None) -> None:
-    if o is not None and not i < o <= i + SHIFT_MAX:
-        raise ApiError("bad_input", "out")
-
-
-def set_balance(con, v: Viewer, vid: int, body: dict) -> dict:
-    org = _need_pres(con, v)
-    reason, p = _reason(body), _person(con, org, vid)
-    b = body.get("minutes")
-    if not isinstance(b, int) or isinstance(b, bool) or not 0 <= b <= 100000 * 60:
-        raise ApiError("bad_input", "minutes")
-    with tx(con):
-        con.execute("UPDATE vol_people SET balance = ? WHERE id = ?", (b, vid))
-        _edit(con, v, vid, "balance", None, p["balance"], b, reason)
-    return person(con, v, vid)
-
-
-def add_shift(con, v: Viewer, vid: int, body: dict) -> dict:
-    """A shift by hand (a camera that didn't work, a mark forgotten): its times as the President gives them."""
-    org = _need_pres(con, v)
-    reason, _ = _reason(body), _person(con, org, vid)
-    i = _when(body.get("inAt"), "in")
-    o = None if body.get("outAt") is None else _when(body.get("outAt"), "out")
-    _span(i, o)
-    sid = body.get("session")
-    if sid is not None and not (isinstance(sid, int) and one(con, "SELECT 1 FROM vol_meets WHERE session_id = ? AND org_id = ?", sid, org)):
-        raise ApiError("bad_input", "session")
-    with tx(con):
-        hid = con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at, in_by, out_by) VALUES (?, ?, ?, ?, ?, ?)",
-                          (vid, sid, i, o, v.id, v.id if o else None)).lastrowid
-        _edit(con, v, vid, "shift_add", hid, None, {"in": i, "out": o, "session": sid}, reason)
-    return person(con, v, vid)
-
+# ------------------------------------------------------------ the President's and Vice's edits (each with a reason, in vol_edits)
 
 def edit_shift(con, v: Viewer, hid: int, body: dict) -> dict:
-    """Its times changed, or taken out (gone) and back; the old values stay in vol_edits."""
+    """A shift taken out (gone) or put back, never its times: hours come from scans alone (Nov 11). The shifts once made
+    or changed by hand stay as recorded; the old values are in vol_edits."""
     org = _need_pres(con, v)
     reason = _reason(body)
     h = one(con, "SELECT h.* FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id WHERE h.id = ? AND p.org_id = ?", hid, org)
     if not h:
         raise ApiError("not_found")
-    i = _when(body["inAt"], "in") if "inAt" in body else h["in_at"]
-    o = (None if body["outAt"] is None else _when(body["outAt"], "out")) if "outAt" in body else h["out_at"]
-    _span(i, o)
-    gone = h["gone_at"] if "gone" not in body else (h["gone_at"] or now()) if body["gone"] is True else None
+    if not isinstance(body.get("gone"), bool):
+        raise ApiError("bad_input", "gone")
+    gone = (h["gone_at"] or now()) if body["gone"] else None
     with tx(con):
-        con.execute("UPDATE vol_shifts SET in_at = ?, out_at = ?, gone_at = ?, in_by = CASE WHEN ? THEN ? ELSE in_by END, out_by = CASE WHEN ? THEN ? ELSE out_by END WHERE id = ?",
-                    (i, o, gone, i != h["in_at"], v.id, o != h["out_at"], v.id, hid))
-        _edit(con, v, h["vol_id"], "shift", hid, {"in": h["in_at"], "out": h["out_at"], "gone": h["gone_at"] is not None},
-              {"in": i, "out": o, "gone": gone is not None}, reason)
+        con.execute("UPDATE vol_shifts SET gone_at = ? WHERE id = ?", (gone, hid))
+        _edit(con, v, h["vol_id"], "shift", hid, {"gone": h["gone_at"] is not None}, {"gone": gone is not None}, reason)
     return person(con, v, h["vol_id"])
 
 

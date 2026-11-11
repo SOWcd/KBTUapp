@@ -123,7 +123,7 @@
   const presVice = $derived(m?.role === 'president' || m?.role === 'vice');
   // the volunteers ledger's club (server logic/vol.py): the list for its President and whom she grants, my own hours for each volunteer
   const vol = $derived(session.me?.vol && session.me.vol.org === m?.org.id ? session.me.vol : null);
-  const volLine = (x: { minutes: number; misses: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + tn('ledg.misses', x.misses) : '');
+  const volLine = (x: { minutes: number; misses: number; unmarked: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + tn('ledg.misses', x.misses) : '') + (x.unmarked ? ' · ' + t('ledg.unmarkedN', { n: x.unmarked }) : '');
   async function askOfficial() {
     if (!m || !path) return;
     const was = path, org = m.org.id;

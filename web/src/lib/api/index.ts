@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -140,10 +140,13 @@ export interface Api {
   volLedger(): Promise<VolLedger>;
   volMine(): Promise<VolPerson>;
   volPerson(id: Id): Promise<VolPerson>;
-  volBalance(id: Id, minutes: number, reason: string): Promise<VolPerson>;
   volLink(id: Id, user: Id | null): Promise<VolPerson>;
-  volAddShift(id: Id, inAt: Ts, outAt: Ts | null, reason: string): Promise<VolPerson>;
-  volEditShift(id: Id, change: { inAt?: Ts; outAt?: Ts | null; gone?: boolean }, reason: string): Promise<VolPerson>;
+  volShiftGone(id: Id, gone: boolean, reason: string): Promise<VolPerson>; // taken out or back; nobody types hours or times
+  volDoor(session: Id): Promise<VolDoor>;
+  volResolve(shift: Id, left: Ts | null): Promise<VolDoor>;              // left null: "was here until the end"
+  volHand(session: Id): Promise<VolDoor & { token: string }>;            // the one-time link's token, given once
+  volUnhand(session: Id): Promise<VolDoor>;
+  volTake(token: string): Promise<import('./types').ScreenSession>;      // the link opened: that session, mine to run
   volAddMiss(id: Id, n: 1 | -1, reason: string): Promise<VolPerson>;
   volDropMiss(id: Id, reason: string): Promise<VolPerson>;
   volTeam(session: Id, team: boolean): Promise<VolLedger>;

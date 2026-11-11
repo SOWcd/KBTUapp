@@ -1,5 +1,6 @@
 """The volunteers ledger (logic/vol.py, VOLUNTEERS=<slug>): the import from the club's xlsx (dry run, apply, again, undo),
-hours from check-in, the misses' validity rule, who reads and who edits, and deleting an account. The xlsx is synthetic,
+hours from check-in alone (nobody types them), who left without checking out, the door handed over by a link, the
+misses' validity rule, who reads and who edits, and deleting an account. The xlsx is synthetic,
 made here with the club's sheet and header names (never the real file)."""
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from kbtu import app as server, checkin, db, logic, xlsx
 from kbtu.logic import vol
 from test_core import delete_now, login, tma  # noqa: F401
 from test_core import env  # noqa: F401  (the fixture)
-from test_review_checkin import _scan
+from test_review_checkin import _scan, _signed
 
 MEM, HRS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"  # the club's two sheets
 FIO_LAT, KURS, PHONE, TG = "\u0424\u0418\u041e \u043d\u0430 \u043b\u0430\u0442\u0438\u043d\u0438\u0446\u0435", "\u041a\u0443\u0440\u0441", \
@@ -208,41 +209,34 @@ def test_who_reads_and_who_edits(zz):
     c, _, con, org = zz
     vol.apply(con, org, vol.plan(_book()), "list")
     vid = con.execute("SELECT id FROM vol_people WHERE tg = 'bek_test'").fetchone()[0]
-    vice = _member(c, con, org, 5, "vice", "vice")
+    head = _member(c, con, org, 5, "head", "head")
     me3 = _member(c, con, org, 3, "vika")
     login(c, 6, "out")
-    for tg in (5, 3, 6):                                                          # Vice, a member, a stranger: no ledger
+    for tg in (5, 3, 6):                                                          # a Head, a member, a stranger: no ledger
         assert c.get("/api/vol", headers=tma(tg)).status_code == 403
         assert c.get(f"/api/vol/people/{vid}", headers=tma(tg)).status_code == 403
     assert c.post("/api/vol/access", headers=tma(5), json={"user": me3, "on": True}).status_code == 403
     assert c.post("/api/vol/access", headers=tma(P), json={"user": _uid(c, 6), "on": True}).status_code == 400  # not in the club
-    assert c.post("/api/vol/access", headers=tma(P), json={"user": vice, "on": True}).status_code == 200
+    assert c.post("/api/vol/access", headers=tma(P), json={"user": head, "on": True}).status_code == 200
     _agree(c, 5)
     seen = c.get(f"/api/vol/people/{vid}", headers=tma(5)).json()
     assert seen["raw"][MEM][KURS] == "3"                                          # granted: reads, columns included
-    shift = {"inAt": int(time.time()) - 7200, "outAt": int(time.time()) - 3600, "reason": "camera broke"}
-    assert c.post(f"/api/vol/people/{vid}/shifts", headers=tma(5), json=shift).status_code == 403   # but never edits
-    assert c.post(f"/api/vol/people/{vid}/shifts", headers=tma(P), json={**shift, "reason": ""}).status_code == 400  # a reason is a must
-    got = c.post(f"/api/vol/people/{vid}/shifts", headers=tma(P), json=shift).json()
-    assert got["minutes"] == 60 and got["shifts"][0]["byHand"]
-    hid = got["shifts"][0]["id"]
-    got = c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"outAt": shift["inAt"] + 1800, "reason": "left early"}).json()
-    assert got["minutes"] == 30
-    assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"outAt": shift["inAt"] - 1, "reason": "oops"}).status_code == 400
+    t = int(time.time())
+    hid = con.execute("INSERT INTO vol_shifts (vol_id, in_at, out_at) VALUES (?, ?, ?)", (vid, t - 7200, t - 3600)).lastrowid  # an old hand-made one
+    assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(5), json={"gone": True, "reason": "duplicate"}).status_code == 403   # but never edits
+    assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"gone": True, "reason": ""}).status_code == 400  # a reason is a must
     assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"gone": True, "reason": "duplicate"}).json()["minutes"] == 0
+    assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"gone": False, "reason": "it was real"}).json()["minutes"] == 60
     got = c.post(f"/api/vol/people/{vid}/misses", headers=tma(P), json={"n": 1, "reason": "missed the meeting"}).json()
     assert got["misses"] == 1
     got = c.post(f"/api/vol/misses/{got['manual'][0]['id']}/drop", headers=tma(P), json={"reason": "typo"}).json()
     assert got["misses"] == 0
-    got = c.post(f"/api/vol/people/{vid}/balance", headers=tma(P), json={"minutes": 600, "reason": "old sheet"}).json()
-    assert got["minutes"] == 600
     edits = got["edits"]
-    assert [e["what"] for e in edits] == ["balance", "miss_gone", "miss", "shift", "shift", "shift_add"]
-    assert all("+7" not in str(e) for e in edits) and edits[0]["old"] == 0 and edits[0]["new"] == 600
-    # her own shifts and hours too (owner, Nov 10)
+    assert [e["what"] for e in edits] == ["miss_gone", "miss", "shift", "shift"]
+    assert all("+7" not in str(e) for e in edits)
     own = c.get("/api/me", headers=tma(P)).json()["vol"]
     assert own["edit"] and own["ledger"] and own["mine"] is None
-    assert c.post("/api/vol/access", headers=tma(P), json={"user": vice, "on": False}).status_code == 200
+    assert c.post("/api/vol/access", headers=tma(P), json={"user": head, "on": False}).status_code == 200
     assert c.get("/api/vol", headers=tma(5)).status_code == 403
 
 
@@ -471,3 +465,239 @@ def test_an_ambiguous_name_matches_nobody():
     by = {(r["tg"], tuple(sorted(r["sheets"]))): r["balance"] for r in p["people"]}
     assert len(p["people"]) == 3 and by[("aru_two", tuple(sorted((HRS, MEM))))] == 600
     assert by[(None, (MEM,))] == 0 and by[(None, (HRS,))] == 180
+
+
+# ------------------------------------------------------------ hours only from scans; the unmarked; the door by a link (Nov 11)
+
+def _door(c, sid, tg=P):
+    """Start (once) and the QR this person shows."""
+    c.post(f"/api/screens/{sid}/start", headers=tma(tg))
+    return c.post(f"/api/screens/{sid}/show", headers=tma(tg)).json()["param"]
+
+
+def _shift(con, uid, sid):
+    return con.execute("SELECT h.* FROM vol_shifts h JOIN vol_people v ON v.id = h.vol_id WHERE v.user_id = ? AND h.session_id = ?", (uid, sid)).fetchone()
+
+
+def _mins(c, tg):
+    return c.get("/api/me", headers=tma(tg)).json()["vol"]["mine"]
+
+
+def test_nobody_types_hours(zz, monkeypatch):
+    """No route and no CLI command sets minutes, a shift's times or a balance: for the President, a Vice, a reader, the
+    volunteer and the app's admin alike."""
+    from kbtu import admin
+    c, cfg, con, org = zz
+    _member(c, con, org, 5, "vice", "vice")
+    reader = _member(c, con, org, 6, "reader")
+    me3 = _member(c, con, org, 3, "vika")
+    login(c, 7, "boss")
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (_uid(c, 7),))
+    assert c.post("/api/vol/access", headers=tma(P), json={"user": reader, "on": True}).status_code == 200
+    vid = con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, 'V', 0)", (org,)).lastrowid
+    assert c.post(f"/api/vol/people/{vid}/link", headers=tma(P), json={"user": me3}).status_code == 200
+    t = int(time.time())
+    hid = con.execute("INSERT INTO vol_shifts (vol_id, in_at, out_at) VALUES (?, ?, ?)", (vid, t - 7200, t - 3600)).lastrowid
+    for tg in (P, 5, 6, 3, 7):
+        if tg != 7:
+            _agree(c, tg)
+        h = tma(tg)
+        assert c.post(f"/api/vol/people/{vid}/shifts", headers=h, json={"inAt": t - 900, "outAt": t - 60, "reason": "camera broke"}).status_code in (404, 405)
+        assert c.post(f"/api/vol/people/{vid}/balance", headers=h, json={"minutes": 6000, "reason": "old sheet"}).status_code in (404, 405)
+        for body in ({"outAt": t, "reason": "left late"}, {"inAt": t - 86000, "reason": "came early"}, {"minutes": 999, "reason": "more"}):
+            assert c.patch(f"/api/vol/shifts/{hid}", headers=h, json=body).status_code in (400, 403)
+        assert c.patch(f"/api/vol/shifts/{hid}", headers=h, json={"gone": False, "inAt": t - 86000, "outAt": t, "reason": "smuggled"}).status_code in (200, 403)
+        assert c.post(f"/api/vol/shifts/{hid}/resolve", headers=h, json={"left": t}).status_code in (403, 404, 409)  # no session: nothing to answer for
+    assert tuple(con.execute("SELECT in_at, out_at FROM vol_shifts WHERE id = ?", (hid,)).fetchone()) == (t - 7200, t - 3600)
+    assert con.execute("SELECT balance FROM vol_people WHERE id = ?", (vid,)).fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM vol_shifts").fetchone()[0] == 1
+    paths = {(m, r.path) for r in c.app.routes if "/vol/" in getattr(r, "path", "") for m in r.methods}
+    assert not any("balance" in p or p.endswith("/shifts") for _, p in paths)
+    monkeypatch.setattr(admin.config, "load", lambda: dataclasses.replace(cfg, volunteers="zhzh"))
+    for cmd in (["vol", "shift", str(vid), "60"], ["vol", "balance", str(vid), "600"], ["vol", "hours", str(vid), "10"], ["vol", "resolve", str(hid)]):
+        with pytest.raises(SystemExit):
+            admin.main(cmd)
+    assert con.execute("SELECT balance FROM vol_people WHERE id = ?", (vid,)).fetchone()[0] == 0
+
+
+def test_vice_is_president(zz):
+    c, _, con, org = zz
+    vice = _member(c, con, org, 5, "vice", "vice")
+    me3 = _member(c, con, org, 3, "vika")
+    _agree(c, 5)
+    h = tma(5)
+    assert c.get("/api/me", headers=h).json()["vol"]["edit"] and c.get("/api/vol", headers=h).json()["edit"]
+    vid = con.execute("INSERT INTO vol_people (org_id, name, created_at) VALUES (?, 'V', 0)", (org,)).lastrowid
+    assert c.get(f"/api/vol/people/{vid}", headers=h).status_code == 200
+    assert c.post(f"/api/vol/people/{vid}/link", headers=h, json={"user": me3}).status_code == 200
+    assert c.post("/api/vol/access", headers=h, json={"user": me3, "on": True}).json()["access"][0]["id"] == me3
+    sid = checkin.new(con, "Teambuilding", [], org)
+    assert c.post(f"/api/vol/meets/{sid}", headers=h, json={"team": True}).status_code == 200
+    assert c.post(f"/api/vol/people/{vid}/misses", headers=h, json={"n": 1, "reason": "missed the meeting"}).json()["misses"] == 1
+    assert c.post(f"/api/vol/meets/{sid}/hand", headers=h).status_code == 200
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=h).json()["lead"]
+    con.execute("UPDATE org_members SET role = 'head' WHERE user_id = ?", (vice,))
+    assert c.get("/api/vol", headers=h).status_code == 403                      # the role, not the person
+
+
+def test_finish_leaves_the_unmarked_to_be_answered_for(zz):
+    c, _, con, org = zz
+    u3, u4 = _member(c, con, org, 3, "vika"), _member(c, con, org, 4, "bek")
+    vice = _member(c, con, org, 5, "vice", "vice")
+    reader = _member(c, con, org, 6, "reader")
+    c.post("/api/vol/access", headers=tma(P), json={"user": reader, "on": True})
+    login(c, 8, "stranger")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    p = _door(c, sid)
+    for tg in (3, 4, 5):                                                        # the Vice came as a volunteer: he runs nothing
+        assert _scan(c, tg, p).status_code == 200
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 7200 WHERE session_id = ?", (sid,))
+    h3, h4, h5 = (_shift(con, u, sid) for u in (u3, u4, vice))
+    for tg in (3, 4, 5, 6):
+        _agree(c, tg)
+    assert c.post(f"/api/vol/shifts/{h3['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 409   # not finished yet
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(P)).status_code == 200
+    end = con.execute("SELECT ended_at FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0]
+    assert [_shift(con, u, sid)["out_at"] for u in (u3, u4, vice)] == [None] * 3   # nobody is closed by Finish itself
+    assert _mins(c, 3) == {**_mins(c, 3), "minutes": 0, "open": 1, "unmarked": 0}
+    assert next(m for m in c.get("/api/vol", headers=tma(P)).json()["meets"] if m["session"] == sid)["unresolved"] == 3
+    door = c.get(f"/api/vol/meets/{sid}/door", headers=tma(P)).json()
+    assert [(x["id"], x["inAt"], x["outAt"]) for x in door["unmarked"]] == [(h["id"], h["in_at"], None) for h in (h3, h4, h5)] and door["ended"] == end
+    for tg in (3, 6, 8):                                                        # a volunteer, a reader, a stranger: not theirs
+        assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(tg)).status_code == 403
+        assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(tg), json={"left": None}).status_code == 403
+    assert c.post(f"/api/vol/shifts/{h5['id']}/resolve", headers=tma(5), json={"left": None}).json()["message"] == "own"   # never one's own
+    assert _shift(con, u4, sid)["out_at"] is None and _shift(con, vice, sid)["out_at"] is None
+    # "was here until the end": to Finish
+    assert c.post(f"/api/vol/shifts/{h3['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 200
+    assert _shift(con, u3, sid)["out_at"] == end and _mins(c, 3)["minutes"] == (end - h3["in_at"]) // 60 >= 120
+    # "left at T": only from the check-in to Finish
+    for bad in (h4["in_at"] - 120, end + 60, "18:30", True, 1.5):
+        assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(5), json={"left": bad}).status_code == 400
+    assert _shift(con, u4, sid)["out_at"] is None
+    assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(5), json={"left": h4["in_at"] + 1800}).status_code == 200   # the Vice answers too
+    assert _mins(c, 4) == {**_mins(c, 4), "minutes": 30, "open": 0, "unmarked": 1}
+    e = con.execute("SELECT * FROM vol_edits WHERE what = 'resolve' AND ref = ?", (h4["id"],)).fetchone()
+    assert e["by"] == vice and e["reason"] == "" and __import__("json").loads(e["new"]) == {"out": h4["in_at"] + 1800, "left_unmarked": True, "until_end": False}
+    # the counter: in the ledger's row, on the person's page, on my own hours; no minutes taken off
+    rows_ = {r["id"]: r["unmarked"] for r in c.get("/api/vol", headers=tma(6)).json()["people"]}
+    assert rows_[h3["vol_id"]] == rows_[h4["vol_id"]] == 1 and rows_[h5["vol_id"]] == 0
+    mine = c.get("/api/vol/mine", headers=tma(4)).json()
+    assert mine["unmarked"] == 1 and mine["shifts"][0]["unmarked"] and mine["minutes"] == 30
+    # answered wrongly: answered again, the counter stays one
+    assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 200
+    assert _mins(c, 4)["unmarked"] == 1 and _shift(con, u4, sid)["out_at"] == end
+    assert c.post(f"/api/vol/shifts/{h5['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 200
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(P)).json()["unmarked"][0]["outAt"] == end
+    # a shift closed by its own check-out scan is nobody's to answer for
+    hid = con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, out_at) VALUES (?, ?, ?, ?)", (h3["vol_id"], sid, end - 600, end - 300)).lastrowid
+    assert c.post(f"/api/vol/shifts/{hid}/resolve", headers=tma(P), json={"left": None}).status_code == 409
+
+
+def test_who_runs_the_door_is_on_shift_from_the_first_mark(zz):
+    c, cfg, con, org = zz
+    pres = _uid(c, P)
+    u3 = _member(c, con, org, 3, "vika")
+    vice = _member(c, con, org, 5, "vice", "vice")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    p = _door(c, sid)
+    assert _shift(con, pres, sid) is None                                      # showing the QR alone opens nothing
+    assert _scan(c, 3, p).status_code == 200
+    mine, hers = _shift(con, u3, sid), _shift(con, pres, sid)
+    assert hers["in_at"] == mine["in_at"] and hers["in_by"] == pres and hers["out_at"] is None
+    assert _shift(con, vice, sid) is None                                      # the Vice ran nothing here
+    assert _scan(c, 5, p).status_code == 200                                   # he comes as a volunteer...
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 3600 WHERE session_id = ?", (sid,))
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(5)).status_code == 200   # ...and presses Finish
+    end = con.execute("SELECT ended_at FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0]
+    assert _shift(con, pres, sid)["out_at"] == end and _shift(con, vice, sid)["out_at"] == end   # who ran it and who finished it
+    assert _shift(con, u3, sid)["out_at"] is None
+    assert con.execute("SELECT COUNT(*) FROM vol_edits WHERE what = 'resolve'").fetchone()[0] == 0   # no "left unmarked" for them
+    # her own check-out comes first
+    sid2 = _meet(c, con, org, team=False, title="Fair")
+    p = _door(c, sid2)
+    assert _scan(c, 3, p).status_code == 200
+    c.post(f"/api/screens/{sid2}/out", headers=tma(P))
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 3600 WHERE session_id = ?", (sid2,))
+    assert _scan(c, P, c.post(f"/api/screens/{sid2}/show", headers=tma(P)).json()["param"]).json()["left"]
+    out = _shift(con, pres, sid2)["out_at"]
+    con.execute("UPDATE vol_shifts SET out_at = out_at - 600 WHERE session_id = ? AND out_at IS NOT NULL", (sid2,))
+    c.post(f"/api/screens/{sid2}/finish", headers=tma(P))
+    assert out is not None and _shift(con, pres, sid2)["out_at"] == out - 600 and _shift(con, u3, sid2)["out_at"] is None
+    assert _scan(c, 5, _signed(cfg, sid2, int(time.time()) // checkin.SLOT)).status_code != 200   # leaving without having come: still refused
+
+
+def test_the_door_handed_over_by_a_link(zz):
+    c, cfg, con, org = zz
+    u3, u4 = _member(c, con, org, 3, "vika"), _member(c, con, org, 4, "bek")
+    _member(c, con, org, 5, "vice", "vice")
+    login(c, 8, "stranger")
+    sid, other = _meet(c, con, org, team=False, title="Concert"), _meet(c, con, org, team=False, title="Fair")
+    for tg in (3, 4, 5):
+        _agree(c, tg)                                                                   # on the roster now: the ledger's part of the policy
+    assert c.post(f"/api/vol/meets/{sid}/hand", headers=tma(3)).status_code == 403      # only the President and Vice make it
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(3)).status_code == 403
+    got = c.post(f"/api/vol/meets/{sid}/hand", headers=tma(P)).json()
+    tok = got["token"]
+    assert got["hand"] == {"holder": None} and len(tok) >= 32
+    dump = "".join(str(tuple(r)) for t in ("vol_hands", "audit_log", "meta") for r in con.execute(f"SELECT * FROM {t}"))
+    assert tok not in dump                                                              # hashed, never logged
+    assert c.post("/api/vol/hand", headers=tma(8), json={"token": tok}).status_code == 403   # not in the club
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok[:-1] + "x"}).status_code == 404
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": None}).status_code == 404
+    assert c.post("/api/vol/hand", headers=tma(5), json={"token": tok}).json()["session"] == sid    # the Vice looks: takes nothing
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(P)).json()["hand"] == {"holder": None}
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok}).json()["session"] == sid
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok}).status_code == 200          # mine: opened again
+    assert c.post("/api/vol/hand", headers=tma(4), json={"token": tok}).status_code == 409          # one-time
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(4)).status_code == 403
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(5)).json()["hand"]["holder"]["id"] == u3  # who holds it
+    # this session's door, nothing else
+    assert sid in [x["session"] for x in c.get("/api/screens", headers=tma(3)).json()]
+    p = _door(c, sid, 3)
+    assert p and c.post(f"/api/screens/{sid}/out", headers=tma(3)).status_code == 200 and c.post(f"/api/screens/{sid}/in", headers=tma(3)).status_code == 200
+    for method, path in (("post", f"/api/screens/{sid}/csv"), ("post", f"/api/screens/{sid}/unpair"), ("post", f"/api/screens/{sid}/helpers"),
+                         ("delete", f"/api/screens/{sid}/helpers"), ("post", f"/api/screens/{other}/start"), ("post", f"/api/screens/{other}/finish"),
+                         ("get", "/api/vol"), ("post", f"/api/vol/meets/{sid}/hand"), ("delete", f"/api/vol/meets/{sid}/hand"),
+                         ("get", f"/api/vol/meets/{other}/door"), ("post", f"/api/vol/meets/{other}/hand")):
+        assert getattr(c, method)(path, headers=tma(3)).status_code == 403, path
+    assert c.post(f"/api/vol/meets/{sid}", headers=tma(3), json={"team": True}).status_code == 403
+    assert _scan(c, 4, p).status_code == 200
+    h4 = _shift(con, u4, sid)
+    mine = _shift(con, u3, sid)
+    assert mine["in_at"] == h4["in_at"] and mine["in_by"] == u3                         # running the door: on shift from the first mark
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 3600 WHERE session_id = ?", (sid,))
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(3)).status_code == 200
+    end = con.execute("SELECT ended_at FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0]
+    assert _shift(con, u3, sid)["out_at"] == end
+    door = c.get(f"/api/vol/meets/{sid}/door", headers=tma(3)).json()
+    assert [x["id"] for x in door["unmarked"]] == [h4["id"]] and door["hand"] is None and not door["lead"]
+    assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(3), json={"left": end - 60}).status_code == 200
+    assert c.post(f"/api/vol/meets/{sid}/hand", headers=tma(P)).status_code == 409      # finished: no new link
+    # it ends GRACE after Finish
+    con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ?", (int(time.time()) - vol.GRACE - 60, sid))
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(3)).status_code == 403
+    assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(3), json={"left": None}).status_code == 403
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok}).status_code == 404
+    assert sid not in [x["session"] for x in c.get("/api/screens", headers=tma(3)).json()]
+    # taken back; a new link ends the last; leaving the club ends it
+    old = c.post(f"/api/vol/meets/{other}/hand", headers=tma(5)).json()["token"]        # the Vice makes one too
+    tok2 = c.post(f"/api/vol/meets/{other}/hand", headers=tma(P)).json()["token"]
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": old}).status_code == 404
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok2}).status_code == 200
+    assert c.post(f"/api/screens/{other}/start", headers=tma(3)).status_code == 200
+    assert c.delete(f"/api/vol/meets/{other}/hand", headers=tma(P)).json()["hand"] is None
+    assert c.post(f"/api/screens/{other}/show", headers=tma(3)).status_code == 403
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok2}).status_code == 404
+    tok3 = c.post(f"/api/vol/meets/{other}/hand", headers=tma(P)).json()["token"]
+    assert c.post("/api/vol/hand", headers=tma(4), json={"token": tok3}).status_code == 200
+    con.execute("UPDATE vol_hands SET created_at = created_at - ? WHERE user_id = ?", (vol.HAND_MAX + 60, u4))
+    assert c.post(f"/api/screens/{other}/show", headers=tma(4)).status_code == 403      # never finished: the link still dies
+    con.execute("UPDATE vol_hands SET created_at = ? WHERE user_id = ?", (int(time.time()), u4))
+    assert c.post(f"/api/screens/{other}/show", headers=tma(4)).status_code == 200
+    con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (org, u4))
+    assert c.post(f"/api/screens/{other}/show", headers=tma(4)).status_code == 403
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, u4))
+    assert ("vol_hands", "user_id") in logic._DEL_GONE
+    delete_now(c, cfg, tma(4))                                                          # an account deleted: its right goes with it
+    assert con.execute("SELECT COUNT(*) FROM vol_hands WHERE user_id = ?", (u4,)).fetchone()[0] == 0

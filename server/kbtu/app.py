@@ -1516,18 +1516,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def vol_person(con: Con, v: VolMe, vid: int):
         return logic.vol.person(con, v, vid)
 
-    @app.post("/api/vol/people/{vid}/balance")
-    def vol_balance(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
-        return logic.vol.set_balance(con, v, vid, body)
-
     @app.post("/api/vol/people/{vid}/link")
     def vol_link(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.link(con, v, vid, body)
 
-    @app.post("/api/vol/people/{vid}/shifts")
-    def vol_add_shift(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
-        return logic.vol.add_shift(con, v, vid, body)
-
+    # hours come from scans alone: no route enters a shift, its times or a balance (Nov 11); this one takes a shift out or back
     @app.patch("/api/vol/shifts/{hid}")
     def vol_edit_shift(con: Con, v: VolMe, hid: int, body: dict = Body(...)):
         return logic.vol.edit_shift(con, v, hid, body)
@@ -1543,6 +1536,27 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/vol/meets/{sid}")
     def vol_team(con: Con, v: VolMe, sid: int, body: dict = Body(...)):
         return logic.vol.set_team(con, v, sid, body)
+
+    # a session's door: who left without checking out (answered after Finish), and the one-time link that hands the door over
+    @app.get("/api/vol/meets/{sid}/door")
+    def vol_door(con: Con, v: VolMe, sid: int):
+        return logic.vol.door(con, v, sid)
+
+    @app.post("/api/vol/shifts/{hid}/resolve")
+    def vol_resolve(con: Con, v: VolMe, hid: int, body: dict = Body(...)):
+        return logic.vol.resolve(con, v, hid, body)
+
+    @app.post("/api/vol/meets/{sid}/hand")
+    def vol_hand(con: Con, v: VolMe, sid: int):
+        return logic.vol.hand(con, v, sid)
+
+    @app.delete("/api/vol/meets/{sid}/hand")
+    def vol_unhand(con: Con, v: VolMe, sid: int):
+        return logic.vol.unhand(con, v, sid)
+
+    @app.post("/api/vol/hand")  # the link opened; the token in the body, never in a URL (the access log)
+    def vol_take(con: Con, v: VolMe, body: dict = Body(...)):
+        return qr.handed(con, cfg.token_key, v, body.get("token"))
 
     @app.post("/api/vol/access")
     def vol_access(con: Con, v: VolMe, body: dict = Body(...)):
