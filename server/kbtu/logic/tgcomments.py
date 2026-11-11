@@ -31,7 +31,6 @@ EDIT_LOOKS = 10            # an author's edits of reported comments a day that m
 AI_LOOKS = 30              # a reporter's reports a day that may each bring a fresh AI look (reports themselves: no cap, owner)
 GOOD_AT = 10              # confirmed reports on as many different authors, none wrong: the owner hears (never a promotion)
 LIVE = ("open", "queued")  # in the moderators' queue, still up
-WRONG = ("overturned", "abuse")
 
 
 def commenter(con, tg_id: int | None) -> str | None:

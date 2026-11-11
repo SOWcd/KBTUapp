@@ -148,11 +148,6 @@ export const sheets = {
   anthem: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
-  /** Admin → Awards: give a manual award to a person, by the scanner, by a link, to a check-in's people */
-  adminAwards: () => {},
-  /** the two older award sheets' names: both open Admin → Awards now */
-  give: () => {},
-  badges: () => {},
   /** Admin → Clubs and schools; at: that club opened in the list (Admin's search) */
   adminClubs: (_at?: Id) => {},
   adminChats: () => {},

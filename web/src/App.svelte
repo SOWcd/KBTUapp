@@ -198,7 +198,6 @@
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
   sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {}, 'sheet.awards');
-  sheets.adminAwards = sheets.give = sheets.badges = () => lazy(() => import('./screens/admin/AdminAwards.svelte'), {});
   sheets.adminClubs = (at) => lazy(() => import('./screens/admin/AdminClubs.svelte'), { at });
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});

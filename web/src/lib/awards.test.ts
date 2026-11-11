@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, isCoin, isMedal, layersOf, legendOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, awardOf, codesOf } from './awards';
+import { artOf, isCoin, isMedal, layersOf, legendOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -82,6 +82,5 @@ it('lists a badge once, its variants inside', () => {
   expect(CATALOG.map((a) => a.code)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26']); // Fuel and Club founder: art being redone
   expect(codesOf(MANUAL[3])).toEqual(['init26p', 'init26', 'init26f']);
   expect(codesOf(MANUAL[2])).toEqual(['bugs']);
-  for (const c of ['init26p', 'init26', 'init26f']) expect(awardOf(c).code).toBe('init26'); // a held Performer or Guest holds it
   expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26p', 'init26', 'init26f', 'club_founder', 'supporter']);
 });

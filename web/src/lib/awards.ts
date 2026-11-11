@@ -64,8 +64,6 @@ export const manualMedal = (code: string, emoji: string, held = true): Achieveme
 export const manualTitle = (a: Manual): string => (a.variants ? t(`ach.${a.code}.name` as 'ach.init26.name') : manualName(a.code));
 /** an award's grant codes: its variants, else itself */
 export const codesOf = (a: Manual): GrantItem['code'][] => a.variants?.map((v) => v.code) ?? [a.code as GrantItem['code']];
-/** the award a grant code belongs to */
-export const awardOf = (code: string): Manual => MANUAL.find((a) => codesOf(a).includes(code as GrantItem['code']))!;
 /** a manual award by name: a badge's variant with its badge ("Initiation 2026 · Performer"), or short (the variant alone) */
 export const manualName = (code: string, short = false): string =>
   code.startsWith('init26') ? (short ? '' : t('ach.init26.name') + ' · ') + variantName('init26', code) : t(`ach.${code}.name` as 'ach.bugs.name');

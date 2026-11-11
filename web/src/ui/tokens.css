@@ -56,9 +56,8 @@
   --danger: #F0524A;
   --gold: #F5B13D;
 
-  /* tap targets; --btn-*: the buttons' heights before the design system (Button uses --ctl-* now) */
+  /* tap targets */
   --tap: 44px;
-  --btn-l: 52px; --btn-m: 42px; --btn-s: 32px;
 
   /* Safe areas. Telegram (fullscreen) sets --tg-* on <html>; env() covers a plain browser.
      --tg-content-safe-area-inset-top is the row with Telegram's own Close / ⋯ buttons. */
