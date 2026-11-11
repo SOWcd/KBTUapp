@@ -188,7 +188,7 @@ Board = Annotated[Viewer, Depends(board_viewer)]
 
 
 def board_writer(request: Request, v: Board, con: Con) -> Viewer:
-    """Writing on the forum: also agreed to the policy in force (its section on the forum, the AI's cross-border look);
+    """Writing on the forum: also agreed to the policy in force;
     the app asks first, the server holds it too. Staff trying it (BOARD=staff) are on the policy they have."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
     if request.app.state.cfg.board == "all" and s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
@@ -211,7 +211,7 @@ FChan = Annotated[Viewer, Depends(fchan_viewer)]
 
 def fchan_writer(request: Request, v: FChan, con: Con) -> Viewer:
     """Posting to the channel: a student Microsoft confirmed (a typed-in ID could be anyone's), on the policy in force
-    (its section on the channel: public posts, the AI's cross-border look)."""
+    (public posts, the AI's cross-border look)."""
     logic.need_student(v)
     s = logic.one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", v.id)
     if not s or s["manual"]:
@@ -230,7 +230,7 @@ def policy_for(con, v: Viewer, policy: str) -> str:
 
 
 def vol_viewer(request: Request, v: Me, con: Con) -> Viewer:
-    """The volunteers ledger (logic/vol.py): someone it concerns uses it only once agreed to its section (+vol1)."""
+    """The volunteers ledger (logic/vol.py): someone it concerns uses it only once agreed to its part of the policy (+vol1)."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
     want = policy_for(con, v, request.app.state.policy)
     if s and want != request.app.state.policy and s[0] not in (want, "staff", "admin"):
@@ -2248,19 +2248,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
-        # each forum's part (and the version line that names it) only with that forum on for everyone
-        # the channel's comments section comes last: its number follows the forums' (11 with neither)
-        tgcn = 11 + cfg.forum + (cfg.board == "all")
-        fchn = tgcn + bool(cfg.tgc_chat)
-        body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(fchn))  # the channel's posts: after it
-        body = body.replace("{{voln}}", str(fchn + bool(cfg.forum_channel)))  # a club's volunteers ledger
-        apln = fchn + bool(cfg.forum_channel) + bool(cfg.volunteers)
-        body = body.replace("{{apln}}", str(apln)).replace("{{chsn}}", str(apln + bool(cfg.appeals)))  # appeals to SG, then the chat sync: last
-        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
-                         ("ai", ai_on), ("vol", bool(cfg.volunteers)), ("apl", bool(cfg.appeals)), ("chs", cfg.chat_sync)):
-            off = f"no{part}" if on else part
-            body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
-        body = re.sub(r"<!-- TODO\(legal.*?-->\n?", "", body, flags=re.S)  # notes for whoever writes the text, never served
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
         other = "terms" if doc == "privacy" else "privacy"
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

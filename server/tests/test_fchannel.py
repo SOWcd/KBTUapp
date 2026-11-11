@@ -493,17 +493,15 @@ def test_old_board_cleaned_up(env):
 
 
 def test_post_off_and_gate(env, monkeypatch):
-    """FORUM_CHANNEL unset: none of it; set: the policy gains its section and version; a student added by hand (not
+    """FORUM_CHANNEL unset: none of it; set: the policy and its version are the same; a student added by hand (not
     Microsoft) and one on the old policy can't post."""
     c0, cfg0 = env
     login(c0, 1, "ann"), login(c0, 2, "bob")
     assert c0.get("/api/forum-posts", headers=tma(1)).status_code == 404 and "forumChannel" not in c0.get("/api/me", headers=tma(1)).json()
-    assert "{{fchn}}" not in c0.get("/privacy").text and "@KBTUappForum" not in c0.get("/privacy").text
     c, cfg, _, _ = setup(env, monkeypatch)
     me = TestClient(server.create(dataclasses.replace(cfg0, forum_channel=CH))).get("/api/me", headers=tma(1)).json()
-    assert me["consentNow"].endswith(logic.CONSENT_FCH + logic.CONSENT_AI)
-    page = TestClient(server.create(dataclasses.replace(cfg0, forum_channel=CH))).get("/privacy?lang=en").text
-    assert "@KBTUappForum" in page and "{{" not in page
+    assert me["consentNow"] == logic.CONSENT
+    assert "@KBTUappForum" in c0.get("/privacy").text                      # described whether the switch is on or not
     con = db.connect(cfg.db_path)
     con.execute("UPDATE students SET manual = 1 WHERE user_id = (SELECT id FROM users WHERE tg_id = 2)")
     assert c.post("/api/forum-posts", headers=tma(2), json={"body": "hello all"}).json()["error"] == "need_student"
@@ -700,7 +698,7 @@ def test_post_faces_and_reactions(env, monkeypatch):
     k = card()
     assert k["comments"] == 5 and k["faces"] == []                                              # counted; no one agreed to show his face yet
     assert con.execute("SELECT COUNT(*) FROM fchan_comments").fetchone()[0] == 5               # recorded all the same
-    con.execute("UPDATE students SET consent_version = '1+tgc1' || ? WHERE user_id IN (2, 3, 5)", (logic.CONSENT_FCH,))
+    con.execute("UPDATE students SET consent_version = ? || '+vol1' WHERE user_id IN (2, 3, 5)", (logic.CONSENT,))
     con.execute("UPDATE users SET role = 'moderator' WHERE id = 4")                             # staff: on staff terms
     names = lambda pid=p["id"]: [f["name"] for f in card(pid)["faces"]]  # noqa: E731
     k = card()

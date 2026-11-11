@@ -53,8 +53,10 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   write it as `\u` escapes.
 - **The database**: never edit `schema.sql`; append a migration (one transaction). A CHECK can't be altered in
   SQLite and a table rebuild with foreign keys on cascades deletes into its children: prefer a new table or column.
-- **Personal data**: never in the repo, logs or screenshots. New personal data needs the privacy policy to say so
-  first (a new section behind its feature flag, a new consent version); see `board_on` / `FORUM` in `app.py`.
+- **Personal data**: never in the repo, logs or screenshots. One policy by data categories, one consent
+  version for everyone (`CONSENT` in `logic/account.py`), whatever the flags. A new category of personal data: the
+  policy says so first (Codex writes it), and the feature asks its own consent inside itself (like `appeals.CONSENT`),
+  never a suffix on the version.
   Deleting an account must cover every new table (`_DEL_GONE` in `logic/account.py`; a test checks the schema).
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
@@ -83,12 +85,13 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 ## Feature switches (server env)
 
 - `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
-- `BOARD=1`: the privacy section 12 (the assistant, sign-up questions, the map's flaws) for every student, with a new
-  consent version; `BOARD=staff`: admins and moderators only. Its old in-app forum is off for good.
+- `BOARD=1`: the assistant, sign-up questions, the map's flaws for every student; `BOARD=staff`: admins and
+  moderators only. Its old in-app forum is off for good.
 - `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
-- `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`),
-  with its privacy section and a consent version suffix (`+fch3`). `FORUM_GROUP`: its discussion group.
+- `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`).
+  `FORUM_GROUP`: its discussion group.
 - `DOCS=1`: the assistant answers from the university's documents (`kbtu/docs.py`, a separate file at `DOCS_DB`, default
   next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
   embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
+- No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

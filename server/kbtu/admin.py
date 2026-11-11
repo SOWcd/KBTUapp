@@ -141,7 +141,7 @@ def _vol_import(con, rest: list[str]) -> None:
         else:
             sys.exit(__doc__)
     vol.ORG = config.load().volunteers
-    org = vol.org_id(con) or sys.exit("VOLUNTEERS is off or names no club: the privacy section comes with it, so the import waits for it")
+    org = vol.org_id(con) or sys.exit("VOLUNTEERS is off or names no club")
     try:
         p = vol.plan(Path(path).read_bytes(), vals.get("--balance"))
     except (OSError, xlsx.Bad) as exc:
@@ -166,7 +166,7 @@ def _vol_import(con, rest: list[str]) -> None:
 def _chatsync(con, cfg, rest: list[str]) -> None:
     from .logic import account, chatsync
     if not cfg.chat_sync:
-        sys.exit("CHAT_SYNC is off: its privacy section comes with it, so the sync waits for it")
+        sys.exit("CHAT_SYNC is off")
     chatsync.POLICY = account.policy(cfg)
     sub, ids = rest[:1], [int(x) for x in rest[1:3] if re.fullmatch(r"-?\d+", x)]
     try:

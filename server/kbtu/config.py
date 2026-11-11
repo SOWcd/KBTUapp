@@ -26,15 +26,15 @@ class Config:
     cf_ai_token: str = field(default="", repr=False)
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
-    # the policy's section 12 (the assistant, sign-up questions, the map's flaws): BOARD=1 every student (in force,
-    # everyone agrees again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
+    # the policy's section 12 (the assistant, sign-up questions, the map's flaws): BOARD=1 every student,
+    # BOARD=staff the app's staff only to try it
     board: str = ""
     # the forum channel's discussion group (its chat id, -100...): only verified students may comment there (tgc.py,
-    # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too. Never the events
+    # logic/tgcomments.py); 0: all of it off. Never the events
     # channel's discussion group: the bot would take its post copies as this group's and never comment under them
     tgc_chat: int = 0
     # the forum channel itself (@KBTUappForum's chat id, -100...): students post from the app, the bot publishes after
-    # the AI's or a moderator's yes (logic/fchannel.py); 0: off, the policy's section and its consent version too
+    # the AI's or a moderator's yes (logic/fchannel.py); 0: off
     forum_channel: int = 0
     # MS_AGE_CUTOFF=MM-DD (e.g. 06-01): free 1st-year seats only for a Microsoft account made on or after that day of
     # the academic year's first calendar year (logic/core.py first_year_free); empty: the date is only recorded
@@ -53,13 +53,13 @@ class Config:
     # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
     # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md
     donate_phone: str = field(default="", repr=False)
-    # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py) and its privacy section; empty: off
+    # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py); empty: off
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
     appeals: str = ""
     # GALLERY=1: everyone posts to the Gallery (logic/gallery.py: KBTU's own photos beside the albums); staff: admins and moderators
     gallery: str = ""
-    # CHAT_SYNC=1: clubs' members mirrored from their linked Telegram chats (logic/chatsync.py) and its privacy section; off: none of it runs
+    # CHAT_SYNC=1: clubs' members mirrored from their linked Telegram chats (logic/chatsync.py); off: none of it runs
     chat_sync: bool = False
     # DOCS=1: the assistant answers from the university's documents too (kbtu/docs.py, a separate file at DOCS_DB, next
     # to the database by default); DOCS=hybrid: and the question's own embedding from Cloudflare, only where the policy

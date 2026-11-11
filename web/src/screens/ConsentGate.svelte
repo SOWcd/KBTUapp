@@ -4,15 +4,7 @@
   // close it. App renders it over the tabs and holds every other overlay until it's accepted. One button (owner, Nov 1:
   // no "Delete account" here); the way out is Telegram's own close, the policy one tap away.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import AtSign from '@lucide/svelte/icons/at-sign';
-  import UserX from '@lucide/svelte/icons/user-x';
-  import Users from '@lucide/svelte/icons/users';
-  import TelegramMark from '../ui/TelegramMark.svelte';
-  import Cpu from '@lucide/svelte/icons/cpu';
-  import EyeOff from '@lucide/svelte/icons/eye-off';
-  import Clock from '@lucide/svelte/icons/clock';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import type { Component } from 'svelte';
   import Button from '../ui/Button.svelte';
@@ -25,37 +17,20 @@
   import { session } from '../lib/state/session.svelte';
   import { t, i18n, type Key } from '../lib/i18n/index.svelte';
   import { haptic, openLink } from '../lib/tg';
-  import { CONSENT_AI, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FCH, CONSENT_TGC, CONSENT_VERSION, CONSENT_VOL } from '../lib/legal';
+  import { CONSENT_VOL } from '../lib/legal';
 
   let busy = $state(false), done = $state(false), seal: HTMLElement;
-  // what's new in the version asked, one short line each with its mark: the nick rule (v9-v12, Nov 2: every version), the find-people forum,
-  // (v10), the student forum (v11), both (v12); a text's lines and its icons go in the same order (ru, kk, en alike)
+  // what's asked, one short line each with its mark: the rewritten policy, and the volunteers ledger's part ("+vol1"
+  // after the version, server logic/account.py CONSENT_VOL) for the people it concerns only
   type Tone = 'accent' | 'success' | 'warning' | 'danger';
   const PARTS: [Key, [Component<any>, Tone][]][] = [
-    ['consent.textNick', [[AtSign, 'accent']]],
-    ['consent.textKeep', [[UserX, 'accent']]],
-    ['consent.textForum', [[Users, 'accent'], [TelegramMark, 'success'], [Cpu, 'warning']]],
-    ['consent.textBoard', [[EyeOff, 'accent'], [Cpu, 'warning'], [Clock, 'success'], [ThumbsUp, 'danger']]],
-    ['consent.textTgc', [[TelegramMark, 'accent'], [Cpu, 'warning']]],
-    ['consent.textFch', [[TelegramMark, 'accent'], [EyeOff, 'success'], [Cpu, 'warning']]],
-    ['consent.textAi', [[Cpu, 'warning']]],
+    ['consent.text', [[ShieldCheck, 'accent']]],
     ['consent.textVol', [[HandHeart, 'accent']]],
   ];
-  // the channel's comments add "+tgc1" to whichever version (server logic/account.py CONSENT_TGC), its posts "+fch4"
-  // after that (CONSENT_FCH), the AI providers "+ai1" last (CONSENT_AI): their lines, on top of the base's
-  // the volunteers ledger's "+vol1" after all of them, for the people it concerns only
   const vol = $derived(session.policy.endsWith(CONSENT_VOL));
-  const pol = $derived(vol ? session.policy.slice(0, -CONSENT_VOL.length) : session.policy);
-  const ai = $derived(pol.endsWith(CONSENT_AI));
-  const noAi = $derived(ai ? pol.slice(0, -CONSENT_AI.length) : pol);
-  const fch = $derived(noAi.endsWith(CONSENT_FCH));
-  const q = $derived(fch ? noAi.slice(0, -CONSENT_FCH.length) : noAi);
-  const tgc = $derived(q.endsWith(CONSENT_TGC));
-  const p = $derived(tgc ? q.slice(0, -CONSENT_TGC.length) : q);
-  const asked = (k: Key) => k === 'consent.textVol' ? vol : k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.textNick' || k === 'consent.textKeep' ? true
-    : k === 'consent.textForum' ? p !== CONSENT_VERSION && p !== CONSENT_BOARD : p === CONSENT_BOARD || p === CONSENT_BOTH;
-  // one card per section asked (owner, Nov 1: the lines read as one list, not by section)
-  const groups = $derived(PARTS.filter(([k]) => asked(k)).map(([k, marks]) =>
+  // already on the policy, asked the ledger's part alone: no "we rewrote" line
+  const fresh = $derived(session.me?.student?.consent !== session.policy.slice(0, vol ? -CONSENT_VOL.length : undefined));
+  const groups = $derived(PARTS.filter(([k]) => k === 'consent.textVol' ? vol : fresh).map(([k, marks]) =>
     t(k).split('\n').map((text, i) => ({ text, icon: marks[i]?.[0] ?? ShieldCheck, tone: marks[i]?.[1] ?? 'accent' }))));
   const count = $derived(groups.reduce((n, g) => n + g.length, 0));
 

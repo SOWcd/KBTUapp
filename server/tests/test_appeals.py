@@ -46,8 +46,6 @@ def test_off_without_the_switch(env):
     c, _ = env
     login(c, ANN, "ann")
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 404 and "appeals" not in c.get("/api/me", headers=tma(ANN)).json()
-    page = c.get("/privacy?lang=en").text
-    assert "{{apln}}" not in page and "Appeals to the Student Government" not in page
 
 
 def test_staff_pilot(env):
@@ -61,8 +59,6 @@ def test_staff_pilot(env):
     assert c.get("/api/me", headers=tma(SG)).json()["appeals"] == {"consent": False, "sg": True}
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (_uid(c, ANN),))
     assert c.get("/api/appeals", headers=tma(ANN)).status_code == 200                    # staff try it
-    page = c.get("/privacy?lang=ru").text
-    assert "<!--apl" not in page and "{{apln}}" not in page                            # the section shows with the switch
     con.close()
 
 

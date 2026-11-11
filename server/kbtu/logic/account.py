@@ -897,34 +897,21 @@ def delete_info(con, v: Viewer) -> dict:
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
-CONSENT = "2026-11-v13"  # web/src/lib/legal.ts says the same; v13-v16 (Nov 2): a deleted account's posts and comments stay, nameless (section 7); v9-v12: the nick rule
-CONSENT_FORUM = "2026-11-v14" # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
-CONSENT_BOARD = "2026-11-v15"  # with BOARD=1 alone: the student forum's section (11 then); v11, v7, v5 before
-CONSENT_BOTH = "2026-11-v16"  # (v12, v8, v6 before) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
-CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
-CONSENT_FCH = "+fch4"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch3 until Nov 4: the check's explanation, appeals, reply limits; fch2 until Nov 3: the anonymous author's replies; fch1 until Nov 2: commenters' faces and reactions)
-CONSENT_CHS = "+chs1"         # with CHAT_SYNC: added after those (app.py), the section on clubs' members mirrored from their Telegram chats
-CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
+CONSENT = "2026-11-unified1"  # web/src/lib/legal.ts says the same. One policy by data categories, one version, whatever the flags;
+# a new category of personal data asks its own consent inside its feature (appeals.CONSENT), never a suffix here
 
 
 def ai_on(cfg) -> bool:
-    """A section that sends students' texts to the AI providers of section 5 is public: the policy names them all."""
+    """A feature that sends students' texts to the AI providers of the policy's section 9 is open to everyone."""
     return cfg.forum or cfg.board == "all" or bool(cfg.tgc_chat) or bool(cfg.forum_channel)
 
 
 def policy(cfg) -> str:
-    """The policy version in force: its forum parts count only with the forums on (legal_page shows them then); the
-    channel's comments (FORUM_GROUP), then its posts (FORUM_CHANNEL), then the AI providers add theirs, and whatever
-    the version, everyone agrees once more."""
-    out = {(False, False): CONSENT, (True, False): CONSENT_FORUM, (False, True): CONSENT_BOARD,
-           (True, True): CONSENT_BOTH}[(bool(cfg.forum), cfg.board == "all")]
-    out += CONSENT_TGC if cfg.tgc_chat else ""
-    out += CONSENT_FCH if cfg.forum_channel else ""
-    out += CONSENT_CHS if cfg.chat_sync else ""
-    return out + (CONSENT_AI if ai_on(cfg) else "")
+    """The policy version in force: the same whatever is switched on (the text describes every built feature)."""
+    return CONSENT
 
 
-CONSENT_VOL = "+vol1"  # with VOLUNTEERS: the ledger's section, agreed to only by the people it concerns (logic/vol.py concerned)
+CONSENT_VOL = "+vol1"  # with VOLUNTEERS: the ledger's part of the policy, agreed to only by the people it concerns (logic/vol.py concerned)
 
 
 def on_policy(version: object, current: str) -> bool:
@@ -938,7 +925,7 @@ def agreed(s, cfg) -> bool:
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
-    """The privacy policy changed (H2; what a deletion keeps): a student agrees again once; staff and students
+    """The privacy policy changed: a student agrees again once; staff and students
     added by hand keep their marks."""
     need_student(v)
     if version != current:

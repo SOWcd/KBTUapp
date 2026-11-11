@@ -70,14 +70,6 @@ def test_off_without_the_switch(env):
     c, cfg = env
     login(c, 1, "ann")
     assert c.get("/api/vol", headers=tma(1)).status_code == 404 and "vol" not in c.get("/api/me", headers=tma(1)).json()
-    assert "{{voln}}" not in c.get("/privacy?lang=en").text and "volunteers ledger" not in c.get("/privacy?lang=en").text
-
-
-def test_privacy_section_with_the_switch(zz):
-    c, _, _, _ = zz
-    page = c.get("/privacy?lang=en").text
-    assert "volunteers ledger" in page and "{{voln}}" not in page and "on the club's instruction" in page
-    assert "<!--vol" not in c.get("/privacy?lang=ru").text and "{{voln}}" not in c.get("/privacy?lang=kk").text
 
 
 def test_import_dry_run_apply_again_undo(zz):
@@ -337,7 +329,7 @@ def test_consent_only_for_whom_it_concerns(zz):
     """+vol1: asked of the people the ledger concerns (linked, granted, the President), nobody else; the routes hold it."""
     c, _, con, org = zz
     plain = c.get("/api/me", headers=tma(P)).json()["consentNow"]
-    assert plain.endswith(logic.account.CONSENT_VOL)
+    assert plain == logic.CONSENT + logic.account.CONSENT_VOL
     uid = _member(c, con, org, 3, "aru")
     login(c, 4, "other")
     assert not c.get("/api/me", headers=tma(4)).json()["consentNow"].endswith("+vol1")      # an ordinary student: nothing new

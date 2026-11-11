@@ -302,20 +302,19 @@ def test_account_deletion_takes_it_all(env, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM tgc_strangers WHERE tg_id = 22").fetchone()[0] == 0
 
 
-def test_policy_section_and_consent_only_with_the_switch(env, monkeypatch):
-    """With the group set: a new consent version and the policy's section, numbered after the forums'; without: neither."""
+def test_policy_and_consent_the_same_with_the_switch(env, monkeypatch):
+    """With the group set or not: the same consent version, the same policy (it describes /report either way)."""
     c0, cfg0 = env
     off = c0.get("/api/me", headers=tma(20)).json()["consentNow"]
-    assert "+tgc" not in off and "{{tgcn}}" not in c0.get("/privacy").text and "/report" not in c0.get("/privacy?lang=en").text
+    page = c0.get("/privacy").text
+    assert off == logic.CONSENT and "/report" in page
     c, *_ = setup(env, monkeypatch)
-    assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC + logic.CONSENT_AI
-    page = c.get("/privacy?lang=en").text
-    assert "11. Comments in the forum's Telegram channel" in page and "{{tgcn}}" not in page
+    assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off and c.get("/privacy").text == page
 
 
 def test_ai_look_only_eu_before_the_new_consent(env, monkeypatch):
-    """Review of +ai1: commenter() doesn't ask for the policy in force, so a reported author not yet on it has his
-    comment looked at by the EU host alone; on it, by every provider section 5 names."""
+    """commenter() doesn't ask for the policy in force, so a reported author not yet on it has his
+    comment looked at by the EU host alone; on it, by every provider the policy names."""
     c, cfg, con, _ = setup(env, monkeypatch)
     uid = student(c, con, 20, "ali")
     asked = []
@@ -329,7 +328,7 @@ def test_ai_look_only_eu_before_the_new_consent(env, monkeypatch):
         cid = con.execute("INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, created_at) VALUES (?, ?, ?, 20, ?, 0)",
                           (G, 900 + i, uid, f"words {i}")).lastrowid
         asyncio.run(tgc._judge(cfg, None, cid))
-    assert asked == [tgc.ai.EU_ONLY, tgc.ai.PUBLIC_PROVIDERS] and logic.policy(cfg).endswith(logic.CONSENT_AI)
+    assert asked == [tgc.ai.EU_ONLY, tgc.ai.PUBLIC_PROVIDERS]
 
 
 def test_review_fixes(env, monkeypatch):

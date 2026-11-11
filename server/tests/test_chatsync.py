@@ -262,9 +262,9 @@ def test_off_without_the_switch(club, monkeypatch):
 def test_consent_version_and_policy_page(env):
     c, cfg = env
     on = TestClient(server.create(dataclasses.replace(cfg, chat_sync=True)))
-    assert logic.policy(dataclasses.replace(cfg, chat_sync=True)).endswith(logic.account.CONSENT_CHS)
-    assert logic.account.CONSENT_CHS not in logic.policy(cfg)
-    assert "<!--chs" not in on.get("/privacy?lang=en").text and "CHAT_SYNC" not in c.get("/privacy?lang=ru").text
+    assert logic.policy(dataclasses.replace(cfg, chat_sync=True)) == logic.policy(cfg) == logic.CONSENT  # no version of its own
+    assert chatsync._consents() == (logic.CONSENT, logic.CONSENT + "+vol1")     # whom the sync acts on: the policy in force
+    assert on.get("/privacy?lang=ru").text == c.get("/privacy?lang=ru").text and "CHAT_SYNC" not in c.get("/privacy?lang=ru").text
     chatsync.POLICY = ""  # app.create set the module global: not into the next test
 
 

@@ -213,7 +213,7 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = T
         if (seen := rules.looked(con, cid)) is not None:
             verdict, rule = seen
         elif fresh and body.strip():  # a sticker: a moderator looks
-            # commenter() doesn't ask for the policy in force: an author not yet on it (+ai1) gets the EU host alone
+            # commenter() doesn't ask for the policy in force: an author not yet on it gets the EU host alone
             s = one(con, """SELECT s.consent_version FROM tgc_comments c JOIN students s ON s.user_id = c.author_id
                 WHERE c.id = ?""", cid)
             only = ai.PUBLIC_PROVIDERS if logic.agreed(s, cfg) else ai.EU_ONLY

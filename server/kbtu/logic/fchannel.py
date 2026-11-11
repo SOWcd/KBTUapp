@@ -220,10 +220,10 @@ FACES = 10  # the newest commenters a card has room for at most (the card shows 
 
 def _faces(con, ids: list[int]) -> dict[int, list[dict]]:
     """The newest FACES distinct commenters of each post, one query for all of them: students of the app alone (a
-    stranger's comment never gets here) who agreed to the policy that says so (CONSENT_FCH in their version; staff
+    stranger's comment never gets here) who agreed to the policy that says so (CONSENT in their version; staff
     too), not banned, comments still in Telegram; a deleted account's rows went with it. Rows are kept either way: a
     face shows once its owner agrees. A face is an avatar and nothing more (no id, no name: who is there, not a list)."""
-    from .account import CONSENT_FCH  # here: account imports this module
+    from .account import CONSENT  # here: account imports this module
     if not ids:
         return {}
     got = rows(con, f"""SELECT f.post_id, {PERSON_COLS} FROM (SELECT post_id, user_id, ROW_NUMBER() OVER
@@ -231,7 +231,7 @@ def _faces(con, ids: list[int]) -> dict[int, list[dict]]:
         AND user_id IN (SELECT u.id FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.banned_at IS NULL
             AND (instr(s.consent_version, ?) > 0 OR s.consent_version = 'staff' OR u.role IN ('admin', 'moderator')))
         GROUP BY post_id, user_id) f
-        JOIN users u ON u.id = f.user_id LEFT JOIN students s ON s.user_id = u.id WHERE f.n <= ? ORDER BY f.post_id, f.n""", *ids, CONSENT_FCH, FACES)
+        JOIN users u ON u.id = f.user_id LEFT JOIN students s ON s.user_id = u.id WHERE f.n <= ? ORDER BY f.post_id, f.n""", *ids, CONSENT, FACES)
     out: dict[int, list[dict]] = {}
     for r in got:
         # name: one letter, the avatar's fallback without a photo (the name the app shows, its first letter)
