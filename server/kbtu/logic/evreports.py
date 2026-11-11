@@ -51,7 +51,8 @@ def get(con, v: Viewer, eid: int) -> dict:
         FROM users u LEFT JOIN students s ON s.user_id = u.id
         LEFT JOIN org_members m ON m.org_id = :o AND m.user_id = u.id
         LEFT JOIN report_marks k ON k.event_id = :e AND k.user_id = u.id
-        WHERE m.user_id IS NOT NULL OR k.user_id IS NOT NULL""", {"o": oid, "e": eid}).fetchall()
+        WHERE u.id IN (SELECT user_id FROM org_members WHERE org_id = :o UNION SELECT user_id FROM report_marks WHERE event_id = :e)""",
+        {"o": oid, "e": eid}).fetchall()  # from the team and the marked, never a scan of every user
     by = {p["id"]: person_ref(p) for p in rows(con, PERSON + " WHERE u.id IN (?, ?)", r["filled_by"], r["edited_by"])} if r else {}
     counts = one(con, """SELECT COALESCE(SUM(status = 'going'), 0) AS signed, COALESCE(SUM(checked_in_at IS NOT NULL), 0) AS came
         FROM registrations WHERE event_id = ?""", eid)
