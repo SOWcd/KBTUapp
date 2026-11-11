@@ -5,6 +5,7 @@
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
+  import { CONSENT_VOL } from './lib/legal';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
@@ -95,7 +96,7 @@
   const consentGate = () => import('./screens/ConsentGate.svelte');
   const gated = $derived.by(() => {
     const s = session.me?.student;
-    return !!s && session.boardKnown && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent);
+    return !!s && session.boardKnown && !session.me?.deleteAt && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
   });
   $effect(() => { ui.gate = gated; });
   // while gated no overlay shows: they wait in the stack and show after "Accept" (a deep link isn't lost)
