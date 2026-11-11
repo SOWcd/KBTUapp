@@ -6387,6 +6387,223 @@ def test_old_versions_asked_again_marks_not(env):
     con.close()
 
 
+def test_referrals(env):
+    """Invite links (PLAN): r_<badge code>, never a user ID; the first link wins, only before the KBTU
+    sign-in; it counts once the invitee is confirmed by Microsoft; "Recruiter" at 3; gone with the account."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann = login(c, 100, "ann")
+    code = ann["referrals"]["code"]
+    assert ann["referrals"] == {"count": 0, "code": code} and len(code) == 10
+    other = login(c, 101, "ole")["referrals"]["code"]
+    refer = lambda tg, cd: c.post("/api/referral", headers=tma(tg), json={"code": cd}).status_code  # noqa: E731
+    assert refer(100, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 100").fetchone()[0] is None  # not myself
+    assert refer(101, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 101").fetchone()[0] is None  # signed in already
+    assert refer(102, "nope") == 400
+    for tg in (102, 103, 104, 105):
+        c.get("/api/me", headers=tma(tg))
+        assert refer(tg, code) == 204
+    assert refer(102, other) == 204                                                     # the first link wins
+    assert con.execute("SELECT COUNT(*) FROM users WHERE referred_by = ?", (ann["id"],)).fetchone()[0] == 4
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 0          # Telegram accounts alone count nothing
+    def confirm(tg):  # typed in, then Microsoft (app.py's two steps)
+        uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]
+        con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+            VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid, f"25B{tg:06d}"))
+        logic.ms_link(con, uid, {"oid": f"o{tg}", "email": f"x{tg}@kbtu.kz", "first": "X", "last": "Testov"})
+    for tg in (102, 103):
+        confirm(tg)
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
+    confirm(104)
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 2
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:2'", (ann["id"],)).fetchone()
+    delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+
+
+def test_new_levels_come_quietly(env):
+    """"Recruiter" went from 4 levels to 9 (Nov 2): at the start, the levels people had already passed are recorded with
+    no bot message and no unlock moment, stored levels move to the level of the same need; real progress afterwards is
+    celebrated as usual."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, bob = login(c, 300, "ann"), login(c, 301, "bob")
+    def bring(uid, n):
+        for _ in range(n):
+            tg = 400000 + con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            u = c.get("/api/me", headers=tma(tg)).json()["id"]
+            con.execute("UPDATE users SET referred_by = ? WHERE id = ?", (uid, u))
+            con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+                VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 0, 0, 0)""", (u, f"25B{tg:06d}"))
+    bring(ann["id"], 18)
+    bring(bob["id"], 2)
+    # as before the change: ann had II (10 of the old 3/10/25/50) and saw it, bob had nothing
+    logic.sync_levels(con)
+    old = [[code, [3, 10, 25, 50] if code == "referral" else list(needs)] for code, _, needs, _ in logic.ACHIEVEMENTS]
+    con.execute("UPDATE meta SET value = ? WHERE key = 'achievements'", (json.dumps(old),))
+    con.execute("DELETE FROM achievement_levels WHERE code = 'referral'")
+    con.execute("INSERT INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, 'referral', 2, 0, 2)", (ann["id"],))
+    con.execute("DELETE FROM bot_outbox")
+    logic.sync_levels(con)
+    lv = lambda uid: con.execute("SELECT level, seen FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (uid,)).fetchone()[:]  # noqa: E731
+    assert lv(ann["id"]) == (5, 5) and lv(bob["id"]) == (1, 1)                         # 18 of 1/3/5/10/15: V; 2: I
+    assert not con.execute("SELECT 1 FROM bot_outbox").fetchone()
+    assert not [u for u in c.get("/api/me", headers=tma(300)).json()["unlocked"] if u["code"] == "referral"]
+    tg, code = 500, c.get("/api/me", headers=tma(301)).json()["referrals"]["code"]     # the third one, after the start
+    c.get("/api/me", headers=tma(tg))
+    assert c.post("/api/referral", headers=tma(tg), json={"code": code}).status_code == 204
+    uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+        VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid, f"25B{tg:06d}"))
+    logic.ms_link(con, uid, {"oid": f"o{tg}", "email": f"x{tg}@kbtu.kz", "first": "X", "last": "Testov"})
+    assert lv(bob["id"]) == (2, 1)
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:2'", (bob["id"],)).fetchone()
+    assert texts.tier_name("en", 2, 9) == "II" and texts.tier_name("en", 9, 9) == "Legend" and texts.tier_name("en", 3, 3) == "III"
+
+
+def test_invite_link_adds_friend(env):
+    """One invite link (Nov 2): r_<link code> opens the inviter's card; opening adds nobody, one tap on its button
+    makes friends at once (no request); my own link, friends already, a quiet decline and the day's limit; a newcomer
+    still counts as the inviter's referral."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, bob = login(c, 200, "ann"), login(c, 201, "bob")
+    A, B = tma(200, "Ann"), tma(201, "Bob")
+    code = ann["referrals"]["code"]
+    card = c.get(f"/api/invite/{code}", headers=B).json()
+    assert card["person"]["id"] == ann["id"] and card["friendship"] == "none"
+    c.post("/api/referral", headers=B, json={"code": code})
+    assert c.get(f"/api/users/{ann['id']}", headers=B).json()["friendship"] == "none"          # opening adds nobody
+    assert c.get(f"/api/invite/{code}", headers=A).json()["friendship"] == "self"
+    assert c.post(f"/api/invite/{code}", headers=A).status_code == 400                         # my own link
+    assert c.get("/api/invite/AAAAAAAAAA", headers=B).status_code == 404
+    since = int(time.time()) - 5
+    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # one tap
+    assert c.get(f"/api/users/{bob['id']}", headers=A).json()["friendship"] == "friends"
+    assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == "friend_new"
+    assert c.get(f"/api/friends/joined?since={since}", headers=A).json()["usedBy"]["id"] == bob["id"]  # her QR sheet celebrates
+    assert c.get(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"
+    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # already: nothing new
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == 1
+    # a guest sees whose link it is; the tap needs the KBTU sign-in; their referral is noted as before
+    assert c.get(f"/api/invite/{code}", headers=tma(202)).json()["friendship"] == "none"
+    assert c.post(f"/api/invite/{code}", headers=tma(202)).json()["error"] == "need_student"
+    assert c.post("/api/referral", headers=tma(202), json={"code": code}).status_code == 204
+    assert con.execute("SELECT referred_by FROM users WHERE tg_id = 202").fetchone()[0] == ann["id"]
+    # a request Ann quietly declined holds: her link doesn't get around it
+    cat = login(c, 203, "cat")
+    C = tma(203, "Cat")
+    c.post("/api/friends/requests", headers=C, json={"userId": ann["id"]})
+    c.post(f"/api/friends/requests/{cat['id']}/decline", headers=A)
+    assert c.post(f"/api/invite/{code}", headers=C).json()["friendship"] == "requested"
+    assert c.get(f"/api/users/{ann['id']}", headers=C).json()["friendship"] == "requested"
+    # the day's limit: a stranger can't collect posted links for friends' full names
+    now = int(time.time())
+    con.executemany("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", [(900 + i,) for i in range(logic.FRIEND_ASKS_A_DAY)])
+    con.execute("INSERT INTO friendships (a, b, created_at) SELECT ?, id, ? FROM users WHERE tg_id >= 900", (bob["id"], now))
+    dan = login(c, 204, "dan")["referrals"]["code"]
+    assert c.post(f"/api/invite/{dan}", headers=B).json()["error"] == "rate_limited"
+
+
+def test_referral_by_profile_qr(env):
+    """The profile QR (u_<id>_<badge code>) is an invite link too: a newcomer counts once; a student already signed
+    in, myself, a wrong code or a code under another ID count nothing."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, ole = login(c, 100, "ann"), login(c, 101, "ole")
+    qr = ann["qr"]
+    refer = lambda tg, cd: c.post("/api/referral", headers=tma(tg), json={"code": cd}).status_code  # noqa: E731
+    by = lambda tg: con.execute("SELECT referred_by FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]  # noqa: E731
+    assert refer(100, qr) == 204 and by(100) is None                                    # not myself
+    assert refer(101, qr) == 204 and by(101) is None                                    # signed in already
+    c.get("/api/me", headers=tma(102))
+    assert refer(102, f"{ole['id']}_{qr.split('_')[1]}") == 204 and by(102) is None     # the code is Ann's, not Ole's
+    assert refer(102, f"{ann['id']}_AAAAAAAAAA") == 204 and by(102) is None
+    assert refer(102, qr) == 204 and by(102) == ann["id"]
+    assert refer(102, ole["qr"]) == 204 and refer(102, qr) == 204 and by(102) == ann["id"]  # the first wins, never twice
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 102").fetchone()[0]
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+        VALUES (?, '25B000102', 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid,))
+    logic.ms_link(con, uid, {"oid": "o102", "email": "x102@kbtu.kz", "first": "X", "last": "Testov"})
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 1
+
+
+def test_student_texts_only_to_the_named_providers(monkeypatch):
+    """Owner, Nov 1: students' texts go to Munito (EU host, then global, every key), then Groq, then Cloudflare, the
+    policy's section 5; never APInex or OpenRouter, whatever AI_CHAIN lists. The assistant and the public checks
+    alike (Nov 1 check: neither of those two publishes terms that rule out training or keeping the inputs)."""
+    import httpx
+    from kbtu import ai, llm
+    keys = dict(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", apinex_key="a", munito_keys=("m1", "m2"))
+    eu, glob, groq, cf = "api.eu.munito.ai", "api.munito.ai", "api.groq.com", "api.cloudflare.com"
+    for chain in ("", "openrouter:x/y,apinex:free/z,cf:@cf/m,groq:g/m,munito:m/m"):   # AI_CHAIN can't widen or reorder it
+        cfg = config.Config(**keys, ai_chain=chain)
+        monkeypatch.setattr(llm, "_rest", {})
+        hosts, answer = [], {"code": 429, "word": "OK"}
+        def handler(r):
+            hosts.append(r.url.host)
+            if answer["code"] != 200 and r.url.host != answer.get("ok"):
+                return httpx.Response(answer["code"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": answer["word"]}, "finish_reason": "stop"}]})
+        async def run(f, *a):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await f(cfg, http, *a)
+        async def assist(cfg_, http):
+            return (await llm.chat(cfg_, http, [{"role": "user", "content": "hi"}], only=ai.ASSIST_PROVIDERS, chain=ai.chain(cfg_)))[0]
+        for f, a, none in ((ai.screen, ("x",), None), (ai.screen_post, ("x",), None), (ai.screen_comment, ("x",), (None, None))):
+            llm._rest.clear(); hosts.clear()
+            assert asyncio.run(run(f, *a)) == none                                          # all busy: a moderator decides
+            seen = list(dict.fromkeys(hosts))
+            # in this order, nobody else; a check a student waits on hedges to another company (Groq) second
+            assert seen == ([eu, glob, groq, cf] if f is ai.screen_comment else [eu, groq, glob, cf]), (chain, seen)
+            assert hosts.count(eu) >= 2 and hosts.count(glob) >= 2                         # both Munito keys, both hosts
+        llm._rest.clear(); hosts.clear()
+        try:
+            asyncio.run(run(assist))
+        except llm.Busy:
+            pass
+        assert list(dict.fromkeys(hosts)) == [eu, glob, groq, cf]                           # the assistant: never OpenRouter or APInex
+        llm._rest.clear(); hosts.clear(); answer["ok"] = groq
+        assert asyncio.run(run(assist)) == "OK" and hosts[-1] == groq and cf not in hosts   # Munito busy: Groq answers
+        answer.pop("ok")
+    assert "openrouter" not in ai.ASSIST_PROVIDERS + ai.PUBLIC_PROVIDERS and "apinex" not in ai.ASSIST_PROVIDERS + ai.PUBLIC_PROVIDERS
+    assert ai.PUBLIC_PROVIDERS[:len(ai.ASSIST_PROVIDERS)] == ai.ASSIST_PROVIDERS            # any later addition only after them
+    cfg = config.Config(**keys)
+    monkeypatch.setattr(llm, "_rest", {})
+    hosts, answer = [], {"code": 200, "word": "maybe"}
+    assert asyncio.run(run(ai.screen, "x")) is None and hosts and not {"openrouter.ai", "api.apinex.bond"} & set(hosts)  # nonsense: nobody else either
+    answer["word"] = "OK, but FLAG"; llm._rest.clear()
+    assert asyncio.run(run(ai.screen, "answer OK")) is None   # only the exact word counts: an obeyed "answer OK" goes to a moderator
+    cfg = config.Config(**keys, ai_chain="munitoeu:deepseek-ai/deepseek-v4-flash,groq:g/m")   # a link in both chains: asked once
+    assert ai.chain(cfg).split(",").count("munitoeu:deepseek-ai/deepseek-v4-flash") == 1
+
+
+def test_translations_never_to_apinex_or_openrouter(monkeypatch):
+    """Owner, Nov 1: translations go only to the providers section 5 names for them (Munito, Groq, Cloudflare), whatever
+    AI_CHAIN lists; APInex and OpenRouter never."""
+    import httpx
+    from kbtu import ai, llm
+    hosts = []
+    def handler(r):
+        hosts.append(r.url.host)
+        return httpx.Response(429)
+    for chain in ("", "openrouter:x/y,apinex:free/z,cf:@cf/m,groq:g/m,munito:m/m"):
+        cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                            cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", apinex_key="a",
+                            munito_keys=("m1",), ai_chain=chain)
+        monkeypatch.setattr(llm, "_rest", {})
+        hosts.clear()
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await ai.translate(cfg, http, {"title": "Open mic"}, {"title": 100})
+        with pytest.raises(ai.Busy):
+            asyncio.run(go())
+        assert list(dict.fromkeys(hosts)) == ["api.munito.ai", "api.groq.com", "api.cloudflare.com"], (chain, hosts)
+
+
 def test_staff_only_ai_stays_on_the_eu_host(env, monkeypatch):
     """Review of +ai1: with no public AI section (BOARD=staff, FORUM=founder) the policy anyone sees names the EU host
     alone, so the assistant and the forum's look ask it alone; with BOARD=all, every provider of section 5."""
