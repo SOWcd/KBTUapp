@@ -309,37 +309,6 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
     return photos
 
 
-def taken_down(con, v: Viewer) -> list[dict]:
-    """What the admin took down (the report queue, a post hidden directly) in the last 30 days and is still down, newest first: a wrong call
-    can be undone (§2 "hide / restore"). Things their own authors or clubs removed aren't here — that was their choice."""
-    _mod(v)
-    out = []
-    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'tg_confirm', 'post_hide') AND at > ?
-            AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)
-            GROUP BY target ORDER BY MAX(at) DESC LIMIT 50""", core.now() - 30 * 86400):  # undone ones stay undone
-        kind, _, ref = a["target"].partition(":")
-        tid = int(ref) if ref.isdigit() else 0
-        if kind == "comment":
-            x = one(con, "SELECT body AS text FROM comments WHERE id = ? AND deleted_at IS NOT NULL", tid)
-        elif kind in ("post", "event"):
-            x = one(con, f"SELECT title AS text FROM {kind}s WHERE id = ? AND hidden_at IS NOT NULL", tid)  # kind from the list above
-        elif kind == "photo":  # the picture itself, as the queue showed it
-            x = one(con, """SELECT 'media/' || f.path || '.t.webp' AS text FROM takedowns k JOIN files f ON f.id = k.file_id
-                WHERE k.target = 'photo' AND k.target_id = ?""", tid)
-        elif kind == "tgc":  # a comment in the channel's Telegram group (tgcomments.py)
-            w = tgcomments.taken(con, tid)
-            x = {"text": w} if w is not None else None
-        elif kind == "user":  # what the person wrote about themselves
-            k = one(con, "SELECT data FROM takedowns WHERE target = 'user' AND target_id = ? ORDER BY id DESC", tid)
-            d = json.loads(k["data"]) if k else None
-            x = {"text": " · ".join(t for t in (d["nick"], d["bio"]) if t) or "\u2014"} if d else None
-        else:
-            x = None
-        if x:
-            out.append({"target": kind, "id": tid, "text": x["text"], "at": a["at"]})
-    return out
-
-
 def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
     """Undo a take-down: the comment, post or event is back as it was; an album photo back in its album; a profile's
     nick, photo and "about me" back where the person hasn't set new ones since (a kept photo not used then goes).

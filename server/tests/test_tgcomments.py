@@ -275,8 +275,7 @@ def test_abusers_report_closed_by_a_moderator(env, monkeypatch):
     hear(cfg, tg, report(62, 21, msg(52, 20, "three")))
     assert not con.execute("SELECT 1 FROM tgc_comments WHERE msg_id = 52").fetchone()
     assert len(outbox(con, "tgc_closed")) == 1 and tg.of("deleteMessages")[-1]["message_ids"] == [62]
-    assert [x["person"]["id"] for x in c.get("/api/admin/tgc-closed", headers=tma(25)).json()] == [r]
-    assert c.get("/api/admin/tgc-closed", headers=tma(24)).status_code == 403     # the admin's switch, not a moderator's
+    assert c.delete(f"/api/admin/tgc-closed/{r}", headers=tma(24)).status_code == 403     # the admin's switch, not a moderator's
     assert c.delete(f"/api/admin/tgc-closed/{r}", headers=tma(25)).status_code == 204
     hear(cfg, tg, report(63, 21, msg(52, 20, "three")))
     assert con.execute("SELECT 1 FROM tgc_comments WHERE msg_id = 52").fetchone()

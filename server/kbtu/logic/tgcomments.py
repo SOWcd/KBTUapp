@@ -16,7 +16,7 @@ import hashlib
 
 from ..db import tx
 
-from .core import ApiError, PERSON, Viewer, log_action, one, person_ref, rows
+from .core import ApiError, Viewer, log_action, one, rows
 
 SAVE_FOR = 3600            # a stranger's deleted text, for him alone (the policy, the bot's template: 1 hour)
 STRANGER_KEEP = 90 * 86400  # a warning or a ban on record
@@ -335,12 +335,6 @@ def _good(con, uid: int) -> None:
             notify(con, owner, "tgc_good", f"gr:{uid}")
 
 
-def taken(con, cid: int) -> str | None:
-    """A deleted comment's text, for the undo list (KEEP days)."""
-    r = one(con, "SELECT body FROM tgc_comments WHERE id = ? AND status IN ('deleting', 'deleted') AND review = 0", cid)
-    return r[0] if r else None
-
-
 def restore(con, v: Viewer, cid: int) -> int:
     """The undo list: a confirmed deletion reversed (the owner's 30 days); the reporters were wrong after all."""
     c = one(con, "SELECT * FROM tgc_comments WHERE id = ? AND status IN ('deleting', 'deleted')", cid)
@@ -351,13 +345,6 @@ def restore(con, v: Viewer, cid: int) -> int:
     _restore(con, cid)
     con.execute("UPDATE tgc_reports SET outcome = 'overturned' WHERE comment_id = ?", (cid,))
     return 1
-
-
-def closed(con, v: Viewer) -> list[dict]:
-    """Whose /report is closed, for the admin's switch."""
-    _admin(v)
-    return [{"person": person_ref(p), "at": p["at"]} for p in rows(con, PERSON.replace("SELECT ", "SELECT k.at, ", 1)
-                                                                   + " JOIN tgc_closed k ON k.user_id = u.id ORDER BY k.at DESC")]
 
 
 def reopen(con, v: Viewer, uid: int) -> None:

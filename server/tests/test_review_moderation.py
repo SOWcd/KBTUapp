@@ -43,7 +43,6 @@ def test_moderator_restores_comment_its_author_deleted(env):
     A, M = tma(93), tma(91)
     cid = c.post("/api/events/1/comments", headers=A, json={"body": "my phone is 8701..."}).json()["items"][0]["id"]
     assert c.delete(f"/api/comments/{cid}", headers=A).status_code == 204
-    assert c.get("/api/admin/taken-down", headers=M).json() == []                      # not listed: not a take-down
     assert c.post(f"/api/admin/taken-down/comment/{cid}/restore", headers=M).status_code == 404  # the author's delete stays
     assert c.get("/api/events/1/comments", headers=A).json()["items"] == []
 
@@ -58,7 +57,6 @@ def test_restore_after_undo_window(env):
     c.post("/api/reports", headers=tma(94), json={"target": "comment", "id": cid, "reason": "spam"})
     assert c.post(f"/api/admin/reports/comment/{cid}", headers=tma(91), json={"remove": True}).status_code == 204
     con.execute("UPDATE audit_log SET at = at - 40 * 86400"); con.execute("UPDATE comments SET deleted_at = deleted_at - 40 * 86400")
-    assert c.get("/api/admin/taken-down", headers=tma(91)).json() == []
     assert c.post(f"/api/admin/taken-down/comment/{cid}/restore", headers=tma(91)).status_code == 404  # past the window
 
 def test_hidden_club_publish_messages_subscribers(env):

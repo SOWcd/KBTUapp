@@ -150,7 +150,6 @@ def test_three_reports_hide_reporter_at_once_moderator_decides(env):
     # Delete: out, its files kept 30 days for the undo
     assert rep(CY) == 204 and c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": True}).status_code == 204
     assert _ids(c, ADMIN) == [] and (c.media / f"{_path(con, fid)}.webp").exists()
-    assert [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=tma(ADMIN)).json()] == [("photo", fid)]
     assert c.post(f"/api/admin/taken-down/photo/{fid}/restore", headers=tma(ADMIN)).status_code == 204
     assert _ids(c, CY) == [fid] and c.get("/api/gallery", headers=tma(CY)).json()["photos"][0]["uid"] == c.ids[BO]
 

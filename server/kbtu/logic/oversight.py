@@ -216,18 +216,6 @@ def staff(con, v: Viewer) -> dict:
             "owner": _owner(con, v)}
 
 
-def find_anyone(con, v: Viewer, username: str) -> dict:
-    """Anyone who opened the app, by @username: the team is picked from them."""
-    _admin(v)
-    name = str(username or "").strip().lstrip("@")
-    if not re.fullmatch(r"[A-Za-z0-9_]{4,32}", name):
-        raise ApiError("bad_input")
-    p = one(con, f"{_STAFF} WHERE lower(u.tg_username) = lower(?) AND u.tg_id > 0", name)
-    if not p:
-        raise ApiError("not_found")
-    return {**_staff_row(p), "banned": one(con, "SELECT banned_at FROM users WHERE id = ?", p["id"])["banned_at"] is not None}
-
-
 def find_people(con, v: Viewer, q: object) -> list[dict]:
     """Admin → People: anyone who opened the app by exact @username or app id, students also by name or student ID
     (which only matches, never comes back). The team's own row shape, the ban with it."""

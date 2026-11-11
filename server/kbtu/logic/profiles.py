@@ -466,14 +466,6 @@ def _drop_grant(con, v: Viewer, g) -> None:
         log_action(con, v.id, "ungrant", f"user:{g['user_id']}", json.dumps({"code": g["code"]}))
 
 
-def my_grants(con, v: Viewer) -> list[dict]:
-    """What I gave, newest first: the Awards sheet's recent people."""
-    _admin(v)
-    return [{"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
-            for g in rows(con, f"""SELECT g.id AS gid, g.code, g.created_at, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
-                LEFT JOIN students s ON s.user_id = u.id WHERE g.granted_by = ? AND g.code IN ({','.join('?' * len(GRANTABLE))})
-                ORDER BY g.created_at DESC, g.id DESC LIMIT 300""", v.id, *GRANTABLE)]
-
 # ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
 SHOWN = (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES["init26"], "club_founder")  # as the chips go; a badge's highest variant first
@@ -522,19 +514,6 @@ def awards_of(con, v: Viewer, uid: object) -> dict:
     if not p:
         raise ApiError("not_found")
     return _badge_row(con, p, _owner(con, v))
-
-
-def badge_people(con, v: Viewer, q: object) -> list[dict]:
-    """Students by name, @username, student ID or app id (the admin's search), each with the manual awards they hold.
-    The student ID only matches, it is never sent back."""
-    _admin(v)
-    q = str(q or "").strip().lstrip("@")
-    if not (2 <= len(q) or q.isdigit()) or len(q) > 64:  # an app id may be one digit
-        raise ApiError("bad_input")
-    found = search.people(rows(con, PERSON.replace("SELECT ", "SELECT u.tg_username, s.student_id, ", 1)
-                               + " WHERE s.user_id IS NOT NULL ORDER BY s.last_name, s.first_name"), q)
-    owner = _owner(con, v)
-    return [_badge_row(con, p, owner) for p in found]
 
 
 def badge_sessions(con, v: Viewer) -> list[dict]:
@@ -940,7 +919,7 @@ def friend_joined(con, v: Viewer, since: int) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, search  # noqa: E402
+from . import core  # noqa: E402
 from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402

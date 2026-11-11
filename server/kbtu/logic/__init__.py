@@ -44,16 +44,16 @@ from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _ch
     set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (DMP_COLS, QUIET_FOR, STAFF_ROLES, _STAFF, _admin, _admin_org, _dmp_person, _mod, _month,
     _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_org_events, admin_orgs,
-    admin_set_role, audit, ban_info, find_anyone, find_people, find_user, registry, registry_export, registry_memos,
+    admin_set_role, audit, ban_info, find_people, find_user, registry, registry_export, registry_memos,
     registry_roster, registry_search, set_ban, set_official, set_role, set_staff, set_staff_mute, staff, staff_mutes)  # noqa: F401
 from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN_KEEP, _about, _moderates, _thread,
     add_comment, close_gone, comments, delete_comment, purge_takedowns, report, report_queue, resolve_report, restore,
-    set_comments_on, taken_down)  # noqa: F401
+    set_comments_on)  # noqa: F401
 from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, CREATOR_ONLY, ONE_BY_ONE, PRIVATE, PROFILES_A_DAY,
     REASK_AFTER, _befriend, _came, _celebrate, _counts, _drop_grant, _friend_row, _grant, _levels, _season_start,
     _stranger_view, _streak, _student, _week, achievements, anthem_heard, answer_friend, ask_friend, attended, brought, card_no,
     find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, claim_link, claim_qr, grant, grant_link, grant_scan, open_qr, qr_code,
-    BADGES, BADGE_OF, award_counts, award_people, awards_of, badge_people, badge_sessions, my_grants, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
+    BADGES, BADGE_OF, award_counts, award_people, awards_of, badge_sessions, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_grant_link)  # noqa: F401
 from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
     INVITES_A_DAY, LEAD_ROLES, PHOTO_REPORT_AT, RATE_FOR, RATE_SHOW, SLIDES, UNDO, UPDATES_A_DAY, _album_room,

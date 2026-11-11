@@ -1555,10 +1555,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def map_flaw_done(fid: int, con: Con, v: Me, body: dict = Body(default={})):
         logic.mapflaws.done(con, v, fid, body.get("done", True))
 
-    @app.get("/api/admin/taken-down")
-    def taken_down(con: Con, v: Me):
-        return logic.taken_down(con, v)
-
     @app.post("/api/admin/taken-down/{target}/{tid}/restore", status_code=204)
     def restore(target: str, tid: int, con: Con, v: Me):
         media.drop(photos, logic.restore(con, v, target, tid))  # a kept photo nothing shows after the undo
@@ -1575,10 +1571,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         media.drop(photos, logic.resolve_report(con, v, target, tid, bool(body.get("remove"))))
 
     # the channel's comments in Telegram (logic/tgcomments.py): whose /report is closed, the admin's switch to reopen it
-    @app.get("/api/admin/tgc-closed")
-    def tgc_closed(con: Con, v: Me):
-        return logic.tgcomments.closed(con, v)
-
     @app.delete("/api/admin/tgc-closed/{uid}", status_code=204)
     def tgc_reopen(uid: int, con: Con, v: Me):
         logic.tgcomments.reopen(con, v, uid)
@@ -1721,10 +1713,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def staff(con: Con, v: Me):
         return logic.staff(con, v)
 
-    @app.get("/api/admin/staff/find")
-    def staff_find(con: Con, v: Me, username: str = ""):
-        return logic.find_anyone(con, v, username)
-
     @app.post("/api/admin/staff")
     def staff_set(con: Con, v: Me, body: dict = Body(...)):
         return logic.set_staff(con, v, body.get("userId"), body.get("role"))
@@ -1744,10 +1732,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/admin/stats")
     def admin_stats(con: Con, v: Me):
         return logic.admin_stats(con, v)
-
-    @app.get("/api/admin/grants")
-    def my_grants(con: Con, v: Me):
-        return logic.my_grants(con, v)
 
     @app.post("/api/admin/grants/scan")
     def grant_scan(con: Con, v: Me, body: dict = Body(...)):
@@ -1803,10 +1787,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.claim_qr(con, v, body.get("p"))
 
     # Admin → Awards: find a student with their awards; everyone counted in a check-in session (the owner)
-    @app.get("/api/admin/badges/people")
-    def badge_people(con: Con, v: Me, q: str = ""):
-        return logic.badge_people(con, v, q)
-
     @app.get("/api/admin/badges/sessions")
     def badge_sessions(con: Con, v: Me):
         return logic.badge_sessions(con, v)

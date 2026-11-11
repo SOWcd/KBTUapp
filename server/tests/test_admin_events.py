@@ -148,6 +148,6 @@ def test_one_search_every_name_scoped_by_who(env):
     assert find("x")["events"] == []                                                # one letter: nothing
     # people (Admin, Awards, the DMP registry): a Cyrillic name in any case, yo as ye, either order
     con.execute("UPDATE students SET first_name = ?, last_name = ? WHERE user_id = ?", ("\u0410\u043b\u0438\u044f", "\u0401\u043b\u043a\u0438\u043d\u0430", ids["ali"]))  # Aliya Yolkina
-    for path in ("/api/admin/people", "/api/admin/badges/people"):
+    for path in ("/api/admin/people",):
         got = c.get(path, params={"q": "\u0435\u043b\u043a\u0438\u043d\u0430 \u0430\u043b\u0438"}, headers=tma(60)).json()  # "elkina ali"
         assert [p["person"]["id"] for p in got] == [ids["ali"]], path

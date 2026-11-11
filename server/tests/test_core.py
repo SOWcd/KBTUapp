@@ -1363,7 +1363,7 @@ def test_album_reports(env):
     # kept 30 days for an undo: the file stays, "taken down" lists it, Restore puts it back in the album
     path = con.execute("SELECT path FROM files WHERE id = ?", (ph["id"],)).fetchone()[0]
     on_disk = lambda: (Path(cfg.db_path).parent / "media" / f"{path}.webp").exists()  # noqa: E731
-    assert on_disk() and [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("photo", ph["id"])]
+    assert on_disk()
     assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 204
     assert [(p["id"], p["by"]) for p in c.get("/api/events/1", headers=P).json()["photos"]] == [(ph["id"], "Ali T")]
     assert c.post("/api/reports", headers=P, json={"target": "photo", "id": ph["id"], "reason": "insult"}).status_code == 204
@@ -1500,20 +1500,18 @@ def test_comments(env):
     assert c.get("/api/admin/reports", headers=B).json() == [] and c.get("/api/me", headers=B).json()["counters"]["inbox"] == 0
     assert first not in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
     # a wrong call undone (§2): the admin's take-downs of the last 30 days, and Restore
-    assert c.get("/api/admin/taken-down", headers=P).status_code == 403
-    assert [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("comment", first)]
+    assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=P).status_code == 403
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 204
     assert first in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
     # decided once, it may be reported again (it is back); kept this time
     assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "danger"}).status_code == 204
     assert [(x["id"], x["reasons"], x["notes"]) for x in c.get("/api/admin/reports", headers=B).json()] == [(first, {"danger": 1}, [])]
     assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": False}).status_code == 204
-    assert c.get("/api/admin/taken-down", headers=B).json() == []
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 404               # nothing to undo
     assert c.post(f"/api/admin/taken-down/user/{first}/restore", headers=B).status_code == 404   # nothing of theirs kept
 
     assert c.delete(f"/api/comments/{first}", headers=P).status_code == 204                                    # gone again (the club)
-    assert c.get("/api/admin/taken-down", headers=B).json() == []                                              # the club's call, not the admin's
+    assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 404               # the club's call, not the admin's
     assert c.patch("/api/events/1/comments", headers=A, json={"on": False}).status_code == 403
     assert c.patch("/api/events/1/comments", headers=P, json={"on": False}).json()["on"] is False
     assert c.post("/api/events/1/comments", headers=A, json={"body": "hello?"}).status_code == 409         # turned off
@@ -1614,10 +1612,9 @@ def test_nick_and_photo(env):
     me = c.get("/api/me", headers=A).json()
     assert (me["nick"], me["name"], me["avatar"], me["photo"]) == (None, real, "https://t.me/i/userpic/320/ali.jpg",
                                                                    {"telegram": True, "tg": "https://t.me/i/userpic/320/ali.jpg", "own": None})
-    assert [(x["target"], x["id"], x["text"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("user", ali["id"], "Ali the Great")]
     assert c.post(f"/api/admin/taken-down/user/{ali['id']}/restore", headers=B).status_code == 204   # a wrong call undone
     me = c.get("/api/me", headers=A).json()
-    assert (me["nick"], me["avatar"]) == ("Ali the Great", newer) and c.get("/api/admin/taken-down", headers=B).json() == []
+    assert (me["nick"], me["avatar"]) == ("Ali the Great", newer)
     assert c.post(f"/api/admin/taken-down/user/{ali['id']}/restore", headers=B).status_code == 404   # once
     assert c.post(f"/api/admin/reports/user/{ali['id']}", headers=B, json={"remove": True}).status_code == 409   # decided: no report open
     c.post("/api/reports", headers=P, json={"target": "user", "id": ali["id"], "reason": "insult"})
@@ -1907,10 +1904,9 @@ def test_grant_scanner(env):
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
     one_ = scan("init26").json()
     assert one_["person"]["id"] == ali["id"] and one_["person"]["name"] and scan("init26").status_code == 409
-    assert scan("creator_found").status_code == 200 and scan("creator_found").status_code == 409
+    gave = [scan("creator_found").json()]
+    assert gave[0]["person"]["id"] == ali["id"] and scan("creator_found").status_code == 409
     assert c.delete(f"/api/admin/grants/{one_['id']}", headers=B).status_code == 204
-    gave = c.get("/api/admin/grants", headers=B).json()
-    assert [g["code"] for g in gave] == ["creator_found"] and gave[0]["person"]["id"] == ali["id"]
     con.execute("UPDATE achievement_grants SET created_at = created_at - 3600")                  # undo has no clock: it's mine
     assert c.delete(f"/api/admin/grants/{gave[0]['id']}", headers=B).status_code == 204
     assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'creator_found'", (ali["id"],)).fetchone()
@@ -1934,16 +1930,9 @@ def test_badge_variants(env):
     put = lambda code, h=B: c.post("/api/admin/grants", headers=h, json={"userId": ali["id"], "code": code})          # noqa: E731
     drop = lambda code, h=B: c.post("/api/admin/grants/take-back", headers=h, json={"userId": ali["id"], "code": code})  # noqa: E731
     has = lambda: c.get(f"/api/admin/grants/of/{ali['id']}", headers=B).json()["has"]  # noqa: E731
-    # not staff: no search, no grant, no take-back, no sessions
-    assert c.get("/api/admin/badges/people?q=ali", headers=A).status_code == 403
+    # not staff: no grant, no take-back, no sessions
     assert put("init26p", A).status_code == 403 and drop("init26p", A).status_code == 403
     assert c.get("/api/admin/badges/sessions", headers=A).status_code == 403
-    # found by @username, student ID, app id or name; the student ID is never sent back
-    for q in ("@ali", "24bali", str(ali["id"]), "Ali Test", "testov ali"):
-        hits = c.get("/api/admin/badges/people", params={"q": q}, headers=B).json()
-        assert [h["person"]["id"] for h in hits] == [ali["id"]], q
-        assert "24Bali" not in str(hits)
-    assert c.get("/api/admin/badges/people?q=a", headers=B).status_code == 400
     assert put("first50").status_code == 400 and c.get("/api/admin/grants/of/999999", headers=B).status_code == 404
     # give: once, audited once, celebrated once
     assert put("init26p").status_code == 200 and has() == ["init26p"]
@@ -4464,12 +4453,10 @@ def test_app_team(env):
     ids = {k: c.get("/api/me", headers=h).json()["id"] for k, h in dict(O=O, A=A, M=M, U=U, X=X).items()}
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ids["O"],))
-    find = lambda h, name: c.get("/api/admin/staff/find", headers=h, params={"username": name})
     role = lambda h, k, r: c.post("/api/admin/staff", headers=h, json={"userId": ids[k], "role": r})
     ban = lambda h, k, on, reason=None: c.post("/api/admin/ban", headers=h, json={"userId": ids[k], "on": on, "reason": reason})
 
     assert c.get("/api/admin/staff", headers=U).status_code == 403
-    assert find(O, "@ADMIN_x").json()["person"]["id"] == ids["A"] and find(O, "nobody_here").status_code == 404 and find(O, "a b").status_code == 400
     assert role(O, "A", "admin").status_code == 200                       # the owner makes an admin; it survives the next sign-in
     assert c.get("/api/me", headers=A).json()["role"] == "admin"
     assert role(A, "X", "admin").status_code == 403                       # an admin can't make admins
@@ -4480,7 +4467,7 @@ def test_app_team(env):
     assert role(M, "U", "moderator").status_code == 403 and c.get("/api/admin/staff", headers=M).status_code == 403
     assert c.get("/api/admin/reports", headers=M).status_code == 200     # the moderator's own work
     assert c.get("/api/admin/stats", headers=M).status_code == 403
-    assert find(M, "user_x").status_code == 403 and c.get("/api/admin/club-applications", headers=M).status_code == 403   # clubs are the admin's
+    assert c.get("/api/admin/club-applications", headers=M).status_code == 403   # clubs are the admin's
     assert c.post("/api/admin/feature", headers=M, json={"postId": 1, "days": 1}).status_code == 403
     assert c.get("/api/me", headers=M).json()["counters"]["inbox"] == 0
     assert ban(A, "X", True, "testing an admin ban").status_code == 200 and ban(A, "X", False).status_code == 200   # an admin bans users

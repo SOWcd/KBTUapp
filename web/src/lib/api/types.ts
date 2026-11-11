@@ -103,8 +103,6 @@ export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'u
 /** My own comment the bot deleted in the forum channel's Telegram group (POST /api/me/tg-comment): to me alone. */
 export interface TgComment { body: string; link: string | null; student: boolean; removed?: boolean;
   verdict?: 'pending' | 'confirmed' | 'restored'; rule?: TgcRule | null } // removed after reports: what became of it
-/** Someone whose /report in Telegram a moderator closed (the admin's switch reopens it). */
-export interface TgcClosed { person: PersonRef; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number; studentsToday: number;
   days: { day: number; active: number; new: number; students: number }[];
