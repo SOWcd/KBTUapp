@@ -18,7 +18,7 @@
   import { api, staffEvents, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
   import { hit } from '../../lib/clubs';
   import { hit as match } from '../../lib/search';
-  import { MANUAL, manualMedal, manualTitle } from '../../lib/awards';
+  import { CATALOG, manualMedal, manualTitle } from '../../lib/awards';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { relDay } from '../../lib/time';
   import Poster from '../../ui/Poster.svelte';
@@ -74,7 +74,7 @@
   // clubs: the ones held at once, then the server's (hidden ones too, every language's name)
   const events = $derived(found?.events);
   const clubs = $derived(found ? found.clubs.slice(0, 8) : s ? data.orgs.filter((o) => hit(o, s)).slice(0, 8) : []);
-  const awards = $derived(s ? MANUAL.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
+  const awards = $derived(s ? CATALOG.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
   const go = (f: () => unknown) => { haptic.tap(); f(); };
 </script>
 

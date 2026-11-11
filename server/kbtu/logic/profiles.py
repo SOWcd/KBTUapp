@@ -193,6 +193,9 @@ ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, At
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter")  # about the creator himself (owner, Nov 3), and Fuel: he alone gives them
 PRIVATE = ("supporter",)  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
+# art being redone (owner, Nov 11); delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
+# locked medal on a profile): a holder keeps it on the shelf, Admin's person page still gives both, Stars still give Fuel
+CATALOG_HIDDEN = ("supporter", "club_founder")
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
 LINK_DAYS = (1, 3, 7, 14)
 CARD_WAIT = 45  # a manual award's bot card waits this long, so an Undo stops it before it goes
@@ -496,7 +499,8 @@ def award_counts(con, v: Viewer) -> dict:
     _admin(v)
     have = dict(rows(con, f"""SELECT COALESCE(CASE {' '.join(f"WHEN code IN ({','.join(repr(c) for c in vs)}) THEN '{b}'" for b, vs in BADGES.items())} END, code),
         COUNT(DISTINCT user_id) FROM achievement_grants WHERE code IN ({','.join('?' * len(GRANTABLE))}) GROUP BY 1""", *GRANTABLE))
-    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES, "club_founder") if a not in PRIVATE or _owner(con, v)}
+    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES, "club_founder")
+            if a not in CATALOG_HIDDEN and (a not in PRIVATE or _owner(con, v))}
 
 
 def award_people(con, v: Viewer, award: object) -> list[dict]:
@@ -689,7 +693,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # an old "init26f" is the badge now
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid)
-           if a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)]
+           if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
         if a["code"] == "club_founder" and a["level"] and close:
             o = one(con, "SELECT o.* FROM achievement_grants g JOIN orgs o ON 'org:' || o.id = g.note WHERE g.user_id = ? AND g.code = 'club_founder' ORDER BY g.id DESC", uid)

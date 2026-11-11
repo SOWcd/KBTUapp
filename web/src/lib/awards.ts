@@ -53,6 +53,10 @@ export const MANUAL: Manual[] = [
   { code: 'club_founder', emoji: 'rocket_3d', scan: false, one: true }, // given with its club picked
   { code: 'supporter', emoji: 'fire_3d', scan: false, creator: true, one: true }, // Fuel: a Stars gift gives it; by hand the creator alone
 ];
+/** art being redone (owner, Nov 11); empty the list to bring them back. Out of Admin's awards catalog and its search
+ *  only (the server's CATALOG_HIDDEN): a person's page in Admin still gives both, a holder keeps the medal */
+const CATALOG_HIDDEN = ['supporter', 'club_founder'];
+export const CATALOG: Manual[] = MANUAL.filter((a) => !CATALOG_HIDDEN.includes(a.code));
 /** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
 export const manualMedal = (code: string, emoji: string, held = true): Achievement =>
   ({ code, emoji, secret: false, count: 0, level: held ? 1 : 0, levels: [{ need: 1, reached: held, rarity: 0 }], rarity: 0 });

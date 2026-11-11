@@ -4,7 +4,7 @@
   // page (its variant, Scan, Link, the links, who has it). A person's awards are given from the person (Admin's search →
   // a person).
   import { api } from '../../lib/api';
-  import { MANUAL, manualMedal, manualTitle } from '../../lib/awards';
+  import { CATALOG, manualMedal, manualTitle } from '../../lib/awards';
   import { session } from '../../lib/state/session.svelte';
   import { open, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -14,7 +14,7 @@
   import AwardPane from './AwardPane.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
-  const list = $derived(MANUAL.filter((a) => !a.creator || !!session.me?.founder));
+  const list = $derived(CATALOG.filter((a) => !a.creator || !!session.me?.founder));
   let counts = $state<Record<string, number>>({});
   const load = () => api.awardCounts().then((c) => (counts = c)).catch(() => {});
   void load();
