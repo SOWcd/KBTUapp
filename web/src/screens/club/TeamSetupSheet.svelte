@@ -140,9 +140,10 @@
   }
   const toggle = (k: Right, on: boolean) => { haptic.tap(); frights = on ? [...frights, k] : frights.filter((x) => x !== k); };
   const rightName = (k: Right) => t(`right.${k}` as 'right.door');
-  // the door is every member's, not a toggle
-  const TOGGLES = RIGHTS.filter((x) => x.key !== 'door');
-  const summary = (r: ClubRole) => { const on = r.rights.filter((k) => k !== 'door'); return on.length ? on.map(rightName).join(', ') : t('ts.noRights'); };
+  // the door is every member's, not a toggle; event reports only while the server has them on (REPORTS)
+  const listed = (k: Right) => k !== 'door' && (k !== 'reports' || !!session.me?.reports);
+  const TOGGLES = $derived(RIGHTS.filter((x) => listed(x.key)));
+  const summary = (r: ClubRole) => { const on = r.rights.filter(listed); return on.length ? on.map(rightName).join(', ') : t('ts.noRights'); };
 </script>
 
 {#snippet dot(c: string)}<span class="dot" style="--c:{c}"></span>{/snippet}

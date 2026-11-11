@@ -17,6 +17,8 @@ export const byRank = (a: { role: OrgRole }, b: { role: OrgRole }): number => RA
 export const RIGHTS: { key: Right; level: ClubLevel }[] = [
   { key: 'door', level: 'member' }, { key: 'events', level: 'head' }, { key: 'posts', level: 'head' }, { key: 'people', level: 'head' },
   { key: 'casting', level: 'head' }, { key: 'team', level: 'vice' }, { key: 'money', level: 'vice' }, { key: 'memo', level: 'vice' }, { key: 'profile', level: 'vice' },
+  // a Vice's by default, yet never ranks a role above Member: a club gives it to its HR (server core.OWN_FROM)
+  { key: 'reports', level: 'member' },
 ];
 /** I may do this in this club (my membership, or a club with my rights) */
 export const may = (m: { rights?: Right[] | null } | null | undefined, right: Right): boolean => !!m?.rights?.includes(right);

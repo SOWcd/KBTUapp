@@ -67,6 +67,8 @@ export const sheets = {
   // only: a scanner-only door helper (server crew.py): tickets, no list by name
   scannerOnly: (_id: Id) => {},
   crew: (_id: Id, _onchange?: (n: number) => void) => {},
+  /** a club's report after its event (server evreports.py, REPORTS) */
+  eventReport: (_id: Id) => {},
   /** a club's volunteers ledger (server logic/vol.py): the list (its President and whom she grants), one volunteer (mine: my own) */
   /** appeals to the Student Government: the composer and my appeals; one of mine; SG's queue and one appeal in it */
   appeals: () => {},

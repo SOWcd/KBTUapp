@@ -17,6 +17,7 @@
   import { onMount } from 'svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import DoorClosed from '@lucide/svelte/icons/door-closed';
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
   import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
@@ -48,6 +49,8 @@
   $effect(() => () => { if (staff) staffEvents.delete(id); });
   const started = $derived(!!e && e.startsAt <= nowTs());
   const live = $derived(e?.status === 'published');
+  // the club's report after its own started event (server evreports.py, REPORTS): its President, Vices, a role given the right
+  const reports = $derived(!!session.me?.reports && !staff && may(mem, 'reports') && live && started);
 
   // everything below comes from the attendee list (Head+), asked again whenever Studio changes (a receipt checked)
   let list = $state<Attendee[] | null>(null);
@@ -205,6 +208,7 @@
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, head, session.me?.vol?.org)} />{/if}<!-- the scanner and the QR, one switch apart (EventSheet's) -->
         {/if}
+        {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id)} />{/if}
         {#if head}
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
           <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->

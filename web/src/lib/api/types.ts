@@ -260,7 +260,7 @@ export interface StudentProfile {
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */
 /** A club role's rights (SPEC §2): door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
-export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile';
+export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile' | 'reports';
 export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null; storiesLocked?: true }  // storiesLocked: a writer of a student initiative below the Ascent's collab (server clubs.stories_open); rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
 
 export interface Me {
@@ -275,6 +275,7 @@ export interface Me {
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
+  reports?: boolean;   // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
   tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
@@ -333,6 +334,18 @@ export interface CohostInvite { event: { id: Id; title: string; startsAt: Ts; pl
 /** an event's temporary door helper (server logic/crew.py): `scan` the scanner only, `door` the whole door; `org` the club that gave it */
 export type CrewKind = 'scan' | 'door';
 export interface CrewMember { person: PersonRef; kind: CrewKind; org: Id }
+
+/** a club's report after its event (server logic/evreports.py, REPORTS=1), for the club's people with the "reports" right */
+export type ReportMark = 'present' | 'late' | 'absent' | 'excused';
+export interface ReportPerson { person: PersonRef; fullName: string; depts: Id[]; team: boolean /* false: left the club since, marked */; status: ReportMark | null }
+export interface EventReport {
+  depts: { id: Id; name: string; color: string }[]; // the club's departments
+  dept: Id | null; guests: number | null; note: string;
+  signed: number; came: number; // what the app knows: going, checked in
+  filledBy: PersonRef | null; filledAt: Ts | null; editedBy: PersonRef | null; editedAt: Ts | null;
+  people: ReportPerson[]; // the club's team, and anyone marked who has left it
+}
+export type ReportPatch = Partial<Pick<EventReport, 'dept' | 'guests' | 'note'>>;
 
 export interface EventCard {
   /** the other languages (ai.py), applied by api/client.ts; `orig`: the text as typed */
