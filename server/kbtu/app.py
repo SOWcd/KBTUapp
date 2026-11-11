@@ -615,6 +615,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("rate_limited", "busy")
         posting.add(v.id)
         try:
+            await run_in_threadpool(logic.gallery.check, con, v, event, topic)  # a plain no costs no upload
             data = await read_upload(request)
             await run_in_threadpool(logic.gallery.attempt, con, v, event, topic)
             saved = await _picture(media.save, data, photos)

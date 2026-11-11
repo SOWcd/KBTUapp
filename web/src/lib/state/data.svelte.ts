@@ -27,6 +27,8 @@ export const data = $state({
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   galleryAlbums: [] as GalleryAlbum[], // the events' albums on its shelf, the newest first (with the first page)
   galleryPost: null as { events: { id: Id; title: string }[] } | null, // I may post (GALLERY), and to which of my events
+  galleryState: 'new' as 'new' | 'ready' | 'failed', // the Gallery's first page: not here yet, here, or the load failed with nothing to show
+  galleryPosted: 0, // my posts started (postGallery): the Gallery goes to All and its top, where they land
   orgs: [] as Org[],
   small: [] as Org[], // under the registry's size bar: search alone finds them
   schedule: [] as ClassItem[],
@@ -64,60 +66,99 @@ export async function loadFriends(): Promise<void> {
 }
 
 /** The Gallery in the background; its card's photos fetched ahead. all: the pages after the first too (as it opens, so the
- *  viewer swipes across all of it). ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
+ *  viewer swipes across all of it). galleryState says where the first page stands, so the screen can tell "empty" from
+ *  "not yet" and "failed". ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
 export async function loadGallery(all = false): Promise<void> {
   if (!session.me?.student) { data.gallery = []; data.galleryAlbums = []; data.galleryPost = null; return; }
+  if (data.galleryState === 'failed') data.galleryState = 'new';
   try {
     let page = await api.gallery();
     data.galleryPost = page.post ?? null;
     data.galleryAlbums = page.albums ?? [];
     const got = [...page.photos];
     while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
-    data.gallery = [...data.gallery.filter((p) => p.pending), ...got]; // mine still uploading stay on top
+    data.gallery = [...data.gallery.filter((p) => p.pending || p.failed), ...got]; // mine still uploading stay on top
+    data.galleryState = 'ready';
     warm(got.slice(0, 4).map((p) => p.thumb));
-  } catch { /* the last copy stays */ }
+  } catch { if (data.galleryState === 'new') data.galleryState = 'failed'; /* else the last copy stays */ }
 }
 /** A theme's first page into the same list (the Gallery's filter shows what is here at once; this brings what the
- *  list hasn't reached yet). Newest first stays: a file's id is the order. */
-export async function loadGalleryTheme(topic: GalleryTopic | 'events'): Promise<void> {
+ *  list hasn't reached yet). Newest first stays: a file's id is the order. false: it failed. */
+export async function loadGalleryTheme(topic: GalleryTopic | 'events'): Promise<boolean> {
   try {
     const got = (await api.gallery(undefined, topic)).photos, have = new Set(data.gallery.map((p) => p.id));
-    const fresh = got.filter((p) => !have.has(p.id));
-    if (fresh.length) data.gallery = [...data.gallery.filter((p) => p.pending), ...[...data.gallery.filter((p) => !p.pending), ...fresh].sort((a, b) => b.id - a.id)];
-  } catch { /* what is here stays */ }
+    const fresh = got.filter((p) => !have.has(p.id)), mine = (p: AlbumPhoto) => p.pending || p.failed;
+    if (fresh.length) data.gallery = [...data.gallery.filter(mine), ...[...data.gallery.filter((p) => !mine(p)), ...fresh].sort((a, b) => b.id - a.id)];
+    return true;
+  } catch { return false; }
 }
 /** Reported from the Gallery: gone for me at once. */
 export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
 
-/** My photos into the Gallery (to an event's album too): each on top of the grid at once from the phone's own copy,
- *  dimmed while it uploads (one after another), then the server's; a refused one goes, with a toast. */
+/** My photos into the Gallery (to an event's album too): each on top of the grid at once from the phone's own copy, in
+ *  its own shape, marked while it uploads (one after another); the server's then takes its tile over (key: the same
+ *  element, no flash). A refused one goes, with a toast; one the network dropped stays with Retry and Remove. */
 let pendingId = -1;
+const waiting = new Map<Id, { file: File; event?: Id; topic?: GalleryTopic }>(); // my uploads not landed yet, by their tile
+const size = (url: string) => new Promise<{ w: number; h: number }>((done) => {
+  const img = new Image();
+  img.onload = () => done({ w: img.naturalWidth, h: img.naturalHeight });
+  img.onerror = () => done({ w: 0, h: 0 });
+  img.src = url;
+});
 export async function postGallery(files: File[], event?: Id, topic?: GalleryTopic): Promise<void> {
   const to = data.galleryPost?.events.find((e) => e.id === event); // under its theme at once
-  const mine = files.slice(0, 10).map((f) => {
-    const url = URL.createObjectURL(f);
-    return { id: pendingId--, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: null, mine: true, pending: true, ...(to ? { event: to } : { topic }) } satisfies AlbumPhoto;
-  });
-  data.gallery = [...mine, ...data.gallery];
+  const mine = await Promise.all(files.slice(0, 10).map(async (file) => {
+    const url = URL.createObjectURL(file), id = pendingId--;
+    waiting.set(id, { file, event, topic });
+    return { id, key: id, url, thumb: url, ...(await size(url)), blur: '', canDelete: false, by: session.me?.name ?? null, mine: true, pending: true, ...(to ? { event: to } : { topic }) } satisfies AlbumPhoto;
+  }));
+  data.gallery = [...[...mine].reverse(), ...data.gallery]; // the last one uploads last: the newest, on top
+  data.galleryPosted++;
   let added = 0;
-  for (const [i, p] of mine.entries()) {
-    try {
-      const got = await api.postGalleryPhoto(await shrink(files[i]), event, topic);
-      data.gallery = [got, ...data.gallery.filter((x) => x.id !== p.id && x.id !== got.id)];
-      added++;
-    } catch (err) {
-      haptic.error();
-      const code = err instanceof ApiErr ? err.code : '';
-      const stop = code === 'rate_limited' || code === 'forbidden' || code === 'not_found';
-      // the rest of this batch goes too when the server says no to all of it (the day's limit, the event)
-      const drop = new Set(stop ? mine.slice(i).map((x) => x.id) : [p.id]);
-      data.gallery = data.gallery.filter((x) => !drop.has(x.id));
-      say(t(code === 'rate_limited' ? 'gallery.tooMany' : code === 'bad_input' ? 'ed.photoBad' : 'common.error'), 'pleading_face_3d');
-      if (stop) break;
-    } finally { URL.revokeObjectURL(p.url); }
+  for (const p of mine) {
+    const at = await upload(p);
+    if (at === 'ok') added++;
+    if (at === 'stop') { drop(mine.filter((x) => waiting.has(x.id) && data.gallery.some((y) => y.id === x.id && y.pending))); break; } // the rest of this batch goes too (the day's limit, the event)
   }
-  if (added) { haptic.ok(); burst(); say(tn('album.added', added), 'camera_with_flash_3d'); }
+  if (added) { burst(); say(tn('album.added', added), 'camera_with_flash_3d'); }
 }
+function drop(ps: AlbumPhoto[]): void {
+  const ids = new Set(ps.map((p) => p.id));
+  for (const p of ps) { waiting.delete(p.id); URL.revokeObjectURL(p.url); }
+  data.gallery = data.gallery.filter((x) => !ids.has(x.id));
+}
+let line: Promise<unknown> = Promise.resolve(); // one upload at a time, a Retry too (the server takes one per person)
+const upload = (p: AlbumPhoto) => (line = line.then(() => send(p))) as Promise<'ok' | 'failed' | 'stop' | 'gone'>;
+async function send(p: AlbumPhoto): Promise<'ok' | 'failed' | 'stop' | 'gone'> {
+  const w = waiting.get(p.id);
+  if (!w) return 'gone';
+  try {
+    const got = await api.postGalleryPhoto(await shrink(w.file), w.event, w.topic);
+    await size(got.thumb); // fetched before it takes the tile over: the phone's copy never gives way to a blank
+    data.gallery = data.gallery.filter((x) => x.id !== got.id).map((x) => (x.id === p.id ? { ...got, key: p.id } : x));
+    waiting.delete(p.id);
+    URL.revokeObjectURL(p.url);
+    haptic.tap();
+    return 'ok';
+  } catch (err) {
+    haptic.error();
+    const code = err instanceof ApiErr ? err.code : '';
+    if (!code || code === 'unavailable') { // never reached the server: the photo waits for another try
+      data.gallery = data.gallery.map((x) => (x.id === p.id ? { ...x, pending: false, failed: true } : x));
+      return 'failed';
+    }
+    drop([p]);
+    say(t(code === 'rate_limited' ? 'gallery.tooMany' : code === 'bad_input' ? 'ed.photoBad' : 'common.error'), 'pleading_face_3d');
+    return code === 'rate_limited' || code === 'forbidden' || code === 'not_found' ? 'stop' : 'gone';
+  }
+}
+/** A failed upload again, or out of the grid. */
+export async function retryGallery(p: AlbumPhoto): Promise<void> {
+  data.gallery = data.gallery.map((x) => (x.id === p.id ? { ...x, pending: true, failed: false } : x));
+  if ((await upload(p)) === 'ok') say(tn('album.added', 1), 'camera_with_flash_3d');
+}
+export const dropGallery = (p: AlbumPhoto): void => drop([p]);
 /** My own photo out of the Gallery (and the albums I put it in); null: it stays (the server said no). */
 export async function deleteGallery(p: AlbumPhoto): Promise<AlbumPhoto[] | null> {
   try { await api.deleteGalleryPhoto(p.id); galleryGone(p); return data.gallery; }

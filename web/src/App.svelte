@@ -75,7 +75,7 @@
   sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
   const galleryPage = () => import('./screens/afisha/Gallery.svelte');
   sheets.gallery = (albums) => lazy(galleryPage, { albums });
-  sheets.galleryAdd = (files) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files });
+  sheets.galleryAdd = (files, topic) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files, topic });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });

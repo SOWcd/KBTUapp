@@ -572,6 +572,7 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
         pics = [r[0] for r in rows(con, """SELECT file_id FROM event_photos WHERE event_id = ?
             UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL
             UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
+        pics += [f for f in gallery.album_gone(con, eid) if f not in pics]  # a closed event's Gallery posts never turn public
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
         for sl in rows(con, "SELECT slug, org_id FROM short_links WHERE event_id = ?", eid):  # they go with it (cascade)
             _keep_name(con, sl["slug"], sl["org_id"])
@@ -941,8 +942,8 @@ def remove_album_photo(con, v: Viewer, eid: int, fid: int) -> tuple[dict, list[s
     if p["added_by"] != v.id and v.role != "admin" and not can(con, v, e["org_id"], "events"):
         raise ApiError("forbidden")
     con.execute("DELETE FROM event_photos WHERE event_id = ? AND file_id = ?", (eid, fid))
-    # a student's Gallery post of this event stays theirs: a plain KBTU photo now
-    con.execute("UPDATE gallery_photos SET event_id = NULL WHERE file_id = ? AND event_id = ?", (fid, eid))
+    # a student's Gallery post of this event stays theirs, a plain KBTU photo now; of a closed event: gone with it
+    gallery.album_gone(con, eid, fid)
     return full(con, v, e), _drop_unused(con, fid)
 
 
@@ -1179,7 +1180,7 @@ def door_round(con) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, gallery  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402

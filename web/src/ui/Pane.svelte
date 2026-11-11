@@ -74,6 +74,7 @@
 
 <div class="pane scroll" class:scrolled role="region" aria-label={title} bind:this={el} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}
   onscroll={() => { if (scrolled !== el.scrollTop > 2) scrolled = !scrolled; }}>
+  <div class="edge" aria-hidden="true"></div>
   {#if !bare}<h1 class="ttl" use:fitTitle use:largeTitle={(g) => (overlay.quiet = !g)}>{title}</h1>{/if}
   {@render children()}
   <div class="tail"></div>
@@ -82,9 +83,13 @@
 <style>
   .pane { position: fixed; inset: 0; z-index: var(--z-sheet); padding: var(--page-top) var(--gutter) 0; background: var(--bg);
     box-shadow: -18px 0 40px -16px rgba(0, 0, 0, 0.45); touch-action: pan-y; }
-  /* the scroll edge: content fades out under the capsule instead of running into it */
-  .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
-    mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
+  /* the scroll edge: content fades out under the capsule instead of running into it. A strip of the page's own colour
+     held at the top (no net height), not a mask on the pane: a masked pane was clear up there, and the page under it
+     (drifted left, dimmed) read through beside the capsule. Sticky offsets count from inside the pane's padding. */
+  .edge { position: sticky; top: calc(-1 * var(--page-top)); z-index: calc(var(--z-sticky) + 1); height: var(--page-top);
+    margin: calc(-1 * var(--page-top)) calc(-1 * var(--gutter)) 0; background: var(--bg); pointer-events: none; opacity: 0;
+    -webkit-mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); }
+  .scrolled .edge { opacity: 1; }
   .ttl { margin: 8px 4px 18px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; overflow-wrap: break-word; }
   .tail { height: calc(var(--safe-bottom) + 40px); }
 </style>

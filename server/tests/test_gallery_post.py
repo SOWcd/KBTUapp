@@ -111,9 +111,95 @@ def test_attach_on_the_albums_rules(env):
     # out of the album by the club's Head: still the student's, a plain KBTU photo
     assert c.delete(f"/api/events/{went}/photos/{p['id']}", headers=tma(HEAD)).status_code == 200
     assert p["id"] in _ids(c, CY) and con.execute("SELECT event_id FROM gallery_photos WHERE file_id = ?", (p["id"],)).fetchone()[0] is None
-    # the event deleted: the posts stay, plain
+    # the event deleted (it was open to everyone): the posts stay, plain
     logic.organizing._delete_event(con, went)
     assert len(_ids(c, CY)) == 10 and not con.execute("SELECT 1 FROM gallery_photos WHERE event_id IS NOT NULL").fetchone()
+
+
+def test_a_closed_events_posts_never_turn_public(env):
+    """Posted to an album not every student sees (members, leaders, a meeting, an initiative off the afisha): the event
+    deleted, or the photo out of its album, or a take-down undone after the event went: never a plain photo for all."""
+    c, con, oid = _app(env)
+    small = logic.create_org(con, None, "Small", "SM", "crown_3d", False)
+    logic.set_role(con, None, c.ids[HEAD], small, "president", "test")
+    files = lambda: sorted(p.name for p in c.media.rglob("*.webp"))  # noqa: E731
+    seed = 0
+    for n, (org, kw) in enumerate(((oid, {"visibility": "members"}), (oid, {"visibility": "leaders", "leaders_from": "president"}),
+                                   (oid, {"meeting": 1}), (small, {}))):
+        eid = _event(con, c, org, f"Closed {n}", **kw)
+        fids = [_post(c, HEAD, seed := seed + 1, event=eid) for _ in range(3)]
+        assert [r.status_code for r in fids] == [200] * 3, (kw, fids[0].text)
+        gone, down, kept = (r.json()["id"] for r in fids)
+        assert len(files()) == 6  # each with its thumbnail
+        # out of the album by the team: gone, not plain
+        assert c.delete(f"/api/events/{eid}/photos/{gone}", headers=tma(HEAD)).status_code == 200
+        assert not con.execute("SELECT 1 FROM gallery_photos WHERE file_id = ?", (gone,)).fetchone() and len(files()) == 4
+        # taken down by a moderator, then the event deleted: the undo brings nothing back
+        con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'photo', ?, 'rules', ?)", (c.ids[AL], down, NOW))
+        assert c.post(f"/api/admin/reports/photo/{down}", headers=tma(ADMIN), json={"remove": True}).status_code == 204
+        _, photos = logic.organizing._delete_event(con, eid)
+        assert len(photos) == 1 and not con.execute("SELECT 1 FROM gallery_photos").fetchone()
+        for who in (CY, HEAD, ADMIN):
+            assert _feed(c, who) == [] and _feed(c, who, topic="other") == [], (kw, who)
+        assert c.post(f"/api/admin/taken-down/photo/{down}/restore", headers=tma(ADMIN)).status_code == 204
+        assert not con.execute("SELECT 1 FROM gallery_photos").fetchone() and _feed(c, CY) == []
+        assert not con.execute("SELECT 1 FROM files WHERE id IN (?, ?, ?)", (gone, down, kept)).fetchone()
+        for f in list(c.media.rglob("*.webp")):
+            f.unlink()  # _delete_event returns the kept one's path for the caller; the test is the caller
+        con.execute("DELETE FROM meta WHERE key LIKE 'gal:%'")
+
+
+def test_an_open_events_take_down_undone_after_it_went_is_plain(env):
+    c, con, oid = _app(env)
+    eid = _event(con, c, oid)
+    fid = _post(c, HEAD, 1, event=eid).json()["id"]
+    con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'photo', ?, 'rules', ?)", (c.ids[AL], fid, NOW))
+    assert c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": True}).status_code == 204
+    logic.organizing._delete_event(con, eid)
+    assert c.post(f"/api/admin/taken-down/photo/{fid}/restore", headers=tma(ADMIN)).status_code == 204
+    assert _feed(c, CY) == [fid] and _feed(c, CY, topic="other") == [fid]
+    # one taken down before this fix (no "open" on its row): stays gone
+    fid = _post(c, HEAD, 2, event=(eid := _event(con, c, oid))).json()["id"]
+    logic.gallery.take_down(con, fid)
+    con.execute("UPDATE takedowns SET data = json_remove(data, '$.gallery.open') WHERE target_id = ?", (fid,))
+    logic.organizing._delete_event(con, eid)
+    assert c.post(f"/api/admin/taken-down/photo/{fid}/restore", headers=tma(ADMIN)).status_code == 204
+    assert fid not in _feed(c, CY)
+
+
+def test_the_admins_delete_takes_a_closed_events_posts(env):
+    c, con, oid = _app(env)
+    eid = _event(con, c, oid, "Secret", visibility="members", meeting=1)
+    fid = _post(c, HEAD, 1, event=eid).json()["id"]
+    assert fid not in _feed(c, CY)
+    assert c.delete(f"/api/admin/events/{eid}", headers=tma(ADMIN)).status_code in (200, 204)
+    assert _feed(c, CY) == []  # hidden for its Undo day
+    con.execute("UPDATE meta SET value = json_set(value, '$.due', 0) WHERE key = ?", (f"evdel:{eid}",))
+    _, photos = logic.events_gone(con)
+    assert len(photos) == 1 and _feed(c, CY) == [] and _feed(c, CY, topic="other") == [] and not con.execute("SELECT 1 FROM gallery_photos").fetchone()
+
+
+def test_albums_only_of_events_open_to_every_student(env):
+    """The shelf says no more than the feed: a draft, a cancelled or hidden event, members' or leaders' own, a meeting,
+    a first-year one for who hides them, an initiative off the afisha: no album, for the staff and the club's own too;
+    a photo three people reported isn't counted."""
+    c, con, oid = _app(env)
+    ok = _event(con, c, oid)
+    a, b = _photo(con, ok, c.ids[BO]), _photo(con, ok, c.ids[BO])
+    for kw in ({"status": "draft"}, {"status": "cancelled"}, {"hidden_at": NOW}, {"visibility": "members"},
+               {"visibility": "leaders", "leaders_from": "president"}, {"meeting": 1}, {"first_year": 1}):
+        _photo(con, _event(con, c, oid, **kw), c.ids[BO])
+    con.execute("UPDATE users SET hide_first_year = 1")
+    small = logic.create_org(con, None, "Small", "SM", "crown_3d", False)
+    _photo(con, _event(con, c, small), c.ids[BO])
+    albums = lambda who: [(x["id"], x["n"]) for x in c.get("/api/gallery", headers=tma(who)).json()["albums"]]  # noqa: E731
+    for who in (AL, HEAD, ADMIN):
+        assert albums(who) == [(ok, 2)], who
+    for n, who in enumerate((AL, CY, HEAD)):
+        assert c.post("/api/reports", headers=tma(who), json={"target": "photo", "id": b, "reason": "rules"}).status_code == 204
+        assert albums(ADMIN) == [(ok, 1 if n == 2 else 2)] and albums(who) == [(ok, 1)]  # mine at once, everyone's at three
+    assert c.post("/api/reports", headers=tma(AL), json={"target": "photo", "id": a, "reason": "rules"}).status_code == 204
+    assert albums(AL) == [] and albums(BO) == [(ok, 1)]  # nothing of it left for me: no album
 
 
 def test_a_day_counts_attempts(env, monkeypatch):
@@ -209,8 +295,9 @@ def test_topic_of_a_photo_of_no_event(env):
     assert files() == [] and not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()  # refused before the work
     for n, topic in enumerate(logic.gallery.TOPICS):
         assert _post(c, AL, n, topic=topic).json()["topic"] == topic
-    assert _post(c, AL, 8, topic=None).status_code == 400  # of no event and no topic said
-    assert len(_feed(c)) == len(logic.gallery.TOPICS)  # nothing of it stored
+    old = _post(c, AL, 8, topic=None)  # an old web bundle: neither said, taken as other until 2026-11-25
+    assert old.status_code == 200 and old.json()["topic"] == "other" and old.json()["id"] in _feed(c, topic="other")
+    assert con.execute("SELECT topic FROM gallery_photos WHERE file_id = ?", (old.json()["id"],)).fetchone()[0] is None
     ev = _post(c, AL, 9, event=eid).json()
     assert "topic" not in ev and ev["event"]["id"] == eid  # the event flow as before
     assert con.execute("SELECT topic FROM gallery_photos WHERE file_id = ?", (ev["id"],)).fetchone()[0] is None
@@ -233,6 +320,7 @@ def test_albums_on_the_first_page(env):
     _post(c, AL, 1, topic="campus")  # of no event: no album
     got = c.get("/api/gallery", headers=tma(CY)).json()["albums"]
     assert [(x["id"], x["title"], x["n"], x["cover"]["id"], x["cover"]["focus"]) for x in got] == [(b, "B", 1, b1, None), (a, "A", 2, cover, [0.5, 0.2])]
+    assert got[0]["at"] == NOW - 7200  # the event's day
     assert c.post("/api/reports", headers=tma(CY), json={"target": "photo", "id": a2, "reason": "rules"}).status_code == 204
     assert [(x["id"], x["n"]) for x in c.get("/api/gallery", headers=tma(CY)).json()["albums"]] == [(b, 1), (a, 1)]  # gone for the reporter
     for params in ({"topic": "events"}, {"before": 1 << 40}):
@@ -256,6 +344,8 @@ def test_feed_mixes_both_newest_first_and_filters(env):
     old = _post(c, BO, 4).json()["id"]
     con.execute("UPDATE gallery_photos SET topic = NULL WHERE file_id = ?", (old,))  # posted before topics
     assert _feed(c) == [old, attached, life, album, campus]
+    shown = {p["id"]: p for p in c.get("/api/gallery", headers=tma(CY)).json()["photos"]}
+    assert shown[album]["at"] == NOW and "uid" not in shown[album]  # an album's photo: when it was uploaded, for the feed's days
     assert _feed(c, topic="events") == [attached, album]
     assert _feed(c, topic="campus") == [campus] and _feed(c, topic="life") == [life] and _feed(c, topic="study") == []
     assert _feed(c, topic="other") == [old]

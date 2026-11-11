@@ -25,9 +25,11 @@ def on(v: Viewer) -> bool:
 
 def _shape(f, v: Viewer) -> dict:
     """A photo as the grid and the viewer show it (types.ts AlbumPhoto): who posted it as the album says it (nick or
-    "First L."); a Gallery post also its author's profile and when it was posted."""
+    "First L."); a Gallery post also its author's profile; when it was posted (an album's photo: uploaded), for the
+    feed's days, where the Gallery is on for me."""
     return {**media_shape(f), "canDelete": f["uid"] == v.id and on(v), "by": _photo_by(f), "mine": f["uid"] == v.id,
-            **({"uid": f["poster"], "at": f["posted"]} if f["poster"] else {}),
+            **({"uid": f["poster"]} if f["poster"] else {}),
+            **({"at": f["posted"] or f["created_at"]} if f["poster"] or on(v) else {}),  # the feed's days; off: no more than the album says
             **({"topic": f["topic"] or "other"} if f["poster"] and not f["event_id"] else {}),  # one posted before topics, or its event gone: other
             **({"event": {"id": f["event_id"], "title": f["title"],
                           **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(f["i18n"]).items()}} if f["i18n"] else {})}}
@@ -42,15 +44,15 @@ def _open() -> str:
 
 def albums(con, v: Viewer) -> list[dict]:
     """The events' albums the feed draws from, the one with the newest photo first: its cover (the event's own, else its
-    newest photo) and how many photos I see in it, in one query for all rows."""
+    newest photo), its day and how many photos I see in it, in one query for all rows."""
     # ponytail: the ALBUMS newest, all at once (the shelf and "All"); page it when there are more albums than that
     found = rows(con, f"""WITH a AS (
-            SELECT e.id AS eid, e.title, e.i18n, e.cover_file_id, e.cover_focus, COUNT(*) AS n, MAX(f.id) AS newest
+            SELECT e.id AS eid, e.title, e.i18n, e.starts_at, e.cover_file_id, e.cover_focus, COUNT(*) AS n, MAX(f.id) AS newest
             FROM event_photos p JOIN files f ON f.id = p.file_id JOIN events e ON e.id = p.event_id JOIN orgs o ON o.id = e.org_id
             WHERE {_open()} AND {PHOTO_SHOWN} GROUP BY e.id)
-        SELECT a.eid, a.title, a.i18n, a.n, a.cover_file_id, a.cover_focus, c.* FROM a JOIN files c ON c.id = COALESCE(a.cover_file_id, a.newest)
+        SELECT a.eid, a.title, a.i18n, a.starts_at, a.n, a.cover_file_id, a.cover_focus, c.* FROM a JOIN files c ON c.id = COALESCE(a.cover_file_id, a.newest)
         ORDER BY a.newest DESC LIMIT ?""", *on_afisha_args(v), v.id, v.id, ALBUMS)
-    return [{"id": a["eid"], "title": a["title"], "n": a["n"],
+    return [{"id": a["eid"], "title": a["title"], "n": a["n"], "at": a["starts_at"],
              "cover": {**media_shape(a), "focus": [float(c) for c in a["cover_focus"].split(",")] if a["cover_file_id"] and a["cover_focus"] else None},
              **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(a["i18n"]).items()}} if a["i18n"] else {})} for a in found]
 
@@ -105,10 +107,11 @@ def _day_key(v: Viewer) -> str:
 
 def check(con, v: Viewer, eid: int | None = None, topic: str | None = None) -> None:
     """May I post to the Gallery (to this event's album, or about this topic)? Asked before the upload is decoded, and
-    again as it is saved. A photo of no event says its topic; an event's never does."""
+    again as it is saved. A photo of no event says its topic (none yet from an old bundle); an event's never does."""
     if not on(v):
         raise ApiError("not_found")
-    if (topic is None) == (eid is None) or topic is not None and topic not in TOPICS:  # one of the two, never both
+    # ponytail: until 2026-11-25, then require: an old web bundle posts with neither (saved as topic NULL, reads as other)
+    if topic is not None and (eid is not None or topic not in TOPICS):  # never both
         raise ApiError("bad_input", "topic")
     if eid is not None and _album_room(con, v, _event(con, v, eid)) <= 0:
         raise ApiError("forbidden")
@@ -163,16 +166,36 @@ def take_down(con, fid: int) -> bool:
     g = one(con, "DELETE FROM gallery_photos WHERE file_id = ? RETURNING *", fid)
     if not g:
         return False
+    g = {**dict(g), "open": bool(g["event_id"] and _was_open(con, g["event_id"]))}  # for restore, should its event go meanwhile
     albums = [dict(p) for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", fid)]
     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
-                (fid, g["user_id"], json.dumps({"gallery": dict(g), "albums": albums}), fid, now()))
+                (fid, g["user_id"], json.dumps({"gallery": g, "albums": albums}), fid, now()))
     return True
 
 
+def _was_open(con, eid: int) -> bool:
+    """The event's album was open to every student whoever they are (public, not a meeting, its club on the afisha by
+    itself): only such an event's Gallery posts may outlive the album as plain KBTU photos."""
+    return bool(one(con, f"""SELECT 1 FROM events e JOIN orgs o ON o.id = e.org_id
+        WHERE e.id = ? AND e.visibility = 'public' AND e.meeting = 0 AND {afisha_ok('o')}""", eid))
+
+
+def album_gone(con, eid: int, fid: int | None = None) -> list[int]:
+    """An event is about to be deleted (or one photo leaves its album: fid): a closed event's Gallery posts go with it,
+    never into everyone's feed (their files: the caller drops them); an open one's stay, plain. Joins the caller's tx."""
+    if _was_open(con, eid):
+        con.execute("UPDATE gallery_photos SET event_id = NULL WHERE event_id = ? AND file_id = COALESCE(?, file_id)", (eid, fid))
+        return []
+    return [r[0] for r in rows(con, "DELETE FROM gallery_photos WHERE event_id = ? AND file_id = COALESCE(?, file_id) RETURNING file_id", eid, fid)]
+
+
 def restore(con, d: dict) -> None:
-    """take_down undone: the post back, in the albums still there."""
+    """take_down undone: the post back, in the albums still there. Its event gone meanwhile: a plain KBTU photo if that
+    event was open to every student, else it stays gone (the caller drops the file)."""
     g = d["gallery"]
-    eid = g["event_id"] if g["event_id"] and one(con, "SELECT 1 FROM events WHERE id = ?", g["event_id"]) else None  # its event gone: a plain KBTU photo
+    eid = g["event_id"] if g["event_id"] and one(con, "SELECT 1 FROM events WHERE id = ?", g["event_id"]) else None
+    if g["event_id"] and not eid and not g.get("open"):
+        return
     con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
                 (g["file_id"], g["user_id"], eid, g["created_at"], g.get("topic")))  # taken down before topics: none
     for p in d["albums"]:
@@ -192,4 +215,4 @@ def mine_gone(con, uid: int) -> list[int]:
 
 from .account import _drop_unused  # noqa: E402
 from .organizing import PHOTO_SHOWN, _album_room, _photo_by  # noqa: E402
-from .seats import _event, on_afisha, on_afisha_args  # noqa: E402
+from .seats import _event, afisha_ok, on_afisha, on_afisha_args  # noqa: E402
