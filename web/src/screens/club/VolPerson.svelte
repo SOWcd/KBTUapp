@@ -118,7 +118,7 @@
       {#if p.shifts.length}
         <Group caption={t('ledg.shifts')} footnote={p.open ? t('ledg.openNote') : undefined}>
           {#each p.shifts as s (s.id)}
-            <Row dense title={s.title ?? t('ledg.byHand')} subtitle={[span(s), s.byHand && s.title && !s.unmarked ? t('ledg.byHand') : null, s.unmarked ? t('ledg.unmarkedTag') : null, s.gone ? t('ledg.removed') : null].filter(Boolean).join(' · ')}
+            <Row dense title={s.title ?? t('ledg.byHand')} subtitle={[span(s), s.byHand && s.title && !s.unmarked ? t('ledg.byHand') : null, s.unmarked ? t('ledg.unmarkedTag') : null, s.gone ? t('ledg.removed') + (s.goneReason ? ': ' + s.goneReason : '') : null].filter(Boolean).join(' · ')}
               value={s.gone ? undefined : s.outAt ? duration(s.outAt - s.inAt) : t('ledg.noOut')} menu={edit ? shiftMenu(s) : undefined} />
           {/each}
         </Group>

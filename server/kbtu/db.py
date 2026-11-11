@@ -1554,7 +1554,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # a request its sender took back after a quiet decline: out of the sender's list, the 30 days still held (profiles.take_back_request)
     (155, "ALTER TABLE friend_requests ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;"),
     # the volunteers ledger's door handed over by a one-time link (logic/vol.py hand, take): only the token's hash;
-    # user_id: the first eligible account that opened it. One live link a session
+    # user_id: the first eligible account that opened it. One live link a session. vol_resolve_from: when answering for
+    # the unmarked began; a session finished before it keeps its open shifts at 0
     (156, """CREATE TABLE vol_hands (
       id INTEGER PRIMARY KEY,
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
@@ -1565,7 +1566,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       taken_at INTEGER,
       revoked_at INTEGER) STRICT;
     CREATE UNIQUE INDEX vol_hands_live ON vol_hands(session_id) WHERE revoked_at IS NULL;
-    CREATE INDEX vol_hands_by_user ON vol_hands(user_id);"""),
+    CREATE INDEX vol_hands_by_user ON vol_hands(user_id);
+    INSERT OR IGNORE INTO meta (key, value) VALUES ('vol_resolve_from', CAST(strftime('%s', 'now') AS TEXT));"""),
 ]
 
 

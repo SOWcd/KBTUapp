@@ -244,9 +244,9 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
             raise ApiError("conflict", "pick")  # none open or several: the app asks which
         sid = live[0]["session"]
     s = _mine(con, v, sid, door=True)
-    logic.vol.ran(con, s, v)
     if not con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ?, created_at = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, now(), r["code"])).rowcount:
         return bind(con, key, v, code, sid)  # another scan bound it first: the session it really got, if mine (or gone: rotated)
+    logic.vol.paired(con, s, v)  # the ledger's club: who paired its screen runs this door
     return _row(con, key, s)
 
 
@@ -260,17 +260,17 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         else:  # a member at the event's door; who showed this code can't check themselves in with it (mark)
             _door(con, v, s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]), sid, act == "start")
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{sid}:{v.id}",))
-    if work:
-        logic.vol.ran(con, s, v)  # the ledger's club: its President, Vice or the link's holder runs this door
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
-        con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
+        with tx(con):
+            if con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid)).rowcount:
+                logic.vol.started(con, s, v)  # the ledger's club: who started it runs this door
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
         _lease(con, sid)
     elif act == "finish":
         with tx(con):
             t = now()
             if con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (t, sid)).rowcount:
-                logic.vol.finished(con, s, t)  # who ran the door: there to the end; every other open shift waits for an answer
+                logic.vol.finished(con, s, v.id, t)  # who ran the door: there to the end; every other open shift waits for an answer
             con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (sid,))
     elif act == "unpair":  # every screen of it goes back to its pairing QR
         con.execute("DELETE FROM qr_screens WHERE session_id = ?", (sid,))

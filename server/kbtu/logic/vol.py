@@ -6,8 +6,9 @@ hours): real check-in and check-out at the club's sessions (checkin.mark), never
 by hand stay as recorded. A check-in never checked out counts 0 minutes, the attendance stays; after Finish whoever ran
 the door answers for each such shift (resolve: "until the end", or the time they left, between the check-in and Finish),
 and the volunteer's "left without checking out" counter grows; no minutes are taken off. Who runs the door (a President,
-a Vice, the holder of the hand-over link: ran) is on shift from the first volunteer they mark in until their own
-check-out or Finish. The door of one session can be handed to a club member by a one-time link (hand, take). Misses: a session the
+a Vice, the holder of the hand-over link), if they started the session or paired its screen themselves (started, paired),
+is on shift from the first volunteer they mark in until their own check-out or Finish. No shift counts more than 12 hours,
+nor past 12 hours after its session's Start (SHIFT_CAP). The door of one session can be handed to a club member by a one-time link (hand, take). Misses: a session the
 President marks as a teambuilding; its expected list (the whole roster) is frozen when the session is made. A miss
 counts only once that session really ran: Finished, GRACE after it, and at least max(3, ceil(expected / 4)) of the
 expected people marked. Readers: the club's President and whom she grants (club members); each volunteer sees only
@@ -31,11 +32,16 @@ from .core import PERSON_COLS, ApiError, Viewer, log_action, now, one, person_re
 # other clubs' events it helps at (the request flow); a teambuilding's validity is frozen only when an account is deleted
 # (freeze_held), live until then so the President's corrections still count; the hand-over link's holder gets no capsule
 # (checkin.running): the link itself is the way back; nobody answers for their own unmarked shift, so a club with one
-# President and no Vice needs her to press Finish or check out herself (upgrade: the app's admin answers from Admin).
+# President and no Vice needs her to check out herself (upgrade: the app's admin answers from Admin); the 12 h caps
+# (SHIFT_CAP) are applied when hours are read (_end), the rows keep the scans' own times, and no job finishes a session
+# left open: its unmarked shifts wait for Finish (upgrade: a nightly Finish at Start + 12 h).
 KEY = b""                # keys the hashes of deleted people's import keys (app.create, admin: from TOKEN_KEY)
 ORG = ""                 # the club's slug (config VOLUNTEERS, set by app.create); empty: all of this is off
 GRACE = 30 * 60          # as checkin.GRACE: a late sign-in may still complete a scan this long after Finish
 REASON_MAX = 200
+SHIFT_CAP = 12 * 3600    # one shift counts this long at most, and a session of the club gives hours for this long after its Start
+RESOLVE_FOR = 7 * 86400  # an unmarked shift is answered for within this long after Finish; later it stays 0
+FROM = "vol_resolve_from"  # meta: when answering for the unmarked began (migration 157); sessions finished before it stay as they were
 HAND_MAX = 14 * 86400    # a hand-over link dies this long after it was made, opened or not (a session never finished)
 MEMBERS, HOURS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"   # the club's sheets (plan, Nov 6), matched loosely below
 
@@ -201,7 +207,7 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
     """A student's check-in scan at the club's session (inside checkin.mark's transaction): arriving opens a shift unless
     one is open; leaving closes the open one, else moves the last one's end (the last leaving counts, as qr_marks.left_at)."""
     org = s["org_id"]
-    if not org or org != org_id(con):
+    if not org or org != org_id(con) or s["ended_at"] is not None:  # a sign-in completed after Finish (GRACE) is attendance, never a shift
         return
     vid = _record(con, org, uid)
     if not vid:
@@ -210,7 +216,7 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
     if not out:
         if not last or last["out_at"] is not None:
             con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, in_by) VALUES (?, ?, ?, ?)", (vid, s["id"], t, uid))
-            for r in _runners(con, s) if s["ended_at"] is None else ():  # whoever runs the door is here from the first volunteer they mark in
+            for r in _runners(con, s):  # whoever runs the door is here from the first volunteer they mark in
                 rv = r != uid and _record(con, org, r)
                 if rv and not one(con, "SELECT 1 FROM vol_shifts WHERE vol_id = ? AND session_id = ? AND gone_at IS NULL", rv, s["id"]):
                     con.execute("INSERT INTO vol_shifts (vol_id, session_id, in_at, in_by) VALUES (?, ?, ?, ?)", (rv, s["id"], t, r))
@@ -235,12 +241,28 @@ def holds(con, v: Viewer, s) -> bool:
     return bool(ORG and v.student and _held(con, v.id, s))
 
 
-def ran(con, s, v: Viewer) -> None:
-    """Someone started, showed, switched or finished this session, or paired its screen: a President, a Vice or the link's
-    holder is noted as running its door (the same meta mark as a member showing an event's QR, checkin.control)."""
-    org = s["org_id"]
-    if org and org == org_id(con) and (_president(con, v, org) or holds(con, v, s)):
+def _mine(con, s) -> bool:
+    return bool(s["org_id"] and s["org_id"] == org_id(con))
+
+
+def _runs(con, s, v: Viewer) -> None:
+    """A President, a Vice or the link's holder is noted as running this door (the same meta mark as a member showing an
+    event's QR, checkin.control): only for what they did themselves, Start or pairing the screen, never a later tap."""
+    if _president(con, v, s["org_id"]) or holds(con, v, s):
         con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{s['id']}:{v.id}",))
+
+
+def started(con, s, v: Viewer) -> None:
+    """checkin.control: this person's Start began the session (ids only in the log)."""
+    if _mine(con, s):
+        _runs(con, s, v)
+        log_action(con, v.id, "vol_session_start", f"qr:{s['id']}")
+
+
+def paired(con, s, v: Viewer) -> None:
+    """checkin.bind: this person's scan paired a screen to the session."""
+    if _mine(con, s):
+        _runs(con, s, v)
 
 
 def on_shift(con, s, uid: int) -> bool:
@@ -250,22 +272,36 @@ def on_shift(con, s, uid: int) -> bool:
 
 
 def _runners(con, s) -> list[int]:
-    """Who ran this door (ran) and still may: a role or a link lost since doesn't count."""
+    """Who ran this door (started, paired) and still may: a role or a link lost since doesn't count."""
     k = f"qrshow:{s['id']}:"
     return [u for u in (int(r[0][len(k):]) for r in rows(con, "SELECT key FROM meta WHERE key >= ? AND key < ?", k, k[:-1] + ";"))
             if _held(con, u, s) or one(con, """SELECT 1 FROM org_members m JOIN students st ON st.user_id = m.user_id AND st.manual = 0
                 WHERE m.org_id = ? AND m.user_id = ? AND m.role IN ('president', 'vice')""", s["org_id"], u)]
 
 
-def finished(con, s, t: int) -> None:
-    """Finish (inside checkin.control's transaction, after ran): who ran the door was there to the end, their own open
-    shift closes now. Every other open shift stays open, 0 minutes, until someone answers for it (resolve)."""
-    org = s["org_id"]
-    if not org or org != org_id(con):
+def finished(con, s, by: int, t: int) -> None:
+    """Finish (inside checkin.control's transaction): who ran the door was there to the end, their own open shift closes
+    now. Every other open shift, the one who pressed Finish too, stays open, 0 minutes, until someone answers for it (resolve)."""
+    if not _mine(con, s):
         return
     for u in _runners(con, s):
         con.execute("""UPDATE vol_shifts SET out_at = ?, out_by = ? WHERE session_id = ? AND out_at IS NULL AND gone_at IS NULL AND in_at < ?
-            AND vol_id IN (SELECT id FROM vol_people WHERE org_id = ? AND user_id = ?)""", (t, u, s["id"], t, org, u))
+            AND vol_id IN (SELECT id FROM vol_people WHERE org_id = ? AND user_id = ?)""", (t, u, s["id"], t, s["org_id"], u))
+    log_action(con, by, "vol_session_finish", f"qr:{s['id']}", json.dumps({"duration": t - s["started_at"]}))
+
+
+def _end(in_at: int, out_at: int, sid: int | None, started: int | None) -> int:
+    """Where a shift's hours stop: its check-out, 12 h after its check-in, 12 h after its session's Start, whichever is
+    first. A shift once entered by hand (no session) stays as recorded."""
+    if sid is None:
+        return out_at
+    return max(in_at, min(out_at, in_at + SHIFT_CAP, *([started + SHIFT_CAP] if started else [])))
+
+
+def _open(con, s) -> bool:
+    """This finished session's unmarked may still be answered for: finished since the feature came, RESOLVE_FOR ago at most."""
+    f = one(con, "SELECT value FROM meta WHERE key = ?", FROM)
+    return s["ended_at"] is not None and bool(f) and int(f[0]) <= s["ended_at"] > now() - RESOLVE_FOR
 
 
 def _thash(token: object) -> str:
@@ -286,7 +322,7 @@ def _door(con, v: Viewer, sid: object):
 
 def _door_view(con, s, lead: bool) -> dict:
     """After Finish: every shift nobody checked out of, answered for or not yet. For the President and Vice: the link."""
-    hs = [] if s["ended_at"] is None else rows(con, """SELECT h.id AS hid, h.in_at, h.out_at, p.* FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+    hs = [] if not _open(con, s) else rows(con, """SELECT h.id AS hid, h.in_at, h.out_at, p.* FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
         WHERE h.session_id = ? AND h.gone_at IS NULL AND (h.out_at IS NULL OR EXISTS (SELECT 1 FROM vol_edits e WHERE e.vol_id = h.vol_id
         AND e.what = 'resolve' AND e.ref = h.id)) ORDER BY h.out_at IS NOT NULL, h.in_at, h.id""", s["id"])
     who = _names(con, hs)
@@ -295,7 +331,8 @@ def _door_view(con, s, lead: bool) -> dict:
         r = one(con, "SELECT user_id FROM vol_hands WHERE session_id = ? AND revoked_at IS NULL AND created_at > ?", s["id"], now() - HAND_MAX)
         hand = r and {"holder": r[0] and _names(con, [r]).get(r[0])}
     return {"session": s["id"], "lead": lead, "ended": s["ended_at"], "hand": hand,
-            "unmarked": [{"id": h["hid"], "name": _name(h, who.get(h["user_id"])), "person": who.get(h["user_id"]), "inAt": h["in_at"], "outAt": h["out_at"]} for h in hs]}
+            "unmarked": [{"id": h["hid"], "name": _name(h, who.get(h["user_id"])), "person": who.get(h["user_id"]), "inAt": h["in_at"], "outAt": h["out_at"],
+                          "end": _end(h["in_at"], s["ended_at"], s["id"], s["started_at"])} for h in hs]}
 
 
 def door(con, v: Viewer, sid: int) -> dict:
@@ -304,8 +341,10 @@ def door(con, v: Viewer, sid: int) -> dict:
 
 def resolve(con, v: Viewer, hid: int, body: dict) -> dict:
     """Someone left without checking out: who ran the door says "until the end" (left: null) or when they left (a time
-    from their check-in to Finish, to the minute); the app counts the minutes. Never one's own shift. Logged in vol_edits
-    (left_unmarked), which is also the volunteer's counter. Answered wrongly: answered again, the same way."""
+    from their check-in to Finish, to the minute; _end's 12 h at most); the app counts the minutes. Never the shift of a
+    record ever tied to one's own account (an unlink doesn't make it someone else's). Only a session finished since this
+    came, within RESOLVE_FOR. Logged in vol_edits (left_unmarked), which is also the volunteer's counter. Answered wrongly:
+    the President or a Vice answers again, inside the same window."""
     org = _org(con)
     with tx(con):
         h = one(con, """SELECT h.*, p.user_id FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
@@ -313,13 +352,13 @@ def resolve(con, v: Viewer, hid: int, body: dict) -> dict:
         if not h:
             raise ApiError("not_found")
         s, lead = _door(con, v, h["session_id"])
-        if s["ended_at"] is None:
+        if not _open(con, s):
             raise ApiError("closed")
-        if h["user_id"] == v.id:
+        if h["user_id"] == v.id or one(con, "SELECT 1 FROM vol_ties WHERE vol_id = ? AND user_id = ?", h["vol_id"], v.id):
             raise ApiError("forbidden", "own")
-        if h["out_at"] is not None and not one(con, "SELECT 1 FROM vol_edits WHERE vol_id = ? AND what = 'resolve' AND ref = ?", h["vol_id"], hid):
-            raise ApiError("conflict")  # checked out by a scan: nothing to answer for
-        end = max(s["ended_at"], h["in_at"])  # a sign-in completed under GRACE opens a shift after Finish: 0 minutes
+        if h["out_at"] is not None and not (lead and one(con, "SELECT 1 FROM vol_edits WHERE vol_id = ? AND what = 'resolve' AND ref = ?", h["vol_id"], hid)):
+            raise ApiError("conflict")  # checked out by a scan: nothing to answer for; answered already: the President's or Vice's to change
+        end = _end(h["in_at"], s["ended_at"], s["id"], s["started_at"])
         left = body.get("left")
         if left is not None and (not isinstance(left, int) or isinstance(left, bool) or not h["in_at"] // 60 * 60 <= left <= end):
             raise ApiError("bad_input", "left")
@@ -360,7 +399,7 @@ def take(con, v: Viewer, token: object) -> int:
     """The link opened: the first verified student of the club to open it holds the session's door (its id); the same
     person again: still theirs; anyone after: refused. A President or a Vice opening it takes nothing (theirs already)."""
     org = _org(con)
-    if not v.student:
+    if not v.student:  # a verified student (app.viewer: never a manual one), refused before the link is touched
         raise ApiError("forbidden", "student")
     t = now()
     h = one(con, """SELECT h.id, h.session_id, h.user_id, s.ended_at FROM vol_hands h JOIN vol_meets m ON m.session_id = h.session_id
@@ -387,16 +426,18 @@ def _minutes(con, org: int, vid: int | None = None) -> dict[int, tuple[int, int]
     volunteering at events; a teambuilding only counts for misses)."""
     out: dict[int, list] = {}
     end: dict[int, int] = {}
-    for r in rows(con, f"""SELECT h.vol_id, h.in_at, h.out_at FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
+    for r in rows(con, f"""SELECT h.vol_id, h.in_at, h.out_at, h.session_id, (SELECT started_at FROM qr_sessions WHERE id = h.session_id)
+            FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id
             WHERE p.org_id = ? AND h.gone_at IS NULL AND NOT EXISTS (SELECT 1 FROM vol_meets m WHERE m.session_id = h.session_id AND m.team = 1)
             {'AND h.vol_id = ?' if vid else ''} ORDER BY h.vol_id, h.in_at""", org, *([vid] if vid else [])):
         x = out.setdefault(r[0], [0, 0])
         if r[2] is None:
             x[1] += 1
         elif r[2] > r[1]:
+            o = _end(r[1], r[2], r[3], r[4])
             a = max(r[1], end.get(r[0], 0))
-            x[0] += max(0, r[2] - a)
-            end[r[0]] = max(end.get(r[0], 0), r[2])
+            x[0] += max(0, o - a)
+            end[r[0]] = max(end.get(r[0], 0), o)
     return {k: (s // 60, n) for k, (s, n) in out.items()}
 
 
@@ -481,7 +522,7 @@ def ledger(con, v: Viewer) -> dict:
     held = {r[0] for r in rows(con, f"SELECT m.session_id FROM vol_meets m JOIN qr_sessions s ON s.id = m.session_id WHERE m.org_id = ? AND {_HELD}", org, t - GRACE)}
     meets = [{"session": r["session_id"], "title": r["title"], "at": r["started_at"] or r["created_at"], "ended": r["ended_at"], "team": bool(r["team"]),
               "expected": r["expected_n"], "marked": r["marked"], "held": r["session_id"] in held,
-              "unresolved": r["unresolved"] if r["ended_at"] is not None else 0}
+              "unresolved": r["unresolved"] if _open(con, r) else 0}
              for r in rows(con, """SELECT m.*, s.title, s.started_at, s.ended_at, (SELECT COUNT(DISTINCT h.vol_id) FROM vol_shifts h
                 JOIN vol_expected y ON y.vol_id = h.vol_id AND y.session_id = h.session_id WHERE h.session_id = m.session_id AND h.gone_at IS NULL) AS marked,
                 (SELECT COUNT(*) FROM vol_shifts h WHERE h.session_id = m.session_id AND h.gone_at IS NULL AND h.out_at IS NULL) AS unresolved
@@ -509,10 +550,14 @@ def person(con, v: Viewer, vid: int | None) -> dict:
     out = _row(p, who, _minutes(con, org, vid).get(vid, (0, 0)), _misses(con, org, vid).get(vid, 0), _unmarked(con, org, vid).get(vid, 0))
     out["balance"] = p["balance"]
     unm = {r[0] for r in rows(con, "SELECT ref FROM vol_edits WHERE vol_id = ? AND what = 'resolve'", vid)}
-    out["shifts"] = [{"id": h["id"], "session": h["session_id"], "title": h["title"], "inAt": h["in_at"], "outAt": h["out_at"],
-                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None, "unmarked": h["id"] in unm}
-                     for h in rows(con, """SELECT h.*, s.title FROM vol_shifts h LEFT JOIN qr_sessions s ON s.id = h.session_id
-                        WHERE h.vol_id = ? AND (h.gone_at IS NULL OR ?) ORDER BY h.in_at DESC""", vid, reader)]
+    # a shift taken out stays on its volunteer's own page, with why: they see that hours were removed
+    why = {r[0]: r[1] for r in rows(con, "SELECT ref, reason FROM vol_edits WHERE vol_id = ? AND what = 'shift' AND json_extract(new, '$.gone') ORDER BY id", vid)}
+    out["shifts"] = [{"id": h["id"], "session": h["session_id"], "title": h["title"], "inAt": h["in_at"],
+                      "outAt": h["out_at"] and _end(h["in_at"], h["out_at"], h["session_id"], h["started_at"]),
+                      "byHand": h["in_by"] != p["user_id"] or h["session_id"] is None, "gone": h["gone_at"] is not None, "unmarked": h["id"] in unm,
+                      **({"goneReason": why.get(h["id"], "")} if h["gone_at"] is not None else {})}
+                     for h in rows(con, """SELECT h.*, s.title, s.started_at FROM vol_shifts h LEFT JOIN qr_sessions s ON s.id = h.session_id
+                        WHERE h.vol_id = ? ORDER BY h.in_at DESC""", vid)]
     out["missed"] = [{"session": r[1], "title": r[2], "at": r[3]} for r in _missed(con, org, vid)]
     out["manual"] = [{"id": r["id"], "n": r["n"], "session": r["session_id"], "at": r["at"]}
                      for r in rows(con, "SELECT * FROM vol_misses WHERE vol_id = ? AND gone_at IS NULL ORDER BY at DESC", vid)]

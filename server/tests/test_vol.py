@@ -610,8 +610,8 @@ def test_who_runs_the_door_is_on_shift_from_the_first_mark(zz):
     con.execute("UPDATE vol_shifts SET in_at = in_at - 3600 WHERE session_id = ?", (sid,))
     assert c.post(f"/api/screens/{sid}/finish", headers=tma(5)).status_code == 200   # ...and presses Finish
     end = con.execute("SELECT ended_at FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0]
-    assert _shift(con, pres, sid)["out_at"] == end and _shift(con, vice, sid)["out_at"] == end   # who ran it and who finished it
-    assert _shift(con, u3, sid)["out_at"] is None
+    assert _shift(con, pres, sid)["out_at"] == end                             # who started it: there to the end
+    assert _shift(con, vice, sid)["out_at"] is None and _shift(con, u3, sid)["out_at"] is None   # pressing Finish earns nothing
     assert con.execute("SELECT COUNT(*) FROM vol_edits WHERE what = 'resolve'").fetchone()[0] == 0   # no "left unmarked" for them
     # her own check-out comes first
     sid2 = _meet(c, con, org, team=False, title="Fair")
@@ -701,3 +701,138 @@ def test_the_door_handed_over_by_a_link(zz):
     assert ("vol_hands", "user_id") in logic._DEL_GONE
     delete_now(c, cfg, tma(4))                                                          # an account deleted: its right goes with it
     assert con.execute("SELECT COUNT(*) FROM vol_hands WHERE user_id = ?", (u4,)).fetchone()[0] == 0
+
+
+# ------------------------------------------------------------ the adversarial review's probes (Nov 11)
+
+def test_no_shift_counts_more_than_twelve_hours(zz):
+    """A session left open for days, then Finish: nobody gets days of hours, by a scan, by running the door or by an answer."""
+    c, _, con, org = zz
+    pres, u3, u4 = _uid(c, P), _member(c, con, org, 3, "vika"), _member(c, con, org, 4, "bek")
+    sid = _meet(c, con, org, team=False, title="Left open")
+    p = _door(c, sid)
+    assert _scan(c, P, p).status_code == 200 and _scan(c, 3, p).status_code == 200   # she checks herself in with her own QR
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 10 * 86400 WHERE session_id = ?", (sid,))
+    con.execute("UPDATE qr_sessions SET started_at = started_at - 10 * 86400 WHERE id = ?", (sid,))
+    assert _scan(c, 4, c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]).status_code == 200   # ten days into it
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(P)).status_code == 200
+    for tg in (3, 4):
+        _agree(c, tg)
+    assert _mins(c, P)["minutes"] == vol.SHIFT_CAP // 60
+    h3, h4 = _shift(con, u3, sid), _shift(con, u4, sid)
+    assert c.post(f"/api/vol/shifts/{h3['id']}/resolve", headers=tma(P), json={"left": h3["in_at"] + vol.SHIFT_CAP + 60}).status_code == 400
+    assert c.post(f"/api/vol/shifts/{h3['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 200
+    assert _shift(con, u3, sid)["out_at"] == h3["in_at"] + vol.SHIFT_CAP and _mins(c, 3)["minutes"] == vol.SHIFT_CAP // 60
+    assert c.post(f"/api/vol/shifts/{h4['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 200
+    assert _mins(c, 4)["minutes"] == 0                                         # past 12 h after Start: the session gives no more hours
+    con.execute("UPDATE vol_shifts SET out_at = in_at + 5 * 86400 WHERE id = ?", (h3["id"],))   # whatever a row says
+    assert _mins(c, 3)["minutes"] == vol.SHIFT_CAP // 60
+    assert c.get("/api/vol/mine", headers=tma(3)).json()["shifts"][0]["outAt"] == h3["in_at"] + vol.SHIFT_CAP
+    assert pres
+
+
+def test_only_start_or_pairing_runs_the_door(zz):
+    c, _, con, org = zz
+    pres = _uid(c, P)
+    vice = _member(c, con, org, 5, "vice", "vice")
+    _member(c, con, org, 3, "vika")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    c.post(f"/api/screens/{sid}/start", headers=tma(P))
+    for act in ("start", "show", "out", "in", "show"):                         # the Vice taps everything after her Start
+        assert c.post(f"/api/screens/{sid}/{act}", headers=tma(5)).status_code == 200
+    assert _scan(c, 3, c.post(f"/api/screens/{sid}/show", headers=tma(5)).json()["param"]).status_code == 200
+    assert _shift(con, pres, sid) is not None and _shift(con, vice, sid) is None
+    sid2 = _meet(c, con, org, team=False, title="Fair")                        # pairing the screen is running it
+    c.post(f"/api/screens/{sid2}/start", headers=tma(P))
+    code = c.post("/api/screen/pair").json()["code"]
+    assert c.post("/api/screens/bind", headers=tma(5), json={"code": code, "session": sid2}).status_code == 200
+    assert _scan(c, 3, c.post(f"/api/screens/{sid2}/show", headers=tma(P)).json()["param"]).status_code == 200
+    assert _shift(con, vice, sid2) is not None
+    c.post(f"/api/screens/{sid2}/finish", headers=tma(5))
+    log = [(r["action"], r["actor_id"], r["target"]) for r in con.execute("SELECT * FROM audit_log WHERE action LIKE 'vol_session_%' AND target = ? ORDER BY id", (f"qr:{sid2}",))]
+    assert log == [("vol_session_start", pres, f"qr:{sid2}"), ("vol_session_finish", vice, f"qr:{sid2}")]
+    d = __import__("json").loads(con.execute("SELECT data FROM audit_log WHERE action = 'vol_session_finish'").fetchone()[0])
+    assert set(d) == {"duration"} and 0 <= d["duration"] < 60
+
+
+def test_never_ones_own_shift_even_unlinked(zz):
+    c, _, con, org = zz
+    pres = _uid(c, P)
+    _member(c, con, org, 5, "vice", "vice")
+    sid = _meet(c, con, org, team=False, title="X")
+    c.post(f"/api/screens/{sid}/start", headers=tma(5))                        # the Vice runs it; she comes as a volunteer
+    assert _scan(c, P, c.post(f"/api/screens/{sid}/show", headers=tma(5)).json()["param"]).status_code == 200
+    con.execute("UPDATE vol_shifts SET in_at = in_at - 7200 WHERE session_id = ?", (sid,))
+    c.post(f"/api/screens/{sid}/finish", headers=tma(5))
+    h = _shift(con, pres, sid)
+    assert h["out_at"] is None
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": None}).json()["message"] == "own"
+    assert c.post(f"/api/vol/people/{h['vol_id']}/link", headers=tma(P), json={"user": None}).status_code == 200
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": None}).json()["message"] == "own"
+    assert con.execute("SELECT out_at FROM vol_shifts WHERE id = ?", (h["id"],)).fetchone()[0] is None
+
+
+def test_no_shift_after_finish(zz):
+    c, _, con, org = zz
+    u3 = _member(c, con, org, 3, "vika")
+    sid = _meet(c, con, org, team=False, title="Y")
+    p = _door(c, sid)
+    _scan(c, 3, p)
+    c.post(f"/api/screens/{sid}/out", headers=tma(P))
+    p2 = c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]
+    _scan(c, 3, p2)                                                            # checked out properly
+    c.post(f"/api/screens/{sid}/finish", headers=tma(P))
+    _scan(c, 3, p2)                                                            # scanned again after Finish, inside GRACE
+    got = con.execute("SELECT out_at FROM vol_shifts h JOIN vol_people v ON v.id = h.vol_id WHERE v.user_id = ? AND session_id = ?", (u3, sid)).fetchall()
+    assert len(got) == 1 and got[0][0] is not None
+
+
+def test_answers_only_for_new_sessions_and_a_week(zz):
+    c, _, con, org = zz
+    u3, u4 = _member(c, con, org, 3, "vika"), _member(c, con, org, 4, "bek")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    tok = c.post(f"/api/vol/meets/{sid}/hand", headers=tma(P)).json()["token"]
+    for tg in (3, 4):
+        _agree(c, tg)
+    assert c.post("/api/vol/hand", headers=tma(4), json={"token": tok}).status_code == 200
+    assert _scan(c, 3, _door(c, sid)).status_code == 200
+    c.post(f"/api/screens/{sid}/finish", headers=tma(P))
+    h = _shift(con, u3, sid)
+    end = con.execute("SELECT ended_at FROM qr_sessions WHERE id = ?", (sid,)).fetchone()[0]
+    since = con.execute("SELECT value FROM meta WHERE key = ?", (vol.FROM,)).fetchone()[0]
+    assert int(since) <= end
+    con.execute("UPDATE meta SET value = ? WHERE key = ?", (str(end + 1), vol.FROM))      # finished before the feature came
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 409
+    assert c.get(f"/api/vol/meets/{sid}/door", headers=tma(P)).json()["unmarked"] == []
+    assert next(m for m in c.get("/api/vol", headers=tma(P)).json()["meets"] if m["session"] == sid)["unresolved"] == 0
+    con.execute("UPDATE meta SET value = ? WHERE key = ?", (since, vol.FROM))
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(4), json={"left": None}).status_code == 200    # the holder answers once
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(4), json={"left": end}).status_code == 409    # again: the President's or Vice's
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": end}).status_code == 200
+    con.execute("UPDATE meta SET value = '0' WHERE key = ?", (vol.FROM,))
+    con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ?", (int(time.time()) - vol.RESOLVE_FOR - 60, sid))   # a week on
+    assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": None}).status_code == 409
+    assert u4
+
+
+def test_a_shift_taken_out_is_shown_to_its_volunteer(zz):
+    c, _, con, org = zz
+    u3 = _member(c, con, org, 3, "vika")
+    vid = con.execute("INSERT INTO vol_people (org_id, user_id, created_at) VALUES (?, ?, 0)", (org, u3)).lastrowid
+    hid = con.execute("INSERT INTO vol_shifts (vol_id, in_at, out_at) VALUES (?, 0, 3600)", (vid,)).lastrowid
+    _agree(c, 3)
+    assert c.patch(f"/api/vol/shifts/{hid}", headers=tma(P), json={"gone": True, "reason": "a duplicate"}).status_code == 200
+    mine = c.get("/api/vol/mine", headers=tma(3)).json()
+    assert mine["minutes"] == 0 and mine["shifts"] == [{**mine["shifts"][0], "id": hid, "gone": True, "goneReason": "a duplicate"}]
+
+
+def test_a_manual_student_does_not_burn_the_link(zz):
+    c, _, con, org = zz
+    u3, u4 = _member(c, con, org, 3, "vika"), _member(c, con, org, 4, "bek")
+    sid = _meet(c, con, org, team=False, title="Concert")
+    tok = c.post(f"/api/vol/meets/{sid}/hand", headers=tma(P)).json()["token"]
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (u3,))
+    assert c.post("/api/vol/hand", headers=tma(3), json={"token": tok}).status_code in (401, 403)
+    assert con.execute("SELECT user_id FROM vol_hands").fetchone()[0] is None
+    _agree(c, 4)
+    assert c.post("/api/vol/hand", headers=tma(4), json={"token": tok}).status_code == 200 and u4

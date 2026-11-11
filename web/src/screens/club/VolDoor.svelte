@@ -30,7 +30,6 @@
   type One = VolDoor['unmarked'][number];
   const todo = $derived((d?.unmarked ?? []).filter((x) => x.outAt === null || x.id === redo));
   const answered = $derived((d?.unmarked ?? []).filter((x) => x.outAt !== null && x.id !== redo));
-  const end = (x: One) => Math.max(d?.ended ?? 0, x.inAt);
 
   async function write(f: () => Promise<VolDoor>, next: VolDoor) {
     const was = d;
@@ -42,13 +41,13 @@
   function answer(x: One, left: number | null) {
     if (!d) return;
     pick = 0; redo = 0;
-    void write(() => api.volResolve(x.id, left), { ...d, unmarked: d.unmarked.map((y) => (y.id === x.id ? { ...y, outAt: left ?? end(x) } : y)) });
+    void write(() => api.volResolve(x.id, left), { ...d, unmarked: d.unmarked.map((y) => (y.id === x.id ? { ...y, outAt: left ?? x.end } : y)) });
   }
   function leftAt(x: One) {
     // the time alone: on the check-in's day, or past midnight when it reads earlier than the check-in
     let at = fromInputs(dateInput(x.inAt), hm);
     if (at < x.inAt - (x.inAt % 60)) at += 86400;
-    if (!hm || !Number.isFinite(at) || at > end(x)) { haptic.error(); say(t('ledg.leftRange', { from: time(x.inAt), to: time(end(x)) }), 'warning_3d'); return; }
+    if (!hm || !Number.isFinite(at) || at > x.end) { haptic.error(); say(t('ledg.leftRange', { from: time(x.inAt), to: time(x.end) }), 'warning_3d'); return; }
     answer(x, at);
   }
 
@@ -86,7 +85,7 @@
               <p class="t-foot own">{t('ledg.ownNo')}</p>
             {:else if pick === x.id}
               <form class="acts" onsubmit={(e) => { e.preventDefault(); leftAt(x); }}>
-                <input class="at" type="time" aria-label={t('ledg.leftAt')} min={time(x.inAt)} max={time(end(x))} bind:value={hm} required />
+                <input class="at" type="time" aria-label={t('ledg.leftAt')} min={time(x.inAt)} max={time(x.end)} bind:value={hm} required />
                 <Button kind="primary" size="m" full type="submit" disabled={!hm}>{t('common.save')}</Button>
               </form>
             {:else}
@@ -103,7 +102,7 @@
           <Group>
             {#each answered as x (x.id)}
               {#snippet change()}<Button kind="secondary" size="s" onclick={() => { haptic.tap(); pick = 0; redo = x.id; }}>{t('ledg.change')}</Button>{/snippet}
-              <Row dense title={x.name || '—'} subtitle={time(x.inAt) + '–' + time(x.outAt ?? x.inAt)} trailing={x.person?.id === session.me?.id ? undefined : change} />
+              <Row dense title={x.name || '—'} subtitle={time(x.inAt) + '–' + time(x.outAt ?? x.inAt)} trailing={d.lead && x.person?.id !== session.me?.id ? change : undefined} />
             {/each}
           </Group>
         {/if}
