@@ -374,9 +374,16 @@ def staff_create_event(con, v: Viewer, oid: int, body: dict, via: str = "admin")
         raise ApiError("forbidden", "staff")
     if any(body.get(k) is not None for k in ("price", "payToName", "payPhone", "freeFirst")):
         raise ApiError("forbidden", "price")
+    # a plain public event alone: the team's meetings, its volunteers, a leaders' call and the DMP memo are the club's own
+    if body.get("visibility") not in (None, "public") or any(body.get(k) for k in ("meeting", "forBoard", "meetingTag", "leadersFrom", "volunteers")):
+        raise ApiError("forbidden", "plain")
+    org = _org(con, oid)
+    partner = bool(body.get("guestHost"))
+    if org["status"] != "active" or partner and not (org["official"] or org["top_at"]):  # a partner's link out: a recognised club's alone here
+        raise ApiError("forbidden", "partner" if org["status"] == "active" else "staff")
     with tx(con):
-        e = create_event(con, v, oid, body)
-        log_action(con, v.id, "staff_create", f"event:{e['id']}", json.dumps({"org": oid, "via": via}))
+        e = create_event(con, v, oid, {k: x for k, x in body.items() if k != "memo"})
+        log_action(con, v.id, "staff_create", f"event:{e['id']}", json.dumps({"org": oid, "via": via, **({"partner": True} if partner else {})}))
     return e
 
 
@@ -418,7 +425,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
             raise ApiError("conflict")  # seats can't drop below who is already in
         if f["needs_phone"] and not e["needs_phone"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
             raise ApiError("conflict", "needs_phone")  # those in never agreed to give it here (the export sends it)
-        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) else e["memo"]
+        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) and not v.staff_org else e["memo"]  # the admin from Admin never touches the club's memo
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):

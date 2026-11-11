@@ -441,6 +441,7 @@ const kk: Dict = {
   'audit.a.registry_export': "тізілімді жүктеді",
   'audit.a.attendees_export': "қатысушыларды жүктеді",
   'audit.a.staff_create': "клубқа іс-шара әкімші ретінде",
+  'audit.a.staff_photo': "клуб іс-шарасына мұқаба",
   'audit.a.staff_event': "іс-шара әкімші ретінде",
   'audit.a.members_export': "клуб құрамын жүктеп алды",
   'audit.a.delete_my_data': "аккаунтты жойды",

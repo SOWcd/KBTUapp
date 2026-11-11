@@ -441,6 +441,7 @@ const en: Dict = {
   'audit.a.registry_export': "exported the registry",
   'audit.a.attendees_export': "exported attendees",
   'audit.a.staff_create': "event for a club as the admin",
+  'audit.a.staff_photo': "cover for a club's event",
   'audit.a.staff_event': "event as the admin",
   'audit.a.members_export': "exported a club's roster",
   'audit.a.delete_my_data': "deleted an account",

@@ -14,7 +14,7 @@
 
   const KNOWN = ['staff_role', 'ban', 'unban', 'report_remove', 'report_keep', 'restore', 'post_hide', 'feature', 'grant', 'ungrant', 'grant_link', 'grant_link_used', 'grant_link_revoked',
     'official', 'org_create', 'org_edit', 'org_hide', 'role_change', 'presidency_transfer', 'president_handover', 'president_link',
-    'receipt_reject', 'registry_search', 'registry_roster', 'registry_export', 'attendees_export', 'staff_event', 'staff_create', 'delete_my_data', 'first50',
+    'receipt_reject', 'registry_search', 'registry_roster', 'registry_export', 'attendees_export', 'staff_event', 'staff_create', 'staff_photo', 'delete_my_data', 'first50',
     'link_create', 'link_delete', 'link_revoke'] as const;
   const label = (a: string) => ((KNOWN as readonly string[]).includes(a) ? t(`audit.a.${a as (typeof KNOWN)[number]}`) : a);
   // the few details worth a line: a role's change, a ban's reason

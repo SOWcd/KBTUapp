@@ -534,9 +534,9 @@ def main(args: list[str]) -> None:
                     log_action(con, boss[0], "staff_event", f"event:{int(args[2])}", json.dumps({"do": "publish", "via": "server"}))
                 print(f"published {int(args[2])}")
                 return
-            org = one(con, "SELECT id FROM orgs WHERE slug = ?", args[2])
+            org = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", args[2])
             if not org:
-                sys.exit(f"no club {args[2]!r} (see `orgs`)")
+                sys.exit(f"no active club {args[2]!r} (see `orgs`)")
             raw = sys.stdin.buffer.read(EVENT_STDIN + 1)
             try:
                 body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
@@ -545,6 +545,7 @@ def main(args: list[str]) -> None:
             if not isinstance(body, dict):
                 sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
             v, cover = Viewer(boss[0], "admin", True, staff_org=org[0]), body.pop("cover", None)
+            saved = None
             if cover is not None:  # as an upload: POST /api/photos, then the editor's coverId
                 try:
                     data = base64.b64decode(cover, validate=True)
@@ -553,8 +554,11 @@ def main(args: list[str]) -> None:
                     saved = media.save(data, Path(cfg.db_path).resolve().parent / "media")
                 except (TypeError, ValueError, media.BadImage):
                     sys.exit("cover: not a base64 picture")
-                body["coverId"] = add_photo(con, v, saved)["id"]
-            print(f"draft {staff_create_event(con, v, org[0], body, 'server')['id']}")
+            with db.tx(con):  # a refused event keeps no cover row
+                if saved:
+                    body["coverId"] = add_photo(con, v, saved)["id"]
+                eid = staff_create_event(con, v, org[0], body, "server")["id"]
+            print(f"draft {eid}")
         except ApiError as exc:  # the code alone: its message may be a field's name, never the event's words
             sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
     elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():

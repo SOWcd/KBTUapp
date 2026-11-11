@@ -108,12 +108,14 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     if (oid := request.headers.get("x-staff-org")) is not None:
         # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
         # without a role in it. Only these two routes; the draft is then run through X-Staff-Event like any other
-        o = logic.one(con, "SELECT id FROM orgs WHERE id = ?", int(oid)) if oid.isascii() and oid.isdigit() and len(oid) < 12 else None
+        o = logic.one(con, "SELECT id FROM orgs WHERE id = ? AND status = 'active'", int(oid)) if oid.isascii() and oid.isdigit() and len(oid) < 12 else None
         route = (request.method, request.scope["route"].path)
         if v.role != "admin" or not o or "x-staff-event" in request.headers or not (
                 route == ("POST", "/api/photos") or route == ("POST", "/api/orgs/{oid}/events") and str(request.path_params.get("oid")) == oid):
             raise ApiError("forbidden", "staff")
         yield Viewer(v.id, v.role, v.student, staff_org=o["id"])
+        if route[1] == "/api/photos":  # reached only when the upload was kept; the draft itself: logic.staff_create_event
+            logic.log_action(con, v.id, "staff_photo", f"org:{oid}")
         return
     if (eid := request.headers.get("x-staff-event")) is None:
         yield v

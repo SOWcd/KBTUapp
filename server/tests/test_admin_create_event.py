@@ -33,7 +33,7 @@ def test_admin_creates_for_a_club_he_is_not_in(env):
     c, con, ids = _setup(env)
     assert c.post("/api/orgs/1/events", headers=tma(60), json=_body()).status_code == 403  # no flag: he's nobody there
     cover = c.post("/api/photos", headers=_org(60), content=_png((200, 30, 30)))
-    assert cover.status_code == 200
+    assert cover.status_code == 200 and _lines(con, "staff_photo") == [(ids["boss"], "org:1", {})]
     r = c.post("/api/orgs/1/events", headers=_org(60), json=_body(coverId=cover.json()["id"]))
     assert r.status_code == 200, r.text
     eid = r.json()["id"]
@@ -69,7 +69,7 @@ def test_the_flag_lends_nothing_else(env):
             ("POST", "/api/videos", {"size": 10}), ("GET", "/api/me", None)):
         r = c.request(method, path, headers=_org(60), json=body)
         assert (r.status_code, r.json().get("message")) == (403, "staff"), (method, path)
-    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 2 and not _lines(con)
+    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 2 and not _lines(con) and not _lines(con, "staff_photo")
     assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ids["pres"],)).fetchone()[0] == "president"
 
 
@@ -90,14 +90,44 @@ def test_never_the_money(env):
     assert c.patch(f"/api/events/{eid}", headers=tma(62), json=_body(**pay)).json()["price"] == 500   # the club itself
 
 
+def test_a_plain_public_event_alone_and_never_the_memo(env):
+    c, con, ids = _setup(env)
+    con.execute("UPDATE orgs SET official = 1 WHERE id = 1")
+    for more in ({"visibility": "members"}, {"visibility": "leaders", "leadersFrom": "head"}, {"visibility": "members", "meeting": True},
+                 {"visibility": "members", "forBoard": True}, {"visibility": "members", "meetingTag": 7}, {"volunteers": 5}, {"leadersFrom": "head"}):
+        r = c.post("/api/orgs/1/events", headers=_org(60), json=_body(**more))
+        assert (r.status_code, r.json()["message"]) == (403, "plain"), more
+    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 2 and not _lines(con)
+    # a memo sent on this path is dropped: what DMP is asked for is the club's own
+    memo = {"room": {"any": True, "projector": False, "capacity": None}}
+    eid = c.post("/api/orgs/1/events", headers=_org(60), json=_body(memo=memo, visibility="public")).json()["id"]
+    stored = lambda: con.execute("SELECT memo FROM events WHERE id = ?", (eid,)).fetchone()[0]  # noqa: E731
+    assert stored() is None
+    # the club writes its memo; the admin's later edit (the editor sends null, or anything) keeps it
+    assert c.patch(f"/api/events/{eid}", headers=tma(62), json=_body(memo=memo)).status_code == 200
+    theirs = stored()
+    assert theirs and c.get(f"/api/events/{eid}", headers=_as(60, eid)).json()["memo"] is None  # never shown to him either
+    for sent in (None, {}, {"room": {"any": False}}):
+        assert c.patch(f"/api/events/{eid}", headers=_as(60, eid), json=_body(title="Edited", memo=sent)).status_code == 200
+        assert stored() == theirs
+    # an organization that is hidden or archived: no flag for it
+    for status in ("hidden", "archived"):
+        con.execute("UPDATE orgs SET status = ? WHERE id = 1", (status,))
+        assert c.post("/api/orgs/1/events", headers=_org(60), json=_body()).status_code == 403
+        assert c.post("/api/photos", headers=_org(60), content=_png((9, 9, 9))).status_code == 403
+
+
 def test_partner_event_for_an_official_club(env):
     c, con, ids = _setup(env)
     partner = _body(guestHost="Astana Hub", externalUrl="https://astanahub.com/e/1")
+    r = c.post("/api/orgs/1/events", headers=_org(60), json=partner)  # no check mark: the admin's own word isn't enough here
+    assert (r.status_code, r.json()["message"]) == (403, "partner") and not _lines(con)
     con.execute("UPDATE orgs SET official = 1 WHERE id = 1")
     assert c.post("/api/orgs/1/events", headers=_org(60), json=_body(guestHost="KBTU friends", externalUrl="https://a.kz")).status_code == 400
     r = c.post("/api/orgs/1/events", headers=_org(60), json=partner)
     assert r.status_code == 200 and (r.json()["guestHost"], r.json()["externalUrl"]) == ("Astana Hub", "https://astanahub.com/e/1")
     eid = r.json()["id"]
+    assert _lines(con) == [(ids["boss"], f"event:{eid}", {"org": 1, "via": "admin", "partner": True})]
     assert c.post(f"/api/events/{eid}/publish", headers=_as(60, eid)).json()["status"] == "published"
     assert c.post("/api/orgs/1/events", headers=_org(60), json={"title": ""}).status_code == 400  # the editor's checks, in full
 
@@ -131,11 +161,18 @@ def test_from_the_server(env, monkeypatch, capsys):
     assert "JSON" in refused(["event", "create", "it"], b"{not json")
     assert "JSON" in refused(["event", "create", "it"], b"[1]")
     assert "JSON" in refused(["event", "create", "it"], b" " * (admin.EVENT_STDIN + 1))
-    assert "no club" in refused(["event", "create", "nope"], json.dumps(_body()).encode())
+    assert "no active club" in refused(["event", "create", "nope"], json.dumps(_body()).encode())
     assert refused(["event", "create", "it"], json.dumps(_body(price=500, payToName="Me Me", payPhone="87011234567")).encode()) == "refused: forbidden price"
     assert "cover" in refused(["event", "create", "it"], json.dumps(_body(cover="!!")).encode())
     assert "cover" in refused(["event", "create", "it"], json.dumps(_body(cover=base64.b64encode(b"text").decode())).encode())
     assert refused(["event", "create", "it"], json.dumps({"title": "Secret words"}).encode()) == "refused: bad_input"
+    assert refused(["event", "create", "it"], json.dumps(_body(visibility="members", meeting=True)).encode()) == "refused: forbidden plain"
+    assert refused(["event", "create", "it"], json.dumps(_body(guestHost="Astana Hub", externalUrl="https://a.kz")).encode()) == "refused: forbidden partner"
+    files = con.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+    assert refused(["event", "create", "it"], json.dumps({"title": "", "cover": cover}).encode()) == "refused: bad_input"
+    assert con.execute("SELECT COUNT(*) FROM files").fetchone()[0] == files  # a refused event keeps no cover row
+    con.execute("UPDATE orgs SET status = 'archived' WHERE id = 2")
+    assert "no active club" in refused(["event", "create", "b"], json.dumps(_body()).encode())
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == n
     # publish: that draft, by the usual rules
     con.execute("INSERT INTO subscriptions (org_id, user_id, created_at) VALUES (1, ?, 0)", (ids["ali"],))

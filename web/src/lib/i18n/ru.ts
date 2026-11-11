@@ -441,6 +441,7 @@ const ru = {
   'audit.a.registry_export': "выгрузил реестр",
   'audit.a.attendees_export': "выгрузил участников",
   'audit.a.staff_create': "событие клубу как админ",
+  'audit.a.staff_photo': "обложка для события клуба",
   'audit.a.staff_event': "событие как админ",
   'audit.a.members_export': "выгрузил состав клуба",
   'audit.a.delete_my_data': "удалил аккаунт",

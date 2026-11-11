@@ -75,6 +75,8 @@
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
   // its money, its videos or the AI's fill, which stay the club's own
   let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
+  // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent
+  const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
   $effect(() => { if (!staff) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
@@ -99,7 +101,7 @@
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
   const canPrice = $derived(!staff && (full || !!saved?.price) && may(mine, 'money'));
   // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
-  const canPartner = $derived(full || oversee || !!saved?.guestHost);
+  const canPartner = $derived(full || !staff && oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
@@ -331,7 +333,7 @@
 
   const input = (): EventInput => ({
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
-    memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null, // a memo to DMP: a recognised club's alone
+    ...(asStaff ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
@@ -602,7 +604,8 @@
 
     <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
       {#if !f.partner}
-        {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
+        {#if staff}<!-- a plain public event alone (the server's rule) -->
+        {:else if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
         {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
         {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
         {#if f.teamOnly && tagsRead}
@@ -621,11 +624,11 @@
     <Group caption={t('ex.more')}>
       {#if !staff}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
       {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
-      {#if tickets}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+      {#if tickets && !staff}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
       {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
-      {#if full && !f.placeUrl && !f.leaders}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
+      {#if full && !f.placeUrl && !f.leaders && !asStaff}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
       <Row icon={Eye} title={t('ed.preview')} accessory="chevron" onclick={showPreview} />
     </Group>
 
