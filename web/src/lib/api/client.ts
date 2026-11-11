@@ -182,7 +182,6 @@ export const server: Api = {
   linkCard: (code) => call('GET', `/invite/${code}`),
   addByLink: (code) => call('POST', `/invite/${code}`),
   friendJoined: (since) => call('GET', `/friends/joined?since=${since}`),
-  useFriendLink: (token) => call('POST', `/friends/link/${token}`),
 
   orgEvents: (org) => call('GET', `/orgs/${org}/events`),
   memo: (org, later) => call('GET', `/orgs/${org}/memo${later ? '?later=true' : ''}`),

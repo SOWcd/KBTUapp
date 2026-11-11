@@ -1549,6 +1549,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (153, """ALTER TABLE fchan_posts ADD COLUMN posted_at INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN ai_fix TEXT;
     ALTER TABLE fchan_posts ADD COLUMN ai_quote TEXT;"""),
+    # the old one-time fr_ friend links: none issued since Nov 2 (one link, r_), the last died on Nov 9
+    (154, "DROP TABLE IF EXISTS friend_links;"),
 ]
 
 

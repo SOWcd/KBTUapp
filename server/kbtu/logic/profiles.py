@@ -745,7 +745,6 @@ def person(con, v: Viewer, uid: int) -> dict:
 
 FRIEND_ASKS_A_DAY = 500  # no limit for a person (owner, Nov 2: 20 a day stopped the initiation crowd); only a script hits it
 REASK_AFTER = 30 * 86400    # a declined request looks pending to the asker this long, then they may ask again
-LINK_TTL = 7 * 86400
 
 
 def friendship(con, me: int, uid: int) -> str:
@@ -937,28 +936,6 @@ def friend_joined(con, v: Viewer, since: int) -> dict:
     return {"usedBy": person_ref(_student(con, r["uid"])) if r else None, "at": r["created_at"] if r else since}
 
 
-# ponytail: the old one-time fr_<token> links, no longer issued (Nov 2: one link, r_); the last ones die 7 days
-# after that deploy (LINK_TTL): remove this, its route, LINK_TTL and the friend_links table after 2026-11-10.
-def use_friend_link(con, v: Viewer, token: str) -> dict:
-    """Someone opened my link: the first student becomes my friend at once; after that it's 'used' and they may ask
-    the usual way. Results: friends | already | used | self."""
-    need_student(v)
-    r = one(con, "SELECT * FROM friend_links WHERE token = ?", token)
-    if not r:
-        raise ApiError("not_found")
-    owner = _student(con, r["user_id"])
-    out = {"person": person_ref(owner)}
-    if r["user_id"] == v.id:
-        return {**out, "result": "self"}
-    if friendship(con, v.id, r["user_id"]) == "friends":
-        return {**out, "result": "already"}
-    with tx(con):  # one write lock: of two people opening it at once, one wins
-        won = r["expires_at"] > core.now() and con.execute("UPDATE friend_links SET used_by = ?, used_at = ? WHERE token = ? AND used_by IS NULL",
-                                                       (v.id, core.now(), token)).rowcount
-        if won:
-            _befriend(con, v.id, r["user_id"])
-            notify(con, r["user_id"], "friend_new", f"fn:{v.id}:{core.now() // 86400}")
-    return {**out, "result": "friends" if won else "used"}
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only

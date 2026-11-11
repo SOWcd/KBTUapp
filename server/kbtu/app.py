@@ -870,9 +870,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def add_by_link(code: str, con: Con, v: Me):
         return logic.add_by_link(con, v, code)
 
-    @app.post("/api/friends/link/{token}")  # ponytail: the old fr_ links (logic.use_friend_link), remove after 2026-11-10
-    def use_friend_link(token: str, con: Con, v: Me):
-        return logic.use_friend_link(con, v, token)
 
     # ------------------------------------------------------------ casting: a club's recruitment round (casting.py)
 

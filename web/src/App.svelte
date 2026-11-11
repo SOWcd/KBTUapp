@@ -9,7 +9,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, opened } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -364,8 +364,8 @@
   }
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
-  // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
-  // one-time link, §4.7), friends (Profile with the Friends sheet: the bot's request message) ----
+  // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
+  // friends (Profile with the Friends sheet: the bot's request message) ----
   function deepLink(p = tg.startParam) {
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
@@ -388,8 +388,6 @@
       }, p);
       return;
     }
-    const fr = p.match(/^fr_([0-9a-f]{24})$/);
-    if (fr) { friendByLink(fr[1]); return; }
     const gq = p.match(/^gq_([A-Za-z0-9_-]+\.[0-9a-f]{24})$/); // a club group's join request (its guard bot): signed up, let in
     if (gq) {
       asStudent(async () => {
@@ -655,23 +653,6 @@
         haptic.ok(); burst(); say(t('pres.done', { club: o.name }), 'party_popper_3d');
         toClub(o.id);
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
-    });
-  }
-
-  /** A friend's one-time link: friends at once (the first one to open it), else why not and what to do instead. */
-  function friendByLink(token: string) {
-    asStudent(async () => {
-      try {
-        const r = await api.useFriendLink(token);
-        if (r.result === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: r.person.name }), 'partying_face_3d'); friendsChanged(); sheets.person(r.person.id); }
-        else if (r.result === 'already') { say(t('fr.already'), 'raising_hands_3d_default'); sheets.person(r.person.id); }
-        else if (r.result === 'self') say(t('fr.linkSelf'), 'waving_hand_3d_default');
-        else if (await sheets.ask({ title: t('fr.linkUsed'), text: t('fr.linkUsedText', { name: r.person.name }), ok: t('fr.sendRequest'), cancel: t('common.cancel') })) {
-          const a = await api.askFriend(r.person.id);
-          haptic.ok(); say(a.friendship === 'friends' ? t('fr.accepted', { name: r.person.name }) : t('person.requestSent'), 'raising_hands_3d_default');
-          friendsChanged();
-        }
-      } catch { haptic.error(); say(t('fr.linkDead'), 'pleading_face_3d'); }
     });
   }
 

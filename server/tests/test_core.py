@@ -988,13 +988,6 @@ def test_friends(env):
     # asking someone who already asked me is the answer
     c.post("/api/friends/requests", headers=Z, json={"userId": dana["id"]})
     assert c.post("/api/friends/requests", headers=D, json={"userId": zhan["id"]}).json()["friendship"] == "friends"
-    # an old one-time link sent before Nov 2 (no longer issued): still the first one wins, then "used"
-    con.execute("INSERT INTO friend_links (token, user_id, created_at, expires_at) VALUES (?, ?, 0, ?)", ("ab" * 12, dana["id"], int(time.time()) + 3600))
-    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=D).json()["result"] == "self"
-    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=A).json()["result"] == "friends"
-    login(c, 34, "eve")
-    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=tma(34, "Eve")).json()["result"] == "used"
-    assert c.post("/api/friends/link", headers=D).status_code == 405                      # no new ones
     # where friends go: only those who let friends see it
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
