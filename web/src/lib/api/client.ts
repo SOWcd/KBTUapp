@@ -115,8 +115,8 @@ export const server: Api = {
   dmOn: (event?: Id) => call('POST', '/me/dm', { event }),
 
   events: (q = {}) => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
-  gallery: (before) => call('GET', '/gallery' + query({ before })),
-  postGalleryPhoto: (file, event) => call('POST', '/gallery' + query({ event }), file),
+  gallery: (before, topic) => call('GET', '/gallery' + query({ before, topic })),
+  postGalleryPhoto: (file, event, topic) => call('POST', '/gallery' + query({ event, topic }), file),
   deleteGalleryPhoto: (id) => call('DELETE', `/gallery/${id}`),
   pastEvents: (org, mine) => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })),
   event: (id) => call('GET', `/events/${id}`),

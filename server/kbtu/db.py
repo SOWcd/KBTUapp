@@ -1568,6 +1568,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX vol_hands_live ON vol_hands(session_id) WHERE revoked_at IS NULL;
     CREATE INDEX vol_hands_by_user ON vol_hands(user_id);
     INSERT OR IGNORE INTO meta (key, value) VALUES ('vol_resolve_from', CAST(strftime('%s', 'now') AS TEXT));"""),
+    # (Nov 11) one shared gallery: a photo of no event says what it is about (logic/gallery.py TOPICS). A photo of no
+    # event already lives in gallery_photos (event_id NULL), so a nullable column is all it takes: no new table, no
+    # rebuild. NULL: an event's photo, or one posted before topics (read as "other").
+    # 157: 155 is the friends branch's, 156 the volunteers' (it lands first; until then the numbers have a gap).
+    (157, "ALTER TABLE gallery_photos ADD COLUMN topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other'));"),
 ]
 
 

@@ -187,3 +187,86 @@ def test_account_deletion_takes_my_photos_and_their_reports(env):
     assert not con.execute("SELECT 1 FROM reports WHERE target = 'photo'").fetchone()
     assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()
     assert ("gallery_photos", "user_id") in logic._DEL_GONE
+
+
+# ---- photos of no event: a topic each (gallery.TOPICS), the feed's filter
+
+def _feed(c, who=CY, **params):
+    r = c.get("/api/gallery", headers=tma(who), params=params)
+    return [p["id"] for p in r.json()["photos"]] if r.status_code == 200 else r.status_code
+
+
+def test_topic_of_a_photo_of_no_event(env):
+    c, con, oid = _app(env)
+    eid = _event(con, c, oid)
+    _came(con, c, eid, AL, "G-1")
+    files = lambda: sorted(p.name for p in c.media.rglob("*.webp")) if c.media.exists() else []  # noqa: E731
+    for bad in ("events", "CAMPUS", "x", ""):
+        assert _post(c, AL, 1, topic=bad).status_code == 400, bad
+    assert _post(c, AL, 1, event=eid, topic="campus").status_code == 400  # an event's photo has no topic
+    assert files() == [] and not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()  # refused before the work
+    for n, topic in enumerate(logic.gallery.TOPICS):
+        assert _post(c, AL, n, topic=topic).json()["topic"] == topic
+    assert _post(c, AL, 8).json()["topic"] == "other"  # the picker before topics: none said
+    ev = _post(c, AL, 9, event=eid).json()
+    assert "topic" not in ev and ev["event"]["id"] == eid  # the event flow as before
+    assert con.execute("SELECT topic FROM gallery_photos WHERE file_id = ?", (ev["id"],)).fetchone()[0] is None
+    assert _post(c, 999, 1, topic="campus").status_code == 404  # not a student
+    logic.gallery.MODE = "staff"
+    assert _post(c, AL, 10, topic="campus").status_code == 404
+
+
+def test_feed_mixes_both_newest_first_and_filters(env):
+    c, con, oid = _app(env)
+    eid = _event(con, c, oid)
+    _came(con, c, eid, AL, "G-1")
+    campus = _post(c, AL, 1, topic="campus").json()["id"]
+    album = _photo(con, eid, c.ids[BO])  # added in the album itself
+    life = _post(c, BO, 2, topic="life").json()["id"]
+    attached = _post(c, AL, 3, event=eid).json()["id"]
+    old = _post(c, BO, 4).json()["id"]
+    con.execute("UPDATE gallery_photos SET topic = NULL WHERE file_id = ?", (old,))  # posted before topics
+    assert _feed(c) == [old, attached, life, album, campus]
+    assert _feed(c, topic="events") == [attached, album]
+    assert _feed(c, topic="campus") == [campus] and _feed(c, topic="life") == [life] and _feed(c, topic="study") == []
+    assert _feed(c, topic="other") == [old]
+    assert _feed(c, topic="x") == 400
+    page = c.get("/api/gallery", headers=tma(CY), params={"topic": "events", "limit": 1}).json()
+    assert [p["id"] for p in page["photos"]] == [attached] and page["more"] is True
+    assert _feed(c, topic="events", before=attached) == [album]
+    logic.gallery.MODE = ""  # off: the albums alone, whatever is asked
+    assert _feed(c, topic="campus") == [] and _feed(c) == [attached, album]
+
+
+def test_a_topic_photo_is_as_safe_as_any(env, monkeypatch):
+    c, con, _ = _app(env)
+    monkeypatch.setattr(logic.gallery, "A_DAY", 3)
+    fid = _post(c, BO, 1, topic="study").json()["id"]
+    rep = lambda who: c.post("/api/reports", headers=tma(who), json={"target": "photo", "id": fid, "reason": "me"}).status_code  # noqa: E731
+    assert rep(AL) == 204 and _feed(c, AL, topic="study") == [] and _feed(c, CY, topic="study") == [fid]
+    assert rep(CY) == rep(HEAD) == 204 and _feed(c, ADMIN, topic="study") == []  # three people: for everyone
+    # a moderator's Delete and its undo keep the topic
+    assert c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": True}).status_code == 204
+    assert not con.execute("SELECT 1 FROM gallery_photos").fetchone()
+    assert c.post(f"/api/admin/taken-down/photo/{fid}/restore", headers=tma(ADMIN)).status_code == 204
+    assert c.get("/api/gallery", headers=tma(CY), params={"topic": "study"}).json()["photos"][0]["topic"] == "study"
+    # the author's Delete: the row and the file
+    path = _path(con, fid)
+    assert c.delete(f"/api/gallery/{fid}", headers=tma(AL)).status_code == 404
+    assert c.delete(f"/api/gallery/{fid}", headers=tma(BO)).status_code == 204
+    assert _feed(c) == [] and not (c.media / f"{path}.webp").exists()
+    # the day's share is one for every kind
+    assert _post(c, BO, 2, topic="life").status_code == _post(c, BO, 3).status_code == 200
+    r = _post(c, BO, 4, topic="campus")
+    assert r.status_code == 429 and r.json()["message"] == "gallery"
+
+
+def test_account_deletion_leaves_no_topic_photo(env):
+    c, con, _ = _app(env)
+    fid = _post(c, AL, 1, topic="campus").json()["id"]
+    path = _path(con, fid)
+    _, photos = logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
+    server.media.drop(c.media, photos)
+    assert photos == [path] and not (c.media / f"{path}.webp").exists()
+    assert not con.execute("SELECT 1 FROM gallery_photos UNION ALL SELECT 1 FROM files WHERE id = ?", (fid,)).fetchone()
+    assert _feed(c, topic="campus") == []
