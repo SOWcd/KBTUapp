@@ -132,7 +132,7 @@
 <div class="st" bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="dialog" aria-modal="true" tabindex="-1" aria-label={g?.org.name}>
   {#if g && ev}
-    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}<img class="whole" src={ev.cover.url} alt="" decoding="async" style:aspect-ratio="{ev.cover.w} / {ev.cover.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
+    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}<img class="haze" src={ev.cover.thumb} alt="" aria-hidden="true" /><img class="whole" src={ev.cover.url} alt="" decoding="async" style:aspect-ratio="{ev.cover.w} / {ev.cover.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
     <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
     <div class="top">
       <div class="bars">{#each g.items as _, i (i)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>
@@ -202,8 +202,10 @@
   .tapzone { position: absolute; inset: 0; }
   /* an event: its poster centred on its own tint */
   /* an event's poster whole, never cut (owner, Nov 11: a wide poster lost its title and date in a square) */
-  .bg.ev .whole { width: auto; height: auto; max-width: calc(100% - 32px); max-height: 46vh; object-fit: contain; border-radius: var(--r-l); box-shadow: var(--shadow-card); }
-  .bg.ev { display: grid; place-items: center; padding-bottom: 18vh; background: radial-gradient(90% 60% at 50% 35%, color-mix(in srgb, var(--c) 55%, transparent), #0E0F14 75%); }
+  /* behind it the same picture out of focus fills the screen: a wide poster no longer sits in an empty field */
+  .bg.ev .haze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(36px) saturate(1.2); transform: scale(1.25); opacity: 0.55; }
+  .bg.ev .whole { width: auto; height: auto; max-width: calc(100% - 32px); max-height: 46vh; object-fit: contain; position: relative; border-radius: var(--r-l); box-shadow: var(--shadow-card); }
+  .bg.ev { overflow: hidden; display: grid; place-items: center; padding-bottom: 18vh; background: radial-gradient(90% 60% at 50% 35%, color-mix(in srgb, var(--c) 55%, transparent), #0E0F14 75%); }
   .acts .open, .lk { flex: 1; justify-content: center; background: #fff; color: #0B0D14; font: 700 15.5px/1 var(--font-text); }
   .top { position: absolute; left: 12px; right: 12px; top: calc(var(--head-bottom) + 8px); display: flex; flex-direction: column; gap: 10px; }
   .bars { display: flex; gap: 4px; }
