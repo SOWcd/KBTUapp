@@ -255,7 +255,7 @@
         <div class="steps up" role="group">
           {#each a.levels as l, i (i)}
             <button class="step" class:fut={!l.reached} class:on={(peek || a.level) === i + 1} aria-label={tierOf(i)} onclick={() => look(i + 1)}>
-              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{l.reached ? tierOf(i) : l.need}</span>
+              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{l.need}</span>
             </button>
           {/each}
         </div>
