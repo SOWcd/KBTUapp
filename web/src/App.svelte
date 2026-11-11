@@ -307,7 +307,9 @@
   // a finger is down (a long scroll)
   let resting = $state(false), restTimer: ReturnType<typeof setTimeout>;
   const REST_MS = 2500;
-  const poke = () => { resting = false; clearTimeout(restTimer); };
+  // a tap on the capsule itself is not activity: it would swap the live status for the tab's name under the finger
+  // and the tap would open nothing (owner, Nov 11)
+  const poke = (e: Event) => { if ((e.target as Element | null)?.closest?.('.cap-theme')) return; resting = false; clearTimeout(restTimer); };
   const rest = () => { clearTimeout(restTimer); restTimer = setTimeout(() => (resting = true), REST_MS); };
   $effect(() => {
     rest();
