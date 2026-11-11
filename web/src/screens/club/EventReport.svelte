@@ -25,7 +25,7 @@
   const e = $derived(eventById(id));
 
   let r = $state<EventReport | null>(null);
-  // the typed fields stay mine while marks come back from the server
+  // the typed fields stay mine while marks come back from the server; a number input hands back a number (or null), kept as text
   let guests = $state('');
   let note = $state('');
   onMount(() => {
@@ -125,7 +125,8 @@
         <Row title={t('evr.scanned')} value={String(r.came)} />
       </Group>
       <div class="form">
-        <Field label={t('evr.counted')} type="number" inputmode="numeric" bind:value={guests} error={bad ? t('common.error') : undefined} />
+        <Field label={t('evr.counted')} type="number" inputmode="numeric"
+          bind:value={() => guests, (v) => (guests = v == null ? '' : String(v))} error={bad ? t('common.error') : undefined} />
         <Field label={t('evr.note')} placeholder={t('evr.notePh')} multiline rows={3} maxlength={1000} bind:value={note} />
         <div class="fa"><Button kind="primary" size="s" loading={busy} disabled={!dirty || bad} onclick={save}>{t('common.save')}</Button></div>
         {#if byline}<p class="t-foot by">{byline}</p>{/if}
