@@ -126,7 +126,7 @@ export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string =>
 /** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
 export const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
 /** the app's drawn pins as a shield or a round medal, both built as Recruiter's (owner, Nov 4: two variants, he picks) */
-export const PIN_SHAPE = 'shield' as 'shield' | 'round';
+export const PIN_SHAPE = 'round' as 'shield' | 'round';
 /** a drawn pin (ZNAKI): Recruiter's craft, in PIN_SHAPE */
 export const isDrawnPin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji in ZNAKI;
 /** round: a medal, an owner's coin, or a drawn pin when pins are round; the rest of the pins are shields */
