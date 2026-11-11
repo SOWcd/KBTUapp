@@ -290,6 +290,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
+    logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
@@ -580,8 +581,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.past_events(con, v, org, mine)
 
     @app.get("/api/gallery")
-    def gallery(con: Con, v: Me, before: int | None = Query(None, ge=0, lt=1 << 62), limit: int = Query(logic.GALLERY_PAGE, ge=1, le=logic.GALLERY_PAGE)):
-        return logic.gallery(con, v, before, limit)
+    def gallery(con: Con, v: Me, before: int | None = Query(None, ge=0, lt=1 << 62), limit: int = Query(logic.gallery.PAGE, ge=1, le=logic.gallery.PAGE)):
+        return logic.gallery.feed(con, v, before, limit)
+
+    @app.post("/api/gallery")
+    async def post_gallery_photo(request: Request, con: Con, v: Me, event: int | None = Query(None, ge=1, lt=1 << 62)):
+        """A photo into the Gallery (GALLERY), the file is the body as in /api/photos; `event`: into its album too."""
+        data = await read_upload(request)
+        logic.gallery.check(con, v, event)  # before the work, not only after it
+        saved = await _picture(media.save, data, photos)
+        return await run_in_threadpool(logic.gallery.post, con, v, saved, event)
+
+    @app.delete("/api/gallery/{fid}", status_code=204)
+    def drop_gallery_photo(fid: int, con: Con, v: Me):
+        media.drop(photos, logic.gallery.delete_mine(con, v, fid))
 
     @app.post("/api/me/unlocked")
     def seen_unlock(con: Con, v: Me, body: dict = Body(...)):

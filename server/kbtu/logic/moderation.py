@@ -127,16 +127,20 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") or reason not in ("spam", "insult", "danger", "other") \
+    # a photo's own two (the Gallery): "breaks the rules", "I'm in it and against it"
+    if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") \
+            or reason not in (("rules", "me") if target == "photo" else ()) + ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
     if note and len(note) > REPORT_NOTE:
         raise ApiError("bad_input")
-    if target == "photo":  # an album photo (its file id): hidden for me at once, for everyone once two people reported it
+    if target == "photo":  # an album or Gallery photo (its file id): hidden for me at once, for everyone at PHOTO_HIDE people
         # one file can sit in several albums (the same picture added twice): any album I can see will do
         ps = rows(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
-        if not ps or any(p["added_by"] == v.id for p in ps) or not any(_sees_event(con, v, p["event_id"]) for p in ps):
+        g = one(con, "SELECT user_id, event_id FROM gallery_photos WHERE file_id = ?", tid)
+        if (g and g["user_id"] == v.id) or any(p["added_by"] == v.id for p in ps) \
+                or not (any(_sees_event(con, v, p["event_id"]) for p in ps) or (g and g["event_id"] is None and gallery.on(v))):
             raise ApiError("not_found")
     elif target == "user":  # a profile: its nick, own photo and "about me"
         if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
@@ -179,7 +183,8 @@ def _urgent_event(con, eid: int) -> None:
 def _about(con, target: str, tid: int) -> int | None:
     """Whose the reported thing is: the person, a comment's author, a photo's uploader (a club's post or event: nobody's)."""
     r = (one(con, "SELECT ?", tid) if target == "user" else one(con, "SELECT user_id FROM comments WHERE id = ?", tid) if target == "comment"
-         else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo"
+         else one(con, "SELECT COALESCE((SELECT user_id FROM gallery_photos WHERE file_id = ?), (SELECT added_by FROM event_photos WHERE file_id = ?))",
+                  tid, tid) if target == "photo"
          else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask"
          else one(con, "SELECT user_id FROM fchan_posts WHERE id = ?", tid) if target == "fpost" else None)
     return r[0] if r else None
@@ -199,8 +204,10 @@ def report_queue(con, v: Viewer) -> list[dict]:
             text, where = (" · ".join(x for x in (shown_name(p), one(con, "SELECT bio FROM users WHERE id = ?", p["id"])[0]) if x),
                            ("person", r["target_id"])) if p else (None, None)
         elif r["target"] == "photo":  # the picture itself is the thing to look at
-            p = one(con, "SELECT p.event_id, f.path FROM event_photos p JOIN files f ON f.id = p.file_id WHERE p.file_id = ?", r["target_id"])
-            text, where = (f"media/{p['path']}.t.webp", ("event", p["event_id"])) if p else (None, None)
+            p = one(con, """SELECT f.path, (SELECT MAX(event_id) FROM event_photos WHERE file_id = f.id) AS eid FROM files f WHERE f.id = ?
+                AND (EXISTS (SELECT 1 FROM event_photos WHERE file_id = f.id) OR EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = f.id))""", r["target_id"])
+            # a Gallery post of no event: the photo itself opens (where: gallery)
+            text, where = (f"media/{p['path']}.t.webp", ("event", p["eid"]) if p["eid"] else ("gallery", r["target_id"])) if p else (None, None)
         elif r["target"] == "ask":  # a forum request: its words (forum.py hides it only with three reports and the AI, or here)
             a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
@@ -231,7 +238,8 @@ def report_queue(con, v: Viewer) -> list[dict]:
 def close_gone(con) -> None:
     """The bot's round: reports of what is gone by itself (its author deleted it, its event went) close quietly."""
     gone = {"comment": "SELECT 1 FROM comments WHERE id = ? AND deleted_at IS NULL", "user": "SELECT 1 FROM users WHERE id = ?",
-            "photo": "SELECT 1 FROM event_photos WHERE file_id = ?", "ask": "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')",
+            "photo": """SELECT 1 FROM files f WHERE f.id = ? AND (EXISTS (SELECT 1 FROM event_photos WHERE file_id = f.id)
+                        OR EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = f.id))""", "ask": "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')",
             "fpost": "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live'", "post": "SELECT 1 FROM posts WHERE id = ? AND hidden_at IS NULL",
             "event": "SELECT 1 FROM events WHERE id = ? AND hidden_at IS NULL"}
     with tx(con):
@@ -266,6 +274,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                 con.execute("UPDATE comments SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL", (core.now(), v.id, tid))
             elif target in ("post", "event"):
                 con.execute(f"UPDATE {target}s SET hidden_at = ? WHERE id = ? AND hidden_at IS NULL", (core.now(), tid))
+            elif target == "photo" and gallery.is_post(con, tid):  # a Gallery post: Delete erases it, its files too (owner, Nov 11)
+                photos = gallery.erase(con, tid)
             elif target == "photo":  # out of the album; the row and the file kept 30 days for an undo (purge_takedowns)
                 for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
@@ -379,7 +389,7 @@ from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
 from .clubs import org  # noqa: E402
 from .forum import hide_ask  # noqa: E402
-from . import fchannel  # noqa: E402
+from . import fchannel, gallery  # noqa: E402
 from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import _event, notify, notify_staff  # noqa: E402

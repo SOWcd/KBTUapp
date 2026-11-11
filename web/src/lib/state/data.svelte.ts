@@ -2,7 +2,8 @@
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type AlbumPhoto, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue } from '../api';
 import { joinClasses } from '../classes';
-import { t, type Key, subjectOf } from '../i18n/index.svelte';
+import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
+import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
 import { sheets } from './sheets';
@@ -24,6 +25,7 @@ export const data = $state({
   past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
+  galleryPost: null as { events: { id: Id; title: string }[] } | null, // I may post (GALLERY), and to which of my events
   orgs: [] as Org[],
   small: [] as Org[], // under the registry's size bar: search alone finds them
   schedule: [] as ClassItem[],
@@ -63,17 +65,52 @@ export async function loadFriends(): Promise<void> {
 /** The Gallery in the background; its card's photos fetched ahead. all: the pages after the first too (as it opens, so the
  *  viewer swipes across all of it). ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
 export async function loadGallery(all = false): Promise<void> {
-  if (!session.me?.student) { data.gallery = []; return; }
+  if (!session.me?.student) { data.gallery = []; data.galleryPost = null; return; }
   try {
     let page = await api.gallery();
+    data.galleryPost = page.post ?? null;
     const got = [...page.photos];
     while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
-    data.gallery = got;
+    data.gallery = [...data.gallery.filter((p) => p.pending), ...got]; // mine still uploading stay on top
     warm(got.slice(0, 4).map((p) => p.thumb));
   } catch { /* the last copy stays */ }
 }
 /** Reported from the Gallery: gone for me at once. */
 export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
+
+/** My photos into the Gallery (to an event's album too): each on top of the grid at once from the phone's own copy,
+ *  dimmed while it uploads (one after another), then the server's; a refused one goes, with a toast. */
+let pendingId = -1;
+export async function postGallery(files: File[], event?: Id): Promise<void> {
+  const mine = files.slice(0, 10).map((f) => {
+    const url = URL.createObjectURL(f);
+    return { id: pendingId--, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: null, mine: true, pending: true } satisfies AlbumPhoto;
+  });
+  data.gallery = [...mine, ...data.gallery];
+  let added = 0;
+  for (const [i, p] of mine.entries()) {
+    try {
+      const got = await api.postGalleryPhoto(await shrink(files[i]), event);
+      data.gallery = [got, ...data.gallery.filter((x) => x.id !== p.id && x.id !== got.id)];
+      added++;
+    } catch (err) {
+      haptic.error();
+      const code = err instanceof ApiErr ? err.code : '';
+      const stop = code === 'rate_limited' || code === 'forbidden' || code === 'not_found';
+      // the rest of this batch goes too when the server says no to all of it (the day's limit, the event)
+      const drop = new Set(stop ? mine.slice(i).map((x) => x.id) : [p.id]);
+      data.gallery = data.gallery.filter((x) => !drop.has(x.id));
+      say(t(code === 'rate_limited' ? 'gallery.tooMany' : code === 'bad_input' ? 'ed.photoBad' : 'common.error'), 'pleading_face_3d');
+      if (stop) break;
+    } finally { URL.revokeObjectURL(p.url); }
+  }
+  if (added) { haptic.ok(); burst(); say(tn('album.added', added), 'camera_with_flash_3d'); }
+}
+/** My own photo out of the Gallery (and the albums I put it in); null: it stays (the server said no). */
+export async function deleteGallery(p: AlbumPhoto): Promise<AlbumPhoto[] | null> {
+  try { await api.deleteGalleryPhoto(p.id); galleryGone(p); return data.gallery; }
+  catch { haptic.error(); say(t('common.error'), 'warning_3d'); return null; }
+}
 
 /** My card (the Profile hero's numbers, the Awards page), in the background like friends. */
 export async function loadMyCard(): Promise<void> {

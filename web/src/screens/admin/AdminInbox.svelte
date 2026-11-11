@@ -97,10 +97,18 @@
     const text = abuse ? t('adm.abuse') : t(remove ? (r.target === 'tgc' ? 'adm.act.tg_confirm' : 'adm.act.report_remove') : r.removed ? 'adm.act.tg_restore' : 'adm.act.report_keep');
     void decide(it, text, remove ? repTarget(r) : undefined, () => api.resolveReport(r.target, r.id, remove, abuse || undefined, r.target === 'tgc' && remove ? ruleOf(r) : undefined));
   }
+  // a photo: Delete asks first (a Gallery post's files are erased, no Undo); Return keeps it, for everyone again
+  async function dropPhoto(it: InboxItem, r: ReportItem) {
+    const gallery = r.where.kind === 'gallery';
+    if (await sheets.ask({ title: t('adm.photoDeleteAsk'), text: gallery ? t('adm.photoDeleteText') : undefined, ok: t('adm.photoDelete'), cancel: t('common.cancel'), danger: true }))
+      resolve(it, r, true);
+  }
   function look(r: ReportItem) {
     if (r.target === 'comment') sheets.comments(r.where.kind as 'post' | 'event', r.where.id, r.text);
     else if (r.target === 'event') sheets.event(r.id);
     else if (r.target === 'user') sheets.person(r.id);
+    else if (r.target === 'photo' && r.where.kind === 'gallery') // a Gallery post of no event: the photo itself, full screen
+      sheets.photos([{ id: r.id, url: r.text.replace(/\.t\.webp$/, '.webp'), thumb: r.text, w: 0, h: 0, blur: '', canDelete: false, by: null, mine: true }], 0);
     else if (r.target === 'photo') sheets.event(r.where.id);
     else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]);
     else if (r.target === 'ask') sheets.forum(r.id);
@@ -189,6 +197,7 @@
             </button>
             {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
             {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
+            {:else if r.target === 'photo'}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
             {:else}{@render two(t('adm.takeDown'), () => resolve(it, r, true), t('adm.keep'), () => resolve(it, r, false))}{/if}
           </div>
         {:else if it.kind === 'capp'}

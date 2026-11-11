@@ -4,14 +4,17 @@
   // scroll, its momentum and snapping), a pull down drags the photo away (it shrinks, the black fades; far or fast
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo
   // pans with a rubber edge. A tap hides and shows the chrome: "3 / 12" in the capsule, the filmstrip (it follows the
-  // photo, a tap jumps), who added it, report (another's: gone for me at once, the admin decides) and remove (mine, or
-  // any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo (owner, Nov 3)
+  // photo, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
+  // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo (owner, Nov 3)
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import Images from '@lucide/svelte/icons/images';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Flag from '@lucide/svelte/icons/flag';
   import Trash from '@lucide/svelte/icons/trash-2';
   import { onMount, untrack } from 'svelte';
+  import { menu } from '../../ui/menu';
+  import { dayMonth, nowTs, parts } from '../../lib/time';
   import type { AlbumPhoto } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -206,6 +209,17 @@
     if (!left.length) { close(overlay.id); return; }
     list = left; at = Math.min(at, left.length - 1);
   }
+  // ⋯: report another's photo, delete mine (or any, for the club's Head+ in its album)
+  function more(e: MouseEvent) {
+    const p = list[at];
+    if (!p) return;
+    menu(e.currentTarget as Element, [
+      ...(!p.mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),
+      ...(onremove && p.canDelete ? [{ label: t('album.remove'), icon: Trash, destructive: true, onselect: remove }] : []),
+    ], 'end');
+  }
+  // the day it was taken; the year too when it isn't this one
+  const when = (ts: number) => dayMonth(ts) + (parts(ts).y !== parts(nowTs()).y ? ` ${parts(ts).y}` : '');
   // the one report sheet; once sent the photo is hidden for me, so it leaves the viewer and the album
   function report() {
     const p = list[at];
@@ -241,15 +255,18 @@
       </div>
     {/if}
     {#if list[at]?.by || list[at]?.event}
-      {@const ev = list[at].event}
+      {@const p = list[at]}
+      {@const ev = p.event}
       <div class="by" class:low={list.length < 2}>
         <!-- the Gallery's photos come from many events: the one this is from, a tap away -->
         {#if ev}<button class="ev" onclick={() => sheets.event(ev.id)}><span class="ellipsis">{ev.title}</span><ChevronRight size={14} strokeWidth={2.4} /></button>{/if}
-        {#if list[at].by}<p>{list[at].by}</p>{/if}
+        <!-- a Gallery post's author opens their profile (posted under their name) -->
+        {#if p.by || p.at}<p>{#if p.by && p.uid}{@const uid = p.uid}<button class="who" onclick={() => sheets.person(uid)}>{p.by}</button>{:else if p.by}{p.by}{/if}{#if p.by && p.at}{' · '}{/if}{#if p.at}{when(p.at)}{/if}</p>{/if}
       </div>
     {/if}
-    {#if list[at] && !list[at].mine}<button class="tool l glass glass-pill" use:glass aria-label={t('cm.report')} onclick={report}><Flag size={20} /></button>{/if}
-    {#if onremove && list[at]?.canDelete}<button class="tool r glass glass-pill danger" use:glass aria-label={t('album.remove')} onclick={remove}><Trash size={20} /></button>{/if}
+    {#if list[at] && (!list[at].mine || (onremove && list[at].canDelete))}
+      <button class="tool r glass glass-pill" use:glass aria-label={t('common.more')} onclick={more}><Ellipsis size={22} /></button>
+    {/if}
   </div>
   <div class="chrome" class:off={!chrome || !!dy}><CloseX onclick={() => close(overlay.id)} /></div>
 </div>
@@ -285,13 +302,13 @@
   .ev { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; font: 600 var(--fs-body)/1.2 var(--font-text); color: inherit; text-shadow: inherit; }
   .ev > :global(svg) { flex: none; opacity: 0.7; }
   .ev:active { opacity: 0.6; }
-  /* report and remove at the ×'s sides, as the phone's toolbar */
+  .who { display: inline; padding: 0; font: inherit; color: #fff; text-shadow: inherit; }
+  .who:active { opacity: 0.6; }
+  /* ⋯ (report, delete) at the ×'s side, as the phone's toolbar */
   .tool { position: absolute; bottom: calc(var(--safe-bottom) + 20px); width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-full);
     color: #fff; background-color: rgba(255, 255, 255, 0.12); }
   .tool > :global(svg) { position: relative; }
-  .tool.l { left: 24px; }
   .tool.r { right: 24px; }
   .tool:active { transform: scale(0.94); }
-  .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
   @media (prefers-reduced-motion: reduce) { .pic, .chrome { transition: none; } }
 </style>

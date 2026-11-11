@@ -846,10 +846,11 @@ ALBUM_FOR = 7 * 86400                            # photos are added from the sta
 PHOTO_REPORT_AT = 3                              # the third photo tells everyone who came (an hour after the end at the earliest)
 
 
-# An album photo a viewer may see (its one ?: the viewer; `f` is the file): reported by me, or by two people and not kept
-# by a moderator, it's out. A photo taken down is out of event_photos altogether.
-PHOTO_SHOWN = """f.id NOT IN (SELECT r.target_id FROM reports r WHERE r.target = 'photo' AND r.status = 'open' GROUP BY r.target_id
-                         HAVING (COUNT(DISTINCT r.reporter_id) >= 2  -- for everyone, unless a moderator already kept it
+# A photo a viewer may see, an album's or the Gallery's (its one ?: the viewer; `f` is the file): reported by me, or by
+# PHOTO_HIDE people and not kept by a moderator, it's out. A photo taken down is out of event_photos altogether.
+PHOTO_HIDE = 3  # owner, Nov 11 (the Gallery): three different people
+PHOTO_SHOWN = f"""f.id NOT IN (SELECT r.target_id FROM reports r WHERE r.target = 'photo' AND r.status = 'open' GROUP BY r.target_id
+                         HAVING (COUNT(DISTINCT r.reporter_id) >= {PHOTO_HIDE}  -- for everyone, unless a moderator already kept it
                                  AND NOT EXISTS (SELECT 1 FROM reports k WHERE k.target = 'photo' AND k.target_id = r.target_id AND k.status = 'dismissed'))
                              OR SUM(r.reporter_id = ?) > 0)"""
 
@@ -865,36 +866,15 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
     if not v.student:
         return {"photos": [], "canAddPhotos": False}
     head = can(con, v, e["org_id"], "events")
-    ps = rows(con, f"""SELECT f.*, p.added_by, s.first_name, s.last_name, u.nick FROM event_photos p JOIN files f ON f.id = p.file_id
+    # at: when it was taken (a Gallery post's EXIF), uid: a Gallery post's author, posted under their name (gallery.py)
+    ps = rows(con, f"""SELECT f.*, p.added_by, g.user_id AS poster, COALESCE(g.taken_at, f.created_at) AS at, s.first_name, s.last_name, u.nick
+        FROM event_photos p JOIN files f ON f.id = p.file_id LEFT JOIN gallery_photos g ON g.file_id = p.file_id
         LEFT JOIN users u ON u.id = p.added_by LEFT JOIN students s ON s.user_id = p.added_by WHERE p.event_id = ?
         AND {PHOTO_SHOWN}
         ORDER BY p.sort""", e["id"], v.id)
-    return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": _photo_by(f), "mine": f["added_by"] == v.id} for f in ps],
+    return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": _photo_by(f), "mine": f["added_by"] == v.id, "at": f["at"],
+                        **({"uid": f["poster"]} if f["poster"] else {})} for f in ps],
             "canAddPhotos": _album_room(con, v, e) > 0}
-
-
-GALLERY_PAGE = 60
-
-
-def gallery(con, v: Viewer, before: int | None = None, limit: int = GALLERY_PAGE) -> dict:
-    """The Afisha's Gallery: every album photo this student may see, newest first (a file id is the page mark), one query
-    for all rows. Stricter than _visible on purpose, for the staff and a club's own people too: only what is open to every
-    student and on their general afisha, never a team's or a meeting's. A file in two albums shows once, in the newer."""
-    if not v.student:
-        return {"photos": [], "more": False}  # as the album: people's faces
-    n = max(1, min(limit, GALLERY_PAGE))
-    found = rows(con, f"""SELECT f.*, MAX(p.event_id) AS event_id, e.title, e.i18n, p.added_by, s.first_name, s.last_name, u.nick
-        FROM event_photos p JOIN files f ON f.id = p.file_id JOIN events e ON e.id = p.event_id JOIN orgs o ON o.id = e.org_id
-        LEFT JOIN users u ON u.id = p.added_by LEFT JOIN students s ON s.user_id = p.added_by
-        WHERE e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.meeting = 0 AND o.status != 'hidden'
-        AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)
-        AND {PHOTO_SHOWN} AND p.file_id < ?
-        GROUP BY p.file_id ORDER BY p.file_id DESC LIMIT ?""", *on_afisha_args(v), v.id, v.id, before if before is not None else 1 << 62, n + 1)
-    return {"photos": [{**media_shape(f), "canDelete": False, "by": _photo_by(f), "mine": f["added_by"] == v.id,
-                        "event": {"id": f["event_id"], "title": f["title"],
-                                  **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(f["i18n"]).items()}} if f["i18n"] else {})}}
-                       for f in found[:n]],
-            "more": len(found) > n}
 
 
 def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
@@ -940,6 +920,7 @@ def remove_album_photo(con, v: Viewer, eid: int, fid: int) -> tuple[dict, list[s
     if p["added_by"] != v.id and v.role != "admin" and not can(con, v, e["org_id"], "events"):
         raise ApiError("forbidden")
     con.execute("DELETE FROM event_photos WHERE event_id = ? AND file_id = ?", (eid, fid))
+    con.execute("DELETE FROM gallery_photos WHERE file_id = ? AND event_id = ?", (fid, eid))  # a Gallery post of this event: out of the Gallery too
     return full(con, v, e), _drop_unused(con, fid)
 
 
@@ -1181,7 +1162,7 @@ from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
 from .crew import kind as crew_kind  # noqa: E402
-from .seats import _visible, for_me, on_afisha, on_afisha_args  # noqa: E402
+from .seats import _visible, for_me  # noqa: E402
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402

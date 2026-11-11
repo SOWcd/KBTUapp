@@ -90,6 +90,14 @@ def seed(path: str) -> None:
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
             VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (f["sha256"], f["bytes"], f["width"], f["height"], f["path"], uid, now, f["color"])).lastrowid
         con.execute("INSERT INTO event_photos (event_id, file_id, sort, added_by) VALUES (3, ?, ?, ?)", (fid, n + 1, uid))
+    # the Gallery's own (GALLERY on below): five KBTU photos Dana and Bota posted, taken over the last days
+    for n in range(5):
+        uid, rgb = (1, 3)[n % 2], tuple(int(c * 255) for c in colorsys.hsv_to_rgb(0.55 + n / 12, 0.5, 0.85))
+        im = Image.composite(Image.new("RGB", (1200, 900), rgb), Image.new("RGB", (1200, 900), (240, 240, 245)), Image.radial_gradient("L").resize((1200, 900)))
+        f = media.store(im, f"qa-gallery-{n}".encode(), Path(path).resolve().parent / "media")
+        fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
+            VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (f["sha256"], f["bytes"], f["width"], f["height"], f["path"], uid, now, f["color"])).lastrowid
+        con.execute("INSERT INTO gallery_photos (file_id, user_id, taken_at, created_at) VALUES (?, ?, ?, ?)", (fid, uid, now - n * 20 * 3600, now))
     # a draft next week asking DMP for a room, guests and a speaker: Studio's memo card has a week to show
     memo = {"room": {"any": True, "projector": True, "board": True}, "guests": {"side": "tole", "list": "Ivanov Ivan, Satbayev University"},
             "provide": {"jbl": True, "chairs": 20}}
@@ -183,7 +191,7 @@ def main() -> None:
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
            "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002"),
-           "APPEALS": os.environ.get("APPEALS", "1")}  # the student forum on, as it will be after its policy part
+           "APPEALS": os.environ.get("APPEALS", "1"), "GALLERY": os.environ.get("GALLERY", "1")}  # the student forum on, as it will be after its policy part
     subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 

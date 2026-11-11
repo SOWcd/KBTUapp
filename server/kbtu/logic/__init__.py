@@ -55,10 +55,10 @@ from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, CREA
     find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, claim_link, claim_qr, grant, grant_link, grant_scan, open_qr, qr_code,
     BADGES, BADGE_OF, award_counts, award_people, awards_of, badge_people, badge_sessions, my_grants, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_friend_link, use_grant_link)  # noqa: F401
-from .organizing import (GALLERY_PAGE, ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
+from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
     INVITES_A_DAY, LEAD_ROLES, PHOTO_REPORT_AT, RATE_FOR, RATE_SHOW, SLIDES, UNDO, UPDATES_A_DAY, _album_room,
     _album_view, _ask_rating, _asking, _changed, _cover, _expected, _focus, _guest, _invited_leaders, _meeting_ok,
-    _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo, add_door_guest, gallery,
+    _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo, add_door_guest,
     attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
     admin_delete_event, clean_event, create_event, decline, delete_event, events_gone, undo_delete_event, delete_update, door, door_guests, event_invites, invite_friend,
     kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,
@@ -76,5 +76,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import appeals, assistant, cohosts, crew, fchannel, inbox, mapflaws, search, stars, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import appeals, assistant, cohosts, crew, fchannel, gallery, inbox, mapflaws, search, stars, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

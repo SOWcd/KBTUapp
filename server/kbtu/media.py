@@ -10,6 +10,7 @@ import html
 import io
 import re
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -92,7 +93,23 @@ def store(im: Image.Image, data: bytes, root: Path) -> dict:
     _fit(im, 1200).save(root / f"{rel}.jpg", "JPEG", quality=82, optimize=True, progressive=True)
     r, g, b = im.resize((1, 1), Image.Resampling.BOX).getpixel((0, 0))  # the average colour, for the sheet tint
     return {"sha256": sha, "path": rel, "width": big.width, "height": big.height,
-            "bytes": (root / f"{rel}.webp").stat().st_size, "color": f"#{r:02x}{g:02x}{b:02x}"}
+            "bytes": (root / f"{rel}.webp").stat().st_size, "color": f"#{r:02x}{g:02x}{b:02x}", "taken": taken(data)}
+
+
+ALMATY = timezone(timedelta(hours=5))
+
+
+def taken(data: bytes) -> int | None:
+    """When the photo was taken (EXIF DateTimeOriginal), read from the upload itself: the re-encoded files have no EXIF.
+    The camera's clock is local: Almaty's unless the photo says its offset. None when it doesn't say."""
+    try:
+        with Image.open(io.BytesIO(data), formats=FORMATS) as im:
+            ex = im.getexif().get_ifd(0x8769)  # the Exif sub-IFD
+        at = datetime.strptime(str(ex[36867]).strip("\x00 "), "%Y:%m:%d %H:%M:%S")
+        off = str(ex.get(36881) or "").strip("\x00 ")  # OffsetTimeOriginal, "+05:00"
+        return int(at.replace(tzinfo=datetime.strptime(off, "%z").tzinfo if off else ALMATY).timestamp())
+    except (OSError, SyntaxError, ValueError, KeyError, TypeError):
+        return None
 
 
 @functools.lru_cache(maxsize=64)

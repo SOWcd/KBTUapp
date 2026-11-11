@@ -528,7 +528,7 @@
   // The effect reads only the lists' references and data.kept (a tap's change inside a list): no deep read before the
   // paint; the JSON is made when the app is idle, and again as it goes to the background.
   // ponytail: a change deep inside a list that bumps no data.kept waits for the next reload or the background; bump it there if one matters
-  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.slice(0, 4), friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
+  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.filter((p) => !p.pending).slice(0, 4), galleryPost: data.galleryPost, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
   const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
@@ -683,6 +683,7 @@
       session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       data.gallery = snap.gallery ?? [];
+      data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {

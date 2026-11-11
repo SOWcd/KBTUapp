@@ -49,7 +49,7 @@ export interface Comment { id: Id; person: PersonRef | null; org: OrgRef | null;
   replyTo?: { id: Id; name: string; body: string } | null /* the comment it answers, quoted while still up */ }
 /** A thread: oldest first; the club's Head+ moderate it and may write as the club (`asOrg`). */
 export interface CommentThread { items: Comment[]; on: boolean; canModerate: boolean; asOrg: OrgRef | null }
-export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
+export type ReportReason = 'spam' | 'insult' | 'danger' | 'other' | 'rules' | 'me'; // rules, me: a photo's own two
 /** the clause of the terms' section 3 a removed Telegram comment broke (server tgcomments.RULES) */
 export type TgcRule = 'abuse' | 'fake' | 'spam' | 'pdata' | 'disrupt' | 'other';
 /** The admin's queue: one row per reported thing still up. */
@@ -124,7 +124,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
 export interface AssistReply { text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'dmp' | 'creator_laugh' | 'creator_found' | 'init26' | 'init26f' | 'init26p'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc' | 'fpost'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc' | 'fpost'; id: Id; link?: string | null; msg?: number /* fpost: its message in the forum channel */ }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc' | 'fpost'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc' | 'fpost' | 'gallery'; id: Id; link?: string | null; msg?: number /* fpost: its message in the forum channel */ }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name
@@ -140,9 +140,9 @@ export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgR
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
 
 /** A photo in an event's album: the one who added it or the club's Head+ may take it out. */
-export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent } // by: who added it (nick or "First L."); event: in the Gallery
+export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; at?: Ts; uid?: Id; pending?: boolean } // by: who added it (nick or "First L."); event: in the Gallery; at: when it was taken; uid: a Gallery post's author (their profile); pending: mine, still uploading
 export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
-export interface GalleryPage { photos: AlbumPhoto[]; more: boolean }
+export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
 
 /** An event's video (server video.py): our own compressed copy, its poster a photo; `error`: too_long | not_a_video. */
 export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'ready' | 'failed'; url: string | null; duration: number | null;

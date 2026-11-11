@@ -1465,6 +1465,33 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TABLE appeal_staff (
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 11) the Gallery (logic/gallery.py): a photo a student posted under their name, of KBTU or of an event they went
+    # to (that one is in its album too, event_photos); taken_at from the photo's EXIF, read before re-encoding strips it.
+    # And a photo's two report reasons ("breaks the rules", "I'm in it and against it"): the CHECK takes them, rebuilt as 114.
+    # renumbered at ship: other branches take 150-152 too
+    (150, """CREATE TABLE gallery_photos (
+      file_id    INTEGER PRIMARY KEY REFERENCES files(id),
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_id   INTEGER REFERENCES events(id) ON DELETE CASCADE,
+      taken_at   INTEGER NOT NULL,
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
+    CREATE TABLE reports6 (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply', 'fpost')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other', 'rules', 'me')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    ) STRICT;
+    INSERT INTO reports6 SELECT id, reporter_id, target, target_id, reason, note, status, created_at, resolved_by, resolved_at FROM reports;
+    DROP TABLE reports;
+    ALTER TABLE reports6 RENAME TO reports;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
 ]
 
 

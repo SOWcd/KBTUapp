@@ -1351,8 +1351,9 @@ def test_album_reports(env):
     assert rep(Z) == 204
     assert c.get("/api/events/1", headers=Z).json()["photos"] == []                         # gone for me at once
     assert len(c.get("/api/events/1", headers=P).json()["photos"]) == 1                     # not yet for the rest
-    assert rep(D) == 204
-    assert c.get("/api/events/1", headers=P).json()["photos"] == []                         # two people: hidden until the admin looks
+    assert rep(D) == 204 and len(c.get("/api/events/1", headers=P).json()["photos"]) == 1  # two: not yet
+    assert rep(B) == 204
+    assert c.get("/api/events/1", headers=P).json()["photos"] == []                         # three people: hidden until the admin looks
     q = c.get("/api/admin/reports", headers=B).json()
     assert [(r["target"], r["id"], r["where"]) for r in q] == [("photo", ph["id"], {"kind": "event", "id": 1})] and q[0]["text"].endswith(".t.webp")
     # a moderator never judges their own photo: not in their queue, and refused

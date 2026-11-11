@@ -833,7 +833,8 @@ def _drop_unused(con, fid: int | None) -> list[str]:
     if fid and con.execute("""SELECT 1 FROM users WHERE avatar_file_id = :f UNION ALL SELECT 1 FROM orgs WHERE logo_file_id = :f
             UNION ALL SELECT 1 FROM events WHERE cover_file_id = :f UNION ALL SELECT 1 FROM receipts WHERE file_id = :f
             UNION ALL SELECT 1 FROM event_photos WHERE file_id = :f UNION ALL SELECT 1 FROM posts WHERE photo_file_id = :f
-            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f UNION ALL SELECT 1 FROM takedowns WHERE file_id = :f""", {"f": fid}).fetchone():
+            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f UNION ALL SELECT 1 FROM takedowns WHERE file_id = :f
+            UNION ALL SELECT 1 FROM gallery_photos WHERE file_id = :f""", {"f": fid}).fetchone():
         return []
     return _drop_photo(con, fid)
 
@@ -1060,6 +1061,7 @@ _DEL_GONE = {
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it
+    ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -1143,6 +1145,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # album photos: without my name, or gone if I asked (ask_delete)
         drop = one(con, "DELETE FROM meta WHERE key = ? RETURNING 1", f"delphotos:{v.id}") is not None
         mine = [r[0] for r in rows(con, "SELECT file_id FROM event_photos WHERE added_by = ?", v.id)] if drop else []
+        mine += gallery.mine_gone(con, v.id)  # posted under my name: they go whatever I chose, with their reports
         if drop:
             con.execute("DELETE FROM event_photos WHERE added_by = ?", (v.id,))
         avatars = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind = 'avatar' AND owner_id = ?", v.id)]
@@ -1373,6 +1376,7 @@ from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
 from .seats import _remind, _ticket_code, joined, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402
+from . import gallery  # noqa: E402
 
 
 # "Support & ideas" at the bottom of Me (owner, Nov 6): the creator, then the main admin (Alikhan). A new main admin:

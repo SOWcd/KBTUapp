@@ -57,6 +57,8 @@ class Config:
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
     appeals: str = ""
+    # GALLERY=1: everyone posts to the Gallery (logic/gallery.py: KBTU's own photos beside the albums); staff: admins and moderators
+    gallery: str = ""
     seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -129,4 +131,5 @@ def load() -> Config:
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
+        gallery={"1": "all", "staff": "staff"}.get(env.get("GALLERY", "").strip(), ""),
     )

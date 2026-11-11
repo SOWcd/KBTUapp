@@ -58,9 +58,10 @@ def count(con, v: Viewer) -> int:
         r.target = 'user' AND r.target_id = :me
         OR r.target = 'comment' AND EXISTS (SELECT 1 FROM comments WHERE id = r.target_id AND user_id = :me)
         OR r.target = 'photo' AND EXISTS (SELECT 1 FROM event_photos WHERE file_id = r.target_id AND added_by = :me)
+        OR r.target = 'photo' AND EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = r.target_id AND user_id = :me)
         OR r.target = 'ask' AND EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND user_id = :me)
         OR r.target = 'fpost' AND EXISTS (SELECT 1 FROM fchan_posts WHERE id = r.target_id AND user_id = :me))""".replace(":me", "?"),
-            *[v.id] * 5)[0]
+            *[v.id] * 6)[0]
     n += one(con, """SELECT COUNT(*) FROM tgc_comments c WHERE (c.status IN ('open', 'queued') OR c.review = 1)
         AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)
         AND EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id)""", v.id, v.id)[0]  # tgcomments.queue_items' rule

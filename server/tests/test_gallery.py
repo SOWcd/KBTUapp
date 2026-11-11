@@ -106,7 +106,9 @@ def test_reports_and_take_downs(env):
     assert _report(c, AL, fid).status_code == 204
     assert _ids(c, AL) == [other] and _ids(c, CY) == [other, fid]  # one report: gone for me alone
     assert _report(c, CY, fid).status_code == 204
-    assert _ids(c, HEAD) == [other]  # two: for everyone
+    assert _ids(c, HEAD) == [other, fid]  # two: not yet
+    assert _report(c, ADMIN, fid).status_code == 204
+    assert _ids(c, HEAD) == [other]  # three: for everyone
     assert c.post(f"/api/admin/reports/photo/{fid}", headers=tma(ADMIN), json={"remove": False}).status_code == 204  # kept by a moderator
     assert fid in _ids(c, HEAD)
     assert _report(c, CY, other).status_code == 204
@@ -130,7 +132,7 @@ def test_newest_first_pages_once_each_and_one_query(env):
     def count() -> int:
         seen: list[str] = []
         con.set_trace_callback(seen.append)
-        logic.gallery(con, v)
+        logic.gallery.feed(con, v)
         con.set_trace_callback(None)
         return len(seen)
     before = count()
