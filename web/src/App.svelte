@@ -301,12 +301,19 @@
   // it answers every tap): the busy word, else the top overlay's name, else the tab's (the live status wins on a tab)
   // the live status takes the capsule only once the person rests: a tap or a tab switch brings the tab's name back
   // (owner, Nov 9: it never answered the tabs)
+  // 2.5 s after the finger lifts (owner, Nov 11: 5 s felt slow): time to read the tab's name, no longer; never while
+  // a finger is down (a long scroll)
   let resting = $state(false), restTimer: ReturnType<typeof setTimeout>;
-  const poke = () => { resting = false; clearTimeout(restTimer); restTimer = setTimeout(() => (resting = true), 5000); };
+  const REST_MS = 2500;
+  const poke = () => { resting = false; clearTimeout(restTimer); };
+  const rest = () => { clearTimeout(restTimer); restTimer = setTimeout(() => (resting = true), REST_MS); };
   $effect(() => {
-    poke();
-    addEventListener('pointerdown', poke, { capture: true, passive: true });
-    return () => { removeEventListener('pointerdown', poke, { capture: true }); clearTimeout(restTimer); };
+    rest();
+    const o = { capture: true, passive: true };
+    // touchend, not pointercancel: a touch scroll cancels the pointer as it starts, the finger still down
+    const ends = ['pointerup', 'touchend', 'touchcancel'];
+    addEventListener('pointerdown', poke, o); for (const e of ends) addEventListener(e, rest, o);
+    return () => { removeEventListener('pointerdown', poke, o); for (const e of ends) removeEventListener(e, rest, o); clearTimeout(restTimer); };
   });
   // the capsule holds a check-in from /me alone: finished or taken away elsewhere, only asking again lets it go
   const holdingCheckin = $derived(!!session.me?.checkin);
