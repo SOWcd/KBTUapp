@@ -23,7 +23,8 @@ log = logging.getLogger("kbtu.chatsync")
 POLICY = ""   # the privacy policy in force with CHAT_SYNC on (app.create, admin); empty: all of this is off
 STEP = 40     # people a sweep checks per step; the bot paces the calls (bot.SYNC_GAP)
 ODD = 3       # a sweep may remove this many whatever the club's size; more than half of it pauses instead
-GONE = ("user not found", "participant_id_invalid", "user_id_invalid")  # Telegram knows no such user: not in the chat
+GONE = ("user not found", "participant_id_invalid", "user_id_invalid")  # Telegram can't tell about this one (a deleted account, or one the bot never met)
+SKIP = "skip"  # _look's answer then: nothing is known, so nothing changes for them (never read as "left")
 
 
 def in_chat(m: dict) -> bool:
@@ -39,7 +40,7 @@ def _consents() -> tuple[str, str]:
 
 # who the sync may act on: a verified student (not typed in by hand, not staff), not banned or leaving, on the policy in force
 OK = """u.tg_id > 0 AND u.banned_at IS NULL AND u.delete_at IS NULL AND s.manual = 0
-    AND s.consent_version IN (?, ?, 'admin')"""
+    AND s.consent_version IN (?, ?)"""  # not 'admin' (made a student by hand): they never agreed to the section
 
 
 def _student(con, tg_id: int) -> int | None:
@@ -191,7 +192,7 @@ async def step(con, call, bot_id: int, n: int = STEP) -> bool:
             if not now_link or not seen or now_link["last_update"] != seen[0]:
                 return True  # paused or unlinked, or an update came while we asked: this one is asked again
             con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (chat, u["id"]))  # a fresh look replaces any older one
-            if _eligible(con, u["id"]) and (op := _wants(con, now_link, u["id"], inside)):
+            if inside != SKIP and _eligible(con, u["id"]) and (op := _wants(con, now_link, u["id"], inside)):
                 con.execute("INSERT OR REPLACE INTO chat_sync_todo (chat_id, user_id, op) VALUES (?, ?, ?)", (chat, u["id"], op))
             con.execute("UPDATE chat_sync SET sweep_pos = ? WHERE chat_id = ?", (u["id"], chat))
     if len(batch) < n:
@@ -199,15 +200,16 @@ async def step(con, call, bot_id: int, n: int = STEP) -> bool:
     return True
 
 
-async def _look(con, call, chat: int, tg_id: int) -> bool | None:
-    """Whether they are in the chat by getChatMember; None: not known (the network, or a refusal that paused the link)."""
+async def _look(con, call, chat: int, tg_id: int) -> bool | str | None:
+    """Whether they are in the chat by getChatMember; None: not known, asked again (the network, or a refusal that paused
+    the link); SKIP: Telegram knows no such user, left as they are."""
     r = await call("getChatMember", {"chat_id": chat, "user_id": tg_id})
     if r is None:
         return None
     if r.get("ok"):
         return in_chat(r.get("result") or {})
     if any(g in str(r.get("description")).lower() for g in GONE):
-        return False
+        return SKIP
     pause(con, chat, f"getChatMember: {str(r.get('description'))[:80]}")
     return None
 
@@ -236,11 +238,11 @@ async def ask_step(con, call) -> bool:
             return True  # asked again later (a paused link is skipped then)
         with tx(con):
             now_link = one(con, "SELECT * FROM chat_sync WHERE chat_id = ? AND paused IS NULL", link[0])
-            if not now_link or now_link["last_update"] != seen[0]:
+            if not now_link or not seen or now_link["last_update"] != seen[0]:
                 return True
             # a fresh look supersedes a sweep's older finding, even when it changes nothing
             con.execute("DELETE FROM chat_sync_todo WHERE chat_id = ? AND user_id = ?", (link[0], uid))
-            if _eligible(con, uid) and (op := _wants(con, now_link, uid, inside)):
+            if inside != SKIP and _eligible(con, uid) and (op := _wants(con, now_link, uid, inside)):
                 _do(con, now_link, uid, op)
     con.execute("DELETE FROM chat_sync_ask WHERE user_id = ?", (uid,))
     return True

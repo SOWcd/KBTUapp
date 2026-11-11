@@ -429,3 +429,20 @@ def test_fresh_look_supersedes_a_staged_finding(club):
     assert not con.execute("SELECT 1 FROM chat_sync_todo").fetchone()
     sweep(con, tg_api({P: "creator", V: "member", 1: "member"}))
     assert role(con, org, 1) == "head" and role(con, org, 2) is None
+
+
+def test_a_user_telegram_cannot_tell_about_stays(club):
+    """Opus review, Nov 11: "user not found" also comes for someone the bot never met: never read as "left"."""
+    c, cfg, con, org = club
+    feed(con, upd(MAIN, 1, "left", "member"))
+    sweep(con, chatsync_start(con, MAIN, True, tg_api({P: "creator", V: "member"}, errors={1: "Bad Request: user not found"})))
+    assert role(con, org, 1) == "member"
+    assert not con.execute("SELECT paused FROM chat_sync WHERE chat_id = ?", (MAIN,)).fetchone()[0]
+
+
+def test_a_student_made_by_hand_never_agreed(club):
+    """consent_version 'admin' (admin student): outside the sync, the section's consent was never given."""
+    c, cfg, con, org = club
+    con.execute("UPDATE students SET consent_version = 'admin' WHERE user_id = ?", (uid(con, 2),))
+    feed(con, upd(MAIN, 2, "left", "member"))
+    assert role(con, org, 2) is None

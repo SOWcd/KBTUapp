@@ -1588,6 +1588,7 @@ async def run(cfg: Config) -> None:
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
     that process dies, the lock goes with it and another takes over within seconds. Then the outbox, every few
     seconds, and the ears (one poller at a time: Telegram refuses a second)."""
+    global _sync_live
     with open(f"{cfg.db_path}.bot.lock", "w") as lock:
         while True:
             try:
@@ -1597,6 +1598,8 @@ async def run(cfg: Config) -> None:
                 await asyncio.sleep(5)
         log.warning("postman in process %d", os.getpid())  # one line per start (warning: the level the container's log keeps)
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
+        if cfg.chat_sync:  # before the first poll: a join in that window would never come again
+            _sync_live = logic.chatsync.live(db.connect(cfg.db_path))
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
             await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
