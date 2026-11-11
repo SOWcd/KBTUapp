@@ -291,8 +291,8 @@
 
   /* the composer: my face, a quiet prompt, the pen */
   .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
-    transition: transform 450ms var(--ease-bounce); }
-  .compose:active { transform: scale(0.98); transition-duration: 80ms; }
+    transition: background var(--t-fast) var(--ease); }
+  .compose:active { background: var(--surface-2); }
   .compose.away { visibility: hidden; } /* it is the writing window now (ChannelCompose grows out of it and folds back) */
   /* the appeal: the composer's quiet neighbour, a tinted seat instead of the loud pen */
   .appeal { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
@@ -308,8 +308,7 @@
   .pin { display: flex; height: max-content; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
   .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
-    box-shadow: 0 4px 12px -4px var(--accent); transition: transform 380ms var(--ease-bounce); }
-  .compose:active .pen { transform: scale(0.9); transition-duration: 80ms; }
+    box-shadow: 0 4px 12px -4px var(--accent); }
 
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */

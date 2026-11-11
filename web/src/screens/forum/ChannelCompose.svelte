@@ -56,14 +56,8 @@
 </script>
 
 <script lang="ts">
-  // A new post to the forum channel: a glass window at the top that grows out of the Forum tab's pill (owner, Nov 6:
-  // the sheet was ugly; iOS 26's Liquid Glass morph). The pill's glass stretches down into the window: my face stays
-  // where it was, its words fade into the name the post goes out under, the pen turns into Send; closing folds it back
-  // into the pill. Send sits in the top row and the photo bar at the bottom, both above the keyboard.
-  // Rework (Nov 10, Codex's ranked list): "With my name" / "Anonymous" said outright, the signature changes at once; the
-  // anonymity said honestly in one line, the rest a tap deeper; the text rules in both modes. Everything the server
-  // would refuse is said here first, all at once (lib/forumRules: its rules, its minimum, the pace's next time), and
-  // Send stays in place, telling why on a tap. The words sit on a quiet surface; the glass stays on the rim.
+  // The writing window grows from the Forum card; its header keeps the card's geometry.
+  // Focus stays in the opening tap for iOS. The editor and guidance scroll above the attachment control.
   import { onMount, untrack } from 'svelte';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
@@ -157,30 +151,37 @@
   }
 
   let win: HTMLDivElement;
+  let motion: Animation | undefined;
   let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
   let gone = false, sent = false;
-  const R = 22;  // var(--r-l): the pill's and the window's corners
-  const FULL = `inset(0px 0px 0px 0px round ${R}px)`;
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const full = () => `inset(0% 0% 0% 0% round ${getComputedStyle(win).borderTopLeftRadius})`;
+  const ease = () => getComputedStyle(win).getPropertyValue('--ease').trim();
 
-  // the pill as a frame of the window: moved to its place and clipped to its size. null: no pill on screen (scrolled
-  // away, another tab), the window just fades
+  // Percentage insets follow the window as the keyboard changes its height. Pixel insets would expose a different
+  // amount of the editor on resize, then pop to the full height when the animation releases them.
   function pill(): Keyframe | null {
-    const p = document.querySelector('[data-compose]')?.getBoundingClientRect(), r = win.getBoundingClientRect();
+    const p = document.querySelector('[data-compose]')?.getBoundingClientRect();
     if (!p?.width || p.left < -1 || p.right > innerWidth + 1 || p.bottom < 0 || p.top > innerHeight) return null;
-    return { translate: `0 ${p.top - r.top}px`, clipPath: `inset(0px ${r.right - p.right}px ${Math.max(0, r.height - p.height)}px ${p.left - r.left}px round ${R}px)` };
+    const r = win.getBoundingClientRect();
+    return { transform: `translateY(${p.top - r.top}px)`,
+      clipPath: `inset(0% ${(r.right - p.right) / r.width * 100}% ${Math.max(0, 1 - p.height / r.height) * 100}% ${(p.left - r.left) / r.width * 100}% round ${getComputedStyle(win).borderTopLeftRadius})` };
   }
 
   function leave() {
     if (gone) return;
     gone = true; out = true;
+    // Back can arrive mid-growth: start from the frame on screen, without jumping to the fully open window.
+    const style = getComputedStyle(win), current = { transform: style.transform, clipPath: style.clipPath, opacity: style.opacity };
+    // Keep the exit's geometry as the keyboard retracts, so its last frame still matches the source card.
+    win.style.height = win.style.maxHeight = `${win.offsetHeight}px`;
+    motion?.cancel();
+    const to = still() ? null : pill();
     (document.activeElement as HTMLElement | null)?.blur?.(); // the keyboard goes with it
-    const from = still() ? null : pill();
-    const a = from ? win.animate([{ translate: '0 0', clipPath: FULL }, from], { duration: 380, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'forwards' })
-      : win.animate([{ opacity: 1 }, { opacity: 0, scale: '0.97' }], { duration: 180, easing: 'ease-in', fill: 'forwards' });
-    a.onfinish = () => {
-      removeOverlay(overlay.id);
-      document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });  // back where it opened from
+    motion = win.animate([current, to ?? { opacity: 0 }], { duration: still() ? 1 : 240, easing: ease(), fill: 'forwards' });
+    motion.onfinish = () => {
+      flushSync(() => removeOverlay(overlay.id));
+      document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });
     };
   }
   $effect(() => { if (overlay.closing) untrack(leave); });  // Back, the scrim, a send: the draft stays, nothing to ask
@@ -191,18 +192,19 @@
     // the feed behind is out of reach while I write: no focus, no screen reader (the dialog is modal)
     const bg = document.querySelector('section.tab.on'), was = bg?.hasAttribute('inert');
     bg?.setAttribute('inert', '');
-    // the room down to the keyboard (iOS lays it over the page): the window stops above it
+    // Measure the layout position, never the animated rectangle: otherwise each keyboard resize feeds the motion
+    // back into the available height. The inset leaves a little ground between the window and the keyboard.
     const vv = window.visualViewport;
-    const fit = () => { if (vv) win.style.setProperty('--room', `${vv.offsetTop + vv.height - win.getBoundingClientRect().top - 12}px`); };
+    const fit = () => {
+      if (vv && !gone) win.style.setProperty('--room', `${Math.max(0, vv.offsetTop + vv.height - win.offsetTop - 12)}px`);
+    };
     fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
     const from = still() ? null : pill();
-    if (from) {
-      // the glass stretches down out of the pill on a spring that overshoots a hair, narrowing a touch as it flows
-      win.animate([from, { translate: '0 0', clipPath: FULL }], { duration: 560, easing: 'cubic-bezier(.3,1.12,.4,1)' });
-      win.animate([{ scale: '1 1' }, { scale: '0.985 1.012', offset: 0.35 }, { scale: '1 1' }], { duration: 560, easing: 'ease-out' });
-    } else win.animate([{ opacity: 0, scale: '0.97' }, { opacity: 1, scale: '1' }], { duration: still() ? 1 : 220, easing: 'ease-out' });
-    requestAnimationFrame(() => { out = false; });
+    motion = win.animate(from ? [from, { transform: 'none', clipPath: full() }]
+      : [{ opacity: 0 }, { opacity: 1 }], { duration: still() ? 1 : 300, easing: ease() });
+    const frame = requestAnimationFrame(() => { if (!gone) out = false; });
     return () => {
+      cancelAnimationFrame(frame); motion?.cancel();
       channel.writing--; chrome(); vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit);
       if (!was) bg?.removeAttribute('inert');
     };
@@ -267,7 +269,7 @@
     {#if why}<div class="why"><Notice tone="warning" text={why} /></div>{/if}
     <!-- the AI's reason and advice from a refusal (Edit), until I change the words -->
     {#if tip}<div class="tip"><p>{tip.reason}</p>{#if tip.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{tip.fix}</span></p>{/if}</div>{/if}
-    <textarea class="cw-text" class:bad={rules.length > 0} bind:this={field} bind:value={body} maxlength={MAX} rows="5" placeholder={t('fc.share')} aria-label={t('fc.ph')}
+    <textarea class="cw-text" class:bad={rules.length > 0} bind:this={field} bind:value={body} maxlength={MAX} rows="4" placeholder={t('fc.share')} aria-label={t('fc.ph')}
       aria-invalid={rules.length > 0} aria-describedby="cw-hold" onkeydown={key} use:grow></textarea>
     <!-- every rule broken, at once, in plain words; a tap on Send adds why it held -->
     <div class="hints" id="cw-hold" role="status">{#each hints as h (h)}<p>{t(h)}</p>{/each}</div>
@@ -280,70 +282,75 @@
     </div>{/if}
     {#if anon && pics.length}<p class="note warn">{t('fc.photoAnon')}</p>{/if}
     <!-- the rules in both modes; with the mask, the honest line and the rest a tap deeper -->
-    <p class="note">{t('fc.rules')}</p>
-    {#if anon}
-      <p class="note">{t('fc.anonHidden')} <button class="link" aria-expanded={more} onclick={() => { haptic.tap(); more = !more; }}>{t('fc.about')}</button></p>
-      {#if more}<p class="note more">{t('fc.asAnon')}{#if revealed !== null}<br />{t('fc.revealed', { n: revealed })}{/if}</p>{/if}
-    {/if}
+    <div class="notes">
+      <p class="note">{t('fc.rules')}</p>
+      {#if anon}
+        <p class="note">{t('fc.anonHidden')} <button class="link" aria-expanded={more} onclick={() => { haptic.tap(); more = !more; }}>{t('fc.about')}</button></p>
+        {#if more}<p class="note">{t('fc.asAnon')}{#if revealed !== null}<br />{t('fc.revealed', { n: revealed })}{/if}</p>{/if}
+      {/if}
+    </div>
   </div>
-  <!-- the bar over the keyboard: photos on the left, the pace and the count on the right -->
-  <div class="bar">
-    <label class="tool" class:off={pics.length >= PICS} aria-label={t('fc.addPhoto')}><ImagePlus size={22} strokeWidth={2} />
-      <input type="file" accept="image/*" multiple onchange={pick} disabled={pics.length >= PICS} /></label>
-    {#if pics.length}<span class="n">{pics.length}/{PICS}</span>{/if}
-    <span class="sp"></span>
-    {#if wait}<span class="wait" role="status">{t('fc.wait', { n: wait })}</span>{/if}
-    {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
+  <div class="footer">
+    <!-- A named attachment control belongs to the editor, without a separate empty toolbar. -->
+    <div class="tools">
+      <label class="photo-tool" class:disabled={pics.length >= PICS}>
+        <ImagePlus size={20} strokeWidth={2} aria-hidden="true" /><span>{t('fc.addPhoto')}</span>
+        {#if pics.length}<span class="n">{pics.length}/{PICS}</span>{/if}
+        <input type="file" accept="image/*" multiple aria-label={t('fc.addPhoto')} onchange={pick} disabled={pics.length >= PICS} />
+      </label>
+      {#if wait}<span class="wait" role="status">{t('fc.wait', { n: wait })}</span>{/if}
+      {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
+    </div>
   </div>
   </div>
 </div>
 
 <style>
-  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 320ms var(--ease); }
-  .scrim.out { opacity: 0; transition-duration: 260ms; }
-  /* the window: the pill's width, under the capsule, as tall as its words up to the keyboard */
+  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 300ms var(--ease); }
+  .scrim.out { opacity: 0; transition-duration: 240ms; }
+  /* The rim and softened ground give the window depth. The same full clip at rest keeps interrupted exits
+     interpolating smoothly, without an exterior shadow popping in after the reveal. */
   .cw { position: absolute; z-index: var(--z-sheet); top: calc(var(--head-bottom) + var(--s-2)); left: var(--gutter); right: var(--gutter);
     max-width: 560px; margin: 0 auto; max-height: min(var(--room, 100%), calc(100% - var(--head-bottom) - var(--s-2) - var(--s-4) - var(--safe-bottom)));
-    display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); transform-origin: 50% 0; will-change: transform; }
+    display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); transform-origin: 50% 0; background: var(--surface-solid); box-shadow: none; clip-path: inset(0 round var(--r-l));
+    -webkit-backdrop-filter: none; backdrop-filter: none; }
 
   /* the top row: the pill's paddings and sizes, so its face and its pen stay put */
   .top { position: relative; flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
-  .face { flex: none; display: flex; animation: swap 320ms var(--ease-bounce); }
-  @keyframes swap { from { transform: scale(0.6) rotate(-12deg); opacity: 0; } }
+  .face { flex: none; display: flex; }
   .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill-2); color: var(--text); }
-  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; transition: opacity 260ms var(--ease) 80ms, translate 420ms var(--ease); }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; transition: opacity var(--t-base) var(--ease); }
   .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .sub { font: 450 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
   /* the pill's words, where they were: they fade as the name comes */
   .ghost { position: absolute; left: calc(var(--s-4) + 36px + var(--s-3)); right: calc(36px + var(--s-3) * 2); top: 50%; translate: 0 -50%; opacity: 0; pointer-events: none;
     font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); transition: opacity 160ms var(--ease); }
-  .out .who { opacity: 0; translate: 0 4px; transition-delay: 0s; transition-duration: 140ms; }
-  .out .ghost { opacity: 1; transition-delay: 80ms; }
+  .out .who { opacity: 0; transition-duration: var(--t-fast); }
+  .out .ghost { opacity: 1; }
 
   /* the pen turns into Send: one round button, the accent while it can send (held: grey, a tap says why) */
   .send { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--fill-2); color: var(--text-3);
-    transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform 450ms var(--ease-bounce); }
+    transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform var(--t-base) var(--ease); }
   .send.ready, .out .send { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 12px -4px var(--accent); }
   .send::after { content: ''; position: absolute; inset: -4px; } /* 44 to the finger */
-  .ic { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 200ms var(--ease), transform 460ms var(--ease-bounce); }
-  .pen { opacity: 0; transform: rotate(80deg) scale(0.4); }
+  .ic { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 200ms var(--ease), transform var(--t-base) var(--ease); }
+  .pen { opacity: 0; transform: rotate(24deg) scale(0.8); }
   .out .pen { opacity: 1; transform: none; }
-  .out .go { opacity: 0; transform: rotate(-80deg) scale(0.4); }
+  .out .go { opacity: 0; transform: rotate(-24deg) scale(0.8); }
 
-  /* under the top row: the mode, the words, the rules; they flow in after the glass, on a quiet surface that keeps
-     the feed behind from showing through the words (the glass stays on the rim and the top row) */
+  /* One opaque writing surface: no feed text or buttons bleed through its lower edge. */
   .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .body::before { content: ''; position: absolute; inset: 0; background: var(--surface-solid); opacity: 0.86; pointer-events: none; }
-  .rest { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-    transition: opacity 280ms var(--ease) 100ms, translate 420ms var(--ease) 60ms; }
-  .out .rest, .out .bar { opacity: 0; translate: 0 -8px; transition-delay: 0s; transition-duration: 140ms; }
-  .mode { padding: var(--s-3) var(--s-4) var(--s-1); }
+  .rest { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .rest, .footer { transition: opacity var(--t-base) var(--ease); }
+  .out .rest, .out .footer { opacity: 0; transition-duration: var(--t-fast); }
+  .mode { padding: var(--s-1) var(--s-4) var(--s-2); }
   .why { margin: var(--s-3) var(--s-4) 0; }
   .tip { margin: var(--s-3) var(--s-4) 0; display: flex; flex-direction: column; gap: var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
   .tip .fix { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--text); }
   .tip .fix :global(svg) { flex: none; margin-top: 2px; color: var(--warning-text); }
   /* the words: no box of their own, the window is the field */
-  .cw-text { display: block; width: 100%; min-height: 132px; padding: var(--s-3) var(--s-4); border: 0; resize: none; background: none; color: var(--text);
+  .cw-text { display: block; width: 100%; min-height: calc(var(--s-10) * 3); padding: var(--s-3) var(--s-4); border: 0; resize: none; background: none; color: var(--text);
     font: 450 var(--fs-row)/1.42 var(--font-text); letter-spacing: -0.012em; caret-color: var(--accent); }
   .cw-text.bad { caret-color: var(--danger); }
   .cw-text::placeholder { color: var(--text-3); }
@@ -361,27 +368,31 @@
   .off { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
     background: rgb(0 0 0 / 0.55); color: white; }
   .off::after { content: ''; position: absolute; inset: -8px; } /* a bigger target */
-  .note { position: relative; padding: var(--s-2) var(--s-4); font: 450 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
-  .note:last-child { padding-bottom: var(--s-4); }
+  .note { font: 450 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
+  .rest > .note { padding: 0 var(--s-4) var(--s-2); }
   .note.warn { color: var(--warning-text); font-weight: 500; }
-  .note.more { padding-top: 0; }
   .link { display: inline; padding: 0; color: var(--accent-text); font: inherit; font-weight: 500; position: relative; }
   .link::after { content: ''; position: absolute; inset: -12px -6px; } /* 44 to the finger */
 
-  /* the bar under the words, over the keyboard: never scrolls away */
-  .bar { position: relative; flex: none; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3) 0 var(--s-2);
-    box-shadow: inset 0 0.5px 0 var(--separator);
-    transition: opacity 280ms var(--ease) 100ms, translate 420ms var(--ease) 60ms; }
-  .tool { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--text-2); cursor: pointer; }
-  .tool.off { color: var(--text-4, var(--text-3)); opacity: 0.5; cursor: default; }
-  .tool input { position: absolute; inset: 0; opacity: 0; cursor: inherit; }
-  .n, .wait, .count { font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); font-variant-numeric: tabular-nums; }
-  .sp { flex: 1; }
-  .wait { color: var(--warning-text); }
+  /* Only the attachment control stays pinned: the editor keeps room for words when the keyboard is open. */
+  .footer { flex: none; padding: 0 var(--s-4) var(--s-3); }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-1) 0 var(--s-2); }
+  .photo-tool { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+    min-height: var(--tap); max-width: 100%; padding: 0 var(--s-3); border-radius: var(--r-full); background: var(--fill); color: var(--text-2);
+    font: 600 var(--fs-sub)/1.2 var(--font-text); cursor: pointer; transition: background var(--t-fast) var(--ease); }
+  .photo-tool:active { background: var(--fill-2); }
+  .photo-tool:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .photo-tool.disabled { opacity: 0.5; cursor: default; }
+  .photo-tool :global(svg) { flex: none; }
+  .photo-tool input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+  .notes { display: grid; gap: var(--s-1); padding: 0 var(--s-4) var(--s-2); }
+  .n, .wait, .count { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .wait { flex: 1; color: var(--warning-text); }
+  .count { margin-left: auto; }
   .count.full { color: var(--warning-text); }
 
   @media (prefers-reduced-motion: reduce) {
-    .face, .pic.up img { animation: none; }
-    .scrim, .who, .ghost, .send, .ic, .rest, .bar { transition-duration: 1ms !important; transition-delay: 0s !important; }
+    .pic.up img { animation: none; }
+    .scrim, .who, .ghost, .send, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
   }
 </style>
