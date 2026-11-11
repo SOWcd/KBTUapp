@@ -434,7 +434,7 @@ def me(con, v: Viewer) -> dict:
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
-        "memberships": [{"org": org_ref(con, m), "role": m["role"], **core.titled(m), "rights": _ordered(_rights_from(m["role"], m["rights"])),
+        "memberships": [{"org": org_ref(con, m), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
                          "oversee": bool(m["can_oversee"] and m["role"] != "member"),
                          **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
                          # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative

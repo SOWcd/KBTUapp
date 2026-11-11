@@ -7887,3 +7887,23 @@ def test_no_sunday_classes(env):
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(80)).json()] == ["Mon"]  # the old ones: migration 141
     assert not con.execute("SELECT 1 FROM schedule_classes WHERE subject = 'Sun'").fetchall()
     con.close()
+
+
+def test_memo_is_a_recognised_clubs_alone(env):
+    """Owner, Nov 11: a club DMP has not accepted yet has no memos at all: no right in Studio, no memo kept on its
+    event, the memo routes refuse; an official club keeps them."""
+    c, cfg = env
+    login(c, 20, "pres")
+    con = db.connect(cfg.db_path)
+    for oid, slug, official in ((1, "new", 0), (2, "old", 1)):
+        con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (?, ?, 'club', ?, ?, 'laptop_3d', ?, 0)", (oid, slug, slug, slug, official))
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT ?, id, 'president', 0 FROM users WHERE tg_id = 20", (oid,))
+    con.commit()
+    rights = {m["org"]["id"]: m["rights"] for m in c.get("/api/me", headers=tma(20)).json()["memberships"]}
+    assert "memo" not in rights[1] and "memo" in rights[2] and "events" in rights[1]
+    monday = logic._next_week()
+    ev = {"emoji": "laptop_3d", "color": "#3B6BFF", "title": "Talk", "place": "", "startsAt": monday + 86400 + 13 * 3600, "memo": {"room": {"any": True}}}
+    assert c.post("/api/orgs/1/events", headers=tma(20), json=ev).json()["memo"] is None
+    assert c.post("/api/orgs/2/events", headers=tma(20), json=ev).json()["memo"] == {"room": {"any": True}}
+    assert c.get(f"/api/orgs/1/memo?week={monday}", headers=tma(20)).status_code == 403
+    assert c.get(f"/api/orgs/2/memo?week={monday}", headers=tma(20)).status_code == 200

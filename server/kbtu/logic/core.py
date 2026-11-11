@@ -188,10 +188,18 @@ def _rights_from(role: str, rights: str | None) -> frozenset[str]:
     return LEVEL_RIGHTS[role] if role == "president" or rights is None else frozenset(filter(None, rights.split(","))) | {"door"}
 
 
+def club_rights(role: str, rights: str | None, o) -> frozenset[str]:
+    """_rights_from in that club: memos to DMP are a recognised club's alone (official, or the Ascent's top; owner, Nov 11:
+    a club DMP has not accepted yet may not write to it as an organization)."""
+    r = _rights_from(role, rights)
+    return r if o["official"] or o["top_at"] else r - {"memo"}
+
+
 def rights_of(con, uid: int, oid: int) -> frozenset[str]:
     """What someone may do in a club: their club role's toggles, else their level's (SPEC §2)."""
-    m = one(con, "SELECT m.role, t.rights FROM org_members m LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ? AND m.user_id = ?", oid, uid)
-    return _rights_from(m["role"], m["rights"]) if m else frozenset()
+    m = one(con, """SELECT m.role, t.rights, o.official, o.top_at FROM org_members m JOIN orgs o ON o.id = m.org_id
+        LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ? AND m.user_id = ?""", oid, uid)
+    return club_rights(m["role"], m["rights"], m) if m else frozenset()
 
 
 # what the admin may do on another club's event from Admin: run it (edit, updates, attendees, cancel); never its money

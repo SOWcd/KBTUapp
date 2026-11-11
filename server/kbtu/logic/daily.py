@@ -149,7 +149,8 @@ def memo_week(con) -> None:
     if not _once(con, "memo_week", str(monday)):
         return
     for (oid,) in rows(con, """SELECT DISTINCT org_id FROM events WHERE status IN ('draft', 'published') AND memo IS NOT NULL
-            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?""", monday, monday + 7 * 86400):
+            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?
+            AND org_id IN (SELECT id FROM orgs WHERE official = 1 OR top_at IS NOT NULL)""", monday, monday + 7 * 86400):
         for m in rows(con, "SELECT m.user_id, m.role, t.rights FROM org_members m LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ?", oid):
             if "memo" in _rights_from(m["role"], m["rights"]):
                 notify(con, m["user_id"], "memo_ready", f"memo:{oid}:{monday}")

@@ -356,7 +356,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org)}
     _partner_ok(f)
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
-    f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None)
+    f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None) if org["official"] or org["top_at"] else None
     f["video_id"], f["wide_video_id"] = _video(con, v, body, None), _video(con, v, body, None, "wideVideoId")
     with tx(con):  # bad slides leave no draft behind
         cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
@@ -404,7 +404,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
             raise ApiError("conflict")  # seats can't drop below who is already in
         if f["needs_phone"] and not e["needs_phone"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
             raise ApiError("conflict", "needs_phone")  # those in never agreed to give it here (the export sends it)
-        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"])
+        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) else e["memo"]
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):

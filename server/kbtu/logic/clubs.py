@@ -49,7 +49,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row], share: bool = False) ->
         "myRequest": _request_state(asked.get(o["id"])), "subscribed": o["id"] in subscribed,
         "myRole": mine[o["id"]]["role"] if o["id"] in mine else None,
         **({"myTitle": mine[o["id"]]["title"], "myTitleKk": mine[o["id"]]["title_kk"], "myTitleEn": mine[o["id"]]["title_en"]} if o["id"] in mine else {"myTitle": None}),
-        "myRights": _ordered(_rights_from(mine[o["id"]]["role"], mine[o["id"]]["rights"])) if o["id"] in mine else [],
+        "myRights": _ordered(core.club_rights(mine[o["id"]]["role"], mine[o["id"]]["rights"], o)) if o["id"] in mine else [],
     } for o in found]
 
 
