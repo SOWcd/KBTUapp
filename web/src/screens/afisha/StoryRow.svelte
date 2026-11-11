@@ -1,8 +1,8 @@
 <script lang="ts">
   // The news on top of Afisha's List, as a row of circles (PLAN 46): the broadcasts (DMP, KBTU App),
   // every club I'm in or follow that posted in the last 30 days, and every club with a new event (lib/posts.ts); a ring while something is unread. A tap plays that
-  // club's posts full screen (Stories.svelte), then the next clubs'. The last circle, "All", opens every post (News).
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  // club's posts full screen (Stories.svelte), then the next clubs'. The first circle, "News", opens every post (News).
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import { t } from '../../lib/i18n/index.svelte';
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
@@ -34,16 +34,17 @@
 </script>
 
 <div class="row hscroll">
+  <!-- the whole news feed first and by its name (owner, Nov 11: as the last circle "All" nobody found it) -->
+  <button class="s news" onclick={() => sheets.news()}>
+    <span class="ring"><span class="in all"><Newspaper size={24} strokeWidth={2} /></span></span>
+    <b class="ellipsis">{t('page.news')}</b>
+  </button>
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
       <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>
       <b class="ellipsis" use:fit={g.org}>{tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
     </button>
   {/each}
-  <button class="s" onclick={() => sheets.news()}>
-    <span class="ring"><span class="in all"><ChevronRight size={26} strokeWidth={2.2} /></span></span>
-    <b class="ellipsis">{t('common.all')}</b>
-  </button>
 </div>
 
 <style>
@@ -53,7 +54,8 @@
   .ring { display: block; box-sizing: border-box; width: 64px; height: 64px; padding: 2px; border-radius: 50%; background: var(--line-2); transition: transform var(--t-fast) var(--ease); }
   .new .ring { padding: 2.5px; background: conic-gradient(from 200deg, var(--accent), var(--accent-2), var(--accent)); }
   .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
-  .all { background: var(--surface-2); color: var(--text-2); }
+  .all { background: var(--accent-soft); color: var(--accent); }
+  .news b { color: var(--text); }
   b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
   .new b { color: var(--text); }
 </style>
