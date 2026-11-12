@@ -2,6 +2,7 @@
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
+import { teamError } from '../teams';
 import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
@@ -352,15 +353,13 @@ export function put(card: EventCard): void {
   }
 }
 
-// a team's refusals (server evteams.py), said in words
-const TEAM_ERR: Record<string, Key> = { team_full: 'tm.full', name_taken: 'tm.nameTaken', name: 'tm.nameBad', not_going: 'tm.noSeat', locked: 'tm.locked', in_team: 'tm.inTeam' };
 export function errorText(e: unknown): string {
   if (e instanceof ApiErr) {
+    const team = teamError(e.code, e.message);  // first: a team's "full" or "closed" is its own (server evteams.py)
+    if (team) return t(team);
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
     if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
-    const team = TEAM_ERR[e.message];
-    if (team) return t(team);
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile
   }
   return t('common.error');

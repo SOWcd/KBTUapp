@@ -1,11 +1,12 @@
 <script lang="ts">
   // A team event on its sheet (server evteams.py): the sizes for everyone; once signed up, my team (its people, the
   // captain first) or that I wait to be placed. The captain invites by link (Telegram's share sheet or a copy), asks the
-  // app for teammates, renames, removes someone; anyone leaves. Each tap answers at once and goes back if refused.
+  // app for teammates, renames, makes a new link, removes someone; anyone leaves. Each tap answers at once and goes back if refused.
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Copy from '@lucide/svelte/icons/copy';
   import Search from '@lucide/svelte/icons/search';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { api, ApiErr, type EventFull, type EventTeam, type EventTeams } from '../../lib/api';
   import { errorText } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -45,6 +46,11 @@
     const name = await sheets.askText({ title: t('tm.rename'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: t('tm.name'), max: 40, value: team.name, line: true });
     if (name?.trim() && name.trim() !== team.name) void write({ ...team, name: name.trim() }, () => api.teamEdit(detail.id, { name: name.trim() }));
   }
+  // the old link went further than meant: a fresh one, the old stops working
+  async function newLink() {
+    if (!team || !(await sheets.ask({ title: t('tm.newLinkAsk'), text: t('tm.newLinkText'), ok: t('tm.newLink'), cancel: t('common.cancel') }))) return;
+    void write(team, () => api.teamNewLink(detail.id), () => say(t('tm.newLinkDone'), 'sparkles_3d'));
+  }
   async function remove(p: EventTeam['members'][number]) {
     if (!team || !(await sheets.ask({ title: t('tm.removeAsk', { name: p.name }), text: t('tm.removeText'), ok: t('tm.remove'), cancel: t('common.cancel'), danger: true }))) return;
     void write({ ...team, members: team.members.filter((x) => x.id !== p.id) }, () => api.teamRemove(detail.id, p.id));
@@ -79,6 +85,7 @@
       <Row icon={Copy} title={t('tm.copy')} onclick={copy} />
       <Row icon={Search} title={t('tm.open')} accessory="switch" checked={team.open} onchange={setOpen} />
     {/if}
+    {#if captain && !tm.locked && link}<Row icon={RefreshCw} title={t('tm.newLink')} onclick={newLink} />{/if}
   </Group>
   {#if !tm.locked}<span class="out"><Button kind="plain" size="s" onclick={leave}>{t('tm.leave')}</Button></span>{/if}
 {:else if going && !tm.locked}

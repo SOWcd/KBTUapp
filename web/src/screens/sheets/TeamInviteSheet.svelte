@@ -1,6 +1,7 @@
 <script lang="ts">
-  // A captain's invite link (startapp=et_<token>, server evteams.invite): the team's name and people, one tap to join.
-  // Not signed up yet: the tap signs up and joins at once (the event's own questions and phone first, as any sign-up).
+  // A captain's invite link (startapp=et_<token>, server evteams.invite): the team's name, its captain and how many,
+  // one tap to join. Not signed up yet: the tap signs up and joins at once (the event's own questions and phone first,
+  // as any sign-up); waiting for a seat: said, nothing changes (lib/teams.ts inviteStep).
   import { onMount } from 'svelte';
   import { api, ApiErr, type TeamInvite } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -8,6 +9,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { inviteStep } from '../../lib/teams';
   import Sheet from '../../ui/Sheet.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Avatar from '../../ui/Avatar.svelte';
@@ -27,8 +29,9 @@
     const eid = inv.event;
     busy = true; haptic.tap();
     try {
-      const st = (await cardFor(eid))?.my?.status;
-      if (st === 'going') {
+      const step = inviteStep((await cardFor(eid))?.my?.status);
+      if (step === 'noSeat') { haptic.soft(); say(t('tm.noSeat'), 'pleading_face_3d'); return; }
+      if (step === 'join') {
         await api.teamJoin(eid, token);
         haptic.ok(); say(t('tm.joined'), 'party_popper_3d');
       } else toggleGoing(eid, undefined, { join: token }); // says what came of it itself
@@ -45,14 +48,15 @@
     <div class="page">
       <div class="hd">
         <h2 class="fs-sec">{inv.team.name}</h2>
-        <p class="fs-sub dim">{inv.title} · {t('tm.of', { n: inv.team.members.length, max: inv.max })}</p>
+        <p class="fs-sub dim">{inv.title}</p>
       </div>
       <Group>
-        {#each inv.team.members as p (p.id)}
-          <Row dense title={p.name} value={p.id === inv.team.captain ? t('tm.captain') : undefined}>
-            {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
+        {#if inv.team.captain}
+          {@const cap = inv.team.captain}
+          <Row dense title={cap.name} subtitle={t('tm.captain')} value={t('tm.of', { n: inv.team.count, max: inv.max })}>
+            {#snippet lead()}<Avatar person={cap} size={32} />{/snippet}
           </Row>
-        {/each}
+        {/if}
       </Group>
     </div>
   {/if}

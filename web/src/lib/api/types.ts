@@ -403,8 +403,8 @@ export interface EventTeam { id: Id; name: string; open: boolean; captain: Id | 
 export interface EventTeams { min: number; max: number; locked: boolean; team: EventTeam | null; count?: number }
 /** The organizer's teams screen: every team, then those with none yet (sign-up order); placed/left: after Form teams */
 export interface TeamsBoard { min: number; max: number; locked: boolean; teams: EventTeam[]; solo: PersonRef[]; placed?: number; left?: number }
-/** What an invite link opens to */
-export interface TeamInvite { event: Id; title: string; team: EventTeam; min: number; max: number; room: boolean; mine: boolean; locked: boolean }
+/** What an invite link opens to: the team's name, its captain and how many it has, never the other members */
+export interface TeamInvite { event: Id; title: string; team: { name: string; captain: PersonRef | null; count: number }; min: number; max: number; room: boolean; mine: boolean; locked: boolean }
 /** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */
 export type TeamPick = { create: string } | { join: string };
 
