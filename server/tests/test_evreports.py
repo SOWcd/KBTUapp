@@ -276,7 +276,7 @@ def test_cohost_writes_its_own(env):
 
 
 def test_cohost_not_accepted_gets_nothing(env):
-    """A pending or declined co-host has no report; one removed later keeps its report in the database, unreachable."""
+    """A pending or declined co-host has no report; one removed later loses its report (no data without a reader)."""
     c, _, _, con, eid, _, _ = _setup(env)
     _cohost(c, con, eid, "pending")
     for status in ("pending", "declined"):
@@ -289,9 +289,13 @@ def test_cohost_not_accepted_gets_nothing(env):
     con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 2")  # a co-host club no longer shown: none either
     assert _co(c, eid, 41).status_code == 403
     con.execute("UPDATE orgs SET status = 'active' WHERE id = 2")
-    con.execute("DELETE FROM event_cohosts WHERE event_id = ?", (eid,))  # removed (cohosts.end)
+    # the co-hosting ends (cohosts.end): the club's report goes with it, marks too; the host's own stays
+    assert c.put(f"/api/events/{eid}/report/marks/{_uid(con, 20)}", headers=tma(20), json={"status": "present"}).status_code == 200
+    assert c.delete(f"/api/events/{eid}/cohost", headers=tma(20)).status_code == 204
     assert _co(c, eid, 41).status_code == 403
-    assert con.execute("SELECT note FROM club_reports WHERE event_id = ? AND org_id = 2", (eid,)).fetchone()[0] == "ours"
+    assert not con.execute("SELECT 1 FROM club_reports WHERE event_id = ? AND org_id = 2", (eid,)).fetchone()
+    assert not con.execute("SELECT 1 FROM club_report_marks WHERE event_id = ? AND org_id = 2", (eid,)).fetchone()
+    assert con.execute("SELECT 1 FROM club_report_marks WHERE event_id = ? AND org_id = 1", (eid,)).fetchone()
 
 
 def test_cohost_switch_off_and_deletion(env):

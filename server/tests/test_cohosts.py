@@ -151,6 +151,14 @@ def test_cohost_can_scan_but_not_run(env):
         listed = {x["id"]: x for x in c.get(f"/api/orgs/{co}/events", headers=tma(who)).json()}
         assert eid in listed and draft not in listed and pending not in listed, who
         assert all(listed[eid][k] == 0 for k in ("questions", "toCheck", "savedBy", "volunteersAsked", "teamAsks"))
+    # a taken-down (or deleted, still undoable) event and a hidden host's: not in the co-host's list either (review)
+    con.execute("UPDATE events SET hidden_at = 1 WHERE id = ?", (eid,))
+    assert eid not in [x["id"] for x in c.get(f"/api/orgs/{co}/events", headers=tma(CO_MEMBER)).json()]
+    con.execute("UPDATE events SET hidden_at = NULL WHERE id = ?", (eid,))
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = ?", (host,))
+    assert eid not in [x["id"] for x in c.get(f"/api/orgs/{co}/events", headers=tma(CO_MEMBER)).json()]
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = ?", (host,))
+    assert eid in [x["id"] for x in c.get(f"/api/orgs/{co}/events", headers=tma(CO_MEMBER)).json()]
     assert c.get(f"/api/orgs/{co}/events", headers=tma(OTHER)).status_code == 403  # not in the club: nothing
     # ended: the door closes at once
     c.delete(f"/api/events/{eid}/cohost", headers=tma(HOST))

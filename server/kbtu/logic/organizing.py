@@ -37,7 +37,9 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     head = can(con, v, oid, "events")
     # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for the whole team as our
     # own (cohosts.py; their counters below stay the host's, their door and list our event team's as before)
-    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR status != 'draft' AND id IN (SELECT x.event_id FROM event_cohosts x
+    # never a taken-down or deleted one, nor a hidden host's: the event's own page refuses those too (review)
+    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR status != 'draft' AND hidden_at IS NULL
+        AND org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden') AND id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, oid)
     found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own (review)
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too

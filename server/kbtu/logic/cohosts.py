@@ -180,6 +180,10 @@ def end(con, v: Viewer, eid: int) -> None:
         if not host and not (x["status"] == "accepted" and at_least(role_in(con, v, x["org_id"]), "vice")):
             raise ApiError("forbidden")
         con.execute("DELETE FROM event_cohosts WHERE event_id = ? AND org_id = ?", (eid, x["org_id"]))
+        # the club's own report on this event goes with its part in it: nobody could open it again, and personal data
+        # is not kept without a reader (the policy's section 10)
+        con.execute("DELETE FROM club_report_marks WHERE event_id = ? AND org_id = ?", (eid, x["org_id"]))
+        con.execute("DELETE FROM club_reports WHERE event_id = ? AND org_id = ?", (eid, x["org_id"]))
         if x["status"] != "accepted":
             return  # an invite taken back: its message renders to nothing now (bot._render)
         _touch(con, eid)
