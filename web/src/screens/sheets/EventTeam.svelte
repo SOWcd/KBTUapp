@@ -65,7 +65,7 @@
 
 {#snippet edit()}<Button kind="gray" size="s" onclick={rename}>{t('tm.rename')}</Button>{/snippet}
 {#if team}
-  <Group caption={t('tm.yours')} footnote={captain && !tm.locked ? t('tm.openHint') : undefined}>
+  <Group caption={t('tm.yours')} footnote={captain && !tm.locked && team.members.length < tm.max ? t('tm.openHint') : undefined}>
     <Row title={team.name} subtitle={tm.locked ? t('tm.locked') : t('tm.of', { n: team.members.length, max: tm.max })} trailing={captain && !tm.locked ? edit : undefined} />
     {#each team.members as p (p.id)}
       {#snippet drop()}<Button kind="gray" size="s" onclick={() => remove(p)}>{t('tm.remove')}</Button>{/snippet}
@@ -74,7 +74,7 @@
         {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
       </Row>
     {/each}
-    {#if captain && !tm.locked && link}
+    {#if captain && !tm.locked && link && team.members.length < tm.max}<!-- a full team has nobody to invite -->
       <Row icon={UserPlus} tone="action" title={t('tm.invite')} onclick={share} />
       <Row icon={Copy} title={t('tm.copy')} onclick={copy} />
       <Row icon={Search} title={t('tm.open')} accessory="switch" checked={team.open} onchange={setOpen} />

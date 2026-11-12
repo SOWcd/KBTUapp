@@ -64,7 +64,7 @@
     {:else}
       <div class="list">
         {#each b.teams as tm (tm.id)}
-          <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.open ? ' · ' + t('tm.looking') : ''}">
+          <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.open && tm.members.length < b.max ? ' · ' + t('tm.looking') : ''}">
             {#each tm.members as p (p.id)}
               <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} menu={b.locked ? undefined : menuOf(p, tm.id)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
