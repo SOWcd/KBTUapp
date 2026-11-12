@@ -71,3 +71,16 @@ it('a typed street address becomes a 2GIS search; rooms and campus places never 
   expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
   for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
 });
+
+// Our map's SVGs are made from a floor's geometry and one style (tools/map): an edit to either without building
+// again would leave the old picture in the app.
+it("our map's SVGs are built from the geometry and the style as they are now", async () => {
+  const { render } = await import('../../tools/map/build.mjs' as string);
+  const geo = import.meta.glob('/tools/map/floor-*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+  const made = import.meta.glob('/src/assets/map/kbtu-*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+  expect(Object.keys(geo).length).toBeGreaterThan(0);
+  for (const [path, src] of Object.entries(geo)) {
+    const n = /floor-(\d)/.exec(path)![1];
+    for (const dark of [0, 1]) expect(made[`/src/assets/map/kbtu-${n}${dark ? '-dark' : ''}.svg`] === render(src, dark), `floor ${n}: run node tools/map/build.mjs`).toBe(true);
+  }
+});
