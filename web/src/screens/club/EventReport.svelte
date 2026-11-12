@@ -102,7 +102,7 @@
 </script>
 
 <Sheet {overlay} icon={ClipboardCheck} full title={t('evr.title')}>
-  {#if e}<p class="t-foot sub">{e.title}{#if club} · {nameOf(club)}{/if}</p>{/if}
+  {#if e}<p class="t-foot sub">{e.title}{club ? ` · ${nameOf(club)}` : ''}</p>{/if}
   {#if r}
     <div class="pg">
       {#if r.depts.length}
