@@ -40,3 +40,31 @@ def test_race_asks_one_on_a_good_day(monkeypatch):
 def test_race_hedges_to_another_company(monkeypatch):
     link, took, asked = _run(monkeypatch, "slow")
     assert link == "groq:m" and took < 0.8 and asked == ["slow.example", "fast.example"]   # not munito's second host
+
+
+def test_a_lone_link_gets_one_more_try(monkeypatch):
+    """Nov 12: a text only one provider may take (only=...) said "busy" on that provider's single 502; one retry."""
+    hits = []
+
+    async def reply(req):
+        hits.append(1)
+        if len(hits) <= fails:
+            return httpx.Response(502)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}]})
+    links = [N(name=f"{p}:m", provider=p, url=f"https://{p}.example/v1", token="t", model="m") for p in ("munitoeu", "groq")]
+    monkeypatch.setattr(llm, "links", lambda cfg, chain=None: links)
+    monkeypatch.setattr(llm, "RETRY_WAIT", 0)
+
+    async def go():
+        llm._rest.clear()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+            return await llm.chat(None, http, [], only=("munitoeu",))
+    fails = 1
+    assert asyncio.run(go()) == ("OK", "munitoeu:m") and len(hits) == 2
+    hits.clear()
+    fails = 2  # a real outage still says busy, after exactly one retry
+    try:
+        asyncio.run(go())
+        raise AssertionError("not busy")
+    except llm.Busy:
+        assert len(hits) == 2

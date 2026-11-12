@@ -34,6 +34,7 @@ URLS = {
 CHAIN = ("apinex:free/deepseek-v4.1-flash,munito:deepseek-ai/deepseek-v4.1-flash-1017,munito:zai-org/glm-5.3-flash,"
          "groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b,cf:@cf/deepseek-ai/deepseek-v4-pro-0813,"
          "cf:@cf/moonshotai/kimi-k2.6,cf:@cf/zai-org/glm-5.3-flash,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free")
+RETRY_WAIT = 1.0     # before the one retry of a lone link
 REST = 60             # a limited or busy link without a Retry-After rests this long
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
@@ -189,6 +190,13 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         text = await ask(link)
         if text is not None:
             return text, link.name
+    if not answered and len(pool) == 1:
+        # one provider alone may take this text (only=EU_ONLY): its single 502 or timeout was "busy" for the student
+        # (the owner, Nov 12). One more try after a breath; a real outage still says busy
+        await asyncio.sleep(RETRY_WAIT)
+        text = await ask(pool[0])
+        if text is not None:
+            return text, pool[0].name
     raise BadAnswers() if answered else Busy()
 
 
