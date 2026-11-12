@@ -1593,6 +1593,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (event_id, user_id)) STRICT;
     CREATE INDEX report_marks_by_user ON report_marks(user_id);
     UPDATE org_roles SET rights = rights || ',reports' WHERE level = 'vice' AND rights IS NOT NULL AND ',' || rights || ',' NOT LIKE '%,reports,%';"""),
+    # (Nov 12) event reports' own consent (evreports.CONSENT, as appeal_consents): one per person, for every club; no
+    # row, no report of mine and no mark of me
+    (159, """CREATE TABLE report_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

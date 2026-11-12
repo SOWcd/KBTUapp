@@ -1,7 +1,8 @@
 """A club's report after its own event (logic/evreports.py, REPORTS=1): who reads and writes it (the "reports" right:
 President, Vice, a role given it such as HR; never a plain member, an outsider, another club's President, the app's
 admin), marks only for the club's team, only for the host club's started event, off means 404, and deleting an
-account takes its marks and the link to who filled a report."""
+account takes its marks and the link to who filled a report. The feature's own consent: without it no report and no
+mark of me; withdrawing it takes my marks and author links, never the note."""
 from __future__ import annotations
 
 import dataclasses
@@ -14,13 +15,20 @@ from test_core import delete_now, env, login, tma  # noqa: F401  (env is a fixtu
 from test_team_guests import _uid
 
 
-def _setup(env):
+def _agree(c, tg):
+    return c.post("/api/reports/consent", headers=tma(tg), json={"consent": logic.evreports.CONSENT})
+
+
+def _setup(env, agreed=(20, 10, 11, 12, 13, 30, 40)):
     """IT Club (1): tg 20 President, 11 Vice, 12 Head, 10 member, 13 an "HR" role with the reports right alone; tg 30
-    President of Art (2); tg 40 nobody's. Events of IT: one started an hour ago, one tomorrow; Art's started."""
+    President of Art (2); tg 40 nobody's. Events of IT: one started an hour ago, one tomorrow; Art's started.
+    `agreed`: who has given the feature's consent (everyone by default)."""
     c0, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, reports=True)))
     for tg, name in ((20, "pres"), (10, "ali"), (11, "bob"), (12, "cat"), (13, "dan"), (30, "eve"), (40, "fox")):
         login(c, tg, name)
+    for tg in agreed:
+        assert _agree(c, tg).status_code == 200
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (2, 'art', 'club', 'Art', 'Art', 'art_3d', 1, 0)")
@@ -60,7 +68,7 @@ def test_rights(env):
     assert _get(c, art, 20).status_code == 403  # another club's event: refused
     assert _get(c, 9999, 20).status_code == 404
     me = c.get("/api/me", headers=tma(13)).json()
-    assert me["reports"] is True and "reports" in me["memberships"][0]["rights"]
+    assert me["reports"] == {"consent": True} and "reports" in me["memberships"][0]["rights"]
     assert "reports" not in c.get("/api/me", headers=tma(12)).json()["memberships"][0]["rights"]  # a Head by level has none
 
 
@@ -76,6 +84,7 @@ def test_switch_off(env):
     assert c0.get(f"/api/events/{eid}/report", headers=tma(20)).status_code == 404
     assert c0.patch(f"/api/events/{eid}/report", headers=tma(20), json={"note": "x"}).status_code == 404
     assert _mark(c0, eid, 20, _uid(con, 10), "present").status_code == 404
+    assert _agree(c0, 20).status_code == 404 and c0.delete("/api/reports/consent", headers=tma(20)).status_code == 404
     assert "reports" not in c0.get("/api/me", headers=tma(20)).json()
 
 
@@ -152,3 +161,55 @@ def test_vice_role_migration(env):
         con.execute("UPDATE org_roles" + sql)
     got = dict(con.execute("SELECT level, rights FROM org_roles WHERE org_id = 1 AND rights IS NOT NULL").fetchall())
     assert got == {"vice": "team,money,reports", "head": "events"}
+
+
+def test_consent(env):
+    """No consent of mine: every report route says so (the app asks then), the rest of the app works; given: works.
+    A member without it is listed but can't be marked until they agree themselves."""
+    c, _, _, con, eid, _, _ = _setup(env, agreed=(11,))
+    for r in (_get(c, eid, 20), c.patch(f"/api/events/{eid}/report", headers=tma(20), json={"note": "x"}),
+              _mark(c, eid, 20, _uid(con, 11), "present")):
+        assert r.status_code == 403 and r.json()["message"] == "consent"
+    me = c.get("/api/me", headers=tma(20))
+    assert me.status_code == 200 and me.json()["reports"] == {"consent": False}
+    assert c.get("/api/orgs/1/team", headers=tma(20)).status_code == 200  # Studio's team still opens
+    assert c.post("/api/reports/consent", headers=tma(20), json={"consent": "old"}).status_code == 400
+    assert _agree(c, 20).json() == {"consent": True}
+    row = con.execute("SELECT version, at FROM report_consents WHERE user_id = ?", (_uid(con, 20),)).fetchone()
+    assert row[0] == logic.evreports.CONSENT and row[1] > 0
+    people = {p["person"]["id"]: p["consent"] for p in _get(c, eid, 20).json()["people"]}
+    assert people[_uid(con, 10)] is False and people[_uid(con, 11)] is True
+    r = _mark(c, eid, 20, _uid(con, 10), "present")
+    assert r.status_code == 409 and r.json()["message"] == "no_consent"
+    assert _mark(c, eid, 20, _uid(con, 11), "present").status_code == 200
+    assert _agree(c, 10).status_code == 200  # a plain member gives their own (no reports right needed)
+    assert _mark(c, eid, 20, _uid(con, 10), "late").status_code == 200
+
+
+def test_withdraw(env):
+    """Taking it back: my marks go from every report, my name off what I filled or edited, the note stays; marked
+    again only after a new yes; the account stays."""
+    c, _, _, con, eid, _, art = _setup(env)
+    hr = _uid(con, 13)
+    assert c.patch(f"/api/events/{eid}/report", headers=tma(13), json={"note": "went well"}).status_code == 200
+    assert _mark(c, eid, 20, hr, "present").status_code == 200
+    assert _mark(c, eid, 20, _uid(con, 10), "absent").status_code == 200
+    assert _mark(c, eid, 13, _uid(con, 11), "late").status_code == 200  # HR is the last editor now
+    assert c.delete("/api/reports/consent", headers=tma(13)).json() == {"consent": False}
+    assert not con.execute("SELECT 1 FROM report_marks WHERE user_id = ?", (hr,)).fetchone()
+    assert not con.execute("SELECT 1 FROM report_consents WHERE user_id = ?", (hr,)).fetchone()
+    row = con.execute("SELECT filled_by, edited_by, note FROM event_reports WHERE event_id = ?", (eid,)).fetchone()
+    assert tuple(row) == (None, None, "went well")
+    assert con.execute("SELECT COUNT(*) FROM report_marks WHERE event_id = ?", (eid,)).fetchone()[0] == 2  # the others' stay
+    assert _mark(c, eid, 20, hr, "present").json()["message"] == "no_consent"
+    assert _get(c, eid, 13).json()["message"] == "consent"
+    assert c.get("/api/me", headers=tma(13)).status_code == 200  # no account deleted
+    assert _agree(c, 13).status_code == 200 and _mark(c, eid, 20, hr, "present").status_code == 200
+
+
+def test_account_deletion_takes_consent(env):
+    c, _, cfg, con, _, _, _ = _setup(env)
+    gone = _uid(con, 10)
+    assert ("report_consents", "user_id") in logic._DEL_GONE
+    delete_now(c, cfg, tma(10))
+    assert not con.execute("SELECT 1 FROM report_consents WHERE user_id = ?", (gone,)).fetchone()
