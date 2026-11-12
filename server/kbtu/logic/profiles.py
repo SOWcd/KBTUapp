@@ -679,10 +679,10 @@ def person(con, v: Viewer, uid: int) -> dict:
             a["org"] = org_ref(con, o) if o else None
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
-        roles = _roles(con, v)
+        roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
         going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
-            if _visible(con, v, e, roles)])
+            if _visible(con, v, e, roles, hidden)])
     earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
     # the role shows only to the club's own team: outside, just the club
@@ -783,11 +783,11 @@ def friends(con, v: Viewer) -> dict:
         JOIN users u ON u.id = r.to_id JOIN students s ON s.user_id = u.id
         WHERE r.from_id = ? AND (r.status = 'pending' OR (r.status = 'declined' AND r.decided_at > ? AND r.hidden = 0)) ORDER BY r.created_at DESC""",
         v.id, core.now() - REASK_AFTER)]
-    roles = _roles(con, v)
+    roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
     going = [e for e in rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id JOIN users u ON u.id = r.user_id
         WHERE r.status = 'going' AND u.show_going = 1 AND e.status = 'published' AND COALESCE(e.ends_at, e.starts_at + {NO_END}) > ?
         AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)
-        ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles)]
+        ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles, hidden)]
     return {"friends": mine, "incoming": incoming, "outgoing": outgoing, "going": cards(con, v, going)}
 
 
@@ -933,5 +933,5 @@ from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402
-from .seats import _visible, notify  # noqa: E402
+from .seats import _hidden_orgs, _visible, notify  # noqa: E402
 from .teams import team  # noqa: E402
