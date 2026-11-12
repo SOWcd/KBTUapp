@@ -16,12 +16,14 @@ import k1 from '../assets/map/kbtu-1.svg?url';
 import k1d from '../assets/map/kbtu-1-dark.svg?url';
 import k2 from '../assets/map/kbtu-2.svg?url';
 import k2d from '../assets/map/kbtu-2-dark.svg?url';
+import k3 from '../assets/map/kbtu-3.svg?url';
+import k3d from '../assets/map/kbtu-3-dark.svg?url';
 
 /** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off Uni-Q's) */
 export const FLOORS = [null, f1, f2, f3, f4, f5];
 
-/** Our own map's floors (owner, Oct 27): light and dark, built by tools/map from one geometry file a floor and one style; floors 1 and 2 so far (the floor switch offers what is here) */
-export const KBTU_FLOORS: Record<number, [string, string]> = { 1: [k1, k1d], 2: [k2, k2d] };
+/** Our own map's floors (owner, Oct 27): light and dark, built by tools/map from one geometry file a floor and one style; floors 1-3 so far (the floor switch offers what is here) */
+export const KBTU_FLOORS: Record<number, [string, string]> = { 1: [k1, k1d], 2: [k2, k2d], 3: [k3, k3d] };
 
 const loaded = new Map<string, Promise<string>>();
 /** A floor's SVG markup by its url; fetched once per launch, a failed fetch is tried again next time. */
