@@ -1629,6 +1629,38 @@ MIGRATIONS: list[tuple[int, str]] = [
       SELECT k.event_id, e.org_id, k.user_id, k.status FROM report_marks k JOIN events e ON e.id = k.event_id;
     DROP TABLE report_marks;
     DROP TABLE event_reports;"""),
+    # (Nov 12) team events (logic/evteams.py): a free event's teams of team_min..team_max people (NULL: not a team
+    # event). A team is its name, its invite token and the "find us teammates" switch; its roster is its members in the
+    # order they came (the row id), the first one its captain, so a captain who leaves hands over by itself. A member
+    # is a 'going' registration: any way out of the event (cancelled, deleted with the account) takes them out of the
+    # team, and an empty team goes, by the triggers below, whatever code path it was.
+    (161, """ALTER TABLE events ADD COLUMN team_min INTEGER;
+    ALTER TABLE events ADD COLUMN team_max INTEGER;
+    CREATE TABLE event_teams (
+      id INTEGER PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      open INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      UNIQUE (event_id, name COLLATE NOCASE)) STRICT;
+    CREATE TABLE event_team_members (
+      id INTEGER PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES event_teams(id) ON DELETE CASCADE,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      UNIQUE (event_id, user_id)) STRICT;
+    CREATE INDEX event_team_members_by_team ON event_team_members(team_id);
+    CREATE INDEX event_team_members_by_user ON event_team_members(user_id);
+    CREATE TRIGGER event_team_reg_out AFTER UPDATE OF status ON registrations WHEN NEW.status != 'going' BEGIN
+      DELETE FROM event_team_members WHERE event_id = NEW.event_id AND user_id = NEW.user_id;
+    END;
+    CREATE TRIGGER event_team_reg_gone AFTER DELETE ON registrations BEGIN
+      DELETE FROM event_team_members WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
+    END;
+    CREATE TRIGGER event_team_empty AFTER DELETE ON event_team_members BEGIN
+      DELETE FROM event_teams WHERE id = OLD.team_id AND NOT EXISTS (SELECT 1 FROM event_team_members WHERE team_id = OLD.team_id);
+    END;"""),
 ]
 
 

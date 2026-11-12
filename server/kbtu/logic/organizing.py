@@ -356,8 +356,9 @@ def _partner_ok(f: dict, e: sqlite3.Row | None = None) -> None:
 def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
-    f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org)}
+    f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
     _partner_ok(f)
+    evteams.settings_ok(con, f)
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
     f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None) if org["official"] or org["top_at"] else None
     f["video_id"], f["wide_video_id"] = _video(con, v, body, None), _video(con, v, body, None, "wideVideoId")
@@ -417,8 +418,9 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] == "cancelled":
             raise ApiError("closed")
-        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e)
+        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body)
         _partner_ok(f, e)
+        evteams.settings_ok(con, f, e)
         get = lambda k: f[k] if k in f else e[k]  # noqa: E731
         if (get("visibility") != "public" or get("meeting") or get("guest_host")) \
                 and one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND status != 'declined'", eid):
@@ -546,6 +548,7 @@ def cancel_event(con, v: Viewer, eid: int) -> dict:
         if e["status"] != "published":
             raise ApiError("conflict")
         con.execute("UPDATE events SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?", (core.now(), core.now(), eid))
+        evteams.cancelled(con, eid)
         for r in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going','hold','waitlist')", eid):
             notify(con, r[0], "event_cancelled", f"event:{eid}")
         con.execute("DELETE FROM bot_outbox WHERE kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (f"event:{eid}:%",))
@@ -1183,7 +1186,7 @@ def door_round(con) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, gallery  # noqa: E402
+from . import core, evteams, gallery  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402

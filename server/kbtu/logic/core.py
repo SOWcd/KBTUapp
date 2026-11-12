@@ -515,6 +515,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "regUntil": e["reg_until"], "doorAt": door_at(e) if e["starts_at"] else None, "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
+        **({"teamMin": e["team_min"], "teamMax": e["team_max"]} if e["team_max"] is not None else {}),  # a team event (evteams.py)
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
         **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
     } for e in evs}
@@ -546,7 +547,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
-            **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head),
+            **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head), "teams": evteams.view(con, v, e, head),
             "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
             "wideVideo": video_shape(x) if (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)
@@ -564,6 +565,7 @@ STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path",
 # when a function runs
 from .clubs import org, orgs  # noqa: E402
 from .cohosts import cohost_view, cohosts_of  # noqa: E402
+from . import evteams  # noqa: E402
 from .crew import kind as crew_kind, view as crew_view  # noqa: E402
 from .organizing import _album_view, _rating_view  # noqa: E402
 from .oversight import staff  # noqa: E402

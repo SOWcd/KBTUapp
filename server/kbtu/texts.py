@@ -223,6 +223,8 @@ BOT = {
         "crew_added": ("🎫 <b>{org}</b> зовёт тебя помочь на входе: <b>{title}</b>\n🗓 {when} · {place}\nСканер — в карточке события.", "Открыть"),
         "volunteer_yes": ("🙌 Ты волонтёр на <b>{title}</b> ({org})!\n🗓 {when} · {place}\nОрганизаторы напишут, что делать.", "Открыть"),
         "volunteer_no": ("🙏 На <b>{title}</b> ({org}) волонтёров уже хватает. Спасибо, что откликнулся! Приходи гостем.", "Открыть"),
+        "team_placed": ("🤝 У тебя есть команда на <b>{title}</b>\n🗓 {when} · {place}\nПосмотри, кто в ней.", "Моя команда"),
+        "team_removed": ("💙 Капитан убрал тебя из команды на <b>{title}</b>. Ты по-прежнему записан(а): создай команду или жди, приложение найдёт тебе другую.", "Открыть событие"),
         "leaders_invite": ("📣 {org} приглашает руководителей клубов: <b>{title}</b>\n🗓 {when} · {place}\nОтветь в приложении: будешь или нет.", "Ответить"),
         "cohost_invite": ("🤝 Клуб <b>{host}</b> зовёт <b>{org}</b> провести событие вместе. Подробности и ответ — в Студии.", "Открыть Студию"),
         "cohost_changed": ("✏️ <b>{host}</b> изменил событие, которое вы проводите вместе.", "Открыть"),
@@ -399,6 +401,8 @@ BOT = {
         "crew_added": ("🎫 <b>{org}</b> сені кіреберісте көмектесуге шақырады: <b>{title}</b>\n🗓 {when} · {place}\nСканер — іс-шара карточкасында.", "Ашу"),
         "volunteer_yes": ("🙌 Сен <b>{title}</b> ({org}) іс-шарасының волонтерісің!\n🗓 {when} · {place}\nҰйымдастырушылар не істеу керегін жазады.", "Ашу"),
         "volunteer_no": ("🙏 <b>{title}</b> ({org}) іс-шарасына волонтерлер жеткілікті. Рахмет! Қонақ болып кел.", "Ашу"),
+        "team_placed": ("🤝 <b>{title}</b> іс-шарасында сенің командаң бар\n🗓 {when} · {place}\nКім бар екенін қара.", "Менің командам"),
+        "team_removed": ("💙 Капитан сені <b>{title}</b> командасынан шығарды. Сен әлі жазылғансың: команда құр немесе күт, қосымша саған басқасын табады.", "Іс-шараны ашу"),
         "leaders_invite": ("📣 {org} клуб жетекшілерін шақырады: <b>{title}</b>\n🗓 {when} · {place}\nҚосымшада жауап бер: келесің бе, жоқ па.", "Жауап беру"),
         "cohost_invite": ("🤝 <b>{host}</b> клубы <b>{org}</b> клубын іс-шараны бірге өткізуге шақырады. Толығы мен жауап — Студияда.", "Студияны ашу"),
         "cohost_changed": ("✏️ <b>{host}</b> бірге өткізетін іс-шараңызды өзгертті.", "Ашу"),
@@ -569,6 +573,8 @@ BOT = {
         "crew_added": ("🎫 <b>{org}</b> asks you to help at the door: <b>{title}</b>\n🗓 {when} · {place}\nThe scanner is on the event's card.", "Open"),
         "volunteer_yes": ("🙌 You're a volunteer at <b>{title}</b> ({org})!\n🗓 {when} · {place}\nThe organizers will tell you what to do.", "Open"),
         "volunteer_no": ("🙏 <b>{title}</b> ({org}) has enough volunteers already. Thanks for offering! Come as a guest.", "Open"),
+        "team_placed": ("🤝 You have a team for <b>{title}</b>\n🗓 {when} · {place}\nSee who's in it.", "My team"),
+        "team_removed": ("💙 The captain took you off the team for <b>{title}</b>. You're still signed up: make a team or wait, the app will find you another.", "Open the event"),
         "leaders_invite": ("📣 {org} invites club leaders: <b>{title}</b>\n🗓 {when} · {place}\nAnswer in the app: coming or not.", "Answer"),
         "cohost_invite": ("🤝 <b>{host}</b> invites <b>{org}</b> to host an event together. The details and your answer are in Studio.", "Open Studio"),
         "cohost_changed": ("✏️ <b>{host}</b> changed the event you host together.", "Open"),
@@ -720,6 +726,10 @@ TGC_RULES = {
            "spam": "spam, ads, deceit (Rules, s. 3)", "pdata": "others' personal data (Rules, s. 3)",
            "disrupt": "disrupting the service (Rules, s. 3)", "other": "the discussion's rules"},
 }
+
+
+# a team "Form teams" made (evteams.form) is named this and a number, in the organizer's language
+TEAM_NAME = {"ru": "Команда", "kk": "Команда", "en": "Team"}
 
 
 # why a forum request was hidden, said to its author (forum.hide_ask)

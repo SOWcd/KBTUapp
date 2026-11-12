@@ -411,6 +411,12 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    for t in ("event_team_reg_out", "event_team_reg_gone"):  # 161's (its tables' own trigger goes with them)
+        con.execute(f"DROP TRIGGER {t}")
+    con.execute("DROP TABLE event_team_members")
+    con.execute("DROP TABLE event_teams")
+    con.execute("ALTER TABLE events DROP COLUMN team_min")
+    con.execute("ALTER TABLE events DROP COLUMN team_max")
     con.execute("DROP TABLE club_report_marks")  # 160's (it dropped 158's two tables, so those are gone already)
     con.execute("DROP TABLE club_reports")
     con.execute("DROP TABLE report_consents")  # 159's; 158's rights update skips a Vice's role that has "reports"

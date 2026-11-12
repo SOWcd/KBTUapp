@@ -695,7 +695,47 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
+        if body.get("team") is not None:  # a team event's sign-up: create a team or join one by its link (evteams.py)
+            return logic.evteams.signup(con, v, eid, body["team"], body.get("ref"), body.get("phone"), body.get("answers"))
         return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"))
+
+    # team events (logic/evteams.py): my team (create, join by link, leave; the captain's rename, "find us teammates",
+    # remove), an invite link's team, and the organizer's list, "Form teams" and moves
+    @app.post("/api/events/{eid}/team")
+    def team_create(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evteams.create(con, v, eid, body.get("name"))
+
+    @app.post("/api/events/{eid}/team/join")
+    def team_join(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evteams.join(con, v, eid, body.get("token"))
+
+    @app.delete("/api/events/{eid}/team")
+    def team_leave(eid: int, con: Con, v: Me):
+        return logic.evteams.leave(con, v, eid)
+
+    @app.patch("/api/events/{eid}/team")
+    def team_edit(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evteams.edit(con, v, eid, body)
+
+    @app.delete("/api/events/{eid}/team/members/{uid}")
+    def team_remove(eid: int, uid: int, con: Con, v: Me):
+        return logic.evteams.remove(con, v, eid, uid)
+
+    @app.get("/api/team-invites/{token}")
+    def team_invite(token: str, con: Con, v: Me):
+        return logic.evteams.invite(con, v, token)
+
+    @app.get("/api/events/{eid}/teams")
+    def teams_list(eid: int, con: Con, v: Me):
+        return logic.evteams.teams_list(con, v, eid)
+
+    @app.post("/api/events/{eid}/teams/form")
+    def teams_form(eid: int, con: Con, v: Me):
+        return logic.evteams.form(con, v, eid)
+
+    @app.put("/api/events/{eid}/teams/people/{uid}")
+    def teams_move(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evteams.move(con, v, eid, uid, body.get("team"))
 
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con: Con, v: Me):
