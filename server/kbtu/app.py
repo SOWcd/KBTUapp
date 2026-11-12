@@ -1087,12 +1087,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # a club's report after its event (logic/evreports.py, REPORTS=1): the club's people with the "reports" right
     @app.get("/api/events/{eid}/report")
-    def report_get(eid: int, con: Con, v: Reports):
-        return logic.evreports.get(con, v, eid)
+    def report_get(eid: int, con: Con, v: Reports, org: int | None = None):  # org: whose report (the co-host's; the host's by default)
+        return logic.evreports.get(con, v, eid, org)
 
     @app.patch("/api/events/{eid}/report")
-    def report_save(eid: int, con: Con, v: Reports, body: dict = Body(...)):
-        return logic.evreports.save(con, v, eid, body)
+    def report_save(eid: int, con: Con, v: Reports, body: dict = Body(...), org: int | None = None):
+        return logic.evreports.save(con, v, eid, body, org)
 
     @app.post("/api/reports/consent")
     def report_agree(con: Con, v: Reports, body: dict = Body(...)):
@@ -1103,8 +1103,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.evreports.withdraw(con, v)
 
     @app.put("/api/events/{eid}/report/marks/{uid}")
-    def report_mark(eid: int, uid: int, con: Con, v: Reports, body: dict = Body(...)):
-        return logic.evreports.mark(con, v, eid, uid, body.get("status"))
+    def report_mark(eid: int, uid: int, con: Con, v: Reports, body: dict = Body(...), org: int | None = None):
+        return logic.evreports.mark(con, v, eid, uid, body.get("status"), org)
 
     @app.get("/api/orgs/{oid}/cohosts")
     def cohost_invites(oid: int, con: Con, v: Me):

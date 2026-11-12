@@ -1057,7 +1057,7 @@ _DEL_GONE = {
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"), ("vol_hands", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it, a session's door handed to me
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
     ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
-    ("report_marks", "user_id"), ("report_consents", "user_id"),  # my attendance marks in clubs' event reports (evreports.py), my consent to them; who filled one loses the link
+    ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my attendance marks in clubs' event reports (evreports.py), my consent to them; who filled one loses the link
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 

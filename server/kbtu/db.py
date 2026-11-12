@@ -1599,6 +1599,36 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 12) a report per club: the host and its accepted co-host each write their own (evreports.py). 158's tables
+    # are keyed by the event alone and SQLite can't change a primary key, so new ones keyed by (event, club); 158's rows
+    # move over as the host's reports, then its two tables go (nothing else references them; the marks, their only
+    # child, are dropped first, so nothing cascades).
+    (160, """CREATE TABLE club_reports (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL,
+      guests INTEGER CHECK (guests BETWEEN 0 AND 100000),
+      note TEXT NOT NULL DEFAULT '',
+      filled_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      filled_at INTEGER NOT NULL,
+      edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      edited_at INTEGER NOT NULL,
+      PRIMARY KEY (event_id, org_id)) STRICT;
+    CREATE TABLE club_report_marks (
+      event_id INTEGER NOT NULL,
+      org_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('present', 'late', 'absent', 'excused')),
+      PRIMARY KEY (event_id, org_id, user_id),
+      FOREIGN KEY (event_id, org_id) REFERENCES club_reports(event_id, org_id) ON DELETE CASCADE) STRICT;
+    CREATE INDEX club_report_marks_by_user ON club_report_marks(user_id);
+    INSERT INTO club_reports (event_id, org_id, dept_id, guests, note, filled_by, filled_at, edited_by, edited_at)
+      SELECT r.event_id, e.org_id, r.dept_id, r.guests, r.note, r.filled_by, r.filled_at, r.edited_by, r.edited_at
+      FROM event_reports r JOIN events e ON e.id = r.event_id;
+    INSERT INTO club_report_marks (event_id, org_id, user_id, status)
+      SELECT k.event_id, e.org_id, k.user_id, k.status FROM report_marks k JOIN events e ON e.id = k.event_id;
+    DROP TABLE report_marks;
+    DROP TABLE event_reports;"""),
 ]
 
 

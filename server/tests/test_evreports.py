@@ -141,10 +141,10 @@ def test_account_deletion(env):
     assert _mark(c, eid, 13, _uid(con, 13), "present").status_code == 200
     gone = _uid(con, 13)
     delete_now(c, cfg, tma(13))
-    assert not con.execute("SELECT 1 FROM report_marks WHERE user_id = ?", (gone,)).fetchone()  # my marks go
-    row = con.execute("SELECT filled_by, edited_by FROM event_reports WHERE event_id = ?", (eid,)).fetchone()
+    assert not con.execute("SELECT 1 FROM club_report_marks WHERE user_id = ?", (gone,)).fetchone()  # my marks go
+    row = con.execute("SELECT filled_by, edited_by FROM club_reports WHERE event_id = ?", (eid,)).fetchone()
     assert tuple(row) == (None, None)  # the club's report stays, without me
-    assert con.execute("SELECT status FROM report_marks WHERE user_id = ?", (_uid(con, 10),)).fetchone()[0] == "absent"
+    assert con.execute("SELECT status FROM club_report_marks WHERE user_id = ?", (_uid(con, 10),)).fetchone()[0] == "absent"
     r = _get(c, eid, 20).json()
     assert r["filledBy"] is None and r["editedBy"] is None
 
@@ -196,11 +196,11 @@ def test_withdraw(env):
     assert _mark(c, eid, 20, _uid(con, 10), "absent").status_code == 200
     assert _mark(c, eid, 13, _uid(con, 11), "late").status_code == 200  # HR is the last editor now
     assert c.delete("/api/reports/consent", headers=tma(13)).json() == {"consent": False}
-    assert not con.execute("SELECT 1 FROM report_marks WHERE user_id = ?", (hr,)).fetchone()
+    assert not con.execute("SELECT 1 FROM club_report_marks WHERE user_id = ?", (hr,)).fetchone()
     assert not con.execute("SELECT 1 FROM report_consents WHERE user_id = ?", (hr,)).fetchone()
-    row = con.execute("SELECT filled_by, edited_by, note FROM event_reports WHERE event_id = ?", (eid,)).fetchone()
+    row = con.execute("SELECT filled_by, edited_by, note FROM club_reports WHERE event_id = ?", (eid,)).fetchone()
     assert tuple(row) == (None, None, "went well")
-    assert con.execute("SELECT COUNT(*) FROM report_marks WHERE event_id = ?", (eid,)).fetchone()[0] == 2  # the others' stay
+    assert con.execute("SELECT COUNT(*) FROM club_report_marks WHERE event_id = ?", (eid,)).fetchone()[0] == 2  # the others' stay
     assert _mark(c, eid, 20, hr, "present").json()["message"] == "no_consent"
     assert _get(c, eid, 13).json()["message"] == "consent"
     assert c.get("/api/me", headers=tma(13)).status_code == 200  # no account deleted
@@ -213,3 +213,123 @@ def test_account_deletion_takes_consent(env):
     assert ("report_consents", "user_id") in logic._DEL_GONE
     delete_now(c, cfg, tma(10))
     assert not con.execute("SELECT 1 FROM report_consents WHERE user_id = ?", (gone,)).fetchone()
+
+
+def _cohost(c, con, eid, status="accepted"):
+    """Art (2) co-hosts IT's started event; Art's HR is tg 41 (a member-level role with the reports right), and tg 10
+    is in both clubs (IT's member, Art's member)."""
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, 2, ?, 0)", (eid, status))
+    login(c, 41, "gus")
+    assert _agree(c, 41).status_code == 200
+    for tg in (41, 10):
+        logic.set_role(con, None, _uid(con, tg), 2, "member", "test")
+    r = c.post("/api/orgs/2/roles", headers=tma(30), json={"name": "HR", "color": "#3B6BFF", "rights": ["reports"]}).json()
+    hr = next(x for x in r["roles"] if x["name"] == "HR")
+    assert c.put(f"/api/orgs/2/roles/{hr['id']}/people", headers=tma(30), json={"users": [_uid(con, 41)]}).status_code == 200
+
+
+def _co(c, eid, tg, method="get", **kw):
+    return getattr(c, method)(f"/api/events/{eid}/report", headers=tma(tg), params={"org": 2}, **kw)
+
+
+def test_cohost_writes_its_own(env):
+    """The co-host's HR reads and writes Art's own report: its department, its team, its count and note; the host's
+    report is another one, and neither club's reporters reach the other's."""
+    c, _, _, con, eid, _, _ = _setup(env)
+    _cohost(c, con, eid)
+    art = c.post("/api/orgs/2/tags", headers=tma(30), json={"name": "Senate", "color": "#3B6BFF", "department": True}).json()["tags"][0]["id"]
+    it = c.post("/api/orgs/1/tags", headers=tma(11), json={"name": "PR", "color": "#3B6BFF", "department": True}).json()["tags"][0]["id"]
+    empty = _co(c, eid, 41).json()
+    assert [d["id"] for d in empty["depts"]] == [art] and empty["filledBy"] is None
+    assert {p["person"]["id"] for p in empty["people"]} == {_uid(con, tg) for tg in (30, 41, 10)}  # Art's team only
+    r = _co(c, eid, 41, "patch", json={"dept": art, "guests": 7, "note": "senate ran it"}).json()
+    assert (r["dept"], r["guests"], r["note"], r["filledBy"]["id"]) == (art, 7, "senate ran it", _uid(con, 41))
+    assert _co(c, eid, 41, "patch", json={"dept": it}).status_code == 400  # the host's department isn't ours
+    assert c.patch(f"/api/events/{eid}/report", headers=tma(13), json={"note": "it ran it"}).status_code == 200
+    host = _get(c, eid, 20).json()
+    assert host["note"] == "it ran it" and host["guests"] is None and host["filledBy"]["id"] == _uid(con, 13)
+    assert _co(c, eid, 30).json()["note"] == "senate ran it"
+    # never the other club's: the host's reporters can't open Art's, Art's can't open the host's; a plain member neither
+    for tg in (20, 11, 13):
+        assert _co(c, eid, tg).status_code == 403, tg
+        assert _co(c, eid, tg, "patch", json={"note": "x"}).status_code == 403, tg
+    for tg in (30, 41):
+        assert _get(c, eid, tg).status_code == 403, tg
+        assert _mark(c, eid, tg, _uid(con, 10), "present").status_code == 403, tg
+    assert _co(c, eid, 10).status_code == 403
+    assert c.get(f"/api/events/{eid}/report", headers=tma(30), params={"org": 9999}).status_code == 403
+    # marks: Art's team only; someone in both clubs is marked in each report on their own
+    url = f"/api/events/{eid}/report/marks/"
+    assert c.put(url + str(_uid(con, 12)), headers=tma(41), params={"org": 2}, json={"status": "present"}).status_code == 404  # IT's Head
+    assert c.put(url + str(_uid(con, 10)), headers=tma(41), params={"org": 2}, json={"status": "absent"}).status_code == 200
+    assert _mark(c, eid, 13, _uid(con, 10), "present").status_code == 200
+    st = lambda r: {p["person"]["id"]: p["status"] for p in r["people"]}  # noqa: E731
+    assert st(_co(c, eid, 41).json())[_uid(con, 10)] == "absent"
+    assert st(_get(c, eid, 13).json())[_uid(con, 10)] == "present"
+    assert c.put(url + str(_uid(con, 10)), headers=tma(41), params={"org": 2}, json={"status": None}).status_code == 200
+    assert st(_get(c, eid, 13).json())[_uid(con, 10)] == "present"  # clearing Art's mark leaves IT's
+    assert _uid(con, 10) in st(_co(c, eid, 41).json())  # still on Art's team, unmarked
+    # leaving a club takes nobody's mark from the other's report; a person's withdrawal takes both
+    assert c.put(url + str(_uid(con, 10)), headers=tma(41), params={"org": 2}, json={"status": "late"}).status_code == 200
+    assert c.delete("/api/reports/consent", headers=tma(10)).status_code == 200
+    assert not con.execute("SELECT 1 FROM club_report_marks WHERE user_id = ?", (_uid(con, 10),)).fetchone()
+
+
+def test_cohost_not_accepted_gets_nothing(env):
+    """A pending or declined co-host has no report; one removed later keeps its report in the database, unreachable."""
+    c, _, _, con, eid, _, _ = _setup(env)
+    _cohost(c, con, eid, "pending")
+    for status in ("pending", "declined"):
+        con.execute("UPDATE event_cohosts SET status = ? WHERE event_id = ?", (status, eid))
+        for tg in (30, 41):
+            assert _co(c, eid, tg).status_code == 403, (status, tg)
+            assert _co(c, eid, tg, "patch", json={"note": "x"}).status_code == 403, (status, tg)
+    con.execute("UPDATE event_cohosts SET status = 'accepted' WHERE event_id = ?", (eid,))
+    assert _co(c, eid, 41, "patch", json={"note": "ours"}).status_code == 200
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 2")  # a co-host club no longer shown: none either
+    assert _co(c, eid, 41).status_code == 403
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 2")
+    con.execute("DELETE FROM event_cohosts WHERE event_id = ?", (eid,))  # removed (cohosts.end)
+    assert _co(c, eid, 41).status_code == 403
+    assert con.execute("SELECT note FROM club_reports WHERE event_id = ? AND org_id = 2", (eid,)).fetchone()[0] == "ours"
+
+
+def test_cohost_switch_off_and_deletion(env):
+    c, c0, cfg, con, eid, _, _ = _setup(env)
+    _cohost(c, con, eid)
+    assert _co(c0, eid, 41).status_code == 404
+    assert _co(c0, eid, 41, "patch", json={"note": "x"}).status_code == 404
+    url = f"/api/events/{eid}/report/marks/{_uid(con, 10)}"
+    assert c0.put(url, headers=tma(41), params={"org": 2}, json={"status": "present"}).status_code == 404
+    assert c.put(url, headers=tma(41), params={"org": 2}, json={"status": "present"}).status_code == 200
+    assert _mark(c, eid, 20, _uid(con, 10), "late").status_code == 200
+    gone = _uid(con, 10)
+    delete_now(c, cfg, tma(10))  # someone in both clubs: their marks go from both reports
+    assert not con.execute("SELECT 1 FROM club_report_marks WHERE user_id = ?", (gone,)).fetchone()
+    assert con.execute("SELECT COUNT(*) FROM club_reports WHERE event_id = ?", (eid,)).fetchone()[0] == 2  # the reports stay
+    hr = _uid(con, 41)
+    delete_now(c, cfg, tma(41))
+    assert tuple(con.execute("SELECT filled_by, edited_by FROM club_reports WHERE org_id = 2").fetchone()) == (None, None)
+    assert hr not in {p["person"]["id"] for p in _co(c, eid, 30).json()["people"]}
+
+
+def test_migration_keeps_reports_as_the_hosts(env):
+    """160: 158's reports and marks move over as the host's; 158's tables go."""
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO users (id, tg_id, created_at, seen_at) VALUES (500, 500, 0, 0), (501, 501, 0, 0)")
+    eid = con.execute("""INSERT INTO events (org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
+        VALUES (1, 'published', 'Case', 'Hall', 0, 'laptop_3d', '#3B6BFF', 0, 0)""").lastrowid
+    con.execute("DROP TABLE club_report_marks")
+    con.execute("DROP TABLE club_reports")
+    con.executescript("BEGIN;" + dict(db.MIGRATIONS)[158].split("UPDATE org_roles", 1)[0] + "COMMIT;")
+    con.execute("INSERT INTO event_reports (event_id, guests, note, filled_by, filled_at, edited_by, edited_at) VALUES (?, 5, 'kept', 500, 1, 501, 2)", (eid,))
+    con.execute("INSERT INTO report_marks (event_id, user_id, status) VALUES (?, 500, 'late'), (?, 501, 'present')", (eid, eid))
+    con.executescript("BEGIN;" + dict(db.MIGRATIONS)[160] + "COMMIT;")
+    assert [tuple(r) for r in con.execute("SELECT event_id, org_id, guests, note, filled_by, filled_at, edited_by, edited_at FROM club_reports")] \
+        == [(eid, 1, 5, "kept", 500, 1, 501, 2)]
+    assert sorted(tuple(r) for r in con.execute("SELECT event_id, org_id, user_id, status FROM club_report_marks")) \
+        == [(eid, 1, 500, "late"), (eid, 1, 501, "present")]
+    assert not con.execute("SELECT 1 FROM sqlite_master WHERE name IN ('event_reports', 'report_marks')").fetchone()
+    assert con.execute("PRAGMA foreign_key_check").fetchall() == []
