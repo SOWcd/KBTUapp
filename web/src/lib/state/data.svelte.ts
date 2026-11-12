@@ -173,14 +173,23 @@ export async function loadMyCard(): Promise<void> {
 }
 
 /** News for a club member (broadcasts, my clubs' and followed clubs' posts), in the background like friends; their photos
- * are fetched ahead. Called again after a post is published, edited or pinned. */
-export async function loadNews(): Promise<void> {
-  if (!session.me?.student) { data.news = null; return; }
-  try { // a follower in no club: no broadcasts (they reach club members), the posts of the clubs followed
-    const [casts, posts] = await Promise.all([session.me.memberships.length ? api.posts('clubs') : [], api.posts('subs')]);
-    data.news = { casts, posts };
-    warm([...casts, ...posts].slice(0, 6).map((p) => p.photo?.url));
-  } catch { /* the last copy stays */ }
+ * are fetched ahead. Called again after a post is published, edited or pinned. join: a quiet refresh (the app's start, List
+ * coming into view) takes the load already on its way: at a launch both asked, and the feed went twice. A refresh after a
+ * write never joins: it must see the write. */
+let newsLoad: Promise<void> | null = null;
+export function loadNews(join = false): Promise<void> {
+  if (join && newsLoad) return newsLoad;
+  const p = (async () => {
+    if (!session.me?.student) { data.news = null; return; }
+    try { // a follower in no club: no broadcasts (they reach club members), the posts of the clubs followed
+      const [casts, posts] = await Promise.all([session.me.memberships.length ? api.posts('clubs') : [], api.posts('subs')]);
+      data.news = { casts, posts };
+      warm([...casts, ...posts].slice(0, 6).map((p) => p.photo?.url));
+    } catch { /* the last copy stays */ }
+  })();
+  newsLoad = p;
+  void p.finally(() => { if (newsLoad === p) newsLoad = null; });
+  return p;
 }
 
 /** A club's events for Studio and its people for Team, kept per club; the club in view loads with the app, the others
