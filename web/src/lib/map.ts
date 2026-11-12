@@ -18,7 +18,7 @@ import k1d from '../assets/map/kbtu-1-dark.svg?url';
 /** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off Uni-Q's) */
 export const FLOORS = [null, f1, f2, f3, f4, f5];
 
-/** Our own map's floors (design/map/tools/clean, owner, Oct 27): light and dark renders, floor 1 so far */
+/** Our own map's floors (owner, Oct 27): light and dark, built by tools/map from one geometry file a floor and one style; floor 1 so far */
 export const KBTU_FLOORS: Record<number, [string, string]> = { 1: [k1, k1d] };
 
 const loaded = new Map<string, Promise<string>>();

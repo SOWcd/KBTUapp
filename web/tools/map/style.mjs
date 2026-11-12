@@ -2,16 +2,19 @@
 // (floor-N.svg) is geometry only and names these as $tokens; build.mjs writes the light and dark SVGs the app loads.
 // A pair is [light, dark]; a single value serves both.
 export const STYLE = {
-  // the walls' 2.5D: the top face raised `H` units, `layers` copies of the side face under it, the dark's lit top
-  H: 4, layers: 8, oSide: [0.5, 0.8], side: ['#9AA3BA', '#0B0E18'], lit: [null, '#8C9AD0'], oLit: 0.35, litRise: 0.6,
-  // the ground and the building
-  asphalt: ['#E2E5EE', '#0D0F17'], ground: ['#F3F5FB', '#07080F'], floor: ['#FFFFFF', '#10131C'], room: ['#EEF1F8', '#171B27'],
-  warm: ['#FBF3E6', '#171512'], warmWall: ['#E2CFAE', '#423A30'], // floor 0 level: the canteen, Halyk
-  wall: ['#B9C1D3', '#39415C'], outer: ['#A3ACC2', '#4C5778'], tread: ['#C3CADB', '#323A55'], step: ['#F7F8FC', '#141824'],
-  void: ['#E6E9F1', '#0B0D14'], tileLine: ['#D3D8E4', '#1B2030'], slabLine: ['#D8D3C9', '#232633'],
+  // the walls' 2.5D, seen from straight above: the top face raised `H` units, `layers` flat copies of the side face
+  // under it (H / layers no more than 1, the thinnest wall, or the face shows gaps), the dark's lit top
+  H: 6, layers: 8, oSide: 1, side: ['#8C96B0', '#171B2A'], warmSide: ['#C4AE8A', '#18130D'],
+  lit: [null, '#8C9AD0'], oLit: 0.35, litRise: 0.6,
+  cast: [[1.2, 1.2], [2.4, 2.2]], oCast: [0.07, 0.25], // the contact shadow: flat copies of the walls on the floor, each [dx, dy]; no blur
+  // outdoors, then indoors: corridors and halls, rooms
+  asphalt: ['#DCE0EA', '#0A0B10'], ground: ['#F3F5FB', '#0A0B10'], floor: ['#FFFFFF', '#1C2132'], room: ['#EEF1F8', '#272E42'],
+  warm: ['#FBF3E6', '#2E261B'], warmWall: ['#E2CFAE', '#6E5C44'], // floor 0 level: the canteen, Halyk, the north hall
+  wall: ['#B9C1D3', '#4A5474'], outer: ['#A3ACC2', '#5D6990'], tread: ['#C3CADB', '#323A55'], step: ['#F7F8FC', '#222839'],
+  void: ['#E6E9F1', '#12151F'], tileLine: ['#D3D8E4', '#1B2030'], slabLine: ['#D8D3C9', '#232633'],
   shadow: '#0B1020', oShade: [0.22, 0.6], black: '#000', oDrop: [0.16, 0.55],
-  // words
-  label: ['#5B6278', '#8C93AB'], num: ['#69718A', '#8189A3'], street: ['#9AA1B5', '#4E5670'], oMark: [0.26, 0.3],
+  // words: none smaller than minText
+  minText: 7, label: ['#5B6278', '#8C93AB'], num: ['#69718A', '#8189A3'], street: ['#9AA1B5', '#4E5670'], oMark: [0.4, 0.45],
   // openings and fixtures
   glass: ['#E4ECFF', '#24314F'], oGlassLine: [0.45, 0.7], door: ['#B88A5A', '#9C7448'],
   oak: ['#C08A50', '#8A5E35'], oakGrain: ['#8A5A2E', '#5E3D20'], pane: ['#BFE0F5', '#4F6E8F'],

@@ -1,6 +1,7 @@
 // floorOf: a main-building room at the start of a place gives its floor; street addresses and other numbers never do.
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
+import ru from './i18n/ru';
 import { addressGis, atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
 
 it('finds the floor of a room, never of an address', () => {
@@ -81,6 +82,7 @@ it("our map's SVGs are built from the geometry and the style as they are now", a
   expect(Object.keys(geo).length).toBeGreaterThan(0);
   for (const [path, src] of Object.entries(geo)) {
     const n = /floor-(\d)/.exec(path)![1];
+    for (const k of src.match(/data-t="\w+"/g) ?? []) expect(ru, `floor ${n}: no ${k} in the i18n files`).toHaveProperty([`kmap.${k.slice(8, -1)}`]);
     for (const dark of [0, 1]) expect(made[`/src/assets/map/kbtu-${n}${dark ? '-dark' : ''}.svg`] === render(src, dark), `floor ${n}: run node tools/map/build.mjs`).toBe(true);
   }
 });

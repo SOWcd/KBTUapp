@@ -26,16 +26,16 @@
 </filter>
 </defs>
 <rect x="-6000" y="-6000" width="13240" height="13240" fill="$asphalt"/>
-<text x="620" y="147" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(0 620 147)" data-ru="&#1059;&#1051;&#1048;&#1062;&#1040; &#1050;&#1040;&#1047;&#1067;&#1041;&#1045;&#1050; &#1041;&#1048;" data-kk="&#1178;&#1040;&#1047;&#1067;&#1041;&#1045;&#1050; &#1041;&#1048; &#1050;&#1256;&#1064;&#1045;&#1057;&#1030;">
+<text x="620" y="147" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(0 620 147)" data-t="stKazybek">
 KAZYBEK BI STREET
 </text>
-<text x="620" y="1118" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(0 620 1118)" data-ru="&#1059;&#1051;&#1048;&#1062;&#1040; &#1058;&#1054;&#1051;&#1045; &#1041;&#1048;" data-kk="&#1058;&#1256;&#1051;&#1045; &#1041;&#1048; &#1050;&#1256;&#1064;&#1045;&#1057;&#1030;">
+<text x="620" y="1118" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(0 620 1118)" data-t="stToleBi">
 TOLE BI STREET
 </text>
-<text x="128" y="400" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(-90 128 400)" data-ru="&#1059;&#1051;&#1048;&#1062;&#1040; &#1040;&#1041;&#1067;&#1051;&#1040;&#1049; &#1061;&#1040;&#1053;&#1040;" data-kk="&#1040;&#1041;&#1067;&#1051;&#1040;&#1049; &#1061;&#1040;&#1053; &#1050;&#1256;&#1064;&#1045;&#1057;&#1030;">
+<text x="128" y="400" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(-90 128 400)" data-t="stAbylai">
 ABYLAI KHAN STREET
 </text>
-<text x="1114" y="400" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(90 1114 400)" data-ru="&#1059;&#1051;&#1048;&#1062;&#1040; &#1055;&#1040;&#1053;&#1060;&#1048;&#1051;&#1054;&#1042;&#1040;" data-kk="&#1055;&#1040;&#1053;&#1060;&#1048;&#1051;&#1054;&#1042; &#1050;&#1256;&#1064;&#1045;&#1057;&#1030;">
+<text x="1114" y="400" font-size="10" font-weight="600" fill="$street" text-anchor="middle" letter-spacing="2.5" transform="rotate(90 1114 400)" data-t="stPanfilov">
 PANFILOV STREET
 </text>
 <path d="M553.5 298L555.5 298M555.5 298L559 302M605.5 305L604.5 309M577 341L568 341M577 341L584 341M556 341L566 341M590 341L605.5 341M605.5 341L608 342M613.5 341L621 341M621 341L628 341M652 341L635.5 341M657.5 341L666 341M666 341L673 341M686.5 341L676 341M567 341L566 343M611.5 341L611.5 343M631 341L632 343M632 343L634 343M634 343L634 341M652 341L652 343M654.5 343L655.5 341M675 341L676.5 343M608 342L606.5 343M1076 608.5L1076 605.5M1076 605.5L1078 605.5M1078 605.5L1140 605.5M1140 848.5L1076 848.5M1076 848.5L1076 846M166 608.5L104.5 608.5M104.5 608.5L103.5 610M103.5 610L104 844.5M104 844.5L104 846M104 846L166 846M166 608.5L206 608.5M1035.5 608.5L1076 608.5M1076 608.5L1138.5 608.5M1138.5 608.5L1138.5 846M1138.5 846L1076 846M166 611.5L106.5 611.5M106.5 611.5L106.5 843M106.5 843L166 843M166 613.5L110.5 613.5M110.5 613.5L109 615.5M109 615.5L109 839.5M109 839.5L111 840.5M111 840.5L166 840.5M166 616.5L113 616.5M113 616.5L111.5 618M111.5 618L111.5 836.5M111.5 836.5L113.5 837.5M113.5 837.5L166 837.5M1076 616.5L1130 616.5M1130 616.5L1130 837.5M1130 837.5L1076 837.5M1076 619.5L1127 619.5M1127 619.5L1127 835M1127 835L1076 835M166 622L117.5 622M117.5 622L117.5 832M117.5 832L166 832M166 622L166 625M166 625L120 625M120 625L120 829.5M120 829.5L166 829.5M166 829.5L166 832M1076 622L1123 622M1123 622L1124.5 623.5M1124.5 623.5L1124.5 832M1124.5 832L1076 832M165.5 634.5L134.5 634.5M134.5 634.5L134.5 820M134.5 820L166 820M1076 634.5L1107 634.5M1107 634.5L1107 820M1107 820L1076 820M166 637L137.5 637M137.5 637L137.5 817M137.5 817L166 817M1076 637L1104.5 637M1104.5 637L1104.5 817M1104.5 817L1076 817M140 640L166 640M1076 640L1101.5 640M1101.5 640L1101.5 814.5M1101.5 814.5L1076 814.5M140 640L140 814.5M140 814.5L166 814.5M166 643L143 643M143 643L143 811.5M143 811.5L166 811.5M1076 643L1099 643M1099 643L1099 811.5M1099 811.5L1076 811.5M1076 645.5L1096.5 645.5M1096.5 645.5L1096.5 808M1096.5 808L1094 809M1094 809L1076 809M165.5 645.5L147 646M147 646L145.5 646M145.5 646L145.5 807.5M145.5 807.5L147.5 809M147.5 809L166 809M165.5 645.5L165.5 648M165.5 648L164 648M164 648L148.5 648M148.5 648L148.5 805.5M148.5 805.5L150 806M150 806L165 806M165 806L166 809M1076.5 645.5L1076.5 648M1076.5 648L1093 648M1093 648L1093 806M1093 806L1076 806M1076 806L1076 809M206 655L166 655M166 655L166 670M1035.5 655L1076 655M1076 655L1076 670M1035.5 671L1063.5 671M167 671L167 783M169.5 671L169.5 783M172.5 671L172.5 783M175.5 671L175.5 783M1066.5 671L1066.5 783M1069 671L1069 783M1072 671L1072 783M1075 671L1075 783M1076 784L1076 799M1076 799L1035.5 799M166 784L166 799M166 799L206 799M166 820L206 820M1075.5 820L1035.5 820M299.5 1019L299.5 1035.5M940.5 1019L940.5 1038M302 1019L302 1038M938 1019L938 1038M304 1019L304 1038M935.5 1019L935.5 1038M306.5 1019L306.5 1038M316 1019L316 1025.5M933 1019L933 1038M610.5 1019L613.5 1020M316 1025.5L316 1038M352.5 1025.5L352.5 1038M320 1025.5L320 1038M322.5 1025.5L322.5 1038M324.5 1025.5L324.5 1038M327 1025.5L327 1038M329.5 1025.5L329.5 1038M331.5 1025.5L331.5 1038M334 1025.5L337 1025.5M337 1025.5L337 1038M334 1025.5L334 1038M355 1025.5L355 1038M885.5 1025.5L882.5 1026.5M882.5 1026.5L882.5 1038M885.5 1025.5L885.5 1038M906.5 1025.5L906.5 1038M909.5 1025.5L909.5 1038M911 1025.5L911 1038M913.5 1025.5L913.5 1038M915.5 1025.5L915.5 1038M919 1025.5L919 1038M920.5 1025.5L920.5 1038M923 1025.5L923 1038M317.5 1028L317.5 1038M337 1038L337 1052M337 1052L334 1052M302 1038L302 1063.5M302 1063.5L316 1063.5M304 1038L304 1061.5M304 1061.5L314.5 1061.5M306.5 1038L306.5 1059M316 1038L316 1051.5M317.5 1038L317.5 1052M320 1038L320 1052M322.5 1038L322.5 1052M324.5 1038L324.5 1052M327 1038L327 1052M329.5 1038L329.5 1052M331.5 1038L331.5 1052M352.5 1038L352.5 1051.5M355 1038L355 1052M904 1038L904 1051.5M904 1051.5L906.5 1051.5M911 1038L911 1052M913.5 1038L913.5 1052M919 1038L919 1052M920.5 1038L920.5 1052M923 1038L923 1052M925 1038L925 1051M933 1038L933 1059M933 1059L925 1059M935.5 1038L935.5 1061.5M935.5 1061.5L926 1061.5M940.5 1038L940.5 1066.5M940.5 1066.5L925 1066.5M885.5 1038L885.5 1051.5M909.5 1040L909.5 1052M300 1040.5L300 1066M300 1066L316 1066M334 1040.5L334 1052M915.5 1040.5L915.5 1052M938 1040.5L938 1064.5M938 1064.5L926 1064.5M906.5 1041L906.5 1052M316 1052.5L316 1059M352.5 1053.5L352.5 1090M352.5 1090L407.5 1090M473.5 1084.5L407.5 1084.5M407.5 1084.5L407.5 1087.5M473.5 1084.5L541.5 1084.5M541.5 1084.5L541.5 1087.5M619.5 1084.5L554 1084.5M554 1084.5L554 1087.5M622.5 1084.5L687.5 1084.5M687.5 1084.5L687.5 1087.5M620.5 1087.5L554 1087.5M766.5 1087.5L698.5 1087.5M407.5 1087.5L473.5 1087.5M473.5 1087.5L541.5 1087.5M622 1087.5L687.5 1087.5M832.5 1087.5L768 1087.5" fill="none" stroke="$tread" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round"/>
@@ -188,6 +188,7 @@ PANFILOV STREET
 <path d="M207.5 161H331.5V482H420V550.5H321V907H416.8V1017.8H344V976H207.5Z" fill="$floor"/>
 <path d="M463 906H550.8V825.8A119.5 119.5 0 0 0 690.5 825.6V906H777.2V1017.5H463Z" fill="$floor"/>
 <path d="M459 482H550V344H692V482H782.5V551H710.5V562.5H531V551H459ZM555 482H687V349H555Z" fill="$warm"/>
+<path d="M555 482H687V349H555Z" fill="$warm"/>
 <path d="M585 413H605V418.5H600.5V480H641V413H659V418.5H646V480H659V486H585V480H594.5V418.5H585Z" fill="$floor"/>
 <path d="M531 599H710.5V650.0A119.5 119.5 0 1 1 531 649.6Z" fill="$warm" stroke="$warmWall" stroke-width="6" stroke-linejoin="miter"/>
 <path d="M550.8 825.8A119.5 119.5 0 0 0 690.5 825.6V863.5H550.8Z" fill="$warm"/>
@@ -208,245 +209,80 @@ PANFILOV STREET
 <circle cx="537.6" cy="772.0" r="3.4" fill="$warmWall"/>
 <circle cx="590.9" cy="813.8" r="3.2" fill="$warmWall"/>
 <rect x="913.4" y="163.9" width="45.1" height="67.9" fill="$room"/>
-<text class="mid" x="936.0" y="201.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-100
-</text>
 <rect x="211.1" y="163.9" width="46.5" height="67.9" fill="$room"/>
-<text class="mid" x="234.4" y="201.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-183
-</text>
 <rect x="257.6" y="163.9" width="21.3" height="42.9" fill="$room"/>
-<text class="mid" x="268.2" y="188.1" font-size="7.7" font-weight="600" fill="$num" text-anchor="middle" transform="rotate(-90 268.2 185.4)">
-184
-</text>
 <rect x="278.9" y="163.9" width="48.3" height="35.3" fill="$room"/>
-<text class="mid" x="303.0" y="185.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-182
-</text>
 <rect x="980.7" y="163.9" width="48.6" height="36.9" fill="$room"/>
-<text class="mid" x="1005.0" y="186.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-102
-</text>
 <rect x="278.9" y="199.2" width="48.3" height="32.6" fill="$room"/>
-<text class="mid" x="303.0" y="219.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-180
-</text>
 <rect x="983.7" y="225.5" width="45.6" height="37.7" fill="$room"/>
-<text class="mid" x="1006.5" y="248.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-104
-</text>
 <rect x="211.1" y="231.8" width="46.5" height="32.0" fill="$room"/>
-<text class="mid" x="234.4" y="251.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-181
-</text>
 <rect x="211.1" y="263.8" width="46.5" height="66.2" fill="$room"/>
-<text class="mid" x="234.4" y="300.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-179
-</text>
 <rect x="982.9" y="300.8" width="46.4" height="60.8" fill="$room"/>
-<text class="mid" x="1006.1" y="335.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-106
-</text>
 <rect x="211.1" y="330.0" width="41.1" height="29.9" fill="$room"/>
-<text class="mid" x="231.6" y="348.8" font-size="10.8" font-weight="600" fill="$num" text-anchor="middle">
-177
-</text>
 <rect x="913.4" y="338.2" width="47.0" height="52.9" fill="$room"/>
-<text class="mid" x="936.9" y="368.6" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-110
-</text>
 <rect x="211.1" y="359.9" width="47.0" height="29.6" fill="$room"/>
-<text class="mid" x="234.6" y="378.5" font-size="10.7" font-weight="600" fill="$num" text-anchor="middle">
-175
-</text>
 <rect x="281.8" y="361.4" width="45.4" height="62.6" fill="$room"/>
-<text class="mid" x="304.5" y="396.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-170
-</text>
 <rect x="982.9" y="361.6" width="46.4" height="29.0" fill="$room"/>
-<text class="mid" x="1006.1" y="379.9" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-111
-</text>
 <rect x="211.1" y="389.5" width="47.0" height="34.5" fill="$room"/>
-<text class="mid" x="234.6" y="410.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-173
-</text>
 <rect x="913.4" y="391.1" width="47.0" height="91.3" fill="$room"/>
-<text class="mid" x="936.9" y="440.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-117
-</text>
 <rect x="982.9" y="390.6" width="46.4" height="33.4" fill="$room"/>
-<text class="mid" x="1006.1" y="411.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-112
-</text>
 <rect x="281.8" y="424.0" width="45.4" height="28.8" fill="$room"/>
-<text class="mid" x="304.5" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-168
-</text>
 <rect x="211.1" y="424.0" width="47.0" height="28.8" fill="$room"/>
-<text class="mid" x="234.6" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-171
-</text>
 <rect x="982.9" y="424.0" width="46.4" height="28.8" fill="$room"/>
-<text class="mid" x="1006.1" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-114
-</text>
 <rect x="960.4" y="454.2" width="21.1" height="32.3" fill="$room"/>
 <rect x="281.8" y="452.8" width="45.4" height="26.2" fill="$room"/>
-<text class="mid" x="304.5" y="469.3" font-size="9.4" font-weight="600" fill="$num" text-anchor="middle">
-166
-</text>
 <rect x="211.1" y="452.8" width="47.0" height="26.2" fill="$room"/>
-<text class="mid" x="234.6" y="469.3" font-size="9.4" font-weight="600" fill="$num" text-anchor="middle">
-169
-</text>
 <rect x="981.5" y="454.2" width="47.8" height="27.0" fill="$room"/>
-<text class="mid" x="1005.4" y="471.2" font-size="9.7" font-weight="600" fill="$num" text-anchor="middle">
-116
-</text>
 <rect x="990.2" y="481.2" width="39.1" height="38.4" fill="$room"/>
-<text class="mid" x="1009.8" y="504.4" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-118
-</text>
 <rect x="895.0" y="486.0" width="40.6" height="38.5" fill="$room"/>
 <rect x="982.2" y="519.6" width="47.1" height="28.6" fill="$room"/>
-<text class="mid" x="1005.8" y="537.6" font-size="10.3" font-weight="600" fill="$num" text-anchor="middle">
-120
-</text>
 <rect x="923.5" y="552.2" width="34.5" height="16.0" fill="$room"/>
 <rect x="980.7" y="548.2" width="48.6" height="99.6" fill="$room"/>
-<text class="mid" x="1005.0" y="602.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-127
-</text>
 <rect x="211.5" y="547.0" width="46.6" height="133.4" fill="$room"/>
 <rect x="211.5" y="547.0" width="46.6" height="133.4" fill="$library" fill-opacity="$oWashNamed"/>
 <rect x="923.5" y="590.8" width="29.7" height="27.6" fill="$room"/>
 <rect x="282" y="619.5" width="34.0" height="28.3" fill="$room"/>
-<text class="mid" x="299.0" y="637.3" font-size="10.2" font-weight="600" fill="$num" text-anchor="middle">
-160
-</text>
 <rect x="923.5" y="618.4" width="35.7" height="29.4" fill="$room"/>
-<text class="mid" x="941.4" y="636.9" font-size="10.6" font-weight="600" fill="$num" text-anchor="middle">
-131
-</text>
 <rect x="959.2" y="618.4" width="21.5" height="29.4" fill="$room"/>
 <rect x="923.5" y="743.8" width="34.5" height="32.0" fill="$room"/>
 <rect x="923.5" y="775.8" width="34.5" height="29.8" fill="$room"/>
-<text class="mid" x="940.8" y="794.6" font-size="10.7" font-weight="600" fill="$num" text-anchor="middle">
-134
-</text>
 <rect x="983.7" y="778.8" width="45.6" height="28.9" fill="$room"/>
-<text class="mid" x="1006.5" y="797.0" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-133
-</text>
 <rect x="923.5" y="805.6" width="34.5" height="34.6" fill="$room"/>
-<text class="mid" x="940.8" y="826.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-135
-</text>
 <rect x="983.7" y="807.7" width="45.6" height="124.5" fill="$room"/>
-<text class="mid" x="1006.5" y="873.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-136
-</text>
 <rect x="923.5" y="840.2" width="34.5" height="65.7" fill="$room"/>
-<text class="mid" x="940.8" y="877.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-138
-</text>
 <rect x="855.2" y="908.2" width="20.3" height="24.2" fill="$room"/>
 <rect x="690.2" y="908.2" width="36.0" height="38.4" fill="$room"/>
-<text class="mid" x="708.2" y="931.4" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-148
-</text>
 <rect x="467.5" y="910.2" width="42.6" height="38.6" fill="$room"/>
-<text class="mid" x="488.8" y="933.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-151
-</text>
 <rect x="510.1" y="910.2" width="41.5" height="38.6" fill="$room"/>
-<text class="mid" x="530.9" y="933.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-149
-</text>
 <rect x="928.8" y="935.2" width="100.5" height="35.6" fill="$room"/>
 <rect x="928.8" y="935.2" width="100.5" height="35.6" fill="$lab" fill-opacity="$oWashNamed"/>
 <rect x="895.9" y="935.2" width="32.9" height="33.6" fill="$room"/>
-<text class="mid" x="912.3" y="956.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-142
-</text>
 <rect x="865.9" y="946.6" width="30.0" height="22.2" fill="$room"/>
 <rect x="830.8" y="946.6" width="35.1" height="22.2" fill="$room"/>
 <rect x="373.8" y="948.8" width="38.2" height="19.2" fill="$room"/>
 <rect x="467.5" y="972.3" width="40.9" height="41.9" fill="$room"/>
 <rect x="467.5" y="972.3" width="40.9" height="41.9" fill="$service" fill-opacity="$oWashNamed"/>
 <rect x="508.4" y="972.3" width="43.2" height="41.9" fill="$room"/>
-<text class="mid" x="530.0" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-153
-</text>
 <rect x="729.3" y="972.3" width="43.2" height="41.9" fill="$room"/>
-<text class="mid" x="750.9" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-146
-</text>
 <rect x="347.8" y="968.0" width="64.2" height="46.2" fill="$room"/>
-<text class="mid" x="379.9" y="995.1" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-156
-</text>
 <rect x="830.8" y="968.8" width="60.7" height="50.0" fill="$room"/>
-<text class="mid" x="861.1" y="997.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-143
-</text>
 <rect x="211.5" y="486.0" width="203.5" height="61.0" fill="$room"/>
 <rect x="211.5" y="486.0" width="203.5" height="61.0" fill="$library" fill-opacity="$oWashNamed"/>
 <rect x="211.5" y="810.0" width="106.0" height="95.0" fill="$room"/>
 <rect x="211.5" y="810.0" width="106.0" height="95.0" fill="$library" fill-opacity="$oWashNamed"/>
 <rect x="211.5" y="909.0" width="126.0" height="61.5" fill="$room"/>
-<text class="mid" x="274.5" y="943.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-157
-</text>
 <rect x="823.5" y="486.0" width="39.0" height="60.5" fill="$room"/>
-<text class="mid" x="843.0" y="520.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-125
-</text>
 <rect x="864.5" y="486.0" width="30.5" height="38.5" fill="$room"/>
-<text class="mid" x="879.8" y="509.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-124
-</text>
 <path d="M864.5 526.5H897V486H937V546.5H864.5Z" fill="$room"/>
-<text class="mid" x="912.0" y="540.5" font-size="7.0" font-weight="600" fill="$num" text-anchor="middle">
-122
-</text>
 <rect x="688.5" y="972.3" width="40.8" height="41.9" fill="$room"/>
-<text class="mid" x="708.9" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
-147
-</text>
 <path d="M550.8 825.8A119.5 119.5 0 0 0 601 846.6V863.5H550.8Z" fill="$room"/>
-<text class="mid" x="578.0" y="854.5" font-size="7.0" font-weight="600" fill="$num" text-anchor="middle">
-154
-</text>
 <path d="M640 846.6A119.5 119.5 0 0 0 690.5 825.6V863.5H640Z" fill="$room"/>
-<text class="mid" x="664.0" y="854.5" font-size="7.0" font-weight="600" fill="$num" text-anchor="middle">
-155
-</text>
 <rect x="983.7" y="203.0" width="45.6" height="22.5" fill="$room"/>
-<text class="mid" x="1006.5" y="217.2" font-size="8.1" font-weight="600" fill="$num" text-anchor="middle">
-103
-</text>
 <rect x="913.4" y="234.8" width="46.2" height="29.0" fill="$room"/>
-<text class="mid" x="936.5" y="253.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
-105
-</text>
 <rect x="938.6" y="485.4" width="19.4" height="39.4" fill="$room"/>
-<text class="mid" x="948.3" y="507.6" font-size="7.0" font-weight="600" fill="$num" text-anchor="middle" transform="rotate(-90 948.3 505.1)">
-119
-</text>
 <rect x="281.8" y="269.2" width="25.0" height="25.2" fill="$room"/>
-<text class="mid" x="294.3" y="285.0" font-size="9.0" font-weight="600" fill="$num" text-anchor="middle">
-174
-</text>
 <rect x="304.5" y="234.8" width="22.7" height="28.4" fill="$room"/>
-<text class="mid" x="315.9" y="251.9" font-size="8.2" font-weight="600" fill="$num" text-anchor="middle">
-176
-</text>
 <rect x="281.8" y="345.5" width="45.4" height="15.9" fill="$room"/>
-<text class="mid" x="304.5" y="356.0" font-size="7.0" font-weight="600" fill="$num" text-anchor="middle">
-172
-</text>
 <rect x="282.0" y="332.5" width="18.0" height="11.0" fill="$room"/>
 <rect x="282.0" y="332.5" width="18.0" height="11.0" fill="$stairs" fill-opacity="$oWash"/>
 <rect x="707" y="484.5" width="38.6" height="38.0" fill="$room"/>
@@ -497,7 +333,6 @@ PANFILOV STREET
 <path d="M780.0 487.0L780.0 525.0M1031.0 166.0L1031.0 177.0M688.0 854.0L688.0 860.0M688.0 881.0L688.0 888.0M688.0 899.0L688.0 905.0M1031.0 812.0L1031.0 818.0" fill="none" stroke="$wall" stroke-width="5.5"/>
 <g walls>
 <path fill="none" d="M531 599H710.5V650.0A119.5 119.5 0 1 1 531 649.6Z" stroke="$warmWall" stroke-width="6" stroke-linejoin="miter" lit="1.2"/>
-<path fill="none" d="M211 163.9H327.2V478.2H211ZM281.3 301.7V328.4H326.5V301.7Z" stroke="$num" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/>
 <circle fill="none" cx="620.6" cy="728.7" r="26" stroke="$warmWall" stroke-width="3" lit="0.8"/>
 <path fill="none" d="M594.3 725.2L564.1 721.3M550.8 718.9L544.8 718.1M537.9 717.1L505.7 712.6M557.2 697.8L550.9 694.7M544.5 690.8L539.2 688.1M534.7 685.9L517.2 677.2M600.1 711.2L577.3 691.7M568.2 681.5L552.2 667.1M587.0 666.7L582.4 658.4M575.1 643.1L565.9 625.8M608.5 704.0L604.4 695.4M601.5 689.6L595.6 677.5M610.1 672.2L599.6 615.6M632.7 753.4L650.6 790.3M657.8 801.8L662.8 811.6M601.5 774.9L598.2 782.7M609.2 752.1L579.8 812.3M577.7 812.9L567.3 833.4M570.7 778.6L555.5 793.8M552.4 796.9L538.9 810.4M598.3 742.1L571.3 758.3M515.1 746.4L507.2 747.7M551.0 739.7L526.3 743.6M577.5 696.2A54.0 54.0 0 0 1 600.8 678.5M645.3 777.3A54.5 54.5 0 0 1 613.0 782.7M583.4 767.9A54.0 54.0 0 0 1 570.4 748.5M566.1 728.7A54.5 54.5 0 0 1 570.1 708.3M567.0 738.6A54.5 54.5 0 0 1 566.1 729.2M605.0 781.4A55.0 55.0 0 0 1 591.5 775.3M552.9 704.1A72.0 72.0 0 0 1 592.5 662.4M549.6 728.7A71.0 71.0 0 0 1 551.6 712.1M551.2 746.0A71.5 71.5 0 0 1 549.1 729.3M579.8 788.0A72.0 72.0 0 0 1 553.8 755.7M553.0 667.8A91.0 91.0 0 0 1 574.4 650.3M531.0 744.5A91.0 91.0 0 0 1 529.6 729.5M528.6 728.7A92.0 92.0 0 0 1 529.6 715.1M526.8 655.4A119 119 0 0 1 563.8 624.1M565 601L565 621" stroke="$warmWall" stroke-width="3" stroke-linecap="square" lit="0.8"/>
 <path fill="none" d="M638.9 634.5A96 96 0 0 1 686.1 658.5M680.5 622.8A121.7 121.7 0 0 1 703.3 639.4M643.4 610.9L639.3 634.9M614 835.5L664.3 814.6M664.3 814.6L674 831.8" stroke="$warmWall" stroke-width="1.2" stroke-linecap="round"/>
@@ -1370,14 +1205,14 @@ PANFILOV STREET
 <path d="M665.2 497.9L667.5 495.8M661.8 494.2L664.2 492.1M658.4 490.5L660.8 488.4" fill="none" stroke="$wall" stroke-width="0.6"/>
 <path d="M669.7 500.5A9.0 9.0 0 0 1 682.4 501.2" fill="none" stroke="$tread" stroke-width="0.6" stroke-dasharray="1.2 1"/>
 <path d="M675.8 507.2L682.4 501.2" fill="none" stroke="$wall" stroke-width="1.6" stroke-linecap="round"/>
-<text x="439.7" y="413.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1057;&#1090;&#1091;&#1076;&#1077;&#1085;&#1095;&#1077;&#1089;&#1082;&#1080;&#1081; &#1072;&#1084;&#1092;&#1080;&#1090;&#1077;&#1072;&#1090;&#1088;" data-kk="&#1057;&#1090;&#1091;&#1076;&#1077;&#1085;&#1090;&#1090;&#1110;&#1082; &#1072;&#1084;&#1092;&#1080;&#1090;&#1077;&#1072;&#1090;&#1088;" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="439.7" y="413.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-t="amph" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Student amphitheater
 </text>
-<text x="410.0" y="600.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1044;&#1074;&#1086;&#1088; &#171;20 &#1083;&#1077;&#1090; &#1050;&#1041;&#1058;&#1059;&#187;" data-kk="&#171;&#1178;&#1041;&#1058;&#1059;-&#1171;&#1072; 20 &#1078;&#1099;&#1083;&#187; &#1072;&#1091;&#1083;&#1072;&#1089;&#1099;" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="410.0" y="600.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-t="yard" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Yard &#8220;20 years of KBTU&#8221;
 </text>
-<text x="842.0" y="600.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1057;&#1072;&#1076; &#1079;&#1085;&#1072;&#1085;&#1080;&#1081;" data-kk="&#1041;&#1110;&#1083;&#1110;&#1084; &#1073;&#1072;&#1171;&#1099;" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
-Garden of knowledge
+<text x="842.0" y="600.0" font-size="10.5" font-weight="600" fill="$label" text-anchor="middle" data-t="garden" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+Japanese garden
 </text>
 <g transform="translate(0 -$H)">
 <rect x="196.20" y="689.60" width="27.10" height="18.00" fill="$oak" fill-opacity="0.25" stroke="$oakGrain" stroke-width="0.4" rx="0.6"/>
@@ -1638,14 +1473,14 @@ Garden of knowledge
 <path d="M589 422L589 440" stroke="$label" stroke-width="0.9" stroke-linecap="round"/>
 <path d="M587.4 425.0l1.6 1.2l1.6 -1.2M587.4 428.0l1.6 1.2l1.6 -1.2M587.4 431.0l1.6 1.2l1.6 -1.2M587.4 434.0l1.6 1.2l1.6 -1.2M587.4 437.0l1.6 1.2l1.6 -1.2" fill="none" stroke="$label" stroke-width="0.5" stroke-linejoin="round"/>
 <g class="fine">
-<text transform="rotate(-90 584.5 431.0)" x="584.5" y="431.0" font-size="4.5" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1042;&#1077;&#1096;&#1072;&#1083;&#1082;&#1080;" data-kk="&#1030;&#1083;&#1075;&#1110;&#1096;&#1090;&#1077;&#1088;" stroke="$floor" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text transform="rotate(-90 584.5 431.0)" x="584.5" y="429.8" font-size="7" font-weight="600" fill="$label" text-anchor="middle" data-t="racks" stroke="$warm" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Coat racks
 </text>
 </g>
 <path d="M651.5 422L651.5 440" stroke="$label" stroke-width="0.9" stroke-linecap="round"/>
 <path d="M649.9 425.0l1.6 1.2l1.6 -1.2M649.9 428.0l1.6 1.2l1.6 -1.2M649.9 431.0l1.6 1.2l1.6 -1.2M649.9 434.0l1.6 1.2l1.6 -1.2M649.9 437.0l1.6 1.2l1.6 -1.2" fill="none" stroke="$label" stroke-width="0.5" stroke-linejoin="round"/>
 <g class="fine">
-<text transform="rotate(-90 647.0 431.0)" x="647.0" y="431.0" font-size="4.5" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1042;&#1077;&#1096;&#1072;&#1083;&#1082;&#1080;" data-kk="&#1030;&#1083;&#1075;&#1110;&#1096;&#1090;&#1077;&#1088;" stroke="$floor" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text transform="rotate(-90 647.0 431.0)" x="647.0" y="429.8" font-size="7" font-weight="600" fill="$label" text-anchor="middle" data-t="racks" stroke="$warm" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Coat racks
 </text>
 </g>
@@ -1660,7 +1495,7 @@ Coat racks
 <path d="M331 231H370M384 231H405C450 231 470 300 500 322S540 340 553 343" fill="none" stroke="$label" stroke-width="0.9" stroke-dasharray="3 1" stroke-opacity="0.7"/>
 <rect x="386" y="233" width="8" height="6" rx="1" fill="$room" stroke="$wall" stroke-width="1"/>
 <g class="mid">
-<text x="377.0" y="227.0" font-size="6" font-weight="600" fill="$label" text-anchor="middle" data-ru="&#1042;&#1099;&#1093;&#1086;&#1076; &#1085;&#1072; &#1050;&#1072;&#1079;&#1099;&#1073;&#1077;&#1082; &#1073;&#1080;" data-kk="&#1178;&#1072;&#1079;&#1099;&#1073;&#1077;&#1082; &#1073;&#1080; &#1082;&#1257;&#1096;&#1077;&#1089;&#1110;&#1085;&#1077; &#1096;&#1099;&#1171;&#1091;" stroke="$floor" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="377.0" y="227.0" font-size="6" font-weight="600" fill="$label" text-anchor="middle" data-t="exitKazybek" stroke="$floor" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Exit to Kazybek bi
 </text>
 </g>
@@ -1713,7 +1548,187 @@ Exit to Kazybek bi
 <path d="M-3.5 -4.5V-1Q-3.5 0.5 -2 0.5V4.5M-2 -4.5V-1M-0.5 -4.5V-1Q-0.5 0.5 -2 0.5M2.5 4.5V-4.5Q4.5 -3 4.5 0.5H2.5" fill="none" stroke="$white" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text x="269.1" y="352.4" font-size="91" font-weight="800" fill="$num" fill-opacity="$oMark" text-anchor="middle" textLength="270" lengthAdjust="spacing" transform="rotate(-90 269.1 321.05)" data-ru="&#1044;&#1048;&#1058;" data-kk="&#1044;&#1048;&#1058;">
+<text class="mid" x="936.0" y="201.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+100
+</text>
+<text class="mid" x="234.4" y="201.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+183
+</text>
+<text class="mid" x="268.2" y="188.1" font-size="7.7" font-weight="600" fill="$num" text-anchor="middle" transform="rotate(-90 268.2 185.4)">
+184
+</text>
+<text class="mid" x="303.0" y="185.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+182
+</text>
+<text class="mid" x="1005.0" y="186.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+102
+</text>
+<text class="mid" x="303.0" y="219.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+180
+</text>
+<text class="mid" x="1006.5" y="248.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+104
+</text>
+<text class="mid" x="234.4" y="251.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+181
+</text>
+<text class="mid" x="234.4" y="300.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+179
+</text>
+<text class="mid" x="1006.1" y="335.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+106
+</text>
+<text class="mid" x="231.6" y="348.8" font-size="10.8" font-weight="600" fill="$num" text-anchor="middle">
+177
+</text>
+<text class="mid" x="936.9" y="368.6" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+110
+</text>
+<text class="mid" x="234.6" y="378.5" font-size="10.7" font-weight="600" fill="$num" text-anchor="middle">
+175
+</text>
+<text class="mid" x="304.5" y="396.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+170
+</text>
+<text class="mid" x="1006.1" y="379.9" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+111
+</text>
+<text class="mid" x="234.6" y="410.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+173
+</text>
+<text class="mid" x="936.9" y="440.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+117
+</text>
+<text class="mid" x="1006.1" y="411.3" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+112
+</text>
+<text class="mid" x="304.5" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+168
+</text>
+<text class="mid" x="234.6" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+171
+</text>
+<text class="mid" x="1006.1" y="442.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+114
+</text>
+<text class="mid" x="304.5" y="469.3" font-size="9.4" font-weight="600" fill="$num" text-anchor="middle">
+166
+</text>
+<text class="mid" x="234.6" y="469.3" font-size="9.4" font-weight="600" fill="$num" text-anchor="middle">
+169
+</text>
+<text class="mid" x="1005.4" y="471.2" font-size="9.7" font-weight="600" fill="$num" text-anchor="middle">
+116
+</text>
+<text class="mid" x="1009.8" y="504.4" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+118
+</text>
+<text class="mid" x="1005.8" y="537.6" font-size="10.3" font-weight="600" fill="$num" text-anchor="middle">
+120
+</text>
+<text class="mid" x="1005.0" y="602.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+127
+</text>
+<text class="mid" x="299.0" y="637.3" font-size="10.2" font-weight="600" fill="$num" text-anchor="middle">
+160
+</text>
+<text class="mid" x="941.4" y="636.9" font-size="10.6" font-weight="600" fill="$num" text-anchor="middle">
+131
+</text>
+<text class="mid" x="940.8" y="794.6" font-size="10.7" font-weight="600" fill="$num" text-anchor="middle">
+134
+</text>
+<text class="mid" x="1006.5" y="797.0" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+133
+</text>
+<text class="mid" x="940.8" y="826.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+135
+</text>
+<text class="mid" x="1006.5" y="873.9" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+136
+</text>
+<text class="mid" x="940.8" y="877.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+138
+</text>
+<text class="mid" x="708.2" y="931.4" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+148
+</text>
+<text class="mid" x="488.8" y="933.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+151
+</text>
+<text class="mid" x="530.9" y="933.5" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+149
+</text>
+<text class="mid" x="912.3" y="956.0" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+142
+</text>
+<text class="mid" x="530.0" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+153
+</text>
+<text class="mid" x="750.9" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+146
+</text>
+<text class="mid" x="379.9" y="995.1" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+156
+</text>
+<text class="mid" x="861.1" y="997.8" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+143
+</text>
+<text class="mid" x="274.5" y="943.7" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+157
+</text>
+<text class="mid" x="843.0" y="520.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+125
+</text>
+<text class="mid" x="879.8" y="509.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+124
+</text>
+<text class="mid" x="912.0" y="540.9" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle">
+122
+</text>
+<text class="mid" x="708.9" y="997.2" font-size="11.0" font-weight="600" fill="$num" text-anchor="middle">
+147
+</text>
+<text class="mid" x="578.0" y="855.2" font-size="9.0" font-weight="600" fill="$num" text-anchor="middle">
+154
+</text>
+<text class="mid" x="664.0" y="855.2" font-size="9.0" font-weight="600" fill="$num" text-anchor="middle">
+155
+</text>
+<text class="mid" x="1006.5" y="217.2" font-size="8.1" font-weight="600" fill="$num" text-anchor="middle">
+103
+</text>
+<text class="mid" x="936.5" y="253.1" font-size="10.4" font-weight="600" fill="$num" text-anchor="middle">
+105
+</text>
+<text class="mid" x="948.3" y="508.0" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle" transform="rotate(-90 948.3 505.1)">
+119
+</text>
+<text class="mid" x="931.9" y="668.6" font-size="8.5" font-weight="600" fill="$num" text-anchor="middle" transform="rotate(-90 931.9 665.6)">
+132
+</text>
+<text class="mid" x="294.3" y="282.0" font-size="9.0" font-weight="600" fill="$num" text-anchor="middle">
+174
+</text>
+<text class="mid" x="315.9" y="251.9" font-size="8.2" font-weight="600" fill="$num" text-anchor="middle">
+176
+</text>
+<text class="mid" x="304.5" y="355.6" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle">
+172
+</text>
+<text class="mid" x="620" y="327" font-size="8" font-weight="600" fill="$label" text-anchor="middle" data-t="entrance" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+Entrance
+</text>
+<text class="mid" x="620" y="1036" font-size="8" font-weight="600" fill="$label" text-anchor="middle" data-t="entrance" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+Entrance
+</text>
+<text class="mid" x="186" y="725.5" font-size="8" font-weight="600" fill="$label" text-anchor="middle" transform="rotate(-90 186 725.5)" data-t="entrance" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+Entrance
+</text>
+<text class="mid" x="1055" y="725.5" font-size="8" font-weight="600" fill="$label" text-anchor="middle" transform="rotate(90 1055 725.5)" data-t="entrance" stroke="$asphalt" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+Entrance
+</text>
+<text x="270.5" y="405.6" font-size="13" font-weight="800" fill="$num" fill-opacity="$oMark" text-anchor="middle" letter-spacing="6" transform="rotate(-90 270.5 401)" data-t="dit">
 DIT
 </text>
 <g transform="translate(666.5 727.5)">
@@ -1721,7 +1736,7 @@ DIT
 <path d="M-3.5 -4.5V-1Q-3.5 0.5 -2 0.5V4.5M-2 -4.5V-1M-0.5 -4.5V-1Q-0.5 0.5 -2 0.5M2.5 4.5V-4.5Q4.5 -3 4.5 0.5H2.5" fill="none" stroke="$food" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text x="673.5" y="731.0" font-size="10" font-weight="600" fill="$label" text-anchor="start" data-ru="&#1057;&#1090;&#1086;&#1083;&#1086;&#1074;&#1072;&#1103;" data-kk="&#1040;&#1089;&#1093;&#1072;&#1085;&#1072;" stroke="$warm" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="673.5" y="731.0" font-size="10" font-weight="600" fill="$label" text-anchor="start" data-t="canteen" stroke="$warm" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Canteen
 </text>
 <g transform="translate(578.5 528.5)">
@@ -1738,7 +1753,7 @@ Halyk Co-working
 <path d="M0 -3Q-2.5 -4.5 -5 -4V3Q-2.5 2.5 0 4Q2.5 2.5 5 3V-4Q2.5 -4.5 0 -3V4" fill="none" stroke="$library" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text x="242.0" y="857.5" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-ru="&#1041;&#1080;&#1073;&#1083;&#1080;&#1086;&#1090;&#1077;&#1082;&#1072;" data-kk="&#1050;&#1110;&#1090;&#1072;&#1087;&#1093;&#1072;&#1085;&#1072;" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="242.0" y="857.5" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-t="library" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Library
 </text>
 <text x="264.5" y="870.5" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
@@ -1751,7 +1766,7 @@ Library
 <path d="M0 -3Q-2.5 -4.5 -5 -4V3Q-2.5 2.5 0 4Q2.5 2.5 5 3V-4Q2.5 -4.5 0 -3V4" fill="none" stroke="$library" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text x="290.8" y="516.5" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-ru="&#1041;&#1080;&#1073;&#1083;&#1080;&#1086;&#1090;&#1077;&#1082;&#1072;" data-kk="&#1050;&#1110;&#1090;&#1072;&#1087;&#1093;&#1072;&#1085;&#1072;" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="290.8" y="516.5" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-t="library" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Library
 </text>
 <text x="313.2" y="529.5" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
@@ -1764,7 +1779,7 @@ Library
 <path d="M0 -3Q-2.5 -4.5 -5 -4V3Q-2.5 2.5 0 4Q2.5 2.5 5 3V-4Q2.5 -4.5 0 -3V4" fill="none" stroke="$library" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text x="212.3" y="613.7" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-ru="&#1041;&#1080;&#1073;&#1083;&#1080;&#1086;&#1090;&#1077;&#1082;&#1072;" data-kk="&#1050;&#1110;&#1090;&#1072;&#1087;&#1093;&#1072;&#1085;&#1072;" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text x="212.3" y="613.7" font-size="10.0" font-weight="600" fill="$label" text-anchor="start" data-t="library" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Library
 </text>
 <text x="234.8" y="626.7" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
@@ -1776,10 +1791,10 @@ Library
 <path d="M0 -3.6V-3.4M0 -0.8V4" fill="none" stroke="$service" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text data-ru="&#1050;&#1072;&#1088;&#1100;&#1077;&#1088;&#1085;&#1099;&#1081;" data-kk="&#1052;&#1072;&#1085;&#1089;&#1072;&#1087;" x="487.9" y="991.9" font-size="6.9" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text data-t="career1" x="487.9" y="991.9" font-size="6.9" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Career
 </text>
-<text data-ru="&#1094;&#1077;&#1085;&#1090;&#1088;" data-kk="&#1086;&#1088;&#1090;&#1072;&#1083;&#1099;&#1171;&#1099;" x="487.9" y="998.8" font-size="6.9" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text data-t="career2" x="487.9" y="998.8" font-size="6.9" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Center
 </text>
 <text x="487.9" y="1006.7" font-size="5.5" font-weight="600" fill="$num" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
@@ -1790,22 +1805,22 @@ Center
 <path d="M-2 -4.5H2M-1 -4.5V-1L-4 4H4L1 -1V-4.5" fill="none" stroke="$lab" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
-<text data-ru="&#1051;&#1072;&#1073;&#1086;&#1088;&#1072;&#1090;&#1086;&#1088;&#1080;&#1103;" data-kk="Honeywell" x="979.0" y="951.0" font-size="10.0" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text data-t="lab1" x="979.0" y="951.0" font-size="10.0" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Honeywell
 </text>
-<text data-ru="Honeywell" data-kk="&#1079;&#1077;&#1088;&#1090;&#1093;&#1072;&#1085;&#1072;&#1089;&#1099;" x="979.0" y="961.0" font-size="10.0" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
+<text data-t="lab2" x="979.0" y="961.0" font-size="10.0" font-weight="600" fill="$label" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 Lab
 </text>
 <text x="979.0" y="972.0" font-size="8.0" font-weight="600" fill="$num" text-anchor="middle" stroke="$room" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke">
 140
 </text>
 <rect x="140" y="1108" width="14" height="14" rx="4" fill="$warm" stroke="$warmWall" stroke-width="1.5"/>
-<text x="162" y="1119" font-size="11" font-weight="500" fill="$label" data-ru="&#1059;&#1088;&#1086;&#1074;&#1077;&#1085;&#1100; 0 &#1101;&#1090;&#1072;&#1078;&#1072;, &#1085;&#1072; &#1087;&#1088;&#1086;&#1083;&#1105;&#1090; &#1085;&#1080;&#1078;&#1077;" data-kk="0-&#1179;&#1072;&#1073;&#1072;&#1090; &#1076;&#1077;&#1187;&#1075;&#1077;&#1081;&#1110;, &#1073;&#1110;&#1088; &#1084;&#1072;&#1088;&#1096; &#1090;&#1257;&#1084;&#1077;&#1085;">
+<text x="162" y="1119" font-size="11" font-weight="500" fill="$label" data-t="level0">
 Floor 0 level, a flight below
 </text>
 <rect x="380" y="1108" width="14" height="14" rx="4" fill="$room"/>
 <rect x="380" y="1108" width="14" height="14" rx="4" fill="url(#hatch)" stroke="$num" stroke-width="1.2" stroke-dasharray="3 2"/>
-<text x="402" y="1119" font-size="11" font-weight="500" fill="$label" data-ru="&#1057;&#1083;&#1091;&#1078;&#1077;&#1073;&#1085;&#1072;&#1103; &#1079;&#1086;&#1085;&#1072;" data-kk="&#1178;&#1099;&#1079;&#1084;&#1077;&#1090;&#1090;&#1110;&#1082; &#1072;&#1081;&#1084;&#1072;&#1179;">
+<text x="402" y="1119" font-size="11" font-weight="500" fill="$label" data-t="staff">
 Staff only
 </text>
 </svg>

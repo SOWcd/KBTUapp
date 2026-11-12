@@ -86,9 +86,10 @@
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
   const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
   let svg = $state('');
-  // our map's words in the UI language: each <text> holds the English and carries data-ru / data-kk
-  const shown = $derived(i18n.lang === 'en' ? svg
-    : svg.replace(new RegExp(`(<text[^>]*\\sdata-${i18n.lang}="([^"]*)"[^>]*>)[^<]*`, 'g'), (_, open: string, w: string) => open + w));
+  // our map's words in the UI language: a <text data-t="canteen"> is 'kmap.canteen' of the i18n files (the SVG holds the
+  // English, so the file reads on its own; map.test.ts checks every key is there)
+  const shown = $derived(svg.replace(/(<text[^>]*\sdata-t="(\w+)"[^>]*>)[^<]*/g,
+    (_, open: string, k: string) => open + t(`kmap.${k}` as 'kmap.canteen').replace(/&/g, '&amp;').replace(/</g, '&lt;')));
   // another room: a clean plan, without the last one's rings
   $effect(() => {
     const n = cur, url = ver === 'old' ? FLOORS[n] : ver === 'kbtu' ? KBTU_FLOORS[n]?.[look === 'dark' ? 1 : 0] : null; // ours is drawn light and dark
