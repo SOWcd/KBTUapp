@@ -1633,7 +1633,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # event). A team is its name (unique in the event by name_key: NFKC, casefolded), its invite token and the "find us
     # teammates" switch; its roster is its members in the order they came (the row id), the first one its captain, so a captain who leaves hands over by itself. A member
     # is a 'going' registration: any way out of the event (cancelled, deleted with the account) takes them out of the
-    # team, and an empty team goes, by the triggers below, whatever code path it was.
+    # team, and an empty team goes, by the triggers below, whatever code path it was. team_consents: the feature's own
+    # consent (evteams.CONSENT, as report_consents): no row, never in a team.
     (161, """ALTER TABLE events ADD COLUMN team_min INTEGER;
     ALTER TABLE events ADD COLUMN team_max INTEGER;
     CREATE TABLE event_teams (
@@ -1661,7 +1662,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;
     CREATE TRIGGER event_team_empty AFTER DELETE ON event_team_members BEGIN
       DELETE FROM event_teams WHERE id = OLD.team_id AND NOT EXISTS (SELECT 1 FROM event_team_members WHERE team_id = OLD.team_id);
-    END;"""),
+    END;
+    CREATE TABLE team_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

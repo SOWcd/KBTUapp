@@ -28,9 +28,12 @@ def _event(c, start=None, publish=True, **extra):
     return ev["id"]
 
 
-def _people(c, n, first=100):
+def _people(c, n, first=100, consent=True):
+    """n students; consent: each has agreed to teams (evteams.CONSENT) as the app asks before the first team."""
     for tg in range(first, first + n):
         login(c, tg, f"p{tg}")
+        if consent:
+            assert c.post("/api/teams/consent", headers=tma(tg), json={"consent": logic.evteams.CONSENT}).json() == {"consent": True}
     return list(range(first, first + n))
 
 
@@ -240,7 +243,7 @@ def test_form_teams_shapes(club, lo, hi, solos, open_teams, want_new, want_left)
         k += size
     closed = None
     if open_teams:  # a closed team of one is never filled
-        login(c, 99, "closed")
+        _people(c, 1, first=99)
         _go(c, eid, 99, {"create": "Closed"})
         closed = _mine(c, eid, 99)["id"]
     for p in people[k:]:
@@ -278,7 +281,7 @@ def test_form_rules(club, monkeypatch):
     text, _, start = bot._render(con, m)
     assert start == f"ev_{eid}" and "Team 2" not in text
     con.execute("UPDATE users SET lang = 'ru' WHERE id = ?", (_uid(con, 20),))
-    login(c, 98, "late"), _go(c, eid, 98), login(c, 97, "later"), _go(c, eid, 97)
+    _people(c, 2, first=97), _go(c, eid, 98), _go(c, eid, 97)
     names = [t["name"] for t in c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()["teams"]]
     assert names[-1] == "\u041a\u043e\u043c\u0430\u043d\u0434\u0430 1"
 
@@ -445,3 +448,101 @@ def test_banned_never_placed(club):
     placed = {p["id"] for t in r["teams"] for p in t["members"]}
     assert _uid(con, b) not in placed and placed == set(_ids(con, [a, x, y])) and r["placed"] == 2
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'team_placed' AND user_id = ?", (_uid(con, b),)).fetchone()
+
+
+
+def test_consent(club):
+    """Teams' own consent: /me says it; without it no team of my own, no join, no sign-up with a team (nothing left
+    behind); "I have no team" still signs up, and the organizer can't place me until I agree."""
+    c, con = club
+    (cap,), (x,) = _people(c, 1), _people(c, 1, first=200, consent=False)
+    eid = _event(c, **TEAMS)
+    _go(c, eid, cap, {"create": "Owls"})
+    tok = _mine(c, eid, cap)["token"]
+    assert c.get("/api/me", headers=tma(x)).json()["teams"] == {"consent": False}
+    assert c.get("/api/me", headers=tma(cap)).json()["teams"] == {"consent": True}
+    for pick in ({"create": "Hawks"}, {"join": tok}):
+        assert _go(c, eid, x, pick).json()["message"] == "team_consent" and _sheet(c, eid, x)["my"] is None
+    assert c.post("/api/teams/consent", headers=tma(x), json={"consent": "old"}).status_code == 400
+    assert _go(c, eid, x).json()["my"]["status"] == "going"  # "no team": signed up, alone
+    assert c.post(f"/api/events/{eid}/team", headers=tma(x), json={"name": "Hawks"}).json()["message"] == "team_consent"
+    assert c.post(f"/api/events/{eid}/team/join", headers=tma(x), json={"token": tok}).json()["message"] == "team_consent"
+    owls = _list(c, eid)["teams"][0]["id"]
+    assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, x)}", headers=tma(20), json={"team": owls}).json()["message"] == "team_consent"
+    assert _list(c, eid)["solo"][0]["consent"] is False
+    c.post("/api/teams/consent", headers=tma(x), json={"consent": logic.evteams.CONSENT})
+    assert _list(c, eid)["solo"][0]["consent"] is True
+    assert c.post(f"/api/events/{eid}/team/join", headers=tma(x), json={"token": tok}).status_code == 200
+    at = con.execute("SELECT version, at FROM team_consents WHERE user_id = ?", (_uid(con, x),)).fetchone()
+    assert at[0] == "tm1" and at[1] > 0  # recorded: which text, when
+
+
+def test_converted_event_waits_for_consent(club):
+    """An event made a team event after people signed up: they wait with no team; Form teams skips them and says how
+    many; once one agrees, the next Form places them."""
+    c, con = club
+    a, b = _people(c, 2, consent=False)
+    x, y = _people(c, 2, first=300)
+    eid = _event(c)
+    for p in (a, b, x, y):
+        _go(c, eid, p)
+    base = {"title": "Case Cup", "place": "Hall", "startsAt": int(time.time()) + 5 * 3600, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, **TEAMS}).status_code == 200
+    r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
+    assert (r["placed"], r["left"], r["noConsent"]) == (2, 0, 2)
+    assert {p["id"] for p in r["teams"][0]["members"]} == set(_ids(con, [x, y]))
+    assert [(p["id"], p["consent"]) for p in r["solo"]] == [(i, False) for i in _ids(con, [a, b])]
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'team_placed' AND user_id IN (?, ?)", _ids(con, [a, b])).fetchone()
+    for p in (a, b):
+        c.post("/api/teams/consent", headers=tma(p), json={"consent": logic.evteams.CONSENT})
+    r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
+    assert (r["placed"], r["noConsent"], r["solo"]) == (2, 0, [])
+
+
+def test_withdraw(club, monkeypatch):
+    """Taking it back: out of my teams on events not started (captaincy passes on), still signed up, never placed again
+    until a new yes; a started event's team stays as it was."""
+    c, con = club
+    cap, mate, other = _people(c, 3)
+    soon, later = int(time.time()) + 3600, int(time.time()) + 5 * 3600
+    e1, e2 = _event(c, start=soon, **TEAMS), _event(c, start=later, **TEAMS)
+    for e in (e1, e2):
+        _go(c, e, cap, {"create": "Owls"})
+        _go(c, e, mate, {"join": _mine(c, e, cap)["token"]})
+        _go(c, e, other)
+    set_clock(monkeypatch, lambda: soon + 60)  # e1 has started
+    assert c.delete("/api/teams/consent", headers=tma(cap)).json() == {"consent": False}
+    assert c.get("/api/me", headers=tma(cap)).json()["teams"] == {"consent": False}
+    assert _mine(c, e2, cap) is None and _sheet(c, e2, cap)["my"]["status"] == "going"
+    assert _mine(c, e2, mate)["captain"] == _uid(con, mate)
+    assert [p["id"] for p in _mine(c, e1, cap)["members"]] == _ids(con, [cap, mate])  # started: fixed
+    tm = _list(c, e2)["teams"][0]["id"]
+    assert c.put(f"/api/events/{e2}/teams/people/{_uid(con, cap)}", headers=tma(20), json={"team": tm}).json()["message"] == "team_consent"
+    c.patch(f"/api/events/{e2}/team", headers=tma(mate), json={"open": True})
+    r = c.post(f"/api/events/{e2}/teams/form", headers=tma(20)).json()
+    assert _uid(con, cap) not in {p["id"] for t in r["teams"] for p in t["members"]} and r["noConsent"] == 1
+
+
+def test_consent_goes_with_the_account(club):
+    c, con = club
+    (a,) = _people(c, 1)
+    uid = _uid(con, a)
+    assert con.execute("SELECT 1 FROM team_consents WHERE user_id = ?", (uid,)).fetchone()
+    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    assert not con.execute("SELECT 1 FROM team_consents WHERE user_id = ?", (uid,)).fetchone()
+
+
+def test_organizer_removal_is_told(club):
+    """The organizer taking someone out of a team (to no team): the bot's template, as the captain's remove."""
+    c, con = club
+    a, b = _people(c, 2)
+    eid = _event(c, **TEAMS)
+    _go(c, eid, a, {"create": "Owls"})
+    _go(c, eid, b, {"join": _mine(c, eid, a)["token"]})
+    assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": None}).status_code == 200
+    m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_removed' AND user_id = ?", (_uid(con, b),)).fetchone()
+    assert m, "no removal message"
+    text, _, start = bot._render(con, m)
+    assert start == f"ev_{eid}" and "Owls" not in text
+    assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": None}).status_code == 200  # already alone: nothing
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'team_removed' AND user_id = ?", (_uid(con, b),)).fetchone()[0] == 1

@@ -358,6 +358,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"reports": logic.evreports.summary(con, v)} if app.state.cfg.reports else {}),  # Studio's event reports (REPORTS): my consent
+                                   "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
@@ -716,6 +717,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.patch("/api/events/{eid}/team")
     def team_edit(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.evteams.edit(con, v, eid, body)
+
+    @app.post("/api/teams/consent")
+    def team_agree(con: Con, v: Me, body: dict = Body(...)):
+        return logic.evteams.agree(con, v, body)
+
+    @app.delete("/api/teams/consent")
+    def team_withdraw(con: Con, v: Me):
+        return logic.evteams.withdraw(con, v)
 
     @app.post("/api/events/{eid}/team/link")
     def team_new_link(eid: int, con: Con, v: Me):

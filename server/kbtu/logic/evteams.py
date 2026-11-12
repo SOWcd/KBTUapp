@@ -7,6 +7,10 @@ short of people asks the app for teammates ("open"); a student without one signs
 and an empty team goes. The roster is ordered by when each came (the member row's id); its first is the captain.
 Teams lock when the event starts, so a later bracket gets a fixed list (a team: id, name, ordered roster, captain).
 
+The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
+it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
+team event waits with no team until they agree. Withdrawing it takes me out of my teams on events not started yet.
+
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
 an invite link's holder sees the team it invites to; anyone else, only that it is a team event and its sizes.
 """
@@ -23,6 +27,44 @@ from .core import PERSON_COLS, ApiError, Viewer, full, need_student, one, person
 
 SIZE = (2, 10)    # the editor's bounds for a team's min and max
 NAME_MAX = 40
+CONSENT = "tm1"   # the privacy policy's teams clause, agreed to before the first team
+
+
+# ------------------------------------------------------------ the feature's own consent
+
+def consented(con, uid: int) -> bool:
+    return one(con, "SELECT 1 FROM team_consents WHERE user_id = ? AND version = ?", uid, CONSENT) is not None
+
+
+def summary(con, v: Viewer) -> dict:
+    """/api/me's part: agreed to teams yet."""
+    return {"consent": consented(con, v.id)}
+
+
+def agree(con, v: Viewer, body: dict) -> dict:
+    """Mine given: the app sends the version it showed."""
+    need_student(v)
+    if not isinstance(body, dict) or body.get("consent") != CONSENT:
+        raise ApiError("bad_input")
+    with tx(con):
+        con.execute("INSERT OR REPLACE INTO team_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT, core.now()))
+    return summary(con, v)
+
+
+def withdraw(con, v: Viewer) -> dict:
+    """Mine taken back: out of my teams on every event not started yet (captaincy passes on; the sign-ups stay), and
+    nobody places me again until a new yes. A started event's teams are fixed (a bracket may stand on them)."""
+    with tx(con):
+        con.execute("DELETE FROM team_consents WHERE user_id = ?", (v.id,))
+        con.execute("""DELETE FROM event_team_members WHERE user_id = ? AND event_id IN
+            (SELECT m.event_id FROM event_team_members m JOIN events e ON e.id = m.event_id WHERE m.user_id = ? AND e.starts_at > ?)""",
+                    (v.id, v.id, core.now()))
+    return summary(con, v)
+
+
+def _consent(con, uid: int) -> None:
+    if not consented(con, uid):
+        raise ApiError("forbidden", "team_consent")  # the app asks it then
 
 
 # ------------------------------------------------------------ the editor's switch
@@ -126,11 +168,12 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
         raise ApiError("not_found")
     teams = rows(con, "SELECT * FROM event_teams WHERE event_id = ? ORDER BY id", eid)
     rosters = _rosters(con, eid)
-    solo = rows(con, f"""SELECT {PERSON_COLS} FROM registrations r JOIN users u ON u.id = r.user_id LEFT JOIN students s ON s.user_id = u.id
+    solo = rows(con, f"""SELECT {PERSON_COLS}, c.user_id IS NOT NULL AS consent FROM registrations r JOIN users u ON u.id = r.user_id
+        LEFT JOIN students s ON s.user_id = u.id LEFT JOIN team_consents c ON c.user_id = u.id AND c.version = '{CONSENT}'
         WHERE r.event_id = ? AND r.status = 'going' AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
         ORDER BY r.created_at, r.id""", eid)
     return {"min": e["team_min"], "max": e["team_max"], "locked": e["starts_at"] <= core.now(),
-            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [person_ref(p) for p in solo]}
+            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"])} for p in solo]}
 
 
 # ------------------------------------------------------------ a student's own
@@ -179,6 +222,7 @@ def _new_team(con, e: sqlite3.Row, name: str) -> int:
 def _create(con, v: Viewer, e: sqlite3.Row, name: str) -> None:
     _open_now(e)
     _going(con, e, v.id)
+    _consent(con, v.id)
     _free(con, e, v.id)
     _add(con, e, _new_team(con, e, name), v.id)
 
@@ -189,6 +233,7 @@ def _join(con, v: Viewer, e: sqlite3.Row, token: object) -> None:
         raise ApiError("not_found", "team_link")  # gone, replaced by a new one, or another event's link
     _open_now(e)
     _going(con, e, v.id)
+    _consent(con, v.id)
     _free(con, e, v.id)
     _add(con, e, t["id"], v.id)
 
@@ -306,16 +351,19 @@ def form(con, v: Viewer, eid: int) -> dict:
     """"Form teams": the open teams filled up to max from those alone (the smallest team first, people in the order they
     signed up), then new teams of the rest (sizes()), each named "<Team> N" in the organizer's language, its first member
     captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. A banned user
-    is never placed. Everyone placed hears it from the bot. The answer: the list as teams_list, with `placed` and `left` (who couldn't be)."""
+    is never placed, nor anyone without the teams consent (`noConsent`: how many). Everyone placed hears it from the bot.
+    The answer: the list as teams_list, with `placed` and `left` (who couldn't be)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
         if e["team_max"] is None:
             raise ApiError("not_found")
         _open_now(e)
-        solo = [r[0] for r in rows(con, """SELECT r.user_id FROM registrations r JOIN users u ON u.id = r.user_id AND u.banned_at IS NULL
+        alone = rows(con, """SELECT r.user_id, c.user_id IS NOT NULL AS ok FROM registrations r JOIN users u ON u.id = r.user_id AND u.banned_at IS NULL
+            LEFT JOIN team_consents c ON c.user_id = r.user_id AND c.version = ?
             WHERE r.event_id = ? AND r.status = 'going'
             AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
-            ORDER BY r.created_at, r.id""", eid)]
+            ORDER BY r.created_at, r.id""", CONSENT, eid)
+        solo = [r[0] for r in alone if r[1]]
         placed: list[tuple[int, int]] = []
         for t in rows(con, """SELECT t.id, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
                 WHERE t.event_id = ? AND t.open = 1 GROUP BY t.id ORDER BY n, t.id""", eid):
@@ -332,12 +380,12 @@ def form(con, v: Viewer, eid: int) -> dict:
         con.executemany("INSERT INTO event_team_members (team_id, event_id, user_id) VALUES (?, ?, ?)", [(t, eid, u) for t, u in placed])
         for t, u in placed:
             notify(con, u, "team_placed", f"tp:{eid}:{t}")
-    return {**teams_list(con, v, eid), "placed": len(placed), "left": len(solo)}
+    return {**teams_list(con, v, eid), "placed": len(placed), "left": len(solo), "noConsent": len(alone) - len(placed) - len(solo)}
 
 
 def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
     """The organizer moves one person into a team (not past its max; the bot tells them) or out to no team (team null).
-    A banned user is not moved anywhere."""
+    A banned user is not moved anywhere, nor into a team anyone without the teams consent."""
     if team is not None and type(team) is not int:
         raise ApiError("bad_input")
     with tx(con):
@@ -353,12 +401,16 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
             raise ApiError("not_found", "team")
         if (now_in[0] if now_in else None) == team:
             return teams_list(con, v, eid)
+        if team is not None and not consented(con, uid):
+            raise ApiError("conflict", "team_consent")
         if team is not None and one(con, "SELECT COUNT(*) FROM event_team_members WHERE team_id = ?", team)[0] >= e["team_max"]:
             raise ApiError("full", "team_full")  # checked before the move: leaving its own last place mustn't drop the target
         con.execute("DELETE FROM event_team_members WHERE event_id = ? AND user_id = ?", (eid, uid))
         if team is not None:
             con.execute("INSERT INTO event_team_members (team_id, event_id, user_id) VALUES (?, ?, ?)", (team, eid, uid))
             notify(con, uid, "team_placed", f"tp:{eid}:{team}")
+        elif now_in:
+            notify(con, uid, "team_removed", f"tr:{eid}:{core.now()}")  # as the captain's remove
     return teams_list(con, v, eid)
 
 

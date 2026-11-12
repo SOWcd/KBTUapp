@@ -413,6 +413,7 @@ def test_old_board_cleaned_up(env):
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
     for t in ("event_team_reg_out", "event_team_reg_gone"):  # 161's (its tables' own trigger goes with them)
         con.execute(f"DROP TRIGGER {t}")
+    con.execute("DROP TABLE team_consents")
     con.execute("DROP TABLE event_team_members")
     con.execute("DROP TABLE event_teams")
     con.execute("ALTER TABLE events DROP COLUMN team_min")

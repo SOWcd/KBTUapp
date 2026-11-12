@@ -1058,7 +1058,7 @@ _DEL_GONE = {
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
     ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
     ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my attendance marks in clubs' event reports (evreports.py), my consent to them; who filled one loses the link
-    ("event_team_members", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next)
+    ("event_team_members", "user_id"), ("team_consents", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next), my consent to teams
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
