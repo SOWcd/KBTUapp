@@ -100,7 +100,7 @@ def test_pending_shows_nowhere(env):
 
 def test_cohost_can_scan_but_not_run(env):
     """The co-host's event team works the door and reads the list (no receipts, no CSV); never edits, prices, seats,
-    cancels or deletes. Its plain Member gets nothing."""
+    cancels or deletes. Its plain Member sees it in Studio and nothing more."""
     c, cfg = env
     con, host, co = _clubs(c, cfg)
     eid = _event(c, host)["id"]
@@ -141,9 +141,17 @@ def test_cohost_can_scan_but_not_run(env):
     for r in (c.get(f"/api/events/{eid}/attendees", headers=tma(CO_MEMBER)), c.get(f"/api/events/{eid}/door", headers=tma(CO_MEMBER)),
               c.post(f"/api/events/{eid}/checkin", headers=tma(CO_MEMBER), json={"code": code}), c.post(f"/api/events/{eid}/screen", headers=tma(CO_MEMBER))):
         assert r.status_code == 403
-    # the co-host's Studio lists it for its event team, without the host's counters
-    assert eid in [x["id"] for x in c.get(f"/api/orgs/{co}/events", headers=tma(CO_HEAD)).json()]
-    assert eid not in [x["id"] for x in c.get(f"/api/orgs/{co}/events", headers=tma(CO_MEMBER)).json()]
+    # the co-host's Studio lists it for its whole team as its own, without the host's counters; the host's drafts stay
+    # hidden, and a pending invite's event isn't there
+    draft = _event(c, host, publish=False)["id"]
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (draft, co))
+    pending = _event(c, host)["id"]
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'pending', 0)", (pending, co))
+    for who in (CO_HEAD, CO_MEMBER):
+        listed = {x["id"]: x for x in c.get(f"/api/orgs/{co}/events", headers=tma(who)).json()}
+        assert eid in listed and draft not in listed and pending not in listed, who
+        assert all(listed[eid][k] == 0 for k in ("questions", "toCheck", "savedBy", "volunteersAsked", "teamAsks"))
+    assert c.get(f"/api/orgs/{co}/events", headers=tma(OTHER)).status_code == 403  # not in the club: nothing
     # ended: the door closes at once
     c.delete(f"/api/events/{eid}/cohost", headers=tma(HOST))
     assert c.get(f"/api/events/{eid}/door", headers=tma(CO)).status_code == 403
