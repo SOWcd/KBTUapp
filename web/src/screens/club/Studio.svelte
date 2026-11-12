@@ -176,9 +176,12 @@
   const asking = $derived(events.filter((e) => (e.questions ?? 0) > 0 && e.status === 'published' && !over(e)));
   // a club's own events open its organizer's screen; one we co-host opens as a student sees it, with our door tools (cohosts.py)
   const ours = (e: EventCard) => e.org.id === m?.org.id;
-  // whoever keeps the club's event reports (an HR role without "events") opens a started one's organizer screen for its report row
+  // whoever keeps the club's event reports (an HR role without "events") opens a started one's organizer screen for its report row;
+  // on one we co-host, that screen holds our own report (server evreports.py: one per club)
   const reports = (e: EventCard) => !!session.me?.reports && may(m, 'reports') && e.status === 'published' && e.startsAt <= nowTs();
-  const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id) : (staff || reports(e)) && ours(e) ? sheets.manage(e.id) : sheets.event(e.id));
+  const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id)
+    : ours(e) ? ((staff || reports(e)) ? sheets.manage(e.id) : sheets.event(e.id))
+    : m && reports(e) ? sheets.manage(e.id, false, m.org.id) : sheets.event(e.id));
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
   const guesting = $derived(events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e))); // our own people asking to come as guests

@@ -155,9 +155,9 @@ export interface Api {
   crewPut(id: Id, user: Id, kind: CrewKind): Promise<CrewMember[]>;
   crewDrop(id: Id, user: Id): Promise<CrewMember[]>;
   /** a club's report after its event (server logic/evreports.py): read, its fields, one person's mark (null: off) */
-  eventReport(id: Id): Promise<EventReport>;
-  eventReportSave(id: Id, patch: ReportPatch): Promise<EventReport>;
-  eventReportMark(id: Id, user: Id, status: ReportMark | null): Promise<EventReport>;
+  eventReport(id: Id, org?: Id): Promise<EventReport>; // org: the co-host's own report (the host's without it)
+  eventReportSave(id: Id, patch: ReportPatch, org?: Id): Promise<EventReport>;
+  eventReportMark(id: Id, user: Id, status: ReportMark | null, org?: Id): Promise<EventReport>;
   /** the feature's own consent, mine: given (the version shown) or withdrawn (my marks and author links go) */
   reportConsent(version: string | null): Promise<{ consent: boolean }>;
   cohostInvites(org: Id): Promise<CohostInvite[]>;

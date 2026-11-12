@@ -67,8 +67,8 @@ export const sheets = {
   // only: a scanner-only door helper (server crew.py): tickets, no list by name
   scannerOnly: (_id: Id) => {},
   crew: (_id: Id, _onchange?: (n: number) => void) => {},
-  /** a club's report after its event (server evreports.py, REPORTS) */
-  eventReport: (_id: Id) => {},
+  /** a club's report after its event (server evreports.py, REPORTS); org: the co-host's own (the host's without it) */
+  eventReport: (_id: Id, _org?: Id) => {},
   /** a club's volunteers ledger (server logic/vol.py): the list (its President and whom she grants), one volunteer (mine: my own) */
   /** appeals to the Student Government: the composer and my appeals; one of mine; SG's queue and one appeal in it */
   appeals: () => {},
@@ -90,8 +90,8 @@ export const sheets = {
   screens: (_code?: string, _event?: Id, _seed?: ScreenSession) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session; seed: that session alone (the capsule)
   /** Profile's "Big screen": the scanner for a computer's pairing QR; a helper's own QR */
   bigScreen: () => {},
-  /** Studio → an event: the organizer's screen (money, people, tools) */
-  manage: (_id: Id, _staff?: boolean) => {},
+  /** Studio → an event: the organizer's screen (money, people, tools); org: a co-host's Studio (its report alone) */
+  manage: (_id: Id, _staff?: boolean, _org?: Id) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (_org: Id) => {},
   /** the clubs' rosters (PLAN 95): the claims I confirm */

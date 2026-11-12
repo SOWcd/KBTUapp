@@ -39,12 +39,16 @@
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
 
-  // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money
-  let { overlay, id, staff = false }: { overlay: Overlay; id: Id; staff?: boolean } = $props();
+  // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money.
+  // org: opened from the Studio of a club co-hosting it (server cohosts.py): our own report, our door if we run it, the
+  // student's view; nothing of the host's
+  let { overlay, id, staff = false, org }: { overlay: Overlay; id: Id; staff?: boolean; org?: Id } = $props();
 
   const e = $derived(eventById(id));
-  const mem = $derived(session.me?.memberships.find((m) => m.org.id === e?.org.id));
-  const head = $derived(staff || may(mem, 'events'));
+  const co = $derived(!!e && org != null && org !== e.org.id);
+  const mem = $derived(session.me?.memberships.find((m) => m.org.id === (co ? org : e?.org.id)));
+  const head = $derived(!co && (staff || may(mem, 'events')));
+  const coCrew = $derived(co && may(mem, 'events')); // the co-host's event team: the door, as from the event's sheet
   // Admin put it in staffEvents before opening; it leaves with this screen, so the event's own sheet is a student's again
   $effect(() => () => { if (staff) staffEvents.delete(id); });
   const started = $derived(!!e && e.startsAt <= nowTs());
@@ -116,7 +120,7 @@
   let tick = $state(nowTs());  // a ticking now: "opens at" turns into "open since" at T-30 with the screen open
   onMount(() => { const i = setInterval(() => (tick = nowTs()), 10_000); return () => clearInterval(i); });
   const doorOpen = $derived(doorAt <= tick);
-  const opener = $derived(mem?.role === 'president' || mem?.role === 'vice');
+  const opener = $derived(!co && (mem?.role === 'president' || mem?.role === 'vice'));
   const setDoor = (at: number) => { const x = eventById(id); if (x) x.doorAt = at; };
   async function openDoor() {
     if (!e) return;
@@ -200,15 +204,16 @@
 
       <Group>
         {#if live && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
-          {#if doorOpen}<Row icon={DoorOpen} title={t('door.openedAt', { time: time(doorAt) })} />
+          {#if co}{#if coCrew}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, true, session.me?.vol?.org)} />{/if}
+          {:else if doorOpen}<Row icon={DoorOpen} title={t('door.openedAt', { time: time(doorAt) })} />
           {:else if opener && !staff && e.startsAt - 4 * 3600 <= tick}<Row icon={DoorClosed} title={t('door.open')} subtitle={t('door.openAt', { time: time(doorAt) })} accessory="chevron" onclick={openDoor} />
           {:else}<Row icon={DoorClosed} title={t('door.openAt', { time: time(doorAt) })} />{/if}
         {/if}
-        {#if live && !e.guestHost && !staff}<!-- a partner's event has no door; Admin never works the door -->
+        {#if live && !e.guestHost && !staff && !co}<!-- a partner's event has no door; Admin never works the door -->
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, head, session.me?.vol?.org)} />{/if}<!-- the scanner and the QR, one switch apart (EventSheet's) -->
         {/if}
-        {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id)} />{/if}
+        {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
         {#if head}
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
           <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->

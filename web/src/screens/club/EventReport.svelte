@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club's report after its own event (server logic/evreports.py, REPORTS): which department ran it, who of the team
+  // A club's report after its own or co-hosted event (server logic/evreports.py, REPORTS): which department ran it, who of the team
   // was there (a mark each), the guests by the club's own count beside what the app knows, a note. For the club's
   // President, Vices and a role given "reports" (HR). The checklist: the department's people (the whole team when
   // none is picked) and anyone marked; the rest of the team is added by hand. A mark answers at once; back if the
@@ -13,6 +13,7 @@
   import { eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
+  import { nameOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
   import { relDay, time } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
@@ -24,8 +25,10 @@
   import Row from '../../ui/Row.svelte';
   import SearchField from '../../ui/SearchField.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  // org: the co-host's own report (the host's without it); on a co-hosted event the subtitle names whose it is
+  let { overlay, id, org }: { overlay: Overlay; id: Id; org?: Id } = $props();
   const e = $derived(eventById(id));
+  const club = $derived(e?.coHost ? (e.coHost.id === org ? e.coHost : e.org) : null);
 
   let r = $state<EventReport | null>(null);
   // the typed fields stay mine while marks come back from the server; a number input hands back a number (or null), kept as text
@@ -33,7 +36,7 @@
   let note = $state('');
   async function load() {
     if (!session.me?.reports?.consent && !(await setReportConsent(true))) { close(overlay.id); return; }
-    try { const x = await api.eventReport(id); r = x; guests = x.guests == null ? '' : String(x.guests); note = x.note; }
+    try { const x = await api.eventReport(id, org); r = x; guests = x.guests == null ? '' : String(x.guests); note = x.note; }
     catch (err) {
       // the server knows better (taken back on another phone): ask again
       if (err instanceof ApiErr && err.message === 'consent' && session.me?.reports) { session.me.reports.consent = false; void load(); }
@@ -59,7 +62,7 @@
     haptic.tap();
     const was = r;
     r = { ...r, people: r.people.map((x) => (x.person.id === p.person.id ? { ...x, status } : x)) };
-    try { r = await api.eventReportMark(id, p.person.id, status); }
+    try { r = await api.eventReportMark(id, p.person.id, status, org); }
     catch { r = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const markMenu = (p: ReportPerson) => [
@@ -72,7 +75,7 @@
     haptic.select();
     const was = r;
     r = { ...r, dept: d };
-    try { r = await api.eventReportSave(id, { dept: d }); }
+    try { r = await api.eventReportSave(id, { dept: d }, org); }
     catch { r = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const deptMenu = $derived([
@@ -87,7 +90,7 @@
   async function save() {
     if (!r || bad || busy) return;
     busy = true;
-    try { r = await api.eventReportSave(id, { guests: count, note: note.trim() }); note = r.note; haptic.ok(); say(t('evr.saved'), 'sparkles_3d'); }
+    try { r = await api.eventReportSave(id, { guests: count, note: note.trim() }, org); note = r.note; haptic.ok(); say(t('evr.saved'), 'sparkles_3d'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
@@ -99,7 +102,7 @@
 </script>
 
 <Sheet {overlay} icon={ClipboardCheck} full title={t('evr.title')}>
-  {#if e}<p class="t-foot sub">{e.title}</p>{/if}
+  {#if e}<p class="t-foot sub">{e.title}{#if club} · {nameOf(club)}{/if}</p>{/if}
   {#if r}
     <div class="pg">
       {#if r.depts.length}

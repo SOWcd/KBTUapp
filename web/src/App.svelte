@@ -121,7 +121,7 @@
   sheets.volDoor = (sid, title) => lazy(() => import('./screens/club/VolDoor.svelte'), { sid, title });
   sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine, vol: true });
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
-  sheets.eventReport = (id) => lazy(() => import('./screens/club/EventReport.svelte'), { id });
+  sheets.eventReport = (id, org) => lazy(() => import('./screens/club/EventReport.svelte'), { id, org });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
@@ -149,7 +149,7 @@
     });
     if (!can) { sheets.screens(); say(t('give.phone'), 'pleading_face_3d'); } // no scanner in this client: the sheet says how, by the phone's camera
   };
-  sheets.manage = (id, staff) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff });
+  sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });
