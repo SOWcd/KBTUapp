@@ -700,7 +700,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"))
 
     # team events (logic/evteams.py): my team (create, join by link, leave; the captain's rename, "find us teammates",
-    # remove), an invite link's team, and the organizer's list, "Form teams" and moves
+    # a new link, remove), an invite link's team, and the organizer's list, "Form teams" and moves
     @app.post("/api/events/{eid}/team")
     def team_create(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.evteams.create(con, v, eid, body.get("name"))
@@ -716,6 +716,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.patch("/api/events/{eid}/team")
     def team_edit(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.evteams.edit(con, v, eid, body)
+
+    @app.post("/api/events/{eid}/team/link")
+    def team_new_link(eid: int, con: Con, v: Me):
+        return logic.evteams.new_link(con, v, eid)
 
     @app.delete("/api/events/{eid}/team/members/{uid}")
     def team_remove(eid: int, uid: int, con: Con, v: Me):

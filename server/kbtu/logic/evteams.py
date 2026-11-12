@@ -83,7 +83,7 @@ def _rosters(con, eid: int, team: int | None = None) -> dict[int, list[sqlite3.R
 
 
 def _shape(t: sqlite3.Row, people: list, captain: bool = False) -> dict:
-    """A team as the app gets it; the invite token to its captain alone (and the organizers)."""
+    """A team as the app gets it; the invite token to its captain alone (never the organizers, never other members)."""
     return {"id": t["id"], "name": t["name"], "open": bool(t["open"]), "captain": people[0]["id"] if people else None,
             "members": [person_ref(p) for p in people], **({"token": t["token"]} if captain else {})}
 
@@ -103,8 +103,9 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict | None:
 
 
 def invite(con, v: Viewer, token: str) -> dict:
-    """What an invite link opens to: the event, the team's name and people, whether there is room. The link's holder
-    sees this much (the captain sent it to them); a dead link (the team is gone) is not_found."""
+    """What an invite link opens to: the event, the team's name, its captain and how many it has, whether there is
+    room. Never the other members: a link travels further than the captain meant, and attendees don't see each other.
+    A dead link (the team is gone, or the captain made a new one) is not_found."""
     need_student(v)
     t = one(con, "SELECT * FROM event_teams WHERE token = ?", str(token or ""))
     if not t:
@@ -112,7 +113,8 @@ def invite(con, v: Viewer, token: str) -> dict:
     e = _team_event(con, v, t["event_id"])
     people = _rosters(con, e["id"], t["id"]).get(t["id"], [])
     mine = one(con, "SELECT team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", e["id"], v.id)
-    return {"event": e["id"], "title": e["title"], "team": _shape(t, people), "max": e["team_max"], "min": e["team_min"],
+    team = {"name": t["name"], "captain": person_ref(people[0]) if people else None, "count": len(people)}
+    return {"event": e["id"], "title": e["title"], "team": team, "max": e["team_max"], "min": e["team_min"],
             "room": len(people) < e["team_max"], "mine": bool(mine and mine[0] == t["id"]), "locked": e["starts_at"] <= core.now()}
 
 
@@ -134,11 +136,18 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
 # ------------------------------------------------------------ a student's own
 
 def clean_name(raw: object) -> str:
-    """2-40 characters of plain text, spaces squeezed, nothing invisible, no @handles or links (shown to others)."""
-    s = " ".join("".join(ch for ch in str(raw or "") if unicodedata.category(ch)[0] != "C").split())
-    if not 2 <= len(s) <= NAME_MAX or re.search(r"@|https?:|t\.me/|www\.", s, re.I):
-        raise ApiError("bad_input", "name")
+    """2-40 characters of plain text, spaces squeezed, nothing invisible (the forum's filter: format marks, filler
+    letters), the blank Braille cell read as a space, something that shows (not only marks), no @handles or links."""
+    s = "".join(" " if ch == "\u2800" else ch for ch in str(raw or "") if fchannel._visible(ch) and unicodedata.category(ch)[0] != "C")
+    s = " ".join(s.split())
+    if not 2 <= len(s) <= NAME_MAX or all(unicodedata.category(ch)[0] in "MZ" for ch in s) or re.search(r"@|https?:|t\.me/|www\.", s, re.I):
+        raise ApiError("bad_input", "team_name")
     return s
+
+
+def name_key(s: str) -> str:
+    """What makes two names the same within an event: NFKC, casefolded (Cyrillic and fullwidth too, not SQLite's NOCASE)."""
+    return unicodedata.normalize("NFKC", s).casefold()
 
 
 def _going(con, e: sqlite3.Row, uid: int) -> None:
@@ -161,8 +170,8 @@ def _add(con, e: sqlite3.Row, tid: int, uid: int) -> None:
 
 def _new_team(con, e: sqlite3.Row, name: str) -> int:
     try:
-        return con.execute("INSERT INTO event_teams (event_id, name, token, created_at) VALUES (?, ?, ?, ?)",
-                           (e["id"], name, secrets.token_hex(12), core.now())).lastrowid
+        return con.execute("INSERT INTO event_teams (event_id, name, name_key, token, created_at) VALUES (?, ?, ?, ?, ?)",
+                           (e["id"], name, name_key(name), secrets.token_hex(12), core.now())).lastrowid
     except sqlite3.IntegrityError:
         raise ApiError("conflict", "name_taken")
 
@@ -177,7 +186,7 @@ def _create(con, v: Viewer, e: sqlite3.Row, name: str) -> None:
 def _join(con, v: Viewer, e: sqlite3.Row, token: object) -> None:
     t = one(con, "SELECT * FROM event_teams WHERE token = ? AND event_id = ?", str(token or ""), e["id"])
     if not t:
-        raise ApiError("not_found", "team")  # gone, or another event's link
+        raise ApiError("not_found", "team_link")  # gone, replaced by a new one, or another event's link
     _open_now(e)
     _going(con, e, v.id)
     _free(con, e, v.id)
@@ -250,11 +259,19 @@ def edit(con, v: Viewer, eid: int, body: dict) -> dict:
         e, t = _mine(con, v, eid, captain=True)
         if name is not None and name != t["name"]:
             try:
-                con.execute("UPDATE event_teams SET name = ? WHERE id = ?", (name, t["id"]))
+                con.execute("UPDATE event_teams SET name = ?, name_key = ? WHERE id = ?", (name, name_key(name), t["id"]))
             except sqlite3.IntegrityError:
                 raise ApiError("conflict", "name_taken")
         if "open" in body:
             con.execute("UPDATE event_teams SET open = ? WHERE id = ?", (int(body["open"]), t["id"]))
+    return full(con, v, e)
+
+
+def new_link(con, v: Viewer, eid: int) -> dict:
+    """The captain's "New link": a fresh token; the old link stops working (sent too far, say)."""
+    with tx(con):
+        e, t = _mine(con, v, eid, captain=True)
+        con.execute("UPDATE event_teams SET token = ? WHERE id = ?", (secrets.token_hex(12), t["id"]))
     return full(con, v, e)
 
 
@@ -288,14 +305,15 @@ def _team_word(con, v: Viewer) -> str:
 def form(con, v: Viewer, eid: int) -> dict:
     """"Form teams": the open teams filled up to max from those alone (the smallest team first, people in the order they
     signed up), then new teams of the rest (sizes()), each named "<Team> N" in the organizer's language, its first member
-    captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. Everyone
-    placed hears it from the bot. The answer: the list as teams_list, with `placed` and `left` (who couldn't be)."""
+    captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. A banned user
+    is never placed. Everyone placed hears it from the bot. The answer: the list as teams_list, with `placed` and `left` (who couldn't be)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
         if e["team_max"] is None:
             raise ApiError("not_found")
         _open_now(e)
-        solo = [r[0] for r in rows(con, """SELECT r.user_id FROM registrations r WHERE r.event_id = ? AND r.status = 'going'
+        solo = [r[0] for r in rows(con, """SELECT r.user_id FROM registrations r JOIN users u ON u.id = r.user_id AND u.banned_at IS NULL
+            WHERE r.event_id = ? AND r.status = 'going'
             AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
             ORDER BY r.created_at, r.id""", eid)]
         placed: list[tuple[int, int]] = []
@@ -304,10 +322,10 @@ def form(con, v: Viewer, eid: int) -> dict:
             for _ in range(min(e["team_max"] - t["n"], len(solo))):
                 placed.append((t["id"], solo.pop(0)))
         word, n = _team_word(con, v), 0
-        taken = {r[0].lower() for r in rows(con, "SELECT name FROM event_teams WHERE event_id = ?", eid)}
+        taken = {r[0] for r in rows(con, "SELECT name_key FROM event_teams WHERE event_id = ?", eid)}
         for size in sizes(len(solo), e["team_min"], e["team_max"]):
             n += 1
-            while f"{word} {n}".lower() in taken:
+            while name_key(f"{word} {n}") in taken:
                 n += 1
             tid = _new_team(con, e, f"{word} {n}")
             placed += [(tid, solo.pop(0)) for _ in range(size)]
@@ -318,7 +336,8 @@ def form(con, v: Viewer, eid: int) -> dict:
 
 
 def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
-    """The organizer moves one person into a team (not past its max; the bot tells them) or out to no team (team null)."""
+    """The organizer moves one person into a team (not past its max; the bot tells them) or out to no team (team null).
+    A banned user is not moved anywhere."""
     if team is not None and type(team) is not int:
         raise ApiError("bad_input")
     with tx(con):
@@ -327,6 +346,8 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
             raise ApiError("not_found")
         _open_now(e)
         _going(con, e, uid)
+        if one(con, "SELECT 1 FROM users WHERE id = ? AND banned_at IS NOT NULL", uid):
+            raise ApiError("not_found")
         now_in = one(con, "SELECT team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", eid, uid)
         if team is not None and not one(con, "SELECT 1 FROM event_teams WHERE id = ? AND event_id = ?", team, eid):
             raise ApiError("not_found", "team")
@@ -347,6 +368,6 @@ def cancelled(con, eid: int) -> None:
 
 
 # the other domains', imported last: they import this one too
-from . import core  # noqa: E402
+from . import core, fchannel  # noqa: E402
 from .organizing import _staff_event  # noqa: E402
 from .seats import _event, notify, register  # noqa: E402

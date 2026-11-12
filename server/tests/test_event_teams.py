@@ -111,21 +111,27 @@ def test_create_join_and_the_bad_cases(club):
     assert t["name"] == "Night Owls" and t["captain"] == _uid(con, cap) and len(t["token"]) == 24 and not t["open"]
     assert _go(c, eid, m1, {"create": "night owls"}).json()["message"] == "name_taken"  # unique within the event, any case
     assert _sheet(c, eid, m1)["my"] is None  # refused: no sign-up left behind
-    for bad in ("x", "a" * 41, "@owls", "t.me/owls", "see https://x.kz", "​​"):
+    # blank-looking: zero-width, Hangul filler letters, the blank Braille cell, combining marks alone
+    for bad in ("x", "a" * 41, "@owls", "t.me/owls", "see https://x.kz", "\u200b\u200b", "\u3164\u3164", "a\u3164", "\u2800\u2800\u2800",
+                "\u115f\u1160", "\u0301\u0301", " \u2800 \u3164 "):
         assert _go(c, eid, m1, {"create": bad}).status_code == 400, bad
     assert _go(c, eid, m1, {"join": 5}).status_code == 400
-    # the invite link: who holds it sees the team, joins in one tap
+    # the invite link: who holds it sees the team's name, its captain and how many, joins in one tap
     inv = c.get(f"/api/team-invites/{t['token']}", headers=tma(m1)).json()
     assert inv["event"] == eid and inv["team"]["name"] == "Night Owls" and inv["room"] and not inv["mine"]
-    assert "token" not in inv["team"] and [p["id"] for p in inv["team"]["members"]] == _ids(con, [cap])
+    assert inv["team"]["captain"]["id"] == _uid(con, cap) and inv["team"]["count"] == 1 and inv["max"] == 3
     assert c.get("/api/team-invites/nope", headers=tma(m1)).status_code == 404
     assert _go(c, eid, m1, {"join": t["token"]}).json()["my"]["status"] == "going"
-    assert _go(c, eid2, m2, {"join": t["token"]}).json()["message"] == "team"  # another event's link
+    assert _go(c, eid2, m2, {"join": t["token"]}).json()["message"] == "team_link"  # another event's link
     assert _sheet(c, eid2, m2)["my"] is None
     assert _go(c, eid, m2, {"join": t["token"]}).status_code == 200
     assert _go(c, eid, m3, {"join": t["token"]}).json()["message"] == "team_full"  # 3 of 3
     assert _sheet(c, eid, m3)["my"] is None
-    assert c.get(f"/api/team-invites/{t['token']}", headers=tma(m3)).json()["room"] is False
+    inv = c.get(f"/api/team-invites/{t['token']}", headers=tma(m3)).json()
+    assert inv["room"] is False and inv["team"]["count"] == 3
+    # a link travels further than the captain meant: never the members besides the captain
+    assert set(inv["team"]) == {"name", "captain", "count"} and f"P{cap}" in str(inv)
+    assert f"P{m1}" not in str(inv) and f"P{m2}" not in str(inv) and t["token"] not in str(inv)
     # one team per person per event
     assert c.post(f"/api/events/{eid}/team", headers=tma(m1), json={"name": "Second"}).json()["message"] == "in_team"
     assert c.post(f"/api/events/{eid}/team/join", headers=tma(m1), json={"token": t["token"]}).json()["message"] == "in_team"
@@ -154,7 +160,7 @@ def test_who_sees_rosters(club):
     assert c.get(f"/api/events/{eid}/teams", headers=tma(mate)).status_code == 403  # the whole list: organizers
     mine = _mine(c, eid, mate)
     assert mine["name"] == "Owls" and "token" not in mine and [p["id"] for p in mine["members"]] == _ids(con, [cap, mate])
-    assert set(mine["members"][0]) <= {"id", "name", "nick", "avatar", "founder", "mark", "staff", "realName", "i18n"}  # as attendees see each other
+    assert set(mine["members"][0]) <= {"id", "name", "nick", "avatar", "founder", "mark", "staff", "realName", "i18n"}  # a person's reference, nothing more
     assert _sheet(c, eid, 20)["teams"]["count"] == 1 and _list(c, eid)["teams"][0]["name"] == "Owls"
     # leaving the event: no roster any more
     c.delete(f"/api/events/{eid}/registration", headers=tma(mate))
@@ -386,3 +392,56 @@ def test_migration_triggers(club):
     con.execute("DELETE FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, a)))
     assert con.execute("SELECT COUNT(*) FROM event_teams").fetchone()[0] == 0
     assert [n for n, _ in db.MIGRATIONS][-1] == 161
+
+
+def test_names_unique_by_key(club):
+    """Within an event a name is taken in any case and any width (NFKC, casefolded), Cyrillic too; Form teams' "Team N"
+    skips a name taken so."""
+    c, con = club
+    a, b, x, y, z = _people(c, 5)
+    eid = _event(c, **TEAMS)
+    owls = "\u0421\u043e\u0432\u044b \u0451\u0436"  # Cyrillic, lower case with yo
+    assert _go(c, eid, a, {"create": owls}).status_code == 200
+    for same in ("\u0421\u041e\u0412\u042b \u0401\u0416", "\u0441\u043e\u0432\u044b \u0451\u0436"):
+        assert _go(c, eid, b, {"create": same}).json()["message"] == "name_taken", same
+    assert _go(c, eid, b, {"create": "\uff34\uff45\uff41\uff4d 1"}).status_code == 200  # fullwidth "Team 1"
+    assert c.patch(f"/api/events/{eid}/team", headers=tma(b), json={"name": "\u0421\u043e\u0432\u042b \u0401\u0436"}).json()["message"] == "name_taken"
+    assert c.patch(f"/api/events/{eid}/team", headers=tma(b), json={"name": "TEAM 1"}).status_code == 200  # its own name, another case
+    for p in (x, y, z):
+        _go(c, eid, p)
+    names = [t["name"] for t in c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()["teams"]]
+    assert names[-1] == "Team 2"
+    assert _go(c, _event(c, **TEAMS), x, {"create": owls}).status_code == 200  # another event: free
+
+
+def test_new_link(club):
+    """The captain's "New link": the old one stops working, the team stays; only the captain."""
+    c, con = club
+    cap, mate, late = _people(c, 3)
+    eid = _event(c, **TEAMS)
+    _go(c, eid, cap, {"create": "Owls"})
+    old = _mine(c, eid, cap)["token"]
+    _go(c, eid, mate, {"join": old})
+    assert c.post(f"/api/events/{eid}/team/link", headers=tma(mate)).json()["message"] == "captain"
+    new = c.post(f"/api/events/{eid}/team/link", headers=tma(cap)).json()["teams"]["team"]
+    assert new["token"] != old and len(new["token"]) == 24 and len(new["members"]) == 2
+    assert c.get(f"/api/team-invites/{old}", headers=tma(late)).status_code == 404
+    assert _go(c, eid, late, {"join": old}).json()["message"] == "team_link" and _sheet(c, eid, late)["my"] is None
+    assert _go(c, eid, late, {"join": new["token"]}).status_code == 200
+
+
+def test_banned_never_placed(club):
+    c, con = club
+    a, b, x, y = _people(c, 4)
+    eid = _event(c, teamMin=2, teamMax=3)
+    _go(c, eid, a, {"create": "Owls"})
+    for p in (b, x, y):
+        _go(c, eid, p)
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (_uid(con, b),))
+    owls = _list(c, eid)["teams"][0]["id"]
+    assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": owls}).status_code == 404
+    c.patch(f"/api/events/{eid}/team", headers=tma(a), json={"open": True})
+    r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
+    placed = {p["id"] for t in r["teams"] for p in t["members"]}
+    assert _uid(con, b) not in placed and placed == set(_ids(con, [a, x, y])) and r["placed"] == 2
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'team_placed' AND user_id = ?", (_uid(con, b),)).fetchone()

@@ -1630,8 +1630,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     DROP TABLE report_marks;
     DROP TABLE event_reports;"""),
     # (Nov 12) team events (logic/evteams.py): a free event's teams of team_min..team_max people (NULL: not a team
-    # event). A team is its name, its invite token and the "find us teammates" switch; its roster is its members in the
-    # order they came (the row id), the first one its captain, so a captain who leaves hands over by itself. A member
+    # event). A team is its name (unique in the event by name_key: NFKC, casefolded), its invite token and the "find us
+    # teammates" switch; its roster is its members in the order they came (the row id), the first one its captain, so a captain who leaves hands over by itself. A member
     # is a 'going' registration: any way out of the event (cancelled, deleted with the account) takes them out of the
     # team, and an empty team goes, by the triggers below, whatever code path it was.
     (161, """ALTER TABLE events ADD COLUMN team_min INTEGER;
@@ -1640,10 +1640,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       id INTEGER PRIMARY KEY,
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
+      name_key TEXT NOT NULL,
       token TEXT NOT NULL UNIQUE,
       open INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
-      UNIQUE (event_id, name COLLATE NOCASE)) STRICT;
+      UNIQUE (event_id, name_key)) STRICT;
     CREATE TABLE event_team_members (
       id INTEGER PRIMARY KEY,
       team_id INTEGER NOT NULL REFERENCES event_teams(id) ON DELETE CASCADE,
