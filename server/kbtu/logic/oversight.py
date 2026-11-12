@@ -290,18 +290,24 @@ def audit(con, v: Viewer) -> list[dict]:
     if not _owner(con, v):
         raise ApiError("forbidden")
     out = []
-    for a in rows(con, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 200"):
-        p = one(con, f"{PERSON} WHERE u.id = ?", a["actor_id"]) if a["actor_id"] else None
+    found = rows(con, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 200")
+    # the actors and the targets named, each read once for the page: one or two queries per row were up to 400 for 200 rows
+    ids = lambda k: {int(t) for a in found if (x := a["target"].partition(":"))[0] == k and (t := x[2]).isdigit()}  # noqa: E731
+    uids = [*({a["actor_id"] for a in found if a["actor_id"]} | ids("user"))]
+    people = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({_qs(uids)})", *uids)} if uids else {}
+    orgs, events = _by_id(con, "orgs", ids("org")), _by_id(con, "events", ids("event"))
+    for a in found:
+        p = people.get(a["actor_id"]) if a["actor_id"] else None
         kind, _, tid = a["target"].partition(":")
         named = None  # whom or what, readable: a person or an org by name
         if kind == "user" and tid.isdigit():
-            u = one(con, f"{PERSON} WHERE u.id = ?", int(tid))
+            u = people.get(int(tid))
             named = shown_name(u) if u else None
         elif kind == "org" and tid.isdigit():
-            o = one(con, "SELECT name FROM orgs WHERE id = ?", int(tid))
+            o = orgs.get(int(tid))
             named = o["name"] if o else None
         elif kind == "event" and tid.isdigit():
-            e = one(con, "SELECT title FROM events WHERE id = ?", int(tid))
+            e = events.get(int(tid))
             named = e["title"] if e else None
         out.append({"id": a["id"], "actor": person_ref(p) if p else None, "action": a["action"], "target": a["target"],
                     "targetName": named, "data": json.loads(a["data"] or "{}"), "at": a["at"]})
