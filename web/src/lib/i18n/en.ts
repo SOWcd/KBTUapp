@@ -782,7 +782,7 @@ const en: Dict = {
   'map.ver.main': "Uni-Q",
   'map.ver.kbtu': "KBTU App",
   'map.ver.old': "2023",
-  'map.noteKbtu': "KBTU App map — floors 1–3 for now",
+  'map.noteKbtu': "KBTU App map — floors 1–4 for now",
   'map.bShort': "0",
   'kmap.stKazybek': "KAZYBEK BI STREET",
   'kmap.stToleBi': "TOLE BI STREET",

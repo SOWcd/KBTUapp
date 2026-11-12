@@ -783,7 +783,7 @@ const ru = {
   'map.ver.main': "Uni-Q",
   'map.ver.kbtu': "KBTU App",
   'map.ver.old': "2023",
-  'map.noteKbtu': "Карта KBTU App — пока 1–3 этажи",
+  'map.noteKbtu': "Карта KBTU App — пока 1–4 этажи",
   'map.bShort': "0",
   // our map's words, drawn on the plan itself (tools/map/floor-N.svg: data-t)
   'kmap.stKazybek': "УЛИЦА КАЗЫБЕК БИ",
