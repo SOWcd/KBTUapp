@@ -58,6 +58,8 @@
   import { nameOf } from '../../lib/short';
   import { photosFirst } from '../../lib/faces';
   import Avatar from '../../ui/Avatar.svelte';
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+  import { setReportConsent } from '../../lib/reports';
 
   // onTitle: in a pane, the club's name scrolled under the capsule (the pane's quiet capsule speaks then)
   let { onTitle }: { onTitle?: (gone: boolean) => void } = $props();
@@ -164,6 +166,7 @@
   }
 
   let seg = $state(0);
+  let undo = $state(0); // the reports' consent switch, redrawn as it was
   let picking = $state(false);
   const segs = $derived(staff ? [[t('studio.upcoming'), upcoming], [t('studio.drafts'), drafts], [t('studio.past'), past]] as const : [[t('studio.upcoming'), upcoming], [t('studio.past'), past]] as const);
   const at = $derived(Math.min(seg, segs.length - 1));
@@ -280,6 +283,13 @@
         {#if vol.ledger}<Row icon={HandHeart} title={t('ledg.title')} value={data.vol ? tn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
         {#if vol.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
       </Group>
+    {/if}
+
+    {#if session.me?.reports}
+      <!-- the reports' own consent, mine (lib/reports.ts): every member sees it, the same for everyone; one for all my clubs -->
+      <!-- a "no" in its question puts the switch back (the checkbox keeps its own state otherwise) -->
+      <Group>{#key undo}<Row icon={ClipboardCheck} title={t('evr.mine')} accessory="switch" checked={session.me.reports.consent}
+        onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}</Group>
     {/if}
 
     {#if todo}

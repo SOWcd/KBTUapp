@@ -6,7 +6,7 @@ import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
 
 // wait: ms before "ok" can be tapped (a second confirm, so a double tap doesn't go through both)
-export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number };
+export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number; link?: { label: string; url: string } };
 
 /** a still copy of the top capsule and its theme wrapper's classes (the map's circle cuts between it and the live one) */
 export type CapCopy = { node: HTMLElement; theme: string };

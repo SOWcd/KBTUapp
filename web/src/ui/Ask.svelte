@@ -2,16 +2,18 @@
   // In-app confirmation: a short sheet with the question and two buttons. Back, a tap outside or a pull
   // down count as "no". Destructive actions are always confirmed here, never by a system dialog. With `input`, a few
   // words to write first (at least 2 characters), handed to `done`; with `input.tel`, a phone number (+7XXXXXXXXXX);
-  // `input.value` fills it in (an edit), `input.line` makes it one line (a nick: Enter saves).
+  // `input.value` fills it in (an edit), `input.line` makes it one line (a nick: Enter saves). `link`: a consent's policy.
   import { onMount, untrack } from 'svelte';
   import Sheet from './Sheet.svelte';
   import Button from './Button.svelte';
   import { close, type Overlay } from '../lib/state/ui.svelte';
   import { fmtPhone, kzPhone } from '../lib/phone';
+  import { openLink } from '../lib/tg';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 
-  type Props = { overlay: Overlay; title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number;
+  type Props = { overlay: Overlay; title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number; link?: { label: string; url: string };
     input?: { placeholder: string; max: number; tel?: boolean; value?: string; line?: boolean }; done: (yes: boolean, written: string) => void };
-  let { overlay, title, text = '', ok, cancel, danger = false, wait = 0, input, done }: Props = $props();
+  let { overlay, title, text = '', ok, cancel, danger = false, wait = 0, link, input, done }: Props = $props();
 
   // wait: "ok" stays dim this long (a second confirm: a double tap must not pass both)
   let ready = $state(untrack(() => !wait));
@@ -30,6 +32,7 @@
 <Sheet {overlay} hold={() => false}><!-- a dialog: its few words never ask "leave?" over itself -->
   <h2 class="t-h3 q">{title}</h2>
   {#if text}<p class="t-body dim">{text}</p>{/if}
+  {#if link}<div class="lnk"><Button kind="plain" size="m" onclick={() => openLink(link.url)}>{link.label}<ArrowUpRight size={16} /></Button></div>{/if}
   {#if input?.tel}<label class="field say"><input type="tel" inputmode="tel" autocomplete="tel" placeholder={input.placeholder} bind:value={written} oninput={() => (written = fmtPhone(written))} /></label>
   {:else if input?.line}<label class="field say"><input bind:value={written} maxlength={input.max} placeholder={input.placeholder} enterkeyhint="done" autocomplete="off"
     onkeydown={(e) => { if (e.key === 'Enter' && said.length >= 2) answer(true); }} /></label>
@@ -46,6 +49,7 @@
   .q { margin: 6px 0 8px; }
   .dim { white-space: pre-line; } /* a text in paragraphs (an invite's description, then what saying yes means) */
   .say { margin-top: 12px; }
+  .lnk { margin: 4px 0 0 -12px; }
   .say textarea { width: 100%; resize: none; }
   .say input { width: 100%; }
   .row { display: flex; gap: 10px; }

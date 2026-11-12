@@ -275,7 +275,7 @@ export interface Me {
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
-  reports?: boolean;   // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row
+  reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
   tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
@@ -337,7 +337,7 @@ export interface CrewMember { person: PersonRef; kind: CrewKind; org: Id }
 
 /** a club's report after its event (server logic/evreports.py, REPORTS=1), for the club's people with the "reports" right */
 export type ReportMark = 'present' | 'late' | 'absent' | 'excused';
-export interface ReportPerson { person: PersonRef; fullName: string; depts: Id[]; team: boolean /* false: left the club since, marked */; status: ReportMark | null }
+export interface ReportPerson { person: PersonRef; fullName: string; depts: Id[]; team: boolean /* false: left the club since, marked */; status: ReportMark | null; consent: boolean /* agreed to be marked */ }
 export interface EventReport {
   depts: { id: Id; name: string; color: string }[]; // the club's departments
   dept: Id | null; guests: number | null; note: string;

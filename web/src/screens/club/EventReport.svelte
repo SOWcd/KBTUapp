@@ -3,10 +3,13 @@
   // was there (a mark each), the guests by the club's own count beside what the app knows, a note. For the club's
   // President, Vices and a role given "reports" (HR). The checklist: the department's people (the whole team when
   // none is picked) and anyone marked; the rest of the team is added by hand. A mark answers at once; back if the
-  // server says no.
+  // server says no. Its own consent first (lib/reports.ts): no yes, the sheet closes; a member without theirs is listed,
+  // never marked.
   import { onMount } from 'svelte';
-  import { api, type EventReport, type Id, type ReportMark, type ReportPerson } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { api, ApiErr, type EventReport, type Id, type ReportMark, type ReportPerson } from '../../lib/api';
+  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { session } from '../../lib/state/session.svelte';
+  import { setReportConsent } from '../../lib/reports';
   import { eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
@@ -28,9 +31,16 @@
   // the typed fields stay mine while marks come back from the server; a number input hands back a number (or null), kept as text
   let guests = $state('');
   let note = $state('');
-  onMount(() => {
-    api.eventReport(id).then((x) => { r = x; guests = x.guests == null ? '' : String(x.guests); note = x.note; }).catch(() => say(t('common.error'), 'warning_3d'));
-  });
+  async function load() {
+    if (!session.me?.reports?.consent && !(await setReportConsent(true))) { close(overlay.id); return; }
+    try { const x = await api.eventReport(id); r = x; guests = x.guests == null ? '' : String(x.guests); note = x.note; }
+    catch (err) {
+      // the server knows better (taken back on another phone): ask again
+      if (err instanceof ApiErr && err.message === 'consent' && session.me?.reports) { session.me.reports.consent = false; void load(); }
+      else say(t('common.error'), 'warning_3d');
+    }
+  }
+  onMount(() => void load());
 
   const MARKS: ReportMark[] = ['present', 'late', 'absent', 'excused'];
   const label = (s: ReportMark) => t(`evr.${s}`);
@@ -53,7 +63,7 @@
     catch { r = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const markMenu = (p: ReportPerson) => [
-    ...MARKS.map((s) => ({ label: label(s), checked: p.status === s, onselect: () => { if (p.status !== s) void mark(p, s); } })),
+    ...(p.consent ? MARKS : []).map((s) => ({ label: label(s), checked: p.status === s, onselect: () => { if (p.status !== s) void mark(p, s); } })),
     ...(p.status ? [{ label: t('evr.clear'), destructive: true, onselect: () => void mark(p, null) }] : []),
   ];
 
@@ -98,7 +108,8 @@
 
       <Group caption={t('evr.team')}>
         {#each list as p (p.person.id)}
-          <Row dense title={p.fullName} subtitle={p.team ? undefined : t('evr.left')} value={p.status ? label(p.status) : t('evr.mark')} menu={markMenu(p)}>
+          <Row dense title={p.fullName} subtitle={p.team ? undefined : t('evr.left')} value={p.status ? label(p.status) : p.consent ? t('evr.mark') : t('evr.noConsent')}
+            menu={p.consent || p.status ? markMenu(p) : undefined}>
             {#snippet lead()}<Avatar person={p.person} size={30} tappable={false} />{/snippet}
           </Row>
         {:else}
@@ -113,7 +124,7 @@
         <Group>
           {#each rest as p (p.person.id)}
             {#snippet add()}<Button kind="tinted" size="s" onclick={() => mark(p, 'present')}>{label('present')}</Button>{/snippet}
-            <Row dense title={p.fullName} trailing={add}>
+            <Row dense title={p.fullName} trailing={p.consent ? add : undefined} value={p.consent ? undefined : t('evr.noConsent')}>
               {#snippet lead()}<Avatar person={p.person} size={30} tappable={false} />{/snippet}
             </Row>
           {/each}

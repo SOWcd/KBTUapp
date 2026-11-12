@@ -158,6 +158,8 @@ export interface Api {
   eventReport(id: Id): Promise<EventReport>;
   eventReportSave(id: Id, patch: ReportPatch): Promise<EventReport>;
   eventReportMark(id: Id, user: Id, status: ReportMark | null): Promise<EventReport>;
+  /** the feature's own consent, mine: given (the version shown) or withdrawn (my marks and author links go) */
+  reportConsent(version: string | null): Promise<{ consent: boolean }>;
   cohostInvites(org: Id): Promise<CohostInvite[]>;
   /** volunteers: I apply (a short "why") or take it back; the organizers list them and say yes or no */
   /** "Create chat": Telegram's add-the-bot-to-a-group link for this event */

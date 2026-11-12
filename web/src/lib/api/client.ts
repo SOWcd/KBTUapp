@@ -246,6 +246,7 @@ export const server: Api = {
   eventReport: (id) => call('GET', `/events/${id}/report`),
   eventReportSave: (id, patch) => call('PATCH', `/events/${id}/report`, patch),
   eventReportMark: (id, user, status) => call('PUT', `/events/${id}/report/marks/${user}`, { status }),
+  reportConsent: (version) => (version ? call('POST', '/reports/consent', { consent: version }) : call('DELETE', '/reports/consent')),
   cohostInvites: (org) => call('GET', `/orgs/${org}/cohosts`),
   chatStart: (id) => call<{ url: string }>('POST', `/events/${id}/chat`).then((r) => r.url),
   volunteer: (id, note) => call('POST', `/events/${id}/volunteer`, { note }),
