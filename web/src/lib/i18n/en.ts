@@ -798,7 +798,7 @@ const en: Dict = {
   'kmap.career2': "Center",
   'kmap.lab1': "Honeywell",
   'kmap.lab2': "Lab",
-  'kmap.level0': "Floor 0 level, a flight below",
+  'kmap.level0': "Yard level, a flight below",
   'kmap.staff': "Staff only",
   'kmap.entrance': "Entrance",
   'route.out': "Help me get out",

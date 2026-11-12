@@ -800,7 +800,7 @@ const ru = {
   'kmap.career2': "центр",
   'kmap.lab1': "Лаборатория",
   'kmap.lab2': "Honeywell",
-  'kmap.level0': "Уровень 0 этажа, на пролёт ниже",
+  'kmap.level0': "Уровень двора, на пролёт ниже",
   'kmap.staff': "Служебная зона",
   'kmap.entrance': "Вход",
   'route.out': "Помоги выйти",

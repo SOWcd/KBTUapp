@@ -798,7 +798,7 @@ const kk: Dict = {
   'kmap.career2': "орталығы",
   'kmap.lab1': "Honeywell",
   'kmap.lab2': "зертханасы",
-  'kmap.level0': "0-қабат деңгейі, бір марш төмен",
+  'kmap.level0': "Аула деңгейі, бір марш төмен",
   'kmap.staff': "Қызметтік аймақ",
   'kmap.entrance': "Кіру",
   'route.out': "Шығуға көмектес",
