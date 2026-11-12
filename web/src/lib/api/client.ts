@@ -258,6 +258,7 @@ export const server: Api = {
   teamLeave: (id) => call('DELETE', `/events/${id}/team`),
   teamEdit: (id, change) => call('PATCH', `/events/${id}/team`, change),
   teamNewLink: (id) => call('POST', `/events/${id}/team/link`),
+  teamConsent: (version) => (version ? call('POST', '/teams/consent', { consent: version }) : call('DELETE', '/teams/consent')),
   teamRemove: (id, user) => call('DELETE', `/events/${id}/team/members/${user}`),
   teamInvite: (token) => call('GET', `/team-invites/${encodeURIComponent(token)}`),
   teams: (id) => call('GET', `/events/${id}/teams`),

@@ -275,6 +275,7 @@ export interface Me {
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
+  teams?: { consent: boolean };   // GET /api/me only: my own consent to team events (server evteams.CONSENT)
   reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
@@ -402,7 +403,7 @@ export interface EventTeam { id: Id; name: string; open: boolean; captain: Id | 
 /** The event sheet's part: the sizes for everyone, my team once I'm in one; count: the organizers' */
 export interface EventTeams { min: number; max: number; locked: boolean; team: EventTeam | null; count?: number }
 /** The organizer's teams screen: every team, then those with none yet (sign-up order); placed/left: after Form teams */
-export interface TeamsBoard { min: number; max: number; locked: boolean; teams: EventTeam[]; solo: PersonRef[]; placed?: number; left?: number }
+export interface TeamsBoard { min: number; max: number; locked: boolean; teams: EventTeam[]; solo: (PersonRef & { consent: boolean })[]; placed?: number; left?: number; noConsent?: number }
 /** What an invite link opens to: the team's name, its captain and how many it has, never the other members */
 export interface TeamInvite { event: Id; title: string; team: { name: string; captain: PersonRef | null; count: number }; min: number; max: number; room: boolean; mine: boolean; locked: boolean }
 /** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */

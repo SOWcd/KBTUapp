@@ -13,6 +13,9 @@ it("a team's refusal says its own words, not the event's", () => {
   expect(teamError('closed', 'not_going')).toBe('tm.noSeat');
   expect(teamError('closed', 'locked')).toBe('tm.locked');
   expect(teamError('not_found', 'team_link')).toBe('tm.dead');
+  expect(teamError('forbidden', 'team_consent')).toBe('tm.consentAgain');
+  expect(teamError('conflict', 'team_consent')).toBe('tm.noConsentMove');
+  expect(teamError('conflict', 'no_consent')).toBeUndefined(); // the reports' own
   expect(teamError('full', 'full')).toBeUndefined();
   expect(teamError('bad_input', 'name')).toBeUndefined(); // a club's name, not a team's
 });

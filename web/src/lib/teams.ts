@@ -11,5 +11,6 @@ export function inviteStep(status: string | null | undefined): 'join' | 'signup'
 const ERR: Record<string, Key> = {
   'full/team_full': 'tm.full', 'conflict/name_taken': 'tm.nameTaken', 'bad_input/team_name': 'tm.nameBad', 'closed/not_going': 'tm.noSeat',
   'closed/locked': 'tm.locked', 'conflict/in_team': 'tm.inTeam', 'not_found/team_link': 'tm.dead',
+  'forbidden/team_consent': 'tm.consentAgain', 'conflict/team_consent': 'tm.noConsentMove',
 };
 export const teamError = (code: string, message: string): Key | undefined => ERR[`${code}/${message}`];

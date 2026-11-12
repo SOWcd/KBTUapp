@@ -174,7 +174,8 @@ export interface Api {
   teamJoin(id: Id, token: string): Promise<EventFull>;
   teamLeave(id: Id): Promise<EventFull>;
   teamEdit(id: Id, change: { name?: string; open?: boolean }): Promise<EventFull>;
-  teamNewLink(id: Id): Promise<EventFull>;                  // the captain's: a fresh token, the old link stops working
+  teamNewLink(id: Id): Promise<EventFull>;
+  teamConsent(version: string | null): Promise<{ consent: boolean }>; // teams' own consent: given (its version) or taken back (null)                  // the captain's: a fresh token, the old link stops working
   teamRemove(id: Id, user: Id): Promise<EventFull>;
   teamInvite(token: string): Promise<TeamInvite>;
   teams(id: Id): Promise<TeamsBoard>;

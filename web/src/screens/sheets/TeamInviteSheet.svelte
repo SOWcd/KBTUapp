@@ -10,6 +10,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { inviteStep } from '../../lib/teams';
+  import { teamConsentOk } from '../../lib/teamConsent';
   import Sheet from '../../ui/Sheet.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Avatar from '../../ui/Avatar.svelte';
@@ -32,6 +33,7 @@
       const step = inviteStep((await cardFor(eid))?.my?.status);
       if (step === 'noSeat') { haptic.soft(); say(t('tm.noSeat'), 'pleading_face_3d'); return; }
       if (step === 'join') {
+        if (!(await teamConsentOk())) return; // a no: nothing changes
         await api.teamJoin(eid, token);
         haptic.ok(); say(t('tm.joined'), 'party_popper_3d');
       } else toggleGoing(eid, undefined, { join: token }); // says what came of it itself

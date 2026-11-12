@@ -3,6 +3,7 @@
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
+import { teamConsentOk } from '../teamConsent';
 import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
@@ -356,6 +357,7 @@ export function put(card: EventCard): void {
 export function errorText(e: unknown): string {
   if (e instanceof ApiErr) {
     const team = teamError(e.code, e.message);  // first: a team's "full" or "closed" is its own (server evteams.py)
+    if (e.message === 'team_consent' && e.code === 'forbidden' && session.me?.teams) session.me.teams.consent = false; // the next tap asks
     if (team) return t(team);
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
@@ -399,6 +401,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap
     const pick = !leaving && before.teamMax ? team ?? await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax) : undefined;
     if (pick === null) return;
+    if (pick && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
     if (flying.has(id)) return; // a second tap while the first is on its way
     flying.add(id);

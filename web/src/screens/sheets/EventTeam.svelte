@@ -1,7 +1,9 @@
 <script lang="ts">
   // A team event on its sheet (server evteams.py): the sizes for everyone; once signed up, my team (its people, the
   // captain first) or that I wait to be placed. The captain invites by link (Telegram's share sheet or a copy), asks the
-  // app for teammates, renames, makes a new link, removes someone; anyone leaves. Each tap answers at once and goes back if refused.
+  // app for teammates, renames, makes a new link, removes someone; anyone leaves. Each tap answers at once and goes back
+  // if refused. Teams' own consent (lib/teamConsent.ts): asked before a team of my own; one signed up without it (the
+  // event became a team event later) gives it here; anyone takes it back here (out of the teams of events not started).
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Copy from '@lucide/svelte/icons/copy';
@@ -14,6 +16,8 @@
   import { say } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
+  import { setTeamConsent, teamConsentOk } from '../../lib/teamConsent';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
@@ -23,6 +27,7 @@
   const tm = $derived(detail.teams!);
   const team = $derived(tm.team);
   const me = $derived(session.me?.id);
+  const agreed = $derived(!!session.me?.teams?.consent);
   const captain = $derived(!!team && team.captain === me);
   const link = $derived(team?.token ? `https://t.me/KBTUappBot?startapp=et_${team.token}` : '');
 
@@ -59,8 +64,14 @@
     if (!(await sheets.ask({ title: t('tm.leaveAsk'), text: t('tm.leaveText'), ok: t('tm.leave'), cancel: t('common.cancel'), danger: true }))) return;
     void write(null, () => api.teamLeave(detail.id), () => say(t('tm.left'), 'waving_hand_3d_default'));
   }
+  // taking it back: the server takes me out of my teams; this sheet shows it from the server's word
+  async function withdraw() {
+    if (!(await setTeamConsent(false))) return;
+    try { onchange(await api.event(detail.id)); } catch { /* the next open shows it */ }
+  }
   let making = $state(false);
   async function create() {
+    if (!(await teamConsentOk())) return;
     const name = await sheets.askText({ title: t('tm.create'), ok: t('tm.create'), cancel: t('common.cancel'), placeholder: t('tm.name'), max: 40, line: true });
     if (!name?.trim() || making) return;
     making = true; haptic.tap();
@@ -89,14 +100,17 @@
   </Group>
   {#if !tm.locked}<span class="out"><Button kind="plain" size="s" onclick={leave}>{t('tm.leave')}</Button></span>{/if}
 {:else if going && !tm.locked}
-  <Group footnote={t('tm.waitingSub')}>
+  <Group footnote={agreed ? t('tm.waitingSub') : t('tm.consentNeed')}>
     <Row icon={UsersRound} title={t('tm.waiting')} subtitle={t('tm.size', { min: tm.min, max: tm.max })} />
+    {#if !agreed}<Row icon={ShieldCheck} tone="action" title={t('tm.consentRow')} onclick={() => setTeamConsent(true)} />{/if}
     <Row tone="add" title={t('tm.create')} disabled={making} onclick={create} />
   </Group>
 {:else}
   <Group><Row icon={UsersRound} title={t('tm.event')} subtitle={t('tm.size', { min: tm.min, max: tm.max })} /></Group>
 {/if}
+{#if going && agreed && !tm.locked}<span class="off"><Button kind="plain" size="s" onclick={withdraw}>{t('tm.offRow')}</Button></span>{/if}
 
 <style>
   .out { align-self: center; --plain-ink: var(--danger-text); }
+  .off { align-self: center; }
 </style>
