@@ -123,13 +123,13 @@ def invites(con, v: Viewer, oid: int) -> list[dict]:
         WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled'
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND h.status = 'active' ORDER BY e.starts_at""", oid, core.NO_END, core.now())
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in found))
-    files = core._by_id(con, "files", (e["cover_file_id"] for e in found))
+    files = core._by_id(con, "files", [*(e["cover_file_id"] for e in found), *(h["logo_file_id"] for h in hosts.values())])  # the hosts' logos too
     # what is being signed (collab-review S3): the cover, the description, the price, and whether our name goes on the
     # @KBTUevents post (an official club vouching for an initiative)
     us = one(con, "SELECT official FROM orgs WHERE id = ?", oid)[0]
     return [{"event": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], "place": e["place"], "status": e["status"],
                        "description": e["description"], "price": e["price"], "cover": core._event_cover(con, e, files)},
-             "host": org_ref(con, hosts[e["org_id"]]), "at": e["asked"],
+             "host": org_ref(con, hosts[e["org_id"]], files), "at": e["asked"],
              "channel": bool(us) and not hosts[e["org_id"]]["official"] and hosts[e["org_id"]]["kind"] == "club"} for e in found]
 
 

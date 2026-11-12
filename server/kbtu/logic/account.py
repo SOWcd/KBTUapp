@@ -392,6 +392,7 @@ def me(con, v: Viewer) -> dict:
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
     mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
                                           *(m["id"] for m in members))} if members else {}
+    logos = core._by_id(con, "files", (m["logo_file_id"] for m in members))  # every club's logo in one read, not one per membership
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, core.now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
@@ -434,7 +435,7 @@ def me(con, v: Viewer) -> dict:
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
-        "memberships": [{"org": org_ref(con, m), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
+        "memberships": [{"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
                          "oversee": bool(m["can_oversee"] and m["role"] != "member"),
                          **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
                          # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative

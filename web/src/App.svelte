@@ -618,7 +618,7 @@
     wasStudent = st;
   });
   function loadMine() {
-    void loadFriends(); void loadMyCard(); void loadNews();
+    void loadFriends(); void loadMyCard(); void loadNews(true); // StoryRow's refresh at the same launch joins it
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
     if (session.me?.oversee) void loadRegistry();

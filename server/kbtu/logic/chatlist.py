@@ -30,8 +30,7 @@ def chats(con, v: Viewer) -> dict:
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
     live = rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY COALESCE(members, -1) DESC, title")
-    found = {c["org_id"] for c in live if c["org_id"]}
-    orgs = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
+    orgs = _org_refs(con, {c["org_id"] for c in live if c["org_id"]})
     everything = [_chat(c, opened, orgs) for c in live if v.student or "/+" not in c["url"]]
     fits = lambda c: (c["school"] in (None, st["school"])) and (c["course"] in (None, st["course"]))  # noqa: E731
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last
@@ -45,9 +44,15 @@ def chats(con, v: Viewer) -> dict:
 def pending_chats(con) -> list[dict]:
     """The suggestions waiting for a look, newest first, with whose each is (for the moderator)."""
     waiting = rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")
-    found = {c["org_id"] for c in waiting if c["org_id"]}
-    whose = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
+    whose = _org_refs(con, {c["org_id"] for c in waiting if c["org_id"]})
     return [{**_chat(c, set(), whose), "at": c["created_at"]} for c in waiting]
+
+
+def _org_refs(con, ids: set[int]) -> dict[int, dict]:
+    """The chats' clubs as org_ref shows them, their logos in one read (one per club ran on every app start)."""
+    found = rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(ids)})", *ids) if ids else []
+    logos = core._by_id(con, "files", (o["logo_file_id"] for o in found))
+    return {o["id"]: org_ref(con, o, logos) for o in found}
 
 
 def chat_opened(con, v: Viewer, cid: int) -> None:
