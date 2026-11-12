@@ -1311,6 +1311,8 @@ PANFILOV STREET
 <g data-k="column">
 <rect x="578.5" y="808.5" width="5.0" height="5.0" fill="$outer" stroke="$wall" stroke-width="1"/>
 <rect x="660.5" y="808.5" width="5.0" height="5.0" fill="$outer" stroke="$wall" stroke-width="1"/>
+<rect x="599.2" y="945.8" width="4.5" height="4.5" fill="$outer" stroke="$wall" stroke-width="1"/>
+<rect x="638.2" y="945.8" width="4.5" height="4.5" fill="$outer" stroke="$wall" stroke-width="1"/>
 <circle cx="712.7" cy="741.6" r="2.2" fill="$outer" stroke="$wall" stroke-width="1"/>
 <circle cx="704.2" cy="769.5" r="2.2" fill="$outer" stroke="$wall" stroke-width="1"/>
 <circle cx="687.5" cy="793.3" r="2.2" fill="$outer" stroke="$wall" stroke-width="1"/>
