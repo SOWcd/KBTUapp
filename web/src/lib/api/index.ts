@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryAlbum, GalleryTopic, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryAlbum, GalleryTopic, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -33,7 +33,7 @@ export interface Api {
   deleteGalleryPhoto(id: Id): Promise<void>;                      // mine: from the Gallery and the albums I put it in
   pastEvents(org?: Id, mine?: boolean): Promise<EventCard[]>; // org: a club's latest few; mine: the ones I was signed up for or came to
   event(id: Id): Promise<EventFull>;
-  register(id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[]): Promise<EventCard>; // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
+  register(id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick): Promise<EventCard>; // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   addSeats(id: Id, add: number): Promise<EventFull>;
   changePlace(id: Id, place: string): Promise<EventFull>;   // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline(id: Id, note?: string): Promise<EventCard>;      // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
@@ -168,6 +168,17 @@ export interface Api {
   volunteerLeave(id: Id): Promise<EventFull>;
   volunteers(id: Id): Promise<VolunteerApp[]>;
   volunteerDecide(id: Id, user: Id, yes: boolean): Promise<VolunteerApp[]>;
+  /** team events (server evteams.py): mine (make, join by link, leave; the captain's name, "find us teammates", remove),
+   *  an invite link's team, and the organizer's list, Form teams and moves (team null: no team) */
+  teamCreate(id: Id, name: string): Promise<EventFull>;
+  teamJoin(id: Id, token: string): Promise<EventFull>;
+  teamLeave(id: Id): Promise<EventFull>;
+  teamEdit(id: Id, change: { name?: string; open?: boolean }): Promise<EventFull>;
+  teamRemove(id: Id, user: Id): Promise<EventFull>;
+  teamInvite(token: string): Promise<TeamInvite>;
+  teams(id: Id): Promise<TeamsBoard>;
+  teamsForm(id: Id): Promise<TeamsBoard>;
+  teamsMove(id: Id, user: Id, team: Id | null): Promise<TeamsBoard>;
   /** the host club's member asks its President or a Vice to come as a guest, or takes it back; they list and answer */
   teamAsk(id: Id): Promise<EventCard>;
   teamUnask(id: Id): Promise<EventCard>;

@@ -201,4 +201,10 @@ export const sheets = {
    *  handed over as +7XXXXXXXXXX; value: filled in to edit; line: one line, Enter answers (a nick) */
   askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean; value?: string; line?: boolean }): Promise<string | null> => Promise.resolve(null),
   answers: (_title: string, _questions: import('../api').Question[]): Promise<{ q: string; a: string }[] | null> => Promise.resolve(null), // an event's own questions at sign-up
+  /** a team event's sign-up: make a team (its name) or "I have no team"; null: closed, no sign-up (server evteams.py) */
+  teamPick: (_title: string, _min: number, _max: number): Promise<import('../api').TeamPick | 'solo' | null> => Promise.resolve(null),
+  /** a captain's invite link (startapp=et_<token>): the team, one tap to join */
+  teamInvite: (_token: string) => {},
+  /** the organizer's teams: every team, those with none, Form teams */
+  teams: (_id: Id) => {},
 };

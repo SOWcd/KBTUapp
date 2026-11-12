@@ -391,8 +391,22 @@ export interface EventCard {
   needsVolunteers?: number | null;  // how many volunteers it asks for; null: none
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
+  teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
+  teamMax?: number;
   teamAsk?: 'pending' | 'yes' | 'no';  // the host club's member: my ask to come as a guest (none: never asked)
 }
+
+/** A team of a team event (server evteams.py): its people in the order they came, the first the captain; the invite
+ *  token to the captain alone */
+export interface EventTeam { id: Id; name: string; open: boolean; captain: Id | null; members: PersonRef[]; token?: string }
+/** The event sheet's part: the sizes for everyone, my team once I'm in one; count: the organizers' */
+export interface EventTeams { min: number; max: number; locked: boolean; team: EventTeam | null; count?: number }
+/** The organizer's teams screen: every team, then those with none yet (sign-up order); placed/left: after Form teams */
+export interface TeamsBoard { min: number; max: number; locked: boolean; teams: EventTeam[]; solo: PersonRef[]; placed?: number; left?: number }
+/** What an invite link opens to */
+export interface TeamInvite { event: Id; title: string; team: EventTeam; min: number; max: number; room: boolean; mine: boolean; locked: boolean }
+/** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */
+export type TeamPick = { create: string } | { join: string };
 
 /** A host club's member asking to come to its public event as a guest (server seats.team_asks) */
 export interface TeamAsk { person: PersonRef; createdAt: Ts }
@@ -401,6 +415,7 @@ export interface EventFull extends EventCard {
   description: string;
   /** volunteers: `mine` my application's state; `asked` (organizers only) how many wait */
   volunteers?: { need: number; senior: boolean; taken: number; mine: 'asked' | 'yes' | 'no' | null; asked?: number } | null;
+  teams?: EventTeams | null;    // a team event (server evteams.py)
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
   meetingTag?: Id | null;       // "for whom" on a team-only event: one of the club's tags; null = the whole team
@@ -501,6 +516,8 @@ export interface EventInput {
   form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1
+  teamMin?: number | null;     // a team event: both 2..10, min <= max; both null: off; left out: kept (free events only)
+  teamMax?: number | null;
   visibility?: 'public' | 'members' | 'leaders';  // left out: kept as it is; leaders only from an oversight org
   meeting?: boolean;           // a club meeting: only team-only, no seats, no price
   meetingTag?: Id | null; forBoard?: boolean;

@@ -36,6 +36,7 @@
   import Blend from '@lucide/svelte/icons/blend';
   import Mail from '@lucide/svelte/icons/mail';
   import Plus from '@lucide/svelte/icons/plus';
+  import UsersRound from '@lucide/svelte/icons/users-round';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Segmented from '../../ui/Segmented.svelte';
   import Group from '../../ui/Group.svelte';
@@ -105,7 +106,7 @@
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
-    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
+    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
@@ -150,8 +151,10 @@
   });
   const regTs = $derived(fromInputs(f.regDate, f.regTime));
   // "Until the end" (late sign-up): free, uncapped, public, ours only (the server checks the same)
-  const lateOk = $derived(!f.paid && !(+f.seats > 0) && !f.teamOnly && !f.leaders && !f.partner);
+  const lateOk = $derived(!f.paid && !(+f.seats > 0) && !f.teamOnly && !f.leaders && !f.partner && !f.teams);
   const regMode = $derived(f.late && lateOk ? 'end' : f.deadline ? 'date' : 'start');
+  // a team event (server evteams.py): free, ours, not open until the end
+  const teamsOk = $derived(!isMeeting && !f.partner && !f.paid && regMode !== 'end');
   // switched on: the day before the event, or its own day when that's already gone
   function deadlineOn(on: boolean) {
     f.deadline = on;
@@ -171,6 +174,7 @@
     host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
     link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
     form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? t('ed.formBad') : '',
+    teams: !f.teams || !teamsOk || (Number.isInteger(+f.teamMin) && Number.isInteger(+f.teamMax) && +f.teamMin >= 2 && +f.teamMax <= 10 && +f.teamMin <= +f.teamMax) ? '' : t('ed.teamsBad'),
     reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
@@ -295,7 +299,8 @@
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: e.endsAt ? time(e.endsAt) : '', endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
-          seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
+          seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior,
+          teams: !!e.teamMax, teamMin: String(e.teamMin ?? 2), teamMax: String(e.teamMax ?? 5), teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null, forBoard: !!e.forBoard,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
@@ -335,7 +340,7 @@
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     ...(asStaff ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
-    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
+    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, ...(f.teams && teamsOk ? { teamMin: +f.teamMin, teamMax: +f.teamMax } : { teamMin: null, teamMax: null }), visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
     ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
@@ -355,7 +360,7 @@
     const o = session.me?.memberships.find((m) => m.org.id === org)?.org ?? data.orgs.find((x) => x.id === org)!;
     const i = input();
     sheets.preview({
-      ...i, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
+      ...i, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
       cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       coHost: saved?.coHost ?? null, my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
@@ -367,6 +372,8 @@
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
     if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
+    // teams off on an event that has some: they break up (the server lets them go)
+    if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: t('ed.teamsOffAsk'), text: t('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
     busy = kind;
     try {
       const first = !saved;
@@ -452,11 +459,11 @@
     catch { saved = { ...saved, cohost: was }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
-  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'partner' | 'cohost' | 'memo' | 'check';
+  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'teams' | 'partner' | 'cohost' | 'memo' | 'check';
   let pick = $state<Panel>('');
   const open = (p: Panel) => { haptic.tap(); pick = p; };
   const PANEL: Record<Exclude<Panel, ''>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
-    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
+    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
 
   // the rows' values
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
@@ -625,6 +632,7 @@
       {#if !staff}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
       {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets && !staff}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+      {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && err.teams ? '' : f.teams && teamsOk ? `${f.teamMin}–${f.teamMax}` : t('ex.no')} invalid={tried && !!err.teams} accessory="chevron" onclick={() => open('teams')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
       {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
@@ -794,6 +802,17 @@
           {#if f.vol}
             <Field label={t('ed.volN')} bind:value={f.volN} type="number" inputmode="numeric" />
             <Group><Row title={t('ed.volSenior')} accessory="switch" checked={f.volSenior} onchange={(v) => (f.volSenior = v)} /></Group>
+          {/if}
+
+        {:else if pick === 'teams'}
+          <!-- team events: captains make teams and invite by link, the organizers form the rest (Teams in the event's screen) -->
+          <Group footnote={teamsOk ? t('ed.teamsHint') : t('ed.teamsFree')}><Row title={t('ed.teamsOn')} accessory="switch" checked={f.teams && teamsOk} disabled={!teamsOk} onchange={(v) => (f.teams = v)} /></Group>
+          {#if f.teams && teamsOk}
+            <div class="two">
+              <Field label={t('ed.teamMin')} bind:value={f.teamMin} type="number" inputmode="numeric" />
+              <Field label={t('ed.teamMax')} bind:value={f.teamMax} type="number" inputmode="numeric" />
+            </div>
+            {#if err.teams}<p class="err">{err.teams}</p>{/if}
           {/if}
 
         {:else if pick === 'partner'}

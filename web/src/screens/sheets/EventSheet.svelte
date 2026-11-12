@@ -67,6 +67,7 @@
   import Notice from '../../ui/Notice.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import EventTeam from './EventTeam.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
@@ -91,6 +92,13 @@
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
   const st = $derived(e?.my?.status);
+  // a team event: my team follows my sign-up (made or joined with the same tap, server evteams.signup)
+  let seenSt: string | null = null;
+  $effect(() => {
+    const now = st ?? '';
+    if (!preview && e?.teamMax && seenSt !== null && now !== seenSt) api.event(id).then((d) => (detail = d)).catch(() => {});
+    seenSt = now;
+  });
   const going = $derived(st === 'going');
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
@@ -455,6 +463,8 @@
 
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
+    {#if detail?.teams && !preview && !cancelled}<EventTeam {detail} {going} onchange={(d) => (detail = d)} />{/if}
+
     <!-- volunteers: a student applies with a short "why", the organizers answer; the team sees the count -->
     {#if detail?.volunteers && !preview && !cancelled && !started}
       {@const vo = detail.volunteers}
@@ -502,6 +512,7 @@
           {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => register(head)} />{/if}
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+            {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
             <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {/if}
         {/if}

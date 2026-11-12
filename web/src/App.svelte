@@ -154,6 +154,10 @@
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
+  // team events (server evteams.py): the sign-up's choice, a captain's invite link, the organizer's teams
+  sheets.teamPick = (title, min, max) => new Promise((done) => lazy(() => import('./screens/sheets/TeamPickSheet.svelte'), { title, min, max, done }));
+  sheets.teamInvite = (token) => asStudent(() => lazy(() => import('./screens/sheets/TeamInviteSheet.svelte'), { token }), `et_${token}`);
+  sheets.teams = (id) => lazy(() => import('./screens/club/TeamsSheet.svelte'), { id });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
   // in a whole application before the server said no)
@@ -431,6 +435,8 @@
     if (p === 'news') { ui.tab = 'afisha'; sheets.news(); return; } // every post: Afisha's "All" 
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     if (/^hq_\d+_\d+_\d+_[0-9a-f]{16}$/.test(p)) { asStudent(() => void helpRun(p), p); return; } // an organizer's "help me mark people" QR
+    const et = p.match(/^et_([0-9a-f]{24})$/); // a captain's invite to their team at an event (server evteams.invite)
+    if (et) { sheets.teamInvite(et[1]); return; }
     const vh = p.match(/^vh_([0-9a-f]{32})$/); // the volunteers ledger's hand-over link: that session's door, mine to run (server vol.take)
     if (vh) { asStudent(() => void takeDoor(vh[1]), p); return; }
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it

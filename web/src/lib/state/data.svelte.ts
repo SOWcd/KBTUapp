@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
@@ -307,7 +307,7 @@ export function eventById(id: Id): EventCard | undefined {
 }
 function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened.push(d); return d; }
 /** The app's card, or the server's for one it doesn't hold yet (kept: opened) */
-const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
+export const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
 
 // An event's details (the text, album, updates), asked for the moment a finger touches its card: the sheet opens a beat
 // later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
@@ -352,11 +352,15 @@ export function put(card: EventCard): void {
   }
 }
 
-function errorText(e: unknown): string {
+// a team's refusals (server evteams.py), said in words
+const TEAM_ERR: Record<string, Key> = { team_full: 'tm.full', name_taken: 'tm.nameTaken', name: 'tm.nameBad', not_going: 'tm.noSeat', locked: 'tm.locked', in_team: 'tm.inTeam' };
+export function errorText(e: unknown): string {
   if (e instanceof ApiErr) {
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
     if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
+    const team = TEAM_ERR[e.message];
+    if (team) return t(team);
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile
   }
   return t('common.error');
@@ -376,7 +380,8 @@ export const goingBusy = new SvelteSet<Id>();
 const flying = new Set<Id>();
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
-export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
+/** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick) */
+export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: TeamPick | 'solo'): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
   asStudent(async () => {
     const before = await cardFor(id);
@@ -392,11 +397,15 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     // the event's own questions: answered here, sent with the same tap (closed: no sign-up)
     const answers = !leaving && before.form?.length ? await sheets.answers(before.title, before.form) : undefined;
     if (answers === null) return;
+    // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap
+    const pick = !leaving && before.teamMax ? team ?? await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax) : undefined;
+    if (pick === null) return;
+    const joins = pick && pick !== 'solo' ? pick : undefined;
     if (flying.has(id)) return; // a second tap while the first is on its way
     flying.add(id);
     // a free event with nothing to ask and a seat left: going at once (the speed rule), the server's card settles it;
     // anything else (paid, full, a form) shows the button pressed until the answer
-    const sure = !leaving && !before.price && !answers && !phone && (before.seats == null || before.taken < before.seats);
+    const sure = !leaving && !before.price && !answers && !phone && !joins && (before.seats == null || before.taken < before.seats);
     const was = { my: before.my, taken: before.taken };
     if (sure) {
       before.my = { ...(before.my ?? { cancelReason: null, ticketCode: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going' };
@@ -405,7 +414,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     } else goingBusy.add(id);
     taps++;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins);
       if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);

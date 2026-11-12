@@ -216,6 +216,7 @@
         {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
         {#if head}
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
           <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
           {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
             <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
