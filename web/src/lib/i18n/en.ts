@@ -806,6 +806,7 @@ const en: Dict = {
   'kmap.press': "Press Center Abay",
   'kmap.cowork2': "Co-working #2",
   'kmap.indep': "Independence Hall",
+  'kmap.r349b': "349b",
   'route.out': "Help me get out",
   'route.here': "You are here",
   'route.lead': "Take me out",

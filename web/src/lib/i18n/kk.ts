@@ -806,6 +806,7 @@ const kk: Dict = {
   'kmap.press': "«Абай» баспасөз орталығы",
   'kmap.cowork2': "Коворкинг №2",
   'kmap.indep': "Тәуелсіздік залы",
+  'kmap.r349b': "349б",
   'route.out': "Шығуға көмектес",
   'route.here': "Сен осындасың",
   'route.lead': "Шығуға апар",

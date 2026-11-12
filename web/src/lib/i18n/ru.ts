@@ -808,6 +808,7 @@ const ru = {
   'kmap.press': "Пресс-центр «Абай»",
   'kmap.cowork2': "Коворкинг №2",
   'kmap.indep': "Зал Независимости",
+  'kmap.r349b': "349б",
   'route.out': "Помоги выйти",
   'route.here': "Ты здесь",
   'route.lead': "Вести к выходу",
