@@ -1399,7 +1399,7 @@ const en: Dict = {
   'evr.edited': "Edited by {who} · {when}",
   'evr.saved': "Report saved",
   'evr.noConsent': "No consent",
-  'evr.mine': "Allow marks in reports",
+  'evr.mine': "Mark me in reports",
   'evr.consentT': "Event reports",
   'evr.consentText': "I give separate consent to the collection and processing of my data in event reports for the club's internal records: marks of my attendance and details of my filling in and last editing a report, accessible only to this club's authorised people and kept under section 10 of the Privacy Policy; I understand that leaving the club does not delete the marks, and I can withdraw consent through the operator without deleting my account.",
   'evr.consentLink': "Policy: sections 3, 10 and 11",

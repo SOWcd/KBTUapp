@@ -49,7 +49,8 @@
   .q { margin: 6px 0 8px; }
   .dim { white-space: pre-line; } /* a text in paragraphs (an invite's description, then what saying yes means) */
   .say { margin-top: 12px; }
-  .lnk { margin: 4px 0 0 -12px; }
+  .lnk { display: flex; margin: 4px 0 0 -12px; }
+  .lnk :global(.lbl) { display: inline-flex; align-items: center; gap: 4px; }
   .say textarea { width: 100%; resize: none; }
   .say input { width: 100%; }
   .row { display: flex; gap: 10px; }
