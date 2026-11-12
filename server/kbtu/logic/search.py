@@ -13,9 +13,14 @@ import unicodedata
 from .core import Viewer, _by_id, _roles, cards, now, org_ref, rows
 
 
+# Kazakh letters as the Russian ones a Russian keyboard types for them (the owner, Nov 12: a Kazakh name is found
+# without a Kazakh layout); both sides fold, so the Kazakh spelling finds it too. web/src/lib/search.ts: the same table
+_KK = str.maketrans("\u0451\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456", "\u0435\u0430\u0433\u043a\u043d\u043e\u0443\u0443\u0445\u0438")
+
+
 def fold(s: object) -> str:
-    """The form both sides are compared in: NFKC, Unicode case-folded (Cyrillic, Kazakh), yo as ye, spaces squeezed."""
-    return " ".join(unicodedata.normalize("NFKC", str(s or "")).casefold().replace("\u0451", "\u0435").split())
+    """The form both sides are compared in: NFKC, Unicode case-folded, yo as ye, Kazakh letters as Russian, spaces squeezed."""
+    return " ".join(unicodedata.normalize("NFKC", str(s or "")).casefold().translate(_KK).split())
 
 
 def names(row, *keys: str) -> list[str]:

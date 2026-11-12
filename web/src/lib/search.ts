@@ -1,6 +1,8 @@
 // The one search's match, the server's (server/kbtu/logic/search.py) for lists already held: any case in any script,
 // Russian yo as ye, every word of the query starting a word of one of the names, in any order.
-const words = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\u0451/g, '\u0435').match(/[\p{L}\p{N}]+/gu) ?? [];
+// Kazakh letters as the Russian ones a Russian keyboard types for them (the server's table, search.py _KK)
+const KK = '\u0451\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456', RU = '\u0435\u0430\u0433\u043a\u043d\u043e\u0443\u0443\u0445\u0438';
+const words = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[\u0451\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456]/g, (c) => RU[KK.indexOf(c)]).match(/[\p{L}\p{N}]+/gu) ?? [];
 
 export function hit(q: string, names: (string | null | undefined)[]): boolean {
   const ws = words(q);
