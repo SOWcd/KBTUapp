@@ -500,8 +500,8 @@ def test_converted_event_waits_for_consent(club):
 
 
 def test_withdraw(club, monkeypatch):
-    """Taking it back: out of my teams on events not started (captaincy passes on), still signed up, never placed again
-    until a new yes; a started event's team stays as it was."""
+    """Taking it back: out of every team of mine, a started event's too (captaincy passes on), still signed up, never
+    placed again until a new yes."""
     c, con = club
     cap, mate, other = _people(c, 3)
     soon, later = int(time.time()) + 3600, int(time.time()) + 5 * 3600
@@ -515,7 +515,8 @@ def test_withdraw(club, monkeypatch):
     assert c.get("/api/me", headers=tma(cap)).json()["teams"] == {"consent": False}
     assert _mine(c, e2, cap) is None and _sheet(c, e2, cap)["my"]["status"] == "going"
     assert _mine(c, e2, mate)["captain"] == _uid(con, mate)
-    assert [p["id"] for p in _mine(c, e1, cap)["members"]] == _ids(con, [cap, mate])  # started: fixed
+    assert not con.execute("SELECT 1 FROM event_team_members WHERE user_id = ?", (_uid(con, cap),)).fetchone()  # the started one too
+    assert [p["id"] for p in _mine(c, e1, mate)["members"]] == _ids(con, [mate]) and _mine(c, e1, mate)["captain"] == _uid(con, mate)
     tm = _list(c, e2)["teams"][0]["id"]
     assert c.put(f"/api/events/{e2}/teams/people/{_uid(con, cap)}", headers=tma(20), json={"team": tm}).json()["message"] == "team_consent"
     c.patch(f"/api/events/{e2}/team", headers=tma(mate), json={"open": True})

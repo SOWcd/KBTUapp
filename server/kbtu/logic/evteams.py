@@ -52,13 +52,12 @@ def agree(con, v: Viewer, body: dict) -> dict:
 
 
 def withdraw(con, v: Viewer) -> dict:
-    """Mine taken back: out of my teams on every event not started yet (captaincy passes on; the sign-ups stay), and
-    nobody places me again until a new yes. A started event's teams are fixed (a bracket may stand on them)."""
+    """Mine taken back: out of every team I am in, past events' too (captaincy passes on; the sign-ups stay), and nobody
+    places me again until a new yes. A started event's roster loses me as it would with my account: the law gives no
+    reason to keep showing me there after I said no (the legal review, Nov 12)."""
     with tx(con):
         con.execute("DELETE FROM team_consents WHERE user_id = ?", (v.id,))
-        con.execute("""DELETE FROM event_team_members WHERE user_id = ? AND event_id IN
-            (SELECT m.event_id FROM event_team_members m JOIN events e ON e.id = m.event_id WHERE m.user_id = ? AND e.starts_at > ?)""",
-                    (v.id, v.id, core.now()))
+        con.execute("DELETE FROM event_team_members WHERE user_id = ?", (v.id,))
     return summary(con, v)
 
 
