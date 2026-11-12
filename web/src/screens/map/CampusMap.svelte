@@ -1,7 +1,7 @@
 <script lang="ts">
   // The campus map (CONTEXT): a floor of the main building full screen, pinch to zoom and drag to look around, a
   // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Three versions, picked from a list at the top left
-  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floor 1 so far): the main one, Uni-Q's plans (credited under the map), and the old one, our vector redraw with red
+  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floors 1 and 2 so far): the main one, Uni-Q's plans (credited under the map), and the old one, our vector redraw with red
   // walls (floors 1-5 from the 2023 plans, which nobody updates, so it says so). Opens on a room's floor ("Aud. 305"
   // → 3), rings the room's number and glides in to it (owner, Oct 5: "show where the room is"); a room the plan
   // doesn't number frames its nearest numbers on the floor, "somewhere here, look yourself", or just says it couldn't
@@ -54,7 +54,7 @@
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
-  // which map (owner, Oct 27: a list at the top left): Uni-Q's, ours (floor 1 so far, not the default yet), the 2023 plan
+  // which map (owner, Oct 27: a list at the top left): Uni-Q's, ours (floors 1 and 2 so far, not the default yet), the 2023 plan
   type Ver = 'main' | 'kbtu' | 'old';
   const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); Uni-Q stays the default for now
   let ver = $state<Ver>('main');

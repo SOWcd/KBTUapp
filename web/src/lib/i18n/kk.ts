@@ -782,7 +782,7 @@ const kk: Dict = {
   'map.ver.main': "Uni-Q",
   'map.ver.kbtu': "KBTU App",
   'map.ver.old': "2023",
-  'map.noteKbtu': "KBTU App картасы — әзірге тек 1-қабат",
+  'map.noteKbtu': "KBTU App картасы — әзірге 1 және 2-қабат",
   'map.bShort': "0",
   'kmap.stKazybek': "ҚАЗЫБЕК БИ КӨШЕСІ",
   'kmap.stToleBi': "ТӨЛЕ БИ КӨШЕСІ",
