@@ -11,7 +11,7 @@ import time
 
 from ..db import tx
 
-from .core import (ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _org, _roles, cards,
+from .core import (ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
     log_action, need_student, one, org_ref, person_ref, rows, short_name)
 
 
@@ -683,26 +683,29 @@ def person(con, v: Viewer, uid: int) -> dict:
         going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles)])
-    badges = [{"eventId": e["id"], "title": e["badge_name"], "org": org_ref(con, _org(con, e["org_id"])), "emoji": e["emoji"] or "party_popper_3d",
-               "color": e["tint"] or "#3B6BFF", "at": e["starts_at"]}
-              for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-                  WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid)] if close else []
+    earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+        WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
+    # the role shows only to the club's own team: outside, just the club
+    clubs = rows(con, f"""SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.*
+        FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close else []
+    # where they were before (org_history, written by triggers): a role held at least a day, the club still shown;
+    # the role by the same rule as above. Newest first
+    past = rows(con, """SELECT h.role, h.since, h.until, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = h.org_id AND x.user_id = ?) AS mine, o.*
+        FROM org_history h JOIN orgs o ON o.id = h.org_id
+        WHERE h.user_id = ? AND h.until IS NOT NULL AND h.until - h.since >= 86400 AND o.status = 'active'
+        ORDER BY h.until DESC LIMIT 20""", v.id, uid) if close else []
+    # the badges' clubs and every logo in two reads: one org and one logo per badge was ~2 queries a badge on each profile view
+    hosts = core._by_id(con, "orgs", (e["org_id"] for e in earned))
+    logos = core._by_id(con, "files", (o["logo_file_id"] for o in [*hosts.values(), *clubs, *past]))
+    badges = [{"eventId": e["id"], "title": e["badge_name"], "org": org_ref(con, hosts[e["org_id"]], logos), "emoji": e["emoji"] or "party_popper_3d",
+               "color": e["tint"] or "#3B6BFF", "at": e["starts_at"]} for e in earned]
     return {
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
         "master": (s["student_id"] or "")[2:3] == "M",  # a master's 1st year isn't a bachelor's (the ID's letter)
         "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
         "attended": len(attended(con, uid)),
-        # the role shows only to the club's own team: outside, just the club
-        "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, **(core.titled(m) if m["mine"] else {"title": None})} for m in rows(con, f"""
-            SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.* FROM org_members m
-            JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close],
-        # where they were before (org_history, written by triggers): a role held at least a day, the club still shown;
-        # the role by the same rule as above. Newest first
-        "past": [{"org": org_ref(con, h), "role": h["role"] if h["mine"] else None, "since": h["since"], "until": h["until"]} for h in rows(con, """
-            SELECT h.role, h.since, h.until, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = h.org_id AND x.user_id = ?) AS mine, o.*
-            FROM org_history h JOIN orgs o ON o.id = h.org_id
-            WHERE h.user_id = ? AND h.until IS NOT NULL AND h.until - h.since >= 86400 AND o.status = 'active'
-            ORDER BY h.until DESC LIMIT 20""", v.id, uid) if close],
+        "clubs": [{"org": org_ref(con, m, logos), "role": m["role"] if m["mine"] else None, **(core.titled(m) if m["mine"] else {"title": None})} for m in clubs],
+        "past": [{"org": org_ref(con, h, logos), "role": h["role"] if h["mine"] else None, "since": h["since"], "until": h["until"]} for h in past],
         "showcase": [a for c in picked for a in ach if a["code"] == c and a["level"] > 0],
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
         "shelf": [k for k in picked if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
