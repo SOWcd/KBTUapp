@@ -1331,6 +1331,8 @@ PANFILOV STREET
 <ellipse cx="1020.67" cy="559.75" rx="0.85" ry="1.3" fill="none" stroke="$wall" stroke-width="0.35"/>
 </g>
 <g data-k="shaft">
+<rect x="283.5" y="487.5" width="13.0" height="12.5" fill="$void" stroke="$wall" stroke-width="1"/>
+<path d="M283.5 487.5L296.5 500.0M296.5 487.5L283.5 500.0" fill="none" stroke="$wall" stroke-width="0.6"/>
 <rect x="374.5" y="936.0" width="9.0" height="10.0" fill="$void" stroke="$wall" stroke-width="1"/>
 <path d="M374.5 936.0L383.5 946.0M383.5 936.0L374.5 946.0" fill="none" stroke="$wall" stroke-width="0.6"/>
 <rect x="856.5" y="934.0" width="11.0" height="11.5" fill="$void" stroke="$wall" stroke-width="1"/>
