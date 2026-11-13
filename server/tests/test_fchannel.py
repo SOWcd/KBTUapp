@@ -31,8 +31,9 @@ def setup(env, monkeypatch, verdict: str | None = "ok"):
     said = {"word": verdict}
     seen: list[str] = []
 
-    async def look(_cfg, _http, text, con=None):
+    async def look(_cfg, _http, text, con=None, only=None):
         seen.append(text)
+        said["only"] = only
         return said["word"]
     monkeypatch.setattr(ai, "screen_post", look)
 
@@ -511,7 +512,7 @@ def test_post_off_and_gate(env, monkeypatch):
     c0, cfg0 = env
     login(c0, 1, "ann"), login(c0, 2, "bob")
     assert c0.get("/api/forum-posts", headers=tma(1)).status_code == 404 and "forumChannel" not in c0.get("/api/me", headers=tma(1)).json()
-    c, cfg, _, _ = setup(env, monkeypatch)
+    c, cfg, said, _ = setup(env, monkeypatch)
     me = TestClient(server.create(dataclasses.replace(cfg0, forum_channel=CH))).get("/api/me", headers=tma(1)).json()
     assert me["consentNow"] == logic.CONSENT
     assert "@KBTUappForum" in c0.get("/privacy").text                      # described whether the switch is on or not
@@ -519,7 +520,8 @@ def test_post_off_and_gate(env, monkeypatch):
     con.execute("UPDATE students SET manual = 1 WHERE user_id = (SELECT id FROM users WHERE tg_id = 2)")
     assert c.post("/api/forum-posts", headers=tma(2), json={"body": "hello all"}).json()["error"] == "need_student"
     c.app.state.policy = "new"
-    assert c.post("/api/forum-posts", headers=tma(1), json={"body": "hello all"}).json()["message"] == "consent"
+    # an earlier policy: nobody is asked to accept again (owner, Nov 13); the post goes, its look only on the EU host
+    assert c.post("/api/forum-posts", headers=tma(1), json={"body": "hello all"}).status_code == 200 and said["only"] == ai.EU_ONLY
     con.close()
 
 

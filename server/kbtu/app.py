@@ -206,12 +206,28 @@ def board_viewer(request: Request, v: Me) -> Viewer:
 Board = Annotated[Viewer, Depends(board_viewer)]
 
 
+def _eu_only() -> None:
+    """This request's student agreed to an earlier policy, not the one in force. Nobody is asked to accept again (owner,
+    Nov 13: no policy screen at all, until he says), so they write as before, and their text is looked at only on the EU
+    host (ai.EU_ONLY: what every earlier policy named), never by the other providers the policy in force added."""
+    (logic.core.CALLER.get() or {})["eu"] = True
+
+
+def _ai_only(usual: tuple[str, ...]) -> tuple[str, ...]:
+    return ai.EU_ONLY if (logic.core.CALLER.get() or {}).get("eu") else usual
+
+
+def _ai_eu() -> dict:
+    """For the forum's checks: nothing to add on the usual day."""
+    return {"only": ai.EU_ONLY} if (logic.core.CALLER.get() or {}).get("eu") else {}
+
+
 def board_writer(request: Request, v: Board, con: Con) -> Viewer:
-    """Writing on the forum: also agreed to the policy in force;
-    the app asks first, the server holds it too. Staff trying it (BOARD=staff) are on the policy they have."""
+    """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only).
+    Staff trying it (BOARD=staff) are on the policy they have."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
     if request.app.state.cfg.board == "all" and s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
-        raise ApiError("forbidden", "consent")
+        _eu_only()
     return v
 
 
@@ -236,7 +252,7 @@ def fchan_writer(request: Request, v: FChan, con: Con) -> Viewer:
     if not s or s["manual"]:
         raise ApiError("need_student")
     if not logic.account.on_policy(s["consent_version"], request.app.state.policy) and s["consent_version"] != "admin":
-        raise ApiError("forbidden", "consent")
+        _eu_only()
     return v
 
 
@@ -1492,7 +1508,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
                 for last in (False, True):
                     try:
-                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=assist_only, chain=ai.chain(cfg), **kw))[0]
+                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=_ai_only(assist_only), chain=ai.chain(cfg), **kw))[0]
                     except llm.BadAnswers:
                         if last:
                             raise ApiError("unavailable", "assistant") from None
@@ -2194,7 +2210,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
         pid = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked
-        verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
+        verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0], **_ai_eu())
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
             raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
@@ -2222,14 +2238,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum-posts/{pid}/why")
     async def fchan_why(pid: int, con: Con, v: FChanWrite, body: dict = Body(default={})):
         text, verdict = await run_in_threadpool(F.why_post, con, v, pid, body)
-        got = await ai.explain(cfg, ai_http(), text, verdict)
+        got = await ai.explain(cfg, ai_http(), text, verdict, **_ai_eu())
         await run_in_threadpool(F.said, con, "fchan_posts", pid, got)  # the moderator's queue reads it too
         return {"explain": got}
 
     @app.post("/api/forum-replies/{rid}/why")
     async def fchan_reply_why(rid: int, con: Con, v: FChanWrite):
         text, verdict = await run_in_threadpool(F.why_reply, con, v, rid)
-        got = await ai.explain(cfg, ai_http(), text, verdict)
+        got = await ai.explain(cfg, ai_http(), text, verdict, **_ai_eu())
         await run_in_threadpool(F.said, con, "fchan_replies", rid, got)
         return {"explain": got}
 
@@ -2266,7 +2282,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum-posts/{pid}/replies")
     async def fchan_reply(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
         rid = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
-        verdict = await ai.screen_reply(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_replies WHERE id = ?", rid)[0])
+        verdict = await ai.screen_reply(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_replies WHERE id = ?", rid)[0], **_ai_eu())
         return await run_in_threadpool(F.reply_settle, con, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
 
     @app.delete("/api/forum-replies/{rid}", status_code=204)

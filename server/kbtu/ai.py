@@ -175,17 +175,18 @@ POST_PROMPT = ("You check a post a university student wants to publish in the st
 POST_WORDS = ("OK", "PERSON", "FLAG", "AD", "NOISE")  # AD: refused at once, the author told (owner, Nov 3: no ads in the forum)
 
 
-async def screen_post(cfg, http: httpx.AsyncClient, text: str, con=None) -> str | None:
+async def screen_post(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[str, ...] = PUBLIC_PROVIDERS) -> str | None:
     """'ok', 'person', 'flag', 'ad' or 'noise'; None: no answer, or not exactly one of the words ("OK, but FLAG": a moderator decides)."""
-    return await _screen(cfg, http, text, con, POST_PROMPT, POST_WORDS)
+    return await _screen(cfg, http, text, con, POST_PROMPT, POST_WORDS, only)
 
 
-async def _screen(cfg, http: httpx.AsyncClient, text: str, con, prompt: str, words: tuple[str, ...]) -> str | None:
+async def _screen(cfg, http: httpx.AsyncClient, text: str, con, prompt: str, words: tuple[str, ...],
+                  only: tuple[str, ...] = PUBLIC_PROVIDERS) -> str | None:
     msgs = [{"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=lambda w: _word(w) in words, con=con,
-                                 only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=15, race=True)
+                                 only=only, chain=chain(cfg), timeout=15, race=True)
     except (llm.Busy, llm.BadAnswers):
         return None
     return _word(word).lower() if _word(word) in words else None
@@ -203,11 +204,11 @@ REPLY_PROMPT = ("You check a reply the anonymous author of a post wants the bot 
 REPLY_WORDS = ("OK", "PERSON", "FLAG")
 
 
-async def screen_reply(cfg, http: httpx.AsyncClient, text: str, con=None) -> str | None:
+async def screen_reply(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[str, ...] = PUBLIC_PROVIDERS) -> str | None:
     """'ok', 'person' or 'flag'; None: no answer, or a failure llm doesn't wrap (a moderator decides: never a 500 that
     leaves the reply held "check" and the author's retry under the minute's cap)."""
     try:
-        return await _screen(cfg, http, text, con, REPLY_PROMPT, REPLY_WORDS)
+        return await _screen(cfg, http, text, con, REPLY_PROMPT, REPLY_WORDS, only)
     except Exception:  # noqa: BLE001
         return None
 
@@ -319,7 +320,7 @@ def explained(raw: dict | None, post: str) -> dict | None:
     return {"quote": quote, "reason": reason, "fix": line(raw.get("fix"))}
 
 
-async def explain(cfg, http: httpx.AsyncClient, text: str, verdict: str | None, con=None) -> dict | None:
+async def explain(cfg, http: httpx.AsyncClient, text: str, verdict: str | None, con=None, only: tuple[str, ...] = PUBLIC_PROVIDERS) -> dict | None:
     """Phase 2 for a refused post or reply ('noise', 'ad', 'person', 'flag'): explained(), or None (no answer in time, a
     bad one, any failure: the caller falls back to its template)."""
     import asyncio
@@ -329,7 +330,7 @@ async def explain(cfg, http: httpx.AsyncClient, text: str, verdict: str | None, 
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         got, _ = await asyncio.wait_for(llm.chat(cfg, http, msgs, max_tokens=400, temperature=0.2, check=lambda a: _explain_json(a) is not None,
-                                                 con=con, only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=EXPLAIN_WAIT, race=True), EXPLAIN_WAIT)
+                                                 con=con, only=only, chain=chain(cfg), timeout=EXPLAIN_WAIT, race=True), EXPLAIN_WAIT)
         return explained(_explain_json(got), text)
     except Exception:  # noqa: BLE001  (a timeout, Busy, BadAnswers, anything: the template)
         return None
