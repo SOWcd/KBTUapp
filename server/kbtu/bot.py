@@ -55,6 +55,9 @@ WARN_FOR = 60               # a swear warning stays this long, then the bot remo
 # ponytail: per worker (the bot polls in one) and its keys never pruned (a few bytes a swearer); a table if that changes
 _swore: dict[tuple[int, int], list[float]] = {}  # (chat, person; 0: the chat) -> this minute's warnings
 _tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
+_tagged: dict[int, float] = {}  # a chat's last /all finished then (ALL_AGAIN); per worker as _tagging, a few bytes a group
+ALL_AGAIN = 300             # a chat's next /all no sooner than this after the last ended: no calling everyone in a loop
+TAG_MAX = 300               # people one /all calls at most: 60 messages, about 3 minutes at TAG_GAP
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
 
@@ -1209,7 +1212,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         sender = msg.get("from") or {}
         # the sender of this very message, a person: never a forward, an anonymous admin or a channel (sender_chat), an old one
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
-                or msg.get("is_automatic_forward") or time.time() - int(msg.get("date") or 0) > FRESH or chat["id"] in _tagging:
+                or msg.get("is_automatic_forward") or time.time() - int(msg.get("date") or 0) > FRESH:
             return
         who = int(sender.get("id") or 0)
         people = logic.tag_all(con, chat["id"], who)
@@ -1222,10 +1225,12 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
                     lang = sender.get("language_code")
                     await _send(cfg, http, {"chat_id": chat["id"], "text": texts.swear(lang if lang in ("kk", "en") else "ru", "unlinked"), "parse_mode": "HTML",
                                             "reply_parameters": {"message_id": msg["message_id"], "allow_sending_without_reply": True}})
-        if people is None:  # a club's chat, not theirs to call: say so, then both messages go (no litter)
+        # a club's chat, not theirs to call; or everyone was just called (one run, then ALL_AGAIN): say so, then both go
+        again = people and (chat["id"] in _tagging or time.time() - _tagged.get(chat["id"], 0) < ALL_AGAIN)
+        if people is None or again:
             if time.time() - _denied.get(chat["id"], 0) > ALL_NO_TTL:
                 _denied[chat["id"]] = time.time()
-                tgc.spawn(_all_no(cfg, http, chat["id"], msg["message_id"], sender.get("language_code")), f"allno:{chat['id']}")
+                tgc.spawn(_all_no(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_soon" if again else "all_no"), f"allno:{chat['id']}")
         elif people:
             r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
             to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
@@ -1270,9 +1275,9 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=html.escape(e["title"])), "parse_mode": "HTML"})
 
 
-async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None) -> None:
-    """/all from someone who may not: a template under their command, then both are deleted (theirs: if the bot may)."""
-    text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", "all_no")
+async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None, key: str = "all_no") -> None:
+    """/all refused: a template under the command, then both are deleted (theirs: if the bot may)."""
+    text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", key)
     sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
     await asyncio.sleep(ALL_NO_TTL)
     for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
@@ -1376,17 +1381,22 @@ async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> N
 
 async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:
     """/all: whom Telegram says is in the chat, five a message (it notifies only the first five mentions), each an emoji
-    linked by id (no username needed), as replies under `to`, paced for the group's limit; stops at the first refusal."""
+    linked by id (no username needed), as replies under `to`, paced for the group's limit; stops at the first refusal.
+    At most TAG_MAX people: past it the rest (the app's list first, then the seen ones by when they were last seen) aren't
+    called this run, and the chat waits ALL_AGAIN like after any run."""
     gone: list[int] = []
+    called = 0
     try:
         batch: list[int] = []
         for i, tg in enumerate(people):
+            if called >= TAG_MAX:
+                break
             m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
             if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
                 batch.append(tg)
             elif m and m.get("ok"):  # Telegram says not in the chat: forgotten if the bot remembered them
                 gone.append(tg)
-            if len(batch) == 5 or batch and i == len(people) - 1:
+            if len(batch) == 5 or batch and (i == len(people) - 1 or called + len(batch) >= TAG_MAX):
                 marks = random.sample(TAG_MARKS, len(batch))
                 body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
                 sent = await _call(cfg, http, "sendMessage", {**body, "text": "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, TAG_GAP)
@@ -1395,9 +1405,11 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, peo
                 if not (sent and sent.get("ok")):  # the network, no rights, the chat gone: no more of it
                     log.warning("tag all: %s", str((sent or {}).get("description"))[:120])
                     return
+                called += len(batch)
                 batch = []
     finally:
         _tagging.discard(chat)
+        _tagged[chat] = time.time()
         if gone:
             con = db.connect(cfg.db_path)
             try:
