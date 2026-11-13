@@ -86,6 +86,12 @@ def chat_on(con, tg_chat: int) -> int | None:
     return _on[1].get(tg_chat)
 
 
+def on_now(con, tg_chat: int) -> int | None:
+    """chat_on read from the database itself: a hit's last check, so a switch turned off elsewhere stops it at once."""
+    r = one(con, """SELECT id FROM chats WHERE tg_chat_id = ? AND swear = 1 AND swear_miss IS NULL AND org_id IS NOT NULL""", tg_chat)
+    return r[0] if r else None
+
+
 def rights(con, tg_chat: int, miss: list[str]) -> None:
     """The bot's rights in a chat as Telegram just told them (my_chat_member, a refused delete or mute): lacking any,
     the filter pauses there and Studio says which; given back, it goes on by itself."""

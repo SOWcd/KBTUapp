@@ -226,6 +226,13 @@ def test_off_and_ignored(env, monkeypatch):
     con.execute("UPDATE chats SET swear = 1")
     assert _run(cfg, con, http, _msg(31)) == [False]  # another worker's switch: seen within FRESH
     logic.chatmod.stale()
+    assert _run(cfg, con, _Http(), _msg(31, mid=70)) == [True]
+    con.execute("UPDATE chats SET swear = 0")  # off in another worker: a hit asks the database, not the cached list
+    assert _run(cfg, con, http, _msg(31, mid=71)) == [False]
+    con.execute("DELETE FROM swear_hits")
+    con.execute("UPDATE chats SET swear = 1")
+    bot._swore.clear()
+    logic.chatmod.stale()
     assert _run(cfg, con, http, _msg(31, "good morning"), _msg(31, "\u0441\u0443\u043a\u0430", chat=-555),           # clean; another chat
                 {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}, "sender_chat": {"id": -100}},  # anonymous admin
                 {**_msg(5), "from": {"id": 5, "is_bot": True}},                                   # a bot
@@ -360,3 +367,42 @@ def test_all_in_a_chat_no_club_holds(env, monkeypatch):
     asyncio.run(go(_msg(31, "/all", chat=-555), _msg(41, "/all", chat=-555), _msg(41, "@all", chat=-555)))
     sent = http.said("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == -555 and "\u2192" in sent[0]["text"]   # the admin, once a minute; a member: silence
+
+
+def test_review_holes(env, monkeypatch):
+    """The adversarial review (Nov 13): a name or a link isn't the sender's words; polls count; an old message is left
+    alone; a member already restricted isn't muted (the hour's end would lift their restriction); a migrated group goes on."""
+    c, cfg = env
+    con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
+    suka = "\u0421\u0443\u043a\u0430"
+    # someone named "suka", mentioned by name (no username) or by @username; a link that holds a word
+    assert _run(cfg, con, _Http(),
+                _msg(31, f"{suka}, hi", entities=[{"type": "text_mention", "offset": 0, "length": 4, "user": {"id": 9}}]),
+                _msg(31, "\U0001F600 @blyat_kz hi", entities=[{"type": "mention", "offset": 3, "length": 9}]),
+                _msg(31, "see https://x.kz/pizdec", entities=[{"type": "url", "offset": 4, "length": 19}])) == [False] * 3
+    assert _run(cfg, con, _Http(), _msg(31, f"{suka}, \u0441\u0443\u043a\u0430", mid=2,
+                                        entities=[{"type": "text_mention", "offset": 0, "length": 4}])) == [True]  # their own word still counts
+    bot._swore.clear()
+    assert _run(cfg, con, _Http(), _msg(31, text=None, mid=3, poll={"question": "ok?", "options": [{"text": "fuck"}, {"text": "no"}]})) == [True]
+    old = _msg(31, mid=4, date=int(time.time()) - 3600)
+    assert _run(cfg, con, _Http(), old, {**old, "edit_date": int(time.time()) - 3599}) == [False, False]
+    bot._swore.clear()
+    assert _run(cfg, con, _Http(), {**old, "edit_date": int(time.time())}) == [True]  # an edit now: fresh
+    assert [h["warn"] for h in _hits(con, cid)] == [1, 2, 3] and _hits(con, cid)[-1]["muted"] == 1
+
+    class Restricted(_Http):
+        async def post(self, url, json=None, **_):
+            if url.endswith("/getChatMember") and json["user_id"] == 20:
+                self.calls.append(("getChatMember", json))
+                return _Resp({"ok": True, "result": {"status": "restricted", "can_send_messages": True, "can_send_photos": False}})
+            return await super().post(url, json)
+    con.execute("INSERT INTO swear_hits (chat_id, tg_id, stem, at, warn) VALUES (?, 20, 'x', ?, 1), (?, 20, 'x', ?, 2)",
+                (cid, int(time.time()), cid, int(time.time())))
+    http = Restricted()
+    _run(cfg, con, http, _msg(20, mid=5))
+    assert http.said("deleteMessage")[0]["message_id"] == 5 and not http.said("restrictChatMember")
+    assert http.said("sendMessage")[0]["text"] == texts.swear("ru", "warn")
+    # the group turned supergroup: its new id is filtered at once
+    asyncio.run(bot._group(cfg, _Http(), con, {"chat": {"id": -100, "type": "group"}, "message_id": 1, "migrate_to_chat_id": -1009}))
+    bot._swore.clear()
+    assert _run(cfg, con, _Http(), _msg(22, chat=-1009, mid=6)) == [True]

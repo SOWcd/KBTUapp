@@ -1191,6 +1191,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
+        logic.chatmod.stale()  # its swear filter goes on under the new id at once
         return
     words = str(msg.get("text") or "").split()
     # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
@@ -1278,15 +1279,30 @@ async def _swear(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     no query a message). True: it was such a message (nothing else answers it)."""
     chat, sender = msg.get("chat") or {}, msg.get("from") or {}
     if chat.get("type") not in ("group", "supergroup") or not sender.get("id") or sender.get("is_bot") or msg.get("sender_chat") \
-            or not (msg.get("text") or msg.get("caption")) or not (cid := logic.chatmod.chat_on(con, chat["id"])):
-        return False
-    if not (stem := swear.find(msg.get("text") or msg.get("caption"))):
+            or time.time() - int(msg.get("edit_date") or msg.get("date") or 0) > FRESH or not logic.chatmod.chat_on(con, chat["id"]):
+        return False  # an old one (piled up while the bot was away) is left alone: no warning about yesterday
+    poll = msg.get("poll") or {}
+    text = _own_words(msg.get("text") or "", msg.get("entities")) + "\n" + _own_words(msg.get("caption") or "", msg.get("caption_entities")) \
+        + "\n" + "\n".join([poll.get("question") or "", *((o.get("text") or "") for o in poll.get("options") or ())])
+    # the cached list may be 30 s behind a switch turned off in another worker: a hit asks the database itself
+    if not (stem := swear.find(text)) or not (cid := logic.chatmod.on_now(con, chat["id"])):
         return False
     lang = sender.get("language_code")
     topic = msg.get("message_thread_id") if msg.get("is_topic_message") else None  # a forum's topic (General: none; a reply's thread isn't one)
     tgc.spawn(_swear_act(cfg, http, chat["id"], cid, msg["message_id"], sender["id"], stem, lang if lang in ("kk", "en") else "ru", topic),
               f"swear:{chat['id']}")
     return True
+
+
+def _own_words(text: str, entities: list | None) -> str:
+    """The text without its mentions, links and emails: someone named "a swear word" (a first name, a username) must not
+    get whoever mentions them deleted and muted. Entities count UTF-16 units."""
+    b = text.encode("utf-16-le")
+    for e in sorted(entities or (), key=lambda e: -int(e.get("offset", 0))):
+        if e.get("type") in ("mention", "text_mention", "url", "email"):
+            o, n = 2 * int(e.get("offset", 0)), 2 * int(e.get("length", 0))
+            b = b[:o] + " ".encode("utf-16-le") + b[o + n:]
+    return b.decode("utf-16-le", "ignore")
 
 
 async def swear_rights(cfg: Config, http: httpx.AsyncClient, chat: int) -> list[str] | None:
@@ -1298,11 +1314,12 @@ async def swear_rights(cfg: Config, http: httpx.AsyncClient, chat: int) -> list[
 async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, mid: int, tg: int, stem: str, lang: str,
                      topic: int | None = None) -> None:
     """A chat's admin: nothing (never deleted, never muted). Else delete; then, once a minute a person (SWEAR_CAP, and
-    SWEAR_CHAT_CAP for the chat) the hit is recorded and warned ("n of 3", in the message's topic), the third muted for an
-    hour; the warning goes after a minute. A refused delete or mute: the bot's rights are asked, a lacking one pauses the filter there (Studio
+    SWEAR_CHAT_CAP for the chat) the hit is recorded and a template warning naming nobody is said (in the message's
+    topic), the third muted for an hour (not one already restricted: our hour's end would lift their restriction too);
+    the warning goes after a minute. A refused delete or mute: the bot's rights are asked, a lacking one pauses the filter there (Studio
     says which). Logs Telegram's word only."""
     m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
-    if not (m and m.get("ok")) or (m.get("result") or {}).get("status") in ("creator", "administrator"):
+    if not (m and m.get("ok")) or (status := (m.get("result") or {}).get("status")) in ("creator", "administrator"):
         return
     con = db.connect(cfg.db_path)
     try:
@@ -1321,7 +1338,7 @@ async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, 
         room.append(t)
         rid, n = logic.chatmod.hit(con, cid, tg, stem)
         kind = "warn"
-        if n >= logic.chatmod.WARNS:
+        if n >= logic.chatmod.WARNS and status != "restricted":
             no = dict.fromkeys(("can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
                                 "can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
                                 "can_add_web_page_previews"), False)
