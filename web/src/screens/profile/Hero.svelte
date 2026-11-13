@@ -52,10 +52,12 @@
   const staff = $derived(p.founder ? null : p.staff ?? null);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
-  // someone's photo full screen (owner, Nov 3), our biggest copy (media's 1600 px .webp beside the 480 px .t.webp)
+  // someone's photo full screen (owner, Nov 3), our biggest copy (media's 1600 px .webp beside the 480 px .t.webp).
+  // It flies from the avatar alone: the viewer hides what it flies from, and the button holds the rim and the frame too
   function bigPhoto(e: MouseEvent) {
-    const small = h.person.avatar!;
-    sheets.photos([{ id: -1, url: small.replace(/\.t\.webp$/, '.webp'), thumb: small, w: 0, h: 0, blur: '', by: null, mine: true, canDelete: false }], 0, undefined, undefined, e.currentTarget as Element);
+    const small = h.person.avatar!, at = e.currentTarget as Element;
+    sheets.photos([{ id: -1, url: small.replace(/\.t\.webp$/, '.webp'), thumb: small, w: 0, h: 0, blur: '', by: null, mine: true, canDelete: false }], 0, undefined, undefined,
+      at.querySelector('.av') ?? at);
   }
 
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
