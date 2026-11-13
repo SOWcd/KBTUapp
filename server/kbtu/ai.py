@@ -109,6 +109,12 @@ EU_CHAIN = "munitoeu:deepseek-ai/deepseek-v4.1-flash-1017,munitoeu:deepseek-ai/d
 DEAD = {"munitoeu:zai-org/glm-5.3-flash", "munitoeu:qwen/qwen3.8-27b", "munito:zai-org/glm-5.3-flash", "groq:openai/gpt-oss-120b"}
 
 
+# A one-word verdict's cap. Not the word's own few tokens: most free models reason first and the reasoning counts, so a
+# cap of 5 cut every DeepSeek answer before its word (prod, Nov 13: 5 of 9 post checks got no answer). The checks
+# still take exactly one word, whatever the room.
+WORD_TOKENS = 300
+
+
 def chain(cfg) -> str:
     """The EU host's links, then the main chain's (AI_CHAIN or llm.CHAIN): chat()'s only= keeps the allowed providers
     and puts them in its order."""
@@ -130,7 +136,7 @@ async def screen(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[
     msgs = [{"role": "system", "content": SCREEN_PROMPT},
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=_verdict, con=con, only=only,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=_verdict, con=con, only=only,
                                  chain=chain(cfg), timeout=15, race=True)
     except (llm.Busy, llm.BadAnswers):
         return None
@@ -178,7 +184,7 @@ async def _screen(cfg, http: httpx.AsyncClient, text: str, con, prompt: str, wor
     msgs = [{"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=lambda w: _word(w) in words, con=con,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=lambda w: _word(w) in words, con=con,
                                  only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=15, race=True)
     except (llm.Busy, llm.BadAnswers):
         return None
@@ -232,7 +238,7 @@ async def screen_comment(cfg, http: httpx.AsyncClient, text: str, con=None,
     msgs = [{"role": "system", "content": COMMENT_PROMPT},
             {"role": "user", "content": json.dumps({"comment": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=8, temperature=0, check=_comment_word, con=con, only=only,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=_comment_word, con=con, only=only,
                                  chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None, None
@@ -259,7 +265,7 @@ async def chat_section(cfg, http: httpx.AsyncClient, title: str, about: str | No
             {"role": "user", "content": json.dumps({"title": CONTROL.sub("", title)[:80], "description": CONTROL.sub("", about or "")[:300]},
                                                    ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=lambda w: _word(w) in SECTION_WORDS, con=con,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=lambda w: _word(w) in SECTION_WORDS, con=con,
                                  only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None
@@ -343,7 +349,7 @@ async def fill_categories(con, cfg, http: httpx.AsyncClient) -> tuple[int, int]:
         try:
             said, _ = await llm.chat(cfg, http, [{"role": "system", "content": CATEGORY_PROMPT},
                                                  {"role": "user", "content": json.dumps({"name": o["name"], "description": o["description"]}, ensure_ascii=False)}],
-                                     max_tokens=200, temperature=0, con=con, only=PUBLIC_PROVIDERS, check=lambda a: a.strip().lower() in (*CATEGORIES, "none"))
+                                     max_tokens=WORD_TOKENS, temperature=0, con=con, only=PUBLIC_PROVIDERS, check=lambda a: a.strip().lower() in (*CATEGORIES, "none"))
         except llm.BadAnswers:
             left += 1
             continue

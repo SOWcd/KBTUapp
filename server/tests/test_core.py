@@ -4204,6 +4204,10 @@ def test_translations(env):
                 return await ai.translate(chained, http, {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
         return asyncio.run(go()), seen
     llm._rest.clear()
+    import itertools
+    llm._turn = itertools.count()
+    assert [call({})[1] for _ in range(3)] == [["m1"], ["m2"], ["m1"]]                   # the keys take turns: each call starts from the next
+    llm._turn = itertools.repeat(0)                                                     # below: the first key first, to read the order
     # translations ask Munito, Groq, Cloudflare in that order (ai.TRANSLATE_PROVIDERS), whatever AI_CHAIN's order
     assert call({}) == (("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}}), ["m1"])     # the empty description isn't sent
     assert call({"m1": httpx.Response(429, headers={"retry-after": "120"})})[1] == ["m1", "m2"]
@@ -4282,6 +4286,7 @@ def test_translations(env):
     c.patch("/api/orgs/1", headers=tma(20), json={"description": "\u041d\u043e\u0432\u043e\u0435."})
     assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b"}} and logic.ai_next(con)[0] == "org"
     con.close()
+    llm._turn = itertools.count()
 
 
 def test_role_titles(env):

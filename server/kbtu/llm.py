@@ -7,6 +7,7 @@ the prompt). The chain's model names are measured from the providers' lists on p
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import time
@@ -64,6 +65,7 @@ class Link:
 
 
 _rest: dict[str, float] = {}     # link name -> resting until (this process)
+_turn = itertools.count()        # which key of a provider goes first this time: the keys share the load (owner, Nov 13)
 
 
 def links(cfg, chain: str | None = None) -> list[Link]:
@@ -124,6 +126,9 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
     if only:  # stable: each provider's links keep the chain's order
         pool.sort(key=lambda x: only.index(x.provider))
+    turn = next(_turn)  # one model on several keys: each call starts from the next key, the others stay its spares
+    pool = [x for _, g in itertools.groupby(pool, key=lambda x: (x.provider, x.model)) for g in [list(g)]
+            for x in g[turn % len(g):] + g[:turn % len(g)]]
     awake = [x for x in pool if _rest.get(x.name, 0) <= time.time()]
 
     async def ask(link) -> str | None:
