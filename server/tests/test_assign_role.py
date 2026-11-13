@@ -48,3 +48,18 @@ def test_assign_role_no_own_rights_raised(env):
     r = c.put(f"/api/orgs/1/roles/{smm}/people", headers=V, json={"users": [vice["id"], a["id"]]})
     assert r.status_code == 200 and r.json()["skipped"] == 0 and mine() == ("vice", coord)
     assert c.put(f"/api/orgs/1/roles/{lead}/people", headers=V, json={"users": [a["id"]]}).status_code == 403
+
+
+def test_tag_all_any_role(env):
+    """/all: anyone holding a role in the club may call it (a role of the club's own at member level too), a plain member not."""
+    from kbtu import logic
+    c, cfg = env
+    pres, a, b = login(c, 20, "pres"), login(c, 22, "aaa"), login(c, 23, "bbb")
+    con = _club(cfg, pres["id"], **{f"u{a['id']}": "member", f"u{b['id']}": "member"})
+    roles = c.post("/api/orgs/1/roles", headers=tma(20), json={"name": "Vice Head", "color": "#112233", "rights": []}).json()["roles"]
+    rid = next(r["id"] for r in roles if r["name"] == "Vice Head")
+    c.put(f"/api/orgs/1/roles/{rid}/people", headers=tma(20), json={"users": [a["id"]]})
+    con.execute("INSERT INTO chat_sync (chat_id, org_id, kind, created_at) VALUES (-100, 1, 'main', 0)")
+    con.commit()
+    assert sorted(logic.chatlist.tag_all(con, -100, 22)) == [20, 23]
+    assert logic.chatlist.tag_all(con, -100, 23) == []

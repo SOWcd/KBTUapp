@@ -558,8 +558,8 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
 
 
 def tag_all(con, tg_chat: int, tg_from: int) -> list[int]:
-    """/all in a group (bot._tag_all): whom to mention, when the sender leads the club that holds the chat (its President,
-    Vice or a Head: a club's own role at those levels too; an event's chat: the event's club). Empty: not theirs, or a chat
+    """/all in a group (bot._tag_all): whom to mention, when the sender holds a role in the club that holds the chat (President,
+    Vice, Head, or any role of the club's own, a Vice Head too; an event's chat: the event's club). Empty: not theirs, or a chat
     no club holds. Who, as far as the app knows: a synced department chat its department, a club chat the club's members,
     an event's chat its going people; never the caller. The bot asks Telegram whether each is in the chat before tagging."""
     link = one(con, "SELECT org_id, tag_id FROM chat_sync WHERE chat_id = ?", tg_chat)
@@ -567,7 +567,7 @@ def tag_all(con, tg_chat: int, tg_from: int) -> list[int]:
     ev = one(con, "SELECT org_id FROM events WHERE chat_id = ? AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1", tg_chat)
     oid = (link or card or ev or [None])[0]
     if not oid or not one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? AND u.tg_id = ?
-            AND u.tg_id > 0 AND u.banned_at IS NULL AND m.role IN ('president', 'vice', 'head')""", oid, tg_from):
+            AND u.tg_id > 0 AND u.banned_at IS NULL AND (m.role != 'member' OR m.role_id IS NOT NULL)""", oid, tg_from):
         return []
     who = "SELECT user_id FROM member_tags WHERE tag_id = ?" if link and link["tag_id"] else \
         "SELECT user_id FROM org_members WHERE org_id = ?" if link or card else \
