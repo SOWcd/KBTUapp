@@ -2483,11 +2483,8 @@ show(L.wait);
   const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : r.status === 404 ? 404 : null);
   if (v === 404) return end("expired", "bad");  // the link is older than 15 minutes (or not ours)
   if (!v) return end("fail", "bad");
-  // whose Telegram this link is for: someone the link was forwarded to sees a stranger's name and stops here
-  show([L.ask[0].replace("{name}", () => v.name), L.ask[1]], "");
-  $("yes").textContent = L.yes; $("yes").hidden = false;
-  await new Promise((go) => { $("yes").onclick = go; });
-  $("yes").hidden = true; show(L.wait);
+  // no "link to <name>?" tap any more (owner, Nov 13): the claim below lands only on the Telegram that started the sign-in,
+  // so a forwarded link ties nothing whoever finishes it here
   const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
