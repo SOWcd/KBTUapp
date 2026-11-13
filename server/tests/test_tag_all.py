@@ -72,6 +72,9 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert "meeting" not in sent[0]["text"] and any(m in sent[0]["text"] for m in bot.TAG_MARKS)   # never the caller's words
     assert not bot._tagging
     assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
+    for t in ("\u041a\u0430\u043b\u043b", "\u043a\u043e\u043b\u043b \u0432 6", "Call!"):                             # the words people type instead of a command
+        assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text=t))) == 2, t
+    assert _run(cfg, con, _Http(), _msg(20, text="call me later")) == [] and _run(cfg, con, _Http(), _msg(20, text="\u043a\u0430\u043b")) == []
     # as a reply: under the message replied to
     sent = _run(cfg, con, _Http(), _msg(21, reply_to_message={"message_id": 3}))
     assert {s["reply_parameters"]["message_id"] for s in sent} == {3}

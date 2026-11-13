@@ -1185,7 +1185,10 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         return
     words = str(msg.get("text") or "").split()
-    if words and re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all", words[0], re.I):  # "@all": ours alone where another bot answers /all too
+    # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
+    # "\u043a\u043e\u043b\u043b" first in a message, "call" only as the whole message (it starts ordinary English sentences)
+    if words and (re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all|\u043a[\u0430\u043e]\u043b\u043b[!.]*", words[0], re.I)
+                  or len(words) == 1 and re.fullmatch(r"call[!.]*", words[0], re.I)):
         sender = msg.get("from") or {}
         # the sender of this very message, a person: never a forward, an anonymous admin or a channel (sender_chat), an old one
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
