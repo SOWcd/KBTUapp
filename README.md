@@ -47,6 +47,8 @@ Checks: `cd server && .venv/bin/python -m pytest -q tests`, `cd web && npm run c
 The university's documents never go in the repo. Rebuild: `scp -r docs/ sowcloud:<the kbtu volume>/docs-src`; in the
 container `cd /app/server && python -m kbtu.docs build /var/lib/kbtu/docs-src /var/lib/kbtu/docs.db` (scans via tesseract,
 embeddings with `CF_ACCOUNT_ID`/`CF_AI_TOKEN`; `.doc` → `.docx` first), delete `docs-src`; `python -m kbtu.docs audit /var/lib/kbtu/docs.db` must show no `left`; `DOCS=1` turns it on.
+Curricula: any file whose path has "RUP" (Latin or Cyrillic) is read as a table, one chunk per semester; the year in its
+name, else its folder's, is the intake.
 
 ## Free rooms on the map
 

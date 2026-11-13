@@ -1567,7 +1567,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         try:
             msgs, rooms, events = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
             if logic.assistant.DOCS:
-                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body))
+                year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
+                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
             text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):

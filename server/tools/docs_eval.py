@@ -1,6 +1,6 @@
 """The documents search's eval: realistic student questions (docs_eval.json, no document text in it) with the source that
 answers each; hit@3 of the words' search alone and of the hybrid one. A Handbook page counts within one page (the three
-languages' editions shift by a page).
+languages' editions shift by a page); a curriculum's answer is its chunk with the semester or the course code asked.
 
     cd server && .venv/bin/python tools/docs_eval.py /var/lib/kbtu/docs.db   # hybrid too with CF_ACCOUNT_ID, CF_AI_TOKEN
 """
@@ -18,8 +18,10 @@ QUESTIONS = Path(__file__).with_name("docs_eval.json")
 
 
 def hit(h: dict, expect: list) -> bool:
+    """A source, its page if given, and the words its chunk must hold if given (a curriculum's "semester 3", a course code)."""
     page = int(h["at"][3:]) if h["at"].startswith("p. ") else None
-    return any(doc in h["doc"] and (want is None or page is not None and abs(page - want) <= 1) for doc, want in expect)
+    return any(doc in h["doc"] and (want is None or page is not None and abs(page - want) <= 1) and all(w in h["text"] for w in must)
+               for doc, want, *must in expect)
 
 
 def run(path: str, embed=None, k: int = 3) -> dict:

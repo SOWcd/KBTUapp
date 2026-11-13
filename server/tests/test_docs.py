@@ -4,6 +4,7 @@ the excerpts with their sources in the assistant's brief only when DOCS is on.""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import zipfile
 
@@ -98,6 +99,11 @@ def test_assistant_brief_has_the_documents(env, tmp_path, monkeypatch):
     assert "University documents" in system and SCHOLARSHIP not in system      # the rule in the system, the words not
     assert quoted["role"] == "user" and "<excerpts>" in quoted["content"] and "[First year FAQ, Money] Money " + SCHOLARSHIP in quoted["content"]
     assert last == {"role": "user", "content": ASK} and "a.petrova" not in everything()
+    got, real = [], docs.Index.search  # the curricula of the student's intake (from their year, in the brief) first
+    monkeypatch.setattr(docs.Index, "search", lambda self, q, qvec=None, k=4, intake=None: got.append(intake) or real(self, q, qvec, k, intake))
+    ask(ASK)
+    year = re.search(r"most likely intake (\d{4})", seen[-1][0]["content"])
+    assert got == [int(year[1]) if year else None] and "programme unknown" in seen[-1][0]["content"]
     ask("and when?", [{"role": "user", "text": ASK}, {"role": "assistant", "text": "..."}])  # a follow-up searches with the turn before
     assert "[First year FAQ, Money]" in seen[-1][-2]["content"] and seen[-1][-1]["content"] == "and when?"
     monkeypatch.setattr(logic.assistant, "DOCS", docs.Index(str(tmp_path / "missing.db")))
@@ -287,3 +293,44 @@ def test_question_goes_to_cloudflare_only_with_vectors(env, tmp_path, monkeypatc
     con.close()
     assert h.post("/api/assistant", headers=tma(1), json={"q": "retake rules?"}).status_code == 200
     assert len(sent) == 1 and "/ai/run/@cf/baai/bge-m3" in sent[0]
+
+
+def _rup_cells(calc: str) -> list[tuple]:
+    """A made-up curriculum page as its cells (left, bottom, right, top, text): semester 1 on the left, 2 on the
+    right, a course name wrapped onto a second line, each semester's total, the cycles' table below."""
+    row = lambda y, x, *t: [(x + dx, y, x + dx + 20, y + 4, s) for dx, s in zip((0, 10, 40, 140, 150, 160), t) if s]  # noqa: E731
+    return [*row(600, 60, "UC", "MAT1245", "Calculus 1", "C", "5", "3"), *row(600, 310, "UC", "MAT1246", calc, "C", "5", "3"),
+            *row(590, 60, "RC", "HUM1101", "History of", "G", "5", "3"), (100, 584, 140, 588, "Kazakhstan"),
+            *row(590, 310, "EC", "", "Elective 1", "C", "5", "3"),
+            (100, 570, 130, 574, "Total"), (150, 570, 160, 574, "10"), (350, 570, 380, 574, "Total"), (400, 570, 410, 574, "10"),
+            (60, 500, 200, 504, "General Education Discipline 56")]
+
+
+def test_a_curriculum_reads_by_semester_and_intake(tmp_path):
+    texts = docs.rup(_rup_cells("Calculus 2"), "Curriculum (\u0420\u0423\u041f) Information Systems, intake 2026")
+    assert texts[0].startswith(f"{docs.CURR} Information Systems, intake 2026, semester 1 (columns: component, code, course,")
+    assert texts[0].splitlines()[1:] == ["UC MAT1245 Calculus 1 C 5 3", "RC HUM1101 History of G 5 3 Kazakhstan", "Total 10"]
+    assert texts[1].splitlines()[1:] == ["UC MAT1246 Calculus 2 C 5 3", "EC Elective 1 C 5 3", "Total 10"]
+    assert "General Education" in texts[2] and docs.rup([(0, 0, 9, 9, "Some prose")], "X") is None  # not a table: as before
+    assert docs.garbled("PFouoaucqL Aexan UnM uEncH nrucMn.r.cknit o6n0cru IIIopemop Cnnnr(a ncFan rtrtrnn trr6oli")
+    assert not docs.garbled("UC MAT1246 Calculus 2 C 5 3 1/0/2 Exam MAT1245 Programming Principles 1 History of Kazakhstan")
+    assert docs.semesters("courses of the 3rd semester?") == [3] == docs.semesters("\u0432 \u0442\u0440\u0435\u0442\u044c\u0435\u043c \u0441\u0435\u043c\u0435\u0441\u0442\u0440\u0435")
+    assert docs.semesters("2 \u043a\u0443\u0440\u0441") == [3, 4] and docs.semesters("Calculus 2 credits") == []
+
+    con = sqlite3.connect(tmp_path / "r.db")  # one programme's two intakes among a handbook's rules
+    con.executescript(docs.SCHEMA)
+    for yr, calc in (("2025-26", "Calculus 2 (old)"), ("2026-27", "Calculus 2")):
+        for i, t in enumerate(docs.rup(_rup_cells(calc), f"{docs.CURR} Information Systems, intake {yr[:4]}")):
+            con.execute("INSERT INTO chunks (doc, title, at, year, text) VALUES (?, ?, 'p. 1', ?, ?)", (f"IS {yr}.pdf", f"IS {yr}", yr, t))
+    con.executemany("INSERT INTO chunks (doc, title, at, text) VALUES ('h.txt', 'Handbook', '', ?)", [(f"Rule {i} of campus life.",) for i in range(30)])
+    con.execute("INSERT INTO fts (fts) VALUES ('rebuild')")
+    con.execute("INSERT INTO meta VALUES ('gen', 'x')")
+    con.commit()
+    con.close()
+    ix = docs.Index(str(tmp_path / "r.db"))
+    q = "Information Systems: Calculus 2 credits, 2nd semester?"
+    assert "intake 2025, semester 2" in ix.search(q, k=1, intake=2025)[0]["text"]      # the student's intake first
+    assert "intake 2026, semester 2" in ix.search(f"{q} 2026", k=1, intake=2025)[0]["text"]  # unless the question names one
+    hit = ix.search(q, k=1, intake=2026)[0]
+    assert "intake 2026, semester 2" in hit["text"] and "\nUC MAT1246 Calculus 2 C 5 3\n" in docs.cite([hit])
+    assert "academic year" not in docs.cite([hit])  # an intake's curriculum, not one in force by its year

@@ -95,22 +95,152 @@ def audit(path: str) -> dict:
 
 # ------------------------------------------------------------ text out of the files
 
-def _ocr(page) -> str:
-    """A scanned page (no text layer) through tesseract, as receipt.py reads receipts; no tesseract: nothing."""
+def _runs(d: np.ndarray) -> np.ndarray:
+    """Along each row: how long the run of True ending at each pixel is."""
+    pos = np.arange(1, d.shape[1] + 1)
+    return pos - np.maximum.accumulate(np.where(d, 0, pos), axis=1)
+
+
+def _ruled_off(a: np.ndarray) -> np.ndarray:
+    """A scanned table without its ruling (tesseract reads the cells' lines as letters and loses the rows): dark runs
+    longer than an eighth of an inch across or down whitened, a pixel around them too."""
+    d, m = a < 200, np.zeros(a.shape, bool)
+    for t, back in ((d, lambda x: x), (d.T, lambda x: x.T)):
+        m |= back(_runs(t) + _runs(t[:, ::-1])[:, ::-1] > 300 // 8)
+    m[1:] |= m[:-1].copy()
+    m[:, 1:] |= m[:, :-1].copy()
+    return np.where(m, 255, a).astype(np.uint8)
+
+
+def _ocr(page, *conf: str) -> str:
+    """A scanned page (no text layer) through tesseract, as receipt.py reads receipts; no tesseract: nothing. With
+    tesseract's "tsv": its words with their boxes, a table's ruling taken off first."""
     im = page.render(scale=300 / 72).to_pil().convert("L")
+    if conf:
+        from PIL import Image
+        im = Image.fromarray(_ruled_off(np.asarray(im)))
     import io
     png = io.BytesIO()
     im.save(png, "PNG")
     try:
-        r = subprocess.run(["tesseract", "stdin", "stdout", "-l", os.environ.get("DOCS_OCR", "rus+kaz+eng"), "--psm", "3"],
+        r = subprocess.run(["tesseract", "stdin", "stdout", "-l", os.environ.get("DOCS_OCR", "rus+kaz+eng"), "--psm", "3", *conf],
                            input=png.getvalue(), capture_output=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout.decode("utf-8", "replace")
 
 
-def pages(path: Path) -> list[tuple[str, str]]:
-    """(where, text) for each page of a PDF ("p. 3"), each heading's part of a .docx (its heading, or "")."""
+def garbled(text: str) -> bool:
+    """A text layer that's an old OCR's guess (Cyrillic read as Latin: "PFouoaucqL", "o6n0cru"): read it again."""
+    ws = re.findall(r"[^\W_]{3,}", text)
+    odd = sum(1 for w in ws if re.search(r"[a-z][A-Z]|[A-Za-z]\d+[a-z]|\d[a-z]", w) or re.search("[A-Za-z]", w) and re.search("[\u0400-\u04ff]", w))
+    return len(ws) >= 10 and odd > 0.25 * len(ws)
+
+
+def _cells(page, scan: bool) -> list[tuple]:
+    """A page's text as (left, bottom, right, top, text) pieces in points: the text layer's runs (a table's cells), or a
+    scan's words through tesseract glued along their line while closer than a letter's height (a cell's words)."""
+    out = []
+    if not scan:
+        tp = page.get_textpage()
+        for r in (tp.get_rect(i) for i in range(tp.count_rects())):
+            s = " ".join(tp.get_text_bounded(*r).split())
+            if out and min(r[3], out[-1][3]) - max(r[1], out[-1][1]) > 1 and -1 < r[0] - out[-1][2] < 1:  # a letter in another font (Kazakh's)
+                p = out[-1]
+                out[-1] = (p[0], min(p[1], r[1]), r[2], max(p[3], r[3]), p[4] + s)
+            elif s:
+                out.append((*r, s))
+        return out
+    k, h, line = 300 / 72, page.get_size()[1], None
+    for row in _ocr(page, "tsv").splitlines()[1:]:
+        f = row.split("\t")
+        if len(f) < 12 or not f[11].strip():
+            continue
+        x, y, w, hh = (int(v) / k for v in f[6:10])
+        cell = (x, h - y - hh, x + w, h - y, f[11].strip())
+        if line == f[1:5] and out and x - out[-1][2] < hh:
+            p = out[-1]
+            out[-1] = (p[0], min(p[1], cell[1]), cell[2], max(p[3], cell[3]), f"{p[4]} {cell[4]}")
+        else:
+            out.append(cell)
+        line = f[1:5]
+    return out
+
+
+# a curriculum (RUP): two tables side by side, odd semesters on the left, even on the right, each semester's rows ending
+# in its total. Its rows start with a component (ru, kk, en: required, university's, elective)
+_COMP = {"\u041e\u041a", "\u0412\u041a", "\u041a\u0412", "\u041c\u041a", "\u0416\u041a", "\u0422\u041a", "RC", "UC", "EC"}
+_TOTAL = re.compile("^(?:\u0412\u0441\u0435\u0433\u043e|\u0418\u0442\u043e\u0433\u043e|\u0411\u0430\u0440\u043b\u044b\u0493\u044b|\u0416\u0438\u044b\u043d\u044b|Total|\\d{2,3}$)", re.I)  # or its sum alone
+_SEM = re.compile("^(\\d{1,2})(?:st|nd|rd|th)?\\s*-?\\s*(?:\u0441\u0435\u043c\u0435\u0441\u0442\u0440|semester)", re.I)  # "3 semestr" as a scan reads
+_PROG = re.compile("[\"\u00ab\u201c]\\s*(6[B\u0412]\\d{5}\\s*[-–]?\\s*[^\"\u00bb\u201d]{3,80})[\"\u00bb\u201d]")
+RUP = re.compile("(?<![^\\W\\d_])(?:\u0440\u0443\u043f|rup)", re.I)  # a curriculum's file or folder: "RUP ..", "rupy 23bd"
+CURR = "Curriculum (\u0420\u0423\u041f)"  # every curriculum chunk's first words: "RUP" as students say it
+RUP_COLS = ("columns: component, code, course, cycle, credits (ECTS), contact hours a week, lectures/labs/seminars, "
+            "assessment, prerequisites")
+
+
+def _rows(cells: list[tuple]) -> list[str]:
+    """Cells in table rows, top to bottom: cells that overlap in height are one row (a wrapped course name with its
+    credits), read by column (cells overlapping in width are one, read downwards)."""
+    rows, cur, low = [], [], None
+    for c in sorted(cells, key=lambda c: -c[3]):
+        if cur and c[3] - 0.3 <= low:
+            rows.append(cur)
+            cur = []
+        cur.append(c)
+        low = c[1] if len(cur) == 1 else min(low, c[1])
+    rows.append(cur)
+    out = []
+    for row in filter(None, rows):
+        cols, right = [], None
+        for c in sorted(row):
+            if cols and c[0] < right - 0.5:
+                cols[-1].append(c)
+                right = max(right, c[2])
+            else:
+                cols.append([c])
+                right = c[2]
+        out.append(" ".join(c[4] for col in cols for c in sorted(col, key=lambda c: -c[3])))
+    return out
+
+
+def rup(cells: list[tuple], head: str) -> list[str] | None:
+    """A curriculum page as one text per semester, each opening with `head` and its semester ("semester 3", found
+    by a question naming it), the rows one per line; the page's rest (titles, the cycles' totals) last. None: not a
+    curriculum's table (no rows starting with a component)."""
+    marks = sorted(c[0] for c in cells if c[4] in _COMP)
+    if len(marks) < 4:
+        return None
+    gap, cut = max((b - a, b) for a, b in zip(marks, marks[1:]))
+    cut = cut - 1 if gap > 100 else 1e9  # the right table's first column; one table across the page: no cut
+    prog = next((m[1] for c in cells if (m := _PROG.search(c[4]))), "")
+    sems: dict[int, list[str]] = {}
+    rest: list[str] = []
+    for side in (0, 1):
+        n = 1 + side
+        for line in _rows([c for c in cells if (c[0] >= cut) == side]):
+            if m := _SEM.match(line):
+                n = int(m[1])
+            elif _TOTAL.match(line) and n in sems:
+                sems[n].append(line)
+                n += 2
+            elif n in sems and not re.search(r"\d", line) and line.split(" ", 1)[0] not in _COMP:
+                sems[n][-1] += f" {line}"  # a course name's wrapped end
+            elif line.split(" ", 1)[0] in _COMP or n in sems:
+                sems.setdefault(n, []).append(line)
+            else:
+                rest.append(line)
+    if not sems:
+        return None
+    # the programme as the page names it, with its initials as students say it ("VTiPO")
+    acr = "".join(w if w.isupper() else w[0].upper() if len(w) > 2 else w for w in re.findall(r"[^\W\d_]+", prog[8:]))
+    top = f"{head}{' ' + prog if prog else ''}{f' ({acr})' if len(acr) > 2 else ''}"
+    return [f"{top}, semester {n} ({RUP_COLS}):\n" + "\n".join(sems[n]) for n in sorted(sems)] + ([f"{top}:\n" + "\n".join(rest)] if rest else [])
+
+
+def pages(path: Path, head: str = "") -> list[tuple[str, str]]:
+    """(where, text) for each page of a PDF ("p. 3"), each heading's part of a .docx (its heading, or ""). With a
+    curriculum's `head` (its programme and intake), its table pages come one text per semester (rup)."""
     ext = path.suffix.lower()
     if ext == ".pdf":
         import pypdfium2 as pdfium
@@ -119,9 +249,13 @@ def pages(path: Path) -> list[tuple[str, str]]:
             out = []
             for i in range(len(pdf)):
                 t = pdf[i].get_textpage().get_text_range()
-                if len(t.strip()) < 40:  # a scan, or a page of pictures
-                    t = _ocr(pdf[i])
-                out.append((f"p. {i + 1}", t))
+                scan = len(t.strip()) < 40 or garbled(t)  # a scan, or a page of pictures
+                if head:  # a curriculum: its table's rows, or at least its lines in order
+                    cells = _cells(pdf[i], scan)
+                    sems = rup(cells, head) or [f"{head}:\n" + "\n".join(_rows(cells))] if cells else []
+                    out += [(f"p. {i + 1}", s) for s in sems]
+                    continue
+                out.append((f"p. {i + 1}", _ocr(pdf[i]) if scan else t))
             return out
         finally:
             pdf.close()
@@ -206,18 +340,23 @@ def build(src: Path, out: Path, account: str = "", token: str = "") -> dict:
     report = {"docs": 0, "chunks": 0, "redacted": 0, "skipped": []}
     for f in sorted(p for p in src.rglob("*") if p.is_file()):
         rel = str(f.relative_to(src))
+        name = redact(title(f))[0]  # a file's name and a heading reach citations and embeddings too
+        yr = year(f.stem) or year(str(Path(rel).parent))  # "2024-2025/6V04101 Management.pdf"
+        # a curriculum's every chunk says whose and which intake (its year: the intake's, not the year it's in force)
+        head = f"{CURR} {name}, intake {yr[:4] if yr else 'unknown'}" if RUP.search(rel) else ""
         try:
-            got = pages(f)
+            got = pages(f, head)
         except Exception as exc:  # a broken file: the rest still builds
             got = []
             log.warning("%s: %s", rel, exc)
         n = 0
-        name = redact(title(f))[0]  # a file's name and a heading reach citations and embeddings too
         for at, text in got:
             at, (text, cut) = redact(at)[0], redact(text)
             report["redacted"] += cut
-            for c in split(text):
-                con.execute("INSERT INTO chunks (doc, title, at, year, text) VALUES (?, ?, ?, ?, ?)", (rel, name, at, year(f.stem), c))
+            top, _, body = text.partition("\n") if head and text.startswith(head) else ("", "", text)
+            for c in split(body):
+                con.execute("INSERT INTO chunks (doc, title, at, year, text) VALUES (?, ?, ?, ?, ?)",
+                            (rel, name, at, yr, f"{top}\n{c}" if top else c))
                 n += 1
         if n:
             report["docs"] += 1
@@ -366,24 +505,32 @@ class Index:
         except (OSError, sqlite3.Error, TypeError):  # no file, or not a docs file
             return False
 
-    def _fts(self, con, q: str, n: int) -> list[int]:
-        terms = list(dict.fromkeys(stem(w) for w in _WORD.findall(q.lower().replace("\u0451", "\u0435")) if w not in STOP))
-        keep = []
+    def _fts(self, con, q: str, n: int, intake: int | None = None) -> list[list[int]]:
+        q = q.lower().replace("\u0451", "\u0435")
+        terms = list(dict.fromkeys(stem(w) for w in _WORD.findall(q) if w not in STOP))
+        # a question about a curriculum: its semester and intake as the chunks say them (a year is too common a word
+        # alone), the question's year, else the student's intake
+        sems, cur = semesters(q), _CURQ.search(q)
+        years = (re.findall(r"(?<!\d)20\d\d(?!\d)", q) or ([intake] if intake else [])) if cur or sems else []
+        keep = [f'"semester {s}"' for s in sems] + [f'"intake {y}"' for y in dict.fromkeys(years)]
         for t in terms:  # the index's own common words drop out: no stop-word lists to keep in three languages
             m = '"' + t.replace('"', "") + '"'
             if con.execute("SELECT COUNT(*) FROM fts WHERE fts MATCH ?", (m,)).fetchone()[0] <= max(COMMON * n, 3):
                 keep.append(m)
         if not keep:
             return []
-        return [r[0] for r in con.execute("SELECT rowid FROM fts WHERE fts MATCH ? ORDER BY bm25(fts, 0.5, 1) LIMIT ?",
-                                          (" OR ".join(keep), POOL))]
+        ask = lambda m: [r[0] for r in con.execute("SELECT rowid FROM fts WHERE fts MATCH ? ORDER BY bm25(fts, 0.5, 1) LIMIT ?", (m, POOL))]  # noqa: E731
+        # a question about a curriculum: the curricula's semesters ranked on their own beside the whole index (a FAQ's
+        # "subjects" and "intake" outrank a table's rows), fused like the vectors' list
+        return [ask(" OR ".join(keep))] + ([ask(f'"{CURR}" AND "(columns:" AND ({" OR ".join(keep)})')] if cur or sems else [])
 
-    def search(self, q: str, qvec: np.ndarray | None = None, k: int = 4) -> list[dict]:
+    def search(self, q: str, qvec: np.ndarray | None = None, k: int = 4, intake: int | None = None) -> list[dict]:
         """The k best chunks for a question: bm25's list and, with a question's vector of the file's length, cosine's,
-        fused by rank. One edition per handbook (the question's language when it has hits there): the three say the same."""
+        fused by rank. One edition per handbook (the question's language when it has hits there): the three say the same.
+        `intake`: the student's year of entry, its curricula first when the question names no year."""
         with self._con() as con:
             _, ids, vecs, n = self._load(con)
-            lists = [self._fts(con, q, n)]
+            lists = self._fts(con, q, n, intake)
             qv = None if qvec is None else np.asarray(qvec, dtype=np.float32).ravel()
             if vecs is not None and qv is not None and qv.shape == (vecs.shape[1],) and np.isfinite(qv).all():
                 lists.append(ids[np.argsort(-(vecs @ qv))[:POOL]].tolist())
@@ -402,6 +549,31 @@ class Index:
         return [h for h in hits if not (e := _ED.match(h["title"])) or keep[e[2]] == e[1]][:k]
 
 
+# ordinals 1-8 (en, ru, kk); "N semester" or "N year of study" ("kurs": its two semesters)
+_ORD = ("first|\u043f\u0435\u0440\u0432|\u0431\u0456\u0440\u0456\u043d\u0448\u0456", "second|\u0432\u0442\u043e\u0440|\u0435\u043a\u0456\u043d\u0448\u0456",
+        "third|\u0442\u0440\u0435\u0442|\u04af\u0448\u0456\u043d\u0448\u0456", "fourth|\u0447\u0435\u0442\u0432\u0435\u0440\u0442|\u0442\u04e9\u0440\u0442\u0456\u043d\u0448\u0456",
+        "fifth|\u043f\u044f\u0442|\u0431\u0435\u0441\u0456\u043d\u0448\u0456", "sixth|\u0448\u0435\u0441\u0442|\u0430\u043b\u0442\u044b\u043d\u0448\u044b",
+        "seventh|\u0441\u0435\u0434\u044c\u043c|\u0436\u0435\u0442\u0456\u043d\u0448\u0456", "eighth|\u0432\u043e\u0441\u044c\u043c|\u0441\u0435\u0433\u0456\u0437\u0456\u043d\u0448\u0456")
+_SEMQ = re.compile("(?<!\\w)(?:(\\d{1,2})(?:-?[^\\W\\d]{0,3})?|" + "|".join(f"({o})[^\\W\\d]*" for o in _ORD)
+                   + ")[\\s-]*(\u0441\u0435\u043c\u0435\u0441\u0442\u0440|semester|\u043a\u0443\u0440\u0441|year)"
+                   "|(?:\u0441\u0435\u043c\u0435\u0441\u0442\u0440|semester)\\s*(\\d{1,2})(?!\\d)")
+
+
+# a question about a curriculum (ru, kk, en): a semester, a year of study, the plan itself, credits, prerequisites, a code
+_CURQ = re.compile("\u0441\u0435\u043c\u0435\u0441\u0442\u0440|semester|\u043a\u0443\u0440\u0441|year of study|\u0440\u0443\u043f|rup\\b|curricul"
+                   "|\u0443\u0447\u0435\u0431\u043d\\w* \u043f\u043b\u0430\u043d|\u043e\u049b\u0443 \u0436\u043e\u0441\u043f\u0430\u0440|\u043a\u0440\u0435\u0434\u0438\u0442|credit|\u043f\u0440\u0435\u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442|prerequisit"
+                   "|\\b[a-z]{3,4}\\d{3,4}\\b")
+
+
+def semesters(q: str) -> list[int]:
+    """The semesters a question names: "3rd semester", "semestr 3", "tretiy semestr", "2 kurs" (3 and 4)."""
+    out = []
+    for m in _SEMQ.finditer(q.lower()):
+        n = int(m[1] or m[11] or next(i for i in range(1, 9) if m[i + 1]))
+        out += [n] if m[11] or m[10] in ("semester", "\u0441\u0435\u043c\u0435\u0441\u0442\u0440") else [2 * n - 1, 2 * n]
+    return [n for n in dict.fromkeys(out) if 1 <= n <= 12]
+
+
 _ED = re.compile(r"^(RUS|KAZ|ENG) (.+)$")      # a handbook's three editions: "RUS Handbook 2026-2027"
 _EDITION = {"ru": "RUS", "kk": "KAZ", "en": "ENG"}
 
@@ -415,8 +587,12 @@ def lang_of(q: str) -> str:
 
 def cite(hits: list[dict]) -> str:
     """The chunks as the assistant's brief reads them: each with its source to cite."""
-    return "\n".join(f"[{h['title']}{', ' + h['at'] if h['at'] else ''}]{' (academic year ' + h['year'] + ')' if h.get('year') else ''} "
-                     f"{' '.join(h['text'].split())}" for h in hits)
+    def body(h: dict) -> str:  # a curriculum's rows stay one a line; its intake is in its text, not a year in force
+        rows = [" ".join(x.split()) for x in h["text"].splitlines()]
+        return "\n".join(filter(None, rows)) if h["text"].startswith(CURR) else " ".join(rows).strip()
+    return "\n".join(f"[{h['title']}{', ' + h['at'] if h['at'] else ''}]"
+                     f"{' (academic year ' + h['year'] + ')' if h.get('year') and not h['text'].startswith(CURR) else ''} {body(h)}"
+                     for h in hits)
 
 
 if __name__ == "__main__":
