@@ -407,7 +407,7 @@
   let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
   // a new event starts with the announcement (owner, Nov 13: the fill existed, nobody found it): a paste screen first,
   // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
-  let step = $state<'paste' | 'form'>(untrack(() => !id && !staff && session.board ? 'paste' : 'form'));
+  let step = $state<'paste' | 'form'>(untrack(() => !id && session.board ? 'paste' : 'form'));
   let ai = $state<Marked[]>([]);
   let fromAi = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
