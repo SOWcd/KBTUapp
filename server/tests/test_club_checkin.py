@@ -176,3 +176,54 @@ def test_mark_by_hand(env):
     c.post(f"/api/screens/{sid}/finish", headers=tma(9))
     assert _badge(c, 9, sid, url).json()["error"] == "closed"           # finished
     con.close()
+
+
+def test_mark_by_hand_attacks(env):
+    """Another club's head, the leaving phase, an archived club, a flagged receipt at an event's own session."""
+    import time
+    from test_checkin_door import _ev, _qr, _reg
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = _club_runs(c, con, 9, "dana", "chess")
+    _club_runs(c, con, 8, "eve", "go")
+    login(c, 2, "bob")
+    bob = f"u_{c.get('/api/me', headers=tma(2)).json()['qr']}"
+    sid = _new(c, 9, oid).json()["session"]
+    c.post(f"/api/screens/{sid}/start", headers=tma(9))
+    assert _badge(c, 8, sid, bob).status_code == 403                    # another club's head, my session
+    assert c.get(f"/api/screens/{sid}/absent", headers=tma(8)).status_code == 403
+    assert c.post(f"/api/screens/{sid}/csv", headers=tma(8)).status_code == 403
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(8)).status_code == 403
+    c.post(f"/api/screens/{sid}/out", headers=tma(9))
+    assert _badge(c, 9, sid, bob).json()["message"] == "qr_out"         # leaving now: no arrival by hand
+    c.post(f"/api/screens/{sid}/in", headers=tma(9))
+    late = _new(c, 9, oid).json()["session"]                            # made, never started
+    con.execute("UPDATE orgs SET status = 'archived' WHERE id = ?", (oid,))
+    assert _badge(c, 9, sid, bob).json()["error"] == "closed"           # the club is gone
+    assert c.post(f"/api/screens/{late}/start", headers=tma(9)).json()["error"] == "closed"
+    assert c.post(f"/api/screens/{sid}/finish", headers=tma(9)).status_code == 200   # finishing still works
+    # an event's own session: a ticket whose receipt nobody reviewed goes to the door scanner, as a scan does
+    eid = _ev(con, _club_runs(c, con, 7, "mia", "poker"), int(time.time()) - 60, price=2000)
+    rid = _reg(con, eid, c.get("/api/me", headers=tma(2)).json()["id"], "BBBB")
+    fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at) VALUES ('x', 'receipt', 'image/webp', 1, 1, 1, 'p', 1, 0)").lastrowid
+    con.execute("INSERT INTO receipts (registration_id, file_id, via, flags, created_at) VALUES (?, ?, 'app', 'duplicate', 0)", (rid, fid))
+    esid, _ = _qr(c, 7, eid)
+    assert _badge(c, 7, esid, bob).json()["message"] == "flagged"
+    assert not con.execute("SELECT checked_in_at FROM registrations WHERE id = ?", (rid,)).fetchone()[0]
+    con.close()
+
+
+def test_deleting_the_marker_drops_the_link(env):
+    """Who marked by hand loses the link on deleting their account (marked_by: nullable, emptied with the rest)."""
+    from kbtu.logic import Viewer, account
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = _club_runs(c, con, 9, "dana", "chess")
+    me = c.get("/api/me", headers=tma(9)).json()["id"]
+    login(c, 2, "bob")
+    sid = _new(c, 9, oid).json()["session"]
+    c.post(f"/api/screens/{sid}/start", headers=tma(9))
+    assert _badge(c, 9, sid, f"u_{c.get('/api/me', headers=tma(2)).json()['qr']}").json()["done"]
+    account.delete_me(con, Viewer(me, "user", True))
+    assert con.execute("SELECT marked_by FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()[0] is None
+    con.close()

@@ -172,7 +172,7 @@ def _state(con, key: bytes | None, s) -> dict:
     return {"session": sid, "event": s["event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
             "phase": s["phase"], "departed": c[2],
             "expected": one(con, "SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", sid)[0],
-            "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running and key else None, "next": SLOT - int(time.time()) % SLOT}
+            "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running and key else None, "next": SLOT - int(time.time()) % SLOT, "created": s["created_at"]}
 
 
 def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
@@ -305,6 +305,8 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         else:  # a member at the event's door; who showed this code can't check themselves in with it (mark)
             _door(con, v, s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]), sid, act == "start")
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{sid}:{v.id}",))
+    if act == "start" and _archived(con, s):  # a club gone: its leftover session doesn't open
+        raise ApiError("closed", "qr")
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         with tx(con):
             if con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid)).rowcount:
@@ -324,6 +326,10 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         m = one(con, "SELECT user_id, done_at FROM qr_marks WHERE session_id = ? AND done_at IS NOT NULL ORDER BY done_at DESC LIMIT 1", sid)
         out["last"] = m and {"name": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", m[0])), "at": m[1]}
     return {**out, "title": _title_for(con, s, v.id, True)[0]} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
+
+
+def _archived(con, s) -> bool:
+    return bool(s["org_id"] and one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'archived'", s["org_id"]))
 
 
 def _finish(con, s, by: int | None) -> None:
@@ -563,12 +569,18 @@ def badge(con, v: Viewer, sid: int, raw: object) -> dict:
     u_<id>_<code>, as the event door reads it: organizing._walk_in). Counted exactly as a scan of the screen's QR, once,
     while the session runs; the badge is the proof (no names typed)."""
     s = _mine(con, v, sid, door=True)
-    if s["started_at"] is None or s["ended_at"] is not None:
+    if s["started_at"] is None or s["ended_at"] is not None or _archived(con, s):
         raise ApiError("closed", "qr")
+    if s["phase"] == "out":  # the QR marks leaving now: a hand mark would count an arrival at the end
+        raise ApiError("closed", "qr_out")
     m = logic.PROFILE_QR.search(str(raw or ""))
     uid = m and int(m[1])
     if not m or uid == v.id or not one(con, "SELECT 1 FROM users u JOIN students st ON st.user_id = u.id AND st.manual = 0 WHERE u.id = ? AND u.qr_code = ? AND u.banned_at IS NULL", uid, m[2]):
         raise ApiError("not_found", "badge")  # a wrong, foreign, stale (rotated) or own badge
+    r = s["event_id"] and one(con, "SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going' AND checked_in_at IS NULL",
+                              s["event_id"], uid)
+    if r and logic.organizing.flagged(con, r["id"]):  # a receipt nobody reviewed: the door scanner shows its flags (as mark)
+        raise ApiError("conflict", "flagged")
     t = now()
     with tx(con):
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by) VALUES (?, ?, ?, ?)", (sid, uid, t, v.id))
