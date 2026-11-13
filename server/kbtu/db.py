@@ -1724,7 +1724,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (165, _CHAT_SEEN),
     # (Nov 13) a club's team marked at one of its events (checkin.crew): a club session tied to the event, apart from
     # its guests' session (event_id); one per event; the event deleted, the attendance stays
-    (167, """ALTER TABLE qr_sessions ADD COLUMN crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
+    (166, """ALTER TABLE qr_sessions ADD COLUMN crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;"""),
 ]
 
