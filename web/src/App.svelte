@@ -403,6 +403,12 @@
       }, p);
       return;
     }
+    const ms = p.match(/^ms_([\w-]{24})$/); // back from the Microsoft sign-in (/ms.html): it lands only on the Telegram that started it
+    if (ms) {
+      api.msClaim(ms[1]).then(() => loadMe()).then(() => { haptic.ok(); if (session.me?.msPending) sheets.login(); else if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); })
+        .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      return;
+    }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }

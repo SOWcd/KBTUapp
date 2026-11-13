@@ -332,14 +332,43 @@ def ms_pending(con, uid: int) -> dict | None:
     return who if who and who["at"] > core.now() - MS_KEEP else None
 
 
-def ms_apply(con, uid: int, who: dict) -> bool:
-    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
+def ms_check(con, uid: int, who: dict):
+    """Whether this Microsoft account may go on this Telegram (raises why not); my student row, if any."""
     other = one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
     if other and other[0] != uid:
         raise ApiError("conflict", "linked")  # this Microsoft account is someone else's student already
     mine = one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
     if mine and mine[0] and mine[0] != who["oid"]:
         raise ApiError("conflict", "other_ms")  # already confirmed with another KBTU account: no silent swap
+    return mine
+
+
+MS_CLAIM_TTL = 15 * 60  # the browser's way back into the Mini App (msauth.TTL, the link's own life)
+
+
+def ms_hold(con, uid: int, who: dict) -> str:
+    """A Microsoft sign-in done in a browser waits for the Mini App of the Telegram that started it: the browser gets a
+    one-time secret for the app's start link, so a sign-in link sent to someone else can't tie their account to the
+    sender's Telegram (only their own app opens, and it is not his)."""
+    ms_check(con, uid, who)  # the browser hears "linked" / "other_ms" at once
+    secret = secrets.token_urlsafe(18)
+    con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"ms_claim:{secret}", json.dumps({"uid": uid, "who": who, "at": core.now()})))
+    return secret
+
+
+def ms_claim(con, v: Viewer, secret: str) -> bool:
+    """The Mini App's own step after the browser: only the Telegram that started the sign-in takes it (ms_apply's bool)."""
+    with tx(con):
+        row = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"ms_claim:{secret}") if re.fullmatch(r"[\w-]{24}", secret) else None
+        held = json.loads(row[0]) if row else None
+        if not held or held["uid"] != v.id or held["at"] < core.now() - MS_CLAIM_TTL:
+            raise ApiError("forbidden", "ms")
+        return ms_apply(con, v.id, held["who"])
+
+
+def ms_apply(con, uid: int, who: dict) -> bool:
+    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
+    mine = ms_check(con, uid, who)
     if mine:
         ms_link(con, uid, who)
         return True
@@ -354,6 +383,7 @@ def ms_sweep(con) -> None:
         return
     con.execute("DELETE FROM meta WHERE key >= 'ms:' AND key < 'ms;' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
     con.execute("DELETE FROM meta WHERE key >= 'ms_used:' AND key < 'ms_used;' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
+    con.execute("DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.at') < ?", (core.now() - MS_CLAIM_TTL,))
     con.execute("DELETE FROM meta WHERE key >= 'chpick:' AND key < 'chpick;' AND CAST(substr(value, instr(value, ':') + 1) AS INTEGER) < ?", (core.now(),))
 
 

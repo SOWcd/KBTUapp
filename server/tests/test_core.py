@@ -4065,7 +4065,9 @@ def test_ms_sign_in(env, monkeypatch):
         return httpx.Response(200, json=graph)
     monkeypatch.setattr(httpx.AsyncClient, "get", get)
     uid = lambda tg: c.get("/api/me", headers=tma(tg)).json()["id"]  # noqa: E731 (states carry our user id, not Telegram's)
-    finish = lambda tg, tok, st=None: c.post("/api/ms/finish", json={"state": st or msauth.state_for(cfg.token_key, uid(tg)), "token": tok})  # noqa: E731
+    def finish(tg, tok, st=None):  # the browser's step, then the Mini App's claim from the Telegram that started it
+        r = c.post("/api/ms/finish", json={"state": st or msauth.state_for(cfg.token_key, uid(tg)), "token": tok})
+        return c.post("/api/ms/claim", headers=tma(tg), json=r.json()) if r.status_code == 200 else r
     assert finish(21, token(tid="other-tenant")).status_code == 403           # someone else's directory
     assert finish(21, token(app="other-app")).status_code == 403              # a token made for another app
     assert finish(21, token(), st="21.1.x.bad").status_code == 403              # a state we never signed
@@ -4075,6 +4077,16 @@ def test_ms_sign_in(env, monkeypatch):
     st = msauth.state_for(cfg.token_key, uid(21))
     assert finish(21, token(), st=st).json() == {"ok": True}                  # linked at once (no return code)
     assert finish(21, token(), st=st).status_code == 403                      # each link once
+    # someone else's sign-in link (a look-alike name on it): the browser's claim opens only its starter's Mini App
+    graph["id"] = "oid-7"
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid(23)), "token": token()}).json()
+    assert set(held) == {"claim"}
+    assert c.post("/api/ms/claim", headers=tma(24), json=held).status_code == 403   # not the Telegram that asked
+    assert c.post("/api/ms/claim", headers=tma(24), json={"claim": "x"}).status_code == 403
+    assert c.get("/api/me", headers=tma(24)).json()["msPending"] is None
+    assert c.post("/api/ms/claim", headers=tma(23), json=held).json() == {"ok": True}  # its starter's own app
+    assert c.post("/api/ms/claim", headers=tma(23), json=held).status_code == 403      # once
+    graph["id"] = "oid-1"
     me = c.get("/api/me", headers=tma(21)).json()
     assert "msCode" not in me
     assert me["student"]["ms"] and me["student"]["email"] == "b_real@kbtu.kz"

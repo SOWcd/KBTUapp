@@ -107,5 +107,6 @@ def _ms(c, cfg, monkeypatch):
     def finish(tg: int, oid: str):
         graph.update({"id": oid, "givenName": "Bek", "surname": "Real", "userPrincipalName": f"{oid}@kbtu.kz"})
         uid = c.get("/api/me", headers=tma(tg)).json()["id"]
-        return c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid), "token": f"h.{part}.s"})
+        r = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid), "token": f"h.{part}.s"})
+        return c.post("/api/ms/claim", headers=tma(tg), json=r.json()) if r.status_code == 200 else r
     return finish

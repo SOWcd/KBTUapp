@@ -570,9 +570,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         with pool.conn() as con, db.tx(con):
             if not con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"ms_used:{state[-16:]}", str(logic.now()))).rowcount:
                 raise ApiError("forbidden", "ms")  # each link once
-            # ms.html asked "link to <this Telegram>?" before getting here
-            logic.ms_apply(con, uid, who)
-            return {"ok": True}
+            # not applied here: the Mini App of the Telegram that started it takes it (/api/ms/claim)
+            return {"claim": logic.ms_hold(con, uid, who)}
+
+    @app.post("/api/ms/claim")
+    def ms_claim(con: Con, v: Me, body: dict = Body(...)):
+        """The app's ms_<secret> start link from /ms.html: the sign-in lands only on the Telegram that asked for it"""
+        logic.ms_claim(con, v, str(body.get("claim") or ""))
+        return {"ok": True}
 
     # ------------------------------------------------------------ the clubs' rosters (PLAN 95, roster.py)
 
@@ -2489,9 +2494,9 @@ show(L.wait);
   if (!tok.access_token) return end(nope(tok.error, tok.error_description), "bad");
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
-  // linked already: plain Telegram, so the app window left open greets him there; a startapp link would open a second
-  // app over it (owner, Oct 24). Tried at once (a browser may ask or refuse without a tap), the button stays for that
-  if (r.ok) { end("ok", "ok"); location.href = "tg://"; return; }
+  // the app's start link carries a one-time claim that only the Telegram which started the sign-in can take (so a
+  // forwarded sign-in link binds nothing). Tried at once (a browser may ask or refuse without a tap), the button stays for that
+  if (r.ok) { const go = "https://t.me/__BOT__?startapp=ms_" + j.claim; end("ok", "ok"); $("open").href = go; location.href = go; return; }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

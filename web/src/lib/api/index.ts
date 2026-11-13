@@ -13,6 +13,7 @@ export { localize, original, staffEvents, staffOrg, translated } from './client'
 export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
+  msClaim(claim: string): Promise<{ ok: true }>; // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
   updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me>;  // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
