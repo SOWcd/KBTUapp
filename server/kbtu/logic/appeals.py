@@ -277,22 +277,25 @@ def months(con) -> list[dict]:
 SOLVED_LEN = (10, 140)
 SOLVED_MONTH = 10                       # new live entries a calendar month (Almaty)
 SOLVED_SHOWN = 3                        # students see the feed from this many entries; SG always
-_BAD = (("link", re.compile(r"https?:|www\.|t\.me|\b[a-z0-9-]+\.[a-z]{2,}\b|\.(?:\u0440\u0444|\u049b\u0430\u0437)\b", re.I)),
-        ("contact", re.compile(r"@|\((?:at|dog)\)|\[(?:at|dog)\]|\d(?:[\s().+-]*\d){5,}", re.I)),  # mentions, e-mails, phones
-        ("number", re.compile(r"\d{2,}")))
+_CONTACT = re.compile(r"@|\((?:at|dog)\)|\[(?:at|dog)\]|\d(?:[\s().+-]*\d){5,}", re.I)  # mentions, e-mails, phones
+_NUMBER = re.compile(r"\d{2,}")         # a room, a floor, a date, an id (Unicode digits too)
 
 
 def solved_line(x: object) -> str:
-    """One line, plain: invisible and control characters out (they could split a number past the checks), NFKC (wide
-    digits and letters as plain ones), whitespace collapsed; then the length and the shapes. ApiError's reason: the shape."""
-    t = unicodedata.normalize("NFKC", x) if isinstance(x, str) else ""
-    t = " ".join("".join(ch if ch.isspace() or unicodedata.category(ch)[0] != "C" else "" for ch in t).split())
-    if not SOLVED_LEN[0] <= len(t) <= SOLVED_LEN[1]:
+    """One line, plain: the forum channel's invisible characters out (they could split a number past the checks) and
+    control ones, whitespace collapsed; then the length and, read as the forum channel reads it (NFKC, odd dots), a
+    contact, a link (its LINKY, SPACED) or a number. ApiError's message: which. The app mirrors it (web/src/lib/solved.ts;
+    the cases both agree on: server/tests/solved_rules.json)."""
+    from .fchannel import BRACKET_DOT, DOTS, LINKY, SPACED, ZWJ, _visible
+    s = x if isinstance(x, str) else ""
+    s = " ".join("".join(c for c in s if c.isspace() or (_visible(c) and c != ZWJ and unicodedata.category(c) != "Cc")).split())
+    if not SOLVED_LEN[0] <= len(s) <= SOLVED_LEN[1]:
         raise ApiError("bad_input", "length")
-    for why, rx in _BAD:
-        if rx.search(t):
+    seen = BRACKET_DOT.sub(".", unicodedata.normalize("NFKC", s).translate(DOTS))
+    for why, bad in (("contact", _CONTACT.search(seen)), ("link", LINKY.search(seen) or SPACED.search(seen)), ("number", _NUMBER.search(seen))):
+        if bad:
             raise ApiError("bad_input", why)
-    return t
+    return s
 
 
 def _month_start(t: int) -> int:

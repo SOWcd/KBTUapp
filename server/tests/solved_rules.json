@@ -1,0 +1,85 @@
+{
+ "_": "\"Solved by your appeals\" lines: what the server refuses (logic/appeals.solved_line) and the app flags as you type (web/src/lib/solved.ts). [text, why]: length, link, contact, number, or null (passes). Both tests read this file.",
+ "cases": [
+  [
+   "short",
+   "length"
+  ],
+  [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "length"
+  ],
+  [
+   "   ten  \n letters   ",
+   null
+  ],
+  [
+   "see https://kbtu.kz now",
+   "link"
+  ],
+  [
+   "see www.example now",
+   "link"
+  ],
+  [
+   "ask at t.me/somebody",
+   "link"
+  ],
+  [
+   "written on kbtu.edu.kz site",
+   "link"
+  ],
+  [
+   "the site \u043a\u0431\u0442\u0443.\u0440\u0444 opened",
+   "link"
+  ],
+  [
+   "look at instagram . com please",
+   "link"
+  ],
+  [
+   "the page example\u3002com moved",
+   "link"
+  ],
+  [
+   "thanks to @someone for it",
+   "contact"
+  ],
+  [
+   "mail a.b (at) mail com please",
+   "contact"
+  ],
+  [
+   "call +7 7 0 1 2 3 4 5 6 now",
+   "contact"
+  ],
+  [
+   "room 405 got heating",
+   "number"
+  ],
+  [
+   "floor 1\u200b2 got heating",
+   "number"
+  ],
+  [
+   "room \uff14\uff10\uff15 got heating",
+   "number"
+  ],
+  [
+   "since 2024 nothing worked",
+   "number"
+  ],
+  [
+   "Floor 3 got a new microwave",
+   null
+  ],
+  [
+   "Cold water in the dorm showers",
+   null
+  ],
+  [
+   "\u0412 \u0441\u0442\u043e\u043b\u043e\u0432\u043e\u0439 \u043d\u0435 \u0431\u044b\u043b\u043e \u0433\u043e\u0440\u044f\u0447\u0435\u0439 \u0432\u043e\u0434\u044b",
+   null
+  ]
+ ]
+}

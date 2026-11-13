@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import pathlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -293,19 +294,14 @@ def _add(c, tg=SG, raised=OK_R, changed=OK_C, **kw):
     return c.post("/api/sg/solved", headers=tma(tg), json={"raised": raised, "changed": changed, **kw})
 
 
-@pytest.mark.parametrize("bad, why", [
-    ("short", "length"), ("x" * 141, "length"),
-    ("see https://kbtu.kz now", "link"), ("see www.example now", "link"), ("ask at t.me/somebody", "link"),
-    ("written on kbtu.edu.kz site", "link"), ("the site \u043a\u0431\u0442\u0443.\u0440\u0444 opened", "link"),
-    ("thanks to @someone for it", "contact"), ("mail a.b (at) mail com please", "contact"),
-    ("call +7 7 0 1 2 3 4 5 6 now", "contact"),
-    ("room 405 got heating", "number"), ("floor 1\u200b2 got heating", "number"),        # a hidden character can't split it
-    ("room \uff14\uff10\uff15 got heating", "number"),                                         # wide digits are digits
-    ("since 2024 nothing worked", "number"),
-])
-def test_rejected_shapes(bad, why):
+@pytest.mark.parametrize("text, why", json.loads(pathlib.Path(__file__).with_name("solved_rules.json").read_text())["cases"])
+def test_solved_rules(text, why):
+    """The cases the app agrees on (web/src/lib/solved.test.ts)."""
+    if why is None:
+        assert appeals.solved_line(text)
+        return
     with pytest.raises(ApiError) as e:
-        appeals.solved_line(bad)
+        appeals.solved_line(text)
     assert (e.value.code, e.value.message) == ("bad_input", why)
 
 
