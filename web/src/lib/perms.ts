@@ -1,5 +1,5 @@
 // The rank rule from SPEC §2, the UI's copy: it hides what you can't do; the server enforces it (logic.py).
-import type { ClubLevel, OrgRole, Right } from './api/types';
+import type { ClubLevel, Membership, OrgRole, Right } from './api/types';
 import { i18n, t } from './i18n/index.svelte';
 
 export const RANK: Record<OrgRole, number> = { member: 1, head: 2, vice: 3, president: 4 };
@@ -22,6 +22,10 @@ export const RIGHTS: { key: Right; level: ClubLevel }[] = [
 ];
 /** I may do this in this club (my membership, or a club with my rights) */
 export const may = (m: { rights?: Right[] | null } | null | undefined, right: Right): boolean => !!m?.rights?.includes(right);
+
+/** Open Studio for people who run the club; a plain member opens its public page. */
+export const opensStudio = (m: Pick<Membership, 'role' | 'rights'> | null | undefined): boolean =>
+  !!m && (m.role !== 'member' || !!m.rights?.some((r) => r !== 'door'));
 
 /** The rank rule (§2): whoever runs the team manages only people strictly below them. */
 export const canManage = (m: { role: OrgRole; rights?: Right[] } | null | undefined, theirs: OrgRole): boolean => may(m, 'team') && RANK[m!.role] > RANK[theirs];

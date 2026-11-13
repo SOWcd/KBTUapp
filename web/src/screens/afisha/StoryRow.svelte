@@ -1,16 +1,10 @@
 <script lang="ts">
-  // The news on top of Afisha's List, as a row of circles (PLAN 46): the broadcasts (DMP, KBTU App),
-  // every club I'm in or follow that posted in the last 30 days, and every club with a new event (lib/posts.ts); a ring while something is unread. A tap plays that
-  // club's posts full screen (Stories.svelte), then the next clubs'. The first circle, "News", opens every post (News); the second, the Gallery.
-  import Newspaper from '@lucide/svelte/icons/newspaper';
-  import Images from '@lucide/svelte/icons/images';
-  import { t } from '../../lib/i18n/index.svelte';
+  // Clubs' stories only; News has its own header action and Gallery its card in List.
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { OrgRef } from '../../lib/api';
   import { data, loadNews } from '../../lib/state/data.svelte';
   import { ui } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
@@ -32,22 +26,11 @@
   }
   // a new event earns a circle only from an official organization or one I'm in or follow (owner, Nov 9), as the posts do (server _REACH)
   const reach = $derived(new Set(data.orgs.filter((o) => o.official || o.kind !== 'club' || o.top || o.myRole || o.subscribed).map((o) => o.id)));
-  const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv));
+  const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv).filter((g) => g.org.kind === 'club'));
 </script>
 
+{#if groups.length}
 <div class="row hscroll">
-  <!-- the whole news feed first and by its name (owner, Nov 11: as the last circle "All" nobody found it) -->
-  <button class="s news" onclick={() => sheets.news()}>
-    <span class="ring"><span class="in all"><Newspaper size={24} strokeWidth={2} /></span></span>
-    <b class="ellipsis">{t('page.news')}</b>
-  </button>
-  <!-- the Gallery right after it (owner, Nov 11: the card lower in the list was not found); shown as that card is -->
-  {#if session.me?.student && (data.gallery.length || data.galleryPost)}
-    <button class="s news" onclick={() => sheets.gallery()}>
-      <span class="ring"><span class="in all"><Images size={24} strokeWidth={2} /></span></span>
-      <b class="ellipsis">{t('gallery.title')}</b>
-    </button>
-  {/if}
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
       <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>
@@ -55,6 +38,7 @@
     </button>
   {/each}
 </div>
+{/if}
 
 <style>
   .row { display: flex; gap: 12px; margin: 0 calc(-1 * var(--gutter)) 16px; padding: 2px var(--gutter); overflow-x: auto; scrollbar-width: none; }
@@ -63,8 +47,6 @@
   .ring { display: block; box-sizing: border-box; width: 64px; height: 64px; padding: 2px; border-radius: 50%; background: var(--line-2); transition: transform var(--t-fast) var(--ease); }
   .new .ring { padding: 2.5px; background: conic-gradient(from 200deg, var(--accent), var(--accent-2), var(--accent)); }
   .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
-  .all { background: var(--accent-soft); color: var(--accent); }
-  .news b { color: var(--text); }
   b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
   .new b { color: var(--text); }
 </style>

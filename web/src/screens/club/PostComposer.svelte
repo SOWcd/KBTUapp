@@ -34,7 +34,7 @@
   import Lock from '@lucide/svelte/icons/lock';
 
   let { overlay, org, post, casting = false }: { overlay: Overlay; org: Id; post?: Post; casting?: boolean } = $props();
-  const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
+  const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => may(m, 'posts')).sort(byRank));
   const pick = $derived(org);
   const club = $derived(mine.find((m) => m.org.id === pick)?.org);
   // "Important" messages the club's members (once a day per club), so it's Vice+'s

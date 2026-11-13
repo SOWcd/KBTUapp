@@ -1,7 +1,8 @@
 <script lang="ts">
-  // The Clubs tab, top down (the owner's v3, Nov 9): my clubs; open rounds as cards, at most 8, official first (every
-  // round is behind "All"); interests; popular; rows to all clubs, schools and KBTU's chats. The search waits above the
-  // top until the list is pulled down (PullSearch, as on every tab but Profile); typing turns the tab into the results.
+  // My organizations first as cards; the recruiting shop window follows, or leads for newcomers.
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Button from '../../ui/Button.svelte';
+  import Card from '../../ui/Card.svelte';
   import Code from '@lucide/svelte/icons/code';
   import Palette from '@lucide/svelte/icons/palette';
   import Trophy from '@lucide/svelte/icons/trophy';
@@ -11,7 +12,7 @@
   import LayoutGrid from '@lucide/svelte/icons/layout-grid';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { data, loadChats, chatsFor, currentCastings, leaveClub } from '../../lib/state/data.svelte';
+  import { data, loadChats, chatsFor, currentCastings, leaveClub, toggleJoin } from '../../lib/state/data.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -23,10 +24,9 @@
   import { type Membership, type OrgCategory, type OrgRef } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { byWeight, clubSub, hit, nextByOrg, roundDue, waitsDmp } from '../../lib/clubs';
-  import { byRank, canLeave, roleLabel } from '../../lib/perms';
+  import { byRank, canLeave, opensStudio, roleLabel } from '../../lib/perms';
   import Row from '../../ui/Row.svelte';
   import { nameOf } from '../../lib/short';
-  import { SvelteSet } from 'svelte/reactivity';
   import { haptic } from '../../lib/tg';
   import { longPress } from '../../ui/longpress';
   import { menu } from '../../ui/menu';
@@ -43,37 +43,23 @@
   const SCHOOLISH = new Set(['school', 'office']);
   const clubsOnly = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
   const found = $derived(searching ? [...data.orgs, ...data.small].filter((o) => hit(o, q)).sort(byWeight) : []);
-  const next = $derived(nextByOrg(data.events));
+  const next = $derived(nextByOrg([...data.events, ...Object.values(data.studio).flat()].filter((e) => e.status === 'published')));
 
-  // My clubs: the ones I'm in (by my rank; lead: President or Vice there), then the ones I follow
-  type Mine = { org: OrgRef; role: string | null; lead: boolean; leave: Membership | null };
-  const mine = $derived.by<Mine[]>(() => {
-    const ms = [...(session.me?.memberships ?? [])].sort(byRank);
-    const inIds = new Set(ms.map((m) => m.org.id));
-    return [...ms.map((m) => ({ org: m.org, role: roleLabel(m), lead: m.role === 'president' || m.role === 'vice', leave: canLeave(m) ? m : null })),
-      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, role: null, lead: false, leave: null }))];
-  });
-  const openMine = (x: Mine) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
-  const hold = (x: Mine) => (el: HTMLElement) => menu(el, [{ label: t('clubs.open'), onselect: () => openMine(x) }, { label: t('clubs.leave'), destructive: true, onselect: () => void leaveClub(x.leave!) }]);
-  const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: `${x.role ?? t('clubs.following')} · ${next.get(x.org.id) ?? t('clubs.nothingSoon')}` }))); };
-  // a strip name: the short one when the full one runs past the logo's column (StoryRow's rule), measured once each
-  const tight = new SvelteSet<number>();
-  let pen: CanvasRenderingContext2D | null = null;
-  const fit = (o: OrgRef) => (node: HTMLElement) => {
-    if (!o.abbr) return;
-    pen ??= document.createElement('canvas').getContext('2d');
-    if (!pen) return;
-    pen.font = getComputedStyle(node).font;
-    if (pen.measureText(nameOf(o)).width > 70) tight.add(o.id);
-  };
+  type Mine = { org: OrgRef; role: string; membership: Membership; sub: string | undefined };
+  const mine = $derived<Mine[]>([...(session.me?.memberships ?? [])].sort(byRank).map((m) => ({ org: m.org, role: roleLabel(m), membership: m, sub: next.get(m.org.id) })));
+  const followed = $derived(clubsOnly.filter((o) => o.subscribed && !memberOf.has(o.id)).sort(byWeight));
+  const openMine = (x: Mine) => { haptic.tap(); if (opensStudio(x.membership)) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const hold = (x: Mine) => (el: HTMLElement) => menu(el, [{ label: t('clubs.open'), onselect: () => openMine(x) }, { label: t('clubs.leave'), destructive: true, onselect: () => void leaveClub(x.membership) }]);
+  const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: [x.role, x.sub].filter(Boolean).join(' · ') }))); };
 
   // Recruiting: castings (come in person) first, then every open round, none of clubs I'm in. The strip: 8 in all, rounds
   // official first, then by members; "All": each one, the rounds soonest first
   const memberOf = $derived(new Set((session.me?.memberships ?? []).map((m) => m.org.id)));
   const rounds = $derived(data.orgs.flatMap((o) => (o.round && !memberOf.has(o.id) && !o.myRole ? [{ org: o, round: o.round }] : [])));
+  const alwaysOpen = $derived(clubsOnly.filter((o) => o.recruiting && !o.round && !memberOf.has(o.id) && !o.myRole).sort(byWeight));
   const castings = $derived(currentCastings().filter((p) => !memberOf.has(p.org.id)));
   const strip = $derived([...rounds].sort((a, b) => +!a.org.official - +!b.org.official || b.org.members - a.org.members || a.round.closesAt - b.round.closesAt).slice(0, Math.max(0, 8 - castings.length)));
-  const allRounds = () => { haptic.tap(); sheets.myClubs([...castings.map((p) => ({ org: p.org, role: null, sub: `${t('casting.come')} · ${castingStatus(p.casting!)}` })), ...[...rounds].sort((a, b) => a.round.closesAt - b.round.closesAt).map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) }))], t('clubs.recruitingNow')); };
+  const allRounds = () => { haptic.tap(); sheets.myClubs([...castings.map((p) => ({ org: p.org, role: null, sub: `${t('casting.come')} · ${castingStatus(p.casting!)}` })), ...[...rounds].sort((a, b) => a.round.closesAt - b.round.closesAt).map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) })), ...alwaysOpen.map((org) => ({ org, role: null, sub: t('clubs.openNow') }))], t('clubs.recruitingNow')); };
 
   // interests: the ones with a live club in them. Popular: the server's rank
   const live = $derived(clubsOnly.filter((o) => !o.quiet));
@@ -99,25 +85,34 @@
   {:else}
     {#if mine.length}
       <Section title={t('clubs.mineTitle')} onmore={allMine}>
-        <div class="strip hscroll">
+        <div class="mine">
           {#each mine as x (x.org.id)}
-            <button class="mc" onclick={() => openMine(x)} {@attach x.leave && longPress(hold(x))}>
-              <OrgLogo org={x.org} size={64} />
-              <b class="ellipsis" {@attach fit(x.org)}>{tight.has(x.org.id) ? x.org.abbr : nameOf(x.org)}</b>
-              <small class={['ellipsis', { lead: x.lead }]}>{x.role ?? t('clubs.following')}</small>
-            </button>
+            <Card>
+              <button class="mc" onclick={() => openMine(x)} {@attach canLeave(x.membership) && longPress(hold(x))}>
+                <OrgLogo org={x.org} size={48} />
+                <span class="mine-text"><b>{nameOf(x.org)}</b><small>{x.role}</small>{#if x.sub}<span class="activity ellipsis">{x.sub}</span>{/if}</span>
+                <ChevronRight size={18} />
+              </button>
+            </Card>
           {/each}
         </div>
       </Section>
     {/if}
 
-    {#if strip.length || castings.length}
-      <Section title={t('clubs.recruitingNow')} onmore={allRounds} moreLabel={t('clubs.allN', { n: rounds.length + castings.length })} loud>
+    {#if strip.length || castings.length || alwaysOpen.length}
+      <Section title={t('clubs.recruitingNow')} onmore={allRounds} moreLabel={t('clubs.allN', { n: rounds.length + castings.length + alwaysOpen.length })} loud>
         <!-- keyed: castings come in after the rounds, and scroll snap would stay on the card it had, hiding them -->
-        {#key castings.length}<div class="shelf hscroll">
+        {#if strip.length || castings.length}{#key castings.length}<div class="shelf hscroll">
           {#each castings.slice(0, 8) as p (p.id)}<div class="cast"><CastingCard post={p} /></div>{/each}
           {#each strip as r (r.org.id)}<RecruitCard org={r.org} round={r.round} />{/each}
-        </div>{/key}
+        </div>{/key}{/if}
+        {#if alwaysOpen.length}<Group>
+          {#each alwaysOpen.slice(0, 3) as o (o.id)}
+            <ClubRow org={o} name={nameOf(o)} sub={t('clubs.openNow')}>
+              {#snippet end()}<Button kind="secondary" size="s" disabled={o.myRequest === 'rejected'} onclick={() => toggleJoin(o.id)}>{t(o.myRequest === 'rejected' ? 'join.notNow' : o.myRequest === 'pending' ? 'join.sent' : 'join.apply')}</Button>{/snippet}
+            </ClubRow>
+          {/each}
+        </Group>{/if}
       </Section>
     {/if}
 
@@ -139,6 +134,12 @@
         <div class="shelf hscroll">
           {#each popular as o (o.id)}<ClubPoster org={o} sub={next.get(o.id) ?? tn('club.members', o.members)} />{/each}
         </div>
+      </Section>
+    {/if}
+
+    {#if followed.length}
+      <Section title={t('clubs.following')}>
+        <Group>{#each followed as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={clubSub(o, next)} />{/each}</Group>
       </Section>
     {/if}
 
@@ -166,11 +167,13 @@
   .page > :global(.sec) { margin-top: var(--s-7); }
   .page > :global(.hold + .sec) { margin-top: var(--s-1); }
 
-  .strip { gap: 14px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 0; scroll-padding: 0 var(--gutter); }
-  .mc { flex: none; width: 70px; display: flex; flex-direction: column; align-items: center; text-align: center; scroll-snap-align: start; }
-  .mc b { width: 100%; margin-top: 7px; font: 600 var(--fs-cap)/1.25 var(--font-text); }
-  .mc small { width: 100%; font: 500 var(--fs-micro)/1.3 var(--font-text); color: var(--text-3); }
-  .mc small.lead { color: var(--accent-text); font-weight: 600; }
+  .mine { display: flex; flex-direction: column; gap: var(--s-2); }
+  .mc { width: 100%; display: flex; align-items: center; gap: var(--s-3); text-align: left; }
+  .mc :global(svg) { flex: none; color: var(--text-3); }
+  .mine-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+  .mine-text b { font: 700 var(--fs-card)/1.25 var(--font-text); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .mine-text small { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .activity { margin-top: var(--s-1); font: 500 var(--fs-cap)/1.3 var(--font-text); color: var(--accent-text); }
 
   .shelf { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--s-2); scroll-padding: 0 var(--gutter); }
 

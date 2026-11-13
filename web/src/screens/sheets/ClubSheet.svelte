@@ -99,6 +99,9 @@
     </div>
 
     <div class="body">
+      {#if session.me?.memberships.some((m) => m.org.id === id)}
+        <Group><Row icon={Users} title={t('club.workspace')} accessory="chevron" onclick={() => sheets.studio(id)} /></Group>
+      {/if}
       {#if o.description || (shut && !o.members)}
         <div>
           {#if o.description}<p class="t-body selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>

@@ -1,11 +1,5 @@
 <script lang="ts">
-  // Afisha, one screen, in Luma's manner (owner, Nov 2: mock A with B's covers on top). The date and Today with a quiet
-  // pill (the assistant, "In a row"), the news circles; "Your events" (only when I go somewhere): big covers swiped sideways, the next one peeking
-  // in (the events I'm going to this week, their Ticket and Route on the cover); then "Events" over its grey count, the
-  // featured post, and the days ("Tomorrow / Tuesday"): rows with a square cover, the club, a bold title, time and place
-  // with thin icons, classes as slim rows in time order between them, the one on now live in place (the capsule above
-  // says it too), hairlines inset to the text. No date strip
-  // (owner, Oct 24: people scroll); the headers don't stick (a slab mid-screen over the rows).
+  // Events lead each day; the optional timetable stays in its own quiet group.
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
@@ -27,7 +21,7 @@
   import { classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
-  import { openLink } from '../../lib/tg';
+  import { openLink, haptic } from '../../lib/tg';
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
@@ -40,6 +34,7 @@
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import { fitTitle, largeTitle } from '../../ui/title';
+  import Chip from '../../ui/Chip.svelte';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
@@ -49,6 +44,14 @@
   import { hit as orgHit } from '../../lib/clubs';
   import { hit, namesOf } from '../../lib/search';
   import GalleryCard from './GalleryCard.svelte';
+
+  const TIMETABLE = 'kbtu.afisha.classes';
+  let showClasses = $state((() => { try { return localStorage.getItem(TIMETABLE) !== 'hidden'; } catch { return true; } })());
+  function toggleClasses() {
+    haptic.tap();
+    showClasses = !showClasses;
+    try { localStorage.setItem(TIMETABLE, showClasses ? 'shown' : 'hidden'); } catch { /* blocked */ }
+  }
 
   let openPost = $state(false);
 
@@ -74,10 +77,9 @@
     for (const p of data.castings) { if (!p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
     // the coming week's class days too (the owner missed his Wednesday), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
-    const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
+    const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
     const wanted = [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
-    // a class before an event that starts at the same minute: you leave the class for it
-    return wanted.map((d) => ({ d, items: [...classesOf(d), ...(by.get(d) ?? [])].sort((a, b) => a.at - b.at || ('c' in a ? -1 : 1)) }));
+    return wanted.map((d) => ({ d, items: [...(by.get(d) ?? []).sort((a, b) => a.at - b.at), ...(showClasses ? classesOf(d) : [])] }));
   });
   // the first screenfuls come with the tab, the rest a few days per idle moment: a term's worth of events (200 rows,
   // 5k nodes) was one 2 s task at 4x CPU before the Afisha showed. Off-screen days skip layout and paint (.day)
@@ -132,8 +134,8 @@
                   {@const k = lessonKind(it.c.kind)}
                   <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
                   {@const isLive = it.key === live?.key}
-                  <div class="row cl" class:done={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
-                       onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
+                  <div class="row cl" class:done={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive}>
+                    <button class="hit" aria-label={subjectOf(it.c) + ' · ' + t(skipped.has(it.key) ? 'skip.cancel' : 'skip.ok')} aria-pressed={skipped.has(it.key)} onclick={() => void skipClass(it.key, it.c)}></button>
                     <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
                     <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
                     <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
@@ -186,6 +188,7 @@
       </span>
     {/if}
   </header>
+  <div class="news-action"><Button kind="plain" size="s" onclick={() => sheets.news()}>{t('page.news')}</Button></div>
   {#if searching}
     <div class="past">
       {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />
@@ -193,7 +196,7 @@
     </div>
   {:else}
   <StoryRow />
-  {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
+  {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   {#if going.length}
     <h2 class="sec">{t('list.yours')}</h2>
@@ -218,13 +221,16 @@
       {/each}
     </div>
   {/if}
-  {#if askSched}
+  {#if showClasses && askSched}
     <!-- no timetable yet: one card at the top, under my events (owner, Nov 8: an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
     <div class="ask"><Button kind="primary" size="l" full onclick={() => sheets.schedHowTo()}>{#snippet icon()}<CalendarPlus size={20} />{/snippet}{t('sched.cardTitle')}</Button><p class="fs-sub">{t('sched.cardSub')}</p></div>
   {/if}
 
-  <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
+  <div class="events-head">
+    <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
+    <Chip selected={showClasses} onclick={toggleClasses}>{t('list.classes')}</Chip>
+  </div>
 
   {#if featured}
     <div class="pin"><Card onclick={() => (openPost = !openPost)}>
@@ -237,14 +243,16 @@
 
   {#each shownDays as day (day.d)}
     <!-- without a timetable an empty day isn't shown: not a "free day" we can't know (the card above asks for it) -->
-    {#if day.items.length || data.schedule.length}
+    {#if day.items.length || (showClasses && data.schedule.length)}
       {@const [a, b] = head(day.d)}
       <div class="day">
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
-      <!-- classes and events in one line of time (owner, Nov 7: no folded "N classes" block); a class first at a tie -->
+      <!-- Event covers first, then a labelled timetable with no competing artwork. -->
       <div class="list">
-        {#each day.items as it (it.key)}
-          {#if 'c' in it}{@render clRow(it)}
+        {#each day.items as it, i (it.key)}
+          {#if 'c' in it}
+            {#if !i || !('c' in day.items[i - 1])}<p class="class-label">{t('list.classes')}</p>{/if}
+            {@render clRow(it)}
           {:else if 'p' in it}<CastingCard post={it.p} />
           {:else}
             {@const e = it.e}
@@ -271,6 +279,7 @@
     {/if}
     {#if day.d === galleryAt}<GalleryCard />{/if}
   {/each}
+  {#if galleryAt === undefined}<GalleryCard />{/if}
 
   {#if past.length}
     <!-- where I've been: the events I was signed up for or came to, newest first (their albums, my rating) -->
@@ -291,10 +300,12 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
+  .hd > span:first-child { min-width: 0; }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .kick { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); margin-bottom: 2px; }
   .kick::first-letter { text-transform: uppercase; }
   .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
+  .news-action { display: flex; justify-content: flex-end; margin: -8px 0 var(--s-3); }
   .tools { flex: none; display: flex; gap: var(--s-2); }
   .off { margin: 12px 4px 0; color: var(--text-2); }
   .past { display: flex; flex-direction: column; gap: 8px; }
@@ -302,8 +313,10 @@
 
   /* Luma's section titles: bold, the second line grey at the same size */
   .sec { margin: 26px 0 12px; font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .sec.two { display: flex; flex-direction: column; margin-top: 34px; }
-  .sec.two span { color: var(--text-3); font-weight: 700; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px 0 12px; }
+  .sec.two { display: flex; flex-direction: column; min-width: 0; margin: 0; font-size: var(--fs-sec); gap: var(--s-1); }
+  .sec.two span { font: 500 var(--fs-sub)/1.3 var(--font-text); letter-spacing: normal; color: var(--text-3); }
+  .class-label { margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-1); border-radius: var(--r-m) var(--r-m) 0 0; background: var(--surface); font: 600 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
@@ -368,14 +381,15 @@
   .av :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
 
   /* a class: its times in the covers' column, the room at the row's end */
-  .cl { min-height: 56px; padding: 8px 0; cursor: pointer; }
+  .cl { min-height: 56px; padding: 8px var(--s-3); gap: var(--s-2); background: var(--surface); cursor: pointer; }
+  .cl:last-child { border-radius: 0 0 var(--r-m) var(--r-m); }
   .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
   .cl.skip .cl-s b { text-decoration: line-through; }
   /* the class on now: its times in the accent, what's left, a thin line of how far it's gone under the text */
   .cl.live .cl-t b { color: var(--accent-text); }
   .soon { font-weight: 600; color: var(--accent-text); }
   .prog { position: absolute; left: 90px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
-  .cl-t { flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
+  .cl-t { flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .cl-t b { font: 600 var(--fs-body)/1 var(--font-text); color: var(--text); }
   .cl-s { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .cl-s b { font: 600 var(--fs-body)/1.25 var(--font-text); }
@@ -384,7 +398,7 @@
   .cl-k.lecture { color: var(--accent-text); }
   .cl-k.practice { color: var(--success-text); }
   .cl-k.lab { color: var(--warning-text); }
-  .cl-r { flex: none; max-width: 42%; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .cl-r { position: relative; z-index: 2; flex: none; max-width: 42%; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   /* a room in the main building opens the map on its floor; the dorm and the second building open 2GIS */
   .cl-r.on { display: flex; justify-content: flex-end; }
   .cl-r.on :global(.btn) { max-width: 100%; }

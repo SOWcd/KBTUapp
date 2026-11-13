@@ -1,6 +1,6 @@
 <script lang="ts">
   // A list of clubs pushed from the Clubs tab's "All" (mine; `title`: the open rounds): the rows of its "I run" part, for
-  // every club: my role there and what's next. A tap opens it as on the tab (a club I'm in its Studio, one I follow its page).
+  // every club: my role there and what's next. A tap opens Studio for organizers, the club page for members and followers.
   // A row of a club I can leave swipes left to its red Leave, as in iOS lists: one out at a time, any other tap puts it back.
   // ponytail: the rows are the tab's at the tap, not live (only a club I leave goes); fine for a list opened and left, derive here if it must update
   import type { OrgRef } from '../../lib/api';
@@ -9,7 +9,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { canLeave } from '../../lib/perms';
+  import { canLeave, opensStudio } from '../../lib/perms';
   import { shortOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
   import Pane from '../../ui/Pane.svelte';
@@ -19,7 +19,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
   let { overlay, rows, title }: { overlay: Overlay; rows: { org: OrgRef; role: string | null; sub: string }[]; title?: string } = $props();
-  const open = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const open = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role && opensStudio(mine.get(x.org.id))) sheets.studio(x.org.id); else sheets.club(x.org.id); };
 
   const mine = $derived(new Map((session.me?.memberships ?? []).map((m) => [m.org.id, m])));
   const shown = $derived(rows.filter((x) => !x.role || mine.has(x.org.id))); // a club I've just left goes at once

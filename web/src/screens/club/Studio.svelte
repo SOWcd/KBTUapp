@@ -1,11 +1,6 @@
 <script lang="ts">
-  // A club of mine, pushed over the Clubs tab (StudioPane; round 5: no My club | All clubs switch): Studio for Head+ and the club's page for a Member: the Team row (the roster
-  // as a sheet, with the removal requests waiting), "To do" on top only when something waits (new applications, the memo on
-  // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
-  // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state.
-  // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
-  // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
-  // mark by its name, the next event with how full it is, the actions as tiles, the channel's first (Vice+).
+  // Studio: one Create menu, permission-aware tools, then the upcoming event and event tabs.
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -41,7 +36,7 @@
   import Mail from '@lucide/svelte/icons/mail';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
-  import { menu } from '../../ui/menu';
+  import { menu, type MenuItem } from '../../ui/menu';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -218,13 +213,14 @@
   const claimOrg = $derived(dmp ? undefined : m?.org.id);
   const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests(claimOrg).then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
   $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
-  // "Recruiting" is the round: its tile is always there for the casting team (casting audit: on a day without a round Studio
-  // had no way in, so a President made her casting an event); closed, a tap opens the setup. Vice+ without the right:
-  // the any-time join requests' sheet while those are on
-  // the always-open switch lives in Vice+'s sheet: it opens from the start, not only once a round or a request exists
-  // (club presidents, Nov 6)
+  // The team right opens always-on applications; casting alone opens round setup or its board.
   const recruitTile = $derived(casting || vice);
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
+  const creates = $derived<MenuItem[]>([
+    ...(staff ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []),
+    ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),
+    ...(may(m, 'posts') ? [{ label: t('casting.mark'), icon: Megaphone, onselect: () => sheets.composer(m!.org.id, undefined, true) }] : []),
+  ]);
   // a club made by mistake (club presidents, Nov 6): its President deletes it while nobody else is in it and no event
   // went out (the server checks it too, logic.delete_org); otherwise the row says why
   const ownClub = $derived(m?.role === 'president' && m.org.kind === 'club' && !m.org.official);
@@ -254,7 +250,7 @@
         {#if multi}
           <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>{@render who()}</button>
         {:else}<div class="title">{@render who()}</div>{/if}
-        {#if vice}<IconButton icon={Pencil} label={t('ce.title')} onclick={() => sheets.clubEdit(m.org.id)} />{/if}
+        {#if may(m, 'profile')}<IconButton icon={Pencil} label={t('ce.title')} onclick={() => sheets.clubEdit(m.org.id)} />{/if}
       </div>
       {#if picking}
         <div class="pick" transition:fold>
@@ -269,18 +265,12 @@
       {/if}
     </header>
 
+    {#if creates.length}<Button full size="l" onclick={(ev) => menu(ev.currentTarget as Element, creates)}>{#snippet icon()}<Plus size={20} />{/snippet}{t('studio.create')}</Button>{/if}
+
     {#if m.role === 'president' && session.me && !session.me.tg.username}
       <!-- "Message the club" is a DM to the President: without a @username nobody can write (lib/clubdm) -->
       <Notice tone="warning" title={t('studio.noUserT')} text={t('studio.noUser')} />
     {/if}
-
-    <div class="team"><Group>
-      <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>
-        <!-- the faces fill what the row leaves: whole ones only (the line wraps the rest out of sight) -->
-        {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
-          <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
-      </Row>
-    </Group></div>
 
     {#if vol && (vol.ledger || vol.mine)}
       <Group>
@@ -338,6 +328,18 @@
       </Group>
     {/if}
 
+    <div class="tools"><Group>
+      {#if staff}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
+      <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>
+        <!-- the faces fill what the row leaves: whole ones only (the line wraps the rest out of sight) -->
+        {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
+          <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
+      </Row>
+      {#if may(m, 'profile')}<Row icon={MessagesSquare} title={t('studio.chats')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
+      {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
+      {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
+    </Group></div>
+
     <Section title={t('studio.next')}>
       {#if next}
         <article class="hero">
@@ -371,23 +373,6 @@
         <Group><EmptyState inline text={t('studio.none')} /></Group>
       {/if}
     </Section>
-
-    <!-- the actions (were tiles in mockup v24, now Settings' rows): a new event, recruitment while it runs (closed: a
-         "To do" at a term's start), the memo to DMP; inviting lives on Team, editing the club up top. First, to Vice+
-         (who link chats): the channel whose posts the userbot copies into the news, or "Link" -->
-    {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || recruitTile}
-      <Group>
-        {#if m.channel !== undefined}<Row icon={Megaphone} title={t('studio.channelShort')} subtitle={m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
-        {#if staff}<Row icon={Plus} title={t('studio.newShort')} subtitle={t('studio.newSub')} accessory="chevron" onclick={() => sheets.editor(m.org.id)} />{/if}
-        <!-- "Check-in": the check-in page (a meeting starting in minutes, a laptop's /show, the sessions I run; server checkin.club_new) -->
-        {#if staff}<Row icon={QrCode} title={t('scr.page')} subtitle={t('scr.pageSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
-        <!-- the club's news, now circles on Afisha: written from here -->
-        {#if may(m, 'posts')}<Row icon={Megaphone} title={t('casting.mark')} subtitle={t('studio.castingSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id, undefined, true)} />{/if}
-        {#if may(m, 'posts')}<Row icon={PenLine} title={t('studio.postShort')} subtitle={t('studio.postSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id)} />{/if}
-        {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
-        {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} subtitle={t('studio.memoSub')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
-      </Group>
-    {/if}
 
     <div class="events">
       <Segmented label={t('studio.upcoming')} items={segs.map(([label, l], i) => ({ value: i, label: label + (l.length ? ' · ' + l.length : '') }))} value={at} onchange={(v) => (seg = v)} />
@@ -424,8 +409,8 @@
   .role :global(svg) { color: var(--gold); }
   /* the Team row's faces: as many whole ones as fit (the wrap hides the rest), overlapping */
   /* engine: Row's detail taking the width the title leaves (here: the title keeps its words, the faces get the rest) */
-  .team :global(.txt) { flex: none; max-width: 42%; }
-  .team :global(.end) { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .tools :global(.row:has(.faces) .txt) { flex: none; max-width: 42%; }
+  .tools :global(.row:has(.faces) .end) { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
   .faces { flex: 0 1 auto; min-width: 0; height: 32px; padding: 2px; display: flex; flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; overflow: hidden; }
   .faces :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
   .faces :global(.av + .av) { margin-left: -8px; }
