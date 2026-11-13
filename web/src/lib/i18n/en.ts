@@ -2977,6 +2977,8 @@ const en: Dict = {
   'apl.solvedWhy.link': "No links",
   'apl.solvedWhy.contact': "No @, e-mails or phones",
   'apl.solvedWhy.number': "No numbers: a room or a date can give the author away",
+  'apl.solvedWhy.name': "No initials: they can give the author away",
+  'apl.solvedWhy.quote': "Say it in your own words, not an appeal's",
   'apl.solvedCap': "Already 10 entries this month",
   'apl.solvedDelQ': "Delete this entry?",
   'apl.solvedDelText': "Students won't see it any more.",

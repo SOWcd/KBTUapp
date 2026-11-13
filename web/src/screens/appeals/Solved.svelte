@@ -46,7 +46,7 @@
       ({ raised, changed, topic } = was); adding = true; haptic.error();
       const why = err instanceof ApiErr && err.code === 'bad_input' ? (err.message as SolvedWhy) : null;
       say(err instanceof ApiErr && err.code === 'rate_limited' ? t('apl.solvedCap')
-        : why && ['length', 'link', 'contact', 'number'].includes(why) ? t(`apl.solvedWhy.${why}`) : t('common.error'), 'pleading_face_3d');
+        : why && ['length', 'link', 'contact', 'number', 'name', 'quote'].includes(why) ? t(`apl.solvedWhy.${why}`) : t('common.error'), 'pleading_face_3d');
     }
   }
 

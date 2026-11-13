@@ -278,13 +278,22 @@ SOLVED_LEN = (10, 140)
 SOLVED_MONTH = 10                       # new live entries a calendar month (Almaty)
 SOLVED_SHOWN = 3                        # students see the feed from this many entries; SG always
 _CONTACT = re.compile(r"@|\((?:at|dog)\)|\[(?:at|dog)\]|\d(?:[\s().+-]*\d){5,}", re.I)  # mentions, e-mails, phones
-_NUMBER = re.compile(r"\d{2,}")         # a room, a floor, a date, an id (Unicode digits too)
+# a room, a floor, a date, an id (Unicode digits too): two digits however split ("4 0 5", keycaps' marks between),
+# a digit beside a letter that reads as one ("4O5", "l2"), Roman numerals ("XII", Cyrillic look-alikes too), a day
+# and its month ("5 March"); one digit alone passes ("Floor 3")
+_LOOKS = "Oo\u041e\u043eIl\u0406\u0417"
+_NUMBER = re.compile(rf"\d[\W_]*\d|\d[{_LOOKS}]|[{_LOOKS}]\d|(?<!\w)[IVXLC\u0406\u0425\u0421]{{2,}}(?!\w)")
+_DATE = re.compile(r"\d[\W_]*(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?"
+                   r"|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![a-z])|\u044f\u043d\u0432\u0430\u0440|\u0444\u0435\u0432\u0440\u0430\u043b|\u043c\u0430\u0440\u0442|\u0430\u043f\u0440\u0435\u043b|\u043c\u0430[\u0439\u044f]|\u0438\u044e\u043d|\u0438\u044e\u043b"
+                   r"|\u0430\u0432\u0433\u0443\u0441\u0442|\u0441\u0435\u043d\u0442\u044f\u0431\u0440|\u043e\u043a\u0442\u044f\u0431\u0440|\u043d\u043e\u044f\u0431\u0440|\u0434\u0435\u043a\u0430\u0431\u0440|\u049b\u0430\u04a3\u0442\u0430\u0440|\u0430\u049b\u043f\u0430\u043d|\u043d\u0430\u0443\u0440\u044b\u0437|\u0441\u04d9\u0443\u0456\u0440|\u043c\u0430\u043c\u044b\u0440|\u043c\u0430\u0443\u0441\u044b\u043c"
+                   r"|\u0448\u0456\u043b\u0434\u0435|\u0442\u0430\u043c\u044b\u0437|\u049b\u044b\u0440\u043a\u04af\u0439\u0435\u043a|\u049b\u0430\u0437\u0430\u043d|\u049b\u0430\u0440\u0430\u0448\u0430|\u0436\u0435\u043b\u0442\u043e\u049b\u0441\u0430\u043d)", re.I)
+_INITIALS = re.compile(r"(?<!\w)(\w)\. ?(\w)\.")  # "A. B.": a name's initials (both capitals)
 
 
 def solved_line(x: object) -> str:
     """One line, plain: the forum channel's invisible characters out (they could split a number past the checks) and
     control ones, whitespace collapsed; then the length and, read as the forum channel reads it (NFKC, odd dots), a
-    contact, a link (its LINKY, SPACED) or a number. ApiError's message: which. The app mirrors it (web/src/lib/solved.ts;
+    contact, a link (its LINKY, SPACED), a number or initials. ApiError's message: which. The app mirrors it (web/src/lib/solved.ts;
     the cases both agree on: server/tests/solved_rules.json)."""
     from .fchannel import BRACKET_DOT, DOTS, LINKY, SPACED, ZWJ, _visible
     s = x if isinstance(x, str) else ""
@@ -292,7 +301,9 @@ def solved_line(x: object) -> str:
     if not SOLVED_LEN[0] <= len(s) <= SOLVED_LEN[1]:
         raise ApiError("bad_input", "length")
     seen = BRACKET_DOT.sub(".", unicodedata.normalize("NFKC", s).translate(DOTS))
-    for why, bad in (("contact", _CONTACT.search(seen)), ("link", LINKY.search(seen) or SPACED.search(seen)), ("number", _NUMBER.search(seen))):
+    for why, bad in (("contact", _CONTACT.search(seen)), ("link", LINKY.search(seen) or SPACED.search(seen)),
+                     ("number", _NUMBER.search(seen) or _DATE.search(seen)),
+                     ("name", any(a.isupper() and b.isupper() for a, b in _INITIALS.findall(seen)))):
         if bad:
             raise ApiError("bad_input", why)
     return s

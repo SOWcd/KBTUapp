@@ -2999,6 +2999,8 @@ const ru = {
   'apl.solvedWhy.link': "Без ссылок",
   'apl.solvedWhy.contact': "Без @, почты и телефонов",
   'apl.solvedWhy.number': "Без чисел: аудитория или дата могут выдать автора",
+  'apl.solvedWhy.name': "Без инициалов: они могут выдать автора",
+  'apl.solvedWhy.quote': "Своими словами, не словами обращения",
   'apl.solvedCap': "В этом месяце уже 10 записей",
   'apl.solvedDelQ': "Удалить запись?",
   'apl.solvedDelText': "Студенты её больше не увидят.",

@@ -2977,6 +2977,8 @@ const kk: Dict = {
   'apl.solvedWhy.link': "Сілтемесіз",
   'apl.solvedWhy.contact': "@, пошта мен телефонсыз",
   'apl.solvedWhy.number': "Сансыз: аудитория не күн авторды көрсетіп қоюы мүмкін",
+  'apl.solvedWhy.name': "Аты-жөнінің бас әріптерінсіз: олар авторды көрсетіп қоюы мүмкін",
+  'apl.solvedWhy.quote': "Өз сөзіңізбен, өтініштің сөзімен емес",
   'apl.solvedCap': "Осы айда 10 жазба бар",
   'apl.solvedDelQ': "Жазбаны жою керек пе?",
   'apl.solvedDelText': "Студенттер оны енді көрмейді.",
