@@ -654,6 +654,22 @@ def map_graph(con) -> dict:
     return {**json.loads(MAP_DRAFT.read_text()), "ver": 0}
 
 
+_rooms: tuple[str, float, dict] | None = None
+
+
+def map_rooms(path: str) -> dict:
+    """The map's "free now": the timetable's busy hours by room (tools/rooms.py; ROOMS_FILE, never the repo), read again
+    only when the file changes. No file: the feature is off (404) and the app shows nothing of it."""
+    global _rooms
+    try:
+        m = Path(path).stat().st_mtime
+    except OSError:
+        raise ApiError("not_found", "no rooms") from None
+    if not _rooms or _rooms[:2] != (path, m):
+        _rooms = (path, m, json.loads(Path(path).read_text()))
+    return _rooms[2]
+
+
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, oversight  # noqa: E402

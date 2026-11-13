@@ -41,6 +41,8 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { mapFrom, copyCap, type CapCopy } from '../../lib/state/sheets';
+  import { roomNow, type RoomWeek } from '../../lib/rooms';
+  import { nowTs } from '../../lib/time';
 
   let { overlay, place, exit = false }: { overlay: Overlay; place?: string; exit?: boolean } = $props();
   const ROOMS = uniqRooms as unknown as Record<string, number[][]>[]; // by floor: room → where its number is printed
@@ -256,6 +258,19 @@
   let okId = $state(0), seen = $state(0), okT = 0, pressFlaw = 0;
   const canFlaw = () => !!session.me?.student && session.board; // where the policy's section 12 is in force (BOARD), for everyone it covers
   $effect(() => { if (canFlaw()) api.mapFlawsMine().then((l) => (mine = l), () => {}); });
+  // "free now" by the timetable (lib/rooms): fetched as the map opens, nothing of it shows until it comes or if the
+  // server has no timetable (404); the rooms the main map numbers, tinted where their number is printed
+  let week = $state<Record<string, RoomWeek> | null>(null), freeOn = $state(false), clock = $state(nowTs()), pressRoom = '';
+  api.mapRooms().then((r) => (week = r.rooms), () => {});
+  const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) =>
+    week![r] ? ps.map(([u, v]) => ({ r, u, v, free: roomNow(week![r], clock).free })) : []));
+  const roomLine = $derived.by(() => {
+    const w = room && week?.[room];
+    if (!w) return '';
+    const n = roomNow(w, clock), time = `${String(n.until).padStart(2, '0')}:00`;
+    return (n.free ? (n.until == null ? t('map.freeEvening') : t('map.freeUntil', { time })) : t('map.busyUntil', { time })) + ' \u00b7 ' + t('map.byTimetable');
+  });
+  function toggleFree() { haptic.select(); freeOn = !freeOn; clock = nowTs(); if (freeOn) say(t('map.freeHint'), 'sparkles_3d'); }
   /** mine on this floor of this map: its own spot, or on another map through the 2023 plan's units */
   const flawsHere = $derived(mine.flatMap((m) => {
     if (m.floor !== cur) return [];
@@ -284,6 +299,7 @@
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
     pressFlaw = Number((e.target as Element).closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0);
+    pressRoom = (e.target as Element).closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
     clearTimeout(holdT);
     if (press && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
     stage.setPointerCapture(e.pointerId);
@@ -324,7 +340,9 @@
     // a double tap: two taps, the second let go within 300 ms of the first and near it, zooms in (or back out)
     // a tap on my own pin shows what I wrote there; any other tap puts it away
     if (tap && !pts.size && (pressFlaw || seen)) { if (pressFlaw) haptic.tap(); seen = pressFlaw && pressFlaw !== seen ? pressFlaw : 0; }
-    if (tap && !pts.size && p && !pressFlaw) {
+    // a tap on a tinted room: its card, with when it is free (no glide: it is on screen already)
+    if (tap && !pts.size && pressRoom && !pressFlaw) { haptic.tap(); at = null; room = pressRoom; glided = true; lastTap = 0; }
+    else if (tap && !pts.size && p && !pressFlaw) {
       if (lastTap && performance.now() - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, p.x, p.y), 380); lastTap = 0; }
       else { lastTap = performance.now(); tapAt = p; }
     } else if (!tap) lastTap = 0;
@@ -672,7 +690,8 @@
     d.map = ''; // the toast drops under the floor row there (Toast.svelte)
     ro.observe(stage);
     stage.addEventListener('wheel', wheel, { passive: false });
-    return () => { delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
+    const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
+    return () => { clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
@@ -751,6 +770,7 @@
         {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
           {#if i === 0 && card}<span class="pin flag" style:left="{u * 100}%" style:top="{v * 100}%">{cardTitle}</span>{/if}{/each}
         {#each near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
+        {#each freeHere as f (f.r + f.u + f.v)}<span class="room" class:free={f.free} data-room={f.r} style:left="{f.u * 100}%" style:top="{f.v * 100}%"></span>{/each}
         {#if legsHere.length}
           <svg class="way" viewBox="0 0 1000 {1000 * AR}" preserveAspectRatio="none" aria-hidden="true">
             <!-- the way (owner, Oct 24: "chic"): a soft glow, the line, white dots running along the step on screen -->
@@ -809,6 +829,11 @@
     <button class="rb glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)} aria-label={t('map.theme')}>
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
+  <!-- "free now": under the maps button, on the main map only (its rooms' numbers are where the tint goes) -->
+  {#if week && ver === 'main'}
+    <button class="freeb glass glass-pill" class:on={freeOn} class:away={!!rt.route} use:glass onclick={toggleFree} aria-pressed={freeOn}>
+      <i aria-hidden="true"></i>{t('map.freeNow')}</button>
+  {/if}
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
   <p class="note" class:away={pad || card || routing}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
   <!-- the bottom, under the thumb (owner's layout, Oct 26): the way out small on the left, the search, and on the right
@@ -826,6 +851,7 @@
           <span class="ptb" aria-hidden="true">{t('pad.b')}</span><span class="rt"><b>{cardTitle}</b><small>{floorName(at ? at.f : (roomFloor ?? 0))}</small></span>
           <Search size={18} /></button>
         <button class="xb" onclick={clearFound} aria-label={t('common.close')}><X size={18} /></button></div>
+      {#if roomLine}<p class="fl">{roomLine}</p>{/if}
       <button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
     </div>
   {/if}
@@ -893,6 +919,10 @@
   @keyframes ripple { from { transform: scale(1); opacity: 0.9; } to { transform: scale(2.2); opacity: 0; } }
   .spot.near { border-style: dashed; border-color: var(--text-3); background: none; box-shadow: none; } /* a neighbour, for bearings */
   .spot.near::before, .spot.near::after { display: none; }
+  /* "free now": a green disc over a free room's number, a grey one dims a busy room's; a tap opens its card */
+  .room { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: auto;
+    background: rgba(142, 142, 147, 0.28); }
+  .room.free { background: rgba(48, 209, 88, 0.3); box-shadow: inset 0 0 0 2px rgba(48, 209, 88, 0.85); }
   /* the way: a soft glow under the step on screen, the line, white dots running along it (owner, Oct 24: "chic") */
   .way { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   .way polyline { fill: none; stroke: var(--accent); stroke-opacity: 0.35; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
@@ -962,6 +992,13 @@
   .rail button { position: relative; width: var(--fb); height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s, width 0.5s var(--ease-spring), opacity 0.3s; }
   .rail button.gone { width: 0; opacity: 0; overflow: hidden; pointer-events: none; }
   .rail button.r::after { content: ''; position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
+  .freeb { position: absolute; z-index: 1; left: 12px; top: calc(max(48px, var(--top)) + 66px); height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
+    display: flex; align-items: center; gap: 8px; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
+  .freeb i { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--success); transition: background 0.2s; }
+  .freeb.on i { background: var(--success); }
+  .freeb:active { transform: scale(0.94); transition-duration: 80ms; }
+  .freeb.away { opacity: 0; pointer-events: none; }
+  .fl { margin: 10px 4px 0; font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);
     transition: opacity 0.25s; }
   .note.away { opacity: 0; pointer-events: none; }

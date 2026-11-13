@@ -94,5 +94,6 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
   embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
 - `REPORTS=1`: clubs' event reports in Studio (`logic/evreports.py`: the team's attendance marks); off until its clause in the privacy policy (Codex's).
+- `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

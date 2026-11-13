@@ -116,6 +116,7 @@ export interface Api {
   /** one memo item written from the sheet's small form (no event needed) */
   /** indoor routes' graph (PLAN item 22); the admin saves it from the version he edited (conflict: someone saved since) */
   mapGraph(): Promise<Graph>;
+  mapRooms(): Promise<{ updated: string; rooms: Record<string, Record<string, number[]>> }>; // "free now" on the map; 404 when off (ROOMS_FILE)
   memoItem(org: Id, item: { kind: string; fields: object; place: string; startsAt: Ts; endsAt: Ts | null }): Promise<string>;
   createEvent(org: Id, input: EventInput): Promise<EventFull>;   // a draft
   updateEvent(id: Id, input: EventInput): Promise<EventFull>;

@@ -48,6 +48,11 @@ The university's documents never go in the repo. Rebuild: `scp -r docs/ sowcloud
 container `cd /app/server && python -m kbtu.docs build /var/lib/kbtu/docs-src /var/lib/kbtu/docs.db` (scans via tesseract,
 embeddings with `CF_ACCOUNT_ID`/`CF_AI_TOKEN`; `.doc` → `.docx` first), delete `docs-src`; `python -m kbtu.docs audit /var/lib/kbtu/docs.db` must show no `left`; `DOCS=1` turns it on.
 
+## Free rooms on the map
+
+The timetable scrape never goes in the repo. `python3 -I server/tools/rooms.py <progress.json> rooms.json` (busy hours by
+room only), copy it next to the database (`/var/lib/kbtu/rooms.json`) or point `ROOMS_FILE` at it; no file: no "Free now".
+
 ## Contributing
 
 Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).

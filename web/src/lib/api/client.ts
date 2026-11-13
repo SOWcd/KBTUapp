@@ -194,6 +194,7 @@ export const server: Api = {
   memoSent: (org, ids) => call('POST', `/orgs/${org}/memo/sent`, { ids }),
   memoAgain: (org, event) => call('POST', `/orgs/${org}/memo/again/${event}`),
   mapGraph: () => call('GET', '/map/graph'),
+  mapRooms: () => call('GET', '/map/rooms'),
   memoItem: (org, item) => call<{ text: string }>('POST', `/orgs/${org}/memo/item`, item).then((r) => r.text),
   memoSign: (org, sign) => call('PUT', `/orgs/${org}/memo/sign`, sign),
   round: (org) => call('GET', `/orgs/${org}/round`),

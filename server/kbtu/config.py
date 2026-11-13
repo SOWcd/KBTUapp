@@ -69,6 +69,8 @@ class Config:
     # REPORTS=1: clubs' event reports (logic/evreports.py: who of the team came, how many guests); off until the privacy
     # policy names the attendance marks: the routes answer 404 and the app shows nothing of it
     reports: bool = False
+    # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
+    rooms_file: str = ""
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -146,4 +148,5 @@ def load() -> Config:
         docs={"1": "fts", "hybrid": "hybrid"}.get(env.get("DOCS", "").strip(), ""),
         docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
         reports=env.get("REPORTS", "").strip() == "1",
+        rooms_file=env.get("ROOMS_FILE") or str(Path(db_path).parent / "rooms.json"),
     )

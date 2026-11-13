@@ -1034,6 +1034,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def map_graph(con: Con, v: Me):
         return logic.map_graph(con)
 
+    @app.get("/api/map/rooms")
+    def map_rooms(request: Request, v: Me):
+        return logic.map_rooms(request.app.state.cfg.rooms_file)
+
     @app.post("/api/orgs/{oid}/memo/item")
     def memo_item(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return {"text": logic.memo_item(con, v, oid, body)}
