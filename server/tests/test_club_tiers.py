@@ -173,3 +173,16 @@ def test_review_fixes(env):
     login(c, 70, "dmp"); con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 70")
     c.post(f"/api/registry/orgs/{off}/official", headers=tma(70), json={"on": False})
     assert con.execute("SELECT send_after FROM bot_outbox WHERE kind = 'club_unofficial'").fetchone()[0] >= logic.core.now() + 50
+
+
+def test_old_abbr_cleaned_at_start(env):
+    """A short form typed before the rule ("JCC_KBTU") is cut to what the rule allows when the app starts; a good one stays."""
+    from kbtu import db, logic
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    a = logic.create_org(con, None, "Japanese Culture", "JC", "crown_3d", False)
+    b = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    con.execute("UPDATE orgs SET abbr = 'JCC_KBTU' WHERE id = ?", (a,))
+    con.execute("UPDATE orgs SET abbr = 'CHS' WHERE id = ?", (b,))
+    logic.clubs.fill_abbrs(con)
+    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (?, ?) ORDER BY id", (a, b))] == ["JCC", "CHS"]

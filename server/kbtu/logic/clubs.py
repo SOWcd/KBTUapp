@@ -884,6 +884,14 @@ def fill_abbrs(con) -> None:
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
             con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
+        # one typed before today's rule (letters and digits, no KBTU: "JCC_KBTU", owner Nov 13) loses what breaks it
+        for o in rows(con, "SELECT id, name, abbr FROM orgs WHERE abbr IS NOT NULL"):
+            if re.fullmatch(r"[^\W_]{2,8}", o["abbr"]) and not re.search("kbt[uy]", _skeleton(o["abbr"])):
+                continue
+            kept = "".join(w for w in re.findall(r"[^\W_]+", o["abbr"]) if not re.search("kbt[uy]", _skeleton(w)))[:8]
+            new = kept if len(kept) >= 2 else guess_abbr(o["name"])
+            con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (new, o["id"]))
+            log_action(con, None, "org_edit", f"org:{o['id']}", json.dumps({"abbr": [o["abbr"], new], "by": "rule"}))
 
 
 def org_by_slug(con, slug: str) -> int | None:
