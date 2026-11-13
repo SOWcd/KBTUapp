@@ -148,13 +148,17 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
         logic.visit(con, u["id"], t)
     else:
         # ADMIN_TG_IDS are always admins; everyone else's role is given in the app
-        role = "admin" if tg["id"] in admins and not u["banned_at"] else u["role"]  # a ban outranks the env
+        env = tg["id"] in admins
+        role = "admin" if env and not u["banned_at"] else u["role"]  # a ban outranks the env
         dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
         if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
                 or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
             def fresh_seen() -> None:  # one short transaction, skipped while a burst holds the lock: every GET comes here
-                con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
-                    WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
+                # role and can_dm from the row as it is now, never from the read above: a demotion or ban (or the bot's
+                # "blocked") landing in between must not be written back
+                con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?,
+                    role = CASE WHEN ? AND banned_at IS NULL THEN 'admin' ELSE role END, can_dm = MAX(can_dm, ?), seen_at = ?
+                    WHERE id = ?""", (*fresh, int(env), int(bool(tg.get("allows_write_to_pm"))), t, u["id"]))
                 logic.visit(con, u["id"], t)
             db.maybe(con, fresh_seen)
             u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
