@@ -522,7 +522,9 @@ class Index:
         ask = lambda m: [r[0] for r in con.execute("SELECT rowid FROM fts WHERE fts MATCH ? ORDER BY bm25(fts, 0.5, 1) LIMIT ?", (m, POOL))]  # noqa: E731
         # a question about a curriculum: the curricula's semesters ranked on their own beside the whole index (a FAQ's
         # "subjects" and "intake" outrank a table's rows), fused like the vectors' list
-        return [ask(" OR ".join(keep))] + ([ask(f'"{CURR}" AND "(columns:" AND ({" OR ".join(keep)})')] if cur or sems else [])
+        # (there every word of the question counts: "information systems" is common in the index, not among curricula)
+        every = " OR ".join(dict.fromkeys(keep + ['"' + t.replace('"', "") + '"' for t in terms]))
+        return [ask(" OR ".join(keep))] + ([ask(f'"{CURR}" AND "(columns:" AND ({every})')] if cur or sems else [])
 
     def search(self, q: str, qvec: np.ndarray | None = None, k: int = 4, intake: int | None = None) -> list[dict]:
         """The k best chunks for a question: bm25's list and, with a question's vector of the file's length, cosine's,
