@@ -275,7 +275,9 @@ def months(con) -> list[dict]:
 # anonymous author (a room, a floor, a date, an id, a contact), so they never pass; names no regex catches: the SG
 # writer is told why. Owner + adversarial review, Nov 13.
 SOLVED_LEN = (10, 140)
-SOLVED_MONTH = 10                       # new live entries a calendar month (Almaty)
+SOLVED_MONTH = 10                       # new entries a calendar month (Almaty); a deleted one still counts
+SOLVED_TOPIC = 90 * 86400               # an entry's topic shows only if FEW appeals had it in this time before
+SOLVED_QUOTE = 6                        # words in a row the same as in an appeal: its words, not SG's
 SOLVED_SHOWN = 3                        # students see the feed from this many entries; SG always
 _CONTACT = re.compile(r"@|\((?:at|dog)\)|\[(?:at|dog)\]|\d(?:[\s().+-]*\d){5,}", re.I)  # mentions, e-mails, phones
 # a room, a floor, a date, an id (Unicode digits too): two digits however split ("4 0 5", keycaps' marks between),
@@ -313,20 +315,33 @@ def _month_start(t: int) -> int:
     return int(dt.datetime.fromtimestamp(t, ALMATY).replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
 
 
-def _solved_shape(r) -> dict:
-    return {"id": r["id"], "raised": r["raised"], "changed": r["changed"], "topic": r["topic"],
+def _solved_shape(r, sg: bool = True) -> dict:
+    """The id for SG's delete only: students get none (its gaps would count what was deleted)."""
+    return {**({"id": r["id"]} if sg else {}), "raised": r["raised"], "changed": r["changed"], "topic": r["topic"],
             "month": dt.datetime.fromtimestamp(r["created_at"], ALMATY).strftime("%Y-%m")}
 
 
 def solved(con, sg: bool) -> list[dict]:
     """Newest first; empty for students until SOLVED_SHOWN entries (a lonely one proves nothing)."""
     rs = rows(con, "SELECT * FROM appeal_solved WHERE gone_at IS NULL ORDER BY id DESC")
-    return [_solved_shape(r) for r in rs] if sg or len(rs) >= SOLVED_SHOWN else []
+    return [_solved_shape(r, sg) for r in rs] if sg or len(rs) >= SOLVED_SHOWN else []
 
 
 def _room(con, t: int) -> None:
-    if one(con, "SELECT COUNT(*) FROM appeal_solved WHERE gone_at IS NULL AND created_at >= ?", _month_start(t))[0] >= SOLVED_MONTH:
+    if one(con, "SELECT COUNT(*) FROM appeal_solved WHERE created_at >= ?", _month_start(t))[0] >= SOLVED_MONTH:
         raise ApiError("rate_limited", "solved")
+
+
+def _quoted(con, *lines: str) -> None:
+    """SOLVED_QUOTE words in a row from any appeal: an author's own words could give them away; SG says it in theirs.
+    (SG reads every appeal anyway: the refusal tells them nothing new.)"""
+    def runs(s: str) -> set:
+        w = re.findall(r"\w+", unicodedata.normalize("NFKC", s).casefold())
+        return {tuple(w[i:i + SOLVED_QUOTE]) for i in range(len(w) - SOLVED_QUOTE + 1)}
+    mine = set().union(*map(runs, lines))
+    # ponytail: every appeal read on each add (hundreds at most, 10 adds a month); an index if appeals grow to many thousands
+    if mine and any(mine & runs(b) for (b,) in rows(con, "SELECT body FROM appeals")):
+        raise ApiError("bad_input", "quote")
 
 
 def solved_add(con, v: Viewer, body: dict) -> dict:
@@ -336,6 +351,11 @@ def solved_add(con, v: Viewer, body: dict) -> dict:
     t = core.now()
     with tx(con):
         _room(con, t)
+        _quoted(con, raised, changed)
+        # a topic few wrote about could point at them (an entry right after the one appeal): none then, as SG's
+        # numbers merge a small one into "other" (appeals counted, never authors: months())
+        if topic and one(con, "SELECT COUNT(*) FROM appeals WHERE topic = ? AND created_at >= ?", topic, t - SOLVED_TOPIC)[0] < FEW:
+            topic = None
         sid = con.execute("INSERT INTO appeal_solved (raised, changed, topic, created_by, created_at) VALUES (?, ?, ?, ?, ?)",
                           (raised, changed, topic, v.id, t)).lastrowid
         log_action(con, v.id, "solved_add", f"solved:{sid}")
@@ -343,7 +363,7 @@ def solved_add(con, v: Viewer, body: dict) -> dict:
 
 
 def solved_delete(con, v: Viewer, sid: int) -> None:
-    """Any of SG's people, any entry; undoable for a day (solved_restore), then gone for good (forget)."""
+    """Any of SG's people, any entry; undoable for a day (solved_restore), then its words gone for good (forget)."""
     _sg(con, v)
     with tx(con):
         if not con.execute("UPDATE appeal_solved SET gone_at = ? WHERE id = ? AND gone_at IS NULL", (core.now(), sid)).rowcount:
@@ -358,8 +378,6 @@ def solved_restore(con, v: Viewer, sid: int) -> dict:
         r = one(con, "SELECT * FROM appeal_solved WHERE id = ? AND gone_at > ?", sid, t - 86400)
         if not r:
             raise ApiError("not_found")
-        if r["created_at"] >= _month_start(t):
-            _room(con, t)
         con.execute("UPDATE appeal_solved SET gone_at = NULL WHERE id = ?", (sid,))
         log_action(con, v.id, "solved_restore", f"solved:{sid}")
     return _solved_shape(r)
@@ -386,9 +404,12 @@ def reveal(con, actor: int, aid: int):
 
 
 def forget(con) -> None:
-    """Nightly: 90 days after closing, 180 at most from sending; the day's quota rows and deleted "Solved" entries after a day."""
+    """Nightly: 90 days after closing, 180 at most from sending; the day's quota rows and deleted "Solved" entries' words after a day."""
     t = core.now()
     for (aid,) in rows(con, "SELECT id FROM appeals WHERE closed_at < ? OR created_at < ?", t - KEEP_CLOSED, t - KEEP_MAX):
         _drop(con, aid)
     con.execute("DELETE FROM appeal_sends WHERE at < ?", (t - 86400,))
-    con.execute("DELETE FROM appeal_solved WHERE gone_at < ?", (t - 86400,))  # "Solved" entries deleted a day ago
+    # "Solved" entries deleted a day ago: their words and writer out; the row itself stays to its month's end (the cap
+    # counts it: delete and add again can't pass SOLVED_MONTH)
+    con.execute("UPDATE appeal_solved SET raised = '', changed = '', topic = NULL, created_by = NULL WHERE gone_at < ?", (t - 86400,))
+    con.execute("DELETE FROM appeal_solved WHERE gone_at < ? AND created_at < ?", (t - 86400, _month_start(t)))

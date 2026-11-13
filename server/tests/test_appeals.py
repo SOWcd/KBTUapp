@@ -335,15 +335,22 @@ def test_rights(ap):
 def test_threshold_shape_and_no_author(ap):
     c, _, _ = ap
     feed = lambda tg: c.get("/api/appeals", headers=tma(tg)).json()["solved"]  # noqa: E731
+    for tg in (ANN, BEK, PRES):                                         # dorm: 5 appeals (by 3 people: appeals count)
+        _send(c, tg, topic="dorm")
     _add(c, topic="dorm"); _add(c, topic="nope")
     assert feed(ANN) == [] and len(feed(SG)) == 2                      # SG sees it from the first
-    _add(c)
-    f = feed(ANN)
-    assert len(f) == 3 and f[0]["id"] > f[1]["id"] > f[2]["id"]          # newest first
-    assert set(f[0]) == {"id", "raised", "changed", "topic", "month"} and f[2]["topic"] == "dorm" and f[1]["topic"] is None
+    _send(c, ANN, topic="dorm"); _send(c, BEK, topic="dorm")
+    _add(c, raised="Kind words for the dorm staff", topic="dorm")
+    _send(c, ANN, topic="food")
+    _add(c, raised="The canteen ran out of salads", topic="food")      # one food appeal: published, its topic not
+    f, g = feed(ANN), feed(SG)
+    assert len(f) == 4 and [e["raised"] for e in f] == [e["raised"] for e in g] and g[0]["id"] > g[1]["id"] > g[2]["id"]  # newest first
+    assert all(set(e) == {"raised", "changed", "topic", "month"} for e in f)  # no ids for students: their gaps count deletes
+    assert [e["topic"] for e in f] == [None, "dorm", None, None]        # under FEW appeals in 90 days: no topic
     assert f[0]["month"] == dt.datetime.now(appeals.ALMATY).strftime("%Y-%m")
-    c.delete(f"/api/sg/solved/{f[0]['id']}", headers=tma(SG))
-    assert feed(ANN) == []                                              # back under 3
+    for e in g[:2]:
+        c.delete(f"/api/sg/solved/{e['id']}", headers=tma(SG))
+    assert feed(ANN) == []                                              # back under 3, at once
 
 
 def test_monthly_cap_and_forget(ap, monkeypatch):
@@ -353,13 +360,45 @@ def test_monthly_cap_and_forget(ap, monkeypatch):
     r = _add(c)
     assert r.status_code == 429
     c.delete(f"/api/sg/solved/{ids[0]}", headers=tma(SG))
-    assert _add(c).status_code == 200
-    assert c.post(f"/api/sg/solved/{ids[0]}/restore", headers=tma(SG)).status_code == 429   # undo can't pass the cap
+    assert _add(c).status_code == 429                                   # a deleted one still counts: no delete-add loops
+    assert c.post(f"/api/sg/solved/{ids[0]}/restore", headers=tma(SG)).status_code == 200   # undo
+    c.delete(f"/api/sg/solved/{ids[1]}", headers=tma(SG))
+    day = lambda d: monkeypatch.setattr(logic.core, "now", lambda: int(d.timestamp()))  # noqa: E731
+    gone = con.execute("SELECT gone_at FROM appeal_solved WHERE id = ?", (ids[1],)).fetchone()[0]
+    later = dt.datetime.fromtimestamp(gone + 86401, appeals.ALMATY)
+    day(later)
+    assert c.post(f"/api/sg/solved/{ids[1]}/restore", headers=tma(SG)).status_code == 404   # a day on: no undo
+    appeals.forget(con)
+    assert tuple(con.execute("SELECT raised, changed, created_by FROM appeal_solved WHERE id = ?", (ids[1],)).fetchone()) == ("", "", None)
+    if later.month == dt.datetime.fromtimestamp(t, appeals.ALMATY).month:
+        assert _add(c).status_code == 429                               # its words gone, its place in the month's ten kept
     nxt = dt.datetime.fromtimestamp(t, appeals.ALMATY).replace(day=28) + dt.timedelta(days=5)
-    monkeypatch.setattr(logic.core, "now", lambda: int(nxt.timestamp()))
+    day(nxt)
     assert _add(c).status_code == 200                                   # a new month
     appeals.forget(con)
-    assert not con.execute("SELECT 1 FROM appeal_solved WHERE id = ?", (ids[0],)).fetchone()  # deleted a day ago: gone
+    assert not con.execute("SELECT 1 FROM appeal_solved WHERE id = ?", (ids[1],)).fetchone()  # last month's deleted one: gone
+
+
+def test_no_appeal_words(ap):
+    c, _, _ = ap
+    _send(c, ANN)
+    r = _add(c, raised="The canteen had had no hot water since Monday")  # six of the appeal's words in a row
+    assert (r.status_code, r.json()["message"]) == (400, "quote")
+    assert _add(c, raised="Hot water in the canteen kept failing").status_code == 200
+
+
+def test_rights_of_others(ap):
+    c, _, con = ap
+    sid = _add(c).json()["id"]
+    adm = 7
+    login(c, adm, "adm")
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (_uid(c, adm),))
+    assert _add(c, adm).status_code == 403 and c.delete(f"/api/sg/solved/{sid}", headers=tma(adm)).status_code == 403
+    appeals.grant(con, None, _uid(c, SG), False)                         # removed from SG
+    assert _add(c).status_code == 403 and c.delete(f"/api/sg/solved/{sid}", headers=tma(SG)).status_code == 403
+    appeals.grant(con, None, _uid(c, SG), True)
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (_uid(c, SG),))
+    assert _add(c).status_code == 403 and c.get("/api/appeals", headers=tma(SG)).status_code == 403
 
 
 def test_account_deletion_keeps_the_entry_without_its_author(ap):
