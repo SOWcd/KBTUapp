@@ -2059,8 +2059,6 @@ const kk: Dict = {
   'power.auto': "Авто",
   'power.on': "Қосулы",
   'power.off': "Өшірулі",
-  'power.say': "Телефон қуатты үнемдеп жатыр — қуат үнемдеу қосылды",
-  'power.sayDevice': "Қуат үнемдеу қосылды — бұл телефонда осылай жылдамырақ",
   'studio.questions': "Сұрақтар жауап күтуде",
   'studio.toCheck': "Тексерілетін чектер",
   'studio.chipCheck': "Чектер: {n}",

@@ -2081,8 +2081,6 @@ const ru = {
   'power.auto': "Авто",
   'power.on': "Вкл",
   'power.off': "Выкл",
-  'power.say': "Телефон бережёт заряд — энерго­сбере­жение включено",
-  'power.sayDevice': "Энерго­сбере­жение включено — так на этом телефоне быстрее",
   'studio.questions': "Вопросы ждут ответа",
   'studio.toCheck': "Чеки на проверку",
   'studio.chipCheck': "Чеки: {n}",

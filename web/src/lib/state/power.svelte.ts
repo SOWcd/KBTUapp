@@ -10,7 +10,7 @@
 // The rate (frames.ts) is measured at idle a second after the start, again when the app comes back and every minute;
 // a change must show twice in a row, 1.5 s apart. Inside a frame (Telegram Web) it waits for the first tap, as Safari
 // caps a cross-origin frame until one. The verdict is kept, so a phone in Low Power Mode opens light at once.
-// Turning on by itself says so (a toast), once until it has been off again.
+// Turning on by itself says so (a toast with a switch), once until it has been off again; turning off after that too.
 import { LOW, tilt } from '../../ui/glass';
 import { capped, measure } from '../frames';
 import { t } from '../i18n/index.svelte';
@@ -42,8 +42,8 @@ function apply(): void {
   if (power.mode !== 'auto' || lite === told) return;
   told = lite;
   keep();
-  // after the first screen has shown, if it's the start
-  if (lite) setTimeout(() => say(t(power.why === 'device' ? 'power.sayDevice' : 'power.say'), 'high_voltage_3d'), Math.max(0, 2500 - performance.now()));
+  // after the first screen has shown, if it's the start: its name and a switch flipping on (off when Auto ends it)
+  setTimeout(() => say(t('power.title'), 'high_voltage_3d', undefined, lite), Math.max(0, 2500 - performance.now()));
 }
 
 let ready = false, busy = false;

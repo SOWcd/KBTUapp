@@ -21,12 +21,13 @@
     exit: 380,                    // the line folds into the emoji, the circle lifts and pops away: quicker than the entrance
     fling: 280, snap: 420,        // a swipe throws it on with its speed; a short one springs back
     fade: 180,                    // reduced motion and power saving: a plain fade, nothing moves or resizes
+    flipAt: 520, flip: 280,       // a toggle toast's switch flips once its line is in
   };
   // a damped spring (8% overshoot, settled at the end); no linear() (iOS < 17.2, old Android WebViews): a close bezier
   const SPRING = CSS.supports?.('animation-timing-function', 'linear(0, 1)')
     ? 'linear(0, .093, .299, .531, .739, .898, 1.003, 1.061, 1.082, 1.08, 1.065, 1.046, 1.028, 1.013, 1.002, .996, .993, .993, .994, .996, .997, .999, 1)'
     : 'cubic-bezier(.32, 1.25, .4, 1)';
-  const vars = `--spring:${SPRING};--t-pop:${T.pop}ms;--t-bounce:${T.bounce}ms;--at-bounce:${T.bounceAt}ms`;
+  const vars = `--spring:${SPRING};--t-pop:${T.pop}ms;--t-bounce:${T.bounce}ms;--at-bounce:${T.bounceAt}ms;--at-flip:${T.flipAt}ms;--t-flip:${T.flip}ms`;
   const out3 = (k: number) => 1 - Math.pow(1 - k, 3);
   // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way;
   // the map's bottom holds its place card, so there it drops under the floors (it covered the card)
@@ -63,7 +64,7 @@
     // wrapped the new line, the pill grew a line taller and jumped up); the pill's edge uncovers it, the height (one
     // line or two) moves with the width, nothing reflows and nothing is cut at the end
     const tx = [...el.querySelectorAll<HTMLElement>('.tx')].find((n) => !n.style.position);
-    if (tx) tx.style.flex = `0 0 ${tx.offsetWidth}px`;
+    if (tx) tx.style.flex = `0 0 ${tx.offsetWidth + 1}px`; // a pixel more: offsetWidth rounds, a line that just fitted broke at its soft hyphen
     el.animate({ width: [`${from[0]}px`, `${to[0]}px`], height: [`${from[1]}px`, `${to[1]}px`] }, { duration: T.morph, easing: SPRING }).finished
       .catch(() => {}).finally(() => tx?.style.removeProperty('flex'));
   });
@@ -72,7 +73,8 @@
   // so the pill measures the new one
   function leave(node: HTMLElement) {
     const [l, t, w] = at.get(node) ?? [node.offsetLeft, node.offsetTop, node.offsetWidth];
-    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;width:${w}px;`;
+    // a pixel more: offsetWidth rounds, and a line that just fitted broke at its soft hyphen as it left
+    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;width:${w + 1}px;`;
     if (calm()) return fade(T.fade);
     return { duration: T.swapOut, css: (k: number) => `opacity:${k};filter:blur(${(1 - k) * 4}px)` };
   }
@@ -173,6 +175,7 @@
     {#key toast.id}
       <span class="em" in:come|global={{ at: fresh ? T.bounceAt : T.swapAt }} out:leave><span class:bounce={fresh}><Emoji name={toast.emoji} size={26} /></span></span>
       <span class="tx" in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave>{toast.text}</span>
+      {#if toast.toggle != null}<span class="sw" class:on={toast.toggle} in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave></span>{/if}
       {#if toast.undo}{@const undo = toast.undo}<button class="undo" in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave onclick={() => { toast.text = ''; undo(); }}>{t('fc.undo')}</button>{/if}
     {/key}
   </div>
@@ -199,10 +202,21 @@
   .undo { flex: none; align-self: stretch; margin: -9px -8px -9px 2px; padding: 0 var(--s-2); color: var(--accent); font: inherit; font-weight: 700; }
   /* a long line wraps between words, two lines at most (a name never cut in the middle; a third line ends in …) */
   .tx { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  /* a toggle toast's switch (power saving), Settings' switch made small: it flips once the line is in, from where it was */
+  .sw { flex: none; position: relative; width: 34px; height: 20px; margin-right: -4px; border-radius: var(--r-full); background: var(--line-2);
+    animation: sw-off var(--t-flip) var(--ease) var(--at-flip) backwards; }
+  .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--on-accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); animation: knob-off var(--t-flip) var(--ease) var(--at-flip) backwards; }
+  .sw.on { background: var(--switch-on); animation-name: sw-on; }
+  .sw.on::after { transform: translateX(14px); background: var(--switch-knob); animation-name: knob-on; }
+  @keyframes sw-on { from { background: var(--line-2); } }
+  @keyframes sw-off { from { background: var(--switch-on); } }
+  @keyframes knob-on { from { transform: none; background: var(--on-accent); } }
+  @keyframes knob-off { from { transform: translateX(14px); background: var(--switch-knob); } }
   .bounce { display: flex; animation: bounce var(--t-bounce) cubic-bezier(.3, 1.6, .5, 1) var(--at-bounce) both; }
   @keyframes pop { from { transform: translate(-50%, 14px) scale(0.92); } }
   @keyframes drop { from { transform: translate(-50%, -14px) scale(0.92); } }
   @keyframes bounce { from { transform: scale(0.3) rotate(-18deg); } }
   :global(html.lowfx) .toast, :global(html.lowfx) .bounce { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .toast, .bounce { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .toast, .bounce, .sw, .sw::after { animation: none; } }
 </style>

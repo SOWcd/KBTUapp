@@ -2059,8 +2059,6 @@ const en: Dict = {
   'power.auto': "Auto",
   'power.on': "On",
   'power.off': "Off",
-  'power.say': "Your phone is saving power, so power saving is on",
-  'power.sayDevice': "Power saving is on: it's faster on this phone",
   'studio.questions': "Questions waiting for an answer",
   'studio.toCheck': "Receipts to check",
   'studio.chipCheck': "Receipts: {n}",
