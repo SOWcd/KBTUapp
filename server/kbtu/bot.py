@@ -48,6 +48,8 @@ WAIT = 25                   # getUpdates: Telegram holds the request this long w
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
 TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
+TAG_FAST, TAG_BURST = 0.4, 18  # its first messages go quickly (90 people in a few seconds), the rest at TAG_GAP
+TAG_SAY = 200               # the caller's words repeated over each five, at most this long
 TAG_MARKS = tuple("\U0001F525 \u2B50 \u26A1 \U0001F3AF \U0001F680 \U0001F48E \U0001F389 \U0001F44B \U0001F4E3 \U0001F514 \u2728 \U0001F4A5 \U0001F31F \U0001F3C6 \U0001F388 \u2764 \U0001F499 \U0001F49A \U0001F49B \U0001F49C \U0001F9E1".split())  # the link text, one per person (no names): five different ones a message, the pack's animated ones when it has them
 SWEAR_CAP = 1               # a person's swear warnings a minute in a chat; past it (a flood) their messages only go
 SWEAR_CHAT_CAP = 10         # a chat's warnings a minute: a group takes about 20 messages a minute, the bot keeps its voice
@@ -1240,7 +1242,8 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
             r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
             to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
             _tagging.add(chat["id"])
-            tgc.spawn(_tag_all(cfg, http, chat["id"], to, people), f"all:{chat['id']}")
+            say = " ".join(words[1:])[:TAG_SAY]  # their own words after the command, in this very chat
+            tgc.spawn(_tag_all(cfg, http, chat["id"], to, people, say), f"all:{chat['id']}")
         return
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
         sender = int((msg.get("from") or {}).get("id") or 0)
@@ -1384,34 +1387,50 @@ async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> N
     await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
 
 
-async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:
+async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int], say: str = "") -> None:
     """/all: whom Telegram says is in the chat, five a message (it notifies only the first five mentions), each an emoji
-    linked by id (no username needed), as replies under `to`, paced for the group's limit; stops at the first refusal.
+    linked by id (no username needed), as replies under `to`; stops at the first refusal. `say`: the caller's own words
+    after the command, repeated over each five (owner, Nov 13: a push then shows why one is called, as every tag bot
+    does): plain text, escaped, short. Fast at first (TAG_BURST messages TAG_FAST apart: a group takes about 20 a
+    minute), then TAG_GAP; who is in the chat is asked ten at a time.
     At most TAG_MAX people: past it the rest (the app's list first, then the seen ones by when they were last seen) aren't
     called this run, and the chat waits ALL_AGAIN like after any run."""
     gone: list[int] = []
-    called = 0
+    called = sent_n = 0
+    head = f"{html.escape(say)}\n\n" if say else ""
+    body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
+
+    async def send(batch: list[int]) -> bool:
+        nonlocal called, sent_n
+        marks = random.sample(TAG_MARKS, len(batch))
+        gap = TAG_FAST if sent_n < TAG_BURST else TAG_GAP
+        sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, gap)
+        if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
+            sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, gap)
+        if not (sent and sent.get("ok")):  # the network, no rights, the chat gone: no more of it
+            log.warning("tag all: %s", str((sent or {}).get("description"))[:120])
+            return False
+        called, sent_n = called + len(batch), sent_n + 1
+        return True
+
     try:
         batch: list[int] = []
-        for i, tg in enumerate(people):
-            if called >= TAG_MAX:
-                break
-            m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
-            if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
-                batch.append(tg)
-            elif m and m.get("ok"):  # Telegram says not in the chat: forgotten if the bot remembered them
-                gone.append(tg)
-            if len(batch) == 5 or batch and (i == len(people) - 1 or called + len(batch) >= TAG_MAX):
-                marks = random.sample(TAG_MARKS, len(batch))
-                body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
-                sent = await _call(cfg, http, "sendMessage", {**body, "text": "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, TAG_GAP)
-                if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
-                    sent = await _call(cfg, http, "sendMessage", {**body, "text": "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, TAG_GAP)
-                if not (sent and sent.get("ok")):  # the network, no rights, the chat gone: no more of it
-                    log.warning("tag all: %s", str((sent or {}).get("description"))[:120])
+        for i in range(0, len(people), 10):
+            some = people[i:i + 10]
+            for tg, m in zip(some, await asyncio.gather(*(_call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg}, 0) for tg in some))):
+                if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
+                    batch.append(tg)
+                elif m and m.get("ok"):  # Telegram says not in the chat: forgotten if the bot remembered them
+                    gone.append(tg)
+            while len(batch) >= 5 and called < TAG_MAX:
+                n = min(5, TAG_MAX - called)
+                if not await send(batch[:n]):
                     return
-                called += len(batch)
-                batch = []
+                batch = batch[n:]
+            if called >= TAG_MAX:
+                return
+        if batch and called < TAG_MAX:
+            await send(batch[:TAG_MAX - called])
     finally:
         _tagging.discard(chat)
         _tagged[chat] = time.time()

@@ -67,7 +67,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
   reply in its comments the same way (`fchan_replies`): plain text, its own AI check, signed
   with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
-  taken down from Admin. And a user's own text going back to them alone: a channel comment a moderator restored
+  taken down from Admin. In a club's group, `/all` repeats the caller's own words over each five mentions, in the very chat they wrote them (escaped, short). And a user's own text going back to them alone: a channel comment a moderator restored
   (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there

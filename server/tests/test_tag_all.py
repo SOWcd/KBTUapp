@@ -33,6 +33,7 @@ class _Http:
 
 def _setup(c, cfg, monkeypatch):
     monkeypatch.setattr(bot, "TAG_GAP", 0)
+    monkeypatch.setattr(bot, "TAG_FAST", 0)
     monkeypatch.setattr(bot, "ALL_NO_TTL", 0)
     monkeypatch.setattr(bot, "SYNC_GAP", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
@@ -66,6 +67,12 @@ def _run(cfg, con, http, *msgs):
     return http.sent
 
 
+def _run_fresh(cfg, con, http, m, monkeypatch):
+    """A run with the chat's wait after the last /all lifted."""
+    bot._tagged.clear()
+    return _run(cfg, con, http, m)
+
+
 def test_head_tags_in_fives(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
@@ -73,7 +80,10 @@ def test_head_tags_in_fives(env, monkeypatch):
     ids = [[int(p.split('">')[0]) for p in s["text"].split("tg://user?id=")[1:]] for s in sent]
     assert ids == [[21, 31, 32, 33, 34], [35, 36]]                                   # the caller and the one who left skipped
     assert all(s["reply_parameters"]["message_id"] == 7 and s["chat_id"] == -100 for s in sent)
-    assert "meeting" not in sent[0]["text"] and any(m in sent[0]["text"] for m in bot.TAG_MARKS)   # never the caller's words
+    # the caller's own words over each five (a push then says why), as plain text
+    assert all(x["text"].startswith("meeting at 6\n\n") for x in sent) and any(m in sent[0]["text"] for m in bot.TAG_MARKS)
+    sent = _run_fresh(cfg, con, _Http(gone={37}), _msg(20, text="/all <b>x</b> & co"), monkeypatch)
+    assert sent[0]["text"].startswith("&lt;b&gt;x&lt;/b&gt; &amp; co\n\n")                    # escaped, never markup
     assert not bot._tagging
     assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     for t in ("\u041a\u0430\u043b\u043b", "\u043a\u043e\u043b\u043b \u0432 6", "Call!"):                             # the words people type instead of a command
