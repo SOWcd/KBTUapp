@@ -529,6 +529,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def event_screen(eid: int, con: Con, v: Me):
         return qr.for_event(con, cfg.token_key, v, eid)
 
+    # an event's team marked (checkin.crew): the one there is (GET), made with who is expected (POST)
+    @app.get("/api/events/{eid}/crew-screen")
+    def crew_screen(eid: int, con: Con, v: Me):
+        return qr.crew(con, cfg.token_key, v, eid)
+
+    @app.post("/api/events/{eid}/crew-screen")
+    def crew_screen_new(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.crew(con, cfg.token_key, v, eid, body.get("who", "club"), body.get("title"))
+
     @app.post("/api/screens/{sid}/grant")
     def screen_grant(sid: int, con: Con, v: Me, body: dict = Body(...)):
         return qr.grant_all(con, v, sid, body.get("code"))
@@ -540,6 +549,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/screens/{sid}/absent")
     def screen_absent(sid: int, con: Con, v: Me):
         return qr.absent(con, v, sid)
+
+    @app.get("/api/screens/{sid}/people")
+    def screen_people(sid: int, con: Con, v: Me):
+        return qr.people(con, v, sid)
 
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):

@@ -207,7 +207,7 @@ def on_scan(con, s, uid: int, t: int, out: bool) -> None:
     """A student's check-in scan at the club's session (inside checkin.mark's transaction): arriving opens a shift unless
     one is open; leaving closes the open one, else moves the last one's end (the last leaving counts, as qr_marks.left_at)."""
     org = s["org_id"]
-    if not org or org != org_id(con) or s["ended_at"] is not None:  # a sign-in completed after Finish (GRACE) is attendance, never a shift
+    if not _mine(con, s) or s["ended_at"] is not None:  # a sign-in completed after Finish (GRACE) is attendance, never a shift
         return
     vid = _record(con, org, uid)
     if not vid:
@@ -242,7 +242,8 @@ def holds(con, v: Viewer, s) -> bool:
 
 
 def _mine(con, s) -> bool:
-    return bool(s["org_id"] and s["org_id"] == org_id(con))
+    """The ledger's club's session; never its team marked at an event (checkin.crew: no shifts, no hours)"""
+    return bool(s["org_id"] and s["org_id"] == org_id(con) and not s["crew_event_id"])
 
 
 def _runs(con, s, v: Viewer) -> None:

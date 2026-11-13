@@ -46,13 +46,15 @@ def _same(sig: str, given: object) -> bool:
     return hmac.compare_digest(sig.encode(), str(given or "").encode("utf-8", "replace"))  # replace: a lone surrogate in JSON
 
 
-def new(con, title: str, people: list[dict], org_id: int | None = None) -> int:
-    """A session with its expected people, run by the club's organizers (none: the admin only)."""
+def new(con, title: str, people: list[dict], org_id: int | None = None, crew: int | None = None) -> int:
+    """A session with its expected people, run by the club's organizers (none: the admin only); `crew`: the event whose
+    team it marks (crew below)."""
     with tx(con):
         # pin_hash: the PIN went (pairing replaced it); the column is NOT NULL UNIQUE, so a random one
-        sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at) VALUES (?, ?, ?, ?)",
-                          (title, secrets.token_hex(32), org_id, now())).lastrowid
-        logic.vol.meet(con, sid, org_id)  # the volunteers ledger's club: its roster frozen as this session's expected list
+        sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at, crew_event_id) VALUES (?, ?, ?, ?, ?)",
+                          (title, secrets.token_hex(32), org_id, now(), crew)).lastrowid
+        if not crew:  # a team's marks at its event never enter the volunteers ledger (no shifts, no hours)
+            logic.vol.meet(con, sid, org_id)  # the volunteers ledger's club: its roster frozen as this session's expected list
         for p in people:
             if p.get("email"):
                 con.execute("""INSERT OR IGNORE INTO qr_expected (session_id, email, full_name, student_id, school, course, phone, tg, extra)
@@ -70,26 +72,57 @@ def club_new(con, key: bytes, v: Viewer, org_id: int, title: object, who: object
     sessions (_runs); the web names it in the viewer's language, else the English default. Who is expected, frozen now
     into the usual expected list (by KBTU mail, as the CSV and the absent list match it): the whole club ("club"), one
     of its tags (its id), or anyone ("all": no list)."""
+    _starts(con, v, org_id)
+    t = now()
+    name = " ".join(str(title or "").split())[:80] or "Meeting · " + time.strftime("%d %b", time.gmtime(t + 5 * 3600))  # plain, one line; Almaty's day
+    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", _club(con, v, org_id, name, who, t)))
+
+
+def _starts(con, v: Viewer, org_id: int) -> None:
+    """Who may start a club's own session: whoever runs its sessions (_runs), the club still active."""
     if not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", org_id) or not _runs(con, v, {"org_id": org_id, "event_id": None}):
         raise ApiError("forbidden", "screen")
+
+
+def _club(con, v: Viewer, org_id: int, name: str, who: object, t: int, crew: int | None = None) -> int:
+    """club_new's session (crew: an event's team's, made once): its expected list, the caps, the log; its id."""
     tag = who if isinstance(who, int) and not isinstance(who, bool) else None
     if who not in ("club", "all") and not (tag and one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", tag, org_id)):
         raise ApiError("bad_input")
-    t = now()
-    name = " ".join(str(title or "").split())[:80] or "Meeting · " + time.strftime("%d %b", time.gmtime(t + 5 * 3600))  # plain, one line; Almaty's day
     # the club's own people only, as its team list names them; flagged so the CSV leaves their mail out (the team never sees it)
     people = [] if who == "all" else [{"email": r["email"], "name": f"{r['last_name']} {r['first_name']}".strip(), "extra": {"club": 1}}
         for r in rows(con, f"""SELECT s.email, s.first_name, s.last_name FROM org_members m JOIN students s ON s.user_id = m.user_id
             WHERE m.org_id = ? AND s.email IS NOT NULL {"AND m.user_id IN (SELECT user_id FROM member_tags WHERE tag_id = ?)" if tag else ""}""",
                       org_id, *([tag] if tag else []))]
     with tx(con):  # counted under the write lock: two taps at once can't both pass the caps
+        x = crew and one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ?", crew)
+        if x:  # two taps at once: the one made first
+            return x[0]
         c = one(con, "SELECT COUNT(*) FILTER (WHERE ended_at IS NULL), COUNT(*) FROM qr_sessions WHERE org_id = ? AND event_id IS NULL AND created_at > ?",
                 org_id, t - 86400)
         if c[0] >= CLUB_OPEN or c[1] >= CLUB_DAY:
             raise ApiError("rate_limited", "screens")
-        sid = new(con, name, people, org_id)
-        log_action(con, v.id, "checkin_new", f"qr:{sid}", json.dumps({"org": org_id, "who": who}))
-    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid))
+        sid = new(con, name, people, org_id, crew)
+        log_action(con, v.id, "checkin_new", f"qr:{sid}", json.dumps({"org": org_id, "who": who, **({"event": crew} if crew else {})}))
+    return sid
+
+
+def crew(con, key: bytes, v: Viewer, eid: int, who: object = None, title: object = None) -> dict | None:
+    """An event's team marked (owner, Nov 13: a Vice opens the event in Studio, "Mark the team"): a club session of the
+    event's own club (a co-host's or partner's team marks in its own club), with club_new's right, list and caps; one
+    per event (crew_event_id), never its guests' session (event_id): no ticket, no event check-in; anyone's scan counts
+    and who isn't on its list is listed apart (people). Without `who`: the one there is, or None; with it: made if there's none."""
+    e = one(con, "SELECT org_id, status, title FROM events WHERE id = ?", eid)
+    if not e:
+        raise ApiError("forbidden", "screen")
+    _starts(con, v, e["org_id"])
+    x = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
+    if x or who is None:
+        return x and _row(con, key, x)
+    if e["status"] == "cancelled":
+        raise ApiError("closed", "screen")
+    name = " ".join(str(title or "").split())[:80] or e["title"][:64] + " · team"  # the web's: the event's title cut to fit, then its marker
+    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", _club(con, v, e["org_id"], name, who, now(), eid)))
 
 
 # ------------------------------------------------------------ the screen, paired from an organizer's phone
@@ -169,7 +202,7 @@ def _state(con, key: bytes | None, s) -> dict:
     slot = int(time.time()) // SLOT
     c = one(con, """SELECT COUNT(*) FILTER (WHERE done_at IS NOT NULL), COUNT(*) FILTER (WHERE done_at IS NULL),
         COUNT(*) FILTER (WHERE left_at IS NOT NULL) FROM qr_marks WHERE session_id = ?""", sid)
-    return {"session": sid, "event": s["event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
+    return {"session": sid, "event": s["event_id"], "crew": s["crew_event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
             "phase": s["phase"], "departed": c[2],
             "expected": one(con, "SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", sid)[0],
             "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running and key else None, "next": SLOT - int(time.time()) % SLOT, "created": s["created_at"]}
@@ -235,6 +268,18 @@ def absent(con, v: Viewer, sid: int) -> list[str]:
     """Who of the expected list hasn't come (yet): names only, for the host (as the CSV)."""
     _mine(con, v, sid, cohost=False)
     return [r[0] for r in rows(con, f"SELECT full_name FROM qr_expected x WHERE x.session_id = ? AND NOT {_CAME} ORDER BY full_name", sid)]
+
+
+def people(con, v: Viewer, sid: int) -> dict:
+    """The organizer's three lists (owner, Nov 13: someone taken into the club but not yet in the app scans and is
+    marked, the organizer sees he isn't a member): who of the list came, who came not on it, who of it hasn't come.
+    Names only, for absent's people (the CSV has the rest)."""
+    _mine(con, v, sid, cohost=False)
+    came = [r[0] for r in rows(con, f"SELECT full_name FROM qr_expected x WHERE x.session_id = ? AND {_CAME} ORDER BY full_name", sid)]
+    other = [" ".join(n for n in (r["last_name"], r["first_name"]) if n) or logic.short_name(r) for r in rows(con, logic.PERSON + """ JOIN qr_marks m ON m.user_id = u.id AND m.session_id = ? AND m.done_at IS NOT NULL
+        WHERE NOT EXISTS (SELECT 1 FROM qr_expected x WHERE x.session_id = m.session_id
+        AND (lower(s.email) = x.email OR s.student_id = x.student_id)) ORDER BY m.done_at""", sid)]
+    return {"came": came, "other": other, "absent": absent(con, v, sid)}
 
 
 def sessions(con, key: bytes, v: Viewer) -> list[dict]:
@@ -344,8 +389,8 @@ def _finish(con, s, by: int | None) -> None:
 
 def sweep(con) -> None:
     """What was left running (owner, Nov 13: "running" days later) finishes as Finish would: STALE after its Start, and
-    after its event's end for an event's own session. Nightly (daily.stats_day), and as the organizer's list is read."""
-    for s in rows(con, f"""SELECT s.* FROM qr_sessions s LEFT JOIN events e ON e.id = s.event_id WHERE s.started_at < ? AND s.ended_at IS NULL
+    after its event's end for an event's own session or its team's. Nightly (daily.stats_day), and as the organizer's list is read."""
+    for s in rows(con, f"""SELECT s.* FROM qr_sessions s LEFT JOIN events e ON e.id = COALESCE(s.event_id, s.crew_event_id) WHERE s.started_at < ? AND s.ended_at IS NULL
             AND (e.id IS NULL OR COALESCE(e.ends_at, e.starts_at + {logic.DOOR_LATE}) < ?)""", now() - STALE, now()):
         _finish(con, s, None)
 
@@ -414,7 +459,7 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
     hm = lambda ts: time.strftime("%H:%M:%S", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
     xs = rows(con, "SELECT * FROM qr_expected WHERE session_id = ? ORDER BY full_name", sid)
     by_mail, by_sid = {x["email"]: x for x in xs}, {x["student_id"]: x for x in xs if x["student_id"]}
-    seen = set()
+    seen, out_rows = set(), []
     for r in rows(con, """SELECT m.done_at, m.scanned_at, m.left_at, m.marked_by, st.first_name, st.last_name, st.middle_name, st.last_lat, st.first_lat, st.middle_lat, st.email, st.student_id, st.school, st.course,
             st.verified_at, u.tg_first_name, u.tg_last_name, u.tg_username FROM qr_marks m JOIN users u ON u.id = m.user_id
             LEFT JOIN students st ON st.user_id = m.user_id WHERE m.session_id = ?
@@ -424,12 +469,14 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
             seen.add(x["email"])
         done = r["done_at"] is not None
         name = " ".join(n for n in (r["last_name"], r["first_name"]) if n) or " ".join(n for n in (r["tg_last_name"], r["tg_first_name"]) if n)
-        w.writerow(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
+        out_rows.append(list(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
                     x["full_name"] if x else name, r["middle_name"], r["last_lat"], r["first_lat"], r["middle_lat"], r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
                     (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime((r["done_at"] or r["scanned_at"]) + 5 * 3600)),
                     ("A" if r["verified_at"] <= s["started_at"] else "B") if done and r["verified_at"] is not None else "", hm(r["left_at"]),  # unlinked since: no tier
                     f"{(r['left_at'] - r['done_at']) / 3600:.1f}" if done and r["left_at"] and r["left_at"] > r["done_at"] else "",
-                    _marker(con, r["marked_by"])]))
+                    _marker(con, r["marked_by"])])))
+    rank = {"came": 0, "came (not on the list)": 1}
+    w.writerows(sorted(out_rows, key=lambda row: rank.get(row[0], 2)))  # stable: by time within each
     for x in xs:
         if x["email"] not in seen:
             club = json.loads(x["extra"] or "{}").get("club")  # a club's own roster: the team never sees its mails
