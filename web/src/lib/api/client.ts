@@ -418,6 +418,7 @@ export const server: Api = {
   mirrorOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
   swearOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }),
   swearReport: (org) => call('GET', `/orgs/${org}/chats/swear`),
+  chatRoles: (org, chat) => call('GET', `/orgs/${org}/chats/${chat}/roles`),
   deleteChat: (id) => call('DELETE', `/admin/chats/${id}`),
   approveChat: (id) => call('POST', `/admin/chats/${id}/approve`),
   registry: (back = 0) => call('GET', `/registry/orgs?back=${back}`),

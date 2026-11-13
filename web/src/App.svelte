@@ -229,7 +229,7 @@
   sheets.news = () => lazy(newsPage, {}, 'sheet.news');
   sheets.feed = () => lazy(feedPage, {}, 'sheet.feed');
   sheets.friends = () => lazy(friendsPage, {}, 'sheet.friends');
-  sheets.team = () => lazy(teamPage, {});
+  sheets.team = (at) => lazy(teamPage, { at });
   setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- the Clubs tab: one feed for everyone; a club of mine opens its Studio pushed over it (round 5) ----

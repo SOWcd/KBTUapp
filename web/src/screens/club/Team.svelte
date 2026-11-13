@@ -39,7 +39,9 @@
   import Skeleton from '../../ui/Skeleton.svelte';
   import { menu } from '../../ui/menu';
 
-  let { overlay }: { overlay: Overlay } = $props();
+  // at: that person's actions open (Studio → Chats → Roles and admins), once
+  let { overlay, at }: { overlay: Overlay; at?: number } = $props();
+  let first = untrack(() => at);
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
   // kept per club (and for the next launch), so Team opens with the people already there; a visit refreshes it quietly
@@ -47,7 +49,7 @@
   let setup = $state<TeamSetup | null>(null);
   const loadSetup = (org: number) => api.teamSetup(org).then((x) => { if (m?.org.id === org) setup = x; }).catch(() => {});
   const orgId = $derived(m?.org.id); // the same club with a fresh membership (a return refresh) keeps the filter and the open member
-  $effect(() => { const org = orgId; untrack(() => { open = null; filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); } }); });
+  $effect(() => { const org = orgId; untrack(() => { open = first ?? null; first = undefined; filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); } }); });
   let open = $state<number | null>(null); // whose actions are out
   let linkOpen = $state(false); // the link icon's choice
   async function shareLink(many: boolean) {

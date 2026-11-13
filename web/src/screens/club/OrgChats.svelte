@@ -3,8 +3,8 @@
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
-  import { api, ApiErr, type Id, type StudioChat, type SwearRow } from '../../lib/api';
-  import { say } from '../../lib/state/ui.svelte';
+  import { api, ApiErr, type ChatRoles, type Id, type StudioChat, type SwearRow } from '../../lib/api';
+  import { say, open, ui } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -12,6 +12,10 @@
   import { haptic, openLink } from '../../lib/tg';
   import Button from '../../ui/Button.svelte';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Pane from '../../ui/Pane.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import UserCog from '@lucide/svelte/icons/user-cog';
   import IconButton from '../../ui/IconButton.svelte';
   import Field from '../../ui/Field.svelte';
   import Group from '../../ui/Group.svelte';
@@ -81,6 +85,17 @@
       say(miss ? lacks(miss) : t('common.error'), 'warning_3d');
     }
   }
+  // a group's admins against the club's roles (read-only, asked of Telegram as it opens); a person: their row in Team
+  let roles = $state<ChatRoles | null>(null);
+  let asked = 0; // the latest group opened: an earlier answer arriving late is dropped
+  function rolesOf(c: StudioChat) {
+    const mine = ++asked;
+    roles = null;
+    haptic.tap();
+    open(Pane, { title: c.title, icon: UserCog, children: rolesPage });
+    api.chatRoles(org, c.id).then((r) => { if (mine === asked) roles = r; }).catch(() => { if (mine === asked) roles = { state: 'unavailable' }; });
+  }
+  const toTeam = (id: Id | null) => { ui.club = org; sheets.team(id ?? undefined); };
   const lacks = (miss: StudioChat['swearMiss']) => t('oc.swearRights', { rights: miss.map((r) => t(`oc.right.${r}`)).join(', ') });
   const mask = (s: string) => (s.length < 3 ? s : s[0] + '*'.repeat(s.length - 2) + s.at(-1));
   const why = (r: SwearRow) => [r.stems.map(mask).join(', '), r.mutes ? t('oc.swearMuted', { n: r.mutes }) : ''].filter(Boolean).join(' · ');
@@ -125,6 +140,9 @@
     <Group caption={t('oc.swear')} footnote={t('oc.swearNote')}>
       {#each groups as c (c.id)}<Row title={c.title} subtitle={c.swear && c.swearMiss.length ? lacks(c.swearMiss) : undefined} accessory="switch" checked={c.swear} onchange={(on) => swear(c, on)} />{/each}
     </Group>
+    <Group caption={t('oc.roles')} footnote={t('oc.rolesNote')}>
+      {#each groups as c (c.id)}<Row title={c.title} accessory="chevron" onclick={() => rolesOf(c)} />{/each}
+    </Group>
   {/if}
   {#if report.length}
     <Group caption={t('oc.swearLog')}>
@@ -137,6 +155,26 @@
     <Button kind="secondary" size="m" type="submit" loading={busy} disabled={link.trim().length < 4}>{t('oc.add')}</Button>
   </form>{/if}
 </div>
+
+{#snippet rolesPage()}
+  {#if !roles}<Skeleton n={3} />
+  {:else if roles.state !== 'ok'}<EmptyState title={t(`oc.rolesWhy.${roles.state}`)} />
+  {:else if !roles.admins?.length && !roles.others && !roles.leaders?.length}<EmptyState tone="success" title={t('oc.rolesMatch')} />
+  {:else}
+    <div class="oc">
+      {#if roles.admins?.length || roles.others}
+        <Group caption={t('oc.rolesAdmins')} footnote={roles.others ? t('oc.rolesOthers', { n: roles.others }) : undefined}>
+          {#each roles.admins ?? [] as p, i (i)}<Row dense title={p.name} subtitle={p.id ? undefined : t('oc.rolesOutside')} accessory="chevron" onclick={() => toTeam(p.id)} />{/each}
+        </Group>
+      {/if}
+      {#if roles.leaders?.length}
+        <Group caption={t('oc.rolesLeaders')} footnote={roles.capped ? t('oc.rolesCapped') : undefined}>
+          {#each roles.leaders as p (p.id)}<Row dense title={p.name} subtitle={t(p.inGroup ? 'oc.rolesInGroup' : 'oc.rolesNotInGroup')} accessory="chevron" onclick={() => toTeam(p.id)} />{/each}
+        </Group>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
 
 <style>
   .oc { display: flex; flex-direction: column; gap: var(--gap-group); }

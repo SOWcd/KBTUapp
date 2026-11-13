@@ -130,7 +130,7 @@ export const sheets = {
   news: () => {},
   feed: () => {},
   friends: () => {},
-  team: () => {},
+  team: (_at?: Id) => {},  // at: that person's actions open (Studio's Roles and admins)
   /** a new post for a club (Head+), from Studio */
   composer: (_org: Id, _post?: Post, _casting?: boolean) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */
