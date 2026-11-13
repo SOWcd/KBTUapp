@@ -4,6 +4,7 @@ import type { Api } from './index';
 import type { ApiError, ClubApplication, Id, OfficialPath, PersonCard, Video } from './types';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
+import { sheets } from '../state/sheets';
 import { tg } from '../tg';
 import { i18n } from '../i18n/index.svelte';
 
@@ -45,6 +46,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const data = await r.json().catch(() => null);
   // banned mid-session: the app hears it from any call, not only at launch
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
+  // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
+  if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   return localize(data) as T;
 }

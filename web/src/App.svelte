@@ -92,13 +92,15 @@
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
-  // the policy changed since this student agreed: the whole app waits behind the gate until they accept (owner, Nov 1:
-  // the sheet got swiped away unread). Staff and students added by hand have no consent of theirs; a deletion pending is
-  // exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
+  // the policy changed since this student agreed: nobody is asked on opening the app (owner, Nov 13); the gate comes
+  // when they do what the server holds for the policy in force (a post, the assistant: api "forbidden"/"consent" ->
+  // sheets.consent), and may be declined. Staff and students added by hand have no consent of theirs; a deletion
+  // pending is exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
+  let asked = $state(false);
   const consentGate = () => import('./screens/ConsentGate.svelte');
   const gated = $derived.by(() => {
     const s = session.me?.student;
-    return !!s && session.boardKnown && !session.me?.deleteAt && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
+    return !!s && session.boardKnown && !session.me?.deleteAt && asked && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
   });
   $effect(() => { ui.gate = gated; });
   // while gated no overlay shows: they wait in the stack and show after "Accept" (a deep link isn't lost)
@@ -197,7 +199,7 @@
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map'); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
-  sheets.consent = () => void loadMe();
+  sheets.consent = () => { asked = true; void loadMe(); };
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
   sheets.clubEdit = (org, at) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org, at });
   sheets.people = (org, title) => lazy(() => import('./screens/sheets/PeopleSheet.svelte'), { org, title });
@@ -740,7 +742,7 @@
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
-  {#if gated}{#await consentGate() then m}<m.default />{/await}{/if}
+  {#if gated}{#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}{/if}
   {#each overlays as o (o.id)}
     {#if shown(o)}<o.component {...o.props} overlay={o} />{/if}
   {/each}

@@ -19,6 +19,8 @@
   import { haptic, openLink } from '../lib/tg';
   import { CONSENT_VOL } from '../lib/legal';
 
+  // oncancel: asked only when a student does what needs the policy in force (owner, Nov 13: never on opening the app), so they may also not
+  let { oncancel }: { oncancel?: () => void } = $props();
   let busy = $state(false), done = $state(false), seal: HTMLElement;
   // what's asked, one short line each with its mark: the rewritten policy, and the volunteers ledger's part ("+vol1"
   // after the version, server logic/account.py CONSENT_VOL) for the people it concerns only
@@ -73,6 +75,7 @@
   <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
   <div class="foot" style="--i:{count + 4}">
     <Button kind="glass" size="l" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
+    {#if oncancel}<Button kind="plain" size="m" onclick={oncancel}>{t('common.cancel')}</Button>{/if}
   </div>
 </div>
 
@@ -127,7 +130,7 @@
   .lnk :global(.lbl) { display: inline-flex; align-items: center; gap: 4px; }
 
   /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
-  .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; justify-content: center; pointer-events: none; }
+  .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
   .foot :global(.btn) { min-width: 220px; pointer-events: auto; } /* the app's glass button as it is (ui/Button glass) */
   /* the button slides up from below the screen, never fading: WebKit drops a backdrop-filter under a fading parent,
      so the glass switched on at once when the fade ended (owner, Nov 2) */
