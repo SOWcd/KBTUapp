@@ -1699,7 +1699,7 @@ const en: Dict = {
   'oc.bot': "The bot keeps the card current",
   'oc.addBot': "Add our bot",
   'oc.botNote': "The bot keeps the title, photo and member count current. It never reads messages.",
-  'oc.allNote': "In the chat, /all calls everyone — for anyone with a role in the club.",
+  'oc.allNote': "In the chat, /all calls everyone — for anyone with a role in the club and the group's admins.",
   'oc.why.taken': "This chat is linked to another organization. Write to the KBTU App team and we'll sort it out.",
   'oc.why.limit': "No more than 12 chats.",
   'tg.open': "Open in Telegram",

@@ -18,12 +18,12 @@ class _Resp:
 
 class _Http:
     """Telegram: everyone is in the chat but `gone`; the first `busy` sendMessages answer 429."""
-    def __init__(self, gone=(), busy=0):
-        self.gone, self.busy, self.sent = set(gone), busy, []
+    def __init__(self, gone=(), busy=0, admins=()):
+        self.gone, self.busy, self.sent, self.admins = set(gone), busy, [], set(admins)
 
     async def post(self, url, json=None, **_):
         if url.endswith("/getChatMember"):
-            return _Resp({"ok": True, "result": {"status": "left" if json["user_id"] in self.gone else "member", "user": {"id": json["user_id"]}}})
+            return _Resp({"ok": True, "result": {"status": "left" if json["user_id"] in self.gone else "administrator" if json["user_id"] in self.admins else "member", "user": {"id": json["user_id"]}}})
         if self.busy:
             self.busy -= 1
             return _Resp({"ok": False, "parameters": {"retry_after": 0}}, 429)
@@ -94,3 +94,11 @@ def test_one_run_at_a_time_and_429(env, monkeypatch):
     assert len(sent) == 2 and sum(s["text"].count("tg://") for s in sent) == 8      # 429 twice: waited, then went
     sent = _run(cfg, con, _Http(busy=9), _msg(20))                                  # still too fast: gives up, the chat free again
     assert sent == [] and not bot._tagging
+
+
+def test_group_admin_tags(env, monkeypatch):
+    """A plain member who is the group's own Telegram admin may call too; a plain member not."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    assert _run(cfg, con, _Http(), _msg(31)) == []
+    assert len(_run(cfg, con, _Http(admins={31}), _msg(31))) == 2

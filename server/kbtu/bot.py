@@ -1188,7 +1188,13 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
                 or msg.get("is_automatic_forward") or time.time() - int(msg.get("date") or 0) > FRESH or chat["id"] in _tagging:
             return
-        if people := logic.tag_all(con, chat["id"], int(sender.get("id") or 0)):  # not theirs: silence, nothing to answer
+        who = int(sender.get("id") or 0)
+        people = logic.tag_all(con, chat["id"], who)
+        if not people:  # no role in the club: the group's own Telegram admin may call too (the title was given for a reason)
+            me = await _call(cfg, http, "getChatMember", {"chat_id": chat["id"], "user_id": who}, 0)
+            if me and me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator"):
+                people = logic.tag_all(con, chat["id"], who, admin=True)
+        if people:  # not theirs: silence, nothing to answer
             r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
             to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
             _tagging.add(chat["id"])

@@ -63,3 +63,5 @@ def test_tag_all_any_role(env):
     con.commit()
     assert sorted(logic.chatlist.tag_all(con, -100, 22)) == [20, 23]
     assert logic.chatlist.tag_all(con, -100, 23) == []
+    assert sorted(logic.chatlist.tag_all(con, -100, 23, admin=True)) == [20, 22]   # the group's Telegram admin
+    assert logic.chatlist.tag_all(con, -200, 23, admin=True) == []   # a chat no club holds
