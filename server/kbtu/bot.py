@@ -1180,7 +1180,12 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     words = str(msg.get("text") or "").split()
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
-        if cid := logic.bot_added(con, int((msg.get("from") or {}).get("id") or 0), chat, cid=int(words[1][3:])):
+        sender = int((msg.get("from") or {}).get("id") or 0)
+        # only the group's own admin links it (whoever added the bot as an admin is one), as for an event's chat
+        me = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChatMember", json={"chat_id": chat["id"], "user_id": sender})).json()
+        if not (me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator")):
+            return
+        if cid := logic.bot_added(con, sender, chat, cid=int(words[1][3:])):
             await chat_card(cfg, http, con, cid, chat["id"])
         return
     if len(words) == 1 and words[0].lower() == f"/start@{cfg.bot_username}".lower():  # someone just asks: am I on duty here?

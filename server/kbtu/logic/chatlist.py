@@ -543,9 +543,13 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
         return None
     v = Viewer(u["id"], u["role"], bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"])))
     name = str(chat.get("username") or "").lower()
+    if one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ?", chat["id"]):  # a chat another card already holds stays its
+        return None
     for c in rows(con, "SELECT * FROM chats WHERE org_id IS NOT NULL AND tg_chat_id IS NULL AND (? IS NULL OR id = ?) ORDER BY id", cid, cid):
         if v.role != "admin" and not can(con, v, c["org_id"], "profile"):
             continue
+        if cid and one(con, "SELECT 1 FROM events WHERE chat_id = ? AND org_id IS NOT ?", chat["id"], c["org_id"]):
+            return None  # another club's event chat stays theirs
         if cid or (name and c["url"].rstrip("/").lower() == f"https://t.me/{name}") or (invite and c["url"].rstrip("/") == invite.rstrip("/")) \
                 or (v.role != "admin" and chat.get("type") == "channel" and c["kind"] == "channel" and c["title"] == chat.get("title")):
             con.execute("UPDATE chats SET tg_chat_id = ? WHERE id = ?", (chat["id"], c["id"]))

@@ -62,3 +62,29 @@ def test_event_chat_claim_guards(env, monkeypatch):
     assert con.execute("SELECT chat_id FROM events WHERE id = ?", (e2,)).fetchone()[0] == -300 and sent[-1]["text"] == bot.texts.CHAT_BAD
     asyncio.run(bot._group(cfg, _Http("administrator"), con, msg))
     assert con.execute("SELECT chat_id FROM events WHERE id = ?", (e2,)).fetchone()[0] == -400
+
+
+def test_club_chat_claim_guards(env, monkeypatch):
+    """/start oc_<id>: only the group's admin binds the club's chat card, and never to a group another card or club holds."""
+    c, cfg = env
+    for uid, name in ((20, "pres"), (30, "rival")):
+        login(c, uid, name)
+    con = db.connect(cfg.db_path)
+    oid, e1, t1 = _club_event(c, con, 20, "Chess")
+    _club_event(c, con, 30, "Go")
+    card = con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id) VALUES ('Chess talk', 'group', 'https://t.me/+c', 0, 'org', ?)",
+                       (oid,)).lastrowid
+    con.execute("INSERT INTO chats (title, kind, url, tg_chat_id, created_at, status) VALUES ('Open', 'group', 'https://t.me/open', -200, 0, 'live')")
+    assert logic.bot_added(con, 20, {"id": -200, "type": "supergroup"}, cid=card) is None   # another card's group
+    go = con.execute("SELECT id FROM events WHERE org_id != ? LIMIT 1", (oid,)).fetchone()[0]
+    con.execute("UPDATE events SET chat_id = -300 WHERE id = ?", (go,))
+    assert logic.bot_added(con, 20, {"id": -300, "type": "supergroup"}, cid=card) is None   # another club's event chat
+
+    async def card_(*_a, **_k):
+        pass
+    monkeypatch.setattr(bot, "chat_card", card_)
+    msg = {"chat": {"id": -400, "type": "supergroup"}, "text": f"/start oc_{card}", "date": int(time.time()), "from": {"id": 20}}
+    asyncio.run(bot._group(cfg, _Http("member"), con, msg))                 # the club's president, but not the group's admin
+    assert con.execute("SELECT tg_chat_id FROM chats WHERE id = ?", (card,)).fetchone()[0] is None
+    asyncio.run(bot._group(cfg, _Http("administrator"), con, msg))
+    assert con.execute("SELECT tg_chat_id FROM chats WHERE id = ?", (card,)).fetchone()[0] == -400
