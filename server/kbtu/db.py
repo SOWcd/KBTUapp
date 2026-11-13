@@ -1737,6 +1737,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       gone_at INTEGER) STRICT;"""),
+    # (Nov 13) a school's own event only for its students (seats._visible): the school's slug, NULL for everyone
+    (168, "ALTER TABLE events ADD COLUMN school TEXT;"),
 ]
 
 

@@ -365,7 +365,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND starts_at > ?", int(ref[1]), logic.now())
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))
         if not e or not p or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')",
-                                 e["id"], m["user_id"]):
+                                 e["id"], m["user_id"]) or not logic.seats.sees_school(con, m["user_id"], e):
             return None
         return (*texts.bot_message(lang, kind, name=logic.shown_name(p), **ev(e)), f"ev_{e['id']}")
     if kind == "round_open":  # ro:<round>, to a club's followers who aren't in it; gone once it stops taking applications
@@ -452,6 +452,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     e = one(con, "SELECT e.*, o.name AS org_name, o.status AS org_status FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
     # a moderator's take-down (hidden_at) or the admin's hidden club: nobody can open it, so nobody hears of it (a cancel still goes)
     if not e or (kind != "event_cancelled" and (e["status"] != "published" or e["hidden_at"] or e["org_status"] == "hidden")):
+        return None
+    if not logic.seats.sees_school(con, m["user_id"], e):  # a school's own event: only to whom it shows (its signed-up keep theirs)
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"

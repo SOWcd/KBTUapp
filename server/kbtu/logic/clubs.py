@@ -67,7 +67,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     # its latest public event that ended in the last 30 days: the Clubs list's line when nothing is coming. One query for
     # all (SQLite's bare columns follow MAX); the same for every viewer, so public ones only
     last = {r["org_id"]: r for r in rows(con, f"""SELECT org_id, id, title, i18n, MAX(starts_at) AS starts_at FROM events
-        WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL AND visibility = 'public' AND starts_at > ?
+        WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL AND visibility = 'public' AND school IS NULL AND starts_at > ?
         AND COALESCE(ends_at, starts_at + ?) <= ? GROUP BY org_id""", *ids, core.now() - 30 * 86400, core.NO_END, core.now())}
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
     # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)

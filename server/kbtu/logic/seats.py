@@ -12,7 +12,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
-    STAFF_KINDS, full, log_action, need_student, one, person_ref, rows, taken)
+    STAFF_KINDS, full, log_action, need_student, one, person_ref, role_in, rows, taken)
 
 
 # ------------------------------------------------------------ volunteers
@@ -192,7 +192,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     out = []
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
-            e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL
+            e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND e.school IS NULL
               AND (e.guest_host IS NULL OR e.channel_msg IS NOT NULL)  -- a partner's event isn't announced; one posted before it became one is kept in step
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) AS live
             FROM events e JOIN orgs o ON o.id = e.org_id
@@ -208,7 +208,8 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
         if not e["live"] or not (own or kept or vouch):
             # one still to come that may not be there, or a past one that hung on a co-host now gone
             # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
-            if e["channel_msg"] and (e["live"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
+            # a school's own event never: one posted before it was made so goes too
+            if e["channel_msg"] and (e["live"] or e["school"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
                 _unpost(con, e)
             continue
         via = None if own or kept else e["co_id"]
@@ -312,7 +313,9 @@ def _calendar(lines: list[str], *head: str) -> str:
 
 
 def event_ics(con, eid: int, link: str) -> str:
-    e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND o.status != 'hidden'", eid)
+    # a school's own event: no viewer here, so none (cal_feed, which knows its reader, has it)
+    e = one(con, """SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published'
+        AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL""", eid)
     if not e or not e["starts_at"]:
         raise ApiError("not_found")
     return _calendar(_vevent(e, link))
@@ -353,13 +356,45 @@ def cal_feed(con, token: str, link) -> str:
 
 # ---------------------------------------------------------------- events
 
-def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None, hidden: set[int] | None = None) -> bool:
-    """Drafts and hidden events only for the organizing team (and the admin); team-only events for members. `roles`
-    (_roles()) and `hidden` (_hidden_orgs()): read once when checking a list."""
+def school_ok(con, v: Viewer, e: sqlite3.Row) -> bool:
+    """A school's own event (events.school, its slug) shows to that school's verified students, whoever runs it (the
+    host's team, an accepted co-host's) and the admin acting from Admin. Not advertised to others, not access
+    control: a student can change their school once (Settings); one signed up before keeps the event and the ticket."""
+    if not e["school"] or v.staff_org == e["org_id"]:  # staff_org: the admin from Admin alone (app.viewer)
+        return True
+    if not v.student:
+        return False
+    if role_in(con, v, e["org_id"]) \
+            or one(con, """SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'
+                UNION ALL SELECT 1 FROM event_crew WHERE event_id = ? AND user_id = ?""", e["id"], v.id, e["id"], v.id):  # signed up, or its door helper
+        return True
+    s = one(con, "SELECT school FROM students WHERE user_id = ?", v.id)  # ponytail: a query per school card, rare
+    from .account import school_slug  # account imports this module
+    from .cohosts import ACCEPTED
+    return school_slug(s["school"] if s else None) == e["school"] \
+        or bool(one(con, ACCEPTED + " AND x.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?)", e["id"], v.id))  # a co-host's team
+
+
+def sees_school(con, uid: int, e: sqlite3.Row) -> bool:
+    """school_ok for someone who isn't the one asking: a friend invited, the bot's message to them (app.viewer's rule
+    for a student: a verified row, not a hand-made one)."""
+    if not e["school"]:
+        return True
+    u = one(con, "SELECT role, EXISTS (SELECT 1 FROM students WHERE user_id = users.id AND manual = 0) AS st FROM users WHERE id = ?", uid)
+    return bool(u) and school_ok(con, Viewer(uid, u["role"], bool(u["st"])), e)
+
+
+def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None, hidden: set[int] | None = None,
+             school: bool = True) -> bool:
+    """Drafts and hidden events only for the organizing team (and the admin); team-only events for members; a school's
+    own event for its students (school_ok). `roles` (_roles()) and `hidden` (_hidden_orgs()): read once when checking
+    a list."""
     if (e["org_id"] in hidden) if hidden is not None else one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'hidden'", e["org_id"]):
         return False  # a club the admin hid: its events are gone for everyone
     roles = _roles(con, v) if roles is None else roles
     team = at_least(roles.get(e["org_id"]), "member")
+    if school and e["school"] and not (team or school_ok(con, v, e)):
+        return False
     if e["status"] == "draft" or e["hidden_at"]:
         return team or v.role == "admin"
     if e["visibility"] == "members":
@@ -450,6 +485,8 @@ def on_afisha_args(v: Viewer) -> list[int]:
 def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or not _visible(con, v, e):
+        if e and e["school"] and _visible(con, v, e, school=False):
+            raise ApiError("forbidden", "school", {"school": e["school"]})  # by its link: whose it is, nothing else
         raise ApiError("not_found")
     return e
 

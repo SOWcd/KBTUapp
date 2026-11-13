@@ -100,7 +100,7 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int]]:
     rooms |= {r["room"] for r in facts if r["room"] and ROOM.match(r["room"])}
     # the afisha's own (seats.on_afisha: an initiative's event only with an official co-host, or if it's mine)
     evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, o.name AS org FROM events e JOIN orgs o ON o.id = e.org_id
-        WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden'
+        WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL
           AND e.starts_at BETWEEN ? AND ? AND {on_afisha()} ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400, *on_afisha_args(v))
     lines.append("Coming events (id, title, when, where, by): " + ("; ".join(
         f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or 'place to be announced'}, {e['org']}"
@@ -125,7 +125,7 @@ def card(con, ctx: object) -> tuple[str, int | None] | None:
               e.first_year, e.external_url, e.reg_until, o.name AS org, c.name AS co FROM events e JOIN orgs o ON o.id = e.org_id
               LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.status = 'accepted' LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
             WHERE e.id = ? AND e.status IN ('published', 'cancelled') AND e.visibility = 'public' AND e.hidden_at IS NULL
-              AND o.status = 'active'""", ctx["id"])
+              AND o.status = 'active' AND e.school IS NULL""", ctx["id"])
         if not e:
             return None
         bits = [f"[{e['id']}] {e['title']}", f"starts {_when(e['starts_at'])}" + (f", ends {_when(e['ends_at'])}" if e["ends_at"] else ""),

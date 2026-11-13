@@ -361,10 +361,24 @@ def _partner_ok(f: dict, e: sqlite3.Row | None = None) -> None:
         raise ApiError("bad_input", "late")
 
 
+def _school_only(org: sqlite3.Row, on: object) -> str | None:
+    """"Only for <school>": a school's own org alone, and only its own school (its slug, account.school_slug's);
+    off (None) is always allowed, so it can be switched off later."""
+    if not isinstance(on, bool):
+        raise ApiError("bad_input")
+    if not on:
+        return None
+    if org["kind"] != "school" or org["slug"] not in {s["slug"] for s in SCHOOLS}:
+        raise ApiError("forbidden", "school")
+    return org["slug"]
+
+
 def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
+    if body.get("schoolOnly"):
+        f["school"] = _school_only(org, True)
     _partner_ok(f)
     evteams.settings_ok(con, f)
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
@@ -439,6 +453,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         if e["status"] == "cancelled":
             raise ApiError("closed")
         f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body)
+        if "schoolOnly" in body:
+            f["school"] = _school_only(org, body["schoolOnly"])
         _partner_ok(f, e)
         evteams.settings_ok(con, f, e)
         get = lambda k: f[k] if k in f else e[k]  # noqa: E731
@@ -533,7 +549,8 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
             told = after is None
             for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
                 WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id) if told else []:
-                notify(con, r[0], "new_event", f"event:{eid}")
+                if sees_school(con, r[0], e):  # a school's own event: its followers of other schools don't hear (nor bot._render)
+                    notify(con, r[0], "new_event", f"event:{eid}")
                 con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"told:{e['org_id']}", str(core.now())))
             # the week starts when someone heard: nobody did, the key still says so (over the fallback to past events)
             if told:
@@ -864,9 +881,11 @@ def event_invites(con, v: Viewer, eid: int) -> list[dict]:
     """"Bring a friend" (§4.7): my friends and where each one stands with this event — to invite, invited by me, or
     going (only for those who show where they go, §3; the rest look invitable and the bot simply stays quiet)."""
     need_student(v)
-    _event(con, v, eid)
+    e = _event(con, v, eid)
     out = []
     for p in rows(con, PERSON + " WHERE u.id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)", v.id, v.id):
+        if not sees_school(con, p["id"], e):  # a school's own event: friends of another school aren't offered
+            continue
         going = p["show_going"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, p["id"])
         asked = one(con, "SELECT 1 FROM friend_invites WHERE from_id = ? AND to_id = ? AND event_id = ?", v.id, p["id"], eid)
         out.append({"person": person_ref(p), "state": "going" if going else "invited" if asked else "none"})
@@ -879,7 +898,7 @@ def invite_friend(con, v: Viewer, eid: int, uid: object) -> list[dict]:
     events that haven't started; 30 invites a day."""
     need_student(v)
     e = _event(con, v, eid)
-    if not isinstance(uid, int) or isinstance(uid, bool) or uid not in friend_ids(con, v.id):
+    if not isinstance(uid, int) or isinstance(uid, bool) or uid not in friend_ids(con, v.id) or not sees_school(con, uid, e):
         raise ApiError("forbidden")
     if e["status"] != "published" or e["starts_at"] <= core.now() or e["visibility"] != "public":
         raise ApiError("closed")
@@ -1209,10 +1228,10 @@ def door_round(con) -> None:
 # when a function runs
 from . import core, evteams, gallery  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
-from .clubs import _keep_name, org, people  # noqa: E402
+from .clubs import SCHOOLS, _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
 from .crew import kind as crew_kind  # noqa: E402
-from .seats import _visible, for_me  # noqa: E402
+from .seats import _visible, for_me, sees_school  # noqa: E402
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402

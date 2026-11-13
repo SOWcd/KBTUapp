@@ -39,7 +39,7 @@ def _shape(f, v: Viewer) -> dict:
 def _open() -> str:
     """SQL: the event `e` of the club `o` shows its album in the Gallery (args: on_afisha_args, my id)."""
     return f"""e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.meeting = 0 AND o.status != 'hidden'
-            AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)"""
+            AND e.school IS NULL AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)"""
 
 
 def albums(con, v: Viewer) -> list[dict]:
@@ -177,7 +177,7 @@ def _was_open(con, eid: int) -> bool:
     """The event's album was open to every student whoever they are (public, not a meeting, its club on the afisha by
     itself): only such an event's Gallery posts may outlive the album as plain KBTU photos."""
     return bool(one(con, f"""SELECT 1 FROM events e JOIN orgs o ON o.id = e.org_id
-        WHERE e.id = ? AND e.visibility = 'public' AND e.meeting = 0 AND {afisha_ok('o')}""", eid))
+        WHERE e.id = ? AND e.visibility = 'public' AND e.meeting = 0 AND e.school IS NULL AND {afisha_ok('o')}""", eid))
 
 
 def album_gone(con, eid: int, fid: int | None = None) -> list[int]:

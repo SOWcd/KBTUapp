@@ -493,7 +493,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
                   "holdUntil": reg["hold_until"], "checkedInAt": reg["checked_in_at"], "receipt": c["status"] if (c := receipts.get(reg["id"])) else "none",
                   "receiptFlags": [x for x in c["flags"].split(",") if x] if c and c["status"] == "accepted" and c["reviewed_at"] is None else [],
                   "free": bool(reg["free"]),
-                  "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" else None,
+                  "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" and not e["school"] else None,
                   "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}
         out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], []),
                     **({"teamAsk": a} if (a := asks.get(e["id"])) else {})})
@@ -529,6 +529,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "regUntil": e["reg_until"], "doorAt": door_at(e) if e["starts_at"] else None, "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
+        **({"school": e["school"]} if e["school"] else {}),  # only its students see it (seats.school_ok): their label
         **({"teamMin": e["team_min"], "teamMax": e["team_max"]} if e["team_max"] is not None else {}),  # a team event (evteams.py)
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
         **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),

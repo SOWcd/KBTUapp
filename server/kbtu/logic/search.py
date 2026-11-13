@@ -64,6 +64,8 @@ def events(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     if v.role != "admin":
         roles, hidden = _roles(con, v), _hidden_orgs(con)
         found = [e for e in found if _visible(con, v, e, roles, hidden)]
+    else:  # a school's own event: the admin finds it from Admin, not in the app's search
+        found = [e for e in found if school_ok(con, v, e)]
     return cards(con, v, found[:n])
 
 
@@ -80,4 +82,4 @@ def clubs(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
 
 
 from .clubs import listed  # noqa: E402
-from .seats import _hidden_orgs, _visible  # noqa: E402
+from .seats import _hidden_orgs, _visible, school_ok  # noqa: E402
