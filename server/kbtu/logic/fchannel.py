@@ -8,6 +8,7 @@ which keeps only the channel's message id. Only the owner reveals an anonymous a
 from __future__ import annotations
 
 import difflib
+import functools
 import json
 import re
 import secrets
@@ -566,6 +567,23 @@ def anon_sign(body: str) -> str:
     """An anonymous post's signature, short and in the post's own script (owner, Nov 2): "Anon" in Russian and Kazakh
     alike for any Cyrillic, else English."""
     return "\u0410\u043d\u043e\u043d\u0438\u043c" if re.search("[\u0400-\u04ff]", body or "") else "Anonymous"
+
+
+@functools.cache
+def _marks() -> tuple[str, frozenset[str], frozenset[str]]:
+    """The reply signature's words, every nick, the "Anon" signatures: as clubs._skeleton reads them."""
+    from .clubs import _skeleton
+    return _skeleton(texts.FCH_REPLY_SIGN), frozenset(_skeleton(texts.nick(a, n)) for a in range(len(texts.NICK_ADJ)) for n in range(len(texts.NICK_NOUN))), \
+        frozenset(_skeleton(x) for x in (anon_sign("\u0430"), anon_sign(""), "Anon"))
+
+
+def anon_mark(name: str) -> bool:
+    """A name that reads as an anonymous author's mark: the bot's reply signature's words, any post's nick, or "Anon"
+    (letters only: clubs._skeleton). No app nick or Telegram name in the group may carry one (only the bot signs so)."""
+    from .clubs import _skeleton
+    sign, nicks, anon = _marks()
+    s = _skeleton(name)
+    return sign in s or s in anon or any(n in s for n in nicks)
 
 
 def _anon_sign(p) -> str:

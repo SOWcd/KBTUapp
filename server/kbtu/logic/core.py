@@ -309,7 +309,8 @@ def clean_nick(val: object) -> str | None:
     s = " ".join("".join(ch for ch in str(val or "") if unicodedata.category(ch)[0] != "C").split())
     if not s:
         return None
-    if not 2 <= len(s) <= 24 or re.search(r"@|https?:|t\.me/|www\.", s, re.I):
+    from .fchannel import anon_mark
+    if not 2 <= len(s) <= 24 or re.search(r"@|https?:|t\.me/|www\.", s, re.I) or anon_mark(s):  # nor an anonymous author's mark
         raise ApiError("bad_input", "nick")
     return s
 

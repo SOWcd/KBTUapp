@@ -161,13 +161,13 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
 
 
 def posing(sender: dict, text: str = "") -> bool:
-    """The anonymous author's mark (texts.FCH_REPLY_SIGN's words, with or without the mask) in a Telegram name, or as a
-    line of its own in the text (the bot's signature line): read as letters only, NFKC, case and the common Latin and
+    """The anonymous author's mark (texts.FCH_REPLY_SIGN's words, with or without the mask, any post's nick, "Anon": fchannel.anon_mark)
+    in a Telegram name, or as a line of its own in the text (the bot's signature line; a nick's line with the mask): read as letters only, NFKC, case and the common Latin and
     Cyrillic look-alikes folded, invisible characters gone (clubs._skeleton). The mask alone in a name is fine. ponytail:
     a rename after commenting shows on old messages and the bot never hears of it; the bot's identity is the real mark"""
-    mark = _skeleton(texts.FCH_REPLY_SIGN)
-    return mark in _skeleton(f"{sender.get('first_name') or ''} {sender.get('last_name') or ''}") \
-        or any(_skeleton(line) == mark for line in text.splitlines())
+    mark, nicks, _ = logic.fchannel._marks()
+    return logic.fchannel.anon_mark(f"{sender.get('first_name') or ''} {sender.get('last_name') or ''}") \
+        or any(_skeleton(line) == mark or "\U0001f3ad" in line and _skeleton(line) in nicks for line in text.splitlines())
 
 
 async def _act(cfg: Config, http: httpx.AsyncClient, con, doomed: list, bans: set, chans: set, warns: list) -> None:

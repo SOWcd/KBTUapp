@@ -74,3 +74,17 @@ def test_nick_old_posts_fall_back(env, monkeypatch):
     t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert group_sends(w.tg)[-1]["text"] == f"Thanks, all of you\n\n<i>— {texts.FCH_REPLY_SIGN}</i>"
+
+
+def test_no_name_poses_as_an_anonymous_author(env):
+    """An app nick or a Telegram name in the group that reads as a post's nick, the reply mark or "Anon" is refused."""
+    from kbtu import tgc
+    from test_core import login
+    c, _ = env
+    login(c, 1, "ann")
+    fox = texts.nick(1, 0)
+    for bad in (fox, fox.upper(), "\U0001f3ad " + fox, texts.FCH_REPLY_SIGN[2:], "\u0410\u043d\u043e\u043d\u0438\u043c", "Anonymous"):
+        assert c.patch("/api/me", headers=tma(1), json={"nick": bad}).status_code == 400, bad
+    assert c.patch("/api/me", headers=tma(1), json={"nick": "\u041b\u0438\u0441\u0430"}).status_code == 200    # a word of one is fine
+    assert tgc.posing({"first_name": fox}) and tgc.posing({"first_name": "Bob"}, f"sure\n\U0001f3ad {fox}")
+    assert not tgc.posing({"first_name": "Bob"}, f"{fox}, you are right")
