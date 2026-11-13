@@ -773,8 +773,9 @@ export type AppealStatus = 'new' | 'work' | 'closed';
 export interface Appeal { id: Id; topic: AppealTopic | null; text: string; anon: boolean; status: AppealStatus; answer: string | null;
   at: Ts; due: Ts; answeredAt: Ts | null; closedAt: Ts | null; overdue: boolean;
   author?: string | null }      // SG's view of a named one: the short name only; an anonymous one never has it
-/** "Solved by your appeals" (server appeals.solved): SG's two general lines, never an appeal's words; month YYYY-MM */
-export interface Solved { id: Id; raised: string; changed: string; topic: AppealTopic | null; month: string }
+/** "Solved by your appeals" (server appeals.solved): SG's two general lines, never an appeal's words; month YYYY-MM;
+ *  id: SG's people only (to delete) */
+export interface Solved { id?: Id; raised: string; changed: string; topic: AppealTopic | null; month: string }
 export interface SgQueue { items: Appeal[]; months: { month: string; total: number; topics: Partial<Record<AppealTopic, number>> }[] }
 export interface AppealHelp { tips: string[]; care?: boolean; help?: string } // help: the helplines (signs of self-harm)
 export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }

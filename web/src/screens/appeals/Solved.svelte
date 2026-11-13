@@ -34,7 +34,7 @@
   async function add() {
     if (!ready) return;
     const was = { raised, changed, topic };
-    const temp: Solved = { id: -Date.now(), raised: solvedClean(raised), changed: solvedClean(changed), topic, month: new Date().toISOString().slice(0, 7) };
+    const temp = { id: -Date.now(), raised: solvedClean(raised), changed: solvedClean(changed), topic, month: new Date().toISOString().slice(0, 7) } satisfies Solved;
     data.solved = [temp, ...data.solved];
     raised = ''; changed = ''; topic = null; adding = false;
     haptic.ok(); say(t('apl.solvedAdded'), 'raising_hands_3d_default');
@@ -51,15 +51,17 @@
   }
 
   async function drop(e: Solved) {
+    const id = e.id;
+    if (!id) return; // students get no ids, and see no Delete
     if (!(await sheets.ask({ title: t('apl.solvedDelQ'), text: t('apl.solvedDelText'), ok: t('apl.solvedDel'), cancel: t('common.cancel'), danger: true }))) return;
-    const back = () => { if (!data.solved.some((x) => x.id === e.id)) data.solved = [...data.solved, e].sort((a, b) => b.id - a.id); };
-    data.solved = data.solved.filter((x) => x.id !== e.id);
-    const gone = api.solvedDrop(e.id);
+    const back = () => { if (!data.solved.some((x) => x.id === id)) data.solved = [...data.solved, e].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)); };
+    data.solved = data.solved.filter((x) => x.id !== id);
+    const gone = api.solvedDrop(id);
     haptic.ok();
     say(t('apl.solvedGone'), 'waving_hand_3d_default', () => {
       back();
-      gone.then(() => api.solvedRestore(e.id)).catch((err) => {
-        data.solved = data.solved.filter((x) => x.id !== e.id);
+      gone.then(() => api.solvedRestore(id)).catch((err) => {
+        data.solved = data.solved.filter((x) => x.id !== id);
         say(t(err instanceof ApiErr && err.code === 'rate_limited' ? 'apl.solvedCap' : 'common.error'), 'pleading_face_3d');
       });
     });
@@ -69,8 +71,8 @@
 
 {#if data.solved.length || edit}
   <Group caption={t('apl.solved')} footnote={edit ? t('apl.solvedRule') : hint}>
-    {#each shown as e (e.id)}
-      {#snippet del()}<IconButton icon={Trash} size="s" label={t('apl.solvedDel')} disabled={e.id < 0} onclick={() => drop(e)} />{/snippet}
+    {#each shown as e, i (e.id ?? i)}
+      {#snippet del()}<IconButton icon={Trash} size="s" label={t('apl.solvedDel')} disabled={!e.id || e.id < 0} onclick={() => drop(e)} />{/snippet}
       <Row dense title={e.changed} subtitle={`${e.raised} · ${meta(e)}`} trailing={edit ? del : undefined} />
     {/each}
     {#if data.solved.length > FIRST && !all}

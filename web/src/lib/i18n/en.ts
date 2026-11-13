@@ -2972,7 +2972,7 @@ const en: Dict = {
   'apl.solvedChanged': "What changed",
   'apl.solvedRaisedPh': "No hot water in the dorm",
   'apl.solvedChangedPh': "The boiler was repaired and is checked weekly",
-  'apl.solvedRule': "No names, rooms or numbers: an anonymous author must stay anonymous.",
+  'apl.solvedRule': "No names, rooms or numbers: an anonymous author must stay anonymous. A topic shows only when 5 appeals or more had it in 90 days.",
   'apl.solvedWhy.length': "10 to 140 characters",
   'apl.solvedWhy.link': "No links",
   'apl.solvedWhy.contact': "No @, e-mails or phones",
