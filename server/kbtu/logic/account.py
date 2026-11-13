@@ -482,12 +482,12 @@ def me(con, v: Viewer) -> dict:
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
         # the capsule's running check-in, and the check-in page's way in: "pair" for who runs a club's events (Studio's
-        # "Check-in" row; Profile's too while nothing in Studio leads there: the app's admin, a door handed over by the
-        # volunteers ledger, only while a session is open), "qr" for a helper's own QR
+        # "Check-in" row; Profile's too while nothing in Studio leads there: a door handed over by the volunteers ledger,
+        # only while its session is open; never the app's admin for every club: that's Admin), "qr" for a helper's own QR
         "checkin": (c := checkin.running(con, v)),
-        "bigScreen": "pair" if any("events" in _rights_from(m["role"], m["rights"]) for m in members) or one(con, """SELECT 1 FROM qr_sessions s
-            WHERE s.ended_at IS NULL AND (? OR s.id IN (SELECT session_id FROM vol_hands WHERE user_id = ? AND revoked_at IS NULL))""",
-            v.role == "admin", v.id) else "qr" if c and c["helper"] else None,
+        "bigScreen": "pair" if any("events" in _rights_from(m["role"], m["rights"]) for m in members) or one(con, """SELECT 1 FROM vol_hands h
+            JOIN qr_sessions s ON s.id = h.session_id WHERE h.user_id = ? AND h.revoked_at IS NULL AND s.ended_at IS NULL""", v.id)
+            else "qr" if c and c["helper"] else None,
     }
 
 

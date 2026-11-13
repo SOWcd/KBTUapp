@@ -6758,8 +6758,8 @@ def test_qr_checkin(env, monkeypatch):
     c.post(f"/api/screens/{sid}/finish", headers=tma(9))
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # finished
     rows_ = _csv(c, 9, sid).splitlines()
-    assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
-    assert rows_[2].split(",")[13] == "B" and rows_[1].split(",")[13] == "A"                     # the tier column
+    assert [r.split(",")[0] for r in rows_[1:]] == ["came", "came (not on the list)", "absent"]   # the list's people first (checkin.export)
+    assert rows_[1].split(",")[13] == "B" and rows_[2].split(",")[13] == "A"                     # the tier column
     con.close()
 
 
