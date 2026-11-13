@@ -8,7 +8,7 @@
   // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
   // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
   // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { fmtPhone } from '../../lib/phone';
   import MemoAsksForm from './MemoAsks.svelte';
   import X from '@lucide/svelte/icons/x';
@@ -71,6 +71,7 @@
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
+  import { marked, missing, type Marked } from '../../lib/eventFill';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
@@ -403,26 +404,51 @@
   // a new event from the announcement the club already wrote (the owner, Oct 30): the AI fills what the text says,
   // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
   let filling = $state(false);
-  let fillLeft = ''; // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
+  let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
+  // a new event starts with the announcement (owner, Nov 13: the fill existed, nobody found it): a paste screen first,
+  // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
+  let step = $state<'paste' | 'form'>(untrack(() => !id && !staff && session.board ? 'paste' : 'form'));
+  let ai = $state<Marked[]>([]);
+  let fromAi = $state(false);
+  const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
+  const lacks = $derived(fromAi ? missing(f) : []);
   async function fillFromText() {
     const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000, value: fillLeft });
-    if (!text) return;
+    if (text) await runFill(text, false);
+  }
+  let run = 0; // the latest fill: one gone on by hand (or left) is dropped when it answers
+  async function runFill(text: string, first: boolean) {
+    const me = ++run;
     fillLeft = text;
     touch(); filling = true;
     try {
       const x = await api.eventFill(org, text);
+      if (me !== run || gone) return;
       const { price, emoji, color, ...rest } = x; // the server sends only the fields it found, named as the form's
+      // from the paste screen a date or time it didn't find stays empty (not next week's default): listed on top, and
+      // the form's own rule stops a publish without them
+      if (first && Object.keys(x).length) { f.date = rest.date ?? ''; f.start = rest.start ?? ''; }
       Object.assign(f, rest);
       if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
       if (price && canPrice) { f.paid = true; f.price = String(price); }
       const got = Object.keys(x).length > 0;
-      if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
+      if (got) { haptic.ok(); fillLeft = ''; ai = marked(x, canPrice); fromAi = true; } else haptic.error();
       say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
     } catch (e) {
+      if (me !== run || gone) return;
       haptic.error();
       const c = e instanceof ApiErr ? e.code : '';
       say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
-    } finally { filling = false; }
+    } finally { if (me === run) { filling = false; step = 'form'; } }
+  }
+  function byHand() { haptic.tap(); run++; filling = false; step = 'form'; }
+  // a missing one tapped: its picker, or the place's panel
+  function jump(k: 'date' | 'time' | 'place') {
+    haptic.tap();
+    if (k === 'place') { open('place'); return; }
+    const el = panel.querySelector<HTMLInputElement>(`.when input[type=${k}]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    try { el?.showPicker(); } catch { el?.focus(); }
   }
 
   // the focused panel at the bottom: '' none, else which one
@@ -461,7 +487,7 @@
 
   type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'teams' | 'partner' | 'cohost' | 'memo' | 'check';
   let pick = $state<Panel>('');
-  const open = (p: Panel) => { haptic.tap(); pick = p; };
+  const open = (p: Panel) => { haptic.tap(); pick = p; if (p === 'place' || p === 'about' || p === 'price') unmark(p); };
   const PANEL: Record<Exclude<Panel, ''>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
     reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
 
@@ -564,6 +590,19 @@
     {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
 
+  {#if step === 'paste'}
+  <!-- the first step of a new event: its announcement, or by hand -->
+  <div class="body paste">
+    <h2 class="pt">{t('ed.pasteTitle')}</h2>
+    <p class="hint">{t('ed.fillSub')}</p>
+    <!-- svelte-ignore a11y_autofocus -->
+    <textarea class="ann" bind:value={fillLeft} maxlength="4000" placeholder={t('ed.fillPh')} aria-label={t('ed.pasteTitle')} autofocus></textarea>
+    <div class="foot">
+      <Button kind="filled" size="l" full loading={filling} disabled={fillLeft.trim().length < 20} onclick={() => runFill(fillLeft, true)}>{#snippet icon()}<Sparkles size={18} />{/snippet}{t('ed.fillGo')}</Button>
+      <Button kind="plain" full onclick={byHand}>{t('ed.byHand')}</Button>
+    </div>
+  </div>
+  {:else}
   <div class="body scroll">
     <button class="art" class:busy={uploading} onclick={() => open('cover')} aria-label={t('ed.cover')}>
       <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
@@ -574,15 +613,23 @@
       <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
     {/if}
 
+    {#if lacks.length}
+      <!-- what the announcement didn't say: each one tapped goes to its field -->
+      <div class="miss">
+        <span>{t('ed.missing')}</span>
+        {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{t(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
+        {#if lacks.includes('place')}<p class="hint">{t('ed.missPlace')}</p>{/if}
+      </div>
+    {/if}
     <!-- engine: Field size="title" with its label for screen readers only (the editor's big name has none in sight) -->
-    <textarea class="name" class:bad={tried && err.title} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
+    <textarea class="name" class:bad={tried && err.title} class:ai={ai.includes('title')} oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
     {#if castLike}
       <!-- a casting made as an event (JCC, Nov 3): the club's recruitment does it properly -->
       <Notice tone="accent" text={t('ed.castHint')} action={{ label: t('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
-    <div class="pill when" class:bad={tried && err.when}>
+    <div class="pill when" class:bad={tried && err.when} class:ai={ai.includes('when')} onchangecapture={() => unmark('when')}>
       <i class="line" aria-hidden="true"></i>
       <!-- one line of text ("Mon, 9 Nov  18:00"); the phone's own pickers sit under each part -->
       <div class="wr"><span class="dot"></span><b>{t('ed.start')}</b>
@@ -594,10 +641,10 @@
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
-    <button class="pill go" class:bad={tried && err.place} onclick={() => open('place')}><MapPin size={20} />
+    <button class="pill go" class:bad={tried && err.place} class:ai={ai.includes('place')} onclick={() => open('place')}><MapPin size={20} />
       <span class="gt ellipsis" class:ph={!f.place.trim()}>{f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
       {#if f.placeUrl && !f.tba}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
-    <button class="pill go" onclick={() => open('about')}><AlignLeft size={20} />
+    <button class="pill go" class:ai={ai.includes('about')} onclick={() => open('about')}><AlignLeft size={20} />
       <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
@@ -654,6 +701,7 @@
     </div>
     <div class="tail"></div>
   </div>
+  {/if}
 
   <!-- the focused panel: one thing at a time; Telegram's Back, the scrim or Done closes it -->
   {#if pick}
@@ -886,6 +934,19 @@
   .err { margin: -6px var(--s-4) 0; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
   .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); font-style: normal; color: var(--text-3); }
   .bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
+  /* the AI filled it: a quiet accent ring and dot until the organiser touches it */
+  .ai:not(.bad) { box-shadow: inset 0 0 0 1px var(--accent-text); }
+  .pill.ai::after { content: ''; position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .paste { gap: var(--s-2); }
+  .pt { margin: var(--s-4) var(--s-4) 0; font: 700 var(--fs-t1)/1.2 var(--font-display); letter-spacing: -0.02em; }
+  .ann { width: 100%; min-height: 40vh; resize: none; margin-top: var(--s-2); padding: var(--s-4); border-radius: var(--r-l); background: var(--pill); color: var(--text);
+    font: 450 var(--fs-body)/1.45 var(--font-text); }
+  .ann::placeholder { color: var(--text-3); }
+  .miss { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
+  .miss > span { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .miss .hint { flex-basis: 100%; margin: 0; }
+  .mk { padding: 6px var(--s-3); border-radius: var(--r-full); border: 1.5px dashed var(--text-3); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .mk:active { background: var(--fill); }
 
   .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
   .art:active { transform: scale(0.98); }
