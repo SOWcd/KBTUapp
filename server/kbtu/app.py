@@ -1675,7 +1675,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # a new event filled from its announcement (logic/assistant.py, below the assistant): the same switch, host and allowance
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
-        msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
+        msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"))
         # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
         text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True)  # a person waits: a slow first host races another
         return logic.assistant.filled(text)

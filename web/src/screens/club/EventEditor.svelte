@@ -70,7 +70,7 @@
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
-  import { marked, missing, type Marked } from '../../lib/eventFill';
+  import { marked, merge, missing, type Differs, type Marked } from '../../lib/eventFill';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
@@ -416,6 +416,16 @@
   let fromAi = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
   const lacks = $derived(fromAi ? missing(f) : []);
+  // "Add more" (owner, Nov 13): with something in the form, a second message merges into it (lib/eventFill merge);
+  // what the new text says otherwise than a filled field waits here for a tap
+  const more = $derived(fromAi || !!(f.title.trim() || f.description.trim()));
+  let differs = $state<{ k: Differs; v: string }[]>([]);
+  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price' } as const;
+  function take(d: { k: Differs; v: string }) {
+    haptic.tap();
+    if (d.k === 'price') { f.paid = true; f.price = d.v; } else f[d.k] = d.v;
+    differs = differs.filter((x) => x !== d);
+  }
   async function fillFromText() {
     const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000, value: fillLeft });
     if (text) await runFill(text, false);
@@ -426,8 +436,26 @@
     fillLeft = text;
     touch(); filling = true;
     try {
-      const x = await api.eventFill(org, text);
+      const adding = !first && more;
+      const now = { title: f.title, date: f.date, start: f.start, end: f.end, place: f.tba ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
+      const dflt = { date: blank.date, start: blank.start };
+      // the form so far, as data (the server bounds it): a default the organiser never set isn't sent
+      const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
+      const x = await api.eventFill(org, text, have);
       if (me !== run || gone) return;
+      if (adding) {
+        const { set, differs: d } = merge(now, x, dflt);
+        const { price: p, ...rest } = set;
+        Object.assign(f, rest);
+        if (rest.place) f.tba = false;
+        if (p && canPrice) { f.paid = true; f.price = p; }
+        const got = Object.keys(set).length > 0 || d.length > 0;
+        differs = d.filter((y) => y.k !== 'price' || canPrice);
+        ai = [...new Set([...ai, ...marked({ ...rest, price: p ? +p : undefined }, canPrice)])];
+        if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
+        say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
+        return;
+      }
       const { price, emoji, color, ...rest } = x; // the server sends only the fields it found, named as the form's
       // from the paste screen a date or time it didn't find stays empty (not next week's default): listed on top, and
       // the form's own rule stops a publish without them
@@ -621,7 +649,7 @@
     {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
       <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
     {#if !id && session.board}
-      <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
+      <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t(more ? 'ed.fillMore' : 'ed.fill')}</Button></span>
     {/if}
 
     {#if lacks.length}
@@ -630,6 +658,13 @@
         <span>{t('ed.missing')}</span>
         {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{t(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
         {#if lacks.includes('place')}<p class="hint">{t('ed.missPlace')}</p>{/if}
+      </div>
+    {/if}
+    {#if differs.length}
+      <!-- the new text says otherwise: the form's value stays; a tap takes the new one -->
+      <div class="miss">
+        <span>{t('ed.differs')}</span>
+        {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{t(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
       </div>
     {/if}
     <!-- engine: Field size="title" with its label for screen readers only (the editor's big name has none in sight) -->

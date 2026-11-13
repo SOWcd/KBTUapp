@@ -2430,6 +2430,8 @@ const en: Dict = {
   'ed.fillText': "Paste the text you already wrote for a channel or chat. What it doesn't say stays empty.",
   'ed.fillPh': "Nov 10, 18:00, room 256: come to…",
   'ed.fillGo': "Fill",
+  'ed.fillMore': "Add more",
+  'ed.differs': "Differs in the new text:",
   'ed.filled': "Done: check the marked fields",
   'ed.fillNone': "The AI found nothing to fill: fill it in yourself",
   'ed.fillShort': "The text is too short",

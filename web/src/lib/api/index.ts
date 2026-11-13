@@ -261,7 +261,7 @@ export interface Api {
   assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply>; // the students' assistant; context: the card it was asked from (the server reads its facts)
   assistantVote(mark: string, vote: 'up' | 'down'): Promise<void>; // 👍/👎 on an answer's signed topic
   assistantSend(mark: string, pair: string, q: string, a: string): Promise<void>; // on 👎, the student's own tap: this one signed question and answer, no name
-  eventFill(org: Id, text: string): Promise<{ title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number; emoji?: string; color?: string }>; // a new event from its announcement (AI); emoji and color: its cover when no photo
+  eventFill(org: Id, text: string, have?: Partial<{ title: string; description: string; date: string; start: string; end: string; place: string; price: number }>): Promise<{ title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number; emoji?: string; color?: string }>; // a new event from its announcement (AI); emoji and color: its cover when no photo
   qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean; event?: Id | null; again?: boolean; already?: Ts; flagged?: boolean }>;                  // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
