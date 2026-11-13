@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryAlbum, GalleryTopic, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryAlbum, GalleryTopic, AlbumPhoto, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, Casting, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, OrgChat, StudioChat, SwearRow, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -339,6 +339,8 @@ export interface Api {
   mainOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;  // a public channel only
   dropOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;
   mirrorOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>;
+  swearOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>; // President or Vice; conflict rights: the bot can't delete and restrict there
+  swearReport(org: Id): Promise<SwearRow[]>;              // President, Vice, Heads
   rosterSeen(): Promise<void>;                            // PLAN 95: the join toasts shown
   rosterClaim(row: Id): Promise<void>;                    // "Yes, it's me" on a row under another name
   rosterRequests(org?: Id): Promise<RosterRequest[]>;             // the claims I confirm (President; DMP for a club without one)

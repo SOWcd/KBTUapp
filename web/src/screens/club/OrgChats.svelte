@@ -3,7 +3,7 @@
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
-  import { api, ApiErr, type Id, type StudioChat } from '../../lib/api';
+  import { api, ApiErr, type Id, type StudioChat, type SwearRow } from '../../lib/api';
   import { say } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -67,6 +67,21 @@
     try { chats = keep(await api.mirrorOrgChat(org, c.id, on)); haptic.select(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // a group's swear filter (its President or Vice; the bot must be able to delete and restrict there) and 30 days of it
+  let report = $state<SwearRow[]>([]);
+  $effect(() => { api.swearReport(org).then((r) => (report = r)).catch(() => {}); });
+  const groups = $derived(chats.filter((c) => c.bot && c.kind === 'group'));
+  async function swear(c: StudioChat, on: boolean) {
+    c.swear = on;
+    try { chats = keep(await api.swearOrgChat(org, c.id, on)); haptic.select(); }
+    catch (e) {
+      c.swear = !on;
+      haptic.error();
+      say(t(e instanceof ApiErr && e.message === 'rights' ? 'oc.swearRights' : 'common.error'), 'warning_3d');
+    }
+  }
+  const mask = (s: string) => (s.length < 3 ? s : s[0] + '*'.repeat(s.length - 2) + s.at(-1));
+  const why = (r: SwearRow) => [r.stems.map(mask).join(', '), r.mutes ? t('oc.swearMuted', { n: r.mutes }) : ''].filter(Boolean).join(' · ');
   async function drop(c: StudioChat) {
     if (!(await sheets.ask({ title: t('oc.dropAsk', { title: c.title }), ok: t('oc.drop'), cancel: t('common.cancel'), danger: true }))) return;
     try { chats = keep(await api.dropOrgChat(org, c.id)); haptic.warn(); }
@@ -102,6 +117,16 @@
     <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
     <Group footnote={t('oc.mirrorNote')}>
       <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
+    </Group>
+  {/if}
+  {#if groups.length}
+    <Group caption={t('oc.swear')} footnote={t('oc.swearNote')}>
+      {#each groups as c (c.id)}<Row title={c.title} accessory="switch" checked={c.swear} onchange={(on) => swear(c, on)} />{/each}
+    </Group>
+  {/if}
+  {#if report.length}
+    <Group caption={t('oc.swearLog')}>
+      {#each report as r, i (i)}<Row dense title={r.person?.name ?? t('oc.swearSomeone')} subtitle={why(r)} value={String(r.warns)} />{/each}
     </Group>
   {/if}
   {#if byLink}<form class="add" onsubmit={add}>

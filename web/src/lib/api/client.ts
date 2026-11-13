@@ -416,6 +416,8 @@ export const server: Api = {
   rosterRequests: (org) => call('GET', org ? `/roster/requests?org=${org}` : '/roster/requests'),
   rosterDecide: (row, ok) => call('POST', `/roster/requests/${row}`, { ok }),
   mirrorOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
+  swearOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }),
+  swearReport: (org) => call('GET', `/orgs/${org}/chats/swear`),
   deleteChat: (id) => call('DELETE', `/admin/chats/${id}`),
   approveChat: (id) => call('POST', `/admin/chats/${id}/approve`),
   registry: (back = 0) => call('GET', `/registry/orgs?back=${back}`),

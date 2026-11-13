@@ -32,7 +32,9 @@ export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 's
  *  (an invite link) shows without a way in, `url` null. */
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
-export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */ }
+export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */ }
+/** A person's swear warnings in the club's groups, 30 days: the club's own people by name, anyone else null ("a chat member"). */
+export interface SwearRow { person: PersonRef | null; warns: number; mutes: number; stems: string[] }
 export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 
 /** DMP's view of a club member (§3, §4.13): contacts only of Presidents and Vices. */
