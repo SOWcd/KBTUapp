@@ -109,7 +109,7 @@ def test_club_names(env):
     # renames: abbr and short checked; an official club's name is DMP's
     con2, oid = _club(c, cfg, False, "Robots", pres=62)
     P = tma(62)
-    for bad in ({"abbr": "KBTU"}, {"abbr": "✓RB"}, {"short": "✓"}):
+    for bad in ({"abbr": "KBTU"}, {"abbr": "✓RB"}, {"short": "✓"}, {"abbr": "JCC_KBTU"}, {"abbr": "JC_C"}, {"abbr": "J.C"}):
         assert c.patch(f"/api/orgs/{oid}", headers=P, json=bad).status_code == 400, bad
     assert c.patch(f"/api/orgs/{oid}", headers=P, json={"name": "Robotics"}).status_code == 200
     con2.execute("UPDATE orgs SET official = 1 WHERE id = ?", (oid,))

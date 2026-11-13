@@ -300,8 +300,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             raise ApiError("conflict", "taken")
     if "short" in body:
         sets["short"] = text("short").upper() if 1 <= len(text("short")) <= 2 else bad
-    if "abbr" in body:  # one word, 2-8 characters: it sits inline beside a role or a place
-        sets["abbr"] = text("abbr") if re.fullmatch(r"\S{2,8}", text("abbr")) else bad
+    if "abbr" in body:  # one word, 2-8 letters or digits (no "_", dots or signs: "JCC_KBTU" got in): it sits inline beside a role or a place
+        sets["abbr"] = text("abbr") if re.fullmatch(r"[^\W_]{2,8}", text("abbr")) else bad
     if "emoji" in body:
         sets["emoji"] = text("emoji") if re.fullmatch(r"[a-z0-9_]{1,40}", text("emoji")) else bad
     if "cover" in body:
