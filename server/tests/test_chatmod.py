@@ -154,7 +154,8 @@ def test_warn_warn_mute_and_start_over(env, monkeypatch):
     _run(cfg, con, http, _msg(31, "\u0431 \u043b \u044f", mid=2))
     assert [j["message_id"] for j in http.said("deleteMessage")] == [1, 1001, 2, 1002]  # the message, then its warning a minute on
     texts_ = [j["text"] for j in http.said("sendMessage")]
-    assert "1" in texts_[0] and "2" in texts_[1] and all("tg://user?id=31" in t for t in texts_)
+    # the warning names nobody and counts nothing in public: the same template each time
+    assert texts_ == [texts.swear("ru", "warn")] * 2 and not any(x in texts_[0] for x in ("tg://", "31", "1", "2", "3", "<a"))
     assert all("\u0441\u0443\u043a" not in t and "\u0431\u043b\u044f" not in t for t in texts_)  # never the words
     assert [tuple(h) for h in _hits(con, cid)] == [(31, uid(31), "\u0441\u0443\u043a\u0430", 1, 0), (31, uid(31), "\u0431\u043b\u044f", 2, 0)]
     bot._swore.clear()
@@ -163,7 +164,7 @@ def test_warn_warn_mute_and_start_over(env, monkeypatch):
     assert http.said("restrictChatMember")[0]["user_id"] == 31
     assert abs(http.said("restrictChatMember")[0]["until_date"] - time.time() - 3600) < 5
     assert not any(http.said("restrictChatMember")[0]["permissions"].values())
-    assert "3" in http.said("sendMessage")[0]["text"] and http.said("sendMessage")[0]["text"] != texts_[0]
+    assert http.said("sendMessage")[0]["text"] == texts.swear("ru", "mute") and "tg://" not in texts.swear("ru", "mute")
     assert tuple(_hits(con, cid)[-1])[3:] == (3, 1)
     # a flood within the minute: only deleted, nothing counted or said
     http = _Http()

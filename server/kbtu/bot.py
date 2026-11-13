@@ -1334,7 +1334,7 @@ async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, 
                 log.warning("swear mute: %s", str((x or {}).get("description"))[:120])
                 if (miss := await swear_rights(cfg, http, chat)) is not None:
                     logic.chatmod.rights(con, chat, miss)
-        sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": texts.swear(lang, kind, tg, min(n, logic.chatmod.WARNS)),
+        sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": texts.swear(lang, kind),
                                                       "parse_mode": "HTML", **({"message_thread_id": topic} if topic else {})})
         if sent and sent.get("ok"):
             u = asyncio.get_running_loop().create_task(_unsay(cfg, http, chat, sent["result"]["message_id"]))

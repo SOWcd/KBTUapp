@@ -758,29 +758,29 @@ def bot_message(lang: str, kind: str, **fields: object) -> tuple[str, str | None
     return text.format(**{k: html.escape(str(v)) for k, v in fields.items()}), button
 
 
-# a club's group moderated for swearing (bot._swear, logic/chatmod.py): who is a mention by id (an emoji linked), never
-# the person's words; on, off: the President's or Vice's language, the rest: the sender's
+# a club's group moderated for swearing (bot._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
+# public (a "2 of 3" under a name shames); on, off: the President's or Vice's language, the rest: the sender's
 SWEAR = {
     "ru": {"on": "🧹 Фильтр мата включён. Сообщения с матом удаляются, за каждое — предупреждение. Три за неделю — час без сообщений.",
            "off": "Фильтр мата выключен.",
-           "warn": "{who} Сообщение удалено: в нём мат. Предупреждение {n} из 3.",
-           "mute": "{who} Сообщение удалено: в нём мат. Предупреждение 3 из 3 — час без сообщений.",
+           "warn": "Сообщение удалено: в нём мат. За повторный мат — час без сообщений.",
+           "mute": "Сообщение удалено: в нём мат. Его автор час не сможет писать.",
            "unlinked": "Этот чат не привязан к клубу. Привяжите его в Студии → Чаты — тогда все с ролью в клубе смогут звать всех."},
     "kk": {"on": "🧹 Балағат сүзгісі қосылды. Балағаты бар хабарламалар өшіріледі, әрқайсысына — ескерту. Аптасына үшеу — бір сағат хабарламасыз.",
            "off": "Балағат сүзгісі өшірілді.",
-           "warn": "{who} Хабарлама өшірілді: онда балағат бар. Ескерту: {n}/3.",
-           "mute": "{who} Хабарлама өшірілді: онда балағат бар. Ескерту: 3/3 — бір сағат хабарламасыз.",
+           "warn": "Хабарлама өшірілді: онда балағат бар. Балағат қайталанса — бір сағат хабарламасыз.",
+           "mute": "Хабарлама өшірілді: онда балағат бар. Авторы бір сағат жаза алмайды.",
            "unlinked": "Бұл чат клубқа қосылмаған. Оны Студия → Чаттар бөлімінде қосыңыз — сонда клубта рөлі барлар барлығын шақыра алады."},
     "en": {"on": "🧹 Swear filter on. Messages with swear words are removed, each with a warning. Three in a week: an hour without messages.",
            "off": "Swear filter off.",
-           "warn": "{who} Message removed: it had a swear word. Warning {n} of 3.",
-           "mute": "{who} Message removed: it had a swear word. Warning 3 of 3: an hour without messages.",
+           "warn": "A message was removed for foul language. Repeated swearing means an hour without messages.",
+           "mute": "A message was removed for foul language. Its author can't write for an hour.",
            "unlinked": "This chat is not linked to a club. Link it in Studio → Chats, then anyone with a role in the club can call everyone."},
 }
 
 
-def swear(lang: str, kind: str, tg: int = 0, n: int = 0) -> str:
-    return pick(SWEAR, lang)[kind].format(who=f'<a href="tg://user?id={int(tg)}">👤</a>', n=n)
+def swear(lang: str, kind: str) -> str:
+    return pick(SWEAR, lang)[kind]
 
 
 CHAT_KIND = {  # a chat as Telegram calls it, in the bot's answer to links (chat_reply); q: the quotes around its title
