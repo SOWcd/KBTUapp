@@ -870,21 +870,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/orgs/{oid}/chats/{cid}/swear")
     async def swear_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         """The group's swear filter (logic/chatmod.py), its President's or Vice's. On only where our bot may delete and
-        restrict (conflict rights); a change, and the bot tells the chat in one template line."""
+        restrict (conflict rights, `missing`: "delete", "ban"); a change, and the bot tells the chat in one template line."""
         on = body.get("on")
         if not isinstance(on, bool):
             raise ApiError("bad_input")
         tg = await run_in_threadpool(logic.chatmod.target, con, v, oid, cid)
-        api = f"https://api.telegram.org/bot{cfg.bot_token}/"
         async with httpx.AsyncClient(timeout=10) as http:
             if on:
-                try:
-                    r = (await http.post(api + "getChatMember", json={"chat_id": tg, "user_id": int(cfg.bot_token.split(":")[0])})).json()
-                except (httpx.HTTPError, ValueError) as exc:
-                    raise ApiError("unavailable", "telegram") from exc
-                me = r.get("result") or {}
-                if not (r.get("ok") and me.get("status") == "administrator" and me.get("can_delete_messages") and me.get("can_restrict_members")):
-                    raise ApiError("conflict", "rights")
+                miss = await bot.swear_rights(cfg, http, tg)
+                if miss is None:
+                    raise ApiError("unavailable", "telegram")
+                if miss:
+                    raise ApiError("conflict", "rights", {"missing": miss})
             if await run_in_threadpool(logic.chatmod.switch, con, v, oid, cid, on):
                 u = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)
                 r = (await bot._send(cfg, http, {"chat_id": tg, "text": texts.swear(u["lang"] if u else "ru", "on" if on else "off"), "parse_mode": "HTML"})).json()

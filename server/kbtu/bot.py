@@ -49,10 +49,11 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
 TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
 TAG_MARKS = tuple("\U0001F525 \u2B50 \u26A1 \U0001F3AF \U0001F680 \U0001F48E \U0001F389 \U0001F44B \U0001F4E3 \U0001F514 \u2728 \U0001F4A5 \U0001F31F \U0001F3C6 \U0001F388 \u2764 \U0001F499 \U0001F49A \U0001F49B \U0001F49C \U0001F9E1".split())  # the link text, one per person (no names): five different ones a message, the pack's animated ones when it has them
-SWEAR_CAP = 3               # a person's swear warnings a minute in a chat; past it (a flood) their messages only go
+SWEAR_CAP = 1               # a person's swear warnings a minute in a chat; past it (a flood) their messages only go
 SWEAR_CHAT_CAP = 10         # a chat's warnings a minute: a group takes about 20 messages a minute, the bot keeps its voice
 WARN_FOR = 60               # a swear warning stays this long, then the bot removes it
-_swore: dict[tuple[int, int], list[float]] = {}  # (chat, person; 0: the chat) -> this minute's warnings; per worker, pruned as read
+# ponytail: per worker (the bot polls in one) and its keys never pruned (a few bytes a swearer); a table if that changes
+_swore: dict[tuple[int, int], list[float]] = {}  # (chat, person; 0: the chat) -> this minute's warnings
 _tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
@@ -564,6 +565,8 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
     chat on its page: the bot keeps that card from now on (a group added by Studio's link says which: its /start)."""
     chat, status = upd.get("chat") or {}, (upd.get("new_chat_member") or {}).get("status")
     logic.chatsync.bot_status(con, chat.get("id"), status)  # a linked chat where the bot isn't an admin any more: paused
+    if chat.get("id"):  # the swear filter pauses without its rights and goes on when they're back
+        logic.chatmod.rights(con, chat["id"], logic.chatmod.missing(upd.get("new_chat_member") or {}))
     if status in ("left", "kicked"):
         logic.bot_left(con, chat["id"])
         return
@@ -1270,61 +1273,73 @@ async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lan
 
 async def _swear(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     """A club's group with its swear filter on (logic/chatmod.py): a new or edited message whose text or caption holds a
-    word of swear.py's lists is recorded (the stem, never the words) and goes; its author is warned, the third time muted
-    (_swear_act, beside the ears, a chat's acts one after another). Elsewhere, and for bots, channels and anonymous
-    admins, nothing is read. True: it was such a message (nothing else answers it)."""
+    word of swear.py's lists goes, its author warned, the third time muted (_swear_act, beside the ears, a chat's acts
+    one after another). Elsewhere, and for bots, channels and anonymous admins, nothing is read (chat_on: a cached list,
+    no query a message). True: it was such a message (nothing else answers it)."""
     chat, sender = msg.get("chat") or {}, msg.get("from") or {}
     if chat.get("type") not in ("group", "supergroup") or not sender.get("id") or sender.get("is_bot") or msg.get("sender_chat") \
             or not (msg.get("text") or msg.get("caption")) or not (cid := logic.chatmod.chat_on(con, chat["id"])):
         return False
     if not (stem := swear.find(msg.get("text") or msg.get("caption"))):
         return False
-    t = time.monotonic()
-    mine, room = (_swore.setdefault(k, []) for k in ((chat["id"], sender["id"]), (chat["id"], 0)))
-    mine[:], room[:] = [x for x in mine if t - x < 60], [x for x in room if t - x < 60]
-    rid, n = 0, 0
-    if len(mine) < SWEAR_CAP and len(room) < SWEAR_CHAT_CAP:  # past either cap: only deleted, nothing counted
-        mine.append(t)
-        room.append(t)
-        rid, n = logic.chatmod.hit(con, cid, sender["id"], stem)
     lang = sender.get("language_code")
-    tgc.spawn(_swear_act(cfg, http, chat["id"], msg["message_id"], sender["id"], rid, n, lang if lang in ("kk", "en") else "ru"), f"swear:{chat['id']}")
+    topic = msg.get("message_thread_id") if msg.get("is_topic_message") else None  # a forum's topic (General: none; a reply's thread isn't one)
+    tgc.spawn(_swear_act(cfg, http, chat["id"], cid, msg["message_id"], sender["id"], stem, lang if lang in ("kk", "en") else "ru", topic),
+              f"swear:{chat['id']}")
     return True
 
 
-async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, tg: int, rid: int, n: int, lang: str) -> None:
-    """Delete, warn ("n of 3"), mute on the third (never a chat admin: Telegram refuses, and the warning says 3 of 3 and no
-    more); the warning goes after a minute. The bot's rights gone: no warning and no hit. Logs Telegram's word only."""
+async def swear_rights(cfg: Config, http: httpx.AsyncClient, chat: int) -> list[str] | None:
+    """The rights our bot lacks in a chat for the swear filter ("delete", "ban"); None: Telegram didn't answer."""
+    r = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": int(cfg.bot_token.split(":")[0])}, 0)
+    return logic.chatmod.missing(r["result"] or {}) if r and r.get("ok") else None
+
+
+async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, mid: int, tg: int, stem: str, lang: str,
+                     topic: int | None = None) -> None:
+    """A chat's admin: nothing (never deleted, never muted). Else delete; then, once a minute a person (SWEAR_CAP, and
+    SWEAR_CHAT_CAP for the chat) the hit is recorded and warned ("n of 3", in the message's topic), the third muted for an
+    hour; the warning goes after a minute. A refused delete or mute: the bot's rights are asked, a lacking one pauses the filter there (Studio
+    says which). Logs Telegram's word only."""
+    m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
+    if not (m and m.get("ok")) or (m.get("result") or {}).get("status") in ("creator", "administrator"):
+        return
     con = db.connect(cfg.db_path)
     try:
         r = await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
-        if not (r and r.get("ok")):
+        if not (r and r.get("ok")):  # gone already (another admin was faster), or our rights
             log.warning("swear: %s", str((r or {}).get("description"))[:120])
-            if rid:
-                logic.chatmod.undo(con, rid)
+            if (miss := await swear_rights(cfg, http, chat)) is not None:
+                logic.chatmod.rights(con, chat, miss)
             return
-        if not rid:
+        t = time.monotonic()
+        mine, room = (_swore.setdefault(k, []) for k in ((chat, tg), (chat, 0)))
+        mine[:], room[:] = [x for x in mine if t - x < 60], [x for x in room if t - x < 60]
+        if len(mine) >= SWEAR_CAP or len(room) >= SWEAR_CHAT_CAP:  # a flood: only deleted, nothing counted or said
             return
+        mine.append(t)
+        room.append(t)
+        rid, n = logic.chatmod.hit(con, cid, tg, stem)
         kind = "warn"
         if n >= logic.chatmod.WARNS:
-            m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
-            if m and m.get("ok") and (m.get("result") or {}).get("status") not in ("creator", "administrator"):
-                no = dict.fromkeys(("can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
-                                    "can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
-                                    "can_add_web_page_previews"), False)
-                x = await _call(cfg, http, "restrictChatMember", {"chat_id": chat, "user_id": tg, "permissions": no,
-                                                                   "until_date": int(time.time()) + logic.chatmod.MUTE})
-                if x and x.get("ok"):
-                    logic.chatmod.muted(con, rid)
-                    kind = "mute"
-                else:
-                    log.warning("swear mute: %s", str((x or {}).get("description"))[:120])
+            no = dict.fromkeys(("can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
+                                "can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
+                                "can_add_web_page_previews"), False)
+            x = await _call(cfg, http, "restrictChatMember", {"chat_id": chat, "user_id": tg, "permissions": no,
+                                                               "until_date": int(time.time()) + logic.chatmod.MUTE})
+            if x and x.get("ok"):
+                logic.chatmod.muted(con, rid)
+                kind = "mute"
+            else:
+                log.warning("swear mute: %s", str((x or {}).get("description"))[:120])
+                if (miss := await swear_rights(cfg, http, chat)) is not None:
+                    logic.chatmod.rights(con, chat, miss)
         sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": texts.swear(lang, kind, tg, min(n, logic.chatmod.WARNS)),
-                                                      "parse_mode": "HTML"})
+                                                      "parse_mode": "HTML", **({"message_thread_id": topic} if topic else {})})
         if sent and sent.get("ok"):
-            t = asyncio.get_running_loop().create_task(_unsay(cfg, http, chat, sent["result"]["message_id"]))
-            tgc._tasks.add(t)
-            t.add_done_callback(tgc._tasks.discard)
+            u = asyncio.get_running_loop().create_task(_unsay(cfg, http, chat, sent["result"]["message_id"]))
+            tgc._tasks.add(u)
+            u.add_done_callback(tgc._tasks.discard)
     finally:
         con.close()
 

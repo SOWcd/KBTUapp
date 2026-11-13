@@ -3,10 +3,12 @@
 Off by default. A linked group's switch (chats.swear) is its club's President's or Vice's; on only when our bot may delete
 and restrict there (app.py asks Telegram). Then the bot (bot._swear) reads each new or edited message's text and caption
 for a word of swear.py's lists: the message goes, its author gets a warning by a link to their id (never their words),
-and the third within 7 days mutes them for an hour; the count starts over. A chat's admins are never muted. A hit is one
+and the third within 7 days mutes them for an hour; the count starts over. A chat's admins are left alone. A hit is one
 row: chat, Telegram id (and app id when known), the matched stem, when, its warning number, whether it muted. Nothing for
 clean messages, nothing at all where it's off; 90 days (daily). The club's President, Vice and Heads see 30 days."""
 from __future__ import annotations
+
+import time
 
 from ..db import tx
 from . import core
@@ -19,6 +21,15 @@ KEEP = 90 * 86400
 REPORT = 30 * 86400
 SWITCH = ("president", "vice")
 READ = ("president", "vice", "head")
+FRESH = 30               # seconds the bot trusts its list of chats with the filter on (another worker flips a switch)
+RIGHTS = (("delete", "can_delete_messages"), ("ban", "can_restrict_members"))
+_on: tuple[float, dict[int, int]] = (0.0, {})  # per worker: until when, Telegram chat id -> our card; one query a FRESH
+
+
+def missing(member: dict) -> list[str]:
+    """The rights the bot lacks in a chat, by its getChatMember / my_chat_member object: "delete", "ban"."""
+    admin = member.get("status") == "administrator"
+    return [name for name, key in RIGHTS if not (admin and member.get(key))]
 
 
 def _lead(con, v: core.Viewer, oid: int, roles: tuple) -> None:
@@ -41,23 +52,46 @@ def switch(con, v: core.Viewer, oid: int, cid: int, on: bool) -> bool:
     """On or off (the caller checked the bot's rights for on); True: it changed, so the bot tells the chat."""
     with tx(con):
         target(con, v, oid, cid)
-        if bool(one(con, "SELECT swear FROM chats WHERE id = ?", cid)[0]) == on:
+        was = one(con, "SELECT swear, swear_miss FROM chats WHERE id = ?", cid)
+        if bool(was[0]) == on:  # on again after its rights came back (app.py checked them): no longer paused
+            if was[1]:
+                con.execute("UPDATE chats SET swear_miss = NULL WHERE id = ?", (cid,))
+                stale()
             return False
-        con.execute("UPDATE chats SET swear = ? WHERE id = ?", (int(on), cid))
+        con.execute("UPDATE chats SET swear = ?, swear_miss = NULL WHERE id = ?", (int(on), cid))
         log_action(con, v.id, "org_chats", f"org:{oid}", f"swear {'on' if on else 'off'} {cid}")
+    stale()
     return True
 
 
 def forget(con, cid: int) -> None:
     """The chat left its club (unlinked, given to another, the bot out): off, and its hits go."""
     con.execute("DELETE FROM swear_hits WHERE chat_id = ?", (cid,))
-    con.execute("UPDATE chats SET swear = 0 WHERE id = ? AND swear = 1", (cid,))
+    con.execute("UPDATE chats SET swear = 0, swear_miss = NULL WHERE id = ? AND (swear = 1 OR swear_miss IS NOT NULL)", (cid,))
+    stale()
+
+
+def stale() -> None:
+    global _on
+    _on = (0.0, {})
 
 
 def chat_on(con, tg_chat: int) -> int | None:
-    """Our card of a club's group whose switch is on, by its Telegram id."""
-    r = one(con, "SELECT id FROM chats WHERE tg_chat_id = ? AND swear = 1 AND org_id IS NOT NULL", tg_chat)
-    return r[0] if r else None
+    """Our card of a club's group whose filter is on and whose bot has its rights, by its Telegram id. A message in any
+    group asks this: the list is read once a FRESH, never per message."""
+    global _on
+    if time.monotonic() > _on[0]:
+        _on = (time.monotonic() + FRESH, dict(rows(con, """SELECT tg_chat_id, id FROM chats WHERE swear = 1 AND swear_miss IS NULL
+            AND org_id IS NOT NULL AND tg_chat_id IS NOT NULL""")))
+    return _on[1].get(tg_chat)
+
+
+def rights(con, tg_chat: int, miss: list[str]) -> None:
+    """The bot's rights in a chat as Telegram just told them (my_chat_member, a refused delete or mute): lacking any,
+    the filter pauses there and Studio says which; given back, it goes on by itself."""
+    v = ",".join(miss) or None
+    if con.execute("UPDATE chats SET swear_miss = ? WHERE tg_chat_id = ? AND swear = 1 AND swear_miss IS NOT ?", (v, tg_chat, v)).rowcount:
+        stale()
 
 
 def hit(con, cid: int, tg: int, stem: str) -> tuple[int, int]:
@@ -74,11 +108,6 @@ def hit(con, cid: int, tg: int, stem: str) -> tuple[int, int]:
 
 def muted(con, rid: int) -> None:
     con.execute("UPDATE swear_hits SET muted = 1 WHERE id = ?", (rid,))
-
-
-def undo(con, rid: int) -> None:
-    """The bot couldn't delete the message (its rights taken away): no hit, no warning."""
-    con.execute("DELETE FROM swear_hits WHERE id = ?", (rid,))
 
 
 def sweep(con) -> None:

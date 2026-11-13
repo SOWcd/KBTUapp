@@ -348,7 +348,8 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"])} if editor else x)
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]),
+                       "swearMiss": c["swear_miss"].split(",") if c["swear_miss"] else []} if editor else x)
     return out
 
 

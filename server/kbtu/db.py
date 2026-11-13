@@ -1675,7 +1675,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # (Nov 13) a club's group moderated for swearing (logic/chatmod.py): chats.swear is its switch, off by default. A hit
     # is a row: the chat, the person's Telegram id (and app id when known), the matched stem of our own list (never the
     # message), when, its warning number (1..3), whether it muted. Nothing for clean messages; 90 days (daily).
+    # chats.swear_miss: the bot's rights it lacks there ("delete", "ban", comma-joined; NULL: none), the filter paused.
     (164, """ALTER TABLE chats ADD COLUMN swear INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE chats ADD COLUMN swear_miss TEXT;
     CREATE TABLE swear_hits (
       id INTEGER PRIMARY KEY,
       chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
