@@ -146,3 +146,45 @@ def test_photo_in_a_closed_album_too_can_still_be_reported(env):
     fid = _photo(con, _event(con, c, oid, 'Team', visibility='members'), c.ids[HEAD])  # the closed album comes first
     _pin(con, _event(con, c, oid), fid, c.ids[HEAD])
     assert c.post('/api/reports', headers=tma(AL), json={'target': 'photo', 'id': fid, 'reason': 'spam'}).status_code == 204
+
+
+def _jpeg(n: int, when: str | None = None, sub: str | None = None, digitized: str | None = None) -> bytes:
+    """A camera's JPEG: its capture time (DateTimeOriginal, sub-seconds, DateTimeDigitized) and where it was (GPS)."""
+    import io
+    from PIL import Image
+    exif = Image.Exif()
+    exif[0x8825] = {2: (43.0, 14.0, 0.0), 4: (76.0, 55.0, 0.0)}
+    exif[0x0110] = "Phone X"  # the camera model: never kept either
+    shot = {k: v for k, v in ((0x9003, when), (0x9291, sub), (0x9004, digitized)) if v}
+    if shot:
+        exif[0x8769] = shot
+    raw = io.BytesIO()
+    Image.new("RGB", (64, 48), (n * 40 % 256, 90, 160)).save(raw, "JPEG", exif=exif)
+    return raw.getvalue()
+
+
+def test_an_album_is_in_the_order_its_photos_were_taken(env):
+    from pathlib import Path
+    from PIL import Image
+    c, con, oid = _setup(env)
+    eid = _event(con, c, oid)
+    con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, checked_in_at, created_at, updated_at)
+        VALUES (?, ?, 'going', 'T82ABC', ?, 0, 0)""", (eid, c.ids[AL], NOW - 7000))
+    H, A = tma(HEAD), tma(AL)
+    # uploaded by two people in the "wrong" order: the last shot first, one without EXIF, the earliest, a sub-second before the first
+    ups = [(H, _jpeg(1, "2025:03:01 12:00:05", "5")), (A, _jpeg(2)), (A, _jpeg(3, "2025:02:01 09:30:00")),
+           (H, _jpeg(4, "2025:03:01 12:00:05", "2")),
+           (A, _jpeg(5, "0000:00:00 00:00:00", digitized="2025:01:15 18:00:00"))]  # nonsense: the next tag says
+    got = [c.post(f"/api/events/{eid}/photos", headers=who, content=data).json()["photos"] for who, data in ups]
+    fid = {n: {p["id"] for p in got[n]}.difference(*({q["id"] for q in got[m]} for m in range(n))).pop() for n in range(len(ups))}
+    order = [p["id"] for p in c.get(f"/api/events/{eid}", headers=tma(BO)).json()["photos"]]
+    assert order == [fid[4], fid[2], fid[3], fid[0], fid[1]]  # no EXIF: its upload time, today, the newest
+    assert [p["id"] for p in got[-1]] == order  # the uploader's answer: the new one already in its place
+    t = dict(con.execute("SELECT id, taken_at FROM files WHERE id IN (?, ?)", (fid[0], fid[1])).fetchall())
+    assert t[fid[1]] is None and abs(t[fid[0]] - 1740812405.5) < 1e-6  # 12:00:05.5 Almaty: 07:00:05.5 UTC
+    # what is kept on disk carries no EXIF at all: no place, no camera, no time
+    media = Path(env[1].db_path).resolve().parent / "media"
+    for (path,) in con.execute("SELECT path FROM files WHERE kind = 'event_photo'"):
+        for ext in (".webp", ".t.webp", ".jpg"):
+            with Image.open(media / f"{path}{ext}") as im:
+                assert not im.getexif() and "exif" not in im.info, ext

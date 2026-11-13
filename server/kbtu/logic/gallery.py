@@ -135,9 +135,9 @@ def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None 
     with tx(con):
         check(con, v, eid, topic)
         f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], v.id)
-        fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
-            VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
-                                                                         saved["path"], v.id, now(), saved["color"])).lastrowid
+        fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color, taken_at)
+            VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
+                                                                         saved["path"], v.id, now(), saved["color"], saved.get("taken"))).lastrowid
         if con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
                        (fid, v.id, eid, now(), topic)).rowcount and eid is not None:  # the same photo again: the one I posted
             con.execute("""INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by)

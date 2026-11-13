@@ -1667,6 +1667,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 13) an album in the order its photos were taken: the time from the upload's EXIF (media.taken; the one fact
+    # kept of it), unix seconds with the camera's sub-seconds; NULL (no EXIF, or uploaded before): its upload time
+    (162, "ALTER TABLE files ADD COLUMN taken_at REAL;"),
 ]
 
 

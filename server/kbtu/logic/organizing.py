@@ -899,7 +899,7 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
         FROM event_photos p JOIN files f ON f.id = p.file_id LEFT JOIN gallery_photos g ON g.file_id = p.file_id
         LEFT JOIN users u ON u.id = p.added_by LEFT JOIN students s ON s.user_id = p.added_by WHERE p.event_id = ?
         AND {PHOTO_SHOWN}
-        ORDER BY p.sort""", e["id"], v.id)
+        ORDER BY COALESCE(f.taken_at, f.created_at), f.id""", e["id"], v.id)  # when each was taken, whoever added it when
     return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": _photo_by(f), "mine": f["added_by"] == v.id,
                         **({"uid": f["poster"], "at": f["posted"]} if f["poster"] else {})} for f in ps],
             "canAddPhotos": _album_room(con, v, e) > 0}
@@ -927,9 +927,9 @@ def add_album_photo(con, v: Viewer, eid: int, saved: dict) -> dict:
     if _album_room(con, v, e) <= 0:
         raise ApiError("forbidden")
     f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], v.id)
-    fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
-        VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
-                                                                     saved["path"], v.id, core.now(), saved["color"])).lastrowid
+    fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color, taken_at)
+        VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
+                                                                     saved["path"], v.id, core.now(), saved["color"], saved.get("taken"))).lastrowid
     con.execute("""INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by)
         VALUES (?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM event_photos WHERE event_id = ?), ?)""", (eid, fid, eid, v.id))
     if one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", eid)[0] == PHOTO_REPORT_AT:  # the album has a story now

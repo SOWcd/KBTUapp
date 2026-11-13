@@ -1,7 +1,8 @@
 """Photos (SPEC §9): whatever a phone sends is decoded, checked and re-encoded, never stored or served as it
 came. That also strips EXIF (a phone photo carries the GPS spot where it was taken) and anything hidden in
-the file. Three files per photo, named by the content hash so they can be cached forever: the cover (WebP,
-longest side 1600 px), a thumbnail (WebP, 480 px) and a JPEG for Telegram's share cards (JPEG only)."""
+the file; only the time it was taken is read first (taken: an album's order), nothing else of it is kept. Three
+files per photo, named by the content hash so they can be cached forever: the cover (WebP, longest side 1600 px), a
+thumbnail (WebP, 480 px) and a JPEG for Telegram's share cards (JPEG only)."""
 from __future__ import annotations
 
 import functools
@@ -10,6 +11,8 @@ import html
 import io
 import re
 import threading
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -48,7 +51,38 @@ def drop(root: Path, paths) -> None:
 def save(data: bytes, root: Path, key: bytes | None = None) -> dict:
     """key: what names the files instead of the upload's bytes (a random one: no hash that matches the same picture elsewhere)."""
     with _busy:
-        return store(_decode(data), key or data, root)
+        return {**store(_decode(data), key or data, root), "taken": taken(data)}
+
+
+ALMATY = timezone(timedelta(hours=5))  # a camera's clock without an offset tag: the campus's
+# (time, its sub-seconds, its offset): DateTimeOriginal, then DateTimeDigitized (Exif IFD), then DateTime (IFD0)
+_WHEN = ((0x9003, 0x9291, 0x9011), (0x9004, 0x9292, 0x9012), (0x0132, 0x9290, 0x9010))
+
+
+def taken(data: bytes) -> float | None:
+    """When a photo was taken (unix seconds) by its EXIF: the one fact read from it, for an album's order. None: no
+    such tag, or one that can't be a real photo's (0000:00:00, before 2000, later than tomorrow)."""
+    try:
+        with Image.open(io.BytesIO(data), formats=FORMATS) as im:  # the header only: nothing is decoded
+            ifd0 = im.getexif()
+            exif = ifd0.get_ifd(0x8769)
+        for at, sub, off in _WHEN:
+            raw = exif.get(at) or ifd0.get(at)
+            if not isinstance(raw, str):
+                continue
+            try:
+                t = datetime.strptime(raw.strip("\0 ")[:19], "%Y:%m:%d %H:%M:%S")
+                o = exif.get(off)
+                tz = datetime.strptime(o.strip("\0 "), "%z").tzinfo if isinstance(o, str) and o.strip("\0 ") else ALMATY
+            except ValueError:
+                continue
+            frac = str(exif.get(sub) or "").strip("\0 ")
+            ts = t.replace(tzinfo=tz).timestamp() + (float(f"0.{frac}") if frac.isdigit() else 0)
+            if 946684800 <= ts <= time.time() + 86400:  # 2000-01-01; a day ahead: a camera a time zone off
+                return ts
+    except Exception:  # a broken EXIF block is no reason to refuse the photo itself
+        return None
+    return None
 
 
 def decode(data: bytes) -> Image.Image:

@@ -428,7 +428,7 @@ export interface EventFull extends EventCard {
   memo?: MemoAsks | null;       // the club's Head+: what this event asks DMP for in the weekly memo
   cohost?: { org: OrgRef; status: 'pending' | 'accepted' | 'declined' } | null;  // the host's Head+: the invited club
   badgeName: string | null;
-  photos: AlbumPhoto[];          // the guests' album (students only), in the order added
+  photos: AlbumPhoto[];          // the guests' album (students only), oldest first by when each was taken (EXIF), else uploaded
   wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)
   canAddPhotos: boolean;        // came (checked in) or the team, from the start until a week after the end, room left
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
