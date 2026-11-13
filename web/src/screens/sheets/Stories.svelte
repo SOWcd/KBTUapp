@@ -19,7 +19,7 @@
   import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, onAndroid, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import { focusPos } from '../../lib/photo';
   import { castingOn, tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
@@ -129,7 +129,7 @@
   function report() { if (!p) return; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
 </script>
 
-<div class="st" bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
+<div class="st" class:flat={onAndroid} bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="dialog" aria-modal="true" tabindex="-1" aria-label={g?.org.name}>
   {#if g && ev}
     {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}<img class="haze" src={ev.cover.thumb} alt="" aria-hidden="true" /><img class="whole" src={ev.cover.url} alt="" decoding="async" style:aspect-ratio="{ev.cover.w} / {ev.cover.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
@@ -231,6 +231,11 @@
   .txt.card { left: 12px; right: 12px; padding: 16px 16px 14px; gap: 8px; border-radius: 22px; background: rgba(12, 13, 18, 0.62); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
   .txt.card h2 { font-size: 21px; }
   .txt.card p { max-height: 30vh; color: rgba(255, 255, 255, 0.92); }
+  /* Android: no blur on a full-screen layer over the stacked sheets (a user's report, Nov 13: after a few posts opened from
+     a club's page and closed, the club's sheet under them came back an empty dimmed panel with old tiles showing through:
+     the blur re-rasters everything under it and overran the GPU, as the sheets' and the award's did, a4098232, 582802e5) */
+  .flat .txt.card { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(12, 13, 18, 0.9); }
+  .flat .bg.ev .haze { display: none; }
   .acts { position: absolute; left: 14px; right: 14px; bottom: calc(var(--safe-bottom) + 22px); display: flex; gap: 8px; }
   .acts button { height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.12); color: #fff; font: 650 14px/1 var(--font-text); }
   .acts button:active { transform: scale(0.95); }
