@@ -239,3 +239,17 @@ def test_a_started_session_nothing_shows_stops(env):
     login(c, 1, "ann")
     assert _scan(c, 1, p).status_code == 400
     con.close()
+
+
+def test_an_old_link_scanned_before_the_door_never_counts_later(env):
+    """A scan before the door opened: its link opened again once the door is open doesn't count; a fresh scan does."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    eid, sid, p = _phone_event(c, con, "vol")
+    login(c, 1, "ann")
+    t = int(time.time())
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (t + logic.DOOR_AUTO - 60, eid))   # the door opened a minute ago
+    con.execute("INSERT INTO qr_marks (session_id, user_id, scanned_at) SELECT ?, id, ? FROM users WHERE tg_id = 1", (sid, t - 3600))
+    assert not _scan(c, 1, _signed(cfg, sid, t // checkin.SLOT - 40)).json()["done"]          # that scan's link, an hour later
+    assert _scan(c, 1, p).json()["done"]
+    con.close()

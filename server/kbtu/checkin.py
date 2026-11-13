@@ -445,7 +445,7 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         raise ApiError("bad_input", "qr") from None
     if not _same(_sig(key, f"ci.{sid}.{slot}"), sig):
         raise ApiError("bad_input", "qr")
-    had = one(con, "SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
+    had = one(con, "SELECT done_at, scanned_at FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     # finished: only someone who scanned before Finish may still complete it, for GRACE (said before "old": a photo
     # scanned after Finish is "closed")
@@ -480,7 +480,8 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
             if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
-                came = logic.screen_came(con, s["event_id"], uid, t)
+                # an old link again: judged at its first scan's moment (a scan before the door opened stays outside it)
+                came = logic.screen_came(con, s["event_id"], uid, t if fresh else had["scanned_at"])
                 if came and fresh:  # never by that old link repeated on a later day (the "had" pass above)
                     _attendance(con, s, uid, t)
             if came and fresh:  # the volunteers ledger's club: a shift opens or closes, only by a scan that counted, of a QR just shown
