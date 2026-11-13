@@ -13,6 +13,34 @@ from pathlib import Path
 
 SCHEMA = (Path(__file__).with_name("schema.sql")).read_text(encoding="utf-8")
 # Changes after the base schema: (user_version they bring the file to, SQL). Append only; mirror in SPEC §5.
+def held_by(x: str) -> str:
+    """SQL: the club that holds Telegram chat `x` (its chat sync link, else its chats card, else its newest event's
+    chat), as logic.chatlist._holder reads it."""
+    return f"""COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = {x}),
+      (SELECT org_id FROM chats WHERE tg_chat_id = {x} AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = {x} AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1))"""
+
+
+def _seen_triggers() -> str:
+    """chat_seen rows go the moment their chat is no longer their club's: any link to the chat made, changed or removed."""
+    out = []
+    for table, col in (("chat_sync", "chat_id"), ("chats", "tg_chat_id"), ("events", "chat_id")):
+        for op, refs in (("INSERT", ("NEW",)), ("DELETE", ("OLD",)), (f"UPDATE OF {col}, org_id", ("OLD", "NEW"))):
+            when = f" WHEN OLD.{col} IS NOT NEW.{col} OR OLD.org_id IS NOT NEW.org_id" if len(refs) == 2 else ""
+            body = "".join(f"\n  DELETE FROM chat_seen WHERE chat_id = {r}.{col} AND org_id IS NOT {held_by(f'{r}.{col}')};" for r in refs)
+            out.append(f"CREATE TRIGGER chat_seen_{table}_{op.split()[0].lower()} AFTER {op} ON {table}{when} BEGIN{body}\nEND;")
+    return "\n".join(out)
+
+
+_CHAT_SEEN = """CREATE TABLE chat_seen (
+  chat_id INTEGER NOT NULL,
+  tg_id INTEGER NOT NULL,
+  org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  seen_at INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;
+""" + _seen_triggers()
+
+
 MIGRATIONS: list[tuple[int, str]] = [
     (2, "ALTER TABLE files ADD COLUMN color TEXT;"),   # a photo's average colour: the event sheet's tint
     # a club's socials (Instagram, TikTok, YouTube, Telegram, a site), shown on its sheet; the old single link moves in
@@ -1691,12 +1719,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX swear_hits_by_user ON swear_hits(user_id);
     CREATE INDEX chats_by_tg ON chats(tg_chat_id);"""),
     # (Nov 13) /all calls who the bot saw in a club's chat too (Telegram gives bots no member list): Telegram ids
-    # alone, no names or words; forgotten on leaving, with the chat, and 180 days after they were last seen
-    (165, """CREATE TABLE chat_seen (
-      chat_id INTEGER NOT NULL,
-      tg_id INTEGER NOT NULL,
-      seen_at INTEGER NOT NULL,
-      PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;"""),
+    # alone, no names or words, with the club that held the chat then; forgotten on leaving, with the chat, as soon
+    # as another club or none holds it (triggers: every way a link changes), and 180 days after they were last seen
+    (165, _CHAT_SEEN),
 ]
 
 

@@ -412,7 +412,10 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
-    con.execute("DROP TABLE chat_seen")  # 165's
+    con.execute("DROP TABLE chat_seen")  # 165's (its triggers on the chats' links with it)
+    for t in ("chat_sync", "chats", "events"):
+        for op in ("insert", "delete", "update"):
+            con.execute(f"DROP TRIGGER chat_seen_{t}_{op}")
     con.execute("DROP TABLE swear_hits")  # 164's
     con.execute("DROP INDEX chats_by_tg")
     con.execute("ALTER TABLE chats DROP COLUMN swear_miss")

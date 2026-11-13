@@ -1188,11 +1188,11 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     links it to the event and makes its join-request link; a group turned supergroup keeps its event."""
     chat = msg["chat"]
     if new := msg.get("migrate_to_chat_id"):
-        con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
-        con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
+        logic.chatlist.seen_moved(con, chat["id"], new)  # first; the links then in the holder's order (chatlist._holder)
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
+        con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
+        con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         logic.chatmod.stale()  # its swear filter goes on under the new id at once
-        logic.chatlist.seen_moved(con, chat["id"], new)
         return
     # who is in a club's chat, for /all: a person who writes or joins (never an anonymous admin or a channel), forgotten on leaving
     if not msg.get("sender_chat"):
@@ -1584,7 +1584,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         new, where = cm.get("new_chat_member") or {}, (cm.get("chat") or {}).get("id")
                         if where and logic.chatsync.in_chat(new):  # /all's memory of who is in a club's chat (logic/chatlist.py)
                             logic.chatlist.seen(con, where, new.get("user"))
-                        elif where and new.get("status") in ("left", "kicked"):
+                        elif where:  # left, banned, or restricted out of it
                             logic.chatlist.unseen(con, where, int((new.get("user") or {}).get("id") or 0))
                         logic.chatsync.member_update(con, cm, upd["update_id"])
                     except sqlite3.Error as exc:
