@@ -1195,8 +1195,11 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     if len(words) != 2 or not re.fullmatch(r"/start(@\w+)?", words[0]) or not words[1].startswith("ec_"):
         return
-    e = logic.chat_claim(con, words[1][3:], int((msg.get("from") or {}).get("id") or 0), chat["id"])
-    api = f"https://api.telegram.org/bot{cfg.bot_token}"
+    api, sender = f"https://api.telegram.org/bot{cfg.bot_token}", int((msg.get("from") or {}).get("id") or 0)
+    # only the group's own admin links it (whoever added the bot as an admin is one): a member can't hand it to an event
+    me = (await http.post(f"{api}/getChatMember", json={"chat_id": chat["id"], "user_id": sender})).json()
+    admin = me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator")
+    e = logic.chat_claim(con, words[1][3:], sender, chat["id"]) if admin else None
     if not e:
         await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_BAD, "parse_mode": "HTML"})
         return
