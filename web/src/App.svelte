@@ -131,7 +131,7 @@
   sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
-  sheets.screens = (code, event, seed) => lazy(screenSheet, { code, event, seed });
+  sheets.screens = (code, event, seed, org) => lazy(screenSheet, { code, event, seed, org });
   // a running check-in's controls: the organizer's sheet, a helper's own QR (so a closed one needs no second scan)
   const openCheckin = (c: MyCheckin) => { haptic.tap(); if (c.helper) sheets.helperQr(c.session, c.event, c.scanner); else sheets.screens(undefined, undefined, c); };
   const PAIR_QR = /[?&]startapp=sh_([0-9a-f]{16})$/; // what /show's QR says

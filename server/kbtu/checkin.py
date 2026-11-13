@@ -4,7 +4,7 @@ The organizer opens /show on a laptop and pairs it from the app (below); Start i
 it counts once that person is a KBTU student (signed in now or before), until Finish. Tier A: a student before Start,
 B: became one during it (a forwarded sign-in link could do that for someone absent: the CSV says which).
 The session's expected list (the organizers' sheet, never in the repo) prefills the student ID at sign-up by KBTU mail.
-A session is made by `admin checkin new`, with the club whose organizers run it."""
+A session is made by `admin checkin new`, with the club whose organizers run it, or by those organizers in Studio (club_new)."""
 from __future__ import annotations
 
 import csv
@@ -58,6 +58,32 @@ def new(con, title: str, people: list[dict], org_id: int | None = None) -> int:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (sid, p["email"].strip().lower(), p.get("name") or "", p.get("studentId"),
                      p.get("school"), p.get("course"), p.get("phone"), p.get("tg"), json.dumps(p.get("extra") or {}, ensure_ascii=False)))
     return sid
+
+
+CLUB_OPEN = 5    # a club's own sessions made in the last day and not finished yet (club_new): junk can't pile up in the list
+CLUB_DAY = 20    # ... and made in the last day at all
+
+
+def club_new(con, key: bytes, v: Viewer, org_id: int, title: object) -> dict:
+    """A club's own session, at any moment with no event (a meeting starting in minutes): made by whoever runs its
+    sessions (_runs), with no expected list; the web names it in the viewer's language, else the English default."""
+    if not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", org_id) or not _runs(con, v, {"org_id": org_id, "event_id": None}):
+        raise ApiError("forbidden", "screen")
+    t = now()
+    name = " ".join(str(title or "").split())[:80] or "Meeting · " + time.strftime("%d %b", time.gmtime(t + 5 * 3600))  # plain, one line; Almaty's day
+    with tx(con):  # counted under the write lock: two taps at once can't both pass the caps
+        # one not started yet (Studio's row tapped again, the sheet closed and opened): that one, not another
+        x = one(con, """SELECT * FROM qr_sessions s WHERE org_id = ? AND event_id IS NULL AND started_at IS NULL AND created_at > ?
+            AND NOT EXISTS (SELECT 1 FROM qr_expected WHERE session_id = s.id) ORDER BY id DESC""", org_id, t - 86400)
+        if x:
+            return _row(con, key, x)
+        c = one(con, "SELECT COUNT(*) FILTER (WHERE ended_at IS NULL), COUNT(*) FROM qr_sessions WHERE org_id = ? AND event_id IS NULL AND created_at > ?",
+                org_id, t - 86400)
+        if c[0] >= CLUB_OPEN or c[1] >= CLUB_DAY:
+            raise ApiError("rate_limited", "screens")
+        sid = new(con, name, [], org_id)
+        log_action(con, v.id, "checkin_new", f"qr:{sid}", json.dumps({"org": org_id}))
+    return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid))
 
 
 # ------------------------------------------------------------ the screen, paired from an organizer's phone

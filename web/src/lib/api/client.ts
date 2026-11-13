@@ -356,6 +356,7 @@ export const server: Api = {
   screenHandsOff: (id) => call('DELETE', `/screens/${id}/helpers`),
   qrHelper: (p, join) => call('POST', '/screens/helper', { p, join }),
   eventScreen: (event) => call('POST', `/events/${event}/screen`),
+  clubScreen: (org, title) => call('POST', `/orgs/${org}/screens`, { title }),
   screenCsv: (id) => call('POST', `/screens/${id}/csv`),
   screenGrant: (id, code) => call('POST', `/screens/${id}/grant`, { code }),
   restore: (target, id) => call('POST', `/admin/taken-down/${target}/${id}/restore`),

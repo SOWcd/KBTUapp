@@ -3,7 +3,7 @@
   // session, and here are the controls the screen itself no longer has: Start, Finish, the list, "disconnect". Anyone
   // who doesn't run a session gets a polite no and the screen stays as it was. From an event (`event`): its own session,
   // made on first use, with the way to the laptop. `seed` (the capsule): that running session alone, there in the first
-  // frame. Without any: my sessions.
+  // frame. `org` (Studio): a new session of that club, no event, made as the sheet opens. Without any: my sessions.
   import { untrack } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession, type VolDoor } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -13,6 +13,7 @@
   import { may } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
   import { downloadFile, haptic } from '../../lib/tg';
+  import { dayMonth, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import MonitorPlay from '@lucide/svelte/icons/monitor-play';
   import Button from '../../ui/Button.svelte';
@@ -31,17 +32,18 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import DoorOpen from '@lucide/svelte/icons/door-open';
 
-  let { overlay, code, event, seed }: { overlay: Overlay; code?: string; event?: Id; seed?: ScreenSession } = $props();
+  let { overlay, code, event, seed, org }: { overlay: Overlay; code?: string; event?: Id; seed?: ScreenSession; org?: Id } = $props();
   let list = $state<ScreenSession[] | null>(untrack(() => (seed ? [seed] : null)));
   let pick = $state(false);   // an unpaired screen and several open sessions: which one
   let note = $state('');      // why there's nothing to do here
   let busy = $state(0);
   let bound = 0;              // the session the laptop just showed: first in the list, the one to start
+  let made = untrack(() => seed?.session ?? 0); // the one session this sheet is about (the capsule's, or the one `org` just made)
   // a co-hosted event's session: its co-host starts the screen; the rest (finish, unpair, the CSV) is the host's (server cohosts.py)
   const own = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
 
   // from an event, only its session stays in view
-  const refresh = () => api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : seed ? l.filter((x) => x.session === seed.session) : first(l); }).catch(() => {});
+  const refresh = () => { if (org && !made) return; void api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : made ? l.filter((x) => x.session === made) : first(l); }).catch(() => {}); };
   const first = (l: ScreenSession[]) => [...l.filter((x) => x.session === bound), ...l.filter((x) => x.session !== bound)];
   async function bind(sid?: Id) {
     try {
@@ -61,6 +63,8 @@
   $effect(() => {
     if (code) void bind();
     else if (event) api.eventScreen(event).then((s) => (list = [s])).catch(() => { haptic.error(); note = t('common.error'); list = []; });
+    else if (org) api.clubScreen(org, untrack(() => t('scr.meeting', { date: dayMonth(nowTs()) }))).then((s) => { made = s.session; list = [s]; haptic.ok(); })
+      .catch((e) => { haptic.error(); note = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; });
     else void refresh();
     const id = setInterval(() => { void refresh(); for (const k of Object.keys(doors)) void loadDoor(Number(k)); }, 4000); // the count goes up while people scan; a door of mine: answers given in its sheet
     return () => clearInterval(id);
@@ -97,6 +101,11 @@
       }
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = 0; }
   }
+  // a session without an event: this phone shows its QR (EventQr's `sess`, the same signed codes and lease as /show), started first
+  async function showQr(s: ScreenSession) {
+    if (!s.started) await act(s, 'start');
+    if (list?.find((x) => x.session === s.session)?.started) sheets.helperQr(s.session, null, false);
+  }
   async function csv(s: ScreenSession) {
     try { const l = await api.screenCsv(s.session); downloadFile(location.origin + l.url, l.name); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
@@ -118,14 +127,14 @@
         </Row>
         <Row title="{s.done}{s.expected ? ' / ' + s.expected : ''} {t('scr.done')}" subtitle={s.pending ? t('scr.joining', { n: s.pending }) : undefined} />
         {#if s.phase === 'out' || s.departed}<Row icon={LogOut} title={s.phase === 'out' ? t('scr.outNow', { n: s.departed }) : t('scr.leftN', { n: s.departed })} />{/if}
-        <Row icon={MonitorUp} title={s.screens ? t('scr.screens', { n: s.screens }) : t('scr.howTo', { url: location.host + '/show' })} />
+        <Row icon={MonitorUp} title={s.screens ? t('scr.screens', { n: s.screens }) : t('scr.howTo', { url: location.host + '/show' })} onclick={s.screens || s.ended || code || session.me?.bigScreen !== 'pair' ? undefined : () => sheets.bigScreen()} />
         {#if handed(s) && doors[s.session].by}<Row icon={DoorOpen} title={t('ledg.handedBy', { name: doors[s.session].by!.name })} />{/if}
       </Group>
       <div class="acts">
         {#if pick}
           <Button kind="primary" size="m" full onclick={() => bind(s.session)}>{t('scr.here')}</Button>
         {:else}
-          {#if s.event && !s.ended}<Button kind="filled" size="m" full onclick={() => { haptic.tap(); sheets.eventQr(s.event!); }}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('aw.show')}</Button>{/if}
+          {#if !s.ended}<Button kind="filled" size="m" full onclick={() => { haptic.tap(); if (s.event) sheets.eventQr(s.event); else void showQr(s); }}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('aw.show')}</Button>{/if}
           {#if !s.started}<Button kind="primary" size="m" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={17} />{/snippet}{t('scr.start')}</Button>{/if}
           {#if s.started && !s.ended && board(s)}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
