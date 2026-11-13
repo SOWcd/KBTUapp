@@ -76,8 +76,12 @@
 
   let detail = $state<EventFull | null>(null);
   // a school's own event opened by another school's student (its link): whose it is, nothing else (server seats._event)
-  let onlyFor = $state('');
-  $effect(() => { if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { if (x instanceof ApiErr && x.message === 'school') onlyFor = String(x.data.school ?? ''); }); });
+  // unset: a verified student with no school known, sent to Settings; the school picked there asks again (the read below)
+  let onlyFor = $state(''), unset = $state(false);
+  $effect(() => {
+    void session.me?.student?.school;
+    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
+  });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
@@ -581,7 +585,9 @@
     </div>
     {/if}
   {:else if onlyFor}
-    <EmptyState icon={Lock} text={t('event.schoolOnlyGone', { school: schoolName(onlyFor) })} />
+    {@const gone = t('event.schoolOnlyGone', { school: schoolName(onlyFor) })}
+    {#if unset}<EmptyState icon={Lock} title={gone} text={t('event.schoolUnset')} action={{ label: t('event.schoolUnsetGo'), onclick: () => sheets.settings('school') }} />
+    {:else}<EmptyState icon={Lock} text={gone} />{/if}
   {/if}
 
   {#snippet footer()}

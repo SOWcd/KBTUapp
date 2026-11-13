@@ -692,6 +692,8 @@ const en: Dict = {
   'event.firstYear': '1st year',
   'event.schoolOnly': '{school} only',
   'event.schoolOnlyGone': 'This event is only for {school}',
+  'event.schoolUnset': "Set your school in Settings and the event will open",
+  'event.schoolUnsetGo': "Open Settings",
   'event.pay': 'Pay · {price}',
   'event.save': 'Save',
   'event.saved': 'Saved',

@@ -692,6 +692,8 @@ const ru = {
   'event.firstYear': '1 курс',
   'event.schoolOnly': 'Только {school}',
   'event.schoolOnlyGone': 'Это событие только для {school}',
+  'event.schoolUnset': "Укажи свою школу в настройках — и событие откроется",
+  'event.schoolUnsetGo': "Открыть настройки",
   'event.pay': 'Оплатить · {price}',
   'event.save': 'Сохранить',
   'event.saved': 'Сохранено',

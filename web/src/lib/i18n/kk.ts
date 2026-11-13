@@ -692,6 +692,8 @@ const kk: Dict = {
   'event.firstYear': '1 курс',
   'event.schoolOnly': 'Тек {school}',
   'event.schoolOnlyGone': 'Бұл іс-шара тек {school} үшін',
+  'event.schoolUnset': "Баптауларда мектебіңді көрсет — сонда іс-шара ашылады",
+  'event.schoolUnsetGo': "Баптауларды ашу",
   'event.pay': 'Төлеу · {price}',
   'event.save': 'Сақтау',
   'event.saved': 'Сақталды',
