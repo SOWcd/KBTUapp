@@ -260,6 +260,16 @@ def signup_open(e: sqlite3.Row) -> bool:
 ICS_KEY = secrets.token_bytes(32)
 
 
+# "My link" to an event (ev_<id>_<code>): a code of its own, derived from the member's id, never their friend link's
+# code (r_<link code> adds a friend at once); app.create sets the key from TOKEN_KEY, like ICS_KEY
+REF_KEY = secrets.token_bytes(32)
+
+
+def ev_ref(uid: int) -> str:
+    import base64
+    return base64.b32encode(hmac.new(REF_KEY, f"evref:{uid}".encode(), hashlib.sha256).digest())[:10].decode()
+
+
 def ics_sig(eid: int) -> str:
     return hmac.new(ICS_KEY, f"ics:{eid}".encode(), hashlib.sha256).hexdigest()[:32]
 
@@ -668,9 +678,13 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
                 WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), r["id"]))
         else:
             # someone already in keeps whoever was first (this branch is new rows only); never myself
-            by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.link_code = ? AND u.id != ?",
-                     e["org_id"], ref, v.id) if isinstance(ref, str) else None
-            inviter = by["user_id"] if by else None
+            # ponytail: one HMAC per member of the club; a stored code if a club ever has thousands
+            inviter = next((m["user_id"] for m in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND user_id != ?", e["org_id"], v.id)
+                            if hmac.compare_digest(ev_ref(m["user_id"]), ref)), None) if isinstance(ref, str) and ref.isascii() else None
+            if inviter is None and isinstance(ref, str):  # an event link shared before Nov 13 carried the link code itself
+                by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.link_code = ? AND u.id != ?",
+                         e["org_id"], ref, v.id)
+                inviter = by["user_id"] if by else None
             if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None

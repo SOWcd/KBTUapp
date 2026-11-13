@@ -316,6 +316,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
+    logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
@@ -2058,8 +2059,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture
             photo = f"https://{cfg.domain}/media/{cover['path']}.jpg" if cover else \
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
-            # "My link": a member of the event's club shares it with their link code, so who came by it is theirs
-            start = f"ev_{ref}_{logic._qr_code(con, v.id, 'link_code')}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
+            # "My link": a member of the event's club shares it with a code of its own (never the friend link's), so who came by it is theirs
+            start = f"ev_{ref}_{logic.seats.ev_ref(v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
