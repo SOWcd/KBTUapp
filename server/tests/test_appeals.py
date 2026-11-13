@@ -5,6 +5,7 @@ AI's tips that never block, and the funnel counters carrying no words."""
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import json
 
 import pytest
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from kbtu import app as server, bot, db, llm, logic, texts
 from kbtu.logic import appeals, assistant, stats
+from kbtu.logic.core import ApiError
 from test_core import delete_now, login, tma  # noqa: F401
 from test_core import env  # noqa: F401  (the fixture)
 
@@ -119,7 +121,7 @@ def test_status_answer_overdue_and_message(ap, monkeypatch):
     assert act(status="work").json()["status"] == "work"
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'appeal_answer'").fetchone()   # a status alone: no message
     monkeypatch.setattr(logic.core, "now", lambda: a["due"] + 60)                      # past due, still open: overdue
-    assert c.get("/api/appeals", headers=tma(ANN)).json()[0]["overdue"]
+    assert c.get("/api/appeals", headers=tma(ANN)).json()["items"][0]["overdue"]
     r = act(status="closed", answer="Fixed on Wednesday").json()
     assert r["status"] == "closed" and r["answer"] == "Fixed on Wednesday" and r["overdue"]   # closing doesn't reset it
     act(status="work"); act(status="closed")
@@ -127,7 +129,7 @@ def test_status_answer_overdue_and_message(ap, monkeypatch):
     assert len(m) == 1 and m[0]["user_id"] == _uid(c, ANN)                           # once, to the author
     text, button, start = bot._render(con, {**dict(m[0]), "lang": "en"})
     assert start == "apl" and "Fixed" not in text and text == texts.bot_message("en", "appeal_answer")[0]
-    mine = c.get("/api/appeals", headers=tma(ANN)).json()[0]
+    mine = c.get("/api/appeals", headers=tma(ANN)).json()["items"][0]
     assert mine["status"] == "closed" and mine["answer"] == "Fixed on Wednesday"
     assert {r[0] for r in con.execute("SELECT action FROM audit_log WHERE action LIKE 'appeal_%'")} >= {"appeal_answer", "appeal_status"}
 
@@ -220,7 +222,7 @@ def test_ids_never_reused(ap):
     new = _send(c, BEK, anon=True).json()["id"]
     assert new != gone
     assert c.post(f"/api/sg/appeals/{gone}", headers=tma(SG), json={"answer": "for the deleted one"}).status_code == 404
-    assert c.get("/api/appeals", headers=tma(BEK)).json()[0]["answer"] is None
+    assert c.get("/api/appeals", headers=tma(BEK)).json()["items"][0]["answer"] is None
 
 
 def test_months_never_link_authors(ap):
@@ -279,3 +281,100 @@ def test_months_merge_small_topics(ap):
         con.execute("INSERT INTO appeal_authors (appeal_id, user_id) VALUES (?, ?)", (aid, u))
     m = appeals.months(con)[0]
     assert m["topics"] == {"food": 6, "other": 1} and m["total"] == 7
+
+# ------------------------------------------------------------ "Solved by your appeals" (appeals.solved*): the shapes that
+# could point at an anonymous author never pass, SG's people alone write and delete, 10 a month, students see it from 3
+# entries, the audit keeps ids only, the author never leaves the server and goes with their account; no appeal link
+
+OK_R, OK_C = "Cold water in the dorm showers", "The boiler was repaired and checked weekly"
+
+
+def _add(c, tg=SG, raised=OK_R, changed=OK_C, **kw):
+    return c.post("/api/sg/solved", headers=tma(tg), json={"raised": raised, "changed": changed, **kw})
+
+
+@pytest.mark.parametrize("bad, why", [
+    ("short", "length"), ("x" * 141, "length"),
+    ("see https://kbtu.kz now", "link"), ("see www.example now", "link"), ("ask at t.me/somebody", "link"),
+    ("written on kbtu.edu.kz site", "link"), ("the site \u043a\u0431\u0442\u0443.\u0440\u0444 opened", "link"),
+    ("thanks to @someone for it", "contact"), ("mail a.b (at) mail com please", "contact"),
+    ("call +7 7 0 1 2 3 4 5 6 now", "contact"),
+    ("room 405 got heating", "number"), ("floor 1\u200b2 got heating", "number"),        # a hidden character can't split it
+    ("room \uff14\uff10\uff15 got heating", "number"),                                         # wide digits are digits
+    ("since 2024 nothing worked", "number"),
+])
+def test_rejected_shapes(bad, why):
+    with pytest.raises(ApiError) as e:
+        appeals.solved_line(bad)
+    assert (e.value.code, e.value.message) == ("bad_input", why)
+
+
+def test_cleaned():
+    assert appeals.solved_line("  Wi-Fi \n\n in the  library\x07 was slow ") == "Wi-Fi in the library was slow"
+    assert appeals.solved_line("Floor 3 got a new microwave") == "Floor 3 got a new microwave"  # one digit is fine
+
+
+def test_rights(ap):
+    c, _, con = ap
+    mod = 9
+    login(c, mod, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (_uid(c, mod),))
+    for tg in (ANN, PRES, mod):                                       # a student, SG's club President, a moderator
+        assert _add(c, tg).status_code == 403
+    sid = _add(c).json()["id"]
+    for tg in (ANN, PRES, mod):
+        assert c.delete(f"/api/sg/solved/{sid}", headers=tma(tg)).status_code == 403
+        assert c.post(f"/api/sg/solved/{sid}/restore", headers=tma(tg)).status_code == 403
+    assert _add(c, raised="room 405 had no heating").status_code == 400
+    other = 8
+    login(c, other, "sec2")
+    appeals.grant(con, None, _uid(c, other), True)
+    assert c.delete(f"/api/sg/solved/{sid}", headers=tma(other)).status_code == 204   # any of SG's people, any entry
+    assert c.delete(f"/api/sg/solved/{sid}", headers=tma(other)).status_code == 404
+    assert c.post(f"/api/sg/solved/{sid}/restore", headers=tma(SG)).json()["id"] == sid  # undo
+    acts = [tuple(r) for r in con.execute("SELECT action, target, data FROM audit_log WHERE action LIKE 'solved_%' ORDER BY id")]
+    assert acts == [("solved_add", f"solved:{sid}", "{}"), ("solved_delete", f"solved:{sid}", "{}"), ("solved_restore", f"solved:{sid}", "{}")]
+
+
+def test_threshold_shape_and_no_author(ap):
+    c, _, _ = ap
+    feed = lambda tg: c.get("/api/appeals", headers=tma(tg)).json()["solved"]  # noqa: E731
+    _add(c, topic="dorm"); _add(c, topic="nope")
+    assert feed(ANN) == [] and len(feed(SG)) == 2                      # SG sees it from the first
+    _add(c)
+    f = feed(ANN)
+    assert len(f) == 3 and f[0]["id"] > f[1]["id"] > f[2]["id"]          # newest first
+    assert set(f[0]) == {"id", "raised", "changed", "topic", "month"} and f[2]["topic"] == "dorm" and f[1]["topic"] is None
+    assert f[0]["month"] == dt.datetime.now(appeals.ALMATY).strftime("%Y-%m")
+    c.delete(f"/api/sg/solved/{f[0]['id']}", headers=tma(SG))
+    assert feed(ANN) == []                                              # back under 3
+
+
+def test_monthly_cap_and_forget(ap, monkeypatch):
+    c, _, con = ap
+    t = logic.core.now()
+    ids = [_add(c).json()["id"] for _ in range(appeals.SOLVED_MONTH)]
+    r = _add(c)
+    assert r.status_code == 429
+    c.delete(f"/api/sg/solved/{ids[0]}", headers=tma(SG))
+    assert _add(c).status_code == 200
+    assert c.post(f"/api/sg/solved/{ids[0]}/restore", headers=tma(SG)).status_code == 429   # undo can't pass the cap
+    nxt = dt.datetime.fromtimestamp(t, appeals.ALMATY).replace(day=28) + dt.timedelta(days=5)
+    monkeypatch.setattr(logic.core, "now", lambda: int(nxt.timestamp()))
+    assert _add(c).status_code == 200                                   # a new month
+    appeals.forget(con)
+    assert not con.execute("SELECT 1 FROM appeal_solved WHERE id = ?", (ids[0],)).fetchone()  # deleted a day ago: gone
+
+
+def test_account_deletion_keeps_the_entry_without_its_author(ap):
+    c, cfg, con = ap
+    sid = _add(c).json()["id"]
+    delete_now(c, cfg, tma(SG))
+    assert tuple(con.execute("SELECT raised, created_by FROM appeal_solved WHERE id = ?", (sid,)).fetchone()) == (OK_R, None)
+
+
+def test_no_link_to_any_appeal(ap):
+    _, _, con = ap
+    cols = {r[1] for r in con.execute("PRAGMA table_info(appeal_solved)")}
+    assert cols == {"id", "raised", "changed", "topic", "created_by", "created_at", "gone_at"}
+    assert not con.execute("PRAGMA foreign_key_list(appeal_solved)").fetchall()[1:]   # users alone

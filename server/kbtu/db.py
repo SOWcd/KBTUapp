@@ -1726,6 +1726,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     # its guests' session (event_id); one per event; the event deleted, the attendance stays
     (166, """ALTER TABLE qr_sessions ADD COLUMN crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;"""),
+    # (Nov 13) "Solved by your appeals" (appeals.solved): SG's public lines, what students raised and what changed. No
+    # link to any appeal by design; who wrote it for the audit only (never sent), emptied when that account goes.
+    # gone_at: deleted, still undoable for a day (appeals.forget)
+    (167, """CREATE TABLE appeal_solved (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      raised TEXT NOT NULL,
+      changed TEXT NOT NULL,
+      topic TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      gone_at INTEGER) STRICT;"""),
 ]
 
 

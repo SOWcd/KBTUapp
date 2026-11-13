@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import unicodedata
 
 from ..db import tx
 from . import core
@@ -160,10 +161,11 @@ def send(con, v: Viewer, body: dict) -> dict:
     return _shape(one(con, "SELECT * FROM appeals WHERE id = ?", aid), t)
 
 
-def mine(con, v: Viewer) -> list[dict]:
+def mine(con, v: Viewer) -> dict:
+    """My appeals and the "Solved" feed, in one request (the screen's only one)."""
     t = core.now()
-    return [_shape(a, t) for a in rows(con, """SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id
-        WHERE w.user_id = ? ORDER BY a.id DESC""", v.id)]
+    return {"items": [_shape(a, t) for a in rows(con, """SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id
+        WHERE w.user_id = ? ORDER BY a.id DESC""", v.id)], "solved": solved(con, is_sg(con, v.id))}
 
 
 def _drop(con, aid: int) -> None:
@@ -266,6 +268,89 @@ def months(con) -> list[dict]:
     return out
 
 
+# ------------------------------------------------------------ "Solved by your appeals": SG's public lines
+
+# Two general lines, never an appeal's words and never linked to one (no appeal id anywhere): proof that writing
+# changes things. Who wrote it is kept for the audit only and never sent. The shapes below could point at an
+# anonymous author (a room, a floor, a date, an id, a contact), so they never pass; names no regex catches: the SG
+# writer is told why. Owner + adversarial review, Nov 13.
+SOLVED_LEN = (10, 140)
+SOLVED_MONTH = 10                       # new live entries a calendar month (Almaty)
+SOLVED_SHOWN = 3                        # students see the feed from this many entries; SG always
+_BAD = (("link", re.compile(r"https?:|www\.|t\.me|\b[a-z0-9-]+\.[a-z]{2,}\b|\.(?:\u0440\u0444|\u049b\u0430\u0437)\b", re.I)),
+        ("contact", re.compile(r"@|\((?:at|dog)\)|\[(?:at|dog)\]|\d(?:[\s().+-]*\d){5,}", re.I)),  # mentions, e-mails, phones
+        ("number", re.compile(r"\d{2,}")))
+
+
+def solved_line(x: object) -> str:
+    """One line, plain: invisible and control characters out (they could split a number past the checks), NFKC (wide
+    digits and letters as plain ones), whitespace collapsed; then the length and the shapes. ApiError's reason: the shape."""
+    t = unicodedata.normalize("NFKC", x) if isinstance(x, str) else ""
+    t = " ".join("".join(ch if ch.isspace() or unicodedata.category(ch)[0] != "C" else "" for ch in t).split())
+    if not SOLVED_LEN[0] <= len(t) <= SOLVED_LEN[1]:
+        raise ApiError("bad_input", "length")
+    for why, rx in _BAD:
+        if rx.search(t):
+            raise ApiError("bad_input", why)
+    return t
+
+
+def _month_start(t: int) -> int:
+    return int(dt.datetime.fromtimestamp(t, ALMATY).replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
+
+
+def _solved_shape(r) -> dict:
+    return {"id": r["id"], "raised": r["raised"], "changed": r["changed"], "topic": r["topic"],
+            "month": dt.datetime.fromtimestamp(r["created_at"], ALMATY).strftime("%Y-%m")}
+
+
+def solved(con, sg: bool) -> list[dict]:
+    """Newest first; empty for students until SOLVED_SHOWN entries (a lonely one proves nothing)."""
+    rs = rows(con, "SELECT * FROM appeal_solved WHERE gone_at IS NULL ORDER BY id DESC")
+    return [_solved_shape(r) for r in rs] if sg or len(rs) >= SOLVED_SHOWN else []
+
+
+def _room(con, t: int) -> None:
+    if one(con, "SELECT COUNT(*) FROM appeal_solved WHERE gone_at IS NULL AND created_at >= ?", _month_start(t))[0] >= SOLVED_MONTH:
+        raise ApiError("rate_limited", "solved")
+
+
+def solved_add(con, v: Viewer, body: dict) -> dict:
+    _sg(con, v)
+    raised, changed = solved_line(body.get("raised")), solved_line(body.get("changed"))
+    topic = body.get("topic") if body.get("topic") in TOPICS else None
+    t = core.now()
+    with tx(con):
+        _room(con, t)
+        sid = con.execute("INSERT INTO appeal_solved (raised, changed, topic, created_by, created_at) VALUES (?, ?, ?, ?, ?)",
+                          (raised, changed, topic, v.id, t)).lastrowid
+        log_action(con, v.id, "solved_add", f"solved:{sid}")
+    return _solved_shape(one(con, "SELECT * FROM appeal_solved WHERE id = ?", sid))
+
+
+def solved_delete(con, v: Viewer, sid: int) -> None:
+    """Any of SG's people, any entry; undoable for a day (solved_restore), then gone for good (forget)."""
+    _sg(con, v)
+    with tx(con):
+        if not con.execute("UPDATE appeal_solved SET gone_at = ? WHERE id = ? AND gone_at IS NULL", (core.now(), sid)).rowcount:
+            raise ApiError("not_found")
+        log_action(con, v.id, "solved_delete", f"solved:{sid}")
+
+
+def solved_restore(con, v: Viewer, sid: int) -> dict:
+    _sg(con, v)
+    t = core.now()
+    with tx(con):
+        r = one(con, "SELECT * FROM appeal_solved WHERE id = ? AND gone_at > ?", sid, t - 86400)
+        if not r:
+            raise ApiError("not_found")
+        if r["created_at"] >= _month_start(t):
+            _room(con, t)
+        con.execute("UPDATE appeal_solved SET gone_at = NULL WHERE id = ?", (sid,))
+        log_action(con, v.id, "solved_restore", f"solved:{sid}")
+    return _solved_shape(r)
+
+
 # ------------------------------------------------------------ the creator, from the server (admin.py)
 
 def grant(con, actor: int | None, uid: int, on_: bool) -> None:
@@ -287,8 +372,9 @@ def reveal(con, actor: int, aid: int):
 
 
 def forget(con) -> None:
-    """Nightly: 90 days after closing, 180 at most from sending; the day's quota rows after a day."""
+    """Nightly: 90 days after closing, 180 at most from sending; the day's quota rows and deleted "Solved" entries after a day."""
     t = core.now()
     for (aid,) in rows(con, "SELECT id FROM appeals WHERE closed_at < ? OR created_at < ?", t - KEEP_CLOSED, t - KEEP_MAX):
         _drop(con, aid)
     con.execute("DELETE FROM appeal_sends WHERE at < ?", (t - 86400,))
+    con.execute("DELETE FROM appeal_solved WHERE gone_at < ?", (t - 86400,))  # "Solved" entries deleted a day ago

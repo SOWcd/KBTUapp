@@ -1584,7 +1584,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         except TimeoutError:
             raise ApiError("unavailable", "assistant") from None
 
-    # appeals to the Student Government (logic/appeals.py): mine, a new one, delete mine; AI help on a draft; SG's queue
+    # appeals to the Student Government (logic/appeals.py): mine (with the Solved feed), a new one, delete mine; AI help on a draft; SG's queue
     @app.get("/api/appeals")
     def my_appeals(con: Con, v: Appeals):
         return logic.appeals.mine(con, v)
@@ -1626,6 +1626,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/sg/appeals/{aid}")
     def sg_act(con: Con, v: Appeals, aid: int, body: dict = Body(...)):
         return logic.appeals.act(con, v, aid, body)
+
+    # "Solved by your appeals": SG's people add and delete (undo: restore); everyone reads it with /api/appeals
+    @app.post("/api/sg/solved")
+    def sg_solved_add(con: Con, v: Appeals, body: dict = Body(...)):
+        return logic.appeals.solved_add(con, v, body)
+
+    @app.delete("/api/sg/solved/{sid}", status_code=204)
+    def sg_solved_drop(con: Con, v: Appeals, sid: int):
+        logic.appeals.solved_delete(con, v, sid)
+
+    @app.post("/api/sg/solved/{sid}/restore")
+    def sg_solved_restore(con: Con, v: Appeals, sid: int):
+        return logic.appeals.solved_restore(con, v, sid)
 
     async def question_vec(body: dict):
         """DOCS=hybrid: the question's embedding for the documents' search, from Cloudflare, only where the policy names
