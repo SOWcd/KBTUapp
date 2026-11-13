@@ -70,16 +70,18 @@
   // a group's swear filter (its President or Vice; the bot must be able to delete and restrict there) and 30 days of it
   let report = $state<SwearRow[]>([]);
   $effect(() => { api.swearReport(org).then((r) => (report = r)).catch(() => {}); });
-  const groups = $derived(chats.filter((c) => c.bot && c.kind === 'group'));
+  const groups = $derived(chats.filter((c) => c.bot && (c.kind === 'group' || c.kind === 'forum')));
   async function swear(c: StudioChat, on: boolean) {
     c.swear = on;
     try { chats = keep(await api.swearOrgChat(org, c.id, on)); haptic.select(); }
     catch (e) {
       c.swear = !on;
       haptic.error();
-      say(t(e instanceof ApiErr && e.message === 'rights' ? 'oc.swearRights' : 'common.error'), 'warning_3d');
+      const miss = e instanceof ApiErr && e.message === 'rights' ? (e.data.missing as StudioChat['swearMiss']) : null;
+      say(miss ? lacks(miss) : t('common.error'), 'warning_3d');
     }
   }
+  const lacks = (miss: StudioChat['swearMiss']) => t('oc.swearRights', { rights: miss.map((r) => t(`oc.right.${r}`)).join(', ') });
   const mask = (s: string) => (s.length < 3 ? s : s[0] + '*'.repeat(s.length - 2) + s.at(-1));
   const why = (r: SwearRow) => [r.stems.map(mask).join(', '), r.mutes ? t('oc.swearMuted', { n: r.mutes }) : ''].filter(Boolean).join(' · ');
   async function drop(c: StudioChat) {
@@ -121,7 +123,7 @@
   {/if}
   {#if groups.length}
     <Group caption={t('oc.swear')} footnote={t('oc.swearNote')}>
-      {#each groups as c (c.id)}<Row title={c.title} accessory="switch" checked={c.swear} onchange={(on) => swear(c, on)} />{/each}
+      {#each groups as c (c.id)}<Row title={c.title} subtitle={c.swear && c.swearMiss.length ? lacks(c.swearMiss) : undefined} accessory="switch" checked={c.swear} onchange={(on) => swear(c, on)} />{/each}
     </Group>
   {/if}
   {#if report.length}
