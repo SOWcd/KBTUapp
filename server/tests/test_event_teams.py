@@ -394,7 +394,7 @@ def test_migration_triggers(club):
     assert [p["id"] for p in _mine(c, eid, a)["members"]] == _ids(con, [a])
     con.execute("DELETE FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, a)))
     assert con.execute("SELECT COUNT(*) FROM event_teams").fetchone()[0] == 0
-    assert [n for n, _ in db.MIGRATIONS][-1] == 161
+    assert 161 in [n for n, _ in db.MIGRATIONS]
 
 
 def test_names_unique_by_key(club):

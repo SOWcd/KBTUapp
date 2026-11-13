@@ -411,6 +411,7 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("ALTER TABLE files DROP COLUMN taken_at")  # 162's
     for t in ("event_team_reg_out", "event_team_reg_gone"):  # 161's (its tables' own trigger goes with them)
         con.execute(f"DROP TRIGGER {t}")
     con.execute("DROP TABLE team_consents")
