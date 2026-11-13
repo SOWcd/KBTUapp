@@ -894,6 +894,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """The club's groups' swear warnings, 30 days: its President, Vice and Heads."""
         return logic.chatmod.report(con, v, oid)
 
+    @app.get("/api/orgs/{oid}/chats/{cid}/roles")
+    async def chat_roles(oid: int, cid: int, con: Con, v: Me):
+        """Studio → Chats → Roles and admins (logic/chatroles.py): the group's admins and the club's roles side by side,
+        asked of Telegram now (paced, capped, kept a few minutes a worker); read-only, no Telegram id leaves."""
+        tg = await run_in_threadpool(logic.chatroles.target, con, v, oid, cid)
+        people = [p["tg_id"] for p in await run_in_threadpool(logic.chatroles.leaders, con, oid)]
+        async with httpx.AsyncClient(timeout=10) as http:
+            got = await logic.chatroles.ask(lambda m, p: bot._call(cfg, http, m, p), int(cfg.bot_token.split(":")[0]), tg, people)
+        return await run_in_threadpool(logic.chatroles.hint, con, oid, got)
+
     @app.delete("/api/orgs/{oid}/chats/{cid}")
     def drop_org_chat(oid: int, cid: int, con: Con, v: Me):
         out, gone = logic.drop_org_chat(con, v, oid, cid)
