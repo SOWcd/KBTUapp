@@ -103,7 +103,7 @@
     {#if q}<b class="head">{q.title}</b>{/if}
     <div class="plate" class:off={!q?.param}>
       {#if q?.param}
-        {#key q.param}<Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr>{/key}
+        <Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr><!-- a new code redraws in place: no blank frame -->
       {:else if q?.ended || note}
         <p class="note">{note || t('scr.closed')}</p>
       {/if}

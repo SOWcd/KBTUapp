@@ -159,7 +159,7 @@
     const can = scanQr(t('scr.byHandAim'), (text) => {
       if (!BADGE.test(text)) { if (text !== wrong) { wrong = text; haptic.error(); } return false; }
       api.screenBadge(s.session, text).then((r) => { haptic.ok(); say(t('scr.marked', { name: r.person }), 'sparkles_3d'); void refresh(); absentOf(s, true); },
-        (e) => { haptic.error(); say(t(e instanceof ApiErr ? (e.message === 'already' ? 'scr.already' : e.code === 'closed' ? 'scr.closed' : e.code === 'not_found' ? 'scan.notFound' : 'common.error') : 'common.error'), 'warning_3d'); });
+        (e) => { haptic.error(); say(t(e instanceof ApiErr ? (e.message === 'already' ? 'scr.already' : e.message === 'flagged' ? 'scr.flagged' : e.code === 'closed' ? 'scr.closed' : e.code === 'not_found' ? 'scan.notFound' : 'common.error') : 'common.error'), 'warning_3d'); });
       return true;
     });
     if (!can) say(t('give.phone'), 'pleading_face_3d');
@@ -176,8 +176,10 @@
 
   const all = $derived(!code && !event && !seed && !org); // Profile's list: the finished folded
   let past = $state(false);
-  const shown = $derived(all && !pick && !past ? (list ?? []).filter((x) => !x.ended) : (list ?? []));
-  const ended = $derived(all && !pick ? (list ?? []).filter((x) => x.ended).length : 0);
+  // past: finished, or made and never started for a day (nobody will: not "waiting" any more)
+  const over = (x: ScreenSession) => !!x.ended || (!x.started && !!x.created && x.created < nowTs() - 86400);
+  const shown = $derived(all && !pick ? [...(list ?? []).filter((x) => !over(x)), ...(past ? (list ?? []).filter(over) : [])] : (list ?? []));
+  const ended = $derived(all && !pick ? (list ?? []).filter(over).length : 0);
 
   async function csv(s: ScreenSession) {
     try { const l = await api.screenCsv(s.session); downloadFile(location.origin + l.url, l.name); }
@@ -228,7 +230,7 @@
         {:else}
           {#if !s.ended}<Button kind="filled" size="m" full onclick={() => { haptic.tap(); if (s.event) sheets.eventQr(s.event); else void showQr(s); }}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('aw.show')}</Button>{/if}
           {#if !s.started}<Button kind="primary" size="m" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={17} />{/snippet}{t('scr.start')}</Button>{/if}
-          {#if s.started && !s.ended}<Button kind="secondary" size="m" full onclick={() => byHand(s)}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('scr.byHand')}</Button>{/if}
+          {#if s.started && !s.ended && s.phase !== 'out'}<Button kind="secondary" size="m" full onclick={() => byHand(s)}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('scr.byHand')}</Button>{/if}
           {#if s.started && !s.ended && board(s)}<Button kind="secondary" size="m" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
           {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}

@@ -71,7 +71,8 @@
   {:else if st.session == null}
     <section class="pair" in:fade>
       <h1>{t('scr.pairTitle')}</h1>
-      {#key pairLink}<div class="code small" in:fade={{ duration: 300 }}><Qr text={pairLink} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>{/key}
+      <!-- a new code redraws in place (no key, no fade): the swap is seamless -->
+      <div class="code small"><Qr text={pairLink} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
       <p class="hint">{t('scr.pairHint')}</p>
       <p class="sub">{t('scr.pairWho')}</p>
     </section>
@@ -79,7 +80,7 @@
     <header><h1>{st.title}</h1></header>
     {#if st.param}
       <section class="live" class:out={st.phase === 'out'}>
-        {#key link}<div class="code" in:fade={{ duration: 400 }}><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>{/key}
+        <div class="code"><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
         <aside>
           {#if st.phase === 'out'}
             <!-- the way out: the same QR marks leaving (the organizer switched it in the app) -->

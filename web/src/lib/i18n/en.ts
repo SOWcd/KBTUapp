@@ -1111,6 +1111,7 @@ const en: Dict = {
   'scr.byHandAim': "Point at the QR in the student's profile",
   'scr.marked': "{name} marked",
   'scr.already': "Already marked",
+  'scr.flagged': "The receipt isn't checked: mark them at the door scanner",
   'scr.again': "Connect again",
   'scr.paired': "Screen connected",
   'scr.stale': "This QR has changed: scan the screen again",

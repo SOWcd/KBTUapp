@@ -52,7 +52,9 @@
     const h = idle(() => void loadQr().then(() => (late = make(tx, mv))).catch(() => {}), { timeout: 500 });
     return () => (window.cancelIdleCallback ?? clearTimeout)(h);
   });
-  const code = $derived(now ?? (late?.text === text ? late : null));
+  // a new text (a rotating check-in code) keeps the last code drawn until its own is ready: never a blank frame
+  let last: Code | null = null;
+  const code = $derived((last = now ?? (late?.text === text ? late : null) ?? last));
 </script>
 
 <div class="qr">
