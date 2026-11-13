@@ -1069,6 +1069,7 @@ const en: Dict = {
   'ci.closed': "Check-in is closed",
   'ci.hDone': "You're checked in",
   'ci.hAgain': "Already checked in",
+  'ci.againText': "No need to scan again",
   'ci.hLeft': "Leaving marked",
   'ci.hWait': "Almost there",
   'ci.hNo': "Not counted",

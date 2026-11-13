@@ -29,8 +29,8 @@
   const at = time(nowTs());
   const HEAD = { done: 'ci.hDone', again: 'ci.hAgain', left: 'ci.hLeft', wait: 'ci.hWait', no: 'ci.hNo', old: 'ci.hOld', closed: 'ci.closed', notIn: 'ci.hNotIn', error: 'common.error' } as const;
   const head = $derived(t(HEAD[kind]));
-  // the line under the name: the minute it counted; a refusal says what to do
-  const sub = $derived(text ? text : ok ? at : kind === 'wait' ? t('ci.waitText') : kind === 'old' ? t('ci.oldText')
+  // the line under the name: the minute it counted (a second scan: that it isn't needed, never "now" as if it counted again); a refusal says what to do
+  const sub = $derived(text ? text : kind === 'again' ? t('ci.againText') : ok ? at : kind === 'wait' ? t('ci.waitText') : kind === 'old' ? t('ci.oldText')
     : kind === 'no' || kind === 'notIn' ? t('ci.askOrg') : '');
   const named = $derived(kind !== 'old' && kind !== 'closed' && kind !== 'error' && !!title);
 
