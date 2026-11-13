@@ -43,11 +43,17 @@ RU_ALLOW = ("\u0431\u043b\u044f\u0445", "\u0435\u0431\u043e\u043b",  # buckle, E
             "\u043a\u043e\u0442\u0430\u043a\u0443",   # Kotaku
             "\u0431\u043b\u044f\u0448",    # blyashka (a plaque, a belt's badge)
             "\u0441\u0443\u043a\u0438\u044f", "\u0441\u0443\u043a\u0438\u044e", "\u0441\u0443\u043a\u0438\u044b",  # sukiyaki; Kazakh suqiyu (to poke, to stare)
-            "\u043c\u0430\u043d\u0434\u0430\u0439")    # Kazakh mangday (forehead), folded
+            "\u043c\u0430\u043d\u0434\u0430\u0439",    # Kazakh mangday (forehead), folded
+            "\u0437\u0430\u043c\u0430\u043d\u0434", "\u043e\u043c\u0430\u043d\u0434",  # Kazakh zamanda (in the era), zamandas (contemporary), Omanda (in Oman): za-/o- + manda
+            "\u0441\u0443\u043a\u0430\u043d",  # Kazakh suqan (greedy-eyed), suqqan (poked), folded and squeezed
+            "\u0441\u0443\u043a\u0438\u0430", "\u0441\u0443\u043a\u0430\u0440", "\u0441\u0443\u043a\u0430\u0435\u0432",  # the surnames Sukiasyan, Sukaev; Sukarno
+            "\u0445\u0443\u0438\u0437")   # Huizinga
 EN = ("fuck", "shit", "cunt", "bitch", "asshole", "dickhead", "whore", "slut", "nigger", "nigga", "faggot",
       "blyat", "blyad", "pizd")  # anywhere in a word; the last three: Russian in Latin letters
-EN_WORDS = ("suka",)
-EN_ALLOW = ("scunthorp", "shiitak", "shitak", "niggard", "snigger", "kshiti", "ashita")  # the last two: Kshitij, Japanese "tomorrow"
+EN_WORDS = ("suka", "blya", "huj", "xuy", "nahuy", "nahui", "nahuj", "pohuy", "pohui", "pidor", "pidar", "mudak",
+            "ebat", "yebat", "eblan")  # Russian in Latin letters, whole words only ("hui", "huy" alone: Chinese, Vietnamese names)
+EN_ALLOW = ("scunthorp", "shiitak", "shitak", "niggard", "snigger", "kshiti", "ashita",  # Kshitij, Japanese "tomorrow"
+            "ishit", "oshit", "shital")  # Japanese names (Kishitani, Nishitani, Yoshitomo), the Indian name Shital
 
 # look-alikes: Latin and digits into Cyrillic, Kazakh into Russian; Cyrillic and digits into Latin
 _TO_CYR = str.maketrans({**dict(zip("abcehkmnoprtxyi", "\u0430\u0432\u0441\u0435\u043d\u043a\u043c\u043f\u043e\u0440\u0433\u0442\u0445\u0443\u0438")), "0": "\u043e", "3": "\u0437", "4": "\u0447", "6": "\u0431", "@": "\u0430",
@@ -71,7 +77,8 @@ _RU, _EN = _stems(RU, True), _stems(EN, False)
 
 
 def _words(text: str) -> list[str]:
-    """The words; single letters split by spaces or dots ("b l y a", "b.l.y.a") joined into one."""
+    """The words; three or more single letters split by spaces or dots ("b l y a", "b.l.y.a") joined into one. Two
+    are initials ("Ahmetova E.B."), not a word."""
     text = unicodedata.normalize("NFKC", text).translate(_GONE).lower()
     out: list[str] = []
     single, last = "", 0  # a run of one-letter words, where the last word ended
@@ -81,10 +88,10 @@ def _words(text: str) -> list[str]:
         if len(w) == 1 and (near or not single):
             single += w
             continue
-        out += [single] if len(single) > 1 else []
+        out += [single] if len(single) > 2 else []
         single = w if len(w) == 1 else ""
         out += [] if single else [w]
-    return out + ([single] if len(single) > 1 else [])
+    return out + ([single] if len(single) > 2 else [])
 
 
 def _spellings(w: str) -> set[str]:
