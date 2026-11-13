@@ -2828,6 +2828,7 @@ def test_departments(env):
     assert put(22, 11, {"addDept": smm}).status_code == 200
     assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM", "color": "#18A9DB", "department": False}).status_code == 403  # Vice+ only
     assert c.post("/api/orgs/1/tags", headers=tma(22), json={"name": "Mine", "color": "#18A9DB", "department": True}).status_code == 403
+    assert c.delete(f"/api/orgs/1/tags/{smm}", headers=tma(22)).status_code == 403                    # nor deletes one
     assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM team", "color": "#18A9DB", "department": True}).status_code == 200  # a rename is fine
     c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": False})
     assert depts(11) == [] and smm in next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[11])["tags"]

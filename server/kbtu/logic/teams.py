@@ -333,6 +333,9 @@ def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> di
 
 def delete_tag(con, v: Viewer, oid: int, tid: int) -> dict:
     _may(con, v, oid, "people")
+    dept = one(con, "SELECT department FROM org_tags WHERE id = ? AND org_id = ?", tid, oid)
+    if dept and dept[0] and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
+        raise ApiError("forbidden")  # a department goes as it's unmarked: Vice+ only (save_tag)
     if not con.execute("DELETE FROM org_tags WHERE id = ? AND org_id = ?", (tid, oid)).rowcount:
         raise ApiError("not_found")
     return team_setup(con, v, oid)
