@@ -348,7 +348,7 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"])} if editor else x)
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"])} if editor else x)
     return out
 
 
@@ -453,6 +453,7 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
             raise ApiError("bad_input")  # out of the catalog and nobody's: removed from the club's list instead
         if c["org_id"] != oid:
             con.execute("UPDATE chats SET org_id = ?, main = 0 WHERE id = ?", (oid, cid))
+            chatmod.forget(con, cid)  # the old club's switch and record don't pass to the new one
             if c["main"] and (nxt := one(con, """SELECT id FROM chats WHERE org_id = ? AND kind = 'channel' AND url NOT LIKE '%/+%'
                     ORDER BY COALESCE(members, -1) DESC LIMIT 1""", c["org_id"])):  # the old org's next public channel
                 con.execute("UPDATE chats SET main = 1 WHERE id = ?", (nxt["id"],))
@@ -466,6 +467,7 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
 def _unlink(con, c: sqlite3.Row) -> str | None:
     """A chat off its org: its own row goes, a catalog row stays in the catalog, nobody's. A closed one waiting for the
     catalog only through its club goes too: nobody's, its invite link must not end up there. Its avatar, to remove if free."""
+    chatmod.forget(con, c["id"])
     if c["status"] == "org" or (c["status"] == "pending" and _closed(c)):
         con.execute("DELETE FROM chats WHERE id = ?", (c["id"],))
         return c["photo"]
@@ -557,6 +559,13 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
     return None
 
 
+def chat_held(con, tg_chat: int) -> bool:
+    """Some club holds this chat: a sync link, a card, an event (/all's answer to an admin of one nobody holds)."""
+    return bool(one(con, "SELECT 1 FROM chat_sync WHERE chat_id = ?", tg_chat)
+                or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat)
+                or one(con, "SELECT 1 FROM events WHERE chat_id = ? AND org_id IS NOT NULL", tg_chat))
+
+
 def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] | None:
     """/all in a group (bot._tag_all): whom to mention, when the sender holds a role in the club that holds the chat (President,
     Vice, Head, or any role of the club's own, a Vice Head too; an event's chat: the event's club), or is the group's own
@@ -582,6 +591,8 @@ def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] |
 
 def bot_left(con, tg_chat: int) -> None:
     """Our bot is out of a chat: its card comes from the t.me page again."""
+    for (cid,) in rows(con, "SELECT id FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat):
+        chatmod.forget(con, cid)
     con.execute("UPDATE chats SET tg_chat_id = NULL WHERE tg_chat_id = ? AND org_id IS NOT NULL", (tg_chat,))
 
 
@@ -605,7 +616,7 @@ def photo_free(con, path: str) -> bool:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import chatmod, core  # noqa: E402
 from .clubs import orgs  # noqa: E402
 from .seats import notify, notify_staff  # noqa: E402
 from .teams import invite  # noqa: E402

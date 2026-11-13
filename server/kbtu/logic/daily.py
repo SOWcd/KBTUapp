@@ -218,6 +218,7 @@ def stats_day(con) -> None:
     stats.forget(con)  # the anonymous usage counters: 180 days
     appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most
     mapflaws.sweep(con)
+    chatmod.sweep(con)  # swear warnings in clubs' groups: 90 days
     assistant.sweep(con)
     # the answers to an event's questions at sign-up go 30 days after it (the privacy policy's promise for them)
     con.execute("""UPDATE registrations SET answers = NULL WHERE answers IS NOT NULL AND event_id IN
@@ -318,7 +319,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatsync, mapflaws, stats  # noqa: E402
+from . import appeals, assistant, chatmod, chatsync, mapflaws, stats  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

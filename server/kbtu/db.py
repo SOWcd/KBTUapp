@@ -1672,6 +1672,22 @@ MIGRATIONS: list[tuple[int, str]] = [
     (162, "ALTER TABLE files ADD COLUMN taken_at REAL;"),
     # a check-in marked by hand from the student's badge QR (checkin.badge): who marked it
     (163, "ALTER TABLE qr_marks ADD COLUMN marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
+    # (Nov 13) a club's group moderated for swearing (logic/chatmod.py): chats.swear is its switch, off by default. A hit
+    # is a row: the chat, the person's Telegram id (and app id when known), the matched stem of our own list (never the
+    # message), when, its warning number (1..3), whether it muted. Nothing for clean messages; 90 days (daily).
+    (164, """ALTER TABLE chats ADD COLUMN swear INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE swear_hits (
+      id INTEGER PRIMARY KEY,
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      tg_id INTEGER NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      stem TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      warn INTEGER NOT NULL,
+      muted INTEGER NOT NULL DEFAULT 0) STRICT;
+    CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
+    CREATE INDEX swear_hits_by_user ON swear_hits(user_id);
+    CREATE INDEX chats_by_tg ON chats(tg_chat_id);"""),
 ]
 
 

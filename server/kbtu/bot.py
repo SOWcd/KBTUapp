@@ -27,7 +27,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, tgc, userbot, video
+from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, swear, texts, tgc, userbot, video
 from .config import Config
 from .logic import now, one, rows
 from .logic.account import _Taken
@@ -49,6 +49,10 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
 TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
 TAG_MARKS = tuple("\U0001F525 \u2B50 \u26A1 \U0001F3AF \U0001F680 \U0001F48E \U0001F389 \U0001F44B \U0001F4E3 \U0001F514 \u2728 \U0001F4A5 \U0001F31F \U0001F3C6 \U0001F388 \u2764 \U0001F499 \U0001F49A \U0001F49B \U0001F49C \U0001F9E1".split())  # the link text, one per person (no names): five different ones a message, the pack's animated ones when it has them
+SWEAR_CAP = 3               # a person's swear warnings a minute in a chat; past it (a flood) their messages only go
+SWEAR_CHAT_CAP = 10         # a chat's warnings a minute: a group takes about 20 messages a minute, the bot keeps its voice
+WARN_FOR = 60               # a swear warning stays this long, then the bot removes it
+_swore: dict[tuple[int, int], list[float]] = {}  # (chat, person; 0: the chat) -> this minute's warnings; per worker, pruned as read
 _tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
@@ -1173,6 +1177,7 @@ HELLO_EVERY = 60            # a group's bare /start@bot gets one answer a minute
 ALL_NO_TTL = 15             # "/all isn't yours" and the command it answers live this long; one such answer a chat in that time
 _denied: dict[int, float] = {}  # ponytail: as _hello below
 _hello: dict[int, float] = {}  # ponytail: per worker and never pruned (a few bytes a group); a table if it's ever abused
+_unlinked: dict[int, float] = {}  # the same for "/all" in a chat no club holds
 
 
 async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
@@ -1200,6 +1205,11 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
             me = await _call(cfg, http, "getChatMember", {"chat_id": chat["id"], "user_id": who}, 0)
             if me and me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator"):
                 people = logic.tag_all(con, chat["id"], who, admin=True)
+                if not people and not logic.chat_held(con, chat["id"]) and time.time() - _unlinked.get(chat["id"], 0) > HELLO_EVERY:
+                    _unlinked[chat["id"]] = time.time()  # a chat no club holds: its admin learns how to link it, once a minute
+                    lang = sender.get("language_code")
+                    await _send(cfg, http, {"chat_id": chat["id"], "text": texts.swear(lang if lang in ("kk", "en") else "ru", "unlinked"), "parse_mode": "HTML",
+                                            "reply_parameters": {"message_id": msg["message_id"], "allow_sending_without_reply": True}})
         if people is None:  # a club's chat, not theirs to call: say so, then both messages go (no litter)
             if time.time() - _denied.get(chat["id"], 0) > ALL_NO_TTL:
                 _denied[chat["id"]] = time.time()
@@ -1256,6 +1266,72 @@ async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lan
     for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
         if m:
             await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": m}, 0)
+
+
+async def _swear(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
+    """A club's group with its swear filter on (logic/chatmod.py): a new or edited message whose text or caption holds a
+    word of swear.py's lists is recorded (the stem, never the words) and goes; its author is warned, the third time muted
+    (_swear_act, beside the ears, a chat's acts one after another). Elsewhere, and for bots, channels and anonymous
+    admins, nothing is read. True: it was such a message (nothing else answers it)."""
+    chat, sender = msg.get("chat") or {}, msg.get("from") or {}
+    if chat.get("type") not in ("group", "supergroup") or not sender.get("id") or sender.get("is_bot") or msg.get("sender_chat") \
+            or not (msg.get("text") or msg.get("caption")) or not (cid := logic.chatmod.chat_on(con, chat["id"])):
+        return False
+    if not (stem := swear.find(msg.get("text") or msg.get("caption"))):
+        return False
+    t = time.monotonic()
+    mine, room = (_swore.setdefault(k, []) for k in ((chat["id"], sender["id"]), (chat["id"], 0)))
+    mine[:], room[:] = [x for x in mine if t - x < 60], [x for x in room if t - x < 60]
+    rid, n = 0, 0
+    if len(mine) < SWEAR_CAP and len(room) < SWEAR_CHAT_CAP:  # past either cap: only deleted, nothing counted
+        mine.append(t)
+        room.append(t)
+        rid, n = logic.chatmod.hit(con, cid, sender["id"], stem)
+    lang = sender.get("language_code")
+    tgc.spawn(_swear_act(cfg, http, chat["id"], msg["message_id"], sender["id"], rid, n, lang if lang in ("kk", "en") else "ru"), f"swear:{chat['id']}")
+    return True
+
+
+async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, tg: int, rid: int, n: int, lang: str) -> None:
+    """Delete, warn ("n of 3"), mute on the third (never a chat admin: Telegram refuses, and the warning says 3 of 3 and no
+    more); the warning goes after a minute. The bot's rights gone: no warning and no hit. Logs Telegram's word only."""
+    con = db.connect(cfg.db_path)
+    try:
+        r = await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
+        if not (r and r.get("ok")):
+            log.warning("swear: %s", str((r or {}).get("description"))[:120])
+            if rid:
+                logic.chatmod.undo(con, rid)
+            return
+        if not rid:
+            return
+        kind = "warn"
+        if n >= logic.chatmod.WARNS:
+            m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
+            if m and m.get("ok") and (m.get("result") or {}).get("status") not in ("creator", "administrator"):
+                no = dict.fromkeys(("can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
+                                    "can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
+                                    "can_add_web_page_previews"), False)
+                x = await _call(cfg, http, "restrictChatMember", {"chat_id": chat, "user_id": tg, "permissions": no,
+                                                                   "until_date": int(time.time()) + logic.chatmod.MUTE})
+                if x and x.get("ok"):
+                    logic.chatmod.muted(con, rid)
+                    kind = "mute"
+                else:
+                    log.warning("swear mute: %s", str((x or {}).get("description"))[:120])
+        sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": texts.swear(lang, kind, tg, min(n, logic.chatmod.WARNS)),
+                                                      "parse_mode": "HTML"})
+        if sent and sent.get("ok"):
+            t = asyncio.get_running_loop().create_task(_unsay(cfg, http, chat, sent["result"]["message_id"]))
+            tgc._tasks.add(t)
+            t.add_done_callback(tgc._tasks.discard)
+    finally:
+        con.close()
+
+
+async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> None:
+    await asyncio.sleep(WARN_FOR)
+    await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
 
 
 async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:
@@ -1355,7 +1431,8 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
 
 
 def _wanted(cfg: Config) -> str:
-    return json.dumps(["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
+    # edits: the forum's group, and a club's group with its swear filter on (an edit mustn't smuggle a word in)
+    return json.dumps(["message", "edited_message", "callback_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
                        # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
                        *(["message_reaction_count"] if cfg.forum_channel else []),
                        # someone joining or leaving a club's linked chat (logic/chatsync.py; sent only where the bot is an admin)
@@ -1448,7 +1525,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             msg = {}
             try:  # all of it: a locked database even in the ban check replayed the whole batch
                 offset = upd["update_id"] + 1
-                if "edited_message" in upd or "pre_checkout_query" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group; pre-checkouts are answered (above)
+                if not tgc.ours(cfg, upd) and await _swear(cfg, http, con, upd.get("message") or upd.get("edited_message") or {}):
+                    continue  # a club's group: a swear word, deleted (before the ban skip: the chat is everyone's)
+                if "edited_message" in upd or "pre_checkout_query" in upd or tgc.ours(cfg, upd):  # edits matter only there; pre-checkouts are answered (above)
                     continue
                 if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
                     try:

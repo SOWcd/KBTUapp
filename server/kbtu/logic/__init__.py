@@ -38,7 +38,7 @@ from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFF
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, cancel_casting, casting_state, castings, create_post, feature, hide_post, post_shape, post_shapes, posts,
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
-    add_chat, add_org_chat, approve_chat, bot_added, tag_all, chat_pick, pick_claim, bot_left, chat_card, chat_handle, chat_input, chat_link,
+    add_chat, add_org_chat, approve_chat, bot_added, chat_held, tag_all, chat_pick, pick_claim, bot_left, chat_card, chat_handle, chat_input, chat_link,
     chat_opened, chat_refreshed, chats, chats_gone, delete_chat, pending_chats, undo_chat, drop_org_chat, main_org_chat, may_chats,
     mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, SECTIONS, chat_links, known_chat,
     set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401
@@ -76,5 +76,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import appeals, assistant, chatsync, cohosts, crew, evreports, evteams, fchannel, gallery, inbox, mapflaws, search, stars, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import appeals, assistant, chatmod, chatsync, cohosts, crew, evreports, evteams, fchannel, gallery, inbox, mapflaws, search, stars, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

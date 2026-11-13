@@ -379,7 +379,7 @@ def test_review_fixes(env, monkeypatch):
 
 
 def test_switched_off_changes_nothing(env):
-    """Without FORUM_GROUP: no edits asked of Telegram, the round does nothing of this feature."""
+    """Without FORUM_GROUP: the round does nothing of this feature."""
     _, cfg = env
     asked = []
 
@@ -391,7 +391,7 @@ def test_switched_off_changes_nothing(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
             await bot.hear(cfg, http, 0)
     asyncio.run(go())
-    assert "edited_message" not in asked[0] and "message" in asked[0]
+    assert "message" in asked[0]  # edits are asked for anyway (a club's group's swear filter), and ignored here
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO tgc_saved (tg_id, body, at) VALUES (1, 'x', 0)")
     tick(cfg, Telegram(), con)
