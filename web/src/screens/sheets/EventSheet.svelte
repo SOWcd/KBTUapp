@@ -300,7 +300,7 @@
   function shareMine() {
     if (!e) return;
     haptic.tap();
-    shareCard({ kind: 'ev', id: String(id), mine: '1' }, `https://t.me/KBTUappBot?startapp=ev_${id}_${session.me?.qr?.split('_')[1] ?? ''}`, e.title)
+    shareCard({ kind: 'ev', id: String(id), mine: '1' }, `https://t.me/KBTUappBot?startapp=ev_${id}${session.me?.evRef ? '_' + session.me.evRef : ''}`, e.title)
       .then((sent) => { if (sent) say(t('event.myLinkSent'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

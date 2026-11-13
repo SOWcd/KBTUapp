@@ -32,3 +32,6 @@ def test_event_link_is_no_friend_invite(env, monkeypatch):
     assert c.post(f"/api/invite/{code}", headers=tma(92)).status_code == 404      # and no friendship
     c.post("/api/events/1/registration", headers=tma(92), json={"ref": code})
     assert con.execute("SELECT invited_by FROM registrations WHERE user_id = ?", (zhan["id"],)).fetchone()[0] == pres["id"]
+    # the plain t.me share (no cards in this Telegram) builds the same link from /api/me: never the badge's code
+    me = c.get("/api/me", headers=tma(90)).json()
+    assert me["evRef"] == code and code not in me["qr"]

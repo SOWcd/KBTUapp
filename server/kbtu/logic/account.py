@@ -460,6 +460,7 @@ def me(con, v: Viewer) -> dict:
         "relink": relink,
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
+        "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
@@ -1403,7 +1404,7 @@ from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
-from .seats import _remind, _ticket_code, joined, notify, promote  # noqa: E402
+from .seats import _remind, _ticket_code, ev_ref, joined, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402
 from . import gallery  # noqa: E402
 
