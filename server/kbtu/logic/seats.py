@@ -375,6 +375,13 @@ def school_ok(con, v: Viewer, e: sqlite3.Row) -> bool:
         or bool(one(con, ACCEPTED + " AND x.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?)", e["id"], v.id))  # a co-host's team
 
 
+def _school_unset(con, v: Viewer) -> bool:
+    """A verified student whose school isn't known (empty, or no KBTU school): the refusal says to set it in Settings."""
+    from .account import school_slug  # account imports this module
+    s = one(con, "SELECT school FROM students WHERE user_id = ?", v.id) if v.student else None
+    return bool(s) and school_slug(s["school"]) is None
+
+
 def sees_school(con, uid: int, e: sqlite3.Row) -> bool:
     """school_ok for someone who isn't the one asking: a friend invited, the bot's message to them (app.viewer's rule
     for a student: a verified row, not a hand-made one)."""
@@ -486,7 +493,7 @@ def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or not _visible(con, v, e):
         if e and e["school"] and _visible(con, v, e, school=False):
-            raise ApiError("forbidden", "school", {"school": e["school"]})  # by its link: whose it is, nothing else
+            raise ApiError("forbidden", "school", {"school": e["school"], **({"unset": True} if _school_unset(con, v) else {})})  # by its link: whose it is, nothing else
         raise ApiError("not_found")
     return e
 

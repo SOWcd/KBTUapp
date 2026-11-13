@@ -92,7 +92,14 @@ def test_nobody_else_sees_it_anywhere(env):
     # by its link: whose it is, and nothing else
     r = c.get(f"/api/events/{eid}", headers=tma(11))
     assert r.status_code == 403 and r.json() == {"error": "forbidden", "message": "school", "school": "site"}
-    assert c.get(f"/api/events/{eid}", headers=tma(12)).json()["message"] == "school"
+    assert c.get(f"/api/events/{eid}", headers=tma(12)).json() == {"error": "forbidden", "message": "school", "school": "site"}
+    # a verified student whose school isn't known (none, or no KBTU school): told to set it in Settings; nothing more
+    con.execute("UPDATE students SET school = NULL WHERE user_id = ?", (_uid(con, 12),))  # unverified: never
+    assert "unset" not in c.get(f"/api/events/{eid}", headers=tma(12)).json()
+    for school in (None, "", "DIT"):
+        con.execute("UPDATE students SET school = ? WHERE user_id = ?", (school, _uid(con, 11)))
+        assert c.get(f"/api/events/{eid}", headers=tma(11)).json() == {"error": "forbidden", "message": "school", "school": "site", "unset": True}
+    con.execute("UPDATE students SET school = ? WHERE user_id = ?", (BUSINESS, _uid(con, 11)))
     # the admin from Admin
     assert c.get(f"/api/events/{eid}", headers={**tma(14), "X-Staff-Event": str(eid)}).json()["title"] == TITLE
     # sign-up with the id, saving it, bringing a friend of another school
