@@ -1587,6 +1587,11 @@ def test_nick_and_photo(env):
     c.post("/api/events/1/comments", headers=A, json={"body": "Hi"})
     who = c.get("/api/events/1/comments", headers=P).json()["items"][0]["person"]
     assert (who["name"], who["realName"]) == ("Ali the Great", real)  # everyone: the nick first, the short name beside it
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0)", (ali["id"],))
+    lead = lambda h: next(x["person"] for x in c.get("/api/orgs/1", headers=h).json()["leaders"] if x["person"]["id"] == ali["id"])  # noqa: E731
+    assert lead(tma(96, "Guest"))["name"] == "Ali the Great" and "realName" not in lead(tma(96, "Guest"))  # a visitor who isn't a student: the nick alone (§8)
+    assert lead(P)["realName"] == real
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (ali["id"],))
     login(c, 95, "zed")
     stranger = c.get(f"/api/users/{ali['id']}", headers=tma(95, "Zed")).json()  # the nick rule: the lanyard shows the name to anyone
     assert (stranger["name"], stranger["nick"], stranger["realName"]) == ("Ali the Great", "Ali the Great", real)

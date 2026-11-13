@@ -90,6 +90,7 @@ async def conn(request: Request) -> AsyncIterator[sqlite3.Connection]:
     # async: taking a kept connection and giving it back are a queue's get and put, so they run on the loop; as a plain
     # generator FastAPI sent each into the thread pool, two of a request's four thread hops (perf round 4: -9% server CPU
     # per request under load)
+    logic.core.CALLER.set({})  # on the loop, so the route's threads share it (viewer fills it in)
     with request.app.state.pool.conn() as con:
         yield con
 
@@ -105,6 +106,8 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         raise ApiError("forbidden", "init_data")
     request.state.tg = tg
     v = _upsert(con, tg, cfg.admins)
+    if (caller := logic.core.CALLER.get()) is not None:
+        caller["student"] = v.student  # person_ref: the real name beside a nick only for students
     if (oid := request.headers.get("x-staff-org")) is not None:
         # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
         # without a role in it, and may fill it from the club's announcement (the AI, nothing stored). Only these routes; the draft is then run through X-Staff-Event like any other

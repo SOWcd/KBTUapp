@@ -7,6 +7,7 @@ import re
 import sqlite3
 import time
 import unicodedata
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 
@@ -279,12 +280,19 @@ def avatar_of(p: sqlite3.Row) -> str | None:
     return f"media/{p['own_photo'] or copy}.t.webp" if p["own_photo"] or copy else p["tg_photo_url"]
 
 
+# the request's caller (app.conn makes it, app.viewer fills it): {"student": bool}; None outside a request (the bot, jobs).
+# ponytail: a request-wide holder, not a Viewer passed to person_ref's 60-odd callers; pass it if one ever needs another rule
+CALLER: ContextVar[dict | None] = ContextVar("caller", default=None)
+
+
 def person_ref(p: sqlite3.Row) -> dict:
     # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
+    # a nick never hides the name from students (§4, §8); anyone else sees the nick alone (link_card's rule)
+    real = p["nick"] and (CALLER.get() or {}).get("student") is not False
     return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff,
-            **({"realName": short_name(p)} if p["nick"] else {}),  # a nick never hides the name (§4)
-            **({"i18n": {k: {"name": x} for k, x in GONE.items()}} if not p["first_name"] and not p["tg_first_name"] else name_i18n(p))}
+            **({"realName": short_name(p)} if real else {}),
+            **({"i18n": {k: {"name": x} for k, x in GONE.items()}} if not p["first_name"] and not p["tg_first_name"] else name_i18n(p) if real or not p["nick"] else {})}
 
 
 def door_at(e) -> int:
