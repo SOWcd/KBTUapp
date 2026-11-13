@@ -15,7 +15,7 @@
   // An appeal to the Student Government (server logic/appeals.py): an optional topic, the words as they are, Anonymous,
   // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). The draft stays on
   // this phone only (localStorage), never on the server. My appeals under it. The section's consent: asked once, on the
-  // first send or AI help. The funnel counts taps (lib/stats), never a word.
+  // first send or AI help. "Solved by your appeals" on top: the proof that writing changes things. The funnel counts taps (lib/stats), never a word.
   import { onMount } from 'svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -35,6 +35,7 @@
   import Field from '../../ui/Field.svelte';
   import Chip from '../../ui/Chip.svelte';
   import Notice from '../../ui/Notice.svelte';
+  import Solved from './Solved.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
 
@@ -108,6 +109,7 @@
 
 <Sheet {overlay} title={t('apl.row')} icon={Megaphone} full>
   <div class="page">
+    <Solved />
     <div class="chips" role="group" aria-label={t('apl.row')}>
       {#each TOPICS as k (k)}
         <Chip selected={topic === k} onclick={() => { haptic.select(); topic = topic === k ? null : k; }}>{t(`apl.t.${k}`)}</Chip>

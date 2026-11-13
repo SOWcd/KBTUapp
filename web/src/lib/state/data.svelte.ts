@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type TeamPick } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk } from '../teamConsent';
@@ -42,6 +42,7 @@ export const data = $state({
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
   appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
+  solved: [] as Solved[],                     // "Solved by your appeals": with my appeals, one request
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
@@ -213,7 +214,7 @@ export function volGone(e: unknown): boolean {
 }
 
 export async function loadAppeals(): Promise<void> {
-  try { data.appeals = await api.appeals(); } catch { /* offline: the last copy stays */ }
+  try { const r = await api.appeals(); data.appeals = r.items; data.solved = r.solved; } catch { /* offline: the last copy stays */ }
 }
 export async function loadSg(): Promise<void> {
   try { data.sg = await api.sgQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.sg = null; }

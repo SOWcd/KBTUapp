@@ -1,11 +1,12 @@
 <script lang="ts">
-  // The Student Government's panel (opened by its round button on the profile); for now its one tool, the queue of appeals (its granted people only, server appeals.queue): open, overdue, closed; an anonymous one never
-  // says who; the months' counts by topic (small ones merged by the server). Loaded with the app, fresh on open.
+  // The Student Government's panel (opened by its round button on the profile); its tools: the queue of appeals (its granted people only, server appeals.queue): open, overdue, closed; an anonymous one never
+  // says who; "Solved by your appeals" to add and delete (Solved.svelte); the months' counts by topic (small ones merged
+  // by the server). Loaded with the app, fresh on open.
   import { onMount } from 'svelte';
   import Inbox from '@lucide/svelte/icons/inbox';
   import Landmark from '@lucide/svelte/icons/landmark';
   import type { Appeal } from '../../lib/api';
-  import { data, loadSg } from '../../lib/state/data.svelte';
+  import { data, loadAppeals, loadSg } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
@@ -16,11 +17,12 @@
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import { statusOf, lineOf, headOf } from './Appeals.svelte';
+  import Solved from './Solved.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   type F = 'open' | 'overdue' | 'closed';
   let f = $state<F>('open');
-  onMount(() => { void loadSg(); });
+  onMount(() => { void loadSg(); void loadAppeals(); }); // the Solved feed fresh too (another SG member's adds)
   const late = (a: Appeal) => a.overdue && a.status !== 'closed';
   const shown = $derived((data.sg?.items ?? []).filter((a) => (f === 'closed' ? a.status === 'closed' : f === 'overdue' ? late(a) : a.status !== 'closed')));
 </script>
@@ -38,6 +40,7 @@
     {:else if data.sg}
       <EmptyState icon={Inbox} title={t('apl.empty')} inline />
     {/if}
+    <Solved edit />
     {#if data.sg?.months.length}
       <Group caption={t('apl.months')}>
         {#each data.sg.months as m (m.month)}

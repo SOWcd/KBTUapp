@@ -11,14 +11,14 @@ const LINK = new RegExp(`${B}[a-z][a-z0-9+.-]*://|${B}www\\.|${B}[\\p{L}\\p{N}][
 const TLDS = 'com|ru|kz|org|net|io|me|ly|gg|app|xyz|link|site|info|tv|co|be|to|dev|ai|su|uk|us|cc|pro|online|store|shop';
 const SITES = 't|telegram|tg|instagram|insta|tiktok|youtube|youtu|wa|vk|discord|x|twitter|facebook|fb|threads|linktr|bit|clck|vm';
 const SPACED = new RegExp(`${B}[a-z]{3,6}\\s*:\\s*/\\s*/|${B}www\\s*[.,]|[.,]\\s*(?:${TLDS})\\s*/|${B}(?:${SITES})\\s*[.,]\\s*(?:${TLDS})${E}|${B}(?:dot|\u0442\u043e\u0447\u043a\u0430|\u0442\u0447\u043a)\\s*(?:${TLDS})${E}`, 'iu');
-const BRACKET_DOT = /\s*[[({]\s*(?:\.|dot|\u0442\u043e\u0447\u043a\u0430)\s*[\])}]\s*/giu;
+export const BRACKET_DOT = /\s*[[({]\s*(?:\.|dot|\u0442\u043e\u0447\u043a\u0430)\s*[\])}]\s*/giu;
 const MENTION = new RegExp(`@[${W}]{3,}`, 'u');
 const PHONE = new RegExp(`\\+\\p{Nd}[\\p{Nd}\\s().-]{7,}\\p{Nd}|${B}[78][\\s(.-]*\\p{Nd}{3}[\\s).-]*\\p{Nd}{3}[\\s.-]*\\p{Nd}{2}[\\s.-]*\\p{Nd}{2}${E}`, 'u');
 const DIGITS = /\p{Nd}(?:[\s-]?\p{Nd}){9,}/gu;
 const SUM = /^[1-9]\p{Nd}{0,2}(?:\s\p{Nd}{3})*\s\p{Nd}00$/u;
 const MONEY = /^\s*(?:\u20b8|\u0442\u0433|\u0442\u0435\u043d\u0433|tg(?![\p{L}\p{N}_])|kzt(?![\p{L}\p{N}_]))/iu; // tenge right after it
 const SIGNED = /^[\p{Pd}−─━➖ー]/u;
-const HIDDEN = /[\p{Cf}\p{Co}\p{Cn}͏ᅟᅠㅤﾠ\u{e0100}-\u{e01ef}]/gu; // the server's invisible ones (_visible)
+export const HIDDEN = /[\p{Cf}\p{Co}\p{Cn}͏ᅟᅠㅤﾠ\u{e0100}-\u{e01ef}]/gu; // the server's invisible ones (_visible)
 
 // a run of ten digits or more, unless a price: one round sum or a range of two, each under ten digits, 12 in all, tenge after it
 const longNumber = (s: string) => [...s.matchAll(DIGITS)].some((m) => {
