@@ -765,17 +765,17 @@ SWEAR = {
            "off": "Фильтр мата выключен.",
            "warn": "{who} Сообщение удалено: в нём мат. Предупреждение {n} из 3.",
            "mute": "{who} Сообщение удалено: в нём мат. Предупреждение 3 из 3 — час без сообщений.",
-           "unlinked": "Этот чат не привязан к клубу. Привяжите его в Студии → Чаты — тогда президент, вице и главы смогут звать всех."},
+           "unlinked": "Этот чат не привязан к клубу. Привяжите его в Студии → Чаты — тогда все с ролью в клубе смогут звать всех."},
     "kk": {"on": "🧹 Балағат сүзгісі қосылды. Балағаты бар хабарламалар өшіріледі, әрқайсысына — ескерту. Аптасына үшеу — бір сағат хабарламасыз.",
            "off": "Балағат сүзгісі өшірілді.",
            "warn": "{who} Хабарлама өшірілді: онда балағат бар. Ескерту: {n}/3.",
            "mute": "{who} Хабарлама өшірілді: онда балағат бар. Ескерту: 3/3 — бір сағат хабарламасыз.",
-           "unlinked": "Бұл чат клубқа қосылмаған. Оны Студия → Чаттар бөлімінде қосыңыз — сонда президент, вице және басшылар барлығын шақыра алады."},
+           "unlinked": "Бұл чат клубқа қосылмаған. Оны Студия → Чаттар бөлімінде қосыңыз — сонда клубта рөлі барлар барлығын шақыра алады."},
     "en": {"on": "🧹 Swear filter on. Messages with swear words are removed, each with a warning. Three in a week: an hour without messages.",
            "off": "Swear filter off.",
            "warn": "{who} Message removed: it had a swear word. Warning {n} of 3.",
            "mute": "{who} Message removed: it had a swear word. Warning 3 of 3: an hour without messages.",
-           "unlinked": "This chat is not linked to a club. Link it in Studio → Chats, then the club's President, Vice and Heads can call everyone."},
+           "unlinked": "This chat is not linked to a club. Link it in Studio → Chats, then anyone with a role in the club can call everyone."},
 }
 
 
