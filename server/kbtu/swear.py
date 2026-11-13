@@ -4,8 +4,8 @@ innocent word: Russian stems count only at a word's start or after a known prefi
 "zastrakhuy" (insure!), "oskorblyat" (offend), "korablya", "khleb", "komanda" stay clean.
 
 Each word is tried in a few spellings: lower case, look-alike Latin letters and digits folded into Cyrillic (and the
-other way for the English list), Kazakh letters folded to their Russian twins, runs of 3+ same letters squeezed (to one
-and to two), single letters spaced or dotted apart joined ("b l y a"), one masked letter ("b*ya") tried as every letter.
+other way for the English list), Kazakh letters folded to their Russian twins, runs of the same letter squeezed (to one,
+and runs of 3+ to two), single letters spaced or dotted apart joined ("b l y a"), one masked letter ("b*ya") tried as every letter.
 The lists are \\u-escaped (the repo's hook keeps Cyrillic in the i18n files and texts.py); each line says it in Latin."""
 from __future__ import annotations
 
@@ -33,7 +33,6 @@ RU = (  # start of a word, or after a prefix
     # Kazakh, folded to Russian letters (q -> k, i -> i ...)
     "\u0441\u0438\u0433\u0435\u0439", "\u0441\u0438\u0433\u0435\u043c", "\u0441\u0438\u043a\u0442\u0438\u043c", "\u0441\u0438\u043a\u0442\u0438\u0440",  # sik-
     "\u043a\u043e\u0442\u0430\u043a",    # qotaq
-    "\u0436\u0430\u043b\u0430\u043f",    # zhalap
     "\u043a\u0430\u043d\u0448\u044b\u043a",   # qanshyq
 )
 RU_WORDS = ("\u0435\u0431",)  # a word alone: "yob tvoyu"
@@ -41,11 +40,14 @@ RU_WORDS = ("\u0435\u0431",)  # a word alone: "yob tvoyu"
 RU_ALLOW = ("\u0431\u043b\u044f\u0445", "\u0435\u0431\u043e\u043b",  # buckle, Ebola
             "\u043c\u0430\u043d\u0434\u0430\u0440\u0438\u043d", "\u043c\u0430\u043d\u0434\u0430\u0442", "\u043c\u0430\u043d\u0434\u0430\u043b",  # tangerine, mandate, mandala
             "\u0441\u0443\u043a\u0430\u0447",    # the surname Sukachev
-            "\u043a\u043e\u0442\u0430\u043a\u0443")   # Kotaku
+            "\u043a\u043e\u0442\u0430\u043a\u0443",   # Kotaku
+            "\u0431\u043b\u044f\u0448",    # blyashka (a plaque, a belt's badge)
+            "\u0441\u0443\u043a\u0438\u044f", "\u0441\u0443\u043a\u0438\u044e", "\u0441\u0443\u043a\u0438\u044b",  # sukiyaki; Kazakh suqiyu (to poke, to stare)
+            "\u043c\u0430\u043d\u0434\u0430\u0439")    # Kazakh mangday (forehead), folded
 EN = ("fuck", "shit", "cunt", "bitch", "asshole", "dickhead", "whore", "slut", "nigger", "nigga", "faggot",
       "blyat", "blyad", "pizd")  # anywhere in a word; the last three: Russian in Latin letters
 EN_WORDS = ("suka",)
-EN_ALLOW = ("scunthorp", "shiitak", "shitak", "niggard")
+EN_ALLOW = ("scunthorp", "shiitak", "shitak", "niggard", "snigger", "kshiti", "ashita")  # the last two: Kshitij, Japanese "tomorrow"
 
 # look-alikes: Latin and digits into Cyrillic, Kazakh into Russian; Cyrillic and digits into Latin
 _TO_CYR = str.maketrans({**dict(zip("abcehkmnoprtxyi", "\u0430\u0432\u0441\u0435\u043d\u043a\u043c\u043f\u043e\u0440\u0433\u0442\u0445\u0443\u0438")), "0": "\u043e", "3": "\u0437", "4": "\u0447", "6": "\u0431", "@": "\u0430",
@@ -54,7 +56,7 @@ _TO_LAT = str.maketrans({**dict(zip("\u0430\u0432\u0441\u0435\u043d\u043a\u043c\
                          "@": "a", "$": "s"})
 _GONE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff\u0301\u0300"))  # soft hyphen, zero widths, accents
 _WORD = re.compile(r"(?:[^\W_]|[@$*])+")  # letters and digits; @ $ * count inside a word
-_RUN3 = re.compile(r"(.)\1{2,}")
+_RUN2, _RUN3 = re.compile(r"(.)\1+"), re.compile(r"(.)\1{2,}")
 _ASCII = re.compile(r"[a-z]")
 _CYR = re.compile(r"[\u0400-\u04ff]")
 
@@ -89,7 +91,7 @@ def _spellings(w: str) -> set[str]:
     w = w.strip("*")
     if w.count("*") > 1:
         return set()
-    forms = {_RUN3.sub(r"\1", w), _RUN3.sub(r"\1\1", w)}
+    forms = {_RUN2.sub(r"\1", w), _RUN3.sub(r"\1\1", w)}
     if "*" in w and len(w) >= 3:  # one masked letter: every letter in its place
         forms = {f.replace("*", c) for f in forms for c in "\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u0439\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448\u0449\u044a\u044b\u044c\u044d\u044e\u044fabcdefghijklmnopqrstuvwxyz"}
     return forms
