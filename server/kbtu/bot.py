@@ -46,6 +46,9 @@ _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the 
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
+TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
+TAG_MARKS = ("\U0001F535", "\U0001F7E2", "\U0001F7E1", "\U0001F7E0", "\U0001F7E3")  # one per person, the link text (no names)
+_tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
 
@@ -1179,6 +1182,18 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         return
     words = str(msg.get("text") or "").split()
+    if words and re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?", words[0], re.I):
+        sender = msg.get("from") or {}
+        # the sender of this very message, a person: never a forward, an anonymous admin or a channel (sender_chat), an old one
+        if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
+                or msg.get("is_automatic_forward") or time.time() - int(msg.get("date") or 0) > FRESH or chat["id"] in _tagging:
+            return
+        if people := logic.tag_all(con, chat["id"], int(sender.get("id") or 0)):  # not theirs: silence, nothing to answer
+            r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
+            to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
+            _tagging.add(chat["id"])
+            tgc.spawn(_tag_all(cfg, http, chat["id"], to, people), f"all:{chat['id']}")
+        return
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
         sender = int((msg.get("from") or {}).get("id") or 0)
         # only the group's own admin links it (whoever added the bot as an admin is one), as for an event's chat
@@ -1215,6 +1230,27 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     con.execute("UPDATE events SET chat_link = ? WHERE id = ?", (r["result"]["invite_link"], e["id"]))
     await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=html.escape(e["title"])), "parse_mode": "HTML"})
+
+
+async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:
+    """/all: whom Telegram says is in the chat, five a message (it notifies only the first five mentions), each an emoji
+    linked by id (no username needed), as replies under `to`, paced for the group's limit; stops at the first refusal."""
+    try:
+        batch: list[int] = []
+        for i, tg in enumerate(people):
+            m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
+            if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
+                batch.append(tg)
+            if len(batch) == 5 or batch and i == len(people) - 1:
+                text = "".join(f'<a href="tg://user?id={t}">{TAG_MARKS[k]}</a>' for k, t in enumerate(batch))
+                sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML",
+                                   "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}, TAG_GAP)
+                if not (sent and sent.get("ok")):  # the network, no rights, the chat gone: no more of it
+                    log.warning("tag all: %s", str((sent or {}).get("description"))[:120])
+                    return
+                batch = []
+    finally:
+        _tagging.discard(chat)
 
 
 def _event_copy(cfg: Config, msg: dict) -> bool:
@@ -1477,6 +1513,23 @@ async def _postman(cfg: Config, http: httpx.AsyncClient) -> None:
         await asyncio.sleep(POLL)
 
 
+async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict, gap: float = SYNC_GAP) -> dict | None:
+    """A paced call beside the ears (the chat sync, /all): a 429 waits as told; None: the network, or still too fast."""
+    for _ in range(5):
+        await asyncio.sleep(gap)
+        try:
+            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)
+            answer = r.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            log.warning("%s: %s", method, type(exc).__name__)  # the type only: the URL holds the token
+            await asyncio.sleep(10)  # the network: again in a while, not in a tight loop
+            return None
+        if r.status_code != 429:
+            return answer
+        await asyncio.sleep(float((answer.get("parameters") or {}).get("retry_after", 5)))
+    return None
+
+
 async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
     """Clubs mirrored from their chats (CHAT_SYNC, logic/chatsync.py): whether to ask Telegram for chat_member updates, and
     the sweeps, a step at a time at about 4 calls a second; a 429 waits as told. Never inside a request or the postman."""
@@ -1484,19 +1537,7 @@ async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
     bot_id = int(cfg.bot_token.split(":")[0])
 
     async def call(method: str, params: dict) -> dict | None:
-        for _ in range(5):
-            await asyncio.sleep(SYNC_GAP)
-            try:
-                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)
-                answer = r.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                log.warning("chat sync: %s", type(exc).__name__)  # the type only: the URL holds the token
-                await asyncio.sleep(10)  # the network: the same people again in a while, not in a tight loop
-                return None
-            if r.status_code != 429:
-                return answer
-            await asyncio.sleep(float((answer.get("parameters") or {}).get("retry_after", 5)))
-        return None
+        return await _call(cfg, http, method, params)
     con = db.connect(cfg.db_path)
     while True:
         try:

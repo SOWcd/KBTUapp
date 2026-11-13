@@ -38,7 +38,7 @@ from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFF
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, cancel_casting, casting_state, castings, create_post, feature, hide_post, post_shape, post_shapes, posts,
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
-    add_chat, add_org_chat, approve_chat, bot_added, chat_pick, pick_claim, bot_left, chat_card, chat_handle, chat_input, chat_link,
+    add_chat, add_org_chat, approve_chat, bot_added, tag_all, chat_pick, pick_claim, bot_left, chat_card, chat_handle, chat_input, chat_link,
     chat_opened, chat_refreshed, chats, chats_gone, delete_chat, pending_chats, undo_chat, drop_org_chat, main_org_chat, may_chats,
     mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, SECTIONS, chat_links, known_chat,
     set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401

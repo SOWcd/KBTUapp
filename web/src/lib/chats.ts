@@ -28,6 +28,7 @@ export const compact = (n: number): string => new Intl.NumberFormat(i18n.lang ==
 export const APP_FOLDER = 'https://t.me/addlist/VtFWmJ1lMboxZjli';
 
 /** Studio's "Add our bot" to a club's chat (PLAN 86): a group by a start link that says which chat it is; a channel
- *  takes a bot only as an admin (the least: inviting, so Telegram tells the bot the chat's own link). */
+ *  takes a bot only as an admin (the least: inviting, so Telegram tells the bot the chat's own link); a group asks for the
+ *  rights every add-to-group link asks for (app.py's). */
 export const addBotLink = (c: { id: number; kind: Chat['kind'] }): string =>
-  c.kind === 'channel' ? 'https://t.me/KBTUappBot?startchannel&admin=invite_users' : `https://t.me/KBTUappBot?startgroup=oc_${c.id}`;
+  c.kind === 'channel' ? 'https://t.me/KBTUappBot?startchannel&admin=invite_users' : `https://t.me/KBTUappBot?startgroup=oc_${c.id}&admin=invite_users+delete_messages+restrict_members+pin_messages`;

@@ -83,7 +83,7 @@
 </script>
 
 <div class="oc">
-  <Group footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '')}>
+  <Group footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '') + (chats.some((c) => c.bot && c.kind === 'group') ? ' ' + t('oc.allNote') : '')}>
     {#each chats as c (c.id)}
       <Row dense title={c.title} subtitle={line(c)}>
         {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
