@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import time
 
 from ..db import tx
 
@@ -573,10 +574,7 @@ def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] |
     Telegram admin (`admin`: the bot asked Telegram). None: a club's chat, not theirs to call. Empty: a chat
     no club holds, or nobody to call. Who, as far as the app knows: a synced department chat its department, a club chat the club's members,
     an event's chat its going people; never the caller. The bot asks Telegram whether each is in the chat before tagging."""
-    link = one(con, "SELECT org_id, tag_id FROM chat_sync WHERE chat_id = ?", tg_chat)
-    card = one(con, "SELECT org_id FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat)
-    ev = one(con, "SELECT org_id FROM events WHERE chat_id = ? AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1", tg_chat)
-    oid = (link or card or ev or [None])[0]
+    link, card, oid = _holder(con, tg_chat)
     if not oid:
         return []
     if not admin and not one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? AND u.tg_id = ?
@@ -586,15 +584,76 @@ def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] |
         "SELECT user_id FROM org_members WHERE org_id = ?" if link or card else \
         "SELECT r.user_id FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.chat_id = ? AND e.org_id = ? AND r.status = 'going'"
     args = (link["tag_id"],) if link and link["tag_id"] else (oid,) if link or card else (tg_chat, oid)
-    return [r[0] for r in rows(con, f"""SELECT DISTINCT u.tg_id FROM users u WHERE u.id IN ({who}) AND u.tg_id > 0
+    app = [r[0] for r in rows(con, f"""SELECT DISTINCT u.tg_id FROM users u WHERE u.id IN ({who}) AND u.tg_id > 0
         AND u.tg_id != ? AND u.banned_at IS NULL ORDER BY u.id""", *args, tg_from)]
+    # and whom the bot saw in the chat (chat_seen), an app account or not
+    seen = [r[0] for r in rows(con, """SELECT tg_id FROM chat_seen WHERE chat_id = ? AND tg_id != ?
+        AND tg_id NOT IN (SELECT tg_id FROM users WHERE banned_at IS NOT NULL) ORDER BY tg_id""", tg_chat, tg_from)]
+    return list(dict.fromkeys(app + seen))
+
+
+def _holder(con, tg_chat: int) -> tuple:
+    """The club that holds a chat: (its chat_sync link, its chats card, the club's id or None)."""
+    link = one(con, "SELECT org_id, tag_id FROM chat_sync WHERE chat_id = ?", tg_chat)
+    card = one(con, "SELECT org_id FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat)
+    ev = one(con, "SELECT org_id FROM events WHERE chat_id = ? AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1", tg_chat)
+    return link, card, (link or card or ev or [None])[0]
+
+
+# Who the bot saw in a club's chat (/all calls them too). Per worker: whether a chat is a club's (looked up again
+# after HELD_TTL) and when each (chat, person) was last written, so a chatty group writes once a day a person.
+HELD_TTL = 600
+SEEN_EVERY = 86400
+SEEN_KEEP = 180 * 86400  # daily.stats_day forgets older ones
+_held: dict[int, tuple[bool, float]] = {}
+_wrote: dict[tuple[int, int], float] = {}  # ponytail: per worker, cleared whole at 100k pairs; fine at KBTU's size
+
+
+def seen(con, tg_chat: int, user: dict | None) -> None:
+    """A person wrote or joined in a chat: remembered when a club holds it. Never a bot; only Telegram's id."""
+    tg = int((user or {}).get("id") or 0)
+    if tg <= 0 or (user or {}).get("is_bot"):
+        return
+    t = time.time()
+    if t - _wrote.get((tg_chat, tg), 0) < SEEN_EVERY:
+        return
+    held = _held.get(tg_chat)
+    if not held or t - held[1] > HELD_TTL:
+        held = _held[tg_chat] = (bool(_holder(con, tg_chat)[2]), t)
+    if not held[0]:
+        return
+    if len(_wrote) > 100_000:
+        _wrote.clear()
+    con.execute("""INSERT INTO chat_seen (chat_id, tg_id, seen_at) VALUES (?, ?, ?)
+        ON CONFLICT (chat_id, tg_id) DO UPDATE SET seen_at = excluded.seen_at""", (tg_chat, tg, int(t)))
+    _wrote[(tg_chat, tg)] = t
+
+
+def unseen(con, tg_chat: int, tg: int) -> None:
+    """Someone left the chat (or Telegram says they aren't in it): forgotten."""
+    con.execute("DELETE FROM chat_seen WHERE chat_id = ? AND tg_id = ?", (tg_chat, tg))
+    _wrote.pop((tg_chat, tg), None)
+
+
+def seen_moved(con, old: int, new: int) -> None:
+    """A group turned supergroup: who was seen moves with it."""
+    con.execute("INSERT OR IGNORE INTO chat_seen (chat_id, tg_id, seen_at) SELECT ?, tg_id, seen_at FROM chat_seen WHERE chat_id = ?", (new, old))
+    _forget_chat(con, old)
+
+
+def _forget_chat(con, tg_chat: int) -> None:
+    con.execute("DELETE FROM chat_seen WHERE chat_id = ?", (tg_chat,))
+    _held.pop(tg_chat, None)
+    for k in [k for k in _wrote if k[0] == tg_chat]:
+        del _wrote[k]
 
 
 def bot_left(con, tg_chat: int) -> None:
-    """Our bot is out of a chat: its card comes from the t.me page again."""
+    """Our bot is out of a chat: its card comes from the t.me page again; whom it saw there is forgotten."""
     for (cid,) in rows(con, "SELECT id FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat):
         chatmod.forget(con, cid)
     con.execute("UPDATE chats SET tg_chat_id = NULL WHERE tg_chat_id = ? AND org_id IS NOT NULL", (tg_chat,))
+    _forget_chat(con, tg_chat)
 
 
 def chat_card(con, cid: int, card: dict) -> str | None:

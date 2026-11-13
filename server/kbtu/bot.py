@@ -1192,7 +1192,15 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         logic.chatmod.stale()  # its swear filter goes on under the new id at once
+        logic.chatlist.seen_moved(con, chat["id"], new)
         return
+    # who is in a club's chat, for /all: a person who writes or joins (never an anonymous admin or a channel), forgotten on leaving
+    if not msg.get("sender_chat"):
+        logic.chatlist.seen(con, chat["id"], msg.get("from"))
+    for u in msg.get("new_chat_members") or []:
+        logic.chatlist.seen(con, chat["id"], u)
+    if gone := (msg.get("left_chat_member") or {}).get("id"):
+        logic.chatlist.unseen(con, chat["id"], int(gone))
     words = str(msg.get("text") or "").split()
     # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
     # "\u043a\u043e\u043b\u043b" first in a message, "call" only as the whole message (it starts ordinary English sentences)
@@ -1369,12 +1377,15 @@ async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> N
 async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:
     """/all: whom Telegram says is in the chat, five a message (it notifies only the first five mentions), each an emoji
     linked by id (no username needed), as replies under `to`, paced for the group's limit; stops at the first refusal."""
+    gone: list[int] = []
     try:
         batch: list[int] = []
         for i, tg in enumerate(people):
             m = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": tg})
             if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
                 batch.append(tg)
+            elif m and m.get("ok"):  # Telegram says not in the chat: forgotten if the bot remembered them
+                gone.append(tg)
             if len(batch) == 5 or batch and i == len(people) - 1:
                 marks = random.sample(TAG_MARKS, len(batch))
                 body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
@@ -1387,6 +1398,13 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, peo
                 batch = []
     finally:
         _tagging.discard(chat)
+        if gone:
+            con = db.connect(cfg.db_path)
+            try:
+                for tg in gone:
+                    logic.chatlist.unseen(con, chat, tg)
+            finally:
+                con.close()
 
 
 def _event_copy(cfg: Config, msg: dict) -> bool:
@@ -1563,6 +1581,11 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
                     try:
+                        new, where = cm.get("new_chat_member") or {}, (cm.get("chat") or {}).get("id")
+                        if where and logic.chatsync.in_chat(new):  # /all's memory of who is in a club's chat (logic/chatlist.py)
+                            logic.chatlist.seen(con, where, new.get("user"))
+                        elif where and new.get("status") in ("left", "kicked"):
+                            logic.chatlist.unseen(con, where, int((new.get("user") or {}).get("id") or 0))
                         logic.chatsync.member_update(con, cm, upd["update_id"])
                     except sqlite3.Error as exc:
                         log.warning("chat sync: %s", type(exc).__name__)

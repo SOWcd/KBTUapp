@@ -214,6 +214,7 @@ def stats_day(con) -> None:
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
+    con.execute("DELETE FROM chat_seen WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))  # /all's memory: 180 days
     forum_sweep(con)
     stats.forget(con)  # the anonymous usage counters: 180 days
     appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most
@@ -319,7 +320,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatmod, chatsync, mapflaws, stats  # noqa: E402
+from . import appeals, assistant, chatlist, chatmod, chatsync, mapflaws, stats  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

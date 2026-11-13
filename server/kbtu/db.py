@@ -1690,6 +1690,13 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
     CREATE INDEX swear_hits_by_user ON swear_hits(user_id);
     CREATE INDEX chats_by_tg ON chats(tg_chat_id);"""),
+    # (Nov 13) /all calls who the bot saw in a club's chat too (Telegram gives bots no member list): Telegram ids
+    # alone, no names or words; forgotten on leaving, with the chat, and 180 days after they were last seen
+    (165, """CREATE TABLE chat_seen (
+      chat_id INTEGER NOT NULL,
+      tg_id INTEGER NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;"""),
 ]
 
 

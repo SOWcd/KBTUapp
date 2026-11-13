@@ -1217,7 +1217,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # the channel's comments by my Telegram id (no foreign key: kept before anyone signed in): my saved text, a
         # warning or a ban on record, a copy of mine reported before the account knew it
         tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
-        for t in ("tgc_saved", "tgc_strangers"):
+        for t in ("tgc_saved", "tgc_strangers", "chat_seen"):  # chat_seen: /all's memory of me in clubs' chats
             con.execute(f"DELETE FROM {t} WHERE tg_id = ?", (tg,))
         # one still to come out of the group (deleting, or in the moderators' queue) still does: its ids, nothing more
         con.execute("""INSERT OR IGNORE INTO tgc_undel (chat_id, msg_id, at) SELECT chat_id, msg_id, ? FROM tgc_comments
