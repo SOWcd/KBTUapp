@@ -51,7 +51,7 @@ def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
 
 
 ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
-    ("regular", "trophy_3d", (5, 15, 30, 50), False), ("streak", "fire_3d", (2, 4, 8, 16), False),
+    ("regular", "trophy_3d", (5, 15, 30, 50), False),  # "streak" (weeks in a row) is off the list: owner, Nov 13 (its counting stays, _streak)
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
     ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
