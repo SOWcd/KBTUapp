@@ -274,6 +274,9 @@ export interface Api {
   clubScreen(org: Id, title: string, who: 'club' | 'all' | Id): Promise<import('./types').ScreenSession>; // a club's own session, no event (who runs its sessions; capped); who: the expected list frozen now (a tag's id: its people)
   screenBadge(id: Id, qr: string): Promise<{ person: string; done: boolean }>;      // marked by hand: a student's badge QR scanned by who runs it
   screenAbsent(id: Id): Promise<string[]>;                                           // the expected who haven't come: names (the host)
+  screenPeople(id: Id): Promise<{ came: string[]; other: string[]; absent: string[] }>; // the host's three lists: the members who came, who came not on the list, the members who haven't
+  crewScreen(event: Id, title: string): Promise<import('./types').ScreenSession>;     // an event's team marked: its club's session, made once (the one there is after)
+  crewScreenOf(event: Id): Promise<import('./types').ScreenSession | null>;          // ... the one there is, if any
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean, abuse?: boolean, rule?: TgcRule): Promise<void>; // admin: take it down or leave it (a Telegram comment: the terms clause it broke, or the reports were abuse)

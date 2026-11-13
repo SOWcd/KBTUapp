@@ -87,7 +87,7 @@ export const sheets = {
   helperQr: (_session: Id, _event: Id | null, _scanner: boolean) => {},
   /** the QR an organizer shows to let someone help */
   handQr: (_session: Id) => {},
-  screens: (_code?: string, _event?: Id, _seed?: ScreenSession, _org?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session; seed: that session alone (the capsule); org: a new session of that club (Studio)
+  screens: (_code?: string, _event?: Id, _seed?: ScreenSession, _org?: Id, _crew?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session; seed: that session alone (the capsule); org: the page from that club's Studio; crew: an event's team, made and started
   /** Profile's "Big screen": the scanner for a computer's pairing QR; a helper's own QR */
   bigScreen: () => {},
   /** Studio → an event: the organizer's screen (money, people, tools); org: a co-host's Studio (its report alone) */

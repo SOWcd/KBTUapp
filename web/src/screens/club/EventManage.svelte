@@ -18,7 +18,7 @@
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import DoorClosed from '@lucide/svelte/icons/door-closed';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type ScreenSession, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -71,6 +71,12 @@
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
   let crewN = $state<number | null>(null);
   $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; crewN = x.crew ? x.crew.length : null; }).catch(() => {}); });
+  // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
+  // with the page and every 10 s (it runs in the page above this one)
+  const teamMark = $derived(!co && !staff && may(mem, 'events') && !!e && e.status !== 'cancelled');
+  let team = $state<ScreenSession | null>(null);
+  $effect(() => { void tick; if (teamMark) api.crewScreenOf(id).then((x) => (team = x)).catch(() => {}); });
+  const teamLine = $derived(!team ? undefined : t(team.ended ? 'scr.teamDone' : 'scr.teamLive', { n: team.expected ? team.came ?? 0 : team.done, m: team.expected }));
   async function openChat() {
     haptic.tap();
     if (chat) { openLink(chat); return; }
@@ -223,6 +229,8 @@
           {/if}
           {#if live && !e.guestHost}{#if inner(e)}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}<!-- a public one's is in the registration mode -->
             <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          <!-- the team marked (owner, Nov 13: a Vice opens the event, "Mark the team"): the club's own session, apart from the guests' -->
+          {#if teamMark}<Row icon={UserCheck} title={t('scr.team')} subtitle={teamLine} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
           <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
           {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
