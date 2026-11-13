@@ -34,6 +34,7 @@
   import { dateInput, dayMonth, nowTs } from '../../lib/time';
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
+  import { may } from '../../lib/perms';
   import Hero from './Hero.svelte';
   import { myShown } from '../../lib/state/looks.svelte';
   import Invite from './Invite.svelte';
@@ -333,8 +334,9 @@
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <Row icon={MessageCircleHeart} title={t('psy.kbtu')}>{#snippet trailing()}
       <Button kind="secondary" size="s" onclick={() => openLink(PSYCHOLOGIST)}><span class="bk">{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></span></Button>{/snippet}</Row>
-    <!-- who has something to run (server account.me): pairs the computer showing /show -->
-    {#if session.me?.bigScreen}<Row icon={MonitorUp} title={t('scr.big')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
+    <!-- the check-in page lives in Studio; here only for whom Studio doesn't lead there (a door handed over, the app's
+         admin, while a session is open: server account.me) and a helper's own QR -->
+    {#if session.me?.bigScreen === 'qr' || (session.me?.bigScreen === 'pair' && !session.me.memberships.some((m) => may(m, 'events')))}<Row icon={MonitorUp} title={t('scr.page')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
     <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer (owner, Nov 11);

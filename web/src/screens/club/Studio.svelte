@@ -379,8 +379,8 @@
       <Group>
         {#if m.channel !== undefined}<Row icon={Megaphone} title={t('studio.channelShort')} subtitle={m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
         {#if staff}<Row icon={Plus} title={t('studio.newShort')} subtitle={t('studio.newSub')} accessory="chevron" onclick={() => sheets.editor(m.org.id)} />{/if}
-        <!-- attendance now, no event (a meeting starting in minutes): a session of the club's own, then Start or Show QR (server checkin.club_new) -->
-        {#if staff}<Row icon={QrCode} title={t('scr.start')} subtitle={t('scr.newSub')} accessory="chevron" onclick={() => sheets.screens(undefined, undefined, undefined, m.org.id)} />{/if}
+        <!-- "Check-in": the check-in page (a meeting starting in minutes, a laptop's /show, the sessions I run; server checkin.club_new) -->
+        {#if staff}<Row icon={QrCode} title={t('scr.page')} subtitle={t('scr.pageSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<Row icon={Megaphone} title={t('casting.mark')} subtitle={t('studio.castingSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id, undefined, true)} />{/if}
         {#if may(m, 'posts')}<Row icon={PenLine} title={t('studio.postShort')} subtitle={t('studio.postSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id)} />{/if}
