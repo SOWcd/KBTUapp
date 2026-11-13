@@ -5,6 +5,7 @@
   // `preview`: the editor's unsaved form, shown exactly as students will see it (no team tools, buttons inert).
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import Share from '@lucide/svelte/icons/share';
+  import Lock from '@lucide/svelte/icons/lock';
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import Clock from '@lucide/svelte/icons/clock';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
@@ -60,7 +61,7 @@
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets, registration } from '../../lib/state/sheets';
   import { focusPos } from '../../lib/photo';
-  import { nameOf } from '../../lib/short';
+  import { nameOf, schoolName, shortOf } from '../../lib/short';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -74,7 +75,9 @@
   let { overlay, id, preview, from, album }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null; album?: boolean } = $props();
 
   let detail = $state<EventFull | null>(null);
-  $effect(() => { if (!preview) eventDetails(id).then((d) => (detail = d)).catch(() => {}); });
+  // a school's own event opened by another school's student (its link): whose it is, nothing else (server seats._event)
+  let onlyFor = $state('');
+  $effect(() => { if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { if (x instanceof ApiErr && x.message === 'school') onlyFor = String(x.data.school ?? ''); }); });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
@@ -327,7 +330,8 @@
       {/if}
       <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
       {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
-      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}</div>
+      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
+      {#if e.school}<span class="tag"><Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag></span>{/if}</div>
     </div>
 
     <div class="head">
@@ -576,6 +580,8 @@
     {/if}
     </div>
     {/if}
+  {:else if onlyFor}
+    <EmptyState icon={Lock} text={t('event.schoolOnlyGone', { school: schoolName(onlyFor) })} />
   {/if}
 
   {#snippet footer()}

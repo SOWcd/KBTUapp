@@ -29,6 +29,7 @@
   import CalendarCheck from '@lucide/svelte/icons/calendar-check';
   import TagIcon from '@lucide/svelte/icons/tag';
   import Phone from '@lucide/svelte/icons/phone';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Handshake from '@lucide/svelte/icons/handshake';
@@ -341,7 +342,11 @@
     });
   });
 
+  // "Only for <school>" (server organizing._school_only): a school's own org alone; sent once touched, else kept
+  const school = $derived([data.orgs.find((o) => o.id === org) ?? mine?.org].find((o) => o?.kind === 'school'));
+  let schoolOnly = $state<boolean>();
   const input = (): EventInput => ({
+    ...(schoolOnly === undefined ? {} : { schoolOnly }),
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     ...(asStaff && !lent ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
@@ -717,6 +722,9 @@
         {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
     </Group>
     {/if}
+    {#if school}<Group footnote={t('ed.schoolOnlyHint')}>
+      <Row icon={GraduationCap} title={t('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
+    </Group>{/if}
 
     <Group caption={t('ex.more')}>
       {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}

@@ -12,6 +12,7 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import { inner } from '../lib/perms';
+  import { shortOf } from '../lib/short';
 
   let { e, showDate = false, dateLine = '', onopen }: { e: EventCard; showDate?: boolean; dateLine?: string; onopen?: () => void } = $props();
 
@@ -41,6 +42,7 @@
       {:else if full}<Tag tone="neutral">{t('event.full')}</Tag>
       {:else if e.guestHost}<Tag tone="neutral">{t('event.partner')}</Tag>
       {:else if e.visibility === 'members'}<Tag tone="accent">{t('event.teamOnly')}</Tag>
+      {:else if e.school}<Tag tone="neutral">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>
       {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
       {#if e.friends.length && !cancelled}
         <span class="fr">

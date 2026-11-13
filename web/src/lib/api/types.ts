@@ -379,6 +379,7 @@ export interface EventCard {
   leadersFrom?: 'president' | 'vice' | 'head' | null; // a leaders meeting: the lowest role invited
   meeting?: boolean;            // a club meeting (§2b): team-only, the whole club or one tag expected to answer and come
   firstYear: boolean;
+  school?: string;              // a school's own event: its slug; only that school's students see it (server seats.school_ok)
   needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
   form?: Question[] | null;     // the event's own questions at sign-up, answered in the same tap
   externalUrl: string | null;
@@ -520,6 +521,7 @@ export interface EventInput {
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
   lateSignup?: boolean;        // open until the end instead (free, uncapped, public only); left out = off
   firstYear: boolean;
+  schoolOnly?: boolean;        // only the host school's students see it (a school's own org alone); left out: kept
   needsPhone?: boolean;        // sign-up asks for the phone if none is kept
   form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none
   volunteers?: number | null;  // how many volunteers it needs; null: none

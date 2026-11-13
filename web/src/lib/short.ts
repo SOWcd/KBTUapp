@@ -12,6 +12,9 @@ export const shortOf = (o: Pick<OrgRef, 'name' | 'abbr'> & { kind?: OrgRef['kind
 /** An org's name in a list or a card: a school by its abbreviation, a club in full. */
 export const nameOf = (o: Pick<OrgRef, 'name' | 'abbr' | 'kind'>): string => (o.kind === 'school' ? shortOf(o) : o.name);
 
+/** A school's short name by its slug (an event only for its students), the slug itself until the orgs are in. */
+export const schoolName = (slug: string): string => { const o = data.orgs.find((x) => x.kind === 'school' && x.slug === slug); return o ? shortOf(o) : slug.toUpperCase(); };
+
 /** A name split before its last word, the space kept on the first part: what follows the word (a mark) stays with it. */
 export const lastWord = (s: string): [string, string] => { const i = s.lastIndexOf(' ') + 1; return [s.slice(0, i), s.slice(i)]; };
 
