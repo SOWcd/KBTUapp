@@ -28,7 +28,6 @@
   import Crown from '@lucide/svelte/icons/crown';
   import CalendarCheck from '@lucide/svelte/icons/calendar-check';
   import TagIcon from '@lucide/svelte/icons/tag';
-  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import Phone from '@lucide/svelte/icons/phone';
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
@@ -499,6 +498,8 @@
   // the rows' values
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
   const tickets = $derived(!isMeeting && !f.partner);
+  // "Questions at sign-up": "Phone, 2 questions" / "Phone" / "No"
+  const askVal = $derived([f.needsPhone ? t('ed.formPhone') : '', f.form.length ? tn('ed.formN', f.form.length) : ''].filter(Boolean).join(', ') || t('ex.no'));
   const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
   const regVal = $derived(regMode === 'end' ? t('ex.untilEnd') : regMode === 'date' && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
   const dayText = $derived(Number.isFinite(startTs) ? `${weekdayShort(startTs)}, ${dayMonthShort(startTs)}` : '—');
@@ -613,6 +614,8 @@
       <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
       <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
+    <!-- the preview: a round eye beside the cover, clear of Telegram's own buttons in the bar above (owner, Nov 13) -->
+    <span class="pv"><IconButton icon={Eye} label={t('ed.preview')} onclick={showPreview} /></span>
     {#if staff}<Notice icon={ShieldCheck} title={clubNames[0]} text={t('mg.asStaff')} />{/if}
     {#if !id && session.board}
       <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
@@ -661,10 +664,11 @@
       </Group>
     {/if}
 
+    <!-- who it is for; "for first-years" is gone from the editor (owner, Nov 13: an event that has it keeps it, sent back
+         as it is), the phone is asked in "Questions at sign-up" -->
+    {#if !f.partner && !plain}
     <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
-      {#if !f.partner}
-        {#if plain}<!-- a plain public event alone (the server's rule) -->
-        {:else if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
+        {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
         {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
         {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
         {#if f.teamOnly && tagsRead}
@@ -673,23 +677,18 @@
         {/if}
         <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
         {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
-      {/if}
-      {#if tickets}
-        <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />
-        <Row icon={Phone} title={t('ed.needsPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} />
-      {/if}
     </Group>
+    {/if}
 
     <Group caption={t('ex.more')}>
       {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
-      {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
+      {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && err.teams ? '' : f.teams && teamsOk ? `${f.teamMin}–${f.teamMax}` : t('ex.no')} invalid={tried && !!err.teams} accessory="chevron" onclick={() => open('teams')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
-      {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
+      {#if canPartner && !isMeeting && saved?.guestHost}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
       {#if full && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
-      <Row icon={Eye} title={t('ed.preview')} accessory="chevron" onclick={showPreview} />
     </Group>
 
     <!-- the form's end, as Luma's Create (owner, Nov 2: no floating bar over the form) -->
@@ -837,7 +836,10 @@
           </div>
 
         {:else if pick === 'form'}
-          <!-- the event's own questions at sign-up (Oct 30): up to five, text or a choice; with the forum's policy section -->
+          <!-- what a participant is asked, in one place (owner, Nov 13): the phone first, a ready-made one; then the event's
+               own questions (Oct 30): up to five, text or a choice; with the forum's policy section -->
+          <Group footnote={t('ed.formPhoneHint')}><Row icon={Phone} title={t('ed.formPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} /></Group>
+          {#if session.board}
           {#each f.form as q, i (i)}
             <div class="qc">
               <div class="qrow"><Field label={t('cast.qText')} bind:value={q.label} maxlength={80} placeholder={t('ed.formQ')} />
@@ -851,6 +853,7 @@
           {#if f.form.length < 5}<span class="lone"><Button kind="tinted" size="s" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>
             {#snippet icon()}<Plus size={16} />{/snippet}{t('ed.formAdd')}</Button></span>{/if}
           <p class="hint">{t('ed.formHint')}</p>
+          {/if}
 
         {:else if pick === 'vol'}
           <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
@@ -956,6 +959,7 @@
   .mk { padding: 6px var(--s-3); border-radius: var(--r-full); border: 1.5px dashed var(--text-3); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
   .mk:active { background: var(--fill); }
 
+  .pv { position: absolute; top: var(--s-3); right: var(--gutter); z-index: 1; }
   .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
   .art:active { transform: scale(0.98); }
   .art.busy { opacity: 0.6; }
