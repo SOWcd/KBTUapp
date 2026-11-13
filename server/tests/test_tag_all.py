@@ -33,6 +33,7 @@ class _Http:
 
 def _setup(c, cfg, monkeypatch):
     monkeypatch.setattr(bot, "TAG_GAP", 0)
+    monkeypatch.setattr(bot, "ALL_NO_TTL", 0)
     monkeypatch.setattr(bot, "SYNC_GAP", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
     for tg in (20, 21, 31, 32, 33, 34, 35, 36, 37, 99):
@@ -84,7 +85,8 @@ def test_silence_for_others(env, monkeypatch):
          _msg(20, text="/all@SomeOtherBot"),
          _msg(20, sender_chat={"id": -100}), {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}},  # anonymous admin
          _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5))
-    assert http.sent == []
+    # nobody is tagged; the member and the stranger in the club's chat are told it isn't theirs, the rest is silence
+    assert not any("tg://" in x.get("text", "") for x in http.sent) and sum("text" in x for x in http.sent) == 2
 
 
 def test_one_run_at_a_time_and_429(env, monkeypatch):
@@ -100,5 +102,7 @@ def test_group_admin_tags(env, monkeypatch):
     """A plain member who is the group's own Telegram admin may call too; a plain member not."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    assert _run(cfg, con, _Http(), _msg(31)) == []
+    http = _Http()
+    _run(cfg, con, http, _msg(31))   # no rights: told so, then the command and the answer are deleted
+    assert len(http.sent) == 2 and "tg://" not in http.sent[0]["text"] and http.sent[1] == {"chat_id": -100, "message_id": 7}
     assert len(_run(cfg, con, _Http(admins={31}), _msg(31))) == 2

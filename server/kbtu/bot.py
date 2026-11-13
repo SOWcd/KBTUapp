@@ -1169,6 +1169,8 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
 
 
 HELLO_EVERY = 60            # a group's bare /start@bot gets one answer a minute
+ALL_NO_TTL = 15             # "/all isn't yours" and the command it answers live this long; one such answer a chat in that time
+_denied: dict[int, float] = {}  # ponytail: as _hello below
 _hello: dict[int, float] = {}  # ponytail: per worker and never pruned (a few bytes a group); a table if it's ever abused
 
 
@@ -1194,7 +1196,11 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
             me = await _call(cfg, http, "getChatMember", {"chat_id": chat["id"], "user_id": who}, 0)
             if me and me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator"):
                 people = logic.tag_all(con, chat["id"], who, admin=True)
-        if people:  # not theirs: silence, nothing to answer
+        if people is None:  # a club's chat, not theirs to call: say so, then both messages go (no litter)
+            if time.time() - _denied.get(chat["id"], 0) > ALL_NO_TTL:
+                _denied[chat["id"]] = time.time()
+                tgc.spawn(_all_no(cfg, http, chat["id"], msg["message_id"], sender.get("language_code")), f"allno:{chat['id']}")
+        elif people:
             r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
             to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
             _tagging.add(chat["id"])
@@ -1236,6 +1242,16 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     con.execute("UPDATE events SET chat_link = ? WHERE id = ?", (r["result"]["invite_link"], e["id"]))
     await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=html.escape(e["title"])), "parse_mode": "HTML"})
+
+
+async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None) -> None:
+    """/all from someone who may not: a template under their command, then both are deleted (theirs: if the bot may)."""
+    text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", "all_no")
+    sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
+    await asyncio.sleep(ALL_NO_TTL)
+    for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
+        if m:
+            await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": m}, 0)
 
 
 async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, people: list[int]) -> None:

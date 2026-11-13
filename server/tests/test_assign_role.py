@@ -62,6 +62,6 @@ def test_tag_all_any_role(env):
     con.execute("INSERT INTO chat_sync (chat_id, org_id, kind, created_at) VALUES (-100, 1, 'main', 0)")
     con.commit()
     assert sorted(logic.chatlist.tag_all(con, -100, 22)) == [20, 23]
-    assert logic.chatlist.tag_all(con, -100, 23) == []
+    assert logic.chatlist.tag_all(con, -100, 23) is None
     assert sorted(logic.chatlist.tag_all(con, -100, 23, admin=True)) == [20, 22]   # the group's Telegram admin
     assert logic.chatlist.tag_all(con, -200, 23, admin=True) == []   # a chat no club holds
