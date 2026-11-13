@@ -36,6 +36,9 @@ def _setup(c, cfg, monkeypatch):
     monkeypatch.setattr(bot, "ALL_NO_TTL", 0)
     monkeypatch.setattr(bot, "SYNC_GAP", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
+    monkeypatch.setattr(bot, "ALL_AGAIN", 0)
+    monkeypatch.setattr(bot, "_tagged", {})
+    monkeypatch.setattr(bot, "_denied", {})
     for tg in (20, 21, 31, 32, 33, 34, 35, 36, 37, 99):
         login(c, tg, f"u{tg}")
     con = db.connect(cfg.db_path)
@@ -95,8 +98,11 @@ def test_silence_for_others(env, monkeypatch):
 def test_one_run_at_a_time_and_429(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    sent = _run(cfg, con, _Http(busy=2), _msg(20), _msg(21))                        # the second /all while the first runs: ignored
-    assert len(sent) == 2 and sum(s["text"].count("tg://") for s in sent) == 8      # 429 twice: waited, then went
+    sent = _run(cfg, con, _Http(busy=2), _msg(20), _msg(21))                        # the second /all while the first runs: told to wait
+    tags = [s for s in sent if "tg://" in s.get("text", "")]
+    assert len(tags) == 2 and sum(s["text"].count("tg://") for s in tags) == 8      # 429 twice: waited, then went
+    soon = [s for s in sent if s.get("text") == bot.texts.bot_message("ru", "all_soon")[0]]
+    assert len(soon) == 1 and soon[0]["reply_parameters"]["message_id"] == 7
     sent = _run(cfg, con, _Http(busy=9), _msg(20))                                  # still too fast: gives up, the chat free again
     assert sent == [] and not bot._tagging
 
@@ -114,8 +120,7 @@ def test_group_admin_tags(env, monkeypatch):
 # ---------------------------------------------------------------- chat_seen: whom the bot saw in a club's chat
 
 def _clean(monkeypatch):
-    monkeypatch.setattr(logic.chatlist, "_wrote", {})
-    monkeypatch.setattr(logic.chatlist, "_held", {})
+    monkeypatch.setattr(logic.chatlist, "_unheld", {})
 
 
 def _seen(con, chat=-100):
@@ -158,14 +163,15 @@ def test_seen_once_a_day_and_purge(env, monkeypatch):
     con = _setup(c, cfg, monkeypatch)
     _clean(monkeypatch)
     logic.chatlist.seen(con, -100, {"id": 700})
-    con.execute("UPDATE chat_seen SET seen_at = 5")
-    logic.chatlist.seen(con, -100, {"id": 700})                                   # fresh in this worker: no write
-    assert con.execute("SELECT seen_at FROM chat_seen").fetchone()[0] == 5
-    logic.chatlist._wrote[(-100, 700)] -= logic.chatlist.SEEN_EVERY + 1           # a day on: written again
+    fresh = int(time.time()) - 100
+    con.execute("UPDATE chat_seen SET seen_at = ?", (fresh,))
+    logic.chatlist.seen(con, -100, {"id": 700})                                   # written today: no write
+    assert con.execute("SELECT seen_at FROM chat_seen").fetchone()[0] == fresh
+    con.execute("UPDATE chat_seen SET seen_at = 5")                               # a day on: written again
     logic.chatlist.seen(con, -100, {"id": 700})
     assert con.execute("SELECT seen_at FROM chat_seen").fetchone()[0] > 5
     night = (int(time.time()) + 5 * 3600) // 86400 * 86400 - 5 * 3600 + 3600       # 1 am in Almaty: the nightly run
-    con.execute("INSERT INTO chat_seen VALUES (-100, 701, ?)", (night - logic.chatlist.SEEN_KEEP - 10,))
+    con.execute("INSERT INTO chat_seen SELECT -100, 701, org_id, ? FROM chat_seen", (night - logic.chatlist.SEEN_KEEP - 10,))
     monkeypatch.setattr(logic.core, "now", lambda: night)
     logic.stats_day(con)
     assert _seen(con) == [700]
@@ -178,7 +184,7 @@ def test_seen_gone_with_account_bot_and_migration(env, monkeypatch):
     _clean(monkeypatch)
     for tg in (31, 800):
         logic.chatlist.seen(con, -100, {"id": tg})
-    con.execute("INSERT INTO chat_seen VALUES (-200, 31, 1)")
+    con.execute("INSERT INTO chat_seen SELECT -200, 31, org_id, 1 FROM chat_seen LIMIT 1")
     delete_now(c, cfg, tma(31, "u31"))                                            # deleting the account: its rows, by tg_id
     assert con.execute("SELECT COUNT(*) FROM chat_seen WHERE tg_id = 31").fetchone()[0] == 0
     _run(cfg, con, _Http(), _msg(800, text="", migrate_to_chat_id=-1009))        # group to supergroup: moved
@@ -205,3 +211,83 @@ def test_seen_chat_member_updates(env, monkeypatch):
     assert _seen(con) == [900]
     asyncio.run(bot.hear(cfg, H([cm("left", 2)]), 0))
     assert _seen(con) == []
+
+
+def test_all_again_waits_and_cap(env, monkeypatch):
+    """A chat's next /all waits ALL_AGAIN after the last one ended (told so, then both go); one run calls TAG_MAX at most."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "ALL_AGAIN", 300)
+    assert len(_tagged(_run(cfg, con, _Http(), _msg(20)))) == 8
+    http = _Http()
+    _run(cfg, con, http, _msg(21, text="/all"))                                    # a minute on: not again
+    assert not _tagged(http.sent) and http.sent[0]["text"] == bot.texts.bot_message("ru", "all_soon")[0]
+    assert {"chat_id": -100, "message_id": 7} in http.sent                         # the command and the answer deleted
+    bot._tagged[-100] -= 301
+    monkeypatch.setattr(bot, "TAG_MAX", 7)
+    sent = _run(cfg, con, _Http(), _msg(21))
+    assert [s["text"].count("tg://") for s in sent] == [5, 2]                      # the cap: the rest not called this run
+
+
+def test_seen_rows_go_when_the_chat_stops_being_the_clubs(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    oid = con.execute("SELECT org_id FROM chats WHERE tg_chat_id = -100").fetchone()[0]
+    other = logic.create_org(con, None, "Go", "GO", "crown_3d", False)
+
+    def fill():
+        for tg in (500, 501):
+            con.execute("INSERT OR REPLACE INTO chat_seen VALUES (-100, ?, ?, 1)", (tg, oid))
+    fill()
+    con.execute("UPDATE chats SET org_id = ? WHERE tg_chat_id = -100", (other,))   # moved to another club
+    assert _seen(con) == []
+    logic.chatlist.seen(con, -100, {"id": 502})
+    assert con.execute("SELECT org_id FROM chat_seen").fetchone()[0] == other       # written for the new holder
+    con.execute("UPDATE chats SET org_id = ? WHERE tg_chat_id = -100", (oid,))
+    fill()
+    con.execute("UPDATE chats SET org_id = NULL WHERE tg_chat_id = -100")           # unlinked in Studio
+    assert _seen(con) == []
+    con.execute("UPDATE chats SET org_id = ? WHERE tg_chat_id = -100", (oid,))
+    fill()
+    con.execute("UPDATE chats SET tg_chat_id = NULL WHERE tg_chat_id = -100")       # the card's chat changed
+    assert _seen(con) == []
+    con.execute("UPDATE chats SET tg_chat_id = -100")
+    fill()
+    con.execute("DELETE FROM chats")                                                # the card gone
+    assert _seen(con) == []
+    con.execute("INSERT INTO chat_sync (chat_id, org_id, kind, created_at) VALUES (-100, ?, 'main', 0)", (oid,))
+    fill()
+    con.execute("UPDATE chats SET title = 'x'")                                     # an unrelated change keeps them
+    assert _seen(con) == [500, 501]
+    con.execute("DELETE FROM chat_sync")                                            # the sync link removed
+    assert _seen(con) == []
+    eid = con.execute("""INSERT INTO events (org_id, status, title, place, starts_at, emoji, color, chat_id, created_at, updated_at)
+        VALUES (?, 'published', 'Ev', 'A', 0, 'x', 'blue', -100, 0, 0)""", (oid,)).lastrowid    # an event's chat alone
+    fill()
+    con.execute("UPDATE events SET chat_id = -300 WHERE id = ?", (eid,))            # the event's chat changed
+    assert _seen(con) == []
+    con.execute("UPDATE events SET chat_id = -100 WHERE id = ?", (eid,))
+    fill()
+    con.execute("DELETE FROM events WHERE id = ?", (eid,))                          # the event deleted
+    assert _seen(con) == []
+
+
+def test_seen_who_is_never_kept(env, monkeypatch):
+    """Forwarded authors, replied-to people, inline bots, Telegram's service accounts, the app's banned: never kept;
+    a person who left and came back the same day: kept again; another club's rows never called."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 36")
+    _run(cfg, con, _Http(),
+         _msg(510, text="x", forward_origin={"type": "user", "sender_user": {"id": 511}}, reply_to_message={"message_id": 1, "from": {"id": 512}},
+              via_bot={"id": 513, "is_bot": True}),
+         *[{**_msg(tg, text="x"), "from": {"id": tg}} for tg in logic.chatlist.TG_SERVICE],
+         _msg(36, text="x"))
+    assert _seen(con) == [510]
+    _run(cfg, con, _Http(), _msg(1, text="", left_chat_member={"id": 510}), _msg(1, text="", new_chat_members=[{"id": 510}]))
+    assert _seen(con) == [1, 510]                                                   # 1: the admin who did it
+    other = logic.create_org(con, None, "Go", "GO", "crown_3d", False)
+    con.execute("INSERT INTO chat_seen VALUES (-100, 514, ?, 1)", (other,))
+    assert 514 not in logic.tag_all(con, -100, 21) and 510 in logic.tag_all(con, -100, 21)
