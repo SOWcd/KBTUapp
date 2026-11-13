@@ -431,6 +431,7 @@ export interface EventFull extends EventCard {
   myCrew?: CrewKind | null;     // I help at this event's door
   payToName: string | null;
   payPhone: string | null;
+  lentFull?: boolean;           // the creator from Admin on a club's event he made: its President's editor (server core.full)
   memo?: MemoAsks | null;       // the club's Head+: what this event asks DMP for in the weekly memo
   cohost?: { org: OrgRef; status: 'pending' | 'accepted' | 'declined' } | null;  // the host's Head+: the invited club
   badgeName: string | null;

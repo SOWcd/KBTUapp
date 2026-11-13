@@ -77,7 +77,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
     """The host's "Invite a club" (the events right): one active club, not ours, on a public event still ahead."""
     if not isinstance(oid, int) or isinstance(oid, bool):
         raise ApiError("bad_input")
-    if v.staff_org:  # the admin from Admin: a partnership is the clubs' own choice
+    if v.staff_org and not v.lent_full:  # the admin from Admin: a partnership is the clubs' own choice (the creator: as its President)
         raise ApiError("forbidden", "staff")
     with tx(con):
         e = _staff_event(con, v, eid, "events")

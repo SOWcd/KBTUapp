@@ -22,10 +22,10 @@ function first(path: string): Promise<Response> | undefined {
  *  each write in the owner's log. Only Admin adds to it. */
 export const staffEvents = new Set<Id>();
 /** Admin → "an event for a club": while that editor is open, the new event and its cover go as the admin's for this club
- *  (server app.viewer, X-Staff-Org: those two routes alone). Only that editor sets it. */
+ *  (server app.viewer, X-Staff-Org: those routes alone; a video the creator's alone). Only that editor sets it. */
 export const staffOrg = { id: 0 as Id };
 const staffOf = (method: string, path: string): Record<string, string> => {
-  if (staffOrg.id && method === 'POST' && (path === '/photos' || path === `/orgs/${staffOrg.id}/events` || path === `/orgs/${staffOrg.id}/events/fill`)) return { 'X-Staff-Org': String(staffOrg.id) };
+  if (staffOrg.id && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${staffOrg.id}/events` || path === `/orgs/${staffOrg.id}/events/fill`)) return { 'X-Staff-Org': String(staffOrg.id) };
   const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
   return id && staffEvents.has(+id) ? { 'X-Staff-Event': id } : {};
 };

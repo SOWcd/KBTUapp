@@ -113,27 +113,32 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         # without a role in it, and may fill it from the club's announcement (the AI, nothing stored). Only these routes; the draft is then run through X-Staff-Event like any other
         o = logic.one(con, "SELECT id FROM orgs WHERE id = ? AND status = 'active'", int(oid)) if oid.isascii() and oid.isdigit() and len(oid) < 12 else None
         route = (request.method, request.scope["route"].path)
+        # the creator alone acts as the club's President there (core.can, lent_full), so his video uploads too
+        full = v.role == "admin" and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
         if v.role != "admin" or not o or "x-staff-event" in request.headers or not (
-                route == ("POST", "/api/photos") or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid):
+                route == ("POST", "/api/photos") or full and route == ("POST", "/api/videos")
+                or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid):
             raise ApiError("forbidden", "staff")
-        yield Viewer(v.id, v.role, v.student, staff_org=o["id"])
-        if route[1] == "/api/photos":  # reached only when the upload was kept; the draft itself: logic.staff_create_event
-            logic.log_action(con, v.id, "staff_photo", f"org:{oid}")
+        yield Viewer(v.id, v.role, v.student, staff_org=o["id"], lent_full=full)
+        if route[1] in ("/api/photos", "/api/videos"):  # reached only when the upload was kept; the draft itself: logic.staff_create_event
+            logic.log_action(con, v.id, "staff_photo" if route[1] == "/api/photos" else "staff_video", f"org:{oid}")
         return
     if (eid := request.headers.get("x-staff-event")) is None:
         yield v
         return
     # Admin → an event: the app's admin acts as its organizers (logic.can, STAFF_RIGHTS), only on that event's own
     # routes and only for this request; anyone else sending it, or on another route, is refused
-    e = logic.one(con, "SELECT org_id FROM events WHERE id = ?", int(eid)) if eid.isascii() and eid.isdigit() and len(eid) < 12 else None
+    e = logic.one(con, "SELECT org_id, created_by FROM events WHERE id = ?", int(eid)) if eid.isascii() and eid.isdigit() and len(eid) < 12 else None
     if v.role != "admin" or not e or str(request.path_params.get("eid")) != eid:
         raise ApiError("forbidden", "staff")
-    v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"])
+    # the creator runs the events he made for a club (Admin's "an event for a club") as their President would (core.can)
+    full = e["created_by"] == v.id and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
+    v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"], lent_full=full)
     yield v
     # reached only when the route answered: every write and every list of people (attendees, a meeting's answers, the
     # volunteers) the owner's log names; the event's own card alone isn't
     if v.used and (request.method != "GET" or request.scope["route"].path != "/api/events/{eid}"):
-        logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}"}))
+        logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}", **({"full": True, "org": v.staff_org} if v.lent_full else {})}))
 
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
     """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""

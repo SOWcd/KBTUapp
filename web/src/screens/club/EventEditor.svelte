@@ -75,11 +75,12 @@
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
-  // its money, its videos or the AI's fill, which stay the club's own
+  // its money, its videos or its memo, which stay the club's own. The creator (lent) has its President's editor
   let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
-  // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent
+  // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent (but to the creator)
   const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
-  $effect(() => { if (!staff) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
+  // his covers and videos go as the club's too (X-Staff-Org)
+  $effect(() => { if (!staff && !lent) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
@@ -90,7 +91,7 @@
   const opts = (s: string) => [...new Set(s.split(',').map((o) => o.trim()).filter(Boolean))];
   const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
   // the name Kaspi prints for the recipient ("Alikhan S.", my short name): mine, as the one setting it up usually takes the money
-  const myKaspiName = session.me?.student ? session.me.name : '';
+  const myKaspiName = session.me?.student && !untrack(() => asStaff) ? session.me.name : ''; // the creator never: the club's are used
 
   const EMOJI = PICK_EMOJI;
   // eleven around the colour wheel and night (10-12, no RGB picker); BRAND when nothing else is set
@@ -100,10 +101,14 @@
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
+  // the creator alone gets its President's editor here (server core.can, lent_full): a new event, or one he made so
+  // (the server lends nothing on another's); `plain` is every other admin's, a plain public free event
+  const lent = $derived(asStaff && !!session.me?.founder && (staff || !!saved?.lentFull));
+  const plain = $derived(staff && !lent);
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
-  const canPrice = $derived(!staff && (full || !!saved?.price) && may(mine, 'money'));
+  const canPrice = $derived((lent || !staff && may(mine, 'money')) && (full || !!saved?.price));
   // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
-  const canPartner = $derived(full || !staff && oversee || !!saved?.guestHost);
+  const canPartner = $derived(full || !plain && oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
@@ -169,8 +174,8 @@
     place: f.tba || f.place.trim() ? '' : t('ed.need'),
     seats: f.seats === '' || (Number.isInteger(+f.seats) && +f.seats > 0) ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
-    payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
-    payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
+    payTo: !f.paid || lent || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
+    payPhone: !f.paid || lent || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
     freeFirst: !f.paid || !f.freeFirst || (Number.isInteger(+f.freeFirst) && +f.freeFirst >= 0 && +f.freeFirst <= 5000) ? '' : t('ed.need'),
     host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
     link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
@@ -339,7 +344,7 @@
 
   const input = (): EventInput => ({
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
-    ...(asStaff ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
+    ...(asStaff && !lent ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, ...(f.teams && teamsOk ? { teamMin: +f.teamMin, teamMax: +f.teamMax } : { teamMin: null, teamMax: null }), visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
@@ -396,7 +401,7 @@
     } catch (x) {
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
-        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
+        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial') : x instanceof ApiErr && x.message === 'kaspi' ? t('ed.payNone')
         : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
@@ -457,7 +462,7 @@
   let coWant = $state<OrgRef | null>(null);
   let coQ = $state('');
   const co = $derived(saved ? saved.cohost ?? null : coWant ? { org: coWant, status: 'new' as const } : null);
-  const coOk = $derived(!isMeeting && !f.teamOnly && !f.leaders && !f.partner && saved?.status !== 'cancelled' && (!!co || may(mine, 'events')));
+  const coOk = $derived(!isMeeting && !f.teamOnly && !f.leaders && !f.partner && saved?.status !== 'cancelled' && (!!co || lent || may(mine, 'events')));
   const coShort = (o: OrgRef) => (o.name.length > 12 && o.abbr) || nameOf(o); // the row's value has a third of 375 px: a long name by its abbreviation
   // an official co-host's yes takes an initiative's event to the afisha (server seats.on_afisha)
   const onAfisha = $derived(co?.status === 'accepted' && (co.org.official || co.org.kind !== 'club'));
@@ -658,7 +663,7 @@
 
     <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
       {#if !f.partner}
-        {#if staff}<!-- a plain public event alone (the server's rule) -->
+        {#if plain}<!-- a plain public event alone (the server's rule) -->
         {:else if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
         {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
         {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
@@ -676,14 +681,14 @@
     </Group>
 
     <Group caption={t('ex.more')}>
-      {#if !staff}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
+      {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
       {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
-      {#if tickets && !staff}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+      {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && err.teams ? '' : f.teams && teamsOk ? `${f.teamMin}–${f.teamMax}` : t('ex.no')} invalid={tried && !!err.teams} accessory="chevron" onclick={() => open('teams')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
       {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
-      {#if full && !f.placeUrl && !f.leaders && !asStaff}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
+      {#if full && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
       <Row icon={Eye} title={t('ed.preview')} accessory="chevron" onclick={showPreview} />
     </Group>
 
@@ -781,9 +786,12 @@
             onchange={(v) => { touch(); f.paid = v === 'paid'; }} />
           {#if f.paid}
             <Field label={t('ed.price')} bind:value={f.price} type="number" inputmode="numeric" placeholder="2000" error={tried && err.price ? err.price : undefined} />
+            {#if lent}<p class="hint">{saved?.payToName ? `${saved.payToName} · ${fmtPhone(saved.payPhone ?? '')}. ` : ''}{t('ed.payClub')}</p>
+            {:else}
             <Field label={t('ed.payTo')} bind:value={f.payTo} maxlength={80} placeholder={t('ed.payToPh')} error={tried && err.payTo ? err.payTo : undefined} />
             <Field label={t('ed.payPhone')} bind:value={f.payPhone} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" error={tried && err.payPhone ? err.payPhone : undefined} />
             <p class="hint">{t('ed.payHint')}</p>
+            {/if}
             <Field label={t('ed.freeFirst')} bind:value={f.freeFirst} type="number" inputmode="numeric" placeholder={t('ed.freeFirstPh')} error={tried && err.freeFirst ? err.freeFirst : undefined} />
             <p class="hint">{t('ed.freeFirstHint')}</p>
           {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}

@@ -60,6 +60,9 @@ class Viewer:
     # Admin → an event (app.viewer, X-Staff-Event): the app's admin acting as that event's organizers, in this one request
     # on that event's own routes; `used` collects the rights lent, and the request's audit line names them
     staff_org: int = 0
+    # the creator (users.is_founder) from Admin: a President's rights on that club's new event and on the ones he made so
+    # (app.viewer); never set for another admin
+    lent_full: bool = False
     used: list = field(default_factory=list, compare=False, hash=False)
 
 
@@ -214,10 +217,12 @@ STAFF_RIGHTS = frozenset({"events"})
 
 
 def can(con, v: Viewer, oid: int | None, right: str) -> bool:
-    """I may do this in this club (students only act, §2); or, from Admin, the admin on that one event (STAFF_RIGHTS)."""
+    """I may do this in this club (students only act, §2); or, from Admin, the admin on that one event (STAFF_RIGHTS),
+    the creator with a President's (lent_full). Receipts stay the club's: their routes never take the staff headers."""
     if v.student and oid and right in rights_of(con, v.id, oid):
         return True
-    if oid and oid == v.staff_org and right in STAFF_RIGHTS:
+    if oid and oid == v.staff_org and (right in STAFF_RIGHTS or v.lent_full and right in club_rights(
+            "president", None, one(con, "SELECT official, top_at FROM orgs WHERE id = ?", oid))):
         v.used.append(right)
         return True
     return False
@@ -536,9 +541,11 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all;
     # the admin from Admin (staff_org) runs the event but gets none of the club's own: no Kaspi details, no DMP memo,
     # no rating comments
-    lent = v.staff_org == e["org_id"]
+    lent = v.staff_org == e["org_id"] and not v.lent_full  # the creator sees it as its President does
     pay = head and not lent or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
     out = _full(con, v, e, c, head, pay)
+    if v.lent_full and v.staff_org == e["org_id"]:
+        out["lentFull"] = True  # the editor shows him its President's rows (app.viewer decided)
     if lent:
         out["memo"] = None
         if out["ratings"]:

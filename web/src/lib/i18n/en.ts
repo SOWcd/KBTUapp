@@ -1440,6 +1440,8 @@ const en: Dict = {
   'co.acceptChannel': "Free. The @KBTUevents post goes out signed \"{us} × {club}\". You hear of every change and can leave at any time.",
   'co.acceptAsk': "Host it together with {club}?",
   'ed.paidRight': "The price is set by someone with the club's “Prices and Kaspi” right",
+  'ed.payClub': "The money goes to the club's Kaspi: the details from its latest paid event",
+  'ed.payNone': "The club has no Kaspi details yet: its first paid event is its own to make",
   'ed.paidOfficial': "Only official clubs can run paid events",
   'ed.gisOffer': "An address? Make it a 2GIS route",
   'ed.form': "Questions at sign-up",

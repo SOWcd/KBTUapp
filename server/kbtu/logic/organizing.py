@@ -295,6 +295,14 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     if not any(k in body for k in ("price", "payToName", "payPhone", "freeFirst")):
         return {}
     price, name, phone, first = body.get("price"), None, None, None
+    if price is not None and v.staff_org == org["id"]:
+        # the creator from Admin (lent_full): the money goes where the club's own goes, never to him. The event's own
+        # details if it has them, else those of the club's latest paid event one of its people made; none: refused
+        k = e if e and e["pay_phone"] else one(con, """SELECT pay_to_name, pay_phone FROM events WHERE org_id = ? AND pay_phone IS NOT NULL
+            AND created_by != ? ORDER BY id DESC LIMIT 1""", org["id"], v.id)
+        if not k:
+            raise ApiError("forbidden", "kaspi")
+        body = {**body, "payToName": k["pay_to_name"], "payPhone": k["pay_phone"]}
     if price is not None:
         name = " ".join(str(body.get("payToName") or "").split())
         phone = kz_phone(body.get("payPhone"))
@@ -376,19 +384,31 @@ def staff_create_event(con, v: Viewer, oid: int, body: dict, via: str = "admin")
     itself in Studio), whatever v's own role in the club. The owner's log names who, the club and the event."""
     if v.role != "admin" or v.staff_org != oid:
         raise ApiError("forbidden", "staff")
-    if any(body.get(k) is not None for k in ("price", "payToName", "payPhone", "freeFirst")):
+    # the creator (lent_full) has every option its President has; anyone else makes a plain public free event alone: the
+    # money, the team's meetings, its volunteers, a leaders' call and the DMP memo are the club's own
+    if not v.lent_full and any(body.get(k) is not None for k in ("price", "payToName", "payPhone", "freeFirst")):
         raise ApiError("forbidden", "price")
-    # a plain public event alone: the team's meetings, its volunteers, a leaders' call and the DMP memo are the club's own
-    if body.get("visibility") not in (None, "public") or any(body.get(k) for k in ("meeting", "forBoard", "meetingTag", "leadersFrom", "volunteers")):
+    if not v.lent_full and (body.get("visibility") not in (None, "public") or any(body.get(k) for k in ("meeting", "forBoard", "meetingTag", "leadersFrom", "volunteers"))):
         raise ApiError("forbidden", "plain")
     org = _org(con, oid)
     partner = bool(body.get("guestHost"))
     if org["status"] != "active" or partner and not (org["official"] or org["top_at"]):  # a partner's link out: a recognised club's alone here
         raise ApiError("forbidden", "partner" if org["status"] == "active" else "staff")
     with tx(con):
-        e = create_event(con, v, oid, {k: x for k, x in body.items() if k != "memo"})
+        e = create_event(con, v, oid, body if v.lent_full else {k: x for k, x in body.items() if k != "memo"})
         log_action(con, v.id, "staff_create", f"event:{e['id']}", json.dumps({"org": oid, "via": via, **({"partner": True} if partner else {})}))
+        _log_full(con, v, oid, e["id"], body)
     return e
+
+
+# what the creator's lent_full adds to staff's plain event: each one set names him and the club in the owner's log
+FULL_ONLY = ("price", "freeFirst", "volunteers", "guestHost", "memo", "videoId", "wideVideoId", "meeting", "forBoard", "meetingTag", "leadersFrom")
+
+
+def _log_full(con, v: Viewer, oid: int, eid: int, body: dict) -> None:
+    got = {k: body[k] for k in FULL_ONLY if body.get(k)} | ({"visibility": body["visibility"]} if body.get("visibility") not in (None, "public") else {})
+    if v.lent_full and got:
+        log_action(con, v.id, "staff_full", f"org:{oid}", json.dumps({"event": eid, **got}, ensure_ascii=False))
 
 
 SLIDES = 9   # photos after the cover (PLAN 33): ten in all, as an Instagram or TikTok photo post
@@ -430,7 +450,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
             raise ApiError("conflict")  # seats can't drop below who is already in
         if f["needs_phone"] and not e["needs_phone"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
             raise ApiError("conflict", "needs_phone")  # those in never agreed to give it here (the export sends it)
-        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) and not v.staff_org else e["memo"]  # the admin from Admin never touches the club's memo
+        f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) and (v.lent_full or not v.staff_org) else e["memo"]  # the admin from Admin never touches the club's memo (the creator as its President)
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):
@@ -445,6 +465,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
                 con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE event_id = ? AND user_id = ?", (core.now(), eid, uid))
                 _remind(con, uid, after)
         _changed(con, v, e, after)
+        _log_full(con, v, e["org_id"], eid, body)
         cohost_changed(con, e, after)
         promote(con, after)
     return full(con, v, after)
