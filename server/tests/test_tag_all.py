@@ -69,7 +69,7 @@ def test_head_tags_in_fives(env, monkeypatch):
     ids = [[int(p.split('">')[0]) for p in s["text"].split("tg://user?id=")[1:]] for s in sent]
     assert ids == [[21, 31, 32, 33, 34], [35, 36]]                                   # the caller and the one who left skipped
     assert all(s["reply_parameters"]["message_id"] == 7 and s["chat_id"] == -100 for s in sent)
-    assert "meeting" not in sent[0]["text"] and bot.TAG_MARKS[0] in sent[0]["text"]   # never the caller's words
+    assert "meeting" not in sent[0]["text"] and any(m in sent[0]["text"] for m in bot.TAG_MARKS)   # never the caller's words
     assert not bot._tagging
     assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     # as a reply: under the message replied to

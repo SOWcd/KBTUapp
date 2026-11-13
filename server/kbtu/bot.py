@@ -17,6 +17,7 @@ import json
 import fcntl
 import logging
 import os
+import random
 import re
 import sqlite3
 import time
@@ -47,7 +48,7 @@ WAIT = 25                   # getUpdates: Telegram holds the request this long w
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
 TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
-TAG_MARKS = ("\U0001F535", "\U0001F7E2", "\U0001F7E1", "\U0001F7E0", "\U0001F7E3")  # one per person, the link text (no names)
+TAG_MARKS = tuple("\U0001F525 \u2B50 \u26A1 \U0001F3AF \U0001F680 \U0001F48E \U0001F389 \U0001F44B \U0001F4E3 \U0001F514 \u2728 \U0001F4A5 \U0001F31F \U0001F3C6 \U0001F388 \u2764 \U0001F499 \U0001F49A \U0001F49B \U0001F49C \U0001F9E1".split())  # the link text, one per person (no names): five different ones a message, the pack's animated ones when it has them
 _tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
@@ -1264,9 +1265,11 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, peo
             if m and m.get("ok") and logic.chatsync.in_chat(m["result"]) and not (m["result"].get("user") or {}).get("is_bot"):
                 batch.append(tg)
             if len(batch) == 5 or batch and i == len(people) - 1:
-                text = "".join(f'<a href="tg://user?id={t}">{TAG_MARKS[k]}</a>' for k, t in enumerate(batch))
-                sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML",
-                                   "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}, TAG_GAP)
+                marks = random.sample(TAG_MARKS, len(batch))
+                body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
+                sent = await _call(cfg, http, "sendMessage", {**body, "text": "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, TAG_GAP)
+                if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
+                    sent = await _call(cfg, http, "sendMessage", {**body, "text": "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, TAG_GAP)
                 if not (sent and sent.get("ok")):  # the network, no rights, the chat gone: no more of it
                     log.warning("tag all: %s", str((sent or {}).get("description"))[:120])
                     return
