@@ -1448,6 +1448,7 @@ const en: Dict = {
   'ed.formPhone': "Phone number",
   'ed.formPhoneHint': "To reach the participant; the number is kept for next sign-ups",
   'ed.formN': { one: "{n} question", other: "{n} questions" },
+  'ed.asAdmin': "as the admin",
   'ed.formQ': "A question: e.g. T-shirt size",
   'ed.formText': "Text",
   'ed.formChoice': "Choice",

@@ -616,7 +616,10 @@
     </button>
     <!-- the preview: a round eye beside the cover, clear of Telegram's own buttons in the bar above (owner, Nov 13) -->
     <span class="pv"><IconButton icon={Eye} label={t('ed.preview')} onclick={showPreview} /></span>
-    {#if staff}<Notice icon={ShieldCheck} title={clubNames[0]} text={t('mg.asStaff')} />{/if}
+    <!-- whose event it is, one quiet line under the cover (owner, Nov 13: the box took the form's room); the full
+         sentence on a tap -->
+    {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
+      <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
     {#if !id && session.board}
       <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
     {/if}
@@ -959,6 +962,8 @@
   .mk { padding: 6px var(--s-3); border-radius: var(--r-full); border: 1.5px dashed var(--text-3); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
   .mk:active { background: var(--fill); }
 
+  .who { align-self: center; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; margin-top: calc(-1 * var(--s-1)); padding: 2px var(--s-2);
+    font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .pv { position: absolute; top: var(--s-3); right: var(--gutter); z-index: 1; }
   .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
   .art:active { transform: scale(0.98); }

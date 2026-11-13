@@ -1448,6 +1448,7 @@ const kk: Dict = {
   'ed.formPhone': "Телефон нөмірі",
   'ed.formPhoneHint': "Қатысушымен байланысу үшін; нөмір келесі жазылуларға сақталады",
   'ed.formN': { one: "{n} сұрақ", other: "{n} сұрақ" },
+  'ed.asAdmin': "әкімші ретінде",
   'ed.formQ': "Сұрақ: мысалы, футболка өлшемі",
   'ed.formText': "Мәтін",
   'ed.formChoice': "Таңдау",
