@@ -44,16 +44,13 @@ def _started(con, sid):
     return sid
 
 
-def test_title_default_reuse_and_log(env):
+def test_title_default_and_log(env):
     c, cfg = env
     con = db.connect(cfg.db_path)
     oid = _club_runs(c, con, 9, "dana", "chess")
     s = _new(c, 9, oid).json()
-    assert s["title"].startswith("Meeting · ") and s["started"] is None and s["expected"] == 0 and s["event"] is None
-    assert _new(c, 9, oid, "Other").json()["session"] == s["session"]   # not started yet: the same one again, no junk
-    _started(con, s["session"])
+    assert s["title"].startswith("Meeting \u00b7 ") and s["started"] is None and s["event"] is None
     assert _new(c, 9, oid, "  \u0412\u0441\u0442\u0440\u0435\u0447\u0430\n\n  " + "x" * 200).json()["title"] == ("\u0412\u0441\u0442\u0440\u0435\u0447\u0430 " + "x" * 200)[:80]
-    con.execute("UPDATE qr_sessions SET started_at = 1")
     assert _new(c, 9, oid, "   ").json()["title"].startswith("Meeting")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_new'").fetchone()[0] == 3
     assert s["session"] in [x["session"] for x in c.get("/api/screens", headers=tma(9)).json()]   # the organizer's list has it
@@ -64,7 +61,7 @@ def test_caps(env):
     c, cfg = env
     con = db.connect(cfg.db_path)
     oid = _club_runs(c, con, 9, "dana", "chess")
-    ids = [_started(con, _new(c, 9, oid).json()["session"]) for _ in range(checkin.CLUB_OPEN)]
+    ids = [_new(c, 9, oid).json()["session"] for _ in range(checkin.CLUB_OPEN)]
     assert _new(c, 9, oid).status_code == 429                           # five open at once
     con.execute(f"UPDATE qr_sessions SET ended_at = 2 WHERE id IN ({','.join(map(str, ids))})")
     for _ in range(checkin.CLUB_DAY - checkin.CLUB_OPEN):
@@ -88,4 +85,94 @@ def test_runs_start_scan_finish(env):
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]
     assert c.post("/api/checkin", headers=tma(1), json={"p": p[:-1] + ("0" if p[-1] != "0" else "1")}).status_code == 400  # forged
     assert c.post(f"/api/screens/{sid}/finish", headers=tma(9)).json()["done"] == 1
+    con.close()
+
+
+def _mail(con, tg, mail):
+    con.execute("UPDATE students SET email = ? WHERE user_id = (SELECT id FROM users WHERE tg_id = ?)", (mail, tg))
+
+
+def test_who_is_expected_and_who_is_absent(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = _club_runs(c, con, 9, "dana", "chess")
+    _mail(con, 9, "dana@kbtu.kz")
+    for tg, name in ((1, "ann"), (2, "bob")):
+        _join(c, con, oid, tg, name, "member")
+        _mail(con, tg, f"{name}@kbtu.kz")
+    login(c, 3, "cat")                                                  # not in the club
+    tag = con.execute("INSERT INTO org_tags (org_id, name, color, created_at) VALUES (?, 'Media', 'blue', 0)", (oid,)).lastrowid
+    con.execute("INSERT INTO member_tags (tag_id, user_id) SELECT ?, id FROM users WHERE tg_id = 2", (tag,))
+    other = _club_runs(c, con, 8, "eve", "go")
+    foreign = con.execute("INSERT INTO org_tags (org_id, name, color, created_at) VALUES (?, 'X', 'red', 0)", (other,)).lastrowid
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={"who": foreign}).status_code == 400   # another club's tag
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={"who": "x"}).status_code == 400
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={"who": tag}).json()["expected"] == 1
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={"who": "all"}).json()["expected"] == 0
+    sid = c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={}).json()["session"]          # the whole club, by default
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
+    for tg in (1, 3):
+        assert c.post("/api/checkin", headers=tma(tg), json={"p": p}).json()["done"]
+    row = [x for x in c.get("/api/screens", headers=tma(9)).json() if x["session"] == sid][0]
+    assert (row["expected"], row["came"], row["done"]) == (3, 1, 2)    # came 1 of 3, and one more not on the list
+    assert c.get(f"/api/screens/{sid}/absent", headers=tma(9)).json() == ["Testov Bob", "Testov Dana"]
+    assert c.get(f"/api/screens/{sid}/absent", headers=tma(1)).status_code == 403
+    csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text
+    assert "came (not on the list)" in csv and "absent,Testov Bob" in csv and "bob@kbtu.kz" not in csv   # the team never sees mails
+    con.close()
+
+
+def test_left_running_finishes_itself(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = _club_runs(c, con, 9, "dana", "chess")
+    sid = _new(c, 9, oid).json()["session"]
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
+    login(c, 1, "ann")
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]
+    late = _new(c, 9, oid).json()["session"]                            # never started: stays
+    con.execute("UPDATE qr_sessions SET started_at = started_at - ? WHERE id = ?", (checkin.STALE - 60, sid))
+    assert [x["ended"] for x in c.get("/api/screens", headers=tma(9)).json() if x["session"] == sid] == [None]
+    con.execute("UPDATE qr_sessions SET started_at = started_at - 120 WHERE id = ?", (sid,))
+    l = c.get("/api/screens", headers=tma(9)).json()
+    assert [x["session"] for x in l] == [late, sid] and l[1]["ended"] and l[1]["done"] == 1   # open first; the mark kept
+    con.close()
+
+
+def _badge(c, tg, sid, qr):
+    return c.post(f"/api/screens/{sid}/badge", headers=tma(tg), json={"qr": qr})
+
+
+def test_mark_by_hand(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = _club_runs(c, con, 9, "dana", "chess")
+    _join(c, con, oid, 1, "ann", "member")
+    login(c, 2, "bob")
+    qr = c.get("/api/me", headers=tma(2)).json()["qr"]
+    url = f"https://t.me/KBTUappBot?startapp=u_{qr}"
+    sid = _new(c, 9, oid).json()["session"]
+    assert _badge(c, 9, sid, url).json()["error"] == "closed"           # not started
+    c.post(f"/api/screens/{sid}/start", headers=tma(9))
+    assert _badge(c, 1, sid, url).status_code == 403                    # a plain member
+    assert _badge(c, 8, sid, url).status_code in (401, 403)             # nobody's organizer
+    assert _badge(c, 9, sid, url[:-1] + ("A" if url[-1] != "A" else "B")).status_code == 404   # wrong code
+    assert _badge(c, 9, sid, "garbage").status_code == 404
+    assert _badge(c, 9, sid, f"u_{c.get('/api/me', headers=tma(9)).json()['qr']}").status_code == 404  # my own
+    login(c, 3, "cat")
+    old = c.get("/api/me", headers=tma(3)).json()["qr"]
+    con.execute("UPDATE users SET qr_code = 'ZZZZZZZZZZ' WHERE tg_id = 3")
+    assert _badge(c, 9, sid, f"u_{old}").status_code == 404             # stale (its code changed)
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 3")
+    assert _badge(c, 9, sid, "u_" + old.split("_")[0] + "_ZZZZZZZZZZ").status_code == 404   # banned
+    got = _badge(c, 9, sid, url).json()
+    assert got["done"] and got["person"]
+    assert _badge(c, 9, sid, url).status_code == 409                    # once per person
+    row = con.execute("SELECT done_at, marked_by FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()
+    assert row[0] and row[1] == c.get("/api/me", headers=tma(9)).json()["id"]
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_badge'").fetchone()[0] == 1
+    csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text.splitlines()
+    assert csv[0].endswith(",by_hand") and csv[1].rsplit(",", 1)[1].startswith("Dana")   # who marked it
+    c.post(f"/api/screens/{sid}/finish", headers=tma(9))
+    assert _badge(c, 9, sid, url).json()["error"] == "closed"           # finished
     con.close()

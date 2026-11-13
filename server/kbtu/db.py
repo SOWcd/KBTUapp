@@ -1670,6 +1670,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # (Nov 13) an album in the order its photos were taken: the time from the upload's EXIF (media.taken; the one fact
     # kept of it), unix seconds with the camera's sub-seconds; NULL (no EXIF, or uploaded before): its upload time
     (162, "ALTER TABLE files ADD COLUMN taken_at REAL;"),
+    # a check-in marked by hand from the student's badge QR (checkin.badge): who marked it
+    (163, "ALTER TABLE qr_marks ADD COLUMN marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
 ]
 
 

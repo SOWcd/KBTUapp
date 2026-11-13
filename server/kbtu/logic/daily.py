@@ -227,6 +227,8 @@ def stats_day(con) -> None:
     con.execute("""DELETE FROM qr_expected WHERE session_id IN (SELECT id FROM qr_sessions WHERE ended_at < ?
         OR (ended_at IS NULL AND created_at < ?))""", (core.now() - 30 * 86400, core.now() - 90 * 86400))
     _prune_deletion_log(con)
+    from .. import checkin  # imports logic: here, not at the top
+    checkin.sweep(con)  # check-ins left running (the organizers' list sweeps too, as it's read)
     chatsync.night(con)  # linked clubs: their members against their chats again (updates missed while down)
     roles_backfill(con)  # club roles from before the typed-once title: a batch a night into the translator's queue
 

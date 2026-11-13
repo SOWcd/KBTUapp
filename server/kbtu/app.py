@@ -518,7 +518,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/orgs/{oid}/screens")
     def club_screen(oid: int, con: Con, v: Me, body: dict = Body(...)):
-        return qr.club_new(con, cfg.token_key, v, oid, body.get("title"))
+        return qr.club_new(con, cfg.token_key, v, oid, body.get("title"), body.get("who", "club"))
 
     @app.post("/api/events/{eid}/screen")
     def event_screen(eid: int, con: Con, v: Me):
@@ -527,6 +527,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/screens/{sid}/grant")
     def screen_grant(sid: int, con: Con, v: Me, body: dict = Body(...)):
         return qr.grant_all(con, v, sid, body.get("code"))
+
+    @app.post("/api/screens/{sid}/badge")
+    def screen_badge(sid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.badge(con, v, sid, body.get("qr"))
+
+    @app.get("/api/screens/{sid}/absent")
+    def screen_absent(sid: int, con: Con, v: Me):
+        return qr.absent(con, v, sid)
 
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
