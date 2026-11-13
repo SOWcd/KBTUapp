@@ -17,7 +17,7 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, scanQr, tg, tgTry } from './lib/tg';
+  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -134,22 +134,14 @@
   sheets.screens = (code, event, seed, org) => lazy(screenSheet, { code, event, seed, org });
   // a running check-in's controls: the organizer's sheet, a helper's own QR (so a closed one needs no second scan)
   const openCheckin = (c: MyCheckin) => { haptic.tap(); if (c.helper) sheets.helperQr(c.session, c.event, c.scanner); else sheets.screens(undefined, undefined, c); };
-  const PAIR_QR = /[?&]startapp=sh_([0-9a-f]{16})$/; // what /show's QR says
+  // Profile's "Big screen": my sessions first (start one, connect a laptop's /show from there: ScreenSheet)
   sheets.bigScreen = () => {
     if (session.me?.bigScreen !== 'pair') { // a helper has no screen to pair (only a session's organizers may: server checkin.bind): their QR
       const c = runningCheckin();
       if (c) openCheckin(c); else { say(t('scr.helpEnded'), 'waving_hand_3d_default'); void loadMe(true); }
       return;
     }
-    haptic.tap();
-    let wrong = '';
-    const can = scanQr(t('scr.aim'), (text) => {
-      const m = text.match(PAIR_QR);
-      if (m) { haptic.ok(); sheets.screens(m[1]); return true; }
-      if (text !== wrong) { wrong = text; haptic.error(); } // another QR: said once, the scanner stays up
-      return false;
-    });
-    if (!can) { sheets.screens(); say(t('give.phone'), 'pleading_face_3d'); } // no scanner in this client: the sheet says how, by the phone's camera
+    haptic.tap(); sheets.screens();
   };
   sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
