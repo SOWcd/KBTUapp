@@ -6,12 +6,15 @@ import { t } from './i18n/index.svelte';
 import { say, ui } from './state/ui.svelte';
 import { haptic, shareCard } from './tg';
 
-export async function shareInvite(org: { id: number; name: string }, dept?: { id: number; name: string }, many = false): Promise<boolean> {
+/** made: the team's link exists (its end), told before the chat picker, which may never call back */
+export async function shareInvite(org: { id: number; name: string }, dept?: { id: number; name: string }, many = false,
+  made?: (expiresAt: number) => void): Promise<boolean> {
   if (ui.busy) return false; // a second tap while the first link is made
   haptic.tap(); ui.busy = t('invite.making'); // the tap is felt and the capsule says so (nothing showed)
   try {
-    const { token } = await (many ? api.teamLink(org.id) : api.invite(org.id, dept?.id));
-    const link = `https://t.me/KBTUappBot?startapp=join_${org.id}_${token}`;
+    const r: { token: string; expiresAt?: number } = await (many ? api.teamLink(org.id) : api.invite(org.id, dept?.id));
+    if (r.expiresAt) made?.(r.expiresAt);
+    const link = `https://t.me/KBTUappBot?startapp=join_${org.id}_${r.token}`;
     const msg = many ? t('team.linkMsg', { club: org.name }) : dept ? t('team.inviteDeptMsg', { club: org.name, dept: dept.name }) : t('team.inviteMsg', { club: org.name });
     await shareCard({ kind: 'join', id: String(org.id), ...(many ? { many: true } : {}) }, link, msg, () => (ui.busy = ''));
     return true;

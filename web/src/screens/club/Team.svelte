@@ -52,8 +52,12 @@
   let linkOpen = $state(false); // the link icon's choice
   async function shareLink(many: boolean) {
     if (!m) return;
-    if (await shareInvite(m.org, undefined, many)) linkOpen = false;
-    if (many) void loadSetup(m.org.id); // the live link's day on the button
+    const org = m.org.id;
+    // the open link shows at once, its day on the row and "turn off" under it: set when it is made, not after the
+    // picker (Android's may never answer), and the choice stays open to show it
+    const ok = await shareInvite(m.org, undefined, many, (until) => { if (setup && m?.org.id === org) setup.teamLink = { expiresAt: until }; });
+    if (ok && !many) linkOpen = false;
+    if (many) void loadSetup(org);
   }
   async function linkOff() {
     if (!m || !(await sheets.ask({ title: t('team.linkOffAsk'), text: t('team.linkOffText'), ok: t('team.linkOff'), cancel: t('common.cancel'), danger: true }))) return;
