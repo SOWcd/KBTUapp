@@ -25,7 +25,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
              if {r[1] for r in con.execute(f"PRAGMA table_info({t})")} & {"email", "student_id", "tg_id", "author_tg", "phone"}}
     # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, only the row I claimed goes
     assert keyed == {"users", "students", "prefill", "prefill_rest", "qr_expected", "tgc_saved", "tgc_strangers", "tgc_comments",
-                     "roster_pending", "swear_hits"}, keyed
+                     "roster_pending", "swear_hits", "chat_seen"}, keyed
 
     ali = login(c, 21, "ali")
     con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))

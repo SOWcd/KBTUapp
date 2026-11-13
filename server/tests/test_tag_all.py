@@ -109,3 +109,99 @@ def test_group_admin_tags(env, monkeypatch):
     _run(cfg, con, http, _msg(31))   # no rights: told so, then the command and the answer are deleted
     assert len(http.sent) == 2 and "tg://" not in http.sent[0]["text"] and http.sent[1] == {"chat_id": -100, "message_id": 7}
     assert len(_run(cfg, con, _Http(admins={31}), _msg(31))) == 2
+
+
+# ---------------------------------------------------------------- chat_seen: whom the bot saw in a club's chat
+
+def _clean(monkeypatch):
+    monkeypatch.setattr(logic.chatlist, "_wrote", {})
+    monkeypatch.setattr(logic.chatlist, "_held", {})
+
+
+def _seen(con, chat=-100):
+    return [r[0] for r in con.execute("SELECT tg_id FROM chat_seen WHERE chat_id = ? ORDER BY tg_id", (chat,))]
+
+
+def _tagged(sent):
+    return sorted(int(p.split('">')[0]) for s in sent for p in s.get("text", "").split("tg://user?id=")[1:])
+
+
+def test_seen_stranger_is_called_and_forgotten_on_leaving(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    _run(cfg, con, _Http(), _msg(500, text="hi"), _msg(20, text="ok", new_chat_members=[{"id": 501}, {"id": 502, "is_bot": True}]))
+    assert _seen(con) == [20, 500, 501]                                      # no app account needed; never a bot
+    sent = _run(cfg, con, _Http(), _msg(21))
+    assert {500, 501} <= set(_tagged(sent)) and 21 not in _tagged(sent)
+    _run(cfg, con, _Http(), _msg(500, text="", left_chat_member={"id": 501}))  # 501 left
+    assert _seen(con) == [20, 21, 500]                                        # 21 wrote too (its /all)
+    sent = _run(cfg, con, _Http(gone={500}), _msg(21))                        # Telegram says 500 isn't there: not called, forgotten
+    assert 500 not in _tagged(sent) and _seen(con) == [20, 21]
+    # banned in the app: never called
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 20")
+    assert 20 not in logic.tag_all(con, -100, 21)
+
+
+def test_seen_never_anonymous_or_unlinked(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    _run(cfg, con, _Http(), _msg(600, text="x", sender_chat={"id": -100}),                 # an anonymous admin, a channel
+         {**_msg(1087968824, text="x"), "from": {"id": 1087968824, "is_bot": True}},
+         _msg(601, chat=-555, text="x"))                                                  # a chat no club holds
+    assert con.execute("SELECT COUNT(*) FROM chat_seen").fetchone()[0] == 0
+
+
+def test_seen_once_a_day_and_purge(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    logic.chatlist.seen(con, -100, {"id": 700})
+    con.execute("UPDATE chat_seen SET seen_at = 5")
+    logic.chatlist.seen(con, -100, {"id": 700})                                   # fresh in this worker: no write
+    assert con.execute("SELECT seen_at FROM chat_seen").fetchone()[0] == 5
+    logic.chatlist._wrote[(-100, 700)] -= logic.chatlist.SEEN_EVERY + 1           # a day on: written again
+    logic.chatlist.seen(con, -100, {"id": 700})
+    assert con.execute("SELECT seen_at FROM chat_seen").fetchone()[0] > 5
+    night = (int(time.time()) + 5 * 3600) // 86400 * 86400 - 5 * 3600 + 3600       # 1 am in Almaty: the nightly run
+    con.execute("INSERT INTO chat_seen VALUES (-100, 701, ?)", (night - logic.chatlist.SEEN_KEEP - 10,))
+    monkeypatch.setattr(logic.core, "now", lambda: night)
+    logic.stats_day(con)
+    assert _seen(con) == [700]
+
+
+def test_seen_gone_with_account_bot_and_migration(env, monkeypatch):
+    from test_core import delete_now, tma
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    for tg in (31, 800):
+        logic.chatlist.seen(con, -100, {"id": tg})
+    con.execute("INSERT INTO chat_seen VALUES (-200, 31, 1)")
+    delete_now(c, cfg, tma(31, "u31"))                                            # deleting the account: its rows, by tg_id
+    assert con.execute("SELECT COUNT(*) FROM chat_seen WHERE tg_id = 31").fetchone()[0] == 0
+    _run(cfg, con, _Http(), _msg(800, text="", migrate_to_chat_id=-1009))        # group to supergroup: moved
+    assert _seen(con, -100) == [] and _seen(con, -1009) == [800]
+    asyncio.run(bot._member(cfg, _Http(), con, {"chat": {"id": -1009, "type": "supergroup"}, "new_chat_member": {"status": "kicked"}}))
+    assert _seen(con, -1009) == []                                                # the bot removed: the chat's rows go
+
+
+def test_seen_chat_member_updates(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _clean(monkeypatch)
+    cm = lambda st, i: {"chat_member": {"chat": {"id": -100}, "new_chat_member": {"status": st, "user": {"id": 900}}, "date": 1}, "update_id": i}  # noqa: E731
+
+    class H(_Http):
+        def __init__(self, ups):
+            super().__init__()
+            self.ups = ups
+
+        async def get(self, url, **_):
+            u, self.ups = self.ups, []
+            return _Resp({"ok": True, "result": u})
+    asyncio.run(bot.hear(cfg, H([cm("member", 1)]), 0))
+    assert _seen(con) == [900]
+    asyncio.run(bot.hear(cfg, H([cm("left", 2)]), 0))
+    assert _seen(con) == []
