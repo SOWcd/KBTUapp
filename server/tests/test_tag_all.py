@@ -70,6 +70,7 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert all(s["reply_parameters"]["message_id"] == 7 and s["chat_id"] == -100 for s in sent)
     assert "meeting" not in sent[0]["text"] and bot.TAG_MARKS[0] in sent[0]["text"]   # never the caller's words
     assert not bot._tagging
+    assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     # as a reply: under the message replied to
     sent = _run(cfg, con, _Http(), _msg(21, reply_to_message={"message_id": 3}))
     assert {s["reply_parameters"]["message_id"] for s in sent} == {3}

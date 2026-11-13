@@ -1182,7 +1182,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         return
     words = str(msg.get("text") or "").split()
-    if words and re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?", words[0], re.I):
+    if words and re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all", words[0], re.I):  # "@all": ours alone where another bot answers /all too
         sender = msg.get("from") or {}
         # the sender of this very message, a person: never a forward, an anonymous admin or a channel (sender_chat), an old one
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
