@@ -30,10 +30,11 @@ URLS = {
     "apinex": "https://api.apinex.bond/v1/chat/completions",
 }
 # the biggest free limits first (Oct 29): APInex (owner's pick), Munito (rate limits only, no daily cap), Groq (~1K
-# req/day per model), Cloudflare (10k neurons/day for all its models), OpenRouter (50 free req/day)
+# req/day per model), Cloudflare (10k neurons/day for all its models; Nov 13: deepseek-v4-pro, kimi-k2.6 and glm-5.3-flash
+# left the free plan, these three answer on it in 1.2-1.5 s), OpenRouter (50 free req/day)
 CHAIN = ("apinex:free/deepseek-v4.1-flash,munito:deepseek-ai/deepseek-v4.1-flash-1017,munito:zai-org/glm-5.3-flash,"
-         "groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b,cf:@cf/deepseek-ai/deepseek-v4-pro-0813,"
-         "cf:@cf/moonshotai/kimi-k2.6,cf:@cf/zai-org/glm-5.3-flash,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free")
+         "groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b,cf:@cf/qwen/qwen3-30b-a3b-fp8,"
+         "cf:@cf/meta/llama-3.3-70b-instruct-fp8-fast,cf:@cf/mistralai/mistral-small-3.1-24b-instruct,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free")
 RETRY_WAIT = 1.0     # before the one retry of a lone link
 REST = 60             # a limited or busy link without a Retry-After rests this long
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
