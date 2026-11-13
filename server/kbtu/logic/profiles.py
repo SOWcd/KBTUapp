@@ -687,7 +687,8 @@ def person(con, v: Viewer, uid: int) -> dict:
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
     # the role shows only to the club's own team: outside, just the club
     clubs = rows(con, f"""SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.*
-        FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close else []
+        FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id
+        WHERE m.user_id = ? AND o.status = 'active'""", v.id, uid) if close else []  # a hidden or archived club is on nobody's profile
     # where they were before (org_history, written by triggers): a role held at least a day, the club still shown;
     # the role by the same rule as above. Newest first
     past = rows(con, """SELECT h.role, h.since, h.until, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = h.org_id AND x.user_id = ?) AS mine, o.*

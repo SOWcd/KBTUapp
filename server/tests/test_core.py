@@ -4557,6 +4557,10 @@ def test_profile_privacy(env, monkeypatch):
         p = full(tg)
         assert {m["org"]["id"] for m in p["clubs"]} == {1, 2} and [h["org"]["id"] for h in p["past"]] == [3] and "limited" not in p
         assert [b["eventId"] for b in p["awards"]["badges"]] == [9] and p["shelf"] == ["b9"] and p["skin"] == 2
+    for gone in ("hidden", "archived"):  # a club taken down or archived leaves every profile (owner, Nov 13)
+        con.execute("UPDATE orgs SET status = ? WHERE id = 2", (gone,))
+        assert {m["org"]["id"] for m in full(11)["clubs"]} == {1}
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 2")
     p = full(13)
     assert p["clubs"] == [] and p["past"] == [] and p["awards"]["badges"] == [] and p["shelf"] == [] and p["limited"] is True
     assert p["skin"] is None and p["username"] is None and p["name"] and p["course"] == 2               # StudEx's badge came by itself
