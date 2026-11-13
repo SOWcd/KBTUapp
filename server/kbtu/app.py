@@ -845,7 +845,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             logic.chat_pick(con, v, oid)
         bot_url = f"https://t.me/{cfg.bot_username}"
         return {"url": f"{bot_url}?startchannel&admin=invite_users+post_messages+edit_messages+delete_messages" if kind == "channel"
-                else f"{bot_url}?startgroup=pick&admin=invite_users+delete_messages+restrict_members+pin_messages"}
+                else f"{bot_url}?startgroup=pick&admin=invite_users+delete_messages+restrict_members+pin_messages+promote_members"}
 
     @app.put("/api/orgs/{oid}/chats/{cid}/main")
     def main_org_chat(oid: int, cid: int, con: Con, v: Me):
@@ -1127,7 +1127,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/chat")
     def chat_start(eid: int, con: Con, v: Me):
         token = logic.chat_start(con, v, eid)  # the bot comes in as an admin that may add people, pin and delete
-        return {"url": f"https://t.me/{cfg.bot_username}?startgroup=ec_{token}&admin=invite_users+pin_messages+delete_messages+restrict_members"}
+        return {"url": f"https://t.me/{cfg.bot_username}?startgroup=ec_{token}&admin=invite_users+pin_messages+delete_messages+restrict_members+promote_members"}
 
     @app.post("/api/events/{eid}/publish")
     def publish(eid: int, con: Con, v: Me):
