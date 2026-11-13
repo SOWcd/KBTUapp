@@ -59,6 +59,7 @@ def _msg(tg, chat=-100, text="/all", **kw):
 def _run(cfg, con, http, *msgs):
     async def go():
         for m in msgs:
+            bot._seen(con, m)  # as hear does, before the swear filter
             await bot._group(cfg, http, con, m)
         await asyncio.gather(*list(tgc._tasks))
     asyncio.run(go())

@@ -1186,6 +1186,18 @@ _hello: dict[int, float] = {}  # ponytail: per worker and never pruned (a few by
 _unlinked: dict[int, float] = {}  # the same for "/all" in a chat no club holds
 
 
+def _seen(con, msg: dict) -> None:
+    """/all's memory of who is in a club's chat: a person who writes or joins (never an anonymous admin or a channel),
+    forgotten on leaving. Before the swear filter: a message it deletes still shows its sender is in the chat."""
+    chat = msg["chat"]["id"]
+    if not msg.get("sender_chat"):
+        logic.chatlist.seen(con, chat, msg.get("from"))
+    for u in msg.get("new_chat_members") or []:
+        logic.chatlist.seen(con, chat, u)
+    if gone := (msg.get("left_chat_member") or {}).get("id"):
+        logic.chatlist.unseen(con, chat, int(gone))
+
+
 async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     """In a group: "/start ec_<token>" (sent by Telegram when the organizer added the bot by the app's "Create chat")
     links it to the event and makes its join-request link; a group turned supergroup keeps its event."""
@@ -1197,13 +1209,6 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         logic.chatmod.stale()  # its swear filter goes on under the new id at once
         return
-    # who is in a club's chat, for /all: a person who writes or joins (never an anonymous admin or a channel), forgotten on leaving
-    if not msg.get("sender_chat"):
-        logic.chatlist.seen(con, chat["id"], msg.get("from"))
-    for u in msg.get("new_chat_members") or []:
-        logic.chatlist.seen(con, chat["id"], u)
-    if gone := (msg.get("left_chat_member") or {}).get("id"):
-        logic.chatlist.unseen(con, chat["id"], int(gone))
     words = str(msg.get("text") or "").split()
     # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
     # "\u043a\u043e\u043b\u043b" first in a message, "call" only as the whole message (it starts ordinary English sentences)
@@ -1587,6 +1592,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             msg = {}
             try:  # all of it: a locked database even in the ban check replayed the whole batch
                 offset = upd["update_id"] + 1
+                if not tgc.ours(cfg, upd) and ((upd.get("message") or {}).get("chat") or {}).get("type") in ("group", "supergroup"):
+                    _seen(con, upd["message"])  # cheap, never blocks: first, so a message the swear filter deletes still counts
                 if not tgc.ours(cfg, upd) and await _swear(cfg, http, con, upd.get("message") or upd.get("edited_message") or {}):
                     continue  # a club's group: a swear word, deleted (before the ban skip: the chat is everyone's)
                 if "edited_message" in upd or "pre_checkout_query" in upd or tgc.ours(cfg, upd):  # edits matter only there; pre-checkouts are answered (above)

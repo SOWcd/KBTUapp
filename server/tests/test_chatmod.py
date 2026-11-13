@@ -406,3 +406,33 @@ def test_review_holes(env, monkeypatch):
     asyncio.run(bot._group(cfg, _Http(), con, {"chat": {"id": -100, "type": "group"}, "message_id": 1, "migrate_to_chat_id": -1009}))
     bot._swore.clear()
     assert _run(cfg, con, _Http(), _msg(22, chat=-1009, mid=6)) == [True]
+
+
+def test_deleted_message_still_seen_never_calls(env, monkeypatch):
+    """A message the filter deletes still records its sender for /all (they are in the chat); a swearing /all calls nobody."""
+    c, cfg = env
+    con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "_tagged", {})
+    http = _Http(updates=[{"update_id": 5, "message": _msg(500, mid=3)},
+                          {"update_id": 6, "message": _msg(21, "/all \u0441\u0443\u043a\u0430", mid=4)}])
+
+    async def go():
+        n = await bot.hear(cfg, http, 0)
+        await _drain()
+        return n
+    assert asyncio.run(go()) == 7
+    assert {j["message_id"] for j in http.said("deleteMessage")} >= {3, 4}
+    assert {r[0] for r in con.execute("SELECT tg_id FROM chat_seen WHERE chat_id = -100")} == {500, 21}
+    assert not any("tg://user" in j["text"] for j in http.said("sendMessage")) and not bot._tagging
+
+
+def test_unlink_forgets_hits_and_seen(env, monkeypatch):
+    c, cfg = env
+    con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
+    _run(cfg, con, _Http(), _msg(31))
+    bot._seen(con, _msg(31, "hi"))
+    assert con.execute("SELECT COUNT(*) FROM swear_hits").fetchone()[0] == 1
+    assert con.execute("SELECT COUNT(*) FROM chat_seen").fetchone()[0] == 1
+    assert c.delete(f"/api/orgs/{oid}/chats/{cid}", headers=tma(21)).status_code == 200
+    assert con.execute("SELECT COUNT(*) FROM swear_hits").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM chat_seen").fetchone()[0] == 0
