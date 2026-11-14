@@ -6,6 +6,8 @@
   import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Images from '@lucide/svelte/icons/images';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -34,7 +36,6 @@
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import { fitTitle, largeTitle } from '../../ui/title';
-  import Chip from '../../ui/Chip.svelte';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
@@ -180,15 +181,14 @@
   <header class="hd">
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
       <h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
-    <!-- the assistant (with the forum's switch) and the Feed full screen -->
-    {#if session.board || shown.length}
-      <span class="tools">
-        {#if session.board}<IconButton icon={Sparkles} label={t('as.ask')} onclick={() => sheets.assistant()} />{/if}
-        {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={() => sheets.feed()} />{/if}
-      </span>
-    {/if}
+    <!-- the assistant (with the forum's switch), the Feed full screen, the Gallery, the clubs' news -->
+    <span class="tools">
+      {#if session.board}<IconButton icon={Sparkles} label={t('as.ask')} onclick={() => sheets.assistant()} />{/if}
+      {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={() => sheets.feed()} />{/if}
+      <IconButton icon={Images} label={t('gallery.title')} onclick={() => sheets.gallery()} />
+      <IconButton icon={Newspaper} label={t('page.news')} onclick={() => sheets.news()} />
+    </span>
   </header>
-  <div class="news-action"><Button kind="plain" size="s" onclick={() => sheets.news()}>{t('page.news')}</Button></div>
   {#if searching}
     <div class="past">
       {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />
@@ -229,7 +229,7 @@
 
   <div class="events-head">
     <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
-    <Chip selected={showClasses} onclick={toggleClasses}>{t('list.classes')}</Chip>
+    <label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>
   </div>
 
   {#if featured}
@@ -301,20 +301,24 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
   .hd > span:first-child { min-width: 0; }
-  .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
+     at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .hd > span:first-child { flex: 1 0 120px; }
   .kick { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); margin-bottom: 2px; }
   .kick::first-letter { text-transform: uppercase; }
   .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
-  .news-action { display: flex; justify-content: flex-end; margin: -8px 0 var(--s-3); }
-  .tools { flex: none; display: flex; gap: var(--s-2); }
+  .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
   .off { margin: 12px 4px 0; color: var(--text-2); }
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
   /* Luma's section titles: bold, the second line grey at the same size */
   .sec { margin: 26px 0 12px; font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px 0 12px; }
+  .events-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: 34px 0 12px; }
   .sec.two { display: flex; flex-direction: column; min-width: 0; margin: 0; font-size: var(--fs-sec); gap: var(--s-1); }
+  /* the timetable's switch: centred on the heading's first line, not on its two lines */
+  .cls { flex: none; display: flex; align-items: center; gap: 10px; height: calc(var(--fs-sec) * 1.1); font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
   .sec.two span { font: 500 var(--fs-sub)/1.3 var(--font-text); letter-spacing: normal; color: var(--text-3); }
   .class-label { margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-1); border-radius: var(--r-m) var(--r-m) 0 0; background: var(--surface); font: 600 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's

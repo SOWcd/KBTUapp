@@ -706,7 +706,7 @@ const ru = {
   'event.partner': 'Партнёр',
   'event.notKbtu': 'Внешний организатор',
 
-  'list.classes': 'Занятия',
+  'list.classes': 'Пары',
   'list.title': 'События',
   'list.yours': 'Твои события',
   'list.moreSoon': "Скоро будет больше событий",
