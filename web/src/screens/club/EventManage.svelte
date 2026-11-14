@@ -2,7 +2,7 @@
   // Studio → an event: the organizer's screen (owner, Oct 11: "inside Studio a tap on an event must open another
   // screen than from the Afisha"; he couldn't find how much had come in). Money first for a paid event: what should
   // have come (paying tickets × price), what the receipts say (OCR), the receipts to check (flagged ones open the
-  // attendee list, flagged first); then the people; then the tools. "As students see it" opens the usual sheet.
+  // attendee list, flagged first); then the people; then the tools. The card's eye opens the usual sheet, its pencil the editor.
   // ponytail: no "message the participants" yet (no such API; the questions thread and the bot's changes cover it).
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import ScanLine from '@lucide/svelte/icons/scan-line';
@@ -160,8 +160,11 @@
     <div class="pg">
       {#if staff}<Notice icon={ShieldCheck} text={t('mg.asStaff')} />{/if}
       <Group>
-        <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}" accessory="chevron" onclick={() => sheets.event(id)}>
+        <!-- the event's two doors on its card (owner, Nov 14): edit it, see it as students do -->
+        <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}">
           {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
+          {#snippet trailing()}<span class="yn">{#if head}<IconButton icon={Pencil} size="s" label={t('studio.edit')} onclick={() => sheets.editor(e.org.id, id)} />{/if}
+            <IconButton icon={Eye} size="s" label={t('mg.asStudents')} onclick={() => sheets.event(id)} /></span>{/snippet}
         </Row>
       </Group>
 
@@ -231,11 +234,9 @@
             <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <!-- the team marked (owner, Nov 13: a Vice opens the event, "Mark the team"): the club's own session, apart from the guests' -->
           {#if teamMark}<Row icon={UserCheck} title={t('scr.team')} subtitle={teamLine} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
-          <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
           {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         {/if}
-        <Row icon={Eye} title={t('mg.asStudents')} accessory="chevron" onclick={() => sheets.event(id)} />
       </Group>
 
       {#if head && live && !e.guestHost && (!started || e.lateSignup)}

@@ -237,6 +237,8 @@
         <div class="cta">
           {#if s.started}<Button kind="primary" size="l" full onclick={() => showQr(s)}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('aw.show')}</Button>
           {:else}<Button kind="primary" size="l" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>{/if}
+          <!-- what the door person needs next (owner, Nov 14): hand the check-in over -->
+          {#if s.started && board(s)}<Button kind="secondary" size="l" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('scr.hand')}</Button>{/if}
         </div>
       {/if}
 
@@ -254,8 +256,6 @@
 
       <Group>
         {#if s.started && !s.ended && s.phase !== 'out'}<Row icon={ScanLine} title={t('scr.byHand')} accessory="chevron" onclick={() => byHand(s)} />{/if}
-        {#if !s.ended}<Row icon={MonitorUp} title={t('scr.connect')} value={s.screens ? String(s.screens) : undefined} accessory="chevron" onclick={() => pairScan(s.session)} />{/if}
-        {#if s.started && !s.ended && board(s)}<Row icon={UserPlus} title={t('scr.handShort')} accessory="chevron" onclick={() => { haptic.tap(); sheets.handQr(s.session); }} />{/if}
         {#if s.started && !s.ended && own(s)}<Row icon={s.phase === 'out' ? LogIn : LogOut} title={t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')} onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')} />{/if}
         {#if doors[s.session] && (waiting(s) || (doors[s.session].lead && (!s.ended || doors[s.session].hand)))}<Row icon={DoorOpen} title={waiting(s) ? t('ledg.unresolvedN', { n: waiting(s) }) : t('ledg.hand')} accessory="chevron" onclick={() => { haptic.tap(); sheets.volDoor(s.session, s.title); }} />{/if}
         {#if handed(s) && doors[s.session].by}<Row icon={DoorOpen} title={t('ledg.handedBy', { name: doors[s.session].by!.name })} />{/if}
