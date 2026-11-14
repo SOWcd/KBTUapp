@@ -5373,7 +5373,8 @@ def test_userbot_lists_group_members(env, monkeypatch):
     """userbot.Mirror.members (a fake Telethon client): each group it shares with our bot listed once at sign-in, Bot API
     ids (-100<id> a megagroup, -<id> a basic group), a broadcast channel and a group without our bot skipped; a held
     chat's members go to chat_seen with its club, an unheld one's to chat_seen_free; a bot, a deleted account and the
-    userbot itself never; whoever left forgotten, but not when the list is capped. Our bot's queue lists one again."""
+    userbot itself never; whoever left forgotten, but not when the list is capped. The userbot or our bot joining a group
+    (Telegram's join message, ChatAction) lists it then."""
     from types import SimpleNamespace as NS
     from telethon.tl.types import Channel, Chat, ChatPhotoEmpty
     from kbtu import userbot
@@ -5411,32 +5412,27 @@ def test_userbot_lists_group_members(env, monkeypatch):
 
     work = userbot.Mirror(cfg, Client(), con, me=500)
 
-    async def rounds(n):
-        task = asyncio.create_task(work.members())
-        for _ in range(n):
-            await asyncio.sleep(0)
-        task.cancel()
-    monkeypatch.setattr(userbot, "LOOK_GAP", 0)
     monkeypatch.setattr(userbot, "GROUP_GAP", 0)
-    asyncio.run(rounds(50))
+    asyncio.run(work.catch_up())
     assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen WHERE chat_id = -1005 AND org_id = 1")) == [11, 12]
     assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen_free WHERE chat_id = -7")) == [21, 98]
     assert not logic.rows(con, "SELECT 1 FROM chat_seen_free WHERE chat_id IN (-8, -1006)")
     assert chatlist.listed(con) == {-1005, -7} and 6 not in asked
     asked.clear()
-    asyncio.run(rounds(50))  # a new sign-in: nothing listed twice
-    assert asked == [8]      # (the group without our bot is looked at again: nothing kept)
+    asyncio.run(work.catch_up())  # a new sign-in: nothing listed twice
+    assert asked == [8]           # (the group without our bot is looked at again: nothing kept)
     asked.clear()
-    people[7] = got([u(22), u(bot, b=True)])  # whole now; queued by our bot (the userbot re-added)
-    chatlist.look_soon(con, -7)
-    asyncio.run(rounds(50))
+
+    async def chat(e):
+        return e
+    action = lambda e, ids, joined=True: NS(user_joined=joined, user_added=False, user_ids=ids, get_chat=lambda: chat(e))  # noqa: E731
+    asyncio.run(work.met(action(basic, [77])))               # someone else joined: nothing asked
+    asyncio.run(work.met(action(basic, [bot], joined=False)))  # not a join (our bot promoted, say): nothing
+    asyncio.run(work.met(action(news, [500])))               # a broadcast channel: nothing
+    assert asked == []
+    people[7] = got([u(22), u(bot, b=True)])  # our bot re-added: the group listed again, whole now
+    asyncio.run(work.met(action(basic, [bot])))
     assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen_free WHERE chat_id = -7")) == [22]
-    assert not chatlist.looks(con)
-    # our bot queues a group when it sees the userbot join it (bot._seen; the id from the userbot's sign-in)
-    from kbtu import bot as botmod
-    con.execute("INSERT INTO meta (key, value) VALUES ('userbot_id', '500')")
-    botmod._seen(con, {"chat": {"id": -1009}, "from": {"id": 11}, "new_chat_members": [{"id": 500}]})
-    assert chatlist.looks(con) == [-1009] and not logic.rows(con, "SELECT 1 FROM chat_seen_free WHERE tg_id = 500")
 
 
 def test_userbot_off(env, caplog):

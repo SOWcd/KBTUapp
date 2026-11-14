@@ -586,8 +586,6 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
     if status in ("left", "kicked"):
         logic.bot_left(con, chat["id"])
         return
-    if chat.get("type") in ("group", "supergroup") and (upd.get("old_chat_member") or {}).get("status") in ("left", "kicked", None):
-        logic.chatlist.look_soon(con, chat["id"])  # added (again): the userbot, if it's in there, lists the members once
     # every link needs our bot made an admin: only a chat's admin can do that, a plain member adding us proves nothing
     # (Codex reviews, Nov 5 and 14: someone else's open group claimed); a later promotion comes as another update.
     # A plain member's group links only by its admin's /start oc_<id> (_group)
@@ -1208,10 +1206,7 @@ def _seen(con, msg: dict) -> None:
     if not msg.get("sender_chat"):
         logic.chatlist.seen(con, chat, msg.get("from"))
     for u in msg.get("new_chat_members") or []:
-        if (ub := one(con, "SELECT value FROM meta WHERE key = 'userbot_id'")) and str(u.get("id")) == ub[0]:
-            logic.chatlist.look_soon(con, chat)  # the userbot joined us here: it lists the members once (never called itself)
-        else:
-            logic.chatlist.seen(con, chat, u)
+        logic.chatlist.seen(con, chat, u)
     if gone := (msg.get("left_chat_member") or {}).get("id"):
         logic.chatlist.unseen(con, chat, int(gone))
 

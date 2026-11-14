@@ -2,11 +2,12 @@
 main public channel and mirrors its posts into the org's news (mirror.py has the rules). It runs in the bot's process
 beside the postman (bot.run), never in a request: one account is one point of failure, and Telegram makes it wait
 (FloodWait) when it hurries. TG_API_ID, TG_API_HASH and TG_SESSION in the environment; any missing: off, the app as
-before. It reads the channels it mirrors, and (owner, Nov 14: /all calls everyone) the member list of a group it was
-added to where our bot is too, once, when the two meet (Mirror.members): only the members' Telegram ids are kept, as
-our bot's own memory of who is in the chat (chatlist.members), never names or usernames. Updates from anywhere else are
-dropped unread, it never writes to anyone, and it keeps nothing else. Patterns from KRI's reader: catch_up off and a
-catch-up of our own, FloodWait slept off, a dead session reported once and the userbot left off (a glitch reconnects)."""
+before. It reads the channels it mirrors, and (owner, Nov 14: /all calls everyone) the member list of a group it
+shares with our bot, once, when the two meet in either order (Mirror.met, on Telegram's join message; Mirror.catch_up
+at sign-in): only the members' Telegram ids are kept, as our bot's own memory of who is in the chat (chatlist.members),
+never names or usernames. Updates from anywhere else are dropped unread, it never writes to anyone, and it keeps
+nothing else. Patterns from KRI's reader: catch_up off and a catch-up of our own, FloodWait slept off, a dead session
+reported once and the userbot left off (a glitch reconnects)."""
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,6 @@ JOIN_GAP = 240          # one join or leave every 4 minutes at most (fresh joins
 SWEEP_GAP = 1800        # every 30 minutes: missed posts, edits and deletions, views and reaction counts
 RETRY = 60              # after a dropped connection
 COMMENT_GAP = 7200      # a post's comments looked at again after 2 hours at most
-LOOK_GAP = 60           # the groups our bot queued (chatlist.look_soon) are listed within a minute
 MEMBERS_CAP = 1000      # a group's members listed at most (a bigger one: those, nobody forgotten)
 GROUP_GAP = 2           # between two groups' lists
 
@@ -66,12 +66,10 @@ async def run(cfg: Config) -> None:
                 said = True
             con = db.connect(cfg.db_path)
             mirror.alive(con)
-            # our bot queues a group when it sees this account join one it's in (bot._seen)
-            con.execute("INSERT INTO meta (key, value) VALUES ('userbot_id', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(me),))
             await client.get_dialogs()  # the joined channels' access hashes: a StringSession keeps no entities
             work = Mirror(cfg, client, con, me)
             work.listen()
-            tasks = [asyncio.create_task(work.joins()), asyncio.create_task(work.sweeps()), asyncio.create_task(work.members())]
+            tasks = [asyncio.create_task(work.joins()), asyncio.create_task(work.sweeps()), asyncio.create_task(work.catch_up())]
             await client.run_until_disconnected()
         except dead as exc:
             log.warning("userbot: off (session ended: %s)", type(exc).__name__)
@@ -110,6 +108,7 @@ class Mirror:
         self.client.add_event_handler(fresh, events.NewMessage())
         self.client.add_event_handler(fresh, events.MessageEdited())
         self.client.add_event_handler(deleted, events.MessageDeleted())
+        self.client.add_event_handler(self.met, events.ChatAction())
 
     async def guard(self, job) -> None:
         """One post's work; FloodWait slept off, a bad post logged, never the listener down."""
@@ -286,24 +285,29 @@ class Mirror:
                 log.exception("userbot sweep")
             await asyncio.sleep(SWEEP_GAP)
 
-    async def members(self) -> None:
-        """Each group it is in with our bot, listed once (owner, Nov 14): at sign-in the ones never listed, then within
-        a minute each one our bot queues (the two just met, either order). Read only, one group at a time."""
+    async def met(self, ev) -> None:
+        """The userbot or our bot joined (or was added to) a group: the pair may have just met, the group listed now,
+        once (owner, Nov 14). No polling: Telegram's own service message is the cue; anyone else's join is dropped."""
+        if not (ev.user_joined or ev.user_added) or not ({self.me, self.bot} & set(ev.user_ids or [])):
+            return
+        if (ent := await ev.get_chat()) is not None and (chat := self.group_id(ent)) is not None:
+            await self.guard(self.list_group(chat, ent))
+
+    async def catch_up(self) -> None:
+        """Once at sign-in: each group it shares with our bot and never listed (met while it was away, or before this
+        existed). Read only, one group at a time; a FloodWait slept off and the rest done after it."""
         from telethon.errors import FloodWaitError
-        start: set[int] | None = None  # the never-listed ones at sign-in; queued ones leave the queue once looked at
-        while True:
+        todo: set[int] | None = None
+        while todo is None or todo:
             try:
-                queued = chatlist.looks(self.con)
-                if queued or start is None or start:
-                    groups = await self.groups()
-                    if start is None:
-                        start = set(groups) - chatlist.listed(self.con)
-                    for chat in sorted(set(queued) | start):
-                        if chat in groups:
-                            await self.list_group(chat, groups[chat])
-                            await asyncio.sleep(GROUP_GAP)
-                        chatlist.looked(self.con, chat)
-                        start.discard(chat)
+                groups = await self.groups()
+                if todo is None:
+                    todo = set(groups) - chatlist.listed(self.con)
+                for chat in sorted(todo):
+                    if chat in groups:
+                        await self.list_group(chat, groups[chat])
+                        await asyncio.sleep(GROUP_GAP)
+                    todo.discard(chat)
             except FloodWaitError as exc:
                 log.warning("userbot: flood wait %ds", exc.seconds)
                 await asyncio.sleep(exc.seconds + 5)
@@ -311,19 +315,25 @@ class Mirror:
                 raise
             except Exception:  # noqa: BLE001
                 log.exception("userbot members")
-            await asyncio.sleep(LOOK_GAP)
+                return
+
+    @staticmethod
+    def group_id(e) -> int | None:
+        """A group's Bot API id: a megagroup -100<id>, a basic group -<id>; None for a broadcast channel, a user, a
+        basic group gone supergroup."""
+        from telethon.tl.types import Channel, Chat
+        if isinstance(e, Channel) and e.megagroup:
+            return int(f"-100{e.id}")
+        if isinstance(e, Chat) and not e.deactivated and not getattr(e, "migrated_to", None):
+            return -e.id
+        return None
 
     async def groups(self) -> dict[int, object]:
-        """The groups it is in, by their Bot API id: a megagroup -100<id>, a basic group -<id>; never a broadcast
-        channel, never a basic group gone supergroup."""
-        from telethon.tl.types import Channel, Chat
+        """The groups it is in, by their Bot API id (group_id)."""
         out = {}
         async for d in self.client.iter_dialogs():
-            e = d.entity
-            if isinstance(e, Channel) and e.megagroup:
-                out[int(f"-100{e.id}")] = e
-            elif isinstance(e, Chat) and not e.deactivated and not getattr(e, "migrated_to", None):
-                out[-e.id] = e
+            if (chat := self.group_id(d.entity)) is not None:
+                out[chat] = d.entity
         return out
 
     async def list_group(self, chat: int, ent) -> None:
@@ -334,7 +344,7 @@ class Mirror:
         try:
             if isinstance(ent, Channel):
                 if self.bot not in {u.id for u in await self.client.get_participants(ent, filter=ChannelParticipantsBots())}:
-                    return  # not listed: our bot joining later queues it
+                    return  # not listed: our bot joining later lists it (met)
                 got = await self.client.get_participants(ent, limit=MEMBERS_CAP)
             else:
                 got = await self.client.get_participants(ent)
