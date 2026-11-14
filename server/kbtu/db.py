@@ -1750,6 +1750,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       until INTEGER NOT NULL,
       UNIQUE (user_id, chat_id)) STRICT;
     CREATE INDEX chat_waits_by_chat ON chat_waits(chat_id);"""),
+    # /all in a chat no club holds (owner, Nov 14): whom the bot saw there, Telegram ids only (chat_seen without a club)
+    (170, """CREATE TABLE chat_seen_free (
+      chat_id INTEGER NOT NULL,
+      tg_id INTEGER NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;"""),
 ]
 
 

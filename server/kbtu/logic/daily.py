@@ -215,6 +215,7 @@ def stats_day(con) -> None:
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     con.execute("DELETE FROM chat_seen WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))  # /all's memory: 180 days
+    con.execute("DELETE FROM chat_seen_free WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))
     forum_sweep(con)
     stats.forget(con)  # the anonymous usage counters: 180 days
     appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most

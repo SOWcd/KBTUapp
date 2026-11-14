@@ -762,17 +762,17 @@ SWEAR = {
            "off": "Фильтр мата выключен.",
            "warn": "Сообщение удалено: в нём мат. За повторный мат — час без сообщений.",
            "mute": "Сообщение удалено: в нём мат. Его автор час не сможет писать.",
-           "unlinked": "Этот чат не привязан к клубу. Привяжите его в Студии → Чаты — тогда все с ролью в клубе смогут звать всех."},
+           "unlinked": "Я пока никого здесь не знаю: запоминаю тех, кто пишет или заходит в чат. Чтобы звать весь клуб, привяжите чат в Студии → Чаты."},
     "kk": {"on": "🧹 Балағат сүзгісі қосылды. Балағаты бар хабарламалар өшіріледі, әрқайсысына — ескерту. Аптасына үшеу — бір сағат хабарламасыз.",
            "off": "Балағат сүзгісі өшірілді.",
            "warn": "Хабарлама өшірілді: онда балағат бар. Балағат қайталанса — бір сағат хабарламасыз.",
            "mute": "Хабарлама өшірілді: онда балағат бар. Авторы бір сағат жаза алмайды.",
-           "unlinked": "Бұл чат клубқа қосылмаған. Оны Студия → Чаттар бөлімінде қосыңыз — сонда клубта рөлі барлар барлығын шақыра алады."},
+           "unlinked": "Мен мұнда әлі ешкімді білмеймін: чатқа жазған не кірген адамдарды есте сақтаймын. Бүкіл клубты шақыру үшін чатты Студия → Чаттар бөлімінде қосыңыз."},
     "en": {"on": "🧹 Swear filter on. Messages with swear words are removed, each with a warning. Three in a week: an hour without messages.",
            "off": "Swear filter off.",
            "warn": "A message was removed for foul language. Repeated swearing means an hour without messages.",
            "mute": "A message was removed for foul language. Its author can't write for an hour.",
-           "unlinked": "This chat is not linked to a club. Link it in Studio → Chats, then anyone with a role in the club can call everyone."},
+           "unlinked": "I don't know anyone here yet: I remember people as they write or join. To call the whole club, link this chat in Studio → Chats."},
 }
 
 

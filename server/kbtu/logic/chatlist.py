@@ -649,8 +649,9 @@ def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] |
     no club holds, or nobody to call. Who, as far as the app knows: a synced department chat its department, a club chat the club's members,
     an event's chat its going people; never the caller. The bot asks Telegram whether each is in the chat before tagging."""
     link, card, oid = _holder(con, tg_chat)
-    if not oid:
-        return []
+    if not oid:  # a chat no club holds: its Telegram admin calls whom the bot saw there
+        return [r[0] for r in rows(con, """SELECT tg_id FROM chat_seen_free WHERE chat_id = ? AND tg_id != ?
+            AND tg_id NOT IN (SELECT tg_id FROM users WHERE banned_at IS NOT NULL) ORDER BY seen_at DESC, tg_id""", tg_chat, tg_from)] if admin else []
     if not admin and not one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? AND u.tg_id = ?
             AND u.tg_id > 0 AND u.banned_at IS NULL AND (m.role != 'member' OR m.role_id IS NOT NULL)""", oid, tg_from):
         return None
@@ -693,14 +694,18 @@ def seen(con, tg_chat: int, user: dict | None) -> None:
     t = time.time()
     if (r := one(con, "SELECT seen_at FROM chat_seen WHERE chat_id = ? AND tg_id = ?", tg_chat, tg)) and t - r[0] < SEEN_EVERY:
         return
-    if t - _unheld.get(tg_chat, 0) < HELD_TTL:
-        return
-    if not (oid := _holder(con, tg_chat)[2]):
-        if len(_unheld) > 10_000:  # a few bytes a chat; the bot sits in few
-            _unheld.clear()
-        _unheld[tg_chat] = t
-        return
     if one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg):
+        return
+    # a chat no club holds (owner, Nov 14: /all works there too, its Telegram admins call): chat_seen_free, no club
+    if t - _unheld.get(tg_chat, 0) < HELD_TTL or not (oid := _holder(con, tg_chat)[2]):
+        if tg_chat not in _unheld or t - _unheld[tg_chat] >= HELD_TTL:
+            if len(_unheld) > 10_000:  # a few bytes a chat; the bot sits in few
+                _unheld.clear()
+            _unheld[tg_chat] = t
+        if (r := one(con, "SELECT seen_at FROM chat_seen_free WHERE chat_id = ? AND tg_id = ?", tg_chat, tg)) and t - r[0] < SEEN_EVERY:
+            return
+        con.execute("""INSERT INTO chat_seen_free (chat_id, tg_id, seen_at) VALUES (?, ?, ?)
+            ON CONFLICT (chat_id, tg_id) DO UPDATE SET seen_at = excluded.seen_at""", (tg_chat, tg, int(t)))
         return
     con.execute("""INSERT INTO chat_seen (chat_id, tg_id, org_id, seen_at) VALUES (?, ?, ?, ?)
         ON CONFLICT (chat_id, tg_id) DO UPDATE SET org_id = excluded.org_id, seen_at = excluded.seen_at""", (tg_chat, tg, oid, int(t)))
@@ -709,6 +714,7 @@ def seen(con, tg_chat: int, user: dict | None) -> None:
 def unseen(con, tg_chat: int, tg: int) -> None:
     """Someone left the chat (or Telegram says they aren't in it): forgotten."""
     con.execute("DELETE FROM chat_seen WHERE chat_id = ? AND tg_id = ?", (tg_chat, tg))
+    con.execute("DELETE FROM chat_seen_free WHERE chat_id = ? AND tg_id = ?", (tg_chat, tg))
 
 
 def seen_moved(con, old: int, new: int) -> None:
@@ -717,6 +723,7 @@ def seen_moved(con, old: int, new: int) -> None:
     con.execute("INSERT OR IGNORE INTO chat_seen (chat_id, tg_id, org_id, seen_at) SELECT ?, tg_id, org_id, seen_at FROM chat_seen WHERE chat_id = ?", (new, old))
     _unheld.pop(new, None)
     con.execute("DELETE FROM chat_seen WHERE chat_id = ?", (old,))
+    con.execute("UPDATE OR IGNORE chat_seen_free SET chat_id = ? WHERE chat_id = ?", (new, old))
 
 
 def bot_left(con, tg_chat: int) -> None:
