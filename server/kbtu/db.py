@@ -1772,7 +1772,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # NULL with the marker's account): 1 the row is the hand mark's, 2 a scan waiting for its sign-up completed by hand.
     # A team list's hand mark with no account goes with its row (a roster row joined or deleted, an expected row of a
     # deleted account: the key carries the mail)
-    (171, """ALTER TABLE qr_marks ADD COLUMN hand INTEGER NOT NULL DEFAULT 0;
+    (172, """ALTER TABLE qr_marks ADD COLUMN hand INTEGER NOT NULL DEFAULT 0;
     CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
       DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
     END;
