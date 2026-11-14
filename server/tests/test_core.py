@@ -2660,7 +2660,9 @@ def test_paid_events(env):
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     assert att[0]["receipt"]["flags"] == ["duplicate"] and not att[0]["receipt"]["reviewed"]
     assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
-    assert c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket}).json()["flagged"] is True
+    held = c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket}).json()      # warned before admission
+    assert held["result"] == "flagged" and held["came"] == 0
+    assert c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket, "admit": True}).json()["flagged"] is True
     c.post(f"/api/receipts/{att[0]['receipt']['id']}/review", headers=tma(20), json={"reject": False})
     assert c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()[0]["receipt"]["reviewed"] is True
 

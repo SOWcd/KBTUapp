@@ -136,6 +136,31 @@ def test_flagged_receipt_goes_to_the_scanner(env):
     con.close()
 
 
+def test_flagged_receipt_warns_before_admission(env):
+    """Codex's release blocker: the ticket scanner and the name list record nothing for a flagged receipt; the organizer
+    lets them in after a look (admit), a scanner-only helper never can."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    eid = _ev(con, org, int(time.time()) - 60, price=2000)
+    bob = login(c, 2, "bob")
+    rid = _reg(con, eid, bob["id"], "BBBB")
+    fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at) VALUES ('x', 'receipt', 'image/webp', 1, 1, 1, 'p', ?, 0)", (bob["id"],)).lastrowid
+    con.execute("INSERT INTO receipts (registration_id, file_id, via, flags, created_at) VALUES (?, ?, 'app', 'duplicate', 0)", (rid, fid))
+    came = lambda: con.execute("SELECT checked_in_at FROM registrations WHERE id = ?", (rid,)).fetchone()[0]  # noqa: E731
+    r = c.post(f"/api/events/{eid}/checkin", headers=tma(9), json={"code": "BBBB"}).json()
+    assert r["result"] == "flagged" and r["person"]["id"] == bob["id"] and not came()
+    r = c.post(f"/api/events/{eid}/checkin", headers=tma(9), json={"userId": bob["id"]}).json()
+    assert r["result"] == "flagged" and not came()
+    helper = login(c, 4, "hel")
+    con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, helper["id"], org))
+    r = c.post(f"/api/events/{eid}/checkin", headers=tma(4), json={"code": "BBBB", "admit": True}).json()
+    assert r["result"] == "flagged" and not came()                                         # a helper can't wave it through
+    r = c.post(f"/api/events/{eid}/checkin", headers=tma(9), json={"userId": bob["id"], "admit": True}).json()
+    assert r["result"] == "ok" and r["flagged"] and came()
+    con.close()
+
+
 def test_leaving_after_the_door_closed(env):
     """Leaving an event's session: within its door window (+ GRACE for the crowd leaving at the end)."""
     c, cfg = env

@@ -794,8 +794,9 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
     return True
 
 
-def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
-    """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer."""
+def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
+    """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer. A
+    flagged receipt stops before anything is recorded (_held); `admit`: the organizer looked and lets them in."""
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
         t = core.now()
@@ -816,6 +817,8 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
                 return {"result": "cancelled"}
         if r["user_id"] == v.id and not runs(con, v, e):  # as checkin_by_name (a walk-in rolls back)
             raise ApiError("forbidden")
+        if (held := _held(con, v, e, r, admit)) is not None:
+            return held
         if not r["checked_in_at"]:
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
                                                            (t, v.id, t, r["id"])))
@@ -824,6 +827,19 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
         return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
                 "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
                 "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"])}  # a helper sees the person only (crew.py)
+
+
+def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict | None:
+    """A paid seat whose receipt nobody reviewed, not in yet: the door hears it before anything is recorded (Codex's
+    release blocker, Nov 14). Who sees the flags (a member of the club, a co-host's team) may let them in anyway
+    (`admit`); a door helper never: an organizer looks. Raised: the transaction rolls a walk-in back."""
+    if r["checked_in_at"] or not e["price"] or not flagged(con, r["id"]):
+        return None
+    if admit and (can(con, v, e["org_id"], "door") or co_runs(con, v, e["id"])):
+        return None
+    return {"result": "flagged", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])), "at": core.now(),
+            "came": one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", e["id"])[0],
+            "going": taken(con, e["id"]), "walkIn": False, "late": 0, "flagged": True}
 
 
 def flagged(con, rid: int) -> bool:
@@ -1043,7 +1059,7 @@ def door(con, v: Viewer, eid: int) -> list[dict]:
     return sorted(out, key=lambda a: (a["checkedInAt"] is not None, -(a["checkedInAt"] or 0), a["person"]["name"]))
 
 
-def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
+def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> dict:
     """No QR (a dead phone): a person going to the event is checked in by hand from the door list (§4.4). The same answer
     as the scanner; marked "by hand" for the organizer and the CSV."""
     with tx(con):
@@ -1066,6 +1082,8 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
             return {"result": "not_found"}
         if r["status"] != "going":
             return {"result": "cancelled"}
+        if (held := _held(con, v, e, r, admit)) is not None:
+            return held
         if not r["checked_in_at"]:
             _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE id = ?",
                                                   (t, v.id, t, r["id"])))

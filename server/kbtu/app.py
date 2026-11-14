@@ -1287,10 +1287,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """A scanned or typed code, or {userId}: by name from the door list (no QR)."""
         uid, code = body.get("userId"), body.get("code")
         if isinstance(uid, int) and not isinstance(uid, bool):
-            return logic.checkin_by_name(con, v, eid, uid)
+            return logic.checkin_by_name(con, v, eid, uid, body.get("admit") is True)
         if not isinstance(code, str) or len(code) > 64:
             raise ApiError("bad_input")
-        return logic.checkin(con, v, eid, code)
+        return logic.checkin(con, v, eid, code, body.get("admit") is True)
 
     @app.put("/api/events/{eid}/rating")
     def rate_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
