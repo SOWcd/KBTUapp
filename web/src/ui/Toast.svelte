@@ -31,7 +31,7 @@
   const out3 = (k: number) => 1 - Math.pow(1 - k, 3);
   // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way;
   // the map's bottom holds its place card, so there it drops under the floors (it covered the card)
-  const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d || 'map' in d; };
+  const atTop = () => { const d = document.documentElement.dataset; return ('sheet' in d || 'map' in d) && !toast.low; };
   const calm = () => power.lite || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fade = (ms: number) => ({ duration: ms, css: (k: number) => `opacity:${k}` });
 

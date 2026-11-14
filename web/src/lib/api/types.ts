@@ -344,7 +344,7 @@ export interface CohostInvite { event: { id: Id; title: string; startsAt: Ts; pl
   host: OrgRef; at: Ts; channel: boolean }
 /** an event's temporary door helper (server logic/crew.py): `scan` the scanner only, `door` the whole door; `org` the club that gave it */
 export type CrewKind = 'scan' | 'door';
-export interface CrewMember { person: PersonRef; kind: CrewKind; org: Id }
+export interface CrewMember { person: PersonRef; kind: CrewKind | 'qr' /* let in by the helper's QR: the scanner */; org: Id }
 
 /** a club's report after its event (server logic/evreports.py, REPORTS=1), for the club's people with the "reports" right */
 export type ReportMark = 'present' | 'late' | 'absent' | 'excused';

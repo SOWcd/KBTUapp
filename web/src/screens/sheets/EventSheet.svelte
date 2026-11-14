@@ -50,7 +50,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf } from '../../lib/map';
-  import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
+  import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -141,6 +141,14 @@
   const role = $derived(mem?.role ?? null);
   const crew = $derived(!preview && !!e && e.status === 'published' && may(mem, 'door'));
   const head = $derived(may(mem, 'events'));
+  // whom the door records (server checkin.set_audience), right under the Mark row where the organizer lands (owner, Nov 14)
+  const AUD = { both: 'mk.aBoth', guests: 'mk.aGuests', team: 'mk.aTeam' } as const;
+  async function setAud(a: DoorAudience) {
+    if (!detail) return;
+    const was = detail.audience;
+    detail.audience = a; haptic.tap();
+    try { await api.setAudience(id, a); } catch { detail.audience = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   // a co-hosted event's other club (server cohosts.py): its event team works the door and reads the list; its Vice+
   // may leave. Editing, price and seats stay the host's
   const coMem = $derived(e?.coHost ? session.me?.memberships.find((m) => m.org.id === e.coHost!.id) ?? null : null);
@@ -520,7 +528,10 @@
           {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
             {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
           <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
-          {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />{/if}
+          {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />
+            {#if head && detail && !over && !e.guestHost}<Row icon={UserCheck} title={t('mk.audience')} value={t(AUD[detail.audience ?? 'both'])}
+              menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === (detail?.audience ?? 'both'), onselect: () => void setAud(a) }))} />{/if}
+          {/if}
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}

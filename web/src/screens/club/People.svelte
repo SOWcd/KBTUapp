@@ -46,7 +46,7 @@
   // rows marked or unmarked in this tab stay in it until the next switch
   let stay = $state<string[]>([]);
   let q = $state('');
-  const want = (x: { name: string }) => !q.trim() || hit(q, [x.name]);
+  const want = (x: { name: string; group?: string }) => !q.trim() || hit(q, [x.name, x.group]); // a department's name finds its people
   // the groups in the list's order, each counted over all its people (search and tab only pick the rows shown)
   const groups = $derived.by(() => {
     const by = new Map<string, { all: number; came: number; rows: Item[] }>();
@@ -66,7 +66,7 @@
     haptic.ok(); keep(x);
     const was = { at: x.at, manual: x.manual };
     set(x, nowTs(), true); // at once; back if the server says no
-    say(t('mk.marked', { name: x.name }), 'sparkles_3d', () => void unmark(x));
+    say(t('mk.marked', { name: x.name.split(' ').slice(0, 2).join(' ') }), 'sparkles_3d', () => void unmark(x), undefined, true);
     try {
       if (x.uid == null) team = await api.teamMark(id, x.key, true);
       else {
@@ -90,7 +90,7 @@
     try {
       if (x.uid == null) team = await api.teamMark(id, x.key, false);
       else await api.undoCheckin(id, x.uid);
-      haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default'); onchange?.();
+      haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default', undefined, undefined, true); onchange?.();
     } catch (e) { set(x, was.at, was.manual); err(e); }
   }
   // the list a row came from, changed in place (the derived items follow)

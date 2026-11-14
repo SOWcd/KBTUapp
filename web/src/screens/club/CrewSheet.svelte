@@ -1,9 +1,11 @@
 <script lang="ts">
-  // An event's door helpers (server logic/crew.py), for a running club's President or Vice: a friend or someone from
-  // the team helps at this one event's door until it ends. 🎫 the scanner by default; 🚪 the whole door (the list of
-  // names) after a confirm. Three at most. Each tap answers at once; back if the server says no.
+  // An event's door helpers (server logic/crew.py), for a running club's President or Vice, the Mark screen's «Helper»:
+  // one place (owner, Nov 14) for the helper's QR (whoever scans it: the scanner, until Finish) and the helpers named
+  // here, a friend or someone from the team, at this one event's door until it ends: the scanner by default, the scanner
+  // and the list after a confirm. Three named at most. Each tap answers at once; back if the server says no.
   import { api, ApiErr, staffEvents, type CrewKind, type CrewMember, type Id, type PersonRef } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { say, overlays, type Overlay } from '../../lib/state/ui.svelte';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -23,14 +25,21 @@
 
   let { overlay, id, onchange }: { overlay: Overlay; id: Id; onchange?: (n: number) => void } = $props();
   let list = $state<CrewMember[] | null>(null);
-  $effect(() => { api.event(id).then((d) => (list = d.crew ?? [])).catch(() => (list = [])); });
+  // read as it opens and again as the helper's QR over it closes (who scanned it is listed then)
+  const covered = $derived([...overlays].reverse().find((o) => !o.closing)?.id !== overlay.id);
+  $effect(() => { if (!covered) api.event(id).then((d) => (list = d.crew ?? [])).catch(() => { list ??= []; }); });
+  async function showQr() {
+    haptic.tap();
+    try { const s = await api.eventScreen(id); if (!s.started) await api.screenAct(s.session, 'start'); sheets.handQr(s.session); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   $effect(() => { if (list) onchange?.(list.length); });
 
   const e = $derived(eventById(id));
   // the club I give helpers for: the host first, else the co-host (as the server's _lead); the creator from Admin: the
   // host, as its President (server app.viewer)
   const mine = $derived(staffEvents.has(id) && session.me?.founder ? e?.org ?? null : [e?.org, e?.coHost].find((o) => o && RANK[session.me?.memberships.find((m) => m.org.id === o.id)?.role ?? 'member'] >= RANK.vice) ?? null);
-  const full = $derived((list?.length ?? 0) >= 3);
+  const full = $derived((list ?? []).filter((x) => x.kind !== 'qr').length >= 3);
 
   // friends and the teams I lead, once each, not me, not already helping
   let q = $state('');
@@ -42,7 +51,7 @@
     return (q.trim() ? out.filter((p) => hit(q, [p.name, p.realName])) : out).slice(0, 30);
   });
 
-  const KIND = { scan: 'crew.scan', door: 'crew.door' } as const;
+  const KIND = { scan: 'crew.scan', door: 'crew.door', qr: 'crew.qr' } as const;
   const why = (x: unknown) => say(t(x instanceof ApiErr && x.code === 'rate_limited' ? 'crew.full' : x instanceof ApiErr && x.message === 'banned' ? 'crew.banned' : 'common.error'), 'pleading_face_3d');
 
   async function put(p: PersonRef, kind: CrewKind) {
@@ -72,6 +81,7 @@
   <p class="t-foot sub">{t('crew.hint')}</p>
   {#if list}
     <div class="list">
+      <Button kind="secondary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('crew.showQr')}</Button>
       <Group>
         {#each list as x (x.person.id)}
           {#snippet off()}<Button kind="secondary" size="s" onclick={() => drop(x.person)}>{t('crew.remove')}</Button>{/snippet}

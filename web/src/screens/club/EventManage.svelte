@@ -70,8 +70,7 @@
   // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
-  let crewN = $state<number | null>(null);
-  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; crewN = x.crew ? x.crew.length : null; }).catch(() => {}); });
+  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; }).catch(() => {}); });
   // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
   // with the page and every 10 s (it runs in the page above this one)
   const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
@@ -206,7 +205,8 @@
 
       {#if head && list}
         <Group>
-          {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {#if (started || doorDay) && aud === 'team' && teamLine}<Row icon={UsersRound} title={teamLine} accessory="chevron" onclick={() => sheets.doorPeople(id)} /><!-- a team-only door: no guests' row -->
+          {:else if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
           {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
@@ -256,8 +256,8 @@
               {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
               {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
               <!-- one «Helpers»: the door's (server crew.py, its sheet links the volunteers), else the volunteers -->
-              {#if crewN != null && live && !inner(e) && !e.guestHost && ends > nowTs()}<Row icon={HandHeart} title={t('mg.helpers')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
-              {:else if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
+              <!-- the door's helpers live under the Mark screen's «Helper» (CrewSheet); here the volunteers who asked -->
+              {#if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
               <!-- the big screen at the door (/show): connect a laptop, finish, the CSV -->
               <!-- a partner's event has no door of ours: its team is marked here -->
               {#if e.guestHost && teamMark}<Row icon={UserCheck} title={t('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}

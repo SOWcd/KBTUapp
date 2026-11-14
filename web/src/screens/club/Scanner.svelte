@@ -44,7 +44,8 @@
   let mode = $state<'scan' | 'qr'>(untrack(() => (qr ? 'qr' : 'scan')));
 
   let detail = $state<EventFull | null>(null);
-  $effect(() => { api.event(id).then((d) => (detail = d)).catch(() => {}); });
+  // the Mark screen's counts once the event says who I am at its door (a scanner-only helper reads no lists: no 403s)
+  $effect(() => { api.event(id).then((d) => { detail = d; if (qr) recount(); }).catch(() => {}); });
   const e = $derived(eventById(id) ?? detail);
   const camera = inTelegram && /^(ios|android)$/.test(tg.platform) && tg.can('6.4');
   // our camera (ui/QrCam) until it fails (refused, none), then Telegram's popup takes over
@@ -65,7 +66,10 @@
   let team = $state<TeamList | null>(null);
   const aud = $derived(team?.audience ?? detail?.audience ?? 'both');
   const teamCame = $derived(team ? team.rows.filter((r) => r.at).length : 0);
+  // let in by the helper's QR, or named for the scanner only: the QR and the camera, said so plainly (no lists)
+  const scanOnly = $derived(qr && detail?.myCrew === 'scan');
   function recount() {
+    if (detail?.myCrew === 'scan') return;
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
     api.teamList(id).then((x) => (team = x)).catch(() => {});
   }
@@ -73,11 +77,8 @@
   function openPeople() { haptic.tap(); sheets.doorPeople(id, recount); }
   // who may let a helper in: the club's President or Vice, or the app's admin (server checkin._hands_over)
   const board = $derived(session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === e?.org.id && (m.role === 'president' || m.role === 'vice')));
-  async function addHelper() {
-    haptic.tap();
-    try { const s = await api.eventScreen(id); if (!s.started) await api.screenAct(s.session, 'start'); sheets.handQr(s.session); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
+  // one place for helpers (CrewSheet): the helper's QR and the people named, with what each may do
+  function addHelper() { haptic.tap(); sheets.crew(id); }
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
   $effect(() => { overlay.title = qr ? t('mk.title') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
@@ -148,7 +149,6 @@
     panel.animate([{ opacity: 0, transform: 'translate3d(0,40px,0)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (names) void openByName();
     else if (live === 'failed' && camera && mode === 'scan') scan();
-    if (qr) recount();
     const show = hideChrome();
     return () => { show?.(); ondone?.(); };
   });
@@ -227,6 +227,7 @@
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
+      {#if scanOnly}<p class="t-foot only">{t('mk.scanOnly')}</p>{/if}
       <div class="quiet">
         {#if lists}<Button kind="secondary" size="m" onclick={openPeople}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('mk.people')}</Button>{/if}
         {#if board && !sess}<Button kind="secondary" size="m" onclick={addHelper}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('mk.helper')}</Button>{/if}
@@ -286,6 +287,7 @@
   .tally { align-self: center; padding: var(--s-1) var(--s-3); border: 0; background: none; color: var(--text); font: 700 var(--fs-t3)/1.25 var(--font-display);
     letter-spacing: -0.01em; text-align: center; font-variant-numeric: tabular-nums; }
   .quiet { display: flex; gap: var(--s-2); }
+  .only { margin: 0; text-align: center; color: var(--text-2); }
   .quiet > :global(*) { flex: 1 1 0; min-width: 0; }
 
   .res { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--r-l); text-align: center;
