@@ -83,6 +83,14 @@ def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
     return con.execute(sql, args).fetchone()
 
 
+def chat_owners(con, tg_chat: int) -> set[int]:
+    """The clubs holding a Telegram chat by any of its three ways: a sync link, a card on the page, an event's group.
+    Every claim checks them all: another club's chat stays theirs (Codex review, Nov 14)."""
+    return {r[0] for r in rows(con, """SELECT org_id FROM chat_sync WHERE chat_id = ?1
+        UNION SELECT org_id FROM chats WHERE tg_chat_id = ?1 AND org_id IS NOT NULL
+        UNION SELECT org_id FROM events WHERE chat_id = ?1 AND org_id IS NOT NULL""", tg_chat)}
+
+
 def rows(con: sqlite3.Connection, sql: str, *args) -> list[sqlite3.Row]:
     return con.execute(sql, args).fetchall()
 

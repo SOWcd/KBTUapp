@@ -385,6 +385,7 @@ def ms_sweep(con) -> None:
     con.execute("DELETE FROM meta WHERE key >= 'ms_used:' AND key < 'ms_used;' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
     con.execute("DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.at') < ?", (core.now() - MS_CLAIM_TTL,))
     con.execute("DELETE FROM meta WHERE key >= 'chpick:' AND key < 'chpick;' AND CAST(substr(value, instr(value, ':') + 1) AS INTEGER) < ?", (core.now(),))
+    con.execute("DELETE FROM chat_waits WHERE until < ?", (core.now(),))
 
 
 SID_WAIT = 30 * 86400  # how long the one turned away waits to hear the ID is free (then the parked message lapses)
@@ -1071,7 +1072,7 @@ _DEL_GONE = {
     ("students", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
-    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
+    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("qr_marks", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),

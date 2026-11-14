@@ -493,70 +493,144 @@ def chat_pick(con, v: Viewer, oid: int) -> None:
 
 
 def pick_claim(con, tg_from: int, chat: dict, invite: str | None) -> int | None:
-    """Our bot just landed in a chat, added by someone with a fresh chat_pick: the chat is that org's now (the same rules
-    as add_org_chat: another org's stays theirs, a catalog chat is the admin's to give, the page's limit). Its id."""
+    """Our bot just made admin in a chat by someone with a fresh chat_pick: the chat is that org's now (bind's rules).
+    The pick is read and spent in the same transaction (two updates can't both use it). Its id."""
     key = f"chpick:{tg_from}"
-    m = one(con, "SELECT value FROM meta WHERE key = ?", key)
-    if not m:
-        return None
-    oid, until = map(int, m["value"].split(":"))
-    u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
-    url = f"https://t.me/{chat['username']}" if chat.get("username") else invite
-    if until < core.now() or not u:
-        con.execute("DELETE FROM meta WHERE key = ?", (key,))
-        return None
-    if not url:  # a plain member of a closed group, or a basic group before Telegram upgrades it: the pick waits for the admin rights
-        return None
-    v = Viewer(u["id"], u["role"], bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"])))
     with tx(con):
-        try:
-            may_chats(con, v, oid)
-        except ApiError:
+        m = one(con, "SELECT value FROM meta WHERE key = ?", key)
+        if not m:
             return None
-        c = one(con, f"SELECT * FROM chats WHERE {SAME_CHAT}", url, url, chat["id"])
-        held = one(con, "SELECT * FROM chats WHERE tg_chat_id = ?", chat["id"])  # the bot's chat id is the proof (a closed chat's links differ)
-        if held and (not c or held["id"] != c["id"]):
-            c = held
-        if c and (c["org_id"] not in (None, oid) or c["org_id"] is None and v.role != "admin"):
+        oid, until = map(int, m["value"].split(":"))
+        u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
+        if until < core.now() or not u:
+            con.execute("DELETE FROM meta WHERE key = ?", (key,))
             return None
-        if (not c or c["org_id"] != oid) and one(con, "SELECT COUNT(*) FROM chats WHERE org_id = ?", oid)[0] >= ORG_CHATS:
+        if not (chat.get("username") or invite):  # a basic group before Telegram upgrades it: the pick waits
             return None
-        kind = "channel" if chat.get("type") == "channel" else "group"
-        if c:
-            con.execute("UPDATE chats SET org_id = ?, tg_chat_id = ? WHERE id = ?", (oid, chat["id"], c["id"]))
-            cid = c["id"]
-        else:
-            title = " ".join(str(chat.get("title") or "").split())[:80] or "Telegram"
-            cid = con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, added_by, created_at, status, org_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'org', ?)""", (title, kind, int(bool(chat.get("is_forum"))), url, chat["id"], v.id, core.now(), oid)).lastrowid
-        ch = one(con, "SELECT * FROM chats WHERE id = ?", cid)
-        if ch["kind"] == "channel" and not _closed(ch) and not one(con, "SELECT 1 FROM chats WHERE org_id = ? AND main = 1", oid):
-            con.execute("UPDATE chats SET main = 1 WHERE id = ?", (cid,))
-        _chats_audit(con, v, oid, f"pick {url}")
-        con.execute("DELETE FROM meta WHERE key = ?", (key,))  # spent only once it worked
+        if cid := _bind(con, u, oid, chat, invite):
+            con.execute("DELETE FROM meta WHERE key = ?", (key,))  # spent only once it worked
     return cid
 
 
+def _bind(con, u: sqlite3.Row, oid: int, chat: dict, invite: str | None) -> int | None:
+    """Inside a transaction: a chat our bot is an admin in becomes this org's card, claimed by `u` (users' id, role):
+    the same rules as add_org_chat (u may edit the org's chats; a chat any other club holds, by a card, an event or a
+    sync link, stays theirs; a catalog chat is the admin's to give; the page's limit). The card's id."""
+    url = f"https://t.me/{chat['username']}" if chat.get("username") else invite
+    if not url:
+        return None
+    v = Viewer(u["id"], u["role"], bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"])))
+    try:
+        may_chats(con, v, oid)
+    except ApiError:
+        return None
+    if core.chat_owners(con, chat["id"]) - {oid}:
+        return None
+    c = one(con, f"SELECT * FROM chats WHERE {SAME_CHAT}", url, url, chat["id"])
+    held = one(con, "SELECT * FROM chats WHERE tg_chat_id = ?", chat["id"])  # the bot's chat id is the proof (a closed chat's links differ)
+    if held and (not c or held["id"] != c["id"]):
+        c = held
+    if c and (c["org_id"] not in (None, oid) or c["org_id"] is None and v.role != "admin"):
+        return None
+    if (not c or c["org_id"] != oid) and one(con, "SELECT COUNT(*) FROM chats WHERE org_id = ?", oid)[0] >= ORG_CHATS:
+        return None
+    kind = "channel" if chat.get("type") == "channel" else "group"
+    if c:
+        con.execute("UPDATE chats SET org_id = ?, tg_chat_id = ? WHERE id = ?", (oid, chat["id"], c["id"]))
+        cid = c["id"]
+    else:
+        title = " ".join(str(chat.get("title") or "").split())[:80] or "Telegram"
+        cid = con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, added_by, created_at, status, org_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'org', ?)""", (title, kind, int(bool(chat.get("is_forum"))), url, chat["id"], v.id, core.now(), oid)).lastrowid
+    ch = one(con, "SELECT * FROM chats WHERE id = ?", cid)
+    if ch["kind"] == "channel" and not _closed(ch) and not one(con, "SELECT 1 FROM chats WHERE org_id = ? AND main = 1", oid):
+        con.execute("UPDATE chats SET main = 1 WHERE id = ?", (cid,))
+    con.execute("DELETE FROM chat_waits WHERE chat_id = ?", (chat["id"],))  # held now: nobody's to pick any more
+    _chats_audit(con, v, oid, f"pick {url}")
+    return cid
+
+
+WAITS = 5  # remembered chats a person (the oldest go)
+
+
+def bot_admin(con, tg_from: int, chat: dict, invite: str | None) -> None:
+    """Our bot made admin in a chat no club holds, and no pick or card claimed it (owner, Nov 14: any order works):
+    remembered for the one who did it (Telegram's `from`, the action's performer) for PICK_TTL; Studio → Chats then
+    lists it to him alone, and he links it to a club he may edit (claim_wait). Nothing is linked by itself."""
+    u = one(con, "SELECT id FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
+    if not u or core.chat_owners(con, chat["id"]):
+        return
+    keep = {k: chat.get(k) for k in ("id", "type", "title", "username", "is_forum")}
+    con.execute("""INSERT INTO chat_waits (user_id, chat_id, chat, invite, until) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, chat_id) DO UPDATE SET chat = excluded.chat, invite = excluded.invite, until = excluded.until""",
+                (u["id"], chat["id"], json.dumps(keep), invite, core.now() + PICK_TTL))
+    con.execute("""DELETE FROM chat_waits WHERE user_id = ? AND id NOT IN
+        (SELECT id FROM chat_waits WHERE user_id = ? ORDER BY until DESC, id DESC LIMIT ?)""", (u["id"], u["id"], WAITS))
+
+
+def bot_unwait(con, tg_chat: int) -> None:
+    """Our bot no longer an admin there (demoted, removed): no proof left, the remembered chat goes."""
+    con.execute("DELETE FROM chat_waits WHERE chat_id = ?", (tg_chat,))
+
+
+def my_waits(con, v: Viewer, oid: int) -> list[dict]:
+    """Studio → Chats: the chats I made our bot an admin in, still free, to link to this org (only mine, only here)."""
+    may_chats(con, v, oid)
+    out = []
+    for r in rows(con, "SELECT id, chat_id, chat FROM chat_waits WHERE user_id = ? AND until >= ? ORDER BY until DESC", v.id, core.now()):
+        if not core.chat_owners(con, r["chat_id"]):
+            c = json.loads(r["chat"])
+            out.append({"id": r["id"], "title": " ".join(str(c.get("title") or "").split())[:80] or "Telegram",
+                        "kind": "channel" if c.get("type") == "channel" else "group"})
+    return out
+
+
+def wait_target(con, v: Viewer, oid: int, wid: int) -> tuple[int, int]:
+    """The Telegram chat behind one of my remembered chats (to ask Telegram, before claim_wait), and my Telegram id."""
+    may_chats(con, v, oid)
+    r = one(con, "SELECT w.chat_id, u.tg_id FROM chat_waits w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND w.user_id = ? AND w.until >= ?",
+            wid, v.id, core.now())
+    if not r:
+        raise ApiError("not_found")
+    return r["chat_id"], r["tg_id"]
+
+
+def claim_wait(con, v: Viewer, oid: int, wid: int) -> list[dict]:
+    """«Link» on a remembered chat (Telegram just said our bot and I are its admins): consumed at once, whatever comes
+    of it, then bound under my rights by bind's rules. The org's chats; conflict when it can't be linked."""
+    with tx(con):
+        r = one(con, "DELETE FROM chat_waits WHERE id = ? AND user_id = ? AND until >= ? RETURNING chat, invite", wid, v.id, core.now())
+        if not r:
+            raise ApiError("not_found")
+        u = one(con, "SELECT id, role FROM users WHERE id = ? AND banned_at IS NULL", v.id)
+        if not u or not _bind(con, u, oid, json.loads(r["chat"]), r["invite"]):
+            raise ApiError("conflict", "taken")
+    return org_chats(con, oid, True)
+
+
 def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int | None = None) -> int | None:
-    """Our bot is in a chat now: which org chat it is, among those of the orgs the one who added it may edit (the admin:
-    any) and not yet kept by the bot. A group by Studio's link says (its /start oc_<id>); a channel can't carry one, so
-    by its @name, its invite link (getChat gives one to an admin bot), or its exact title (a closed channel's link on
-    the page may not be its primary one; not for the admin, who may edit every club: a title is no proof which). The chat's id."""
+    """Our bot is in a chat now, made admin there (or a group's own admin said /start oc_<id>): which org chat it is,
+    among those of the orgs the one who added it may edit (the admin: any) and not yet kept by the bot. A group by
+    Studio's link says (its /start oc_<id>); a channel can't carry one, so by its @name or its invite link (getChat
+    gives one to an admin bot); never by a title (Codex, Nov 14: a title proves nothing). The chat's id."""
     u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
     if not u:
         return None
     v = Viewer(u["id"], u["role"], bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"])))
     name = str(chat.get("username") or "").lower()
+    owners = core.chat_owners(con, chat["id"])
     if one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ?", chat["id"]):  # a chat another card already holds stays its
         return None
     for c in rows(con, "SELECT * FROM chats WHERE org_id IS NOT NULL AND tg_chat_id IS NULL AND (? IS NULL OR id = ?) ORDER BY id", cid, cid):
         if v.role != "admin" and not can(con, v, c["org_id"], "profile"):
             continue
-        if cid and one(con, "SELECT 1 FROM events WHERE chat_id = ? AND org_id IS NOT ?", chat["id"], c["org_id"]):
-            return None  # another club's event chat stays theirs
-        if cid or (name and c["url"].rstrip("/").lower() == f"https://t.me/{name}") or (invite and c["url"].rstrip("/") == invite.rstrip("/")) \
-                or (v.role != "admin" and chat.get("type") == "channel" and c["kind"] == "channel" and c["title"] == chat.get("title")):
+        if owners - {c["org_id"]}:
+            if cid:
+                return None  # another club's event or synced chat stays theirs
+            continue
+        if cid or (name and c["url"].rstrip("/").lower() == f"https://t.me/{name}") or (invite and c["url"].rstrip("/") == invite.rstrip("/")):
             con.execute("UPDATE chats SET tg_chat_id = ? WHERE id = ?", (chat["id"], c["id"]))
+            con.execute("DELETE FROM chat_waits WHERE chat_id = ?", (chat["id"],))
             return c["id"]
     return None
 

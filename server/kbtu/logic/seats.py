@@ -113,9 +113,8 @@ def chat_claim(con, token: str, tg_id: int, chat_id: int) -> sqlite3.Row | None:
         return None
     # a group another club's event or any chat of the app's list already holds stays theirs; the same club's earlier
     # event gives its group up to this one
-    if one(con, "SELECT 1 FROM events WHERE chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]) \
-            or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]):
-        return None
+    if core.chat_owners(con, chat_id) - {e["org_id"]} or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]):
+        return None  # a synced chat too (Codex, Nov 14)
     con.execute("UPDATE events SET chat_id = NULL, chat_link = NULL WHERE chat_id = ? AND id != ?", (chat_id, e["id"]))
     con.execute("UPDATE events SET chat_token = NULL, chat_id = ?, chat_link = NULL WHERE id = ?", (chat_id, e["id"]))
     return e

@@ -878,6 +878,24 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return {"url": f"{bot_url}?startchannel&admin=invite_users+post_messages+edit_messages+delete_messages" if kind == "channel"
                 else f"{bot_url}?startgroup=pick&admin=invite_users+delete_messages+restrict_members+pin_messages"}
 
+    @app.get("/api/orgs/{oid}/chats/waiting")
+    def org_chat_waits(oid: int, con: Con, v: Me):
+        """Chats I made our bot an admin in, no club's yet (logic.bot_admin): mine to link here, ten minutes."""
+        return logic.my_waits(con, v, oid)
+
+    @app.post("/api/orgs/{oid}/chats/waiting/{wid}")
+    async def org_chat_wait_claim(oid: int, wid: int, con: Con, v: Me):
+        """«Link» on one of them: Telegram says now that our bot and I are still its admins, then logic.claim_wait."""
+        chat, me = await run_in_threadpool(logic.wait_target, con, v, oid, wid)
+        async with httpx.AsyncClient(timeout=10) as http:
+            ours = await bot._call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": int(cfg.bot_token.split(":")[0])}, 0)
+            mine = await bot._call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": me}, 0)
+        if not ours or not mine:
+            raise logic.ApiError("unavailable")
+        if (ours.get("result") or {}).get("status") != "administrator" or (mine.get("result") or {}).get("status") not in ("creator", "administrator"):
+            raise logic.ApiError("conflict", "rights")
+        return await run_in_threadpool(logic.claim_wait, con, v, oid, wid)
+
     @app.put("/api/orgs/{oid}/chats/{cid}/main")
     def main_org_chat(oid: int, cid: int, con: Con, v: Me):
         return logic.main_org_chat(con, v, oid, cid)

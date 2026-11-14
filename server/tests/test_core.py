@@ -908,6 +908,116 @@ def test_chat_pick(env):
     con.close()
 
 
+
+class _ChatHttp:
+    """Telegram for my_chat_member: getChat tells an admin bot the chat's invite link."""
+    async def post(self, url, json=None, **_):
+        m = url.rsplit("/", 1)[1]
+        body = {"invite_link": f"https://t.me/+inv{-json['chat_id']}"} if m == "getChat" else 5 if m == "getChatMemberCount" else True
+        return types.SimpleNamespace(json=lambda: {"ok": True, "result": body})
+
+
+def _bot_in(cfg, con, tg, chat_id, status="administrator", kind="supergroup", title=None):
+    """Our bot added to a chat by `tg` (Telegram's action performer); whose card it is now, if any."""
+    asyncio.run(bot._member(cfg, _ChatHttp(), con, {"chat": {"id": chat_id, "type": kind, "title": title or f"chat {chat_id}"},
+                                                     "from": {"id": tg}, "new_chat_member": {"status": status, "user": {"id": 123}}}))
+    r = con.execute("SELECT org_id FROM chats WHERE tg_chat_id = ?", (chat_id,)).fetchone()
+    return r and r[0]
+
+
+def _two_clubs(c, cfg):
+    pres, ali, bob = login(c, 20, "pres"), login(c, 21, "ali"), login(c, 22, "bob")
+    con = db.connect(cfg.db_path)
+    for i, slug in ((1, "it"), (2, "art")):
+        con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (?, ?, 'club', ?, ?, 'laptop_3d', 0)", (i, slug, slug, slug))
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0), (2, ?, 'president', 0)",
+                (pres["id"], ali["id"], bob["id"]))
+    return con, pres
+
+
+def test_chat_link_bot_first(env, monkeypatch):
+    """Owner, Nov 14: our bot made admin first, Studio afterwards. Nothing links by itself: the chat is remembered for
+    the one who made it admin, Studio → Chats lists it to him alone, and «Link» (Telegram saying now that the bot and
+    he are its admins) makes it the club's; the record is spent. A plain member's add remembers nothing; the bot
+    demoted: forgotten; at most five a person; a deleted account's go."""
+    c, cfg = env
+    con, pres = _two_clubs(c, cfg)
+    status = {"bot": "administrator", "me": "creator"}
+
+    async def call(_cfg, _http, method, params, gap=0):
+        assert method == "getChatMember"
+        return {"ok": True, "result": {"status": status["bot" if params["user_id"] == int(cfg.bot_token.split(":")[0]) else "me"]}}
+    monkeypatch.setattr(bot, "_call", call)
+    waits = lambda tg=20, oid=1: c.get(f"/api/orgs/{oid}/chats/waiting", headers=tma(tg)).json()  # noqa: E731
+    link = lambda w, tg=20, oid=1: c.post(f"/api/orgs/{oid}/chats/waiting/{w}", headers=tma(tg))  # noqa: E731
+
+    assert _bot_in(cfg, con, 20, -100600, "member") is None and waits() == []     # a plain member's add: nothing
+    assert _bot_in(cfg, con, 20, -100601, title="IT <b>chat</b>") is None          # made admin: nothing linked by itself
+    (w,) = waits()
+    assert w["title"] == "IT <b>chat</b>" and w["kind"] == "group" and set(w) == {"id", "title", "kind"}   # no Telegram id, no invite
+    assert c.get("/api/orgs/1/chats/waiting", headers=tma(21)).status_code == 403   # a plain club member
+    assert waits(22, 2) == []                                                      # someone else's: never listed
+    assert link(w["id"], 22, 2).status_code == 404                                 # nor his to link
+    status["bot"] = "member"
+    assert link(w["id"]).status_code == 409                                        # our bot no longer an admin there
+    status.update(bot="administrator", me="member")
+    assert link(w["id"]).status_code == 409                                        # nor I
+    status["me"] = "administrator"
+    r = link(w["id"])
+    assert r.status_code == 200 and [x["title"] for x in r.json()] == ["IT <b>chat</b>"]
+    assert con.execute("SELECT org_id, url FROM chats WHERE tg_chat_id = -100601").fetchone()[:] == (1, "https://t.me/+inv100601")
+    assert link(w["id"]).status_code == 404 and waits() == []                      # spent
+    _bot_in(cfg, con, 20, -100602)
+    _bot_in(cfg, con, 20, -100602, "member")                                       # demoted: no proof left
+    assert waits() == []
+    for i in range(7):
+        _bot_in(cfg, con, 20, -100610 - i)
+    assert len(waits()) == 5                                                       # the newest five
+    con.execute("UPDATE chat_waits SET until = 0 WHERE chat_id = -100610 - 6")
+    assert len(waits()) == 4                                                       # ten minutes passed
+    delete_now(c, cfg, tma(20))
+    assert not con.execute("SELECT 1 FROM chat_waits").fetchone()
+    con.close()
+
+
+def test_chat_link_picker_first(env):
+    """Studio's picker first, then our bot made admin by the same person: linked at once (the pick spent); made admin
+    by someone else, or only added as a plain member: the pick waits."""
+    c, cfg = env
+    con, pres = _two_clubs(c, cfg)
+    c.post("/api/orgs/1/chats/pick", headers=tma(20), json={"kind": "group"})
+    assert _bot_in(cfg, con, 22, -100620) is None                                 # not the one who picked
+    assert _bot_in(cfg, con, 20, -100621, "member") is None                       # a plain member
+    assert _bot_in(cfg, con, 20, -100621) == 1
+    assert not con.execute("SELECT 1 FROM meta WHERE key = 'chpick:20'").fetchone()
+    con.close()
+
+
+def test_chat_claims_respect_other_clubs(env):
+    """Codex, Nov 14: a chat another club holds by an event or a sync link stays theirs on every path (the picker, a
+    remembered chat, an event's /start); a channel is never matched to a card by its title alone; a card with the
+    chat's invite link isn't taken by a plain member's add."""
+    c, cfg = env
+    con, pres = _two_clubs(c, cfg)
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at, chat_id)
+        VALUES (5, 2, 'published', 'Art night', 'Hall', 0, 'x', '#000', 0, 0, -300)""")
+    con.execute("INSERT INTO chat_sync (chat_id, org_id, kind, created_at) VALUES (-301, 2, 'main', 0)")
+    for chat in (-300, -301):
+        logic.chat_pick(con, logic.Viewer(pres["id"], "user", True), 1)
+        assert logic.pick_claim(con, 20, {"id": chat, "type": "supergroup", "title": "x"}, "https://t.me/+abcdefgh") is None
+        assert _bot_in(cfg, con, 20, chat) is None and not con.execute("SELECT 1 FROM chat_waits").fetchone()  # never remembered
+    assert con.execute("SELECT org_id FROM events WHERE chat_id = -300").fetchone()[0] == 2
+    con.execute("INSERT INTO chats (title, kind, url, status, org_id, created_at) VALUES ('Duplicate title', 'channel', 'https://t.me/+ijklmnop', 'org', 1, 0)")
+    assert logic.bot_added(con, 20, {"id": -400, "type": "channel", "title": "Duplicate title"}) is None
+    con.execute("INSERT INTO chats (title, kind, url, status, org_id, created_at) VALUES ('IT chat', 'group', 'https://t.me/+inv500', 'org', 1, 0)")
+    assert _bot_in(cfg, con, 20, -500, "member") is None                          # its invite link, but a plain member's add
+    assert _bot_in(cfg, con, 20, -500) == 1                                       # made admin: the card is it
+    e = {"id": 6, "token": "tok"}
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at, chat_token)
+        VALUES (6, 1, 'published', 'IT night', 'Hall', 0, 'x', '#000', 0, 0, 'tok')""")
+    assert logic.chat_claim(con, e["token"], 20, -301) is None                    # another club's synced chat
+    con.close()
+
 def test_team_rank_rule(env):
     """The club's own team (SPEC §2): everyone in it sees the roster; Vice+ manage only people below them and give only
     roles below their own; the President hands the club over and becomes Vice; anyone but the President can leave."""
@@ -4999,8 +5109,8 @@ def test_org_catalog_chat_is_the_admins_to_give(env, monkeypatch):
     assert "KBTU Talk" in [x["title"] for x in c.post("/api/orgs/1/chats", headers=tma(89), json={"link": "@kbtu_talk"}).json()]
     assert tuple(con.execute("SELECT org_id, status FROM chats WHERE id = ?", (talk,)).fetchone()) == (1, "live")  # still in the catalog
     con.execute("UPDATE chats SET kind = 'channel' WHERE url = 'https://t.me/chat_1'")
-    assert logic.bot_added(con, 89, {"id": -100700, "type": "channel", "title": "Chat 1"}) is None   # the admin: never by a title
-    assert logic.bot_added(con, 81, {"id": -100700, "type": "channel", "title": "Chat 1"}) is not None
+    assert logic.bot_added(con, 89, {"id": -100700, "type": "channel", "title": "Chat 1"}) is None   # never by a title (Codex, Nov 14)
+    assert logic.bot_added(con, 81, {"id": -100700, "type": "channel", "title": "Chat 1"}) is None
 
 
 def test_channel_mirror(env, tmp_path):

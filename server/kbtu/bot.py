@@ -568,30 +568,33 @@ async def _avatar(peek: dict, root: Path) -> None:
 
 
 async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
-    """Our bot added to a chat or taken out of it (my_chat_member). Added by someone who may edit a club's chats, to a
-    chat on its page: the bot keeps that card from now on (a group added by Studio's link says which: its /start)."""
+    """Our bot added to a chat or taken out of it (my_chat_member). Made admin by someone who may edit a club's chats:
+    his Studio pick, or a chat on the club's page, links it; else it's remembered for him to link from Studio."""
     chat, status = upd.get("chat") or {}, (upd.get("new_chat_member") or {}).get("status")
     logic.chatsync.bot_status(con, chat.get("id"), status)  # a linked chat where the bot isn't an admin any more: paused
     if chat.get("id"):  # the swear filter pauses without its rights and goes on when they're back
         logic.chatmod.rights(con, chat["id"], logic.chatmod.missing(upd.get("new_chat_member") or {}))
+    if chat.get("id") and status != "administrator":
+        logic.bot_unwait(con, chat["id"])  # a remembered chat needs our bot an admin there
     if status in ("left", "kicked"):
         logic.bot_left(con, chat["id"])
         return
-    if status not in ("member", "administrator") or chat.get("type") not in ("channel", "group", "supergroup"):
+    # every link needs our bot made an admin: only a chat's admin can do that, a plain member adding us proves nothing
+    # (Codex reviews, Nov 5 and 14: someone else's open group claimed); a later promotion comes as another update.
+    # A plain member's group links only by its admin's /start oc_<id> (_group)
+    if status != "administrator" or chat.get("type") not in ("channel", "group", "supergroup"):
         return
     invite = None
-    if status == "administrator":  # an admin bot is told the chat's primary invite link
-        try:
-            r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
-            invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
-        except (httpx.HTTPError, ValueError) as exc:  # matched by its name or title then
-            log.warning("bot added: %s", type(exc).__name__)
-    who = int((upd.get("from") or {}).get("id") or 0)
-    # the picker only for a bot made admin: only a chat's admin can do that, a plain member adding us proves nothing
-    # (Codex review, Nov 5: someone else's open group claimed); a later promotion comes as another update
-    picked = status == "administrator" and logic.pick_claim(con, who, chat, invite)
-    if cid := picked or logic.bot_added(con, who, chat, invite):  # Studio's picker first
+    try:  # an admin bot is told the chat's primary invite link
+        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
+        invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
+    except (httpx.HTTPError, ValueError) as exc:  # matched by its @name then
+        log.warning("bot added: %s", type(exc).__name__)
+    who = int((upd.get("from") or {}).get("id") or 0)  # the action's performer (Telegram's `from`)
+    if cid := logic.pick_claim(con, who, chat, invite) or logic.bot_added(con, who, chat, invite):  # Studio's picker first
         await chat_card(cfg, http, con, cid, chat["id"])
+    else:  # no club's yet: his to link from Studio → Chats for ten minutes
+        logic.bot_admin(con, who, chat, invite)
 
 
 def _refused(r: dict) -> bool:

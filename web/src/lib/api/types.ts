@@ -32,6 +32,7 @@ export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 's
  *  (an invite link) shows without a way in, `url` null. */
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
+export interface WaitingChat { id: Id; title: string; kind: 'group' | 'channel' }  // a chat I made our bot an admin in, no club's yet (ten minutes)
 export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */; swearMiss: ('delete' | 'ban')[] /* the bot's rights it lacks there: the filter paused */ }
 /** A person's swear warnings in the club's groups, 30 days: the club's own people by name, anyone else null ("a chat member"). */
 // Studio → Chats → Roles and admins: app names only (an app id for the club's own people), never a Telegram id

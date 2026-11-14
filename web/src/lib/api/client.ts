@@ -417,6 +417,8 @@ export const server: Api = {
   addOrgChat: (org, link) => call('POST', `/orgs/${org}/chats`, { link }),
   mainOrgChat: (org, chat) => call('PUT', `/orgs/${org}/chats/${chat}/main`),
   dropOrgChat: (org, chat) => call('DELETE', `/orgs/${org}/chats/${chat}`),
+  waitingChats: (org) => call('GET', `/orgs/${org}/chats/waiting`),
+  linkWaitingChat: (org, wait) => call('POST', `/orgs/${org}/chats/waiting/${wait}`),
   rosterSeen: () => call('POST', '/roster/seen'),
   rosterClaim: (row) => call('POST', `/roster/${row}/claim`),
   rosterRequests: (org) => call('GET', org ? `/roster/requests?org=${org}` : '/roster/requests'),

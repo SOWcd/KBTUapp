@@ -1739,6 +1739,17 @@ MIGRATIONS: list[tuple[int, str]] = [
       gone_at INTEGER) STRICT;"""),
     # (Nov 13) a school's own event only for its students (seats._visible): the school's slug, NULL for everyone
     (168, "ALTER TABLE events ADD COLUMN school TEXT;"),
+    # (Nov 14) a chat our bot was made admin in, no club holding it, remembered for the one who did it (Telegram's
+    # action performer) for ten minutes: Studio → Chats lists it to him to link (logic/chatlist.py bot_admin, claim_wait)
+    (169, """CREATE TABLE chat_waits (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      chat_id INTEGER NOT NULL,
+      chat TEXT NOT NULL,
+      invite TEXT,
+      until INTEGER NOT NULL,
+      UNIQUE (user_id, chat_id)) STRICT;
+    CREATE INDEX chat_waits_by_chat ON chat_waits(chat_id);"""),
 ]
 
 

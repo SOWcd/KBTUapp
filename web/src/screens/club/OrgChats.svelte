@@ -3,7 +3,7 @@
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
-  import { api, ApiErr, type ChatRoles, type Id, type StudioChat, type SwearRow } from '../../lib/api';
+  import { api, ApiErr, type ChatRoles, type Id, type StudioChat, type SwearRow, type WaitingChat } from '../../lib/api';
   import { say, open, ui } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -25,7 +25,24 @@
   // n: how many are linked (the profile's row says it)
   let { org, n = $bindable() }: { org: Id; n?: number } = $props();
   let chats = $state<StudioChat[]>([]);
-  const load = () => api.orgChats(org).then((l) => (chats = keep(l))).catch(() => {});
+  // chats I made our bot an admin in before opening Studio (Nov 14: any order works): mine to link here, ten minutes
+  let waits = $state<WaitingChat[]>([]);
+  const load = () => {
+    void api.waitingChats(org).then((l) => (waits = l)).catch(() => {});
+    return api.orgChats(org).then((l) => (chats = keep(l))).catch(() => {});
+  };
+  async function linkWait(w: WaitingChat) {
+    if (!(await sheets.ask({ title: t('oc.waitAsk', { title: w.title }), ok: t('oc.waitLink'), cancel: t('common.cancel') }))) return;
+    waits = waits.filter((x) => x !== w);
+    try { chats = keep(await api.linkWaitingChat(org, w.id)); haptic.ok(); }
+    catch (e) {
+      haptic.error();
+      const why = !(e instanceof ApiErr) ? 'common.error' : e.code === 'unavailable' ? 'chats.why.later' : e.message === 'rights' ? 'oc.why.rights'
+        : e.message === 'taken' ? 'oc.why.taken' : 'common.error';
+      say(t(why as 'common.error'), 'pleading_face_3d');
+      void load();
+    }
+  }
   $effect(() => { void load(); });
   // back from Telegram's picker: the chat our bot was just added to shows up (the bot links it, PLAN Nov 5)
   $effect(() => {
@@ -115,6 +132,16 @@
 </script>
 
 <div class="oc">
+  {#if waits.length}
+    <Group caption={t('oc.wait')} footnote={t('oc.waitNote')}>
+      {#each waits as w (w.id)}
+        <Row dense title={w.title} subtitle={t(`chats.${w.kind}`)}>
+          {#snippet lead()}<ChatAvatar title={w.title} photo={null} kind={w.kind} size={36} />{/snippet}
+          {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => linkWait(w)}>{t('oc.waitLink')}</Button>{/snippet}
+        </Row>
+      {/each}
+    </Group>
+  {/if}
   <Group footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '') + (chats.some((c) => c.bot && c.kind === 'group') ? ' ' + t('oc.allNote') : '')}>
     {#each chats as c (c.id)}
       <Row dense title={c.title} subtitle={line(c)}>
