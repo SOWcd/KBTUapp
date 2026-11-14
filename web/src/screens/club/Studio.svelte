@@ -211,9 +211,9 @@
   const claimOrg = $derived(dmp ? undefined : m?.org.id);
   const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests(claimOrg).then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
   $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
-  // The team right opens always-on applications; casting alone opens round setup or its board.
+  // Waiting applications (or no casting right) open the inbox; otherwise straight to the round's board or its form (owner, Nov 14).
   const recruitTile = $derived(casting || vice);
-  const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
+  const openRecruit = () => (vice && (waiting || !casting) ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
   const creates = $derived<MenuItem[]>([
     ...(staff ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []),
     ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),

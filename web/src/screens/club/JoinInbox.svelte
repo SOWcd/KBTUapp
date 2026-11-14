@@ -2,8 +2,8 @@
   import { withNick } from '../../lib/perms';
   // A club's applications (Vice+, §4.5), oldest first. The owner's flow: look at the person (the avatar opens
   // their card), write to them first ("come by, let's meet"), then accept or decline; the bot tells them.
-  // "Recruiting" (the round) is the row on top; the switch below it ("always open") takes any-time join requests without
-  // a round, with the club's own questions; their answers show under each person. Studio's "Recruiting" tile opens this for Vice+.
+  // "Recruiting" (the round) is the row on top; the "always open" switch lives in the round form (RoundSetup).
+  // Studio's "Recruiting" opens this only while applications wait (or without the casting right).
   // ponytail: "Write" needs a Telegram @username (no username, no chat link); a bot relay if that bites.
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Id, type JoinRequest, type Round } from '../../lib/api';
@@ -17,9 +17,9 @@
   import Inbox from '@lucide/svelte/icons/inbox';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
-  import Megaphone from '@lucide/svelte/icons/megaphone';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -63,18 +63,17 @@
 
 <Sheet {overlay} icon={Inbox} full title={t('cast.card')}>
   <div class="list">
-    {#if casting || o}
-      <Group footnote={o ? t('jr.openHint') : undefined}>
-        {#if casting}
-          <Row icon={Megaphone} title={round ? round.title : t('cast.cardOpen')} count={round?.counts?.new ?? 0}
-            value={round && !round.counts?.new ? tn('cast.apps', total) : undefined} accessory="chevron"
-            onclick={() => (round ? sheets.roundBoard(org) : sheets.roundSetup(org, null, loadRound))} />
-        {/if}
-        {#if o}
-          <Row icon={UserPlus} title={t('jr.open')} accessory="switch" checked={o.recruiting} onchange={(on) => { haptic.tap(); void setOpen(on); }} />
-          <!-- its own questions, as a round's (club presidents, Nov 6) -->
-          {#if o.recruiting}<Row icon={ClipboardPen} title={t('cast.questions')} value={o.joinQuestions?.length ? String(o.joinQuestions.length) : t('jr.qsNone')} accessory="chevron" onclick={() => sheets.joinQuestions(org)} />{/if}
-        {/if}
+    {#if casting}
+      <Group>
+        <Row icon={Megaphone} title={round ? round.title : t('cast.cardOpen')} count={round?.counts?.new ?? 0}
+          value={round && !round.counts?.new ? tn('cast.apps', total) : undefined} accessory="chevron"
+          onclick={() => (round ? sheets.roundBoard(org) : sheets.roundSetup(org, null, loadRound))} />
+      </Group>
+    {:else if o}
+      <!-- no casting right (a club's custom levels): the switch stays here -->
+      <Group footnote={t('jr.openHint')}>
+        <Row icon={UserPlus} title={t('jr.open')} accessory="switch" checked={o.recruiting} onchange={(on) => { haptic.tap(); void setOpen(on); }} />
+        {#if o.recruiting}<Row icon={ClipboardPen} title={t('cast.questions')} value={o.joinQuestions?.length ? String(o.joinQuestions.length) : t('jr.qsNone')} accessory="chevron" onclick={() => sheets.joinQuestions(org)} />{/if}
       </Group>
     {/if}
     {#if list}

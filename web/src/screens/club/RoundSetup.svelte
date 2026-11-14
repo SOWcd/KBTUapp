@@ -27,8 +27,23 @@
   import Segmented from '../../ui/Segmented.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import QuestionsEditor, { toSave, unfinished } from './QuestionsEditor.svelte';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
+  import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
+  import { phrase } from '../../lib/state/data.svelte';
+  import { session } from '../../lib/state/session.svelte';
+  import { may } from '../../lib/perms';
 
   let { overlay, org, round = null, onsaved }: { overlay: Overlay; org: Id; round?: Round | null; onsaved?: () => void } = $props();
+
+  // "Always open" (any-time applications, the team right) sits on top here: Studio's Recruiting opens this form directly (owner, Nov 14)
+  const o = $derived(data.orgs.find((x) => x.id === org));
+  const team = $derived(may(session.me?.memberships.find((x) => x.org.id === org), 'team'));
+  async function setOpen(on: boolean) {
+    if (!o) return;
+    o.recruiting = on;
+    try { Object.assign(o, await api.setRecruiting(org, on)); say(phrase(on ? 'say.recruitOn' : 'say.recruitOff'), on ? 'raising_hands_3d_default' : 'sparkles_3d'); studioChanged(); }
+    catch { o.recruiting = !on; say(t('common.error'), 'warning_3d'); }
+  }
 
   let tags = $state<ClubTag[]>([]);
   // a picked department deleted in Team setup leaves the round too
@@ -90,6 +105,12 @@
 
 <Sheet {overlay} icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
   <div class="stack">
+    {#if team && o}
+      <Group footnote={t('jr.openHint')}>
+        <Row icon={UserPlus} title={t('jr.open')} accessory="switch" checked={o.recruiting} onchange={(on) => { haptic.tap(); void setOpen(on); }} />
+        {#if o.recruiting}<Row icon={ClipboardPen} title={t('cast.questions')} value={o.joinQuestions?.length ? String(o.joinQuestions.length) : t('jr.qsNone')} accessory="chevron" onclick={() => sheets.joinQuestions(org)} />{/if}
+      </Group>
+    {/if}
     <p class="hint">{t('cast.openSub')}</p>
 
     <Field label={t('cast.name')} bind:value={title} maxlength={80} error={tried && err === 'title' ? t('ed.need') : undefined} />
