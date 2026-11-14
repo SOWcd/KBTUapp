@@ -43,7 +43,13 @@
         await video.play();
         // iPhone's WebKit ignores object-fit on a camera <video> (letterboxed, owner's recording Nov 14): we size it to
         // cover the box ourselves, now and whenever the stream or the box changes size
-        for (let i = 0; i < 80 && !gone && !video.videoWidth; i++) await new Promise((r) => setTimeout(r, 25));
+        // and its first frames come in another size before the real one: shown once the size has held for 300 ms (1.5 s at most)
+        let dims = '', held = 0;
+        for (let i = 0; i < 30 && !gone && held < 300; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          const d = video.videoWidth + 'x' + video.videoHeight;
+          held = video.videoWidth && d === dims ? held + 50 : 0; dims = d;
+        }
         if (gone) return;
         fit();
         video.addEventListener('resize', fit);
