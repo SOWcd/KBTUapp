@@ -2255,7 +2255,7 @@ def test_club_applications(env, monkeypatch):
     ping = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application'").fetchall()
     assert len(ping) == 1 and bot._render(con, ping[0])[2] == "capps"                               # the admin hears
     assert c.get("/api/me", headers=B).json()["counters"]["inbox"] == 1
-    assert c.get("/api/admin/club-applications", headers=A).status_code == 403
+    assert c.get("/api/admin/inbox", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
     real = logic.set_role
     monkeypatch.setattr(logic.oversight, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -4607,7 +4607,7 @@ def test_app_team(env):
     assert role(M, "U", "moderator").status_code == 403 and c.get("/api/admin/staff", headers=M).status_code == 403
     assert c.get("/api/admin/reports", headers=M).status_code == 200     # the moderator's own work
     assert c.get("/api/admin/stats", headers=M).status_code == 403
-    assert c.get("/api/admin/club-applications", headers=M).status_code == 403   # clubs are the admin's
+    assert not [x for x in c.get("/api/admin/inbox", headers=M).json()["items"] if x["kind"] == "capp"]   # clubs are the admin's
     assert c.post("/api/admin/feature", headers=M, json={"postId": 1, "days": 1}).status_code == 403
     assert c.get("/api/me", headers=M).json()["counters"]["inbox"] == 0
     assert ban(A, "X", True, "testing an admin ban").status_code == 200 and ban(A, "X", False).status_code == 200   # an admin bans users

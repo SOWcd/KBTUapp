@@ -547,10 +547,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def screen_badge(sid: int, con: Con, v: Me, body: dict = Body(...)):
         return qr.badge(con, v, sid, body.get("qr"))
 
-    @app.get("/api/screens/{sid}/absent")
-    def screen_absent(sid: int, con: Con, v: Me):
-        return qr.absent(con, v, sid)
-
     @app.get("/api/screens/{sid}/people")
     def screen_people(sid: int, con: Con, v: Me):
         return qr.people(con, v, sid)
@@ -1819,11 +1815,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return
         media.drop(photos, logic.resolve_report(con, v, target, tid, bool(body.get("remove"))))
 
-    # the channel's comments in Telegram (logic/tgcomments.py): whose /report is closed, the admin's switch to reopen it
-    @app.delete("/api/admin/tgc-closed/{uid}", status_code=204)
-    def tgc_reopen(uid: int, con: Con, v: Me):
-        logic.tgcomments.reopen(con, v, uid)
-
     @app.post("/api/me/tg-comment")
     def tg_comment(con: Con, v: Me):
         """My own comment the bot deleted in the channel's group, under an hour old: shown to the Telegram account that
@@ -1904,10 +1895,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/club-applications")
     def apply_club(con: Con, v: Me, body: dict = Body(...)):
         return logic.apply_club(con, v, body)
-
-    @app.get("/api/admin/club-applications")
-    def club_applications(con: Con, v: Me):
-        return logic.club_applications(con, v)
 
     @app.post("/api/admin/club-applications/{aid}")
     def decide_club_application(aid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -2128,10 +2115,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/admin/events/{eid}", status_code=204)
     def admin_delete_event(eid: int, con: Con, v: Me):
         logic.admin_delete_event(con, v, eid)  # hidden now, gone a day later (the Undo's day)
-
-    @app.post("/api/admin/events/{eid}/restore", status_code=204)
-    def admin_undelete_event(eid: int, con: Con, v: Me):
-        logic.undo_delete_event(con, v, eid)
 
     # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
 

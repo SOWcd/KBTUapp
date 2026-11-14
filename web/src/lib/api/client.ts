@@ -361,7 +361,6 @@ export const server: Api = {
   eventScreen: (event) => call('POST', `/events/${event}/screen`),
   clubScreen: (org, title, who) => call('POST', `/orgs/${org}/screens`, { title, who }),
   screenBadge: (id, qr) => call('POST', `/screens/${id}/badge`, { qr }),
-  screenAbsent: (id) => call('GET', `/screens/${id}/absent`),
   screenPeople: (id) => call('GET', `/screens/${id}/people`),
   crewScreen: (event, title) => call('POST', `/events/${event}/crew-screen`, { title }),
   crewScreenOf: (event) => call('GET', `/events/${event}/crew-screen`),

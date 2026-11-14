@@ -115,8 +115,8 @@ def test_who_is_expected_and_who_is_absent(env):
         assert c.post("/api/checkin", headers=tma(tg), json={"p": p}).json()["done"]
     row = [x for x in c.get("/api/screens", headers=tma(9)).json() if x["session"] == sid][0]
     assert (row["expected"], row["came"], row["done"]) == (3, 1, 2)    # came 1 of 3, and one more not on the list
-    assert c.get(f"/api/screens/{sid}/absent", headers=tma(9)).json() == ["Testov Bob", "Testov Dana"]
-    assert c.get(f"/api/screens/{sid}/absent", headers=tma(1)).status_code == 403
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(9)).json()["absent"] == ["Testov Bob", "Testov Dana"]
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(1)).status_code == 403
     csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text
     assert "came (not on the list)" in csv and "absent,Testov Bob" in csv and "bob@kbtu.kz" not in csv   # the team never sees mails
     con.close()
@@ -191,7 +191,7 @@ def test_mark_by_hand_attacks(env):
     sid = _new(c, 9, oid).json()["session"]
     c.post(f"/api/screens/{sid}/start", headers=tma(9))
     assert _badge(c, 8, sid, bob).status_code == 403                    # another club's head, my session
-    assert c.get(f"/api/screens/{sid}/absent", headers=tma(8)).status_code == 403
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(8)).status_code == 403
     assert c.post(f"/api/screens/{sid}/csv", headers=tma(8)).status_code == 403
     assert c.post(f"/api/screens/{sid}/finish", headers=tma(8)).status_code == 403
     c.post(f"/api/screens/{sid}/out", headers=tma(9))

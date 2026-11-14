@@ -116,14 +116,14 @@ def test_undo_event_delete(env):
     assert c.get("/api/events/1", headers=tma(63)).status_code == 404          # hidden from everyone at once
     assert c.get("/api/admin/orgs/1/events", headers=tma(60)).json() == []
     assert c.delete("/api/admin/events/1", headers=tma(60)).status_code == 409
-    assert c.post("/api/admin/events/1/restore", headers=tma(60)).status_code == 204
+    assert _undo_event(c, con).status_code == 204                                       # the inbox's undo
     assert c.get("/api/events/1", headers=tma(63)).status_code == 200
     # past its day the bot's round deletes it for good
     assert c.delete("/api/admin/events/1", headers=tma(60)).status_code == 204
     con.execute("UPDATE meta SET value = json_set(value, '$.due', 0) WHERE key = 'evdel:1'")
     logic.events_gone(con)
     assert not con.execute("SELECT 1 FROM events WHERE id = 1").fetchone() and not con.execute("SELECT 1 FROM meta WHERE key = 'evdel:1'").fetchone()
-    assert c.post("/api/admin/events/1/restore", headers=tma(60)).status_code == 404
+    assert _undo_event(c, con).status_code == 404
 
 
 def test_done_undo_takedown_and_people(env):
@@ -144,6 +144,11 @@ def test_done_undo_takedown_and_people(env):
 
 
 # ---- the adversarial review's fixes (Nov 3), one test each
+
+def _undo_event(c, con):
+    aid = con.execute("SELECT MAX(id) FROM audit_log WHERE action = 'event_delete'").fetchone()[0]
+    return c.post(f"/api/admin/done/{aid}/undo", headers=tma(60))
+
 
 def _audit(con, actor, action, target, at=None):
     return con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, '{}', ?)",
@@ -242,7 +247,8 @@ def test_undo_rules_chat_snapshot_tgreport_and_old_lines(env):
     gone = _audit(con, ids["boss"], "tg_report_close", "user")                                           # an account deleted since
     assert c.post(f"/api/admin/done/{gone}/undo", headers=tma(60)).status_code == 404
     con.execute("INSERT INTO tgc_closed (user_id, at, by_id) VALUES (?, 0, ?)", (ids["ali"], ids["boss"]))
-    assert c.delete(f"/api/admin/tgc-closed/{ids['ali']}", headers=tma(60)).status_code == 204
+    close = _audit(con, ids["boss"], "tg_report_close", f"tgreport:{ids['ali']}")
+    assert c.post(f"/api/admin/done/{close}/undo", headers=tma(60)).status_code == 204
     assert con.execute("SELECT target FROM audit_log WHERE action = 'tg_report_open'").fetchone()[0] == f"tgreport:{ids['ali']}"
 
 

@@ -91,11 +91,11 @@ def test_lists_and_csv_stay_the_organizers(env):
     sid = _crew(c, 9, eid).json()["session"]
     c.post(f"/api/screens/{sid}/start", headers=tma(9))
     for tg in (1, 8):
-        assert c.get(f"/api/screens/{sid}/absent", headers=tma(tg)).status_code == 403
+        assert c.get(f"/api/screens/{sid}/people", headers=tma(tg)).status_code == 403
         assert c.post(f"/api/screens/{sid}/csv", headers=tma(tg)).status_code == 403
         assert c.post(f"/api/screens/{sid}/finish", headers=tma(tg)).status_code == 403
         assert sid not in [x["session"] for x in c.get("/api/screens", headers=tma(tg)).json()]
-    assert c.get(f"/api/screens/{sid}/absent", headers=tma(9)).json() == ["Testov Ann", "Testov Dana"]
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(9)).json()["absent"] == ["Testov Ann", "Testov Dana"]
     con.close()
 
 
@@ -116,7 +116,7 @@ def test_caps_cancelled_and_deleted(env):
     con.execute("DELETE FROM events WHERE id = ?", (eid,))                               # the event deleted: the attendance stays
     assert tuple(con.execute("SELECT crew_event_id, org_id FROM qr_sessions WHERE id = ?", (sid,)).fetchone()) == (None, oid)
     assert _crew(c, 9, eid).status_code == 403
-    assert c.get(f"/api/screens/{sid}/absent", headers=tma(9)).status_code == 200
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(9)).status_code == 200
     con.close()
 
 
