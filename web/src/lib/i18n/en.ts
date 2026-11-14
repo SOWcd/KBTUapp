@@ -1097,6 +1097,7 @@ const en: Dict = {
   'scr.staffOnly': "The organizers show this QR. Check people in with the scanner",
   'scr.lastIn': "Last: {name}, {time}",
   'door.reg': "Check-in",
+  'door.in': "Entrance",
   'ci.own': "You're on this event's door: another member checks you in with the scanner",
   'ci.already': "This ticket was already checked in at {time}. Go to the scanner at the door",
   'ci.flagged': "Your receipt needs a check: show your ticket at the scanner at the door",

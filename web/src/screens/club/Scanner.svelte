@@ -73,7 +73,7 @@
   function byHand() { haptic.tap(); manual = !manual; if (manual && !byName) void openByName(); }
 
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
-  $effect(() => { overlay.title = qr ? t('door.reg') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
+  $effect(() => { overlay.title = qr ? t('door.in') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
   const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
