@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from kbtu import db
+from kbtu import checkin, db
 from test_checkin_door import _ev, _mem, _qr, _reg
 from test_club_checkin import _mail
 from test_core import _club_runs, env, login, tma  # noqa: F401
@@ -161,4 +161,42 @@ def test_who_never_gets_into_the_team(env):
         con.execute(f"UPDATE events SET {col} = {val} WHERE id = ?", (e3,))
         _, q3 = _qr(c, 9, e3)
         assert "team" not in _scan(c, 1, q3["param"]).json() and _crew(con, e3) is None
+    con.close()
+
+
+def test_a_held_offer_means_a_guest_and_rights_read_with_the_mark(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid, ann, eid = _setup(c, con)
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, created_at, updated_at) VALUES (?, ?, 'hold', ?, ?, 0, 0)",
+                (eid, ann["id"], f"{eid}-HHHH", int(time.time()) + 600))                  # a waitlist offer held
+    g, q = _qr(c, 9, eid)
+    assert "team" not in _scan(c, 1, q["param"]).json() and _marks(con, _crew(con, eid)["id"], False) == 0
+    # removed from the club just before the scan's write: read inside its transaction, so a guest
+    bob = _mem(c, con, oid, 2, "bob")
+    real = checkin.tx
+    def removed_first(con2):  # the removal lands as the scan's transaction opens
+        con2.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, bob["id"]))
+        return real(con2)
+    checkin.tx = removed_first
+    try:
+        r = _scan(c, 2, q["param"]).json()
+    finally:
+        checkin.tx = real
+    assert "team" not in r and _marks(con, _crew(con, eid)["id"], False) == 0
+    con.close()
+
+
+def test_team_leaving_keeps_the_guests_window(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid, ann, eid = _setup(c, con)
+    g, q = _qr(c, 9, eid)
+    assert _scan(c, 1, q["param"]).json()["team"]
+    c.post(f"/api/screens/{g}/out", headers=tma(9))
+    q = c.post(f"/api/screens/{g}/show", headers=tma(9)).json()
+    con.execute("UPDATE events SET ends_at = ? WHERE id = ?", (int(time.time()) - checkin.GRACE - 60, eid))  # over, past its grace
+    r = _scan(c, 1, q["param"])
+    assert r.status_code == 409
+    assert not con.execute("SELECT left_at FROM qr_marks WHERE session_id = ? AND user_id = ?", (_crew(con, eid)["id"], ann["id"])).fetchone()[0]
     con.close()

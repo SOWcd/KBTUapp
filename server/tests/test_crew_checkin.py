@@ -104,9 +104,10 @@ def test_caps_cancelled_and_deleted(env):
     oid, eid = _setup(c, con)
     for _ in range(checkin.CLUB_OPEN - 1):
         c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={})
-    sid = _crew(c, 9, eid).json()["session"]                                             # the fifth open one
-    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={}).status_code == 429  # counted as a club session
-    assert _crew(c, 9, _ev(con, oid, now())).status_code == 429
+    sid = _crew(c, 9, eid).json()["session"]
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={}).status_code == 200  # an event's team's: never counted (one per event)
+    assert c.post(f"/api/orgs/{oid}/screens", headers=tma(9), json={}).status_code == 429  # the sixth meeting
+    assert _crew(c, 9, _ev(con, oid, now())).status_code == 429                          # ... and a team's made by hand waits too
     late = _ev(con, oid, now())
     con.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", (late,))
     assert _crew(c, 9, late).status_code == 409                                          # a cancelled event: none made

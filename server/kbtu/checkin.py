@@ -90,11 +90,11 @@ def _club(con, v: Viewer, org_id: int, name: str, who: object, t: int, crew: int
     if who not in ("club", "all") and not (tag and one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", tag, org_id)):
         raise ApiError("bad_input")
     people = [] if who == "all" else _people(con, org_id, tag)
-    with tx(con):  # counted under the write lock: two taps at once can't both pass the caps
+    with tx(con):  # counted under the write lock: two taps at once can't both pass the caps (an event's team's: one per event, never counted)
         x = crew and one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ?", crew)
         if x:  # two taps at once: the one made first
             return x[0]
-        c = one(con, "SELECT COUNT(*) FILTER (WHERE ended_at IS NULL), COUNT(*) FROM qr_sessions WHERE org_id = ? AND event_id IS NULL AND created_at > ?",
+        c = one(con, "SELECT COUNT(*) FILTER (WHERE ended_at IS NULL), COUNT(*) FROM qr_sessions WHERE org_id = ? AND event_id IS NULL AND crew_event_id IS NULL AND created_at > ?",
                 org_id, t - 86400)
         if c[0] >= CLUB_OPEN or c[1] >= CLUB_DAY:
             raise ApiError("rate_limited", "screens")
@@ -631,16 +631,17 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
 
 def _team(con, v: Viewer, e, s, t: int) -> dict | None:
     """One QR at the door (owner, Nov 14): at a public event (_guests), a member of its own club (org_members now) with
-    no guest seat ('going': a paid one, a let-in team_ask, a President's) scanning the guests' QR is marked in its team's
+    no guest seat ('going': a paid one, a let-in team_ask, a President's; or a 'hold' offered) scanning the guests' QR is marked in its team's
     session (crew), exactly as a scan of that QR; on the event's day, the door open or not (a team comes early), never
     after its end. Only a team's session already running, made by its organizer opening this QR (crew_open); none (or
     finished), a co-host's or partner's member, someone not signed in yet: None, the guest's way, as before. ponytail: a forwarded photo of the QR marks a member at home within its
     SCAN_OK, as the team's own QR does; a per-person proof (the badge, a geofence) if that gets abused."""
-    if e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400 \
-            or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], v.id) \
-            or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+    if e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400:
         return None
-    with tx(con):
+    with tx(con):  # who they are, read under the write lock with the mark: a removal or a sign-up landing meanwhile wins
+        if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id) \
+                or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+            return None  # a seat (or a waitlist offer held): a guest
         x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", e["id"])
         if not x:
             return None
@@ -652,8 +653,12 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
 
 
 def _team_left(con, s, uid: int) -> dict | None:
-    """The guests' QR marking leaving, scanned by whom _team marked in: the leaving goes on that team mark."""
+    """The guests' QR marking leaving, scanned by whom _team marked in: the leaving goes on that team mark, within the
+    guests' leaving window (mark's)."""
     t = now()
+    e = one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+    if e and _guests(con, e, s["id"]) and (logic.door_shut(e, t) == "not_open" or logic.door_shut(e, t - GRACE) == "closed"):
+        raise ApiError("closed", "qr")
     with tx(con):
         x = one(con, """SELECT x.id FROM qr_sessions x JOIN qr_marks m ON m.session_id = x.id AND m.user_id = ? AND m.done_at IS NOT NULL
             WHERE x.crew_event_id = ? AND x.ended_at IS NULL""", uid, s["event_id"])
