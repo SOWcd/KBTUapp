@@ -348,7 +348,7 @@
           <div class="acts btns">
             <!-- one we co-host: its door is our event team's alone (cohosts.py), our plain members don't work it -->
             <!-- the event's day, its organizers: the door screen (one QR for guests and the team alike: the server sorts, checkin._team; the scanner a switch inside it) -->
-            {#if qrDay}<Button kind="primary" size="m" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : registration(next, true, session.me?.vol?.org))}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('studio.showQr')}</Button>
+            {#if qrDay}<Button kind="primary" size="m" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : registration(next, true, session.me?.vol?.org))}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('mk.title')}</Button>
             {:else if !next.guestHost && (ours(next) || staff)}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
             {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
           </div>

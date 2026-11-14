@@ -53,9 +53,13 @@
   const doorOpen = $derived(!plain && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
-  async function mark(a: Attendee) {
+  async function mark(a: Attendee, admit = false) {
     try {
-      const r = await api.checkinPerson(id, a.person.id);
+      const r = await api.checkinPerson(id, a.person.id, admit);
+      if (r.result === 'flagged') { // nothing recorded yet: a look at the receipt first (server organizing._held)
+        if (await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') })) void mark(a, true);
+        return;
+      }
       if (r.result !== 'ok' && r.result !== 'already') { haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : r.result === 'not_open' ? 'scan.notOpen' : 'common.error'), 'pleading_face_3d'); return; }
       a.checkedInAt = r.at; a.manual = r.result === 'ok';
       haptic.ok();

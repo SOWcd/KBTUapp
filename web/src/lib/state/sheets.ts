@@ -62,7 +62,7 @@ export const sheets = {
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id, _staff?: boolean) => {}, // staff: Admin's "an event for a club"
-  scanner: (_id: Id, _names?: boolean, _qr?: boolean, _hand?: boolean, _ondone?: () => void) => {}, // names: a club's own event, marked by name (no tickets); qr: the door screen, its switch to the event's QR
+  scanner: (_id: Id, _names?: boolean, _qr?: boolean, _ondone?: () => void) => {}, // names: a club's own event, marked by name (no tickets); qr: the door screen, its switch to the event's QR
   // only: a scanner-only door helper (server crew.py): tickets, no list by name
   scannerOnly: (_id: Id) => {},
   crew: (_id: Id, _onchange?: (n: number) => void) => {},
@@ -78,6 +78,8 @@ export const sheets = {
   volDoor: (_session: Id, _title: string) => {}, // a session's door: who left without checking out, the hand-over link
   volPerson: (_id: Id, _mine?: boolean) => {}, // an event's door helpers (a running club's President or Vice)
   attendees: (_id: Id) => {},
+  /** the Mark screen's «People»: the team by department and the guests, came / not came, marked by hand; onchange after a mark */
+  doorPeople: (_id: Id, _onchange?: () => void) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */

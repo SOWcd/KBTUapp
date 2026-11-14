@@ -119,7 +119,7 @@
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
   sheets.deepLink = (p) => deepLink(p);
-  sheets.scanner = (id, names, qr, hand, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, hand, ondone });
+  sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
   sheets.appeals = () => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), {}));
@@ -134,8 +134,11 @@
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
+  sheets.doorPeople = (id, onchange) => lazy(() => import('./screens/club/People.svelte'), { id, onchange });
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
-  sheets.helperQr = (sess, event, scanner) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner });
+  // a helper lands on the same Mark screen as the organizer (owner, Nov 14: helpers didn't know where to go); no scanner of the event: its QR alone
+  sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true })
+    : lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner }));
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
   sheets.screens = (code, event, seed, org, crew) => lazy(screenSheet, { code, event, seed, org, crew });

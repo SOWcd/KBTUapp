@@ -434,6 +434,7 @@ export interface EventFull extends EventCard {
   forBoard?: boolean;           // "for whom": the club's board (Head+, from roles), instead of a tag
   crew?: CrewMember[] | null;   // the door helpers, for the running clubs' Presidents and Vices (null for the rest)
   myCrew?: CrewKind | null;     // I help at this event's door
+  audience?: DoorAudience;      // whom its door records (server checkin._team)
   payToName: string | null;
   payPhone: string | null;
   lentFull?: boolean;           // the creator from Admin on a club's event he made: its President's editor (server core.full)
@@ -597,10 +598,16 @@ export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; 
 export interface JoinRequest { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null; createdAt: Ts;
   answers?: { q: string; a: string | string[] }[] } // to the club's questions, each with the question's text as it was
 
+/** Whom an event's door records: guests, its team, or both (the team routed by membership). */
+export type DoorAudience = 'guests' | 'team' | 'both';
+/** The team's list at the door (server checkin.team): `key` u<user>, r<roster row>, x<expected row>; `at` came; `manual` by hand; `app` has an account */
+export interface TeamRow { key: string; name: string; group: string | null; at: Ts | null; manual: boolean; app: boolean }
+export interface TeamList { session: Id | null; audience: DoorAudience; rows: TeamRow[]; other: { name: string; at: Ts }[]; open: boolean }
+
 /** Door scanner answer (§4.4): a ticket or a badge QR. `walkIn` = registered at the door by their badge,
  *  `late` = minutes after the start. */
 export type CheckinResult =
-  | { result: 'ok' | 'already'; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
+  | { result: 'ok' | 'already' | 'flagged' /* flagged: a receipt nobody checked, not let in yet (admit after a look) */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
   | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;

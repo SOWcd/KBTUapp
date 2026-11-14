@@ -312,14 +312,18 @@ export const server = {
   exportMembers: (oid: Id): Promise<void> => call('POST', `/orgs/${oid}/members/export`),
   guardJoin: (t: string): Promise<{ ok: boolean }> => call('POST', '/guard', { t }),
   pickOrgChat: (oid: Id, kind: 'group' | 'channel'): Promise<{ url: string }> => call('POST', `/orgs/${oid}/chats/pick`, { kind }),
-  checkin: (id: Id, code: string): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { code }),
+  checkin: (id: Id, code: string, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { code, admit }), // admit: a flagged receipt let in after a look
+  /** the Mark screen (server checkin.team): the team's list by department, a hand mark (on) or its undo; whom the door records */
+  teamList: (id: Id): Promise<import('./types').TeamList> => call('GET', `/events/${id}/door-team`),
+  teamMark: (id: Id, key: string, on: boolean): Promise<import('./types').TeamList> => call('POST', `/events/${id}/door-team`, { key, on }),
+  setAudience: (id: Id, audience: import('./types').DoorAudience): Promise<{ audience: import('./types').DoorAudience }> => call('PUT', `/events/${id}/audience`, { audience }),
   // no QR at the door (a dead phone): the door list and a check-in by name, taken back within 10 min (§4.4)
   door: (id: Id): Promise<DoorPerson[]> => call('GET', `/events/${id}/door`),
   // the organizer's updates (Head+, three a day): pinned on the event, the bot pings the people going
   postUpdate: (id: Id, body: string): Promise<EventUpdate[]> => call('POST', `/events/${id}/updates`, { body }),
   rate: (id: Id, score: number, comment?: string): Promise<EventFull> => call('PUT', `/events/${id}/rating`, { score, comment: comment ?? '' }), // one tap after the event (checked-in people)
   deleteUpdate: (id: Id, update: Id): Promise<void> => call('DELETE', `/events/${id}/updates/${update}`),
-  checkinPerson: (id: Id, user: Id): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user }),
+  checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),
   uploadPhoto: (file: Blob): Promise<Media> => call('POST', '/photos', file), // Head+; re-encoded by the server, use its id as coverId
   uploadVideo, // Head+; in pieces, then compressed: its id as videoId (wide: wideVideoId)

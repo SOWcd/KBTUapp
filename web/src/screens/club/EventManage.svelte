@@ -15,7 +15,7 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type ScreenSession, type TeamAsk } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type DoorAudience, type Attendee, type EventCard, type Id, type PersonRef, type ScreenSession, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -149,6 +149,17 @@
     registration(e, co || head, session.me?.vol?.org);
   }
   let more = $state(false);
+  // whom the door records (server checkin.set_audience): an ordinary public event's, where the team is told apart from
+  // guests; the event's organizers set it, the Mark screen counts and lists only that
+  const audienced = $derived(head && !plain && !!e && live && !e.guestHost && !inner(e) && ends > tick);
+  let aud = $state<DoorAudience>('both');
+  $effect(() => { if (audienced) api.event(id).then((x) => (aud = x.audience ?? 'both')).catch(() => {}); });
+  const AUD = { both: 'mk.aBoth', guests: 'mk.aGuests', team: 'mk.aTeam' } as const;
+  async function setAud(a: DoorAudience) {
+    const was = aud;
+    aud = a; haptic.tap();
+    try { await api.setAudience(id, a); } catch { aud = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   // the club's own people asking to come as guests (server seats.team_ask): the President and the Vices answer here
   let asks = $state<TeamAsk[]>([]);
   $effect(() => { void data.rev; if (opener) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
@@ -180,9 +191,14 @@
 
       {#if doorDay}
         <div class="door">
-          <Button kind="primary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('studio.showQr')}</Button>
+          <Button kind="primary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('mk.title')}</Button>
           {#if !doorOpen}<p class="t-foot">{t('door.openAt', { time: time(doorAt) })}</p>{/if}
         </div>
+      {/if}
+
+      {#if audienced}
+        <Group><Row icon={UserCheck} title={t('mk.audience')} value={t(AUD[aud])}
+          menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === aud, onselect: () => void setAud(a) }))} /></Group>
       {/if}
 
       {#if head && list}
