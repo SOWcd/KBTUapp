@@ -74,8 +74,11 @@ def _is_report(cfg: Config, text: str) -> bool:
 
 
 async def _call(cfg: Config, http: httpx.AsyncClient, method: str, body: dict) -> dict:
+    from . import bot  # here: bot imports this module
     try:
-        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=body)).json()
+        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=bot.fancy(body))).json()
+        if not r.get("ok") and bot.fancy(body) is not body and re.search(r"emoji|entit", str(r.get("description")), re.I):
+            r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=body)).json()  # the pack refused: plain
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("tgc %s: %s", method, type(exc).__name__)
         return {"ok": False}

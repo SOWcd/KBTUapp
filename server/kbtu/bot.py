@@ -96,6 +96,15 @@ def premium(text: str) -> str:
     return _custom_re.sub(lambda m: f'<tg-emoji emoji-id="{_custom[m.group(0).replace(chr(0xFE0F), "")]}">{m.group(0)}</tg-emoji>', text)
 
 
+def fancy(body: dict) -> dict:
+    """The pack's emoji in an HTML text or caption (owner, Nov 14: premium emoji everywhere the bot writes); the same
+    dict back when nothing changes."""
+    key = "caption" if "caption" in body else "text"
+    if not body.get(key) or body.get("parse_mode") != "HTML" or (t := premium(body[key])) == body[key]:
+        return body
+    return {**body, key: t}
+
+
 async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict | None = None) -> httpx.Response:
     """A Telegram call whose text or caption (HTML) gets the pack's emoji (everywhere the bot writes, the
     channel and groups too); refused for them (400), once more plain, and the pack is off until a restart."""
@@ -1718,8 +1727,11 @@ async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict,
     for _ in range(5):
         await asyncio.sleep(gap)
         try:
-            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)
+            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=fancy(params))
             answer = r.json()
+            if r.status_code == 400 and fancy(params) is not params and re.search(r"emoji|entit", str(answer.get("description")), re.I):
+                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)  # the pack refused: plain
+                answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("%s: %s", method, type(exc).__name__)  # the type only: the URL holds the token
             await asyncio.sleep(10)  # the network: again in a while, not in a tight loop
