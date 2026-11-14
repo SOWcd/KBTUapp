@@ -283,8 +283,9 @@ def test_no_self_checkin_by_typed_name(env):
     start = int(time.time()) - 600
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (start, start + 7200, pres["id"]))
-    assert c.post("/api/events/1/door/guests", headers=tma(71, "Mem"), json={"name": "Mem Testov"}).status_code == 200
-    assert c.post("/api/events/1/door/guests", headers=tma(70, "Pres"), json={"name": "Pres Testov"}).status_code == 200
+    for by, name in ((mem, "Mem Testov"), (pres, "Pres Testov")):  # typed at the door before the routes went (Nov 14)
+        con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at) VALUES (1, ?, ?, ?, ?)",
+                    (name, logic._norm_name(name), by["id"], start + 60))
     ms = lambda uid: logic.ms_link(con, uid, {"oid": f"o{uid}", "email": f"u{uid}@kbtu.kz", "first": "", "last": "", "profile": {}})  # noqa: E731
     came = lambda uid: con.execute("SELECT checked_in_at FROM registrations WHERE user_id = ? AND event_id = 1", (uid,)).fetchone()  # noqa: E731
     ms(mem["id"])

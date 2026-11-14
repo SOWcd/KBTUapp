@@ -72,8 +72,6 @@ def test_opens_by_itself_at_t30(env):
     assert _go(c, eid, 10)["my"]["status"] == "going"
     _start(con, eid, 31 * 60)
     assert _scan(c, eid, con, 10) == "not_open"
-    walk = lambda: c.post(f"/api/events/{eid}/door/guests", headers=tma(20), json={"name": "Aruzhan Serikova"})  # noqa: E731
-    assert walk().status_code == 409                       # a walk-in by name: not yet
     logic.screen_came(con, eid, _uid(con, 11), int(time.time()))  # the big screen: not yet
     assert not con.execute("SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, 11))).fetchone()
     logic.door_round(con)
@@ -92,7 +90,6 @@ def test_opens_by_itself_at_t30(env):
     con.execute("UPDATE users SET n_remind = 0 WHERE id = ?", (_uid(con, 10),))
     assert bot._render(con, m) is None                     # reminders off: quiet
     con.execute("UPDATE users SET n_remind = 1 WHERE id = ?", (_uid(con, 10),))
-    assert walk().status_code == 200
     assert _scan(c, eid, con, 10) == "ok"
     assert bot._render(con, m) is None                     # in already by the time it goes
     # moved: event_changed tells, not a second door message

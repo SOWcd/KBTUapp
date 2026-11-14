@@ -4828,9 +4828,8 @@ def test_custom_short_links(env):
 
 
 def test_door_guests(env):
-    """A19: a walk-in without the app types their full name at the door (Member+, door open, a free event); the typist
-    takes a wrong one back in 10 minutes; Head+ sees full names, a Member short ones. A student confirmed by Microsoft
-    with that name counts as came, only when exactly one unlinked entry at that event has it."""
+    """A19: the walk-ins typed by name before the routes went (Nov 14): a student confirmed by Microsoft with that name
+    counts as came, only when exactly one unlinked entry at that event has it."""
     c, cfg = env
     pres, mem, ali, bota = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali"), login(c, 74, "bota")
     con = db.connect(cfg.db_path)
@@ -4841,25 +4840,18 @@ def test_door_guests(env):
         con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at, price,
             pay_to_name, pay_phone) VALUES (?, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0, ?, 'Pres', '+70000000000')""",
             (eid, start, start + 7200, pres["id"], price))
-    M, P = tma(71, "Mem"), tma(70, "Pres")
-    add = lambda eid, name, h=M: c.post(f"/api/events/{eid}/door/guests", headers=h, json={"name": name})  # noqa: E731
-    assert add(1, "Ali Testov", tma(73, "Zhan")).status_code == 403                    # the team only
-    assert add(1, "Ali").status_code == 400 and add(1, "Ali 123").status_code == 400   # a first and a last name
-    assert add(3, "Ali Testov").json()["message"] == "paid"
-    g = add(1, "Ali  Testov").json()
-    assert (g["name"], g["undo"]) == ("Ali T", True)                                  # a Member: the short name
-    assert add(1, "testov ali").json()["message"] == "already"
-    assert [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()] == ["Ali Testov"]
-    assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=P).status_code == 409   # the typist's
-    assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=M).status_code == 204
-    add(1, "Ali Testov"); add(1, "Bota Testova"); add(2, "Ali Testov"); add(1, "Mem Testov")
+    M = tma(71, "Mem")
+    for eid, name in ((1, "Ali Testov"), (1, "Bota Testova"), (2, "Ali Testov"), (1, "Mem Testov")):
+        con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (eid, name, logic._norm_name(name), mem["id"], start + 60))
+    linked = lambda name: con.execute("SELECT user_id IS NOT NULL FROM door_guests WHERE event_id = 1 AND full_name = ?", (name,)).fetchone()  # noqa: E731
     con.execute("UPDATE events SET status = 'cancelled' WHERE id = 2")                # the door's rules still hold
     ms = lambda uid: logic.ms_link(con, uid, {"oid": f"o{uid}", "email": "a@kbtu.kz", "first": "", "last": "", "profile": {}})  # noqa: E731
     ms(ali["id"])
     came = lambda uid: con.execute("SELECT event_id, checked_in_at IS NOT NULL, walk_in FROM registrations WHERE user_id = ?", (uid,)).fetchall()  # noqa: E731
     assert [tuple(r) for r in came(ali["id"])] == [(1, 1, 1)]
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'rate'", (ali["id"],)).fetchone()  # as a real check-in
-    assert {x["name"]: x["linked"] for x in c.get("/api/events/1/door/guests", headers=P).json()}["Ali Testov"] is True
+    assert tuple(linked("Ali Testov")) == (1,)
     assert came(bota["id"]) == []                                                      # "Bota Testova" is not "Bota Testov"
     other = login(c, 75, "other")
     con.execute("UPDATE students SET first_name = 'Mem' WHERE user_id = ?", (other["id"],))  # two students named Mem Testov
@@ -4868,7 +4860,7 @@ def test_door_guests(env):
     # the check-in a typed name made is taken back within 10 minutes: the name goes with it, and nothing links again
     assert c.delete(f"/api/events/1/checkin/{ali['id']}", headers=M).status_code == 204
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
-    assert "Ali Testov" not in [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()]
+    assert linked("Ali Testov") is None
     logic.link_door_guests(con, ali["id"])
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
     logic.delete_me(con, logic.Viewer(ali["id"], "user", True))

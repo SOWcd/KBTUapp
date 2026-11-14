@@ -1312,19 +1312,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def door(eid: int, con: Con, v: Me):
         return logic.door(con, v, eid)
 
-    @app.get("/api/events/{eid}/door/guests")
-    def door_guests(eid: int, con: Con, v: Me):
-        return logic.door_guests(con, v, eid)
-
-    @app.post("/api/events/{eid}/door/guests")
-    def add_door_guest(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        """A walk-in by the full name they typed (A19)."""
-        return logic.add_door_guest(con, v, eid, body.get("name"))
-
-    @app.delete("/api/events/{eid}/door/guests/{gid}", status_code=204)
-    def undo_door_guest(eid: int, gid: int, con: Con, v: Me):
-        logic.undo_door_guest(con, v, eid, gid)
-
     @app.post("/api/orgs/{oid}/invites")
     def invite(oid: int, con: Con, v: Me, body: dict | None = Body(None)):
         return logic.invite(con, v, oid, body.get("dept") if isinstance(body, dict) else None)

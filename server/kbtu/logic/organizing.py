@@ -1089,10 +1089,8 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
         con.execute("DELETE FROM door_guests WHERE event_id = ? AND user_id = ?", (eid, uid))
 
 
-# A19 (Oct 23 night): someone at the door without the app, or not on the list, types their own first and last
-# name on the organiser's phone. When a student with that name confirms with Microsoft later, they count as came.
-GUEST_NAME = re.compile(r"[^\W\d_]+(?:[-'’][^\W\d_]+)*(?: [^\W\d_]+(?:[-'’][^\W\d_]+)*){1,3}")
-GUESTS_MAX = 500  # an event's walk-ins by name (a typo loop must not fill the table)
+# A19 (Oct 23 night): someone at the door without the app typed their own first and last name on the organiser's phone;
+# a student with that name confirming with Microsoft later counts as came. The typing went with the check-in redesign.
 
 
 def _norm_name(s: str) -> str:
@@ -1100,56 +1098,10 @@ def _norm_name(s: str) -> str:
     return " ".join(sorted(s.lower().replace("\u0451", "\u0435").split()))
 
 
-def _guest(g: sqlite3.Row, full: bool, me: int) -> dict:
-    first, *rest = g["full_name"].split(" ")
-    return {"id": g["id"], "name": g["full_name"] if full else f"{first} {rest[-1][:1]}", "at": g["created_at"],
-            "linked": g["user_id"] is not None, "undo": g["added_by"] == me and g["user_id"] is None and g["created_at"] > core.now() - UNDO}
-
-
-def door_guests(con, v: Viewer, eid: int) -> list[dict]:
-    """The walk-ins by name, newest first: full names for Head+ (like the attendees), short ones for the door (§3)."""
-    e = _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
-    full = runs(con, v, e)
-    return [_guest(g, full, v.id) for g in rows(con, "SELECT * FROM door_guests WHERE event_id = ? ORDER BY created_at DESC, id DESC", eid)]
-
-
-def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
-    """A walk-in by name (Member+, the door's right): while the door is open, a free event only (a paid one needs a
-    ticket). The same name twice at one event is one person."""
-    full = " ".join(str(name or "").split())
-    if not (3 <= len(full) <= 80 and GUEST_NAME.fullmatch(full)):
-        raise ApiError("bad_input")
-    with tx(con):
-        e = _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
-        t = core.now()
-        if e["status"] != "published" or door_shut(e, t):
-            raise ApiError("conflict", "closed")
-        if e["price"]:
-            raise ApiError("conflict", "paid")
-        if e["visibility"] != "public":  # a team meeting is marked from its expected list (§2b), not by typed names
-            raise ApiError("conflict", "team")
-        con.execute("DELETE FROM door_guests WHERE user_id IS NULL AND created_at < ?", (t - GUEST_DAYS,))  # nobody came for them
-        norm = _norm_name(full)
-        if one(con, "SELECT 1 FROM door_guests WHERE event_id = ? AND norm = ?", eid, norm):
-            raise ApiError("conflict", "already")
-        if one(con, "SELECT COUNT(*) FROM door_guests WHERE event_id = ?", eid)[0] >= GUESTS_MAX:
-            raise ApiError("rate_limited")
-        gid = con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at) VALUES (?, ?, ?, ?, ?)",
-                          (eid, full, norm, v.id, t)).lastrowid
-        return _guest(one(con, "SELECT * FROM door_guests WHERE id = ?", gid), runs(con, v, e), v.id)
-
-
-def undo_door_guest(con, v: Viewer, eid: int, gid: int) -> None:
-    """A wrong name taken back by whoever typed it, in the first 10 minutes, while nobody is linked to it."""
-    _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
-    if not con.execute("DELETE FROM door_guests WHERE id = ? AND event_id = ? AND added_by = ? AND user_id IS NULL AND created_at > ?",
-                       (gid, eid, v.id, core.now() - UNDO)).rowcount:
-        raise ApiError("conflict")
-
-
 GUEST_DAYS = 30 * 86400  # a walk-in's name waits this long for its student, then goes
 
 
+# ponytail: nothing adds door_guests rows since Nov 14; link_door_guests, GUEST_DAYS and _norm_name can go after Dec 14
 def link_door_guests(con, uid: int) -> None:
     """A student confirmed by Microsoft (their names are KBTU's): a walk-in of the last 30 days with their full name was
     them, only if no other student has that name (owner's rule with the review's guard: two Aruzhan Serikovas and
