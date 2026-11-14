@@ -831,15 +831,16 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
 
 def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict | None:
     """A paid seat whose receipt nobody reviewed, not in yet: the door hears it before anything is recorded (Codex's
-    release blocker, Nov 14). Who sees the flags (a member of the club, a co-host's team) may let them in anyway
-    (`admit`); a door helper never: an organizer looks. Raised: the transaction rolls a walk-in back."""
+    release blocker, Nov 14). Its organizers (the events right, a co-host's team) may let them in after a look (`admit`);
+    anyone else at the door (a member, a helper) is only told to call one, never that the receipt is flagged."""
     if r["checked_in_at"] or not e["price"] or not flagged(con, r["id"]):
         return None
-    if admit and (can(con, v, e["org_id"], "door") or co_runs(con, v, e["id"])):
+    org = can(con, v, e["org_id"], "events") or co_runs(con, v, e["id"])
+    if admit and org:
         return None
-    return {"result": "flagged", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])), "at": core.now(),
+    return {"result": "flagged" if org else "ask_org", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])), "at": core.now(),
             "came": one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", e["id"])[0],
-            "going": taken(con, e["id"]), "walkIn": False, "late": 0, "flagged": True}
+            "going": taken(con, e["id"]), "walkIn": False, "late": 0, **({"flagged": True} if org else {})}
 
 
 def flagged(con, rid: int) -> bool:
@@ -1183,6 +1184,7 @@ def door_round(con) -> None:
     t = core.now()
     for e in rows(con, """SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(guest_host, '') = ''
             AND starts_at > ? AND starts_at <= ?
+            AND COALESCE(door_audience, 'both') != 'team'  -- a team-only door: no guest is told
             AND EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = e.id AND r.checked_in_at IS NOT NULL)""", t, t + DOOR_EARLY):
         if door_shut(e, t):
             continue

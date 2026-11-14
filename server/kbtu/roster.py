@@ -235,10 +235,10 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
             con.execute("UPDATE students SET course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?", (r["course"], r["phone"], uid))
         con.execute("INSERT INTO roster_toasts (user_id, org_id, title, at) VALUES (?, ?, ?, ?)", (uid, oid, r["title"], now()))
         # marked by hand at a door before they had the app (checkin.team_mark): the mark is theirs now, still a hand one
-        con.execute("""INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, done_at, marked_by)
-            SELECT session_id, ?, at, at, marked_by FROM qr_hand_marks WHERE who = ?""", (uid, f"r{r['id']}"))
-        con.execute("DELETE FROM qr_hand_marks WHERE who = ?", (f"r{r['id']}",))
-        con.execute("DELETE FROM roster_pending WHERE id = ?", (r["id"],))
+        con.execute("""INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, done_at, marked_by, hand)
+            SELECT h.session_id, ?, h.at, h.at, h.marked_by, 1 FROM qr_hand_marks h JOIN qr_sessions s ON s.id = h.session_id AND s.org_id = ?
+            WHERE h.who = ?""", (uid, oid, f"r{r['id']}"))
+        con.execute("DELETE FROM roster_pending WHERE id = ?", (r["id"],))  # its hand marks with it (trigger qr_hand_roster_gone)
         con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{r['key']}", str(now())))  # a reload skips it
     return vice
 

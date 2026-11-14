@@ -13,6 +13,7 @@ import hmac
 import io
 import ipaddress
 import json
+import re
 import secrets
 import time
 
@@ -236,12 +237,19 @@ def _guests(con, e, sid: int | None) -> bool:
         and not (sid and one(con, "SELECT 1 FROM vol_meets WHERE session_id = ?", sid))
 
 
+def _named(con, v: Viewer, e) -> bool:
+    """A door helper a President or Vice named for this event (crew.py's event_crew, its right still holding); a helper
+    let in by the QR (qr_helpers) only keeps the QR it was given showing (control's "show")."""
+    return bool(logic.crew.kind(con, v, e) and one(con, "SELECT 1 FROM event_crew WHERE event_id = ? AND user_id = ?", e["id"], v.id))
+
+
 def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
     """An event's session: every member who works its door (the ticket scanner) may also start and show its QR, for a
     guest who can't open a ticket (owner, Nov 10), at an ordinary public event while its door is open; Start from T-30
     only (a President's early opening doesn't move the tier line). Finishing, the CSV and the screens stay the
     organizers'. Raises why not: forbidden (an organizers' session), closed (with when it opens)."""
-    if not e or not can(con, v, e["org_id"], "door"):
+    # and a door helper a President or Vice named (crew.py): the same Mark screen as the club's own (owner, Nov 14)
+    if not e or not (can(con, v, e["org_id"], "door") or _named(con, v, e)):
         raise ApiError("forbidden", "screen")
     if not _guests(con, e, sid):
         raise ApiError("forbidden", "door_staff")
@@ -414,7 +422,7 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
     """An event's own session (its organizer's "Check-in screen" in the app), made on first use: its title, its club. A
     paid event keeps its tickets at the door, a partner's has no door (Oct 29)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-    if not e or not can(con, v, e["org_id"], "door") and not logic.co_runs(con, v, eid) and v.role != "admin":
+    if not e or not can(con, v, e["org_id"], "door") and not logic.co_runs(con, v, eid) and v.role != "admin" and not _named(con, v, e):
         raise ApiError("forbidden", "screen")
     if e["status"] != "published" or e["guest_host"]:  # a paid one too: a ticket held is checked in by the scan (organizing.screen_came)
         raise ApiError("closed", "screen")
@@ -645,9 +653,11 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
     if aud == "guests" or e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400:
         return None
     with tx(con):  # who they are, read under the write lock with the mark: a removal or a sign-up landing meanwhile wins
-        if aud == "both" and (one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id)
-                or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id)):
+        member = bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id))
+        if aud == "both" and (not member or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id)):
             return None  # a seat (or a waitlist offer held): a guest
+        if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+            raise ApiError("forbidden", "banned")  # "team": whoever scans, but never someone the club banned
         x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", e["id"])
         if not x:
             return None
@@ -656,7 +666,8 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
         if v.student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, x[0], v.id))
     title, event = _title_for(con, s, v.id, v.student)
-    return {"title": title, "done": v.student, "left": False, "event": event, "again": bool(had and had["done_at"]), "team": True}
+    # team: the club's own only (the app's cue for the reports' consent); a guest at a team-only door is just counted
+    return {"title": title, "done": v.student, "left": False, "event": event, "again": bool(had and had["done_at"]), **({"team": True} if member else {})}
 
 
 def _team_left(con, s, uid: int) -> dict | None:
@@ -823,14 +834,18 @@ def team(con, v: Viewer, eid: int) -> dict:
     sid = s[0] if s else 0
     hand = {r["who"]: r["at"] for r in rows(con, "SELECT who, at FROM qr_hand_marks WHERE session_id = ?", sid)}
     named = lambda p: " ".join(n for n in (p["last_name"], p["first_name"]) if n) if full and p["first_name"] else logic.short_name(p)  # noqa: E731
-    base = f"SELECT {logic.PERSON_COLS}, s.email, s.student_id, m.done_at, m.marked_by"
+    base = f"SELECT {logic.PERSON_COLS}, u.tg_username, s.email, s.student_id, m.done_at, m.marked_by, m.hand"
     members = rows(con, base + """, (SELECT g.name FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE mt.user_id = u.id AND g.org_id = om.org_id
         ORDER BY g.department DESC, g.id LIMIT 1) AS grp FROM org_members om JOIN users u ON u.id = om.user_id LEFT JOIN students s ON s.user_id = u.id
         LEFT JOIN qr_marks m ON m.session_id = ? AND m.user_id = u.id WHERE om.org_id = ?""", sid, e["org_id"])
-    out = [{"key": f"u{p['id']}", "name": named(p), "group": p["grp"], "at": p["done_at"], "manual": bool(p["done_at"] and p["marked_by"]), "app": True} for p in members]
+    mails0, ids = {(p["email"] or "").lower() for p in members} - {""}, {p["id"] for p in members}
+    out = [{"key": f"u{p['id']}", "name": named(p), "group": p["grp"], "at": p["done_at"], "manual": bool(p["done_at"] and p["hand"]), "app": True} for p in members]
+    # a roster row whose person is listed above already (a claim waiting, a name that didn't match): once, as the member
+    tgs = {(p["tg_username"] or "").lower() for p in members} - {""}
     out += [{"key": f"r{r['id']}", "name": (r["full_name"] or "?") if full else _short(r["full_name"] or "?"), "group": r["dept"],
              "at": hand.get(f"r{r['id']}"), "manual": f"r{r['id']}" in hand, "app": False}
-            for r in rows(con, "SELECT id, full_name, dept FROM roster_pending WHERE org_id = ?", e["org_id"])]
+            for r in rows(con, "SELECT id, full_name, dept, email, tg, claimed_by FROM roster_pending WHERE org_id = ?", e["org_id"])
+            if not (r["email"] and r["email"] in mails0 or r["tg"] and r["tg"] in tgs or r["claimed_by"] in ids)]
     # an admin's additions (not the club's own frozen rows: the members above are read live), matched as the CSV does
     mails, sids = {(p["email"] or "").lower() for p in members}, {p["student_id"] for p in members if p["student_id"]}
     xs = [x for x in rows(con, "SELECT email, full_name, student_id FROM qr_expected WHERE session_id = ? AND extra NOT LIKE '%\"club\"%'", sid)
@@ -850,38 +865,45 @@ def team(con, v: Viewer, eid: int) -> dict:
             "other": [{"name": named(p), "at": p["done_at"]} for p in scans if p["id"] not in used], "open": now() < _until(e)}
 
 
+_KEY = re.compile(r"(u|r)(0|[1-9][0-9]{0,17})|x([^\s]{1,200})", re.ASCII)
+
+
 def team_mark(con, v: Viewer, eid: int, key: object, on: bool = True) -> dict:
-    """Mark a row of the team's list by hand (on), or take a hand mark back (a scan stays: it proves they came)."""
+    """Mark a row of the team's list by hand (on), or take a hand mark back: only a hand one (a scan or a badge stays:
+    they prove it), and a door helper only their own. The key must be a row the list shows now (team())."""
+    m = _KEY.fullmatch(key) if isinstance(key, str) else None
+    if not m:
+        raise ApiError("bad_input")
     e, _ = _lists(con, v, eid)
-    k = str(key or "")
+    k = m[0]
     s = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
-    if not s and on and (v.role == "admin" or can(con, v, e["org_id"], "events")):
+    runs = v.role == "admin" or can(con, v, e["org_id"], "events")
+    if not s and on and runs:
         crew_open(con, v, e)  # its organizer marking before the QR was opened (on the event's day)
         s = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
     if not s or now() >= _until(e):
         raise ApiError("closed", "qr")
+    if k not in {r["key"] for r in team(con, v, eid)["rows"]}:
+        raise ApiError("not_found")  # another club's, a hidden expected row, a roster row listed as its member
+    mine = "" if runs else f" AND marked_by = {int(v.id)}"
     t = now()
     with tx(con):
-        if k[:1] == "u" and k[1:].isdigit():
-            uid = int(k[1:])
-            if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
-                raise ApiError("not_found")
-            if uid == v.id and not can(con, v, e["org_id"], "events"):
+        if m[1] == "u":
+            uid = int(m[2])
+            if uid == v.id and not runs:
                 raise ApiError("forbidden", "own")
-            if on:
-                con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by) VALUES (?, ?, ?, ?)", (s["id"], uid, t, v.id))
-                con.execute("UPDATE qr_marks SET done_at = ?, marked_by = COALESCE(marked_by, ?) WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, v.id, s["id"], uid))
+            if on:  # hand 1: the row is the hand mark's; 2: a scan waiting for its sign-up, completed by hand (undo leaves the scan)
+                con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by, hand) VALUES (?, ?, ?, ?, 0)", (s["id"], uid, t, v.id))
+                con.execute("""UPDATE qr_marks SET done_at = ?, marked_by = COALESCE(marked_by, ?), hand = CASE WHEN scanned_at = ? AND marked_by IS ? THEN 1 ELSE 2 END
+                    WHERE session_id = ? AND user_id = ? AND done_at IS NULL""", (t, v.id, t, v.id, s["id"], uid))
             else:
-                con.execute("DELETE FROM qr_marks WHERE session_id = ? AND user_id = ? AND marked_by IS NOT NULL", (s["id"], uid))
-        elif k[:1] == "r" and k[1:].isdigit() and one(con, "SELECT 1 FROM roster_pending WHERE id = ? AND org_id = ?", int(k[1:]), e["org_id"]) \
-                or k[:1] == "x" and one(con, "SELECT 1 FROM qr_expected WHERE session_id = ? AND email = ?", s["id"], k[1:]):
-            if on:
-                con.execute("INSERT OR IGNORE INTO qr_hand_marks (session_id, who, marked_by, at) VALUES (?, ?, ?, ?)", (s["id"], k, v.id, t))
-            else:
-                con.execute("DELETE FROM qr_hand_marks WHERE session_id = ? AND who = ?", (s["id"], k))
+                con.execute(f"DELETE FROM qr_marks WHERE session_id = ? AND user_id = ? AND hand = 1{mine}", (s["id"], uid))
+                con.execute(f"UPDATE qr_marks SET done_at = NULL, hand = 0, marked_by = NULL WHERE session_id = ? AND user_id = ? AND hand = 2{mine}", (s["id"], uid))
+        elif on:
+            con.execute("INSERT OR IGNORE INTO qr_hand_marks (session_id, who, marked_by, at) VALUES (?, ?, ?, ?)", (s["id"], k, v.id, t))
         else:
-            raise ApiError("not_found")
-        log_action(con, v.id, "checkin_hand" if on else "checkin_unhand", f"qr:{s['id']}", json.dumps({"who": k}))
+            con.execute(f"DELETE FROM qr_hand_marks WHERE session_id = ? AND who = ?{mine}", (s["id"], k))
+        log_action(con, v.id, "checkin_hand" if on else "checkin_unhand", f"qr:{s['id']}", json.dumps({"who": k[0] + ("" if k[0] == "x" else k[1:])}))
     return team(con, v, eid)
 
 

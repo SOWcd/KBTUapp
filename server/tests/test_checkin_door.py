@@ -155,7 +155,10 @@ def test_flagged_receipt_warns_before_admission(env):
     helper = login(c, 4, "hel")
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, helper["id"], org))
     r = c.post(f"/api/events/{eid}/checkin", headers=tma(4), json={"code": "BBBB", "admit": True}).json()
-    assert r["result"] == "flagged" and not came()                                         # a helper can't wave it through
+    assert r["result"] == "ask_org" and "flagged" not in r and not came()                  # a helper: "call an organizer", never why
+    _mem(c, con, org, 7, "mia")
+    r = c.post(f"/api/events/{eid}/checkin", headers=tma(7), json={"code": "BBBB", "admit": True}).json()
+    assert r["result"] == "ask_org" and not came()                                         # a plain member can't admit either
     r = c.post(f"/api/events/{eid}/checkin", headers=tma(9), json={"userId": bob["id"], "admit": True}).json()
     assert r["result"] == "ok" and r["flagged"] and came()
     con.close()
