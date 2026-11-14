@@ -209,3 +209,34 @@ def test_door_helper_runs_the_same_mark_screen(env):
     assert c.post(f"/api/screens/{s['session']}/show", headers=tma(4)).json()["param"]
     assert c.get(f"/api/events/{eid}/door-team", headers=tma(4)).status_code == 200
     con.close()
+
+
+def test_one_list_of_helpers(env):
+    """The Mark screen's «Helper» (CrewSheet): whom the helper's QR let in is listed with the named ones, and taken out there."""
+    from test_qr_helpers import _in
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    eid, sid, _ = _in(c, con)                                                              # bob (tg 2) let in by the QR
+    bob = c.get("/api/me", headers=tma(2)).json()["id"]
+    crew = c.get(f"/api/events/{eid}", headers=tma(9)).json()["crew"]
+    assert [(x["person"]["id"], x["kind"]) for x in crew] == [(bob, "qr")]
+    assert c.get(f"/api/events/{eid}", headers=tma(2)).json()["myCrew"] == "scan"           # the screen says scanner only
+    assert c.delete(f"/api/events/{eid}/crew/{bob}", headers=tma(2)).status_code in (403, 404) and con.execute("SELECT 1 FROM qr_helpers").fetchone()  # not theirs to take
+    assert c.delete(f"/api/events/{eid}/crew/{bob}", headers=tma(9)).json() == []
+    assert not con.execute("SELECT 1 FROM qr_helpers").fetchone()
+    con.close()
+
+
+def test_named_helper_shows_the_qr_before_the_door(env):
+    """Before the door time the organizer shows the QR (the team comes early); a named helper sees the same, no 409."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    t0 = int(time.time()) + 2 * 3600
+    oid, ann, eid = _setup(c, con, t0)
+    h = login(c, 4, "hel")
+    con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, h["id"], oid))
+    s = c.post(f"/api/events/{eid}/screen", headers=tma(4)).json()
+    assert c.post(f"/api/screens/{s['session']}/start", headers=tma(4)).status_code == 200
+    assert c.post(f"/api/screens/{s['session']}/show", headers=tma(4)).json()["param"]
+    assert c.post(f"/api/screens/{s['session']}/show", headers=tma(1)).status_code == 409   # a plain member: at the door time, as before
+    con.close()

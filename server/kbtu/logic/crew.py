@@ -71,8 +71,13 @@ def view(con, v: Viewer, e: sqlite3.Row) -> list[dict] | None:
     """The helpers, for the running clubs' Presidents and Vices (None for everyone else)."""
     if not _lead(con, v, e["id"]):
         return None
-    return [{"person": person_ref(p), "kind": p["kind"], "org": p["org_id"]} for p in rows(con, f"""SELECT {PERSON_COLS}, c.kind, c.org_id
+    named = [{"person": person_ref(p), "kind": p["kind"], "org": p["org_id"]} for p in rows(con, f"""SELECT {PERSON_COLS}, c.kind, c.org_id
         FROM event_crew c JOIN users u ON u.id = c.user_id LEFT JOIN students s ON s.user_id = u.id WHERE c.event_id = ? ORDER BY c.created_at""", e["id"])]
+    # and whom the helper's QR let in (checkin.py qr_helpers): the scanner, until Finish; one list of helpers (owner, Nov 14)
+    seen = {x["person"]["id"] for x in named}
+    return named + [{"person": person_ref(p), "kind": "qr", "org": e["org_id"]} for p in rows(con, f"""SELECT {PERSON_COLS} FROM qr_helpers h
+        JOIN qr_sessions q ON q.id = h.session_id AND q.event_id = ? AND q.ended_at IS NULL JOIN users u ON u.id = h.user_id
+        LEFT JOIN students s ON s.user_id = u.id ORDER BY h.created_at""", e["id"]) if p["id"] not in seen]
 
 
 def put(con, v: Viewer, eid: int, uid: object, what: object) -> list[dict]:
@@ -112,6 +117,11 @@ def drop(con, v: Viewer, eid: int, uid: int) -> list[dict]:
     with tx(con):
         e = one(con, "SELECT * FROM events WHERE id = ?", eid)
         r = e and one(con, "SELECT * FROM event_crew WHERE event_id = ? AND user_id = ?", eid, uid)
+        if not r and e and _lead(con, v, eid):  # let in by the helper's QR: out of its session's helpers
+            if not con.execute("DELETE FROM qr_helpers WHERE user_id = ? AND session_id IN (SELECT id FROM qr_sessions WHERE event_id = ?)", (uid, eid)).rowcount:
+                raise ApiError("not_found")
+            log_action(con, v.id, "crew_drop", f"user:{uid}", json.dumps({"event": eid, "kind": "qr"}))
+            return view(con, v, e) or []
         if not r:
             raise ApiError("not_found")
         if not (at_least(role_in(con, v, r["org_id"]), "vice") or at_least(role_in(con, v, e["org_id"]), "vice")):

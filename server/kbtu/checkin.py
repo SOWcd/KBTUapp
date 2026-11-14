@@ -249,14 +249,16 @@ def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
     only (a President's early opening doesn't move the tier line). Finishing, the CSV and the screens stay the
     organizers'. Raises why not: forbidden (an organizers' session), closed (with when it opens)."""
     # and a door helper a President or Vice named (crew.py): the same Mark screen as the club's own (owner, Nov 14)
-    if not e or not (can(con, v, e["org_id"], "door") or _named(con, v, e)):
+    # and as the organizer would, before the door time too (owner, Nov 14: the team comes early; scans are judged as ever)
+    named = bool(e) and _named(con, v, e)
+    if not e or not (named or can(con, v, e["org_id"], "door")):
         raise ApiError("forbidden", "screen")
     if not _guests(con, e, sid):
         raise ApiError("forbidden", "door_staff")
     at = max(logic.door_at(e), e["starts_at"] - logic.DOOR_AUTO) if start else logic.door_at(e)
-    if now() < at and e["status"] == "published" and not e["hidden_at"]:
+    if now() < at and e["status"] == "published" and not e["hidden_at"] and not named:
         raise ApiError("closed", "not_open", {"at": at})
-    if e["status"] != "published" or e["hidden_at"] or logic.door_shut(e, now()):
+    if e["status"] != "published" or e["hidden_at"] or logic.door_shut(e, now()) == "closed" or not named and logic.door_shut(e, now()):
         raise ApiError("closed", "closed")
 
 
