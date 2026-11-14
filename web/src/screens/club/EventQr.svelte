@@ -7,7 +7,7 @@
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { QR_TONE } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
-  import { sheets, doorMode } from '../../lib/state/sheets';
+  import { sheets } from '../../lib/state/sheets';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { eventById } from '../../lib/state/data.svelte';
   import { time } from '../../lib/time';
@@ -22,9 +22,9 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UserPlus from '@lucide/svelte/icons/user-plus';
 
-  // `door`: the registration mode's QR half (Scanner.svelte's switch): its scanner button swaps back in place
-  let { overlay, event, sess, hand = false, scanner = false, door = false }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean; door?: boolean } = $props();
-  $effect(() => { overlay.title = t(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; });
+  // `embed`: the door screen's QR half (Scanner.svelte): the code alone, inside its overlay; `onlast` as someone counts
+  let { overlay, event, sess, hand = false, scanner = false, embed = false, onlast }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean; embed?: boolean; onlast?: () => void } = $props();
+  $effect(() => { if (!embed) { overlay.title = t(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; } });
 
   let q = $state<ScreenSession | null>(null), note = $state('');
   let sid: Id, timer: ReturnType<typeof setTimeout> | undefined, gone = false;
@@ -39,6 +39,7 @@
   function got(r: ScreenSession) {
     if (gone) return;
     if (q && (hand ? (r.helpers ?? 0) > (q.helpers ?? 0) : r.done > q.done)) haptic.soft();
+    if (q && r.last?.at !== q.last?.at) onlast?.();
     q = r;
     if (!r.ended) timer = setTimeout(poll, Math.min(r.next, 3) * 1000 + 300); // the next code as the slot turns, the count meanwhile
   }
@@ -64,7 +65,7 @@
     got(await api.screenAct(sid, 'show'));
   }
 
-  const toScanner = () => { haptic.tap(); if (door) { doorMode('scan'); close(overlay.id); sheets.scanner(event!, false, true); } else sheets.scannerOnly(event!); };
+  const toScanner = () => { haptic.tap(); sheets.scannerOnly(event!); };
   // who may let a helper in: the club's President or Vice, or the app's admin (server checkin._hands_over), here at the event's QR
   const board = $derived(!sess && !hand && !!event && (session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === eventById(event)?.org.id && (m.role === 'president' || m.role === 'vice'))));
 
@@ -77,12 +78,13 @@
     if (r) got(r); else poll();
   }
 
-  let wrap: HTMLDivElement, scrim: HTMLDivElement;
+  let wrap = $state<HTMLDivElement>(), scrim = $state<HTMLDivElement>(); // states: bound inside {#if !embed}
   onMount(() => {
-    haptic.soft();
     open().catch(stop);
-    wrap.animate([{ opacity: 0, transform: 'translate3d(0,50px,0) scale(0.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
-    scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: 'ease-out' });
+    if (embed) return () => { gone = true; clearTimeout(timer); };
+    haptic.soft();
+    wrap!.animate([{ opacity: 0, transform: 'translate3d(0,50px,0) scale(0.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
+    scrim!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: 'ease-out' });
     const chrome = hideChrome();
     return () => { chrome(); clearTimeout(timer); };
   });
@@ -91,23 +93,29 @@
     if (gone) return;
     gone = true;
     clearTimeout(timer);
-    wrap.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate3d(0,40px,0) scale(0.96)' }], { duration: 220, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
-    scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).onfinish = () => removeOverlay(overlay.id);
+    wrap!.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate3d(0,40px,0) scale(0.96)' }], { duration: 220, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+    scrim!.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).onfinish = () => removeOverlay(overlay.id);
   }
-  $effect(() => { if (overlay.closing) leave(); });
+  $effect(() => { if (overlay.closing && !embed) leave(); });
 </script>
+
+{#snippet plate()}
+  <div class="plate" class:off={!q?.param}>
+    {#if q?.param}
+      <Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr><!-- a new code redraws in place: no blank frame -->
+    {:else if q?.ended || note}
+      <p class="note">{note || t('scr.closed')}</p>
+    {/if}
+  </div>
+{/snippet}
+
+{#if embed}{@render plate()}{:else}
 
 <div class="scrim" bind:this={scrim} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
   <div class="page">
     {#if q}<b class="head">{q.title}</b>{/if}
-    <div class="plate" class:off={!q?.param}>
-      {#if q?.param}
-        <Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr><!-- a new code redraws in place: no blank frame -->
-      {:else if q?.ended || note}
-        <p class="note">{note || t('scr.closed')}</p>
-      {/if}
-    </div>
+    {@render plate()}
     {#if q && hand}
       {#if q.param}<p class="hint">{t('scr.handHint')}</p>{/if}
       <p class="got">{t('scr.helpersN', { n: q.helpers ?? 0 })}</p>
@@ -117,13 +125,13 @@
       <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>
       {#if q.last && !out}<p class="hint">{t(q.last.team ? 'scr.lastTeam' : 'scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
       {#if q.pending}<p class="hint">{t('scr.joining', { n: q.pending })}</p>{/if}
-      {#if event && !door && sess && scanner && q.param}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
+      {#if event && sess && scanner && q.param}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
       {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
     {/if}
-    {#if door && event}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
   </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>
+{/if}
 
 <style>
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: rgba(3, 4, 10, 0.94); }

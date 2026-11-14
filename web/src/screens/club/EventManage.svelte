@@ -1,13 +1,12 @@
 <script lang="ts">
   // Studio → an event: the organizer's screen (owner, Oct 11: "inside Studio a tap on an event must open another
-  // screen than from the Afisha"; he couldn't find how much had come in). Money first for a paid event: what should
-  // have come (paying tickets × price), what the receipts say (OCR), the receipts to check (flagged ones open the
-  // attendee list, flagged first); then the people; then the tools. The card's eye opens the usual sheet, its pencil the editor.
+  // screen than from the Afisha"; Nov 14: far too many buttons, organizers are students on a phone at a door). The card
+  // (its pencil the editor, its eye the usual sheet); on the event's day one «Show QR» (the door screen: QR and scanner);
+  // who came; rows only when they ask for something (receipts to check, the team's asks, holds, the waitlist,
+  // volunteers); the money of a paid event; the rest folded under «More».
   // ponytail: no "message the participants" yet (no such API; the questions thread and the bot's changes cover it).
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-  import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
-  import UserCheck from '@lucide/svelte/icons/user-check';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Eye from '@lucide/svelte/icons/eye';
@@ -15,8 +14,6 @@
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
-  import DoorOpen from '@lucide/svelte/icons/door-open';
-  import DoorClosed from '@lucide/svelte/icons/door-closed';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
   import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type ScreenSession, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -24,11 +21,12 @@
   import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs } from '../../lib/time';
+  import { relDay, time, nowTs, dayNo } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Notice from '../../ui/Notice.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { inner, may } from '../../lib/perms';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Sheet from '../../ui/Sheet.svelte';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Poster from '../../ui/Poster.svelte';
@@ -78,7 +76,6 @@
   const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
   let team = $state<ScreenSession | null>(null);
   $effect(() => { void tick; if (teamMark) api.crewScreenOf(id).then((x) => (team = x)).catch(() => {}); });
-  const teamLine = $derived(!team ? undefined : t(team.ended ? 'scr.teamDone' : 'scr.teamLive', { n: team.expected ? team.came ?? 0 : team.done, m: team.expected }));
   async function openChat() {
     haptic.tap();
     if (chat) { openLink(chat); return; }
@@ -130,17 +127,27 @@
   const doorOpen = $derived(doorAt <= tick);
   const opener = $derived(!co && (staff ? !plain : mem?.role === 'president' || mem?.role === 'vice'));
   const setDoor = (at: number) => { const x = eventById(id); if (x) x.doorAt = at; };
-  async function openDoor() {
-    if (!e) return;
-    haptic.tap();
+  async function openDoor(): Promise<boolean> {
+    if (!e) return false;
     const ask = { ok: t('door.openGo'), cancel: t('common.cancel') };
-    if (!(await sheets.ask({ ...ask, title: t('door.openAsk'), text: t('door.openText') }))) return;
-    if (e.startsAt - nowTs() > 3600 && !(await sheets.ask({ ...ask, title: t('door.openSure'), text: t('door.openSureText'), wait: 2000 }))) return;
+    if (!(await sheets.ask({ ...ask, title: t('door.openAsk'), text: t('door.openText') }))) return false;
+    if (e.startsAt - nowTs() > 3600 && !(await sheets.ask({ ...ask, title: t('door.openSure'), text: t('door.openSureText'), wait: 2000 }))) return false;
     const was = doorAt;
     tick = nowTs(); setDoor(tick);
-    try { await api.openDoor(id); haptic.ok(); say(t('door.opened'), 'party_popper_3d'); }
-    catch { setDoor(was); haptic.error(); say(t('common.error'), 'warning_3d'); }
+    try { await api.openDoor(id); haptic.ok(); say(t('door.opened'), 'party_popper_3d'); return true; }
+    catch { setDoor(was); haptic.error(); say(t('common.error'), 'warning_3d'); return false; }
   }
+  // the event's day (or under way), its door ours to work: one «Show QR»; a partner's event has no door, Admin never
+  // works it (the creator as its President does); a co-host's event team works it as from the event's sheet
+  const ends = $derived(e ? e.endsAt ?? e.startsAt + 6 * 3600 : 0);
+  const doorDay = $derived(!!e && live && !e.guestHost && !plain && (co ? coCrew : true) && (started || dayNo(e.startsAt) === dayNo(tick)) && ends > tick);
+  async function showQr() {
+    if (!e) return;
+    haptic.tap();
+    if (!doorOpen && opener && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return; // shut yet: today's confirm first
+    registration(e, co || head, session.me?.vol?.org);
+  }
+  let more = $state(false);
   // the club's own people asking to come as guests (server seats.team_ask): the President and the Vices answer here
   let asks = $state<TeamAsk[]>([]);
   $effect(() => { void data.rev; if (opener) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
@@ -170,6 +177,24 @@
         </Row>
       </Group>
 
+      {#if doorDay}
+        <div class="door">
+          <Button kind="primary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('studio.showQr')}</Button>
+          {#if !doorOpen}<p class="t-foot">{t('door.openAt', { time: time(doorAt) })}</p>{/if}
+        </div>
+      {/if}
+
+      {#if head && list}
+        <Group>
+          {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={team ? t('door.team', { n: team.expected ? team.came ?? 0 : team.done }) : undefined} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if e.needsVolunteers && e.volunteersAsked}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
+        </Group>
+      {/if}
+
       {#if asks.length}
         <Group caption={t('ta.caption')}>
           {#each asks as x (x.person.id)}
@@ -188,17 +213,6 @@
           <Row title={t('mg.byReceipts')} subtitle={unread ? t('mg.unread', { n: unread }) : undefined}>
             {#snippet detail()}<span class="sum num" class:short={byReceipts < paying * price}>{money(byReceipts)}</span>{/snippet}
           </Row>
-          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-        </Group>
-      {/if}
-
-      {#if head && list}
-        <Group caption={t('mg.people')}>
-          <Row title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" />
-          <Row title={t('mg.came')} value={String(came)} />
-          {#if price}<Row title={t('mg.holds')} value={String(of('hold').length)} />{/if}
-          <Row title={t('mg.waitlist')} value={String(of('waitlist').length)} />
-          {#if e.savedBy}<Row title={t('mg.saved')} value={String(e.savedBy)} />{/if}
         </Group>
       {/if}
 
@@ -213,42 +227,30 @@
         </Group>
       {/if}
 
-      <Group>
-        {#if live && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
-          {#if co}{#if coCrew}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, true, session.me?.vol?.org)} />{/if}
-          {:else if doorOpen}<Row icon={DoorOpen} title={t('door.openedAt', { time: time(doorAt) })} />
-          {:else if opener && e.startsAt - 4 * 3600 <= tick}<Row icon={DoorClosed} title={t('door.open')} subtitle={t('door.openAt', { time: time(doorAt) })} accessory="chevron" onclick={openDoor} />
-          {:else}<Row icon={DoorClosed} title={t('door.openAt', { time: time(doorAt) })} />{/if}
-        {/if}
-        {#if live && !e.guestHost && !plain && !co}<!-- a partner's event has no door; Admin never works the door (the creator as its President) -->
-          {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
-          {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, head, session.me?.vol?.org)} />{/if}<!-- the scanner and the QR, one switch apart (EventSheet's) -->
-        {/if}
-        {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
-        {#if head}
-          <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
-          <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
-          {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
-            <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
-          {/if}
-          {#if live && !e.guestHost}{#if inner(e)}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}<!-- a public one's is in the registration mode -->
-            <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
-          <!-- the team marked (owner, Nov 13: a Vice opens the event, "Mark the team"): the club's own session, apart from the guests' -->
-          {#if teamMark}<Row icon={UserCheck} title={t('scr.team')} subtitle={teamLine} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
-          {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
-          {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
-        {/if}
-      </Group>
-
-      {#if head && live && !e.guestHost && (!started || e.lateSignup)}
+      {#if head || reports}
         <Group>
-          {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
-          {:else}<Row tone="destructive" title={t('mg.closeReg')} onclick={closeReg} />{/if}
+          <Row icon={Ellipsis} title={t('common.more')} accessory="disclosure" open={more} onclick={() => { haptic.tap(); more = !more; }} />
+          {#if more}
+            {#if head}
+              <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
+              {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
+              {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
+              <!-- one «Helpers»: the door's (server crew.py, its sheet links the volunteers), else the volunteers -->
+              {#if crewN != null && live && !inner(e) && !e.guestHost && ends > nowTs()}<Row icon={HandHeart} title={t('mg.helpers')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
+              {:else if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
+              <!-- the big screen at the door (/show): connect a laptop, finish, the CSV -->
+              {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+            {/if}
+            {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
+            {#if head && live && !e.guestHost && (!started || e.lateSignup)}
+              {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
+              {:else}<Row title={t('mg.closeReg')} onclick={closeReg} />{/if}
+            {/if}
+            {#if head && live && !started}<Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} />{/if}
+            {#if head && e.status === 'cancelled'}<Row tone="destructive" title={t('studio.deleteEvent')} onclick={removeEvent} />{/if}
+          {/if}
         </Group>
       {/if}
-      {#if head && live && !started}<Group><Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} /></Group>{/if}
-      {#if head && e.status === 'cancelled'}<Group><Row tone="destructive" title={t('studio.deleteEvent')} onclick={removeEvent} /></Group>{/if}
     </div>
   {/if}
 </Sheet>
@@ -258,4 +260,6 @@
   .sum { margin-left: auto; color: var(--text-3); }
   .sum.short { color: var(--warning-text); }
   .yn { display: flex; align-items: center; gap: var(--s-2); }
+  .door { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
+  .door .t-foot { color: var(--text-3); }
 </style>

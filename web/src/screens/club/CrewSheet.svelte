@@ -13,6 +13,7 @@
   import { RANK } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
@@ -100,6 +101,8 @@
           {/each}
         </Group>
       {/if}
+      <!-- the volunteers who asked, under the one «Helpers» (EventManage) -->
+      {#if e?.needsVolunteers}<Group><Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} /></Group>{/if}
     </div>
   {/if}
 </Sheet>

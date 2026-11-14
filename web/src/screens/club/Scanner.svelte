@@ -12,11 +12,11 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
-  import QrCode from '@lucide/svelte/icons/qr-code';
-  import { api, type CheckinResult, type DoorPerson, type EventFull, type Id } from '../../lib/api';
+  import { api, type CheckinResult, type DoorPerson, type EventFull, type Id, type ScreenSession } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets, doorMode } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
+  import { session } from '../../lib/state/session.svelte';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
   import { relDay, time } from '../../lib/time';
@@ -30,11 +30,14 @@
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import EventQr from './EventQr.svelte';
 
   // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
-  // qr: the registration mode (owner, Nov 10): one door screen, this scanner or the event's QR on this phone, switched in place
+  // qr: the door screen (owner, Nov 14): «QR | Scanner» on top (the phone remembers; first time: the scanner for a paid
+  // event, the QR for a free one), the code or the camera, the count, then two quiet buttons: a helper, by hand
   let { overlay, id, names = false, only = false, qr = false }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean; qr?: boolean } = $props();
-  const toQr = () => { haptic.tap(); doorMode('qr'); close(overlay.id); sheets.eventQr(id, true); };
+  let mode = $state<'scan' | 'qr'>(untrack(() => (qr ? doorMode() ?? (eventById(id)?.price ? 'scan' : 'qr') : 'scan')));
 
   let detail = $state<EventFull | null>(null);
   $effect(() => { api.event(id).then((d) => (detail = d)).catch(() => {}); });
@@ -52,8 +55,25 @@
   let gone = false;
   let cam = $state(untrack(() => !names));  // off when leaving: the light goes out with the fade, not after it
 
+  // the door's count from its list (who's going, who came) and the team's own session (server checkin._team), read as
+  // the screen opens and as the QR counts someone; a scan's answer brings the guests' count itself
+  let team = $state<ScreenSession | null>(null);
+  function recount() {
+    api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
+    api.crewScreenOf(id).then((x) => (team = x)).catch(() => {});
+  }
+  // who may let a helper in: the club's President or Vice, or the app's admin (server checkin._hands_over)
+  const board = $derived(session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === e?.org.id && (m.role === 'president' || m.role === 'vice')));
+  async function addHelper() {
+    haptic.tap();
+    try { const s = await api.eventScreen(id); if (!s.started) await api.screenAct(s.session, 'start'); sheets.handQr(s.session); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  let manual = $state(false); // the door's «By hand»: the typed code and the list by name, folded away until asked
+  function byHand() { haptic.tap(); manual = !manual; if (manual && !byName) void openByName(); }
+
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
-  $effect(() => { overlay.title = names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
+  $effect(() => { overlay.title = qr ? t('door.reg') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
   const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
@@ -113,7 +133,8 @@
   onMount(() => {
     panel.animate([{ opacity: 0, transform: 'translate3d(0,40px,0)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (names) void openByName();
-    else if (live === 'failed' && camera) scan();
+    else if (live === 'failed' && camera && mode === 'scan') scan();
+    if (qr) recount();
     return hideChrome();
   });
 
@@ -133,13 +154,17 @@
   </header>
 
   <div class="body scroll">
-    {#if e}
+    {#if qr}
+      <div class="sw"><Segmented items={[{ value: 'qr', label: 'QR' }, { value: 'scan', label: t('studio.scanner') }]} bind:value={mode}
+        onchange={(m) => { haptic.tap(); doorMode(m); if (m === 'qr') closeScanner(); else if (live === 'failed' && camera) scan(); }} /></div>
+      {#if mode === 'qr'}<div class="qr"><EventQr {overlay} event={id} embed onlast={recount} /></div>{/if}
+    {:else if e}
       <h2 class="t-h3 clamp-2">{e.title}</h2>
       <p class="t-foot">{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}</p>
       <p class="count">{count ? t('scan.came', count) : tn('event.going', e.taken)}</p>
     {/if}
 
-    {#if !names && live !== 'failed'}
+    {#if !names && live !== 'failed' && mode === 'scan'}
       <!-- the camera stays outside {#key}: a new <video> per scan had no stream (black after the first scan) -->
       <div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already'} class:bad={!!res && res.result !== 'ok' && res.result !== 'already'}>
         {#if cam}<QrCam bind:live paused={busy} onscan={(v) => void check(v)} />{/if}
@@ -149,7 +174,7 @@
     {/if}
 
     {#key seq}
-      {#if res}
+      {#if res && mode === 'scan'}
         {#if res.result === 'ok' || res.result === 'already'}
           <div class="res" class:good={res.result === 'ok'} class:warn={res.result === 'already'}>
             <Avatar person={res.person} size={84} />
@@ -165,12 +190,26 @@
       {/if}
     {/key}
 
-    {#if !names}
+    {#if !names && mode === 'scan'}
       {#if live !== 'on' && camera}
         <Button kind="primary" size="l" full onclick={scan}>{#snippet icon()}<ScanLine size={20} />{/snippet}{t('scan.open')}</Button>
       {:else if live === 'failed'}
         <p class="t-callout hint">{t('scan.noCamera')}</p>
       {/if}
+    {/if}
+
+    {#if qr}
+      <div class="tally">
+        <p class="big"><b class="num count">{count?.came ?? 0}</b>{#if count}<span>{t('scr.ofM', { m: count.going })}</span>{/if}</p>
+        {#if team}<p class="t-foot">{t('door.team', { n: team.expected ? team.came ?? 0 : team.done })}</p>{/if}
+      </div>
+      <div class="quiet">
+        {#if board}<Button kind="plain" size="m" onclick={addHelper}>{t('door.addHelper')}</Button>{/if}
+        {#if !only}<Button kind="plain" size="m" onclick={byHand}>{t('ledg.byHand')}</Button>{/if}
+      </div>
+    {/if}
+
+    {#if names || (qr && !manual)}{:else}
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
         {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>
@@ -179,9 +218,7 @@
       </form>
     {/if}
 
-    {#if qr}<Button kind="secondary" size="l" full onclick={toQr}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('scr.showQr')}</Button>{/if}
-
-    {#if only}{:else if !byName}
+    {#if only || (qr && !manual)}{:else if !byName}
       <Button kind="secondary" size="l" full onclick={openByName}>{#snippet icon()}<UserSearch size={18} />{/snippet}{t('door.byName')}</Button>
     {:else}
       <section class="door">
@@ -219,6 +256,12 @@
   .body { position: absolute; inset: max(48px, var(--top)) 0 0; display: flex; flex-direction: column; gap: 12px; padding: 6px var(--gutter) calc(var(--safe-bottom) + 20px); }
   .body > p.t-foot { margin-top: -8px; }
   .count { font: 760 28px/1.1 var(--font-display); letter-spacing: -0.02em; margin: 6px 0 2px; }
+  .sw, .qr { flex: none; }
+  .qr { display: flex; justify-content: center; }
+  .tally { text-align: center; }
+  .big { display: flex; align-items: baseline; justify-content: center; gap: var(--s-2); color: var(--text-3); font-size: var(--fs-t3); }
+  .big .count { margin: 0; color: var(--text); font-size: calc(var(--fs-title) * 1.9); line-height: 1; }
+  .quiet { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--s-2); }
 
   .res { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--r-l); text-align: center;
     animation: pop 360ms cubic-bezier(.2, .9, .25, 1.2); }
