@@ -366,7 +366,7 @@ def test_all_in_a_chat_no_club_holds(env, monkeypatch):
         await _drain()
     asyncio.run(go(_msg(31, "/all", chat=-555), _msg(41, "/all", chat=-555), _msg(41, "@all", chat=-555)))
     sent = http.said("sendMessage")
-    assert len(sent) == 1 and sent[0]["chat_id"] == -555 and "\u2192" in sent[0]["text"]   # the admin, once a minute; a member: silence
+    assert len(sent) == 1 and sent[0]["chat_id"] == -555 and "\U0001f440" in sent[0]["text"]   # the admin, once a minute; a member: silence
 
 
 def test_review_holes(env, monkeypatch):

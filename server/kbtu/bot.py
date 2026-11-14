@@ -1295,7 +1295,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None, key: str = "all_no") -> None:
     """/all refused: a template under the command, then both are deleted (theirs: if the bot may)."""
     text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", key)
-    sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
+    sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
     await asyncio.sleep(ALL_NO_TTL)
     for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
         if m:
