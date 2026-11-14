@@ -206,4 +206,6 @@ export const sheets = {
   teamInvite: (_token: string) => {},
   /** the organizer's teams: every team, those with none, Form teams */
   teams: (_id: Id) => {},
+  /** our own t.me link's startapp, opened as if tapped (App.deepLink): a scanner that read one of our QRs */
+  deepLink: (_p: string) => {},
 };

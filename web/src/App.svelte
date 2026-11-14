@@ -113,6 +113,7 @@
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
+  sheets.deepLink = (p) => deepLink(p);
   sheets.scanner = (id, names, qr, hand, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, hand, ondone });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)

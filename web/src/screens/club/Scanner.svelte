@@ -81,7 +81,12 @@
 
   const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
+  // one of our own QRs (the door's own check-in QR, a club's link...) read by this scanner: opened as if tapped, so a
+  // team member scanning the door's QR here is marked himself (owner, Nov 14: people scanned it with this scanner)
+  const ours = (raw: string) => raw.trim().match(/^(?:https?:\/\/)?t\.me\/KBTUappBot(?:\/\w+)?\?startapp=([\w-]{1,64})$/i)?.[1];
   async function check(raw: string) {
+    const p = ours(raw);
+    if (p) { haptic.tap(); leave(); sheets.deepLink(p); return; }
     if (busy || !raw.trim()) return;
     busy = true;
     try {
