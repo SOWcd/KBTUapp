@@ -66,7 +66,8 @@ def test_outsiders_counted_apart_and_guests_never_mix(env):
     sid = _crew(c, 9, eid).json()["session"]
     p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).json()["done"]          # anyone's scan counts: the usual answer
-    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]          # the team member
+    r = c.post("/api/checkin", headers=tma(1), json={"p": p}).json()
+    assert r["done"] and r["team"]                                                       # the team member, said as the team's (the app asks the reports' consent)
     # the team's marks are no event check-in: the guest's ticket stays unused
     assert con.execute("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", (eid,)).fetchone()[0] == 0
     row = [x for x in c.get("/api/screens", headers=tma(9)).json() if x["session"] == sid][0]

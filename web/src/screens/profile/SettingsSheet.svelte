@@ -35,6 +35,7 @@
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
+  import { setReportConsent } from '../../lib/reports';
   // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
   onMount(() => void loadMe());
 
@@ -53,6 +54,7 @@
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
   // one request at a time, and a choice the server hasn't confirmed yet stays on top of any answer
   let chain: Promise<void> = Promise.resolve();
+  let undo = $state(0); // the reports' consent switch, redrawn as it was after a "no" in its question
   const want: Record<string, boolean> = {};
   function set(k: (typeof SWITCHES)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
     if (!me) return;
@@ -290,6 +292,9 @@
         <Row title={t('set.showGoing')} accessory="switch" checked={me.settings.showGoing} onchange={(on) => set('showGoing', on, true)} />
         <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
+        <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
+        {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
+          onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}{/if}
       </Group></div>
     {/if}
     <div class:gap={me?.student}><Group>

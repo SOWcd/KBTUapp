@@ -626,7 +626,9 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
                 logic.vol.on_scan(con, s, uid, t, out)
     title, event = _title_for(con, s, uid, student)
     # event: the confirmation's cover and the sheet it settles into; again: counted by an earlier scan already
-    return {"title": title, "done": came, "left": out, "event": event, "again": bool(came and not out and had and had["done_at"])}
+    # team: an event's team session (crew), the app's cue to ask the reports' consent after a first team mark
+    return {"title": title, "done": came, "left": out, "event": event, "again": bool(came and not out and had and had["done_at"]),
+            **({"team": True} if s["crew_event_id"] else {})}
 
 
 def _team(con, v: Viewer, e, s, t: int) -> dict | None:

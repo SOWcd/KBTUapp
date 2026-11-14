@@ -6,6 +6,7 @@
   import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
   import { CONSENT_VOL } from './lib/legal';
+  import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
@@ -507,6 +508,8 @@
       if (kind === 'wait' && again) return;
       const text = r.team && !r.left ? t('ci.team') : r.already ? t('ci.already', { time: time(r.already) }) : r.flagged ? t('ci.flagged') : undefined; // a ticket used already, a receipt to check: the scanner
       void ciResult({ kind, title: r.title, event: r.event ?? null, text, onsign: () => asStudent(() => void checkIn(p, true), p, true) });
+      // my data starts going into the clubs' reports here: their consent asked once, after the answer has settled (CheckinResult's 2.6 s)
+      if (r.team && r.done && !r.left) setTimeout(askAfterTeamMark, 2800);
     } catch (e) {
       const own = e instanceof ApiErr && e.message === 'own';
       const early = e instanceof ApiErr && e.message === 'not_open' && typeof e.data.at === 'number' ? t('ci.notOpen', { time: time(e.data.at as number) }) : undefined; // a guest before the door
