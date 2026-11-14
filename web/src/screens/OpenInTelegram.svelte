@@ -1,7 +1,9 @@
 <script lang="ts">
   // Outside Telegram (a plain browser, not /show): the app signs in through Telegram, so it says where it lives, with the
   // button that opens it there and, on a computer, the same link as a code for the phone; "continue in the browser" still
-  // lets them in (owner, Oct 13: warn, never forbid; Oct 30: "open in Telegram").
+  // lets them in (owner, Oct 13: warn, never forbid; Oct 30: "open in Telegram"). On a computer the big screen leads (Nov 14):
+  // a laptop at the door is what opens the bare domain; it's a plain link, so no pairing code exists before the click
+  // (PAIR_PER_IP is one campus Wi-Fi address: phones opening this page must never lock out the real screen).
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
   import Qr from '../ui/Qr.svelte';
@@ -10,7 +12,8 @@
   import { t } from '../lib/i18n/index.svelte';
 
   let { link, oncontinue }: { link: string; oncontinue: () => void } = $props();
-  const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // an iPad asks for the desktop site as a Mac: told apart by its touch screen
+  const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 </script>
 
 <main class="tgo scroll">
@@ -21,9 +24,15 @@
     <p class="t-foot">{t('pc.scan')}</p>
   {/if}
   <div class="acts">
-    <Button kind="primary" size="l" full onclick={() => (location.href = link)}>{t('tgo.open')}</Button>
-    <Button kind="plain" size="m" onclick={oncontinue}>{t('tgo.browser')}</Button>
-    <a class="show t-foot" href="/show">{t('tgo.show')}</a>
+    {#if phone}
+      <Button kind="primary" size="l" full onclick={() => (location.href = link)}>{t('tgo.open')}</Button>
+      <Button kind="plain" size="m" onclick={oncontinue}>{t('tgo.browser')}</Button>
+      <a class="show t-foot" href="/show">{t('tgo.show')}</a>
+    {:else}
+      <Button kind="primary" size="l" full onclick={() => (location.href = '/show')}>{t('scr.title')}</Button>
+      <Button kind="plain" size="m" onclick={() => (location.href = link)}>{t('tgo.open')}</Button>
+      <button class="show t-foot" onclick={oncontinue}>{t('tgo.browser')}</button>
+    {/if}
   </div>
 </main>
 
@@ -34,5 +43,5 @@
   h1 { max-width: 320px; text-wrap: balance; }
   .qr { width: 176px; height: 176px; flex: none; margin-top: var(--s-2); padding: 10px; border-radius: var(--r-l); background: white; }
   .acts { width: min(100%, 360px); display: flex; flex-direction: column; align-items: center; gap: var(--s-2); margin-top: var(--s-4); }
-  .show { color: var(--text-2); margin-top: var(--s-2); text-decoration: none; }
+  .show { color: var(--text-2); margin-top: var(--s-2); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 </style>
