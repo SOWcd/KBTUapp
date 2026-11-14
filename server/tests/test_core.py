@@ -5369,6 +5369,76 @@ def test_userbot_reads_only_the_channels_comments(env):
     asyncio.run(work.translations(None, 700))                                                     # asked again within 2 h: no call
 
 
+def test_userbot_lists_group_members(env, monkeypatch):
+    """userbot.Mirror.members (a fake Telethon client): each group it shares with our bot listed once at sign-in, Bot API
+    ids (-100<id> a megagroup, -<id> a basic group), a broadcast channel and a group without our bot skipped; a held
+    chat's members go to chat_seen with its club, an unheld one's to chat_seen_free; a bot, a deleted account and the
+    userbot itself never; whoever left forgotten, but not when the list is capped. Our bot's queue lists one again."""
+    from types import SimpleNamespace as NS
+    from telethon.tl.types import Channel, Chat, ChatPhotoEmpty
+    from kbtu import userbot
+    from kbtu.logic import chatlist
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    bot = int(cfg.bot_token.split(":")[0])
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, tg_chat_id) VALUES ('Mic', 'group', 'https://t.me/mic', 0, 'org', 1, -1005)")
+    con.execute("INSERT INTO chat_seen (chat_id, tg_id, org_id, seen_at) VALUES (-1005, 99, 1, 0)")  # left since
+    con.execute("INSERT INTO chat_seen_free (chat_id, tg_id, seen_at) VALUES (-7, 98, 0)")           # left, but the list is capped
+    mega = Channel(id=5, title="m", photo=ChatPhotoEmpty(), date=None, megagroup=True)
+    news = Channel(id=6, title="n", photo=ChatPhotoEmpty(), date=None, broadcast=True)
+    basic = Chat(id=7, title="b", photo=ChatPhotoEmpty(), participants_count=3, date=None, version=1)
+    lone = Chat(id=8, title="l", photo=ChatPhotoEmpty(), participants_count=2, date=None, version=1)  # no bot of ours
+    u = lambda i, b=False, d=False: NS(id=i, bot=b, deleted=d)  # noqa: E731
+
+    class Total(list):
+        total = 0
+
+    def got(items, total=None):
+        out = Total(items); out.total = len(items) if total is None else total
+        return out
+    people = {5: got([u(11), u(12), u(bot, b=True), u(13, d=True), u(500)]), 7: got([u(21), u(bot, b=True)], total=40), 8: got([u(31)])}
+    asked = []
+
+    class Client:
+        async def iter_dialogs(self):
+            for e in (mega, news, basic, lone):
+                yield NS(entity=e)
+
+        async def get_participants(self, ent, filter=None, limit=None):
+            asked.append(ent.id)
+            return got([x for x in people[ent.id] if x.bot]) if filter else people[ent.id]
+
+    work = userbot.Mirror(cfg, Client(), con, me=500)
+
+    async def rounds(n):
+        task = asyncio.create_task(work.members())
+        for _ in range(n):
+            await asyncio.sleep(0)
+        task.cancel()
+    monkeypatch.setattr(userbot, "LOOK_GAP", 0)
+    monkeypatch.setattr(userbot, "GROUP_GAP", 0)
+    asyncio.run(rounds(50))
+    assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen WHERE chat_id = -1005 AND org_id = 1")) == [11, 12]
+    assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen_free WHERE chat_id = -7")) == [21, 98]
+    assert not logic.rows(con, "SELECT 1 FROM chat_seen_free WHERE chat_id IN (-8, -1006)")
+    assert chatlist.listed(con) == {-1005, -7} and 6 not in asked
+    asked.clear()
+    asyncio.run(rounds(50))  # a new sign-in: nothing listed twice
+    assert asked == [8]      # (the group without our bot is looked at again: nothing kept)
+    asked.clear()
+    people[7] = got([u(22), u(bot, b=True)])  # whole now; queued by our bot (the userbot re-added)
+    chatlist.look_soon(con, -7)
+    asyncio.run(rounds(50))
+    assert sorted(r[0] for r in logic.rows(con, "SELECT tg_id FROM chat_seen_free WHERE chat_id = -7")) == [22]
+    assert not chatlist.looks(con)
+    # our bot queues a group when it sees the userbot join it (bot._seen; the id from the userbot's sign-in)
+    from kbtu import bot as botmod
+    con.execute("INSERT INTO meta (key, value) VALUES ('userbot_id', '500')")
+    botmod._seen(con, {"chat": {"id": -1009}, "from": {"id": 11}, "new_chat_members": [{"id": 500}]})
+    assert chatlist.looks(con) == [-1009] and not logic.rows(con, "SELECT 1 FROM chat_seen_free WHERE tg_id = 500")
+
+
 def test_userbot_off(env, caplog):
     """The userbot stays off, saying why in one line, while any of its three settings is missing (nothing else changes)."""
     import dataclasses

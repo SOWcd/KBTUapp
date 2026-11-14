@@ -717,6 +717,41 @@ def unseen(con, tg_chat: int, tg: int) -> None:
     con.execute("DELETE FROM chat_seen_free WHERE chat_id = ? AND tg_id = ?", (tg_chat, tg))
 
 
+def members(con, tg_chat: int, ids: set[int], whole: bool) -> None:
+    """The userbot listed a group's members (userbot.Mirror.members): each one seen, and when the list is `whole` (not
+    capped, nobody hidden) whoever the chat remembers beyond it forgotten. Telegram ids only."""
+    with tx(con):
+        con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"ub_listed:{int(tg_chat)}",))
+        for tg in ids:
+            seen(con, tg_chat, {"id": tg})
+        if whole:
+            for t in ("chat_seen", "chat_seen_free"):
+                for (tg,) in rows(con, f"SELECT tg_id FROM {t} WHERE chat_id = ?", tg_chat):
+                    if tg not in ids:
+                        unseen(con, tg_chat, tg)
+
+
+def look_soon(con, tg_chat: int) -> None:
+    """Our bot and the userbot just met in a group (either joined the other): the userbot lists it within a minute,
+    once; from then on our bot keeps the memory from joins and leaves (seen, unseen)."""
+    con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"ub_look:{int(tg_chat)}",))
+
+
+def looks(con) -> list[int]:
+    """The groups queued by look_soon."""
+    return [int(r[0].split(":", 1)[1]) for r in rows(con, "SELECT key FROM meta WHERE key LIKE 'ub_look:%'")]
+
+
+def looked(con, tg_chat: int) -> None:
+    """A queued group looked at (listed, or not one the userbot shares with our bot): off the queue."""
+    con.execute("DELETE FROM meta WHERE key = ?", (f"ub_look:{int(tg_chat)}",))
+
+
+def listed(con) -> set[int]:
+    """The groups the userbot has listed once (members): not listed again unless look_soon asks."""
+    return {int(r[0].split(":", 1)[1]) for r in rows(con, "SELECT key FROM meta WHERE key LIKE 'ub_listed:%'")}
+
+
 def seen_moved(con, old: int, new: int) -> None:
     """A group turned supergroup: who was seen moves with it (before its links move: their triggers keep only the
     holder's rows)."""
