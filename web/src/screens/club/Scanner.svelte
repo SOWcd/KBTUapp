@@ -61,6 +61,8 @@
   // the door's count from its list (who's going, who came) and the team's own session (server checkin._team), read as
   // the screen opens and as the QR counts someone; a scan's answer brings the guests' count itself
   let team = $state<ScreenSession | null>(null);
+  // ponytail: mirrors server checkin.TEAM_DOOR (tonight's Talent Show marks its team only): the team's count is the big one
+  const teamDoor = $derived(id === 34);
   function recount() {
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
     api.crewScreenOf(id).then((x) => (team = x)).catch(() => {});
@@ -210,8 +212,9 @@
 
     {#if qr}
       <div class="tally">
-        <p class="big"><b class="num count">{count?.came ?? 0}</b>{#if count}<span>{t('scr.ofM', { m: count.going })}</span>{/if}</p>
-        {#if team}<p class="t-foot">{t('door.team', { n: team.expected ? team.came ?? 0 : team.done })}</p>{/if}
+        {#if teamDoor}<p class="big"><b class="num count">{team ? (team.expected ? team.came ?? 0 : team.done) : 0}</b><span>{t('door.team', { n: '' }).trim()}</span></p>{:else}
+        <p class="big"><b class="num count">{count?.came ?? 0}</b>{#if count}<span>{t('scr.ofM', { m: count.going })}</span>{/if}</p>{/if}
+        {#if team && !teamDoor}<p class="t-foot">{t('door.team', { n: team.expected ? team.came ?? 0 : team.done })}</p>{/if}
       </div>
       <div class="quiet">
         {#if board}<Button kind="secondary" size="m" onclick={addHelper}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('door.addHelper')}</Button>{/if}
