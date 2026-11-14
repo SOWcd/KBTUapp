@@ -174,7 +174,7 @@
     {/if}
 
     {#key seq}
-      {#if res && mode === 'scan'}
+      {#if res && (mode === 'scan' || manual)}
         {#if res.result === 'ok' || res.result === 'already'}
           <div class="res" class:good={res.result === 'ok'} class:warn={res.result === 'already'}>
             <Avatar person={res.person} size={84} />

@@ -26,6 +26,7 @@
   import Notice from '../../ui/Notice.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { inner, may } from '../../lib/perms';
+  import UserCheck from '@lucide/svelte/icons/user-check';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Sheet from '../../ui/Sheet.svelte';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
@@ -144,7 +145,7 @@
   async function showQr() {
     if (!e) return;
     haptic.tap();
-    if (!doorOpen && opener && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return; // shut yet: today's confirm first
+    if (!doorOpen && opener && e.startsAt - 4 * 3600 <= tick) await openDoor(); // shut yet: today's confirm first; a no still opens the screen (set up early, the team)
     registration(e, co || head, session.me?.vol?.org);
   }
   let more = $state(false);
@@ -239,6 +240,8 @@
               {#if crewN != null && live && !inner(e) && !e.guestHost && ends > nowTs()}<Row icon={HandHeart} title={t('mg.helpers')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
               {:else if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
               <!-- the big screen at the door (/show): connect a laptop, finish, the CSV -->
+              <!-- a partner's event has no door of ours: its team is marked here -->
+              {#if e.guestHost && teamMark}<Row icon={UserCheck} title={t('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
               {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
             {/if}
             {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}

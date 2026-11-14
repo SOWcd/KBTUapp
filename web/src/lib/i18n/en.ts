@@ -1085,6 +1085,7 @@ const en: Dict = {
   'ci.oldText': "Scan the screen again",
   'ci.askOrg': "Talk to the organizers",
   'ci.signIn': "Sign in with KBTU",
+  'scr.team': "Team check-in",
   'scr.title': "Big screen",
   'scr.start': "Start check-in",
   'scr.showQr': "Show the check-in QR",
