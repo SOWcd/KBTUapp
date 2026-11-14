@@ -2,7 +2,7 @@
   // An event's door helpers (server logic/crew.py), for a running club's President or Vice: a friend or someone from
   // the team helps at this one event's door until it ends. 🎫 the scanner by default; 🚪 the whole door (the list of
   // names) after a confirm. Three at most. Each tap answers at once; back if the server says no.
-  import { api, ApiErr, type CrewKind, type CrewMember, type Id, type PersonRef } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type CrewKind, type CrewMember, type Id, type PersonRef } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -26,8 +26,9 @@
   $effect(() => { if (list) onchange?.(list.length); });
 
   const e = $derived(eventById(id));
-  // the club I give helpers for: the host first, else the co-host (as the server's _lead)
-  const mine = $derived([e?.org, e?.coHost].find((o) => o && RANK[session.me?.memberships.find((m) => m.org.id === o.id)?.role ?? 'member'] >= RANK.vice) ?? null);
+  // the club I give helpers for: the host first, else the co-host (as the server's _lead); the creator from Admin: the
+  // host, as its President (server app.viewer)
+  const mine = $derived(staffEvents.has(id) && session.me?.founder ? e?.org ?? null : [e?.org, e?.coHost].find((o) => o && RANK[session.me?.memberships.find((m) => m.org.id === o.id)?.role ?? 'member'] >= RANK.vice) ?? null);
   const full = $derived((list?.length ?? 0) >= 3);
 
   // friends and the teams I lead, once each, not me, not already helping

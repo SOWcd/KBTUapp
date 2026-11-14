@@ -101,8 +101,8 @@
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
-  // the creator alone gets its President's editor here (server core.can, lent_full): a new event, or one he made so
-  // (the server lends nothing on another's); `plain` is every other admin's, a plain public free event
+  // the creator alone gets its President's editor here (server core.can, lent_full): a new event, or any club's he opens
+  // from Admin; `plain` is every other admin's, a plain public free event
   const lent = $derived(asStaff && !!session.me?.founder && (staff || !!saved?.lentFull));
   const plain = $derived(staff && !lent);
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)

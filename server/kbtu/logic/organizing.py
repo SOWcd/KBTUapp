@@ -1188,7 +1188,8 @@ def link_door_guests(con, uid: int) -> None:
 
 def open_door(con, v: Viewer, eid: int) -> dict:
     """The host club's President or a Vice opens the door early, from 4 h before the start (it opens by itself at T-30,
-    core.door_at). Their role, not a right: the app's admin (X-Staff-Event lends "events") never opens it. Every guest
+    core.door_at). Their role, not a right: the app's admin (X-Staff-Event lends "events") never opens it; the creator
+    from Admin does, as its President (core.role_in). Every guest
     hears of it (door_round); once open it stays open."""
     with tx(con):
         e = one(con, "SELECT * FROM events WHERE id = ?", eid)

@@ -60,8 +60,8 @@ class Viewer:
     # Admin → an event (app.viewer, X-Staff-Event): the app's admin acting as that event's organizers, in this one request
     # on that event's own routes; `used` collects the rights lent, and the request's audit line names them
     staff_org: int = 0
-    # the creator (users.is_founder) from Admin: a President's rights on that club's new event and on the ones he made so
-    # (app.viewer); never set for another admin
+    # the creator (users.is_founder) from Admin: a President's rights on that club's new event and on any of its events
+    # (app.viewer; can, role_in), never its reports; never set for another admin
     lent_full: bool = False
     used: list = field(default_factory=list, compare=False, hash=False)
 
@@ -129,6 +129,8 @@ def need_student(v: Viewer) -> None:
 
 def role_in(con, v: Viewer, org: int) -> str | None:
     """My role in an org. Only students can be members (a guest's old rows don't count)."""
+    if v.lent_full and org == v.staff_org:  # the creator from Admin, on that one event's club (app.viewer)
+        return "president"
     if not v.student:
         return None
     r = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", org, v.id)
@@ -218,10 +220,11 @@ STAFF_RIGHTS = frozenset({"events"})
 
 def can(con, v: Viewer, oid: int | None, right: str) -> bool:
     """I may do this in this club (students only act, §2); or, from Admin, the admin on that one event (STAFF_RIGHTS),
-    the creator with a President's (lent_full). Receipts stay the club's: their routes never take the staff headers."""
+    the creator with a President's but its reports (lent_full). Receipts stay the club's: their routes never take the staff headers."""
     if v.student and oid and right in rights_of(con, v.id, oid):
         return True
-    if oid and oid == v.staff_org and (right in STAFF_RIGHTS or v.lent_full and right in club_rights(
+    # reports are the club team's own, with their own consent (evreports.py): never lent, not even to the creator
+    if oid and oid == v.staff_org and (right in STAFF_RIGHTS or v.lent_full and right != "reports" and right in club_rights(
             "president", None, one(con, "SELECT official, top_at FROM orgs WHERE id = ?", oid))):
         v.used.append(right)
         return True

@@ -39,7 +39,8 @@
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
 
-  // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money.
+  // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money;
+  // the creator runs it as its President would (server app.viewer), all but the club's money and reports (`plain`: the rest)
   // org: opened from the Studio of a club co-hosting it (server cohosts.py): our own report, our door if we run it, the
   // student's view; nothing of the host's
   let { overlay, id, staff = false, org }: { overlay: Overlay; id: Id; staff?: boolean; org?: Id } = $props();
@@ -47,6 +48,7 @@
   const e = $derived(eventById(id));
   const co = $derived(!!e && org != null && org !== e.org.id);
   const mem = $derived(session.me?.memberships.find((m) => m.org.id === (co ? org : e?.org.id)));
+  const plain = $derived(staff && !session.me?.founder);
   const head = $derived(!co && (staff || may(mem, 'events')));
   const coCrew = $derived(co && may(mem, 'events')); // the co-host's event team: the door, as from the event's sheet
   // Admin put it in staffEvents before opening; it leaves with this screen, so the event's own sheet is a student's again
@@ -73,7 +75,7 @@
   $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; crewN = x.crew ? x.crew.length : null; }).catch(() => {}); });
   // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
   // with the page and every 10 s (it runs in the page above this one)
-  const teamMark = $derived(!co && !staff && may(mem, 'events') && !!e && e.status !== 'cancelled');
+  const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
   let team = $state<ScreenSession | null>(null);
   $effect(() => { void tick; if (teamMark) api.crewScreenOf(id).then((x) => (team = x)).catch(() => {}); });
   const teamLine = $derived(!team ? undefined : t(team.ended ? 'scr.teamDone' : 'scr.teamLive', { n: team.expected ? team.came ?? 0 : team.done, m: team.expected }));
@@ -126,7 +128,7 @@
   let tick = $state(nowTs());  // a ticking now: "opens at" turns into "open since" at T-30 with the screen open
   onMount(() => { const i = setInterval(() => (tick = nowTs()), 10_000); return () => clearInterval(i); });
   const doorOpen = $derived(doorAt <= tick);
-  const opener = $derived(!co && (mem?.role === 'president' || mem?.role === 'vice'));
+  const opener = $derived(!co && (staff ? !plain : mem?.role === 'president' || mem?.role === 'vice'));
   const setDoor = (at: number) => { const x = eventById(id); if (x) x.doorAt = at; };
   async function openDoor() {
     if (!e) return;
@@ -141,7 +143,7 @@
   }
   // the club's own people asking to come as guests (server seats.team_ask): the President and the Vices answer here
   let asks = $state<TeamAsk[]>([]);
-  $effect(() => { void data.rev; if (opener && !staff) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
+  $effect(() => { void data.rev; if (opener) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
   async function decide(x: TeamAsk, yes: boolean) {
     haptic.tap();
     asks = asks.filter((y) => y !== x); // at once; back if the server says no
@@ -215,10 +217,10 @@
         {#if live && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
           {#if co}{#if coCrew}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, true, session.me?.vol?.org)} />{/if}
           {:else if doorOpen}<Row icon={DoorOpen} title={t('door.openedAt', { time: time(doorAt) })} />
-          {:else if opener && !staff && e.startsAt - 4 * 3600 <= tick}<Row icon={DoorClosed} title={t('door.open')} subtitle={t('door.openAt', { time: time(doorAt) })} accessory="chevron" onclick={openDoor} />
+          {:else if opener && e.startsAt - 4 * 3600 <= tick}<Row icon={DoorClosed} title={t('door.open')} subtitle={t('door.openAt', { time: time(doorAt) })} accessory="chevron" onclick={openDoor} />
           {:else}<Row icon={DoorClosed} title={t('door.openAt', { time: time(doorAt) })} />{/if}
         {/if}
-        {#if live && !e.guestHost && !staff && !co}<!-- a partner's event has no door; Admin never works the door -->
+        {#if live && !e.guestHost && !plain && !co}<!-- a partner's event has no door; Admin never works the door (the creator as its President) -->
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => registration(e, head, session.me?.vol?.org)} />{/if}<!-- the scanner and the QR, one switch apart (EventSheet's) -->
         {/if}
@@ -234,7 +236,7 @@
             <Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <!-- the team marked (owner, Nov 13: a Vice opens the event, "Mark the team"): the club's own session, apart from the guests' -->
           {#if teamMark}<Row icon={UserCheck} title={t('scr.team')} subtitle={teamLine} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
-          {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
+          {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
           {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         {/if}
       </Group>

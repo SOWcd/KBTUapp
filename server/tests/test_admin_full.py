@@ -1,5 +1,5 @@
 """Admin → "an event for a club" as the creator (users.is_founder): a President's every option on that club's new event
-and on the ones he made so (core.can, lent_full); the money stays the club's (its own Kaspi details, receipts its own);
+and on any of its events he opens from Admin (core.can, core.role_in, lent_full), never its reports; the money stays the club's (its own Kaspi details, receipts its own);
 every other admin keeps the plain public free event, and nobody else gets anything from the headers."""
 from __future__ import annotations
 
@@ -102,9 +102,6 @@ def test_other_admins_keep_the_plain_rule(env):
     v = c.get(f"/api/events/{mine}", headers=_as(65, mine)).json()
     assert v["payToName"] is None and "lentFull" not in v
     assert not [x for x in _lines(con, "staff_full") if x[0] == ids["adm"]]
-    # and the creator on a club's event its President made: plain too (he made only his own so)
-    assert c.patch("/api/events/1", headers=_as(60, 1), json=_body(**PAY)).status_code == 403
-    assert c.get("/api/events/1/door", headers=_as(60, 1)).status_code == 403
 
 
 def test_headers_lend_nothing_else(env):
@@ -122,5 +119,62 @@ def test_headers_lend_nothing_else(env):
     assert c.get("/api/events/10/attendees", headers=_as(60, mine)).status_code == 403
     for method, path in (("GET", "/api/orgs/1/memo"), ("POST", "/api/orgs/1/memo/sent"), ("PATCH", "/api/orgs/1"), ("GET", "/api/orgs/1/events")):
         assert c.request(method, path, headers=_org(60), json=[mine]).status_code == 403, path
-    assert c.get("/api/events/10", headers=_as(60, 10)).json()["payToName"] is None  # the club's own event: no money shown
+    assert c.get("/api/events/10", headers=_as(65, 10)).json()["payToName"] is None  # another admin on the club's own event: no money shown
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == n
+
+
+def test_creator_runs_any_clubs_event_as_its_president(env):
+    """Nov 14: the creator opens any event from Admin (not one he made) and has its President's door, team marks, chat,
+    team asks and helpers, to test it before it's live; another admin, a moderator, a student get none of it."""
+    import dataclasses
+    from fastapi.testclient import TestClient
+    from kbtu import app as server, logic
+    c, con, ids = _full_setup(env)
+    con.execute("UPDATE events SET starts_at = strftime('%s') + 600 WHERE id = 1")  # the door open (T-30)
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (ids["ali"],))
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'TCK7', 0, 0)", (ids["other"],))
+    assert con.execute("SELECT created_by FROM events WHERE id = 1").fetchone()[0] == ids["pres"]  # not his
+    lent = c.get("/api/events/1", headers=_as(60)).json()
+    assert lent["lentFull"] and lent["crew"] == []
+    # the guests' door: its session, the list, a mark by name, undone
+    assert c.post("/api/events/1/screen", headers=_as(60)).status_code == 200
+    assert c.get("/api/events/1/door", headers=_as(60)).status_code == 200
+    assert c.post("/api/events/1/checkin", headers=_as(60), json={"userId": ids["other"]}).status_code == 200
+    assert con.execute("SELECT checked_in_at FROM registrations WHERE event_id = 1 AND user_id = ?", (ids["other"],)).fetchone()[0]
+    # the team's marks: made, started, a member's scan counts
+    s = c.post("/api/events/1/crew-screen", headers=_as(60), json={"who": "club", "title": "Hack · team"})
+    assert s.status_code == 200 and s.json()["crew"] == 1, s.text
+    p = c.post(f"/api/screens/{s.json()['session']}/start", headers=tma(60)).json()["param"]
+    assert c.post("/api/checkin", headers=tma(63), json={"p": p}).json()["done"]
+    assert c.get("/api/events/1/crew-screen", headers=_as(60)).json()["session"] == s.json()["session"]
+    # the chat link, the team asks, a door helper: a President's
+    assert c.post("/api/events/1/chat", headers=_as(60)).status_code == 200
+    assert c.get("/api/events/1/team-asks", headers=_as(60)).status_code == 200
+    assert c.put("/api/events/1/crew", headers=_as(60), json={"userId": ids["mod"], "kind": "scan"}).status_code == 200
+    # every write named in the owner's log, as his full rights
+    done = [json.loads(x) for _, _, x in con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'staff_event'").fetchall()]
+    assert {d["do"] for d in done} >= {"POST /api/events/{eid}/checkin", "POST /api/events/{eid}/crew-screen", "POST /api/events/{eid}/chat"}
+    assert all(d.get("full") and d["org"] == 1 for d in done)
+    assert not con.execute("SELECT 1 FROM org_members WHERE user_id = ?", (ids["boss"],)).fetchone()  # never a seat faked
+    # another admin: the event's routes, never its door, team marks, chat or asks; nor with no header at all
+    for h in (_as(65), tma(65), tma(60)):
+        assert c.post("/api/events/1/crew-screen", headers=h, json={"who": "club"}).status_code == 403
+        assert c.get("/api/events/1/crew-screen", headers=h).status_code == 403
+        assert c.get("/api/events/1/door", headers=h).status_code == 403
+        assert c.post("/api/events/1/checkin", headers=h, json={"userId": ids["other"]}).status_code == 403
+        assert c.get("/api/events/1/team-asks", headers=h).status_code == 403
+    assert c.post("/api/events/1/chat", headers=_as(65)).status_code == 403
+    assert "lentFull" not in c.get("/api/events/1", headers=_as(65)).json()
+    # a moderator, a student, another club's President sending the header: refused outright
+    for uid in (61, 63, 64):
+        assert c.get("/api/events/1/door", headers=_as(uid)).json()["message"] == "staff"
+        assert c.post("/api/events/1/crew-screen", headers=_as(uid), json={"who": "club"}).status_code == 403
+    # the header for one event never reaches another's routes, even his
+    assert c.get("/api/events/2/door", headers=_as(60, 1)).status_code == 403
+    assert c.post("/api/events/2/crew-screen", headers=_as(60, 1), json={"who": "club"}).status_code == 403
+    # the club's reports stay its team's own, even with his consent given
+    r = TestClient(server.create(dataclasses.replace(env[1], reports=True, admins=frozenset({60}))))
+    assert r.post("/api/reports/consent", headers=tma(60), json={"consent": logic.evreports.CONSENT}).status_code == 200
+    con.execute("UPDATE events SET starts_at = strftime('%s') - 60 WHERE id = 1")
+    assert r.get("/api/events/1/report", headers=_as(60)).status_code == 403
+    assert r.patch("/api/events/1/report", headers=_as(60), json={"note": "x"}).status_code == 403

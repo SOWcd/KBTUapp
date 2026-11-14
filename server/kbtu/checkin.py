@@ -115,6 +115,10 @@ def crew(con, key: bytes, v: Viewer, eid: int, who: object = None, title: object
     e = one(con, "SELECT org_id, status, title FROM events WHERE id = ?", eid)
     if not e:
         raise ApiError("forbidden", "screen")
+    # the club's own: "door" is every member's and never STAFF_RIGHTS', so the app's admin (with or without
+    # X-Staff-Event) is out; the creator from Admin is in as its President (app.viewer)
+    if not can(con, v, e["org_id"], "door"):
+        raise ApiError("forbidden", "screen")
     _starts(con, v, e["org_id"])
     x = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
     if x or who is None:

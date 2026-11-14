@@ -131,8 +131,9 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     e = logic.one(con, "SELECT org_id, created_by FROM events WHERE id = ?", int(eid)) if eid.isascii() and eid.isdigit() and len(eid) < 12 else None
     if v.role != "admin" or not e or str(request.path_params.get("eid")) != eid:
         raise ApiError("forbidden", "staff")
-    # the creator runs the events he made for a club (Admin's "an event for a club") as their President would (core.can)
-    full = e["created_by"] == v.id and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
+    # the creator runs any event from Admin as its club's President would (core.can, core.role_in), to test it before
+    # it goes live; every other admin keeps STAFF_RIGHTS. The one place this is decided
+    full = bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
     v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"], lent_full=full)
     yield v
     # reached only when the route answered: every write and every list of people (attendees, a meeting's answers, the

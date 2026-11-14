@@ -42,13 +42,15 @@
   const ev = $derived(eventById(id));
   const price = $derived(ev?.price ?? 0);
   // a co-host's event team reads short names only: no receipts, no file, no profiles (server cohosts.py)
-  // the app's admin from Admin (staffEvents) reads it as the host's team does; not the door, not the receipts (money)
+  // the app's admin from Admin (staffEvents) reads it as the host's team does; not the door, not the receipts (money);
+  // the creator works the door as its President (server app.viewer), the receipts still the club's (the server hides them)
   const staff = $derived(staffEvents.has(id));
+  const plain = $derived(staff && !session.me?.founder);
   const host = $derived(staff || !ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
   const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
-  const doorOpen = $derived(!staff && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
+  const doorOpen = $derived(!plain && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
   async function mark(a: Attendee) {
