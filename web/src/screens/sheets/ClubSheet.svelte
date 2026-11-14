@@ -9,6 +9,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Camera from '@lucide/svelte/icons/camera';
   import Users from '@lucide/svelte/icons/users';
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
   import Lock from '@lucide/svelte/icons/lock';
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
@@ -42,9 +43,11 @@
   import { compact, APP_FOLDER } from '../../lib/chats';
   import { clubDm } from '../../lib/clubdm';
   import { session } from '../../lib/state/session.svelte';
+  import { setReportConsent } from '../../lib/reports';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
+  let undo = $state(0); // the reports' consent switch, redrawn as it was
   let fetched = $state<Org | null>(null);
   let fetchedEvents = $state<EventCard[] | null>(null);
   let past = $state<EventCard[] | null>(null); // its latest few that are over (Recent), asked with the page
@@ -100,7 +103,13 @@
 
     <div class="body">
       {#if session.me?.memberships.some((m) => m.org.id === id)}
-        <Group><Row icon={Users} title={t('club.workspace')} accessory="chevron" onclick={() => sheets.studio(id)} /></Group>
+        <Group>
+          <Row icon={Users} title={t('club.workspace')} accessory="chevron" onclick={() => sheets.studio(id)} />
+          <!-- the reports' own consent, mine (lib/reports.ts): one for all my clubs; its text says "on the club's page".
+               A "no" in its question puts the switch back (the checkbox keeps its own state otherwise) -->
+          {#if session.me?.reports}{#key undo}<Row icon={ClipboardCheck} title={t('evr.mine')} accessory="switch" checked={session.me.reports.consent}
+            onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}{/if}
+        </Group>
       {/if}
       {#if o.description || (shut && !o.members)}
         <div>
