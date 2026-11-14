@@ -18,6 +18,14 @@
     return new BarcodeDetector({ formats: ['qr_code'] });
   }
 
+  let ro: ResizeObserver | null = null;
+  function fit() {
+    const box = video?.parentElement, vw = video?.videoWidth, vh = video?.videoHeight;
+    if (!box || !vw || !vh) return;
+    const k = Math.max(box.clientWidth / vw, box.clientHeight / vh);
+    video.style.width = vw * k + 'px'; video.style.height = vh * k + 'px';
+  }
+
   onMount(() => {
     if (live === 'failed') return;
     let gone = false, dead = false, stream: MediaStream | null = null, last = { v: '', at: 0 };
@@ -33,10 +41,13 @@
         if (gone) return;
         video.srcObject = st;
         await video.play();
-        // iPhone paints the first frames letterboxed until it knows the stream's size: show it only once that has settled
-        for (let i = 0; i < 40 && !gone && !video.videoWidth; i++) await new Promise((r) => setTimeout(r, 25));
-        await new Promise((r) => setTimeout(r, 180));
+        // iPhone's WebKit ignores object-fit on a camera <video> (letterboxed, owner's recording Nov 14): we size it to
+        // cover the box ourselves, now and whenever the stream or the box changes size
+        for (let i = 0; i < 80 && !gone && !video.videoWidth; i++) await new Promise((r) => setTimeout(r, 25));
         if (gone) return;
+        fit();
+        video.addEventListener('resize', fit);
+        ro = new ResizeObserver(fit); ro.observe(video.parentElement!);
         live = 'on';
         while (!gone) {
           if (!paused && video.readyState >= 2) {
@@ -48,7 +59,7 @@
         }
       } catch { dead = true; stop(); if (!gone) live = 'failed'; }
     })();
-    return () => { gone = true; stop(); };
+    return () => { gone = true; stop(); ro?.disconnect(); };
   });
 </script>
 
@@ -56,6 +67,6 @@
 
 <style>
   /* fades in once playing: no frame of the stream's own size before it fills the square */
-  video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.25s ease; }
+  video { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.25s ease; }
   video.on { opacity: 1; }
 </style>
