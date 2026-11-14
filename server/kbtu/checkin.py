@@ -631,6 +631,11 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
             **({"team": True} if s["crew_event_id"] else {})}
 
 
+# ponytail: events whose door marks its team only (owner, Nov 14, the Talent Show: guests are not marked, every scan by a
+# signed-in student goes on the team's list, whether the app knows them as the club's or not). An event switch in Studio if it comes back.
+TEAM_DOOR = {34}
+
+
 def _team(con, v: Viewer, e, s, t: int) -> dict | None:
     """One QR at the door (owner, Nov 14): at a public event (_guests), a member of its own club (org_members now) with
     no guest seat ('going': a paid one, a let-in team_ask, a President's; or a 'hold' offered) scanning the guests' QR is marked in its team's
@@ -641,8 +646,8 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
     if e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400:
         return None
     with tx(con):  # who they are, read under the write lock with the mark: a removal or a sign-up landing meanwhile wins
-        if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id) \
-                or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+        if e["id"] not in TEAM_DOOR and (one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id)
+                or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id)):
             return None  # a seat (or a waitlist offer held): a guest
         x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", e["id"])
         if not x:
