@@ -671,6 +671,7 @@ const en: Dict = {
   'event.liveOpen': "On now · sign-up open",
   'event.youGo': "You're going",
   'event.team': "You're on the team",
+  'ta.cant': "You can't sign up for this event as a guest",
   'ta.ask': 'Ask permission',
   'ta.note': "As a guest only with the President's or a Vice's OK",
   'ta.pending': 'Waiting for an OK',

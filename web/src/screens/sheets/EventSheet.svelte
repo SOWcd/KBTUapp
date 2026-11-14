@@ -149,7 +149,10 @@
   // the host club's own people come as guests by its President's or a Vice's yes (server seats.team_ask): ask, or
   // take the ask back while it waits; a yes turns this back into the usual Going
   const teamOnly = $derived(!preview && !!e && !going && st !== 'hold' && !e.guestHost && onTeam(e, session.me?.memberships));
-  const askable = $derived(teamOnly && !cancelled && !over && !e?.externalUrl && !shut && !regShut);
+  // ponytail: asking to come as a guest is off (owner, Nov 14, people lost at the Talent Show door): the club's own people
+  // read a plain no; the ask flow (server seats.team_ask) stays for when it comes back
+  const askable = false as boolean;
+  const noGuest = $derived(teamOnly && !cancelled && !over && !e?.externalUrl);
   function setAsk(a: EventCard['teamAsk']) { const card = eventById(id); if (card) card.teamAsk = a; if (detail) detail = { ...detail, teamAsk: a }; }
   async function teamAsk() {
     const was = e?.teamAsk;
@@ -592,6 +595,7 @@
 
   {#snippet footer()}
     {#if e && soon}
+      {#if noGuest}<p class="tnote">{t('ta.cant')}</p>{/if}
       {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
       <div class="actions btns" inert={!!preview}>
         <span class="sv" class:on={e.saved}><Button kind="gray" size="l" round on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)}>
