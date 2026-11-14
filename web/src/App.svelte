@@ -77,7 +77,12 @@
   const galleryPage = () => import('./screens/afisha/Gallery.svelte');
   sheets.gallery = (albums) => lazy(galleryPage, { albums });
   sheets.galleryAdd = (files, topic) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files, topic });
-  sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
+  // one sign-in sheet at a time, and none once Microsoft has confirmed me: a second one (Microsoft's return opening its
+  // own over the waiting one) stayed under the first and asked a new student to sign in with Microsoft again (Nov 14)
+  sheets.login = (after, lock) => {
+    if (session.me?.student?.ms) { after?.(); return; }
+    if (!overlays.some((o) => o.component === LoginSheet && !o.closing)) open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
+  };
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
@@ -401,8 +406,15 @@
     }
     const ms = p.match(/^ms_([\w-]{24})$/); // back from the Microsoft sign-in (/ms.html): it lands only on the Telegram that started it
     if (ms) {
-      api.msClaim(ms[1]).then(() => loadMe()).then(() => { haptic.ok(); if (session.me?.msPending) sheets.login(); else if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); })
-        .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      // then what the guest wanted before Microsoft (a door scan: shown counted) runs after the student ID, as msBack's.
+      // A second launch by the same link (ms.html's button after its own redirect) finds the claim taken: no error then
+      void api.msClaim(ms[1]).then(() => true, () => false).then(async (ok) => {
+        await loadMe();
+        if (!ok && !session.me?.msPending && !session.me?.student?.ms) { haptic.error(); say(t('common.error'), 'pleading_face_3d'); return; }
+        haptic.ok();
+        if (ok && session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d');
+        msBack(true);
+      });
       return;
     }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
@@ -543,7 +555,8 @@
     }
   }
 
-  function msBack() {
+  // force: the Microsoft return's own call (its start param is ms_, nothing else to open)
+  function msBack(force = false) {
     // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
     // must not sign anyone up)
     const again = () => {
@@ -554,7 +567,7 @@
       if (st !== 'going' && st !== 'hold' && st !== 'waitlist') toggleGoing(id, () => sheets.pay(id));
     };
     if (session.me?.msPending) sheets.login(again);
-    else if (session.me?.student && !tg.startParam) again();
+    else if (session.me?.student && (force || !tg.startParam)) again();
   }
 
   // the copy for the next launch follows what the screens show, a second after it settles (only once the server answered).

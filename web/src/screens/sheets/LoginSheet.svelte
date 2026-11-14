@@ -43,7 +43,15 @@
   });
   // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
   $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; m.studentId ||= pending.prefill?.studentId ?? ''; } });
-  $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); setTimeout(() => after?.(), 380); } });
+  // confirmed by Microsoft while this sheet waits (back from the browser, or the return launch's own sheet): it closes and
+  // what I wanted runs; never left open asking a confirmed student for Microsoft again. over: once (submit's own way too)
+  let over = false;
+  $effect(() => {
+    if (!done || over) return;
+    over = true;
+    if (away) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); }
+    close(overlay.id); setTimeout(() => after?.(), 380);
+  });
 
   // engine: ui/Field could take autocapitalize and spellcheck (names in Words, the student ID in capitals)
   const caps = (how: string) => (n: HTMLElement) => { const i = n.querySelector('input'); if (i) { i.autocapitalize = how; if (how === 'characters') i.spellcheck = false; } };
@@ -61,7 +69,9 @@
     if (!pending || !mReady) return;
     busy = true; error = '';
     try {
-      session.me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, session.policy);
+      const me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, session.policy);
+      over = true; // the effect above leaves this way to me
+      session.me = me;
       haptic.ok();
       try { localStorage.setItem('kb-arrive', String(session.me.id)); } catch { /* blocked: no drop, nothing lost */ } // Profile's first open: the badge drops in (Hero)
       say(phrase('say.welcome', { name: session.me.student?.firstName ?? '' }), 'partying_face_3d');
