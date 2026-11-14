@@ -41,7 +41,7 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
-                                ago (the admin and moderators edit them: /api/admin/places, the admin screen)
+                                ago (edited by hand in campus_places)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone

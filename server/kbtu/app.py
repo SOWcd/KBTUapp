@@ -1683,23 +1683,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def assistant_send(con: Con, v: BoardWrite, body: dict = Body(...)):
         logic.assistant.send(con, v, body)
 
-    # its campus facts, kept current by the admin and moderators (the stale ones marked); each call answers the list
-    @app.get("/api/admin/places")
-    def places(con: Con, v: Me):
-        return logic.assistant.places(con, v)
-
-    @app.post("/api/admin/places")
-    def place_add(con: Con, v: Me, body: dict = Body(...)):
-        return logic.assistant.save_place(con, v, body)
-
-    @app.patch("/api/admin/places/{pid}")
-    def place_edit(pid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.assistant.save_place(con, v, body, pid)
-
-    @app.delete("/api/admin/places/{pid}")
-    def place_drop(pid: int, con: Con, v: Me):
-        return logic.assistant.drop_place(con, v, pid)
-
     # a new event filled from its announcement (logic/assistant.py, below the assistant): the same switch, host and allowance
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):

@@ -18,7 +18,7 @@ import sqlite3
 import time
 
 from ..db import tx
-from .core import PERSON, ApiError, Viewer, _qs, academic_year, can, log_action, need_student, now, one, person_ref, rows
+from .core import PERSON, ApiError, Viewer, _qs, academic_year, can, need_student, now, one, person_ref, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -460,23 +460,18 @@ def seen(con) -> dict:
 
 
 # ------------------------------------------------------------ the campus facts, kept current
-# The owner, Oct 30: the places the assistant knew were a list in the code, likely outdated. Now a table (seeded from it)
-# the admin and moderators keep: a place's names in three languages and what students call it, its room or words for
-# where, a dean's office's school; "checked" once someone has looked on campus. Every change goes to the audit log.
+# The owner, Oct 30: the places the assistant knew were a list in the code, likely outdated. Now a table (seeded from it):
+# a place's names in three languages and what students call it, its room or words for where, a dean's office's school;
+# "checked" once someone has looked on campus. Its editor routes went unused (Nov 14): kept by hand, `admin places` lists it.
 
 STALE = 180 * 86400     # not checked for this long, or never (the old list's): to look at again
-PLACES_MAX = 100        # each one is in every brief the model reads
-KINDS = ("place", "office", "dean")
-_COLS = {"kind": ("kind", 6), "code": ("code", 32), "nameEn": ("name_en", 80), "nameRu": ("name_ru", 80),  # API key: column, longest
-         "nameKk": ("name_kk", 80), "aliases": ("aliases", 200), "room": ("room", 4), "location": ("location", 120), "school": ("school", 8)}
+_COLS = {"kind": "kind", "code": "code", "nameEn": "name_en", "nameRu": "name_ru", "nameKk": "name_kk", "aliases": "aliases",  # API key: column
+         "room": "room", "location": "location", "school": "school"}
 _CTRL = re.compile("[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")  # one line; nothing that drives a terminal or turns text around
-_CYR = str.maketrans("\u0430\u0431\u0432\u0441", "abvc")  # a room typed in Cyrillic, read as the map reads it (normRoom)
-CODE = re.compile(r"^[A-Za-z0-9_-]{2,32}$")
-SCHOOL = re.compile(r"^[A-Z]{2,8}$")
 
 
 def _place(r: sqlite3.Row, by: dict) -> dict:
-    return {"id": r["id"], **{k: r[c] for k, (c, _) in _COLS.items()}, "verifiedAt": r["verified_at"],
+    return {"id": r["id"], **{k: r[c] for k, c in _COLS.items()}, "verifiedAt": r["verified_at"],
             "stale": r["verified_at"] is None or r["verified_at"] < now() - STALE, "updatedAt": r["updated_at"], "updatedBy": by.get(r["updated_by"])}
 
 
@@ -487,76 +482,6 @@ def places(con, v: Viewer) -> list[dict]:
     ids = list({r["updated_by"] for r in got} - {None})
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({_qs(ids)})", *ids)} if ids else {}
     return [_place(r, by) for r in got]
-
-
-def _clean(f: dict) -> dict:
-    """A fact as the table keeps it, or bad_input: one line of text each; an English name; a room in the assistant's
-    pattern or words for where; a dean's office's school code (SITE, BS, ...), no school for the rest."""
-    out = {}
-    for c, most in _COLS.values():
-        x = f[c]
-        if x is not None and not isinstance(x, str):
-            raise ApiError("bad_input", c)
-        x = " ".join(_CTRL.sub(" ", x or "").split())
-        if len(x) > most or len(x) == 1 and c != "room":
-            raise ApiError("bad_input", c)
-        out[c] = x or None
-    out["aliases"] = ", ".join(a.strip() for a in (out["aliases"] or "").split(",") if a.strip()) or None
-    out["room"] = out["room"] and out["room"].lower().translate(_CYR)
-    out["school"] = out["school"] and out["school"].upper() if out["kind"] == "dean" else None
-    if out["kind"] not in KINDS or not out["name_en"] or not (out["room"] or out["location"]) or out["room"] and not ROOM.match(out["room"]) \
-            or out["code"] and not CODE.match(out["code"]) or out["kind"] == "dean" and not (out["school"] and SCHOOL.match(out["school"])):
-        raise ApiError("bad_input")
-    return out
-
-
-def save_place(con, v: Viewer, body: dict, pid: int | None = None) -> list[dict]:
-    """A new campus fact, or changes to one (the fields sent; its code stays as made, from the English name unless given).
-    `verified`: true, someone has checked it on campus now; false, not checked. Returns the list."""
-    _mod(v)
-    checked = body.get("verified")
-    if checked is not None and not isinstance(checked, bool):
-        raise ApiError("bad_input", "verified")
-    with tx(con):
-        was = one(con, "SELECT * FROM campus_places WHERE id = ?", pid) if pid is not None else None
-        if pid is not None and not was:
-            raise ApiError("not_found")
-        if not was and one(con, "SELECT COUNT(*) FROM campus_places")[0] >= PLACES_MAX:
-            raise ApiError("conflict", "many")
-        f = _clean({c: body[k] if k in body else was[c] if was else None for k, (c, _) in _COLS.items()})
-        if was:
-            f["code"] = was["code"]
-        elif not f["code"]:
-            slug = re.sub(r"[^a-z0-9]+", "-", f["name_en"].lower()).strip("-")[:32]
-            f["code"] = slug if CODE.match(slug) else secrets.token_hex(4)  # a name in another alphabet
-        t = now()
-        ver = t if checked else None if checked is False or not was else was["verified_at"]
-        changed = {c: x for c, x in f.items() if not was or was[c] != x}
-        if was and not changed and ver == was["verified_at"]:
-            return places(con, v)
-        row = {**f, "verified_at": ver, "updated_by": v.id, "updated_at": t}
-        try:
-            if was:
-                con.execute(f"UPDATE campus_places SET {', '.join(f'{c} = ?' for c in row)} WHERE id = ?", (*row.values(), pid))
-            else:
-                pid = con.execute(f"INSERT INTO campus_places ({', '.join(row)}) VALUES ({_qs(row)})", tuple(row.values())).lastrowid
-        except sqlite3.IntegrityError:
-            raise ApiError("conflict", "taken") from None  # the code, or a second dean's office for a school
-        log_action(con, v.id, "place_edit" if was else "place_add", f"place:{pid}", json.dumps(
-            {"code": f["code"], **({c: [was[c], x] for c, x in changed.items()} if was else {c: x for c, x in f.items() if x is not None}),
-             **({"verified": checked} if checked is not None else {})}, ensure_ascii=False))
-    return places(con, v)
-
-
-def drop_place(con, v: Viewer, pid: int) -> list[dict]:
-    _mod(v)
-    with tx(con):
-        r = one(con, "SELECT * FROM campus_places WHERE id = ?", pid)
-        if not r:
-            raise ApiError("not_found")
-        con.execute("DELETE FROM campus_places WHERE id = ?", (pid,))
-        log_action(con, v.id, "place_delete", f"place:{pid}", json.dumps({c: r[c] for c, _ in _COLS.values() if r[c] is not None}, ensure_ascii=False))
-    return places(con, v)
 
 
 # ------------------------------------------------------------ an event from its announcement
