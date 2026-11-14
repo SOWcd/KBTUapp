@@ -607,7 +607,7 @@ export interface TeamList { session: Id | null; audience: DoorAudience; rows: Te
 /** Door scanner answer (§4.4): a ticket or a badge QR. `walkIn` = registered at the door by their badge,
  *  `late` = minutes after the start. */
 export type CheckinResult =
-  | { result: 'ok' | 'already' | 'flagged' /* flagged: a receipt nobody checked, not let in yet (admit after a look) */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
+  | { result: 'ok' | 'already' | 'flagged' | 'ask_org' /* flagged: a receipt nobody checked, not let in yet (its organizer admits after a look); ask_org: the same, said to anyone else */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
   | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;

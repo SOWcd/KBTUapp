@@ -120,7 +120,7 @@
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
   sheets.deepLink = (p) => deepLink(p);
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone });
-  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, only: true });
+  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
   sheets.appeals = () => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), {}));
   sheets.myAppeal = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id });

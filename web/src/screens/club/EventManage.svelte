@@ -15,7 +15,7 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-  import { api, ApiErr, staffEvents, type DoorAudience, type Attendee, type EventCard, type Id, type PersonRef, type ScreenSession, type TeamAsk } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type DoorAudience, type TeamList, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -75,8 +75,9 @@
   // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
   // with the page and every 10 s (it runs in the page above this one)
   const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
-  let team = $state<ScreenSession | null>(null);
-  $effect(() => { void tick; if (teamMark) api.crewScreenOf(id).then((x) => (team = x)).catch(() => {}); });
+  // the team's count from the Mark screen's own list (server checkin.team): the same numbers there and here
+  let team = $state<TeamList | null>(null);
+  $effect(() => { void tick; if (teamMark && !e?.guestHost) api.teamList(id).then((x) => (team = x)).catch(() => {}); });
   async function openChat() {
     haptic.tap();
     if (chat) { openLink(chat); return; }
@@ -145,7 +146,8 @@
   async function showQr() {
     if (!e) return;
     haptic.tap();
-    if (!doorOpen && opener && e.startsAt - 4 * 3600 <= tick) await openDoor(); // shut yet: today's confirm first; a no still opens the screen (set up early, the team)
+    // shut yet: today's confirm first (it tells the guests), and «Cancel» cancels; a team-only door asks nothing (no guest to tell)
+    if (!doorOpen && opener && aud !== 'team' && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return;
     registration(e, co || head, session.me?.vol?.org);
   }
   let more = $state(false);
@@ -155,6 +157,7 @@
   let aud = $state<DoorAudience>('both');
   $effect(() => { if (audienced) api.event(id).then((x) => (aud = x.audience ?? 'both')).catch(() => {}); });
   const AUD = { both: 'mk.aBoth', guests: 'mk.aGuests', team: 'mk.aTeam' } as const;
+  const teamLine = $derived(team && aud !== 'guests' && team.rows.length ? t('mk.team', { n: team.rows.filter((r) => r.at).length, m: team.rows.length }) : undefined);
   async function setAud(a: DoorAudience) {
     const was = aud;
     aud = a; haptic.tap();
@@ -203,7 +206,7 @@
 
       {#if head && list}
         <Group>
-          {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={team ? t('door.team', { n: team.expected ? team.came ?? 0 : team.done }) : undefined} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
           {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}

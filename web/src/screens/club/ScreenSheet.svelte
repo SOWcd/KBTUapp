@@ -54,7 +54,10 @@
   // a co-hosted event's session: its co-host starts the screen; the rest (finish, unpair, the CSV) is the host's (server cohosts.py)
   const own = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
 
-  const scope = (l: ScreenSession[]) => (event ? l.filter((x) => x.event === event) : made ? l.filter((x) => x.session === made) : l);
+  // Studio's Meetings row (org): the club's own meetings only; an event's sessions live on its Mark screen
+  const scope = (l: ScreenSession[]) => (event ? l.filter((x) => x.event === event) : made ? l.filter((x) => x.session === made) : org ? l.filter((x) => !x.event && !x.crew) : l);
+  // an event's team session is named by the server in English ("… · team"): said in the app's language
+  const nm = (s: ScreenSession) => (s.crew ? `${s.title.replace(/ · team$/, '')} · ${t('mk.teamTag')}` : s.title);
   const refresh = () => { if (crew && !made) return; void api.screens().then((l) => { if (!pick) list = scope(l); }).catch(() => {}); };
   let pairing = untrack(() => code ?? ''); // the screen's code being bound: the link's, or one scanned here
   async function bind(sid?: Id) {
@@ -211,16 +214,16 @@
   <div class="pg">
     {#if pick}
       <p class="lead">{t('scr.pick')}</p>
-      <Group>{#each list ?? [] as s (s.session)}<Row title={s.title} accessory="chevron" onclick={() => bind(s.session)} />{/each}</Group>
+      <Group>{#each list ?? [] as s (s.session)}<Row title={nm(s)} accessory="chevron" onclick={() => bind(s.session)} />{/each}</Group>
     {:else if note}
       <div class="hero"><span class="mark"><MonitorUp size={34} strokeWidth={1.6} /></span><p class="lead">{note}</p></div>
     {:else if cur}
       {@const s = cur}
       {#if live.length > 1 && !made && !event && !pastOpen}
-        <Segmented items={live.map((x) => ({ value: x.session, label: x.title }))} value={s.session} onchange={(v) => { haptic.tap(); sel = v; }} />
+        <Segmented items={live.map((x) => ({ value: x.session, label: nm(x) }))} value={s.session} onchange={(v) => { haptic.tap(); sel = v; }} />
       {/if}
       <header class="head">
-        <h2 class="t-h2 ttl">{s.title}</h2>
+        <h2 class="t-h2 ttl">{nm(s)}</h2>
         <Tag tone={s.started && !s.ended ? 'accent' : 'neutral'}>{s.ended ? `${t('scr.closed')} · ${when(s)}` : s.started ? t('scr.live') : t('scr.waiting')}</Tag>
       </header>
       <!-- the members who came of the club's members; without a list (an event's guests), everyone counted -->
@@ -285,7 +288,7 @@
     {#if past.length && !made && !event && !pick && !note}
       {#if showPast}
         <Group caption={t('scr.past')}>
-          {#each past as x (x.session)}<Row title={x.title} subtitle={when(x)} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
+          {#each past as x (x.session)}<Row title={nm(x)} subtitle={when(x)} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
         </Group>
       {:else}
         <button class="past" onclick={() => { haptic.tap(); showPast = true; }}>{t('scr.past')} · {past.length}</button>

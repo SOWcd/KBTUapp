@@ -180,7 +180,7 @@
 
     {#if !names && live !== 'failed' && mode === 'scan'}
       <!-- the camera stays outside {#key}: a new <video> per scan had no stream (black after the first scan) -->
-      <div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already' || res?.result === 'flagged'} class:bad={!!res && res.result !== 'ok' && res.result !== 'already' && res.result !== 'flagged'}>
+      <div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already' || res?.result === 'flagged' || res?.result === 'ask_org'} class:bad={!!res && !['ok', 'already', 'flagged', 'ask_org'].includes(res.result)}>
         {#if cam}<QrCam bind:live paused={busy} onscan={(v) => void check(v)} />{/if}
         {#if live === 'off'}<span class="wait"><ScanLine size={36} /></span>{/if}
         {#key seq}<span class="aim" class:flash={seq > 0}></span>{/key}
@@ -189,13 +189,15 @@
 
     {#key seq}
       {#if res && mode === 'scan'}
-        {#if res.result === 'flagged'}
-          <!-- a receipt nobody checked: nothing recorded yet (server organizing._held); who sees the flags lets them in after a look -->
+        {#if res.result === 'flagged' || res.result === 'ask_org'}
+          <!-- a receipt nobody checked: nothing recorded yet (server organizing._held); its organizer lets them in after a
+               look, anyone else is only told to call one (never why) -->
           <div class="res warn">
             <Avatar person={res.person} size={84} />
             <b class="nm">{withNick(res.person.realName, res.person)}</b>
-            <span class="flag"><TriangleAlert size={16} />{t('mk.flagged')}</span>
-            {#if only}<span>{t('mk.askOrg')}</span>{:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => (byName && pendingAdmit != null ? mark(pendingAdmit, true) : check(last, true))}>{t('mk.admit')}</Button>{/if}
+            {#if res.result === 'ask_org'}<span class="flag"><TriangleAlert size={16} />{t('mk.askOrg')}</span>
+            {:else}<span class="flag"><TriangleAlert size={16} />{t('mk.flagged')}</span>
+              <Button kind="secondary" size="s" disabled={busy} onclick={() => (byName && pendingAdmit != null ? mark(pendingAdmit, true) : check(last, true))}>{t('mk.admit')}</Button>{/if}
           </div>
         {:else if res.result === 'ok' || res.result === 'already'}
           <div class="res" class:good={res.result === 'ok'} class:warn={res.result === 'already'}>
@@ -231,7 +233,7 @@
       </div>
     {/if}
 
-    {#if names || (qr && mode === 'qr')}{:else}
+    {#if names || (qr && (mode === 'qr' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
         {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>

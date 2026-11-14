@@ -520,7 +520,7 @@
           {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
             {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
           <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
-          {:else}<Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => register(head)} />{/if}
+          {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />{/if}
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
@@ -528,11 +528,12 @@
           {/if}
         {/if}
         {#if coCrew}
-          <Row icon={ScanLine} title={t('door.reg')} accessory="chevron" onclick={() => register(true)} />
+          <Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(true)} />
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
           {#if !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
         {/if}
-        {#if helper}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id))} />{/if}
+        <!-- a door helper: the same Mark screen as the club's own (QR, scanner; a «door» helper the lists too) -->
+        {#if helper}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id, false, true))} />{/if}
         {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}
         {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
         {#if coLead}<Row tone="destructive" title={t('co.leave')} onclick={leaveCohost} />{/if}

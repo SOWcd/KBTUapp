@@ -402,7 +402,6 @@ export const server = {
   screenBadge: (id: Id, qr: string): Promise<{ person: string; done: boolean }> => call('POST', `/screens/${id}/badge`, { qr }), // marked by hand: a student's badge QR scanned by who runs it
   screenPeople: (id: Id): Promise<{ came: string[]; other: string[]; absent: string[] }> => call('GET', `/screens/${id}/people`), // the host's three lists: the members who came, who came not on the list, the members who haven't
   crewScreen: (event: Id, title: string): Promise<import('./types').ScreenSession> => call('POST', `/events/${event}/crew-screen`, { title }), // an event's team marked: its club's session, made once (the one there is after)
-  crewScreenOf: (event: Id): Promise<import('./types').ScreenSession | null> => call('GET', `/events/${event}/crew-screen`), // ... the one there is, if any
   screenCsv: (id: Id): Promise<{ url: string; name: string }> => call('POST', `/screens/${id}/csv`), // a short-lived link for Telegram's download
   screenGrant: (id: Id, code: string): Promise<{ granted: number; batch: string }> => call('POST', `/screens/${id}/grant`, { code }), // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
   restore: (target: TakenDown['target'], id: Id): Promise<void> => call('POST', `/admin/taken-down/${target}/${id}/restore`), // admin: undo one
