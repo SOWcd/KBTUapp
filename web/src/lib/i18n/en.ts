@@ -2497,7 +2497,7 @@ const en: Dict = {
   'scan.notOpen': "The President hasn't opened the door yet",
   'door.openAt': "The door opens at {time}",
   'door.team': "Team {n}",
-  'door.addHelper': "Add a helper",
+  'door.addHelper': "Helper",
   'door.openAsk': "Open the door?",
   'door.openText': "Every guest will get a notification",
   'door.openSure': "Open it right now?",

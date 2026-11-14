@@ -209,8 +209,8 @@
         {#if team}<p class="t-foot">{t('door.team', { n: team.expected ? team.came ?? 0 : team.done })}</p>{/if}
       </div>
       <div class="quiet">
-        {#if board}<Button kind="secondary" size="m" full onclick={addHelper}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('door.addHelper')}</Button>{/if}
-        {#if !only}<Button kind="secondary" size="m" full onclick={byHand}>{#snippet icon()}<Hand size={18} />{/snippet}{t('ledg.byHand')}</Button>{/if}
+        {#if board}<Button kind="secondary" size="m" onclick={addHelper}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('door.addHelper')}</Button>{/if}
+        {#if !only}<Button kind="secondary" size="m" onclick={byHand}>{#snippet icon()}<Hand size={18} />{/snippet}{t('ledg.byHand')}</Button>{/if}
       </div>
     {/if}
 
@@ -267,6 +267,7 @@
   .big { display: flex; align-items: baseline; justify-content: center; gap: var(--s-2); color: var(--text-3); font-size: var(--fs-t3); }
   .big .count { margin: 0; color: var(--text); font-size: calc(var(--fs-title) * 1.9); line-height: 1; }
   .quiet { display: flex; gap: var(--s-2); }
+  .quiet > :global(*) { flex: 1 1 0; min-width: 0; }
 
   .res { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--r-l); text-align: center;
     animation: pop 360ms cubic-bezier(.2, .9, .25, 1.2); }

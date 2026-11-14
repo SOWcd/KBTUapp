@@ -2497,7 +2497,7 @@ const kk: Dict = {
   'scan.notOpen': "Президент кіруді әлі ашқан жоқ",
   'door.openAt': "Кіру {time} ашылады",
   'door.team': "Команда {n}",
-  'door.addHelper': "Көмекші қосу",
+  'door.addHelper': "Көмекші",
   'door.openAsk': "Кіруді ашасыз ба?",
   'door.openText': "Барлық қонаққа хабарлама келеді",
   'door.openSure': "Дәл қазір ашасыз ба?",

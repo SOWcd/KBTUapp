@@ -33,6 +33,10 @@
         if (gone) return;
         video.srcObject = st;
         await video.play();
+        // iPhone paints the first frames letterboxed until it knows the stream's size: show it only once that has settled
+        for (let i = 0; i < 40 && !gone && !video.videoWidth; i++) await new Promise((r) => setTimeout(r, 25));
+        await new Promise((r) => setTimeout(r, 180));
+        if (gone) return;
         live = 'on';
         while (!gone) {
           if (!paused && video.readyState >= 2) {

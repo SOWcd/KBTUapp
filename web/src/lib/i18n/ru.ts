@@ -2519,7 +2519,7 @@ const ru = {
   'scan.notOpen': "Президент ещё не открыл вход",
   'door.openAt': "Вход откроется в {time}",
   'door.team': "Команда {n}",
-  'door.addHelper': "Добавить помощника",
+  'door.addHelper': "Помощник",
   'door.openAsk': "Открыть вход?",
   'door.openText': "Всем гостям придёт уведомление",
   'door.openSure': "Точно открыть сейчас?",
