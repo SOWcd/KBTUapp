@@ -569,6 +569,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
     return {**c, **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"],
             "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"], "forBoard": bool(e["for_board"]),
             "memo": json.loads(e["memo"]) if head and e["memo"] else None, "cohost": cohost_view(con, e) if head else None,
+            "audience": e["door_audience"] or "both",  # whom its door records (checkin._team)
             "crew": crew_view(con, v, e), "myCrew": crew_kind(con, v, e),  # the door helpers (crew.py): theirs to give, mine to use
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (the talk is there)

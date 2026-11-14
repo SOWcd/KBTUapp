@@ -539,6 +539,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def crew_screen_new(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return qr.crew(con, cfg.token_key, v, eid, body.get("who", "club"), body.get("title"))
 
+    # the Mark screen: the team's list by department, marked by hand (checkin.team); whom the event's door records
+    @app.get("/api/events/{eid}/team")
+    def team_list(eid: int, con: Con, v: Me):
+        return qr.team(con, v, eid)
+
+    @app.post("/api/events/{eid}/team")
+    def team_mark(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.team_mark(con, v, eid, body.get("key"), body.get("on") is not False)
+
+    @app.put("/api/events/{eid}/audience")
+    def door_audience(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.set_audience(con, v, eid, body.get("audience"))
+
     @app.post("/api/screens/{sid}/grant")
     def screen_grant(sid: int, con: Con, v: Me, body: dict = Body(...)):
         return qr.grant_all(con, v, sid, body.get("code"))

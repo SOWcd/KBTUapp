@@ -1756,6 +1756,18 @@ MIGRATIONS: list[tuple[int, str]] = [
       tg_id INTEGER NOT NULL,
       seen_at INTEGER NOT NULL,
       PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;"""),
+    # (Nov 14, the Mark screen) whom an event's door records: guests, its team, or both (NULL: both, the team routed by
+    # membership, as before; checkin._team). The Talent Show (34) marked its team only (it was TEAM_DOOR in the code).
+    # qr_hand_marks: a team list's row with no account marked by hand (who: 'r<roster_pending id>' or 'x<qr_expected email>');
+    # a member's hand mark is a qr_marks row with marked_by
+    (171, """ALTER TABLE events ADD COLUMN door_audience TEXT CHECK (door_audience IN ('guests', 'team', 'both'));
+    UPDATE events SET door_audience = 'team' WHERE id = 34;
+    CREATE TABLE qr_hand_marks (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      who        TEXT NOT NULL,
+      marked_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      at         INTEGER NOT NULL,
+      PRIMARY KEY (session_id, who)) STRICT;"""),
 ]
 
 
