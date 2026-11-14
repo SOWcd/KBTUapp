@@ -4,6 +4,7 @@
   // en; here it can be fixed by hand, then the Outlook app opens with it through public/outlook.html (a Mini App can't open
   // mailto: or ms-outlook: itself, Telegram's openLink takes http/https only), or it's copied. Back in the app it asks "Sent it?": the events sent
   // leave the next memos and the others see who sent it. Opened from Studio and the bot's Wednesday message.
+  import { copyText } from '../../ui/copy';
   import Copy from '@lucide/svelte/icons/copy';
   import Mail from '@lucide/svelte/icons/mail';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -55,10 +56,7 @@
     const q = (s: string) => encodeURIComponent(s);
     openLink(`${location.origin}/outlook.html#to=${q(to)}&subject=${q(subject)}&body=${q(body)}&b=${q(t('memo.outlook'))}&w=${q(t('memo.web'))}`);
   }
-  async function copy(body: string) {
-    try { await navigator.clipboard.writeText(body); haptic.ok(); say(t('memo.copied'), 'sparkles_3d'); return true; }
-    catch { haptic.error(); return false; }
-  }
+  const copy = (body: string) => copyText(body, t('memo.copied'));
   // only DMP's letter asks "Sent it?" on the way back
   function toDmp() { if (draft) { mark(); outlook(draft.to, draft.subject, text); } }
   async function copyDmp() { if (await copy(text)) mark(); }

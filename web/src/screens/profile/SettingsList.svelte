@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { calm } from '../../ui/fold';
   import { homeScreen } from '../../lib/tg';
   // the app's icon on the home screen: asked once per launch when the chunk loads (warmed at 3 s), so the row never pops
   // in while the list rises
@@ -65,7 +66,6 @@
   // at its peak a click and the new theme grows from that icon. The menu is gone by then (its exit is 150 ms), so the
   // transition's snapshots never hold it; the icon's tail plays in the live new snapshot, the circle opening on it
   $effect.pre(() => { glyph.dark = theme.current === 'dark'; });
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx');
   // no "as in the system" item: until a pick the app follows Telegram's scheme on its own (owner, Oct 31)
   function look(to: Theme, ic: Element | null) {
     if (theme.chosen === to) return;
@@ -76,7 +76,7 @@
       haptic.rigid();
       chooseTheme(to, ic ?? undefined);
       say(phrase(`say.theme.${to}`), to === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
-    }, still() ? 0 : 160);
+    }, calm() ? 0 : 160);
   }
   const POWER_EMOJI = { on: 'hot_beverage_3d', off: 'high_voltage_3d', auto: 'robot_3d' } as const;
   // my events in the phone's calendar, through our page (server/kbtu/calpage.py); asked on the tap: the address makes a

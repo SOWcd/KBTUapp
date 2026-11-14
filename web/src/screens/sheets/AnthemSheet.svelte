@@ -10,6 +10,7 @@
   // spring from rest, the lines below a beat later);
   // while only the music plays, three breathing dots where the next line comes. The big emblem gives way to a small chip
   // at the top with the verse's language. A hand scrolling the page wins for 3 s; a tap on any line plays from there.
+  import { calm } from '../../ui/fold';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import Music from '@lucide/svelte/icons/music';
@@ -35,7 +36,6 @@
   let track: HTMLSpanElement, fill: HTMLElement, words: HTMLDivElement;
   const ms = 'mediaSession' in navigator ? navigator.mediaSession : null;
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // while it plays the clock is read each frame (timeupdate comes ~4 times a second: a word would fill in steps), and
   // the frame touches no state: sync() writes CSS variables and a word's class straight to the page (a Svelte state
@@ -54,7 +54,7 @@
     a.src = 'anthem/kbtu-anthem.m4a';
     const from = cur; // scrubbed or a line tapped before the first play: it starts there
     if (from) a.addEventListener('loadedmetadata', () => (a.currentTime = from), { once: true });
-    a.onplay = () => { on = true; if (ms) ms.playbackState = 'playing'; if (!raf && !still()) raf = requestAnimationFrame(tick); };
+    a.onplay = () => { on = true; if (ms) ms.playbackState = 'playing'; if (!raf && !calm()) raf = requestAnimationFrame(tick); };
     a.onpause = () => { on = waiting = false; if (ms) ms.playbackState = 'paused'; };
     a.onwaiting = () => (waiting = true);
     a.onplaying = () => (waiting = false);
@@ -170,7 +170,7 @@
     const r = el.getBoundingClientRect(), b = box.getBoundingClientRect(), was = box.scrollTop;
     const top = Math.max(0, was + r.top - b.top - (box.clientHeight - r.height) * 0.45);
     if (Math.abs(top - was) < 1) return;
-    if (still() || Math.abs(top - was) > box.clientHeight) { box.scrollTop = top; return; } // far (a jump back): no glide
+    if (calm() || Math.abs(top - was) > box.clientHeight) { box.scrollTop = top; return; } // far (a jump back): no glide
     const near = [...words.querySelectorAll<HTMLElement>('.fl')].filter((x) => { const q = x.getBoundingClientRect(); return q.bottom > b.top - 40 && q.top < b.bottom + 40; });
     const now = near.map(yOf);
     box.scrollTop = top;

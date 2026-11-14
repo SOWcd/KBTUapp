@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { calm } from '../../ui/fold';
   import { tick, untrack } from 'svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   // The profile hero, shared by Me and the person sheet (owner's pick of three): the profile as a KBTU
@@ -66,9 +67,8 @@
     return { transform: `rotate(${f === 40 ? 0 : (-6 * Math.exp(-2.8 * s) * Math.cos(7.5 * s)).toFixed(2)}deg)` };
   });
   let swing: HTMLDivElement;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
-  $effect(() => { if (live) untrack(() => { if (due()) later(); else if (!still()) swing.animate(frames, { duration: 1400 }); }); });
+  $effect(() => { if (live) untrack(() => { if (due()) later(); else if (!calm()) swing.animate(frames, { duration: 1400 }); }); });
   // signed in from Profile itself: the sign-in sheet is still closing over it, so the drop waits for a free screen
   const later = () => { if (!overlays.some((o) => !o.closing)) { arrive(); return; } swing.style.opacity = '0'; moment(arrive); };
   // the one wow of the first run (onboarding plan, Oct 31): the first Profile open after the sign-in, the badge drops in
@@ -86,7 +86,7 @@
     const award = session.me?.unlocked?.find((x) => x.code === 'first50');
     if (award) void api.markUnlocked(award.code, award.level).then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; }).catch(() => {});
     const land = () => { const r = swing.getBoundingClientRect(); haptic.ok(); burst(false, { x: r.left + r.width / 2, y: r.top + r.height / 2 }); say(t(p.no! <= 500 ? 'me.arrived' : 'me.arrivedNo', { no: h.no }), 'party_popper_3d'); };
-    if (still()) { land(); return; }
+    if (calm()) { land(); return; }
     swing.animate([{ transform: 'translateY(-70vh) rotate(-12deg)', opacity: 0 }, { transform: 'translateY(0) rotate(5deg)', opacity: 1, offset: 0.68 },
       { transform: 'none' }], { duration: 880, easing: 'cubic-bezier(.2,.9,.25,1)' }).onfinish = () => swing.animate(frames, { duration: 1400 });
     setTimeout(land, 600);
@@ -165,7 +165,7 @@
     haptic.soft();
     flipped = to;
     side = to; // the class at rest; while turning, the animations below hold each side's visibility until EDGE
-    if (still()) return;
+    if (calm()) return;
     spinning = true;
     const from = to ? 0 : 180, end = to ? 180 : 0, o = { duration: FLIP_MS };
     card.style.willChange = 'transform';
@@ -223,7 +223,7 @@
     for (const u of urls) { const im = new Image(); im.src = u; waits.push(im.decode()); }
     await Promise.race([Promise.allSettled(waits), new Promise((r) => setTimeout(r, WAIT_MS))]);
     next = null;
-    if (still()) { face = to; was = sk; spinning = false; if (look !== to) change(); }
+    if (calm()) { face = to; was = sk; spinning = false; if (look !== to) change(); }
     else spin(to, sk);
   }
 </script>

@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { calm } from '../../ui/fold';
   import { flushSync } from 'svelte';
   import { open } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -154,7 +155,6 @@
   let motion: Animation | undefined;
   let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
   let gone = false, sent = false;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const full = () => `inset(0% 0% 0% 0% round ${getComputedStyle(win).borderTopLeftRadius})`;
   const ease = () => getComputedStyle(win).getPropertyValue('--ease').trim();
 
@@ -176,9 +176,9 @@
     // Keep the exit's geometry as the keyboard retracts, so its last frame still matches the source card.
     win.style.height = win.style.maxHeight = `${win.offsetHeight}px`;
     motion?.cancel();
-    const to = still() ? null : pill();
+    const to = calm() ? null : pill();
     (document.activeElement as HTMLElement | null)?.blur?.(); // the keyboard goes with it
-    motion = win.animate([current, to ?? { opacity: 0 }], { duration: still() ? 1 : 240, easing: ease(), fill: 'forwards' });
+    motion = win.animate([current, to ?? { opacity: 0 }], { duration: calm() ? 1 : 240, easing: ease(), fill: 'forwards' });
     motion.onfinish = () => {
       flushSync(() => removeOverlay(overlay.id));
       document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });
@@ -199,9 +199,9 @@
       if (vv && !gone) win.style.setProperty('--room', `${Math.max(0, vv.offsetTop + vv.height - win.offsetTop - 12)}px`);
     };
     fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
-    const from = still() ? null : pill();
+    const from = calm() ? null : pill();
     motion = win.animate(from ? [from, { transform: 'none', clipPath: full() }]
-      : [{ opacity: 0 }, { opacity: 1 }], { duration: still() ? 1 : 300, easing: ease() });
+      : [{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 1 : 300, easing: ease() });
     const frame = requestAnimationFrame(() => { if (!gone) out = false; });
     return () => {
       cancelAnimationFrame(frame); motion?.cancel();

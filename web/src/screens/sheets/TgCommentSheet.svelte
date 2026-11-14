@@ -4,10 +4,11 @@
   // reports while the bot couldn't write to me. Its words, Copy, and back to the thread (a student only: for anyone
   // else that button would walk him into the second-comment ban). Telegram's "allow messages" is asked on a tap here,
   // never in front of the text (review 2): a "no" changes nothing.
+  import { copyText } from '../../ui/copy';
   import MessageSquareText from '@lucide/svelte/icons/message-square-text';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
   import type { TgComment } from '../../lib/api';
-  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { askDm } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
@@ -17,8 +18,7 @@
   let { overlay, c }: { overlay: Overlay; c: TgComment } = $props();
 
   async function copy() {
-    try { await navigator.clipboard.writeText(c.body); haptic.ok(); say(t('tgc.copied'), 'sparkles_3d'); }
-    catch { haptic.error(); }
+    await copyText(c.body, t('tgc.copied'));
     if (c.student) void askDm(undefined, true);
   }
   function back() {

@@ -4,6 +4,7 @@
   // check on the current choice, an icon at the end, destructive ones last in red after a line. A tap outside, Escape
   // and Telegram's Back close it (an overlay in the stack); focus goes to the current choice and back to the anchor.
   // The glass look without the tilt light (use:glass is a measured cost on a surface this short-lived).
+  import { calm } from './fold';
   import { onMount, flushSync } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import { close, removeOverlay, type Overlay } from '../lib/state/ui.svelte';
@@ -18,7 +19,6 @@
 
   let layer: HTMLDivElement, panel: HTMLDivElement, room: HTMLElement;
   let gone = false;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   onMount(() => {
     const L = layer.getBoundingClientRect(), a = anchor.getBoundingClientRect(), R = room.getBoundingClientRect();
@@ -36,7 +36,7 @@
     if (fit < h) panel.style.maxHeight = `${fit}px`;
     panel.style.transformOrigin = `${Math.max(0, Math.min(w, a.left + a.width / 2 - L.left - x))}px ${down ? 0 : fit}px`;
     panel.style.visibility = '';
-    if (!still()) {
+    if (!calm()) {
       panel.animate([{ transform: 'scale(0.4)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.3, 1.3, .5, 1)' });
       panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
     }
@@ -53,7 +53,7 @@
     if (gone) return;
     gone = true;
     const done = () => { refocus(); removeOverlay(overlay.id); };
-    if (still()) return done();
+    if (calm()) return done();
     panel.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.92)' }], { duration: 150, easing: 'ease-in', fill: 'forwards' }).onfinish = done;
   }
   $effect(() => { if (overlay.closing) leave(); });

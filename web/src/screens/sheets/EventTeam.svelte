@@ -4,6 +4,7 @@
   // app for teammates, renames, makes a new link, removes someone; anyone leaves. Each tap answers at once and goes back
   // if refused. Teams' own consent (lib/teamConsent.ts): asked before a team of my own; one signed up without it (the
   // event became a team event later) gives it here; anyone takes it back here (out of the teams of events not started).
+  import { copyText } from '../../ui/copy';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Copy from '@lucide/svelte/icons/copy';
@@ -43,7 +44,7 @@
 
   const share = () => { haptic.tap(); openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('tm.inviteMsg', { title: detail.title }))}`); };
   async function copy() {
-    try { await navigator.clipboard.writeText(link); haptic.ok(); say(t('tm.copied'), 'sparkles_3d'); } catch { fail(null); }
+    if (!(await copyText(link, t('tm.copied')))) say(t('common.error'), 'pleading_face_3d');
   }
   const setOpen = (on: boolean) => team && write({ ...team, open: on }, () => api.teamEdit(detail.id, { open: on }));
   async function rename() {

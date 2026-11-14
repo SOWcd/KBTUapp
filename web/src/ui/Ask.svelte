@@ -4,6 +4,7 @@
   // (the keyboard needs it). Back, Escape, a tap outside (and a pull, on the sheet) count as "no".
   // Destructive actions are always confirmed here, never by a system dialog. With `input`, a few words to write first (at least 2 characters), handed to `done`; with `input.tel`, a phone number (+7XXXXXXXXXX);
   // `input.value` fills it in (an edit), `input.line` makes it one line (a nick: Enter saves). `link`: a consent's policy.
+  import { calm } from './fold';
   import { onMount, untrack } from 'svelte';
   import Sheet from './Sheet.svelte';
   import Button from './Button.svelte';
@@ -35,7 +36,6 @@
   const uid = `ask${untrack(() => overlay.id)}`;
   let card = $state<HTMLDivElement>();
   let gone = false;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   onMount(() => {
     if (input || !card) return;
     const opener = document.activeElement as HTMLElement | null;
@@ -45,7 +45,7 @@
   $effect(() => {
     if (input || !overlay.closing || gone) return;
     gone = true;
-    if (still() || !card) return removeOverlay(overlay.id);
+    if (calm() || !card) return removeOverlay(overlay.id);
     card.parentElement!.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' }).onfinish = () => removeOverlay(overlay.id);
   });
   // the focus stays on the two buttons (a modal): Tab goes round them
@@ -59,7 +59,7 @@
 </script>
 
 {#if !input}
-<div class="layer" class:still={still()}>
+<div class="layer" class:still={calm()}>
   <div class="dim-bg" onclick={() => close(overlay.id, true)} role="presentation"></div>
   <div class="alert glass glass-sheet" bind:this={card} role="alertdialog" aria-modal="true" aria-labelledby="{uid}t" aria-describedby={text ? `${uid}d` : undefined} tabindex="-1" onkeydown={trap}>
     <div class="say-it">

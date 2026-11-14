@@ -6,6 +6,7 @@
   // scrolled away. The feed is told by time and people (round 2): "Today", "Yesterday", "This week", then months
   // (lib/gallery), justified rows inside each, the newest photo large; a tile says whose it is, an event's its event
   // first. My own posts land on top under All, marked while they upload. `albums`: every album alone, two a row.
+  import { calm } from '../../ui/fold';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Images from '@lucide/svelte/icons/images';
   import Plus from '@lucide/svelte/icons/plus';
@@ -35,7 +36,6 @@
   let theme = $state<Theme>('all');
   const shown = $derived(theme === 'all' ? data.gallery : data.gallery.filter((p) => (theme === 'events' ? !!p.event : p.topic === theme)));
   const days = $derived(groups(shown));
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let asked = $state<Partial<Record<Theme, 'wait' | 'ok' | 'failed'>>>({}); // each theme's own first page
   async function ask(v: Theme) {
@@ -46,7 +46,7 @@
   let feed = $state<HTMLDivElement>();
   function pick(v: Theme) {
     haptic.select();
-    if (!still()) feed?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' });
+    if (!calm()) feed?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' });
     if (v !== 'all' && asked[v] !== 'ok' && asked[v] !== 'wait') void ask(v);
   }
   // what the feed is, when it has no photo to show
@@ -101,7 +101,7 @@
     if (data.galleryPosted === posted) return;
     posted = data.galleryPosted;
     theme = 'all';
-    head?.scrollIntoView({ block: 'start', behavior: still() ? 'auto' : 'smooth' });
+    head?.scrollIntoView({ block: 'start', behavior: calm() ? 'auto' : 'smooth' });
   });
 
   // an album's cover that didn't load: its newest photo here instead, never a blank card

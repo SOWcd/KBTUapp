@@ -3,6 +3,7 @@
   // member the door was handed to. After Finish: everyone who left without checking out, one answer each ("was here
   // until the end" or the time they left, between their check-in and Finish); the app counts the minutes. Before it, for
   // the President and Vice: the one-time link that hands this session's door to a club member, who holds it, taking it back.
+  import { copyText } from '../../ui/copy';
   import { api, type Id, type VolDoor } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { loadVol } from '../../lib/state/data.svelte';
@@ -59,8 +60,7 @@
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function copy() {
-    try { await navigator.clipboard.writeText(link); haptic.ok(); say(t('sl.copied'), 'sparkles_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    if (!(await copyText(link, t('sl.copied')))) say(t('common.error'), 'warning_3d');
   }
   const share = () => { haptic.tap(); openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('ledg.handMsg', { title }))}`); };
   async function back() {

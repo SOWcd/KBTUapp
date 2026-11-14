@@ -4,6 +4,7 @@
   // the student ID, school, course, city, phone pages); Privacy (whether friends see where I'm going, my city; who
   // sees what; the policy; deleting the account) and About.
   // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
+  import { copyText } from '../../ui/copy';
   import Lock from '@lucide/svelte/icons/lock';
   import Bell from '@lucide/svelte/icons/bell';
   import Info from '@lucide/svelte/icons/info';
@@ -215,10 +216,8 @@
   let copiedT: ReturnType<typeof setTimeout> | undefined;
   async function copyDonate() {
     // the plain digits ("+77001234567"): Kaspi's search takes it as is
-    try {
-      await navigator.clipboard.writeText(session.donate); haptic.ok(); say(t('pay.copied'), 'sparkles_3d');
-      copied = true; clearTimeout(copiedT); copiedT = setTimeout(() => (copied = false), 2000);
-    } catch { haptic.error(); } // the number is selectable too
+    if (!(await copyText(session.donate, t('pay.copied')))) return; // the number is selectable too
+    copied = true; clearTimeout(copiedT); copiedT = setTimeout(() => (copied = false), 2000);
   }
 </script>
 

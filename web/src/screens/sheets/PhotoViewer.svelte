@@ -7,6 +7,7 @@
   // photo, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
   // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo (owner, Nov 3)
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
+  import { calm } from '../../ui/fold';
   import Images from '@lucide/svelte/icons/images';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -35,7 +36,6 @@
   let chrome = $state(true);
   let root: HTMLDivElement, strip: HTMLDivElement, bd: HTMLDivElement, film: HTMLDivElement | undefined = $state();
   let gone = false;
-  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx');
   const thumbOf = (p: AlbumPhoto) => (typeof from === 'function' ? from(p) : from) ?? null;
 
   // the photo's box (its slide inside the padding) and the photo as it sits there, contained

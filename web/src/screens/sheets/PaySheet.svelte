@@ -6,6 +6,7 @@
   // that looks wrong (the server's flags) keeps the ticket and says why at once, with another file to send in its place
   // until the organizer looks at it; the ticket opens this sheet for that too.
   // ponytail: no "Open Kaspi" button: Kaspi has no public link that opens a transfer, so the number is one tap to copy.
+  import { copyText } from '../../ui/copy';
   import { onMount } from 'svelte';
   import Copy from '@lucide/svelte/icons/copy';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
@@ -39,10 +40,7 @@
   const doubt = $derived(e?.my?.status === 'going' ? (e.my.receiptFlags ?? []) : []);
   const phone = $derived(fmtPhone(detail?.payPhone ?? ''));
 
-  async function copy() {
-    try { await navigator.clipboard.writeText(phone); haptic.ok(); say(t('pay.copied'), 'sparkles_3d'); }
-    catch { haptic.error(); } // the number is selectable too
-  }
+  const copy = () => copyText(phone, t('pay.copied')); // the number is selectable too
 
   let busy = $state(false);
   let picker = $state<HTMLInputElement>();

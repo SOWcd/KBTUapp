@@ -1,6 +1,7 @@
 <script lang="ts">
   // The club's own short links (Vice+): kbtu.sow.kz/<slug> to the club, one of its upcoming events or its
   // round, never anywhere outside the app. Made, copied and taken down here at once, not with the profile's Save.
+  import { copyText } from '../../ui/copy';
   import Copy from '@lucide/svelte/icons/copy';
   import Trash from '@lucide/svelte/icons/trash-2';
   import { api, ApiErr, type EventCard, type Id, type ShortLink } from '../../lib/api';
@@ -33,8 +34,7 @@
   const where = (l: ShortLink) => (l.kind === 'event' ? l.eventTitle ?? '' : t(l.kind === 'club' ? 'sl.club' : 'sl.round'));
 
   async function copy(x: string) {
-    try { await navigator.clipboard.writeText(`https://${host}/${x}`); haptic.ok(); say(t('sl.copied'), 'sparkles_3d'); }
-    catch { say(t('common.error'), 'warning_3d'); }
+    if (!(await copyText(`https://${host}/${x}`, t('sl.copied')))) say(t('common.error'), 'warning_3d');
   }
   let busy = $state(false);
   async function add(ev: Event) {
