@@ -1271,3 +1271,10 @@ MS_PAGE = {
            "expired": ("The link expired", "A sign-in link lasts 15 minutes. Go back to the app and tap the button again."),
            "open": "Back to Telegram"},
 }
+
+# The bot's command menu (Telegram's "/" list), per scope and language (bot._commands): groups get /all, private chats /start
+COMMANDS = {
+    "all_group_chats": {"ru": [("all", "Позвать всех участников клуба")], "kk": [("all", "Клубтың барлық мүшелерін шақыру")],
+                        "en": [("all", "Call all the club's members")]},
+    "all_private_chats": {"ru": [("start", "Открыть KBTU App")], "kk": [("start", "KBTU App ашу")], "en": [("start", "Open KBTU App")]},
+}

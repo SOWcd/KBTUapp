@@ -1838,6 +1838,18 @@ async def _userbot(cfg: Config) -> None:
         log.exception("userbot")
 
 
+async def _commands(cfg: Config, http: httpx.AsyncClient) -> None:
+    """Telegram's "/" menu, set at each start (cheap, idempotent): English is the default, ru and kk by the user's language."""
+    for scope, by_lang in texts.COMMANDS.items():
+        for lang, cmds in by_lang.items():
+            try:
+                await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyCommands", json={
+                    "scope": {"type": scope}, **({} if lang == "en" else {"language_code": lang}),
+                    "commands": [{"command": c, "description": d} for c, d in cmds]})
+            except httpx.HTTPError:
+                log.warning("setMyCommands failed")  # the menu waits for the next start; the bot works without it
+
+
 async def run(cfg: Config) -> None:
     """Forever, in one process: every worker (and, during a deploy, the other container) waits on a lock file next to
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
@@ -1857,5 +1869,6 @@ async def run(cfg: Config) -> None:
             _sync_live = logic.chatsync.live(db.connect(cfg.db_path))
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
+            await _commands(cfg, http)
             await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
                                  *([_chat_sync(cfg, http)] if cfg.chat_sync else []))
