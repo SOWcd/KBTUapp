@@ -1,11 +1,8 @@
-"""The owner's one-off (Nov 7): the incubator's elective post to the 3rd years (admin announce3), "more like it?" Yes/No."""
+"""Admin one-offs: a casting from an event, the elective post's Yes/No taps, a DMP leaders meeting."""
 from __future__ import annotations
 
 import asyncio
-import json
 import time
-
-import httpx
 
 from kbtu import admin, bot, config, db, texts
 from test_core import env, login  # noqa: F401  (env: the fixture)
@@ -33,38 +30,13 @@ def test_casting_from_event(env, monkeypatch):
         admin.main(["casting", "from-event", "500", until])
 
 
-def test_announce3(env, monkeypatch, capsys):
+def test_announce_taps(env, monkeypatch):
+    """The elective post (Nov 7, sent): its "more like it?" Yes/No (an:) still answer on the messages people have."""
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     con = db.connect(cfg.db_path)
-    ids = {n: login(c, tg, n)["id"] for tg, n in ((30, "ann"), (31, "ben"), (32, "cat"), (33, "dan"))}
-    con.execute("UPDATE users SET can_dm = 1")
-    con.execute("UPDATE students SET course = 3 WHERE user_id != ?", (ids["dan"],))   # dan: 2nd year
-    con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (ids["ben"],))           # ben: the bot can't write
-    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids["cat"],))        # cat: banned
-    queued = lambda: [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'elective3'")]  # noqa: E731
-    admin.main(["announce3"])                                                        # dry run: counts, queues nothing
-    assert "1 (dry run" in capsys.readouterr().out and queued() == []
-    admin.main(["announce3", "--send"])
-    admin.main(["announce3", "--send"])                                              # a rerun: nobody again
-    assert queued() == [ids["ann"]] and ": 0 (queued)" in capsys.readouterr().out
-
-    calls = []
-
-    def tg(request: httpx.Request) -> httpx.Response:
-        method, body = request.url.path.rsplit("/", 1)[1], json.loads(request.content or b"{}")
-        calls.append((method, body))
-        return httpx.Response(200, json={"ok": True, "result": {"message_id": 7}})
-
-    async def go():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
-            await bot.send_due(cfg, http)
-    asyncio.run(go())
-    sent = [b for m, b in calls if m == "sendMessage" and b.get("chat_id") == 30]
-    assert len(sent) == 1  # one message: the post in short, its link, the question
-    rows = sent[0]["reply_markup"]["inline_keyboard"]
-    assert rows[0][0]["url"] == "https://t.me/KBTUstartup/2016" and [k["callback_data"] for k in rows[1]] == ["an:y", "an:n"]
-    assert con.execute("SELECT sent_at FROM bot_outbox WHERE kind = 'elective3'").fetchone()[0]
+    ids = {n: login(c, tg, n)["id"] for tg, n in ((30, "ann"), (31, "ben"), (33, "dan"))}
+    rows = [[{"text": "post", "url": "https://t.me/KBTUstartup/2016"}], [{"text": "y", "callback_data": "an:y"}, {"text": "n", "callback_data": "an:n"}]]
 
     edits = []
 

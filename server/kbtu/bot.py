@@ -196,10 +196,6 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         text = texts.bot_message(lang, "contact_ask" if a else "contact_ask_plain", name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
-    if kind == "elective3":  # elective3:2016: the incubator's post in short, its link, and more like it? Yes/No (_tapped, an:)
-        (text, post), (yes, no) = texts.bot_message(lang, "elective3_gist"), texts.bot_message(lang, "announce_buttons")
-        return text, None, [[{"text": post, "url": f"https://t.me/{ELECTIVE[0][1:]}/{ELECTIVE[1]}"}],
-                            [{"text": yes, "callback_data": "an:y"}, {"text": no, "callback_data": "an:n"}]]
     if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted'", int(ref[1]))
         other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
@@ -822,7 +818,6 @@ def _answered(con, m, status: int, answer: dict) -> None:
         _mark(con, m, False, str(answer.get("description", status))[:200])
 
 
-ELECTIVE = ("@KBTUstartup", 2016)  # owner's one-off exception (Nov 7): the incubator's post to the 3rd years, in short with its link
 
 
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
