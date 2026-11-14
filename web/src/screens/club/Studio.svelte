@@ -169,6 +169,7 @@
   const asking = $derived(events.filter((e) => (e.questions ?? 0) > 0 && e.status === 'published' && !over(e)));
   // a club's own events open its organizer's screen; one we co-host opens as a student sees it, with our door tools (cohosts.py)
   const ours = (e: EventCard) => e.org.id === m?.org.id;
+  const qrDay = $derived(!!next && today && staff && ours(next) && next.status === 'published');
   // whoever keeps the club's event reports (an HR role without "events") opens a started one's organizer screen for its report row;
   // on one we co-host, that screen holds our own report (server evreports.py: one per club)
   const reports = (e: EventCard) => !!session.me?.reports && may(m, 'reports') && e.status === 'published' && e.startsAt <= nowTs();
@@ -346,7 +347,9 @@
             {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
           <div class="acts btns">
             <!-- one we co-host: its door is our event team's alone (cohosts.py), our plain members don't work it -->
-            {#if !next.guestHost && (ours(next) || staff)}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
+            <!-- the event's day, its organizers: one QR at the door (guests and the team alike: the server sorts, checkin._team); its scanner a switch inside it -->
+            {#if qrDay}<Button kind="primary" size="m" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : sheets.eventQr(next.id))}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('studio.showQr')}</Button>
+            {:else if !next.guestHost && (ours(next) || staff)}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
             {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
           </div>
           {#if staff && ours(next) && today && !next.placeUrl}

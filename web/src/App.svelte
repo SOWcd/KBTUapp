@@ -505,11 +505,12 @@
       count('do.qr');
       const kind = r.done ? (r.left ? 'left' : r.again ? 'again' : 'done') : session.me?.student || r.already || r.flagged ? 'no' : 'wait'; // no: the event didn't take it (window, members only)
       if (kind === 'wait' && again) return;
-      const text = r.already ? t('ci.already', { time: time(r.already) }) : r.flagged ? t('ci.flagged') : undefined; // a ticket used already, a receipt to check: the scanner
+      const text = r.team && !r.left ? t('ci.team') : r.already ? t('ci.already', { time: time(r.already) }) : r.flagged ? t('ci.flagged') : undefined; // a ticket used already, a receipt to check: the scanner
       void ciResult({ kind, title: r.title, event: r.event ?? null, text, onsign: () => asStudent(() => void checkIn(p, true), p, true) });
     } catch (e) {
       const own = e instanceof ApiErr && e.message === 'own';
-      void ciResult({ kind: !(e instanceof ApiErr) ? 'error' : own ? 'no' : e.code === 'closed' ? 'closed' : e.message === 'qr_old' ? 'old' : e.message === 'qr_not_in' ? 'notIn' : 'error', title: '', text: own ? t('ci.own') : undefined });
+      const early = e instanceof ApiErr && e.message === 'not_open' && typeof e.data.at === 'number' ? t('ci.notOpen', { time: time(e.data.at as number) }) : undefined; // a guest before the door
+      void ciResult({ kind: !(e instanceof ApiErr) ? 'error' : own || early ? 'no' : e.code === 'closed' ? 'closed' : e.message === 'qr_old' ? 'old' : e.message === 'qr_not_in' ? 'notIn' : 'error', title: '', text: own ? t('ci.own') : early });
     }
   }
 

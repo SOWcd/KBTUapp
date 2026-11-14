@@ -60,7 +60,7 @@ def test_unstarted_and_ordinary_students_see_nothing(env):
     org = con.execute("SELECT org_id FROM events WHERE id = ?", (eid,)).fetchone()[0]
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, uid))
     assert _me(c, 3)["bigScreen"] is None                                # a club's Member runs no events
-    con.execute("UPDATE qr_sessions SET started_at = NULL WHERE id = ?", (sid,))
+    con.execute("UPDATE qr_sessions SET started_at = NULL WHERE id = ? OR crew_event_id = ?", (sid, eid))  # (its team's, started with it)
     assert _me(c, H)["checkin"] is None                                  # opened, not started: nothing running
     con.close()
 
@@ -91,8 +91,8 @@ def test_who_can_pair(env):
 def test_an_organizer_with_nothing_open_binds_nothing(env):
     c, cfg = env
     con = db.connect(cfg.db_path)
-    _, sid, _ = _phone_event(c, con, "vol")
-    con.execute("DELETE FROM qr_sessions WHERE id = ?", (sid,))
+    eid, sid, _ = _phone_event(c, con, "vol")
+    con.execute("DELETE FROM qr_sessions WHERE id = ? OR crew_event_id = ?", (sid, eid))  # (its team's, started with it)
     code = c.post("/api/screen/pair").json()["code"]
     r = c.post("/api/screens/bind", headers=tma(H), json={"code": code})
     assert r.status_code == 403                                          # the rule stands: the app words it (ScreenSheet)

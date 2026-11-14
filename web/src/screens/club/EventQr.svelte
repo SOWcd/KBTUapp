@@ -115,7 +115,7 @@
     {:else if q}
       {#if q.param}<p class="hint">{t(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
       <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>
-      {#if q.last && !out}<p class="hint">{t('scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
+      {#if q.last && !out}<p class="hint">{t(q.last.team ? 'scr.lastTeam' : 'scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
       {#if q.pending}<p class="hint">{t('scr.joining', { n: q.pending })}</p>{/if}
       {#if event && !door && sess && scanner && q.param}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
       {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}

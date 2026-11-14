@@ -6918,13 +6918,15 @@ def test_event_screen(env):
     with db.tx(con):
         checkin.became_student(con, uid)
     assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0]
-    # far from the door's window (a session started a week early): the scan counts in the list, nobody "came"
+    # far from the door's window (a session started a week early): a guest's scan is refused before any mark (one QR at
+    # the door: no count the team's early scans would be mixed into), told when it opens
     con.execute("UPDATE events SET starts_at = starts_at + 7 * 86400 WHERE id = 1")
     login(c, 5, "eve")
     k = _paired(c, 9, s["session"])                                                          # a laptop on the event's session
-    assert not c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]}).json()["done"]  # not told "checked in"
+    r = c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]})
+    assert r.status_code == 409 and r.json()["message"] == "not_open"                        # not told "checked in"
     assert not con.execute("SELECT 1 FROM registrations r JOIN users u ON u.id = r.user_id WHERE u.tg_id = 5").fetchone()
-    assert con.execute("SELECT done_at FROM qr_marks m JOIN users u ON u.id = m.user_id WHERE u.tg_id = 5").fetchone()[0]
+    assert not con.execute("SELECT 1 FROM qr_marks m JOIN users u ON u.id = m.user_id WHERE u.tg_id = 5").fetchone()
     con.close()
 
 

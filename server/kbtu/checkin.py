@@ -89,11 +89,7 @@ def _club(con, v: Viewer, org_id: int, name: str, who: object, t: int, crew: int
     tag = who if isinstance(who, int) and not isinstance(who, bool) else None
     if who not in ("club", "all") and not (tag and one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", tag, org_id)):
         raise ApiError("bad_input")
-    # the club's own people only, as its team list names them; flagged so the CSV leaves their mail out (the team never sees it)
-    people = [] if who == "all" else [{"email": r["email"], "name": f"{r['last_name']} {r['first_name']}".strip(), "extra": {"club": 1}}
-        for r in rows(con, f"""SELECT s.email, s.first_name, s.last_name FROM org_members m JOIN students s ON s.user_id = m.user_id
-            WHERE m.org_id = ? AND s.email IS NOT NULL {"AND m.user_id IN (SELECT user_id FROM member_tags WHERE tag_id = ?)" if tag else ""}""",
-                      org_id, *([tag] if tag else []))]
+    people = [] if who == "all" else _people(con, org_id, tag)
     with tx(con):  # counted under the write lock: two taps at once can't both pass the caps
         x = crew and one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ?", crew)
         if x:  # two taps at once: the one made first
@@ -105,6 +101,14 @@ def _club(con, v: Viewer, org_id: int, name: str, who: object, t: int, crew: int
         sid = new(con, name, people, org_id, crew)
         log_action(con, v.id, "checkin_new", f"qr:{sid}", json.dumps({"org": org_id, "who": who, **({"event": crew} if crew else {})}))
     return sid
+
+
+def _people(con, org_id: int, tag: int | None = None) -> list[dict]:
+    """The club's own people (one tag's), as its team list names them; flagged so the CSV leaves their mail out (the team never sees it)."""
+    return [{"email": r["email"], "name": f"{r['last_name']} {r['first_name']}".strip(), "extra": {"club": 1}}
+        for r in rows(con, f"""SELECT s.email, s.first_name, s.last_name FROM org_members m JOIN students s ON s.user_id = m.user_id
+            WHERE m.org_id = ? AND s.email IS NOT NULL {"AND m.user_id IN (SELECT user_id FROM member_tags WHERE tag_id = ?)" if tag else ""}""",
+                      org_id, *([tag] if tag else []))]
 
 
 def crew(con, key: bytes, v: Viewer, eid: int, who: object = None, title: object = None) -> dict | None:
@@ -294,7 +298,7 @@ def sessions(con, key: bytes, v: Viewer) -> list[dict]:
     mine = "" if v.role == "admin" else f"""AND (org_id IN ({logic._qs(run)}) OR event_id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs o ON o.id = x.org_id WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)}))
         OR id IN (SELECT session_id FROM vol_hands WHERE user_id = ? AND revoked_at IS NULL))"""
-    return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY ended_at IS NOT NULL, id DESC",
+    return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY ended_at IS NOT NULL, crew_event_id IS NOT NULL, id DESC",
                                               now() - 86400, *([] if v.role == "admin" else [*run * 2, v.id]))
             if v.role == "admin" or s["org_id"] in run or _doors(con, v, s)]
 
@@ -309,9 +313,9 @@ def running(con, v: Viewer) -> dict | None:
     # my clubs only, never _runs: its admin exception would turn an admin who helps into an organizer (one interface for everyone)
     ran = f"""(s.org_id IN ({logic._qs(run)}) OR s.event_id IN (SELECT x.event_id FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
         WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)})))"""
-    s = one(con, f"""SELECT s.*, {end} AS until, {ran} AS ran FROM qr_sessions s LEFT JOIN events e ON e.id = s.event_id
+    s = one(con, f"""SELECT s.*, {end} AS until, {ran} AS ran FROM qr_sessions s LEFT JOIN events e ON e.id = COALESCE(s.event_id, s.crew_event_id)
         WHERE s.started_at IS NOT NULL AND s.ended_at IS NULL AND COALESCE(e.status, '') != 'cancelled' AND {end} > ?
-        AND ({ran} OR {logic.crew.QR_HELPING}) ORDER BY ran DESC, s.id DESC LIMIT 1""", *run, *run, now(), *run, *run, v.id, v.id)
+        AND ({ran} OR {logic.crew.QR_HELPING}) ORDER BY ran DESC, s.crew_event_id IS NOT NULL, s.id DESC LIMIT 1""", *run, *run, now(), *run, *run, v.id, v.id)
     if not s:
         return None
     if s["ran"]:
@@ -332,6 +336,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
     if sid is None:
         mine = sessions(con, key, v)
         live = [x for x in mine if x["ended"] is None]
+        live = [x for x in live if not x["crew"]] or live  # an event's team session beside its guests' (crew_open): the guests' is the screen's
         if not mine:
             raise ApiError("forbidden", "screen")
         if len(live) != 1:
@@ -360,6 +365,8 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         with tx(con):
             if con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid)).rowcount:
                 logic.vol.started(con, s, v)  # the ledger's club: who started it runs this door
+            if s["event_id"]:  # the guests' QR started by its organizer: the team's session with it (one QR at the door)
+                crew_open(con, v, one(con, "SELECT * FROM events WHERE id = ?", s["event_id"]))
     elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
         _lease(con, sid)
     elif act == "finish":
@@ -372,8 +379,10 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         raise ApiError("not_found")
     out = _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
     if act == "show":  # who the last counted scan was: the phone at the door sees a guest's own name, not a screenshot of a toast
-        m = one(con, "SELECT user_id, done_at FROM qr_marks WHERE session_id = ? AND done_at IS NOT NULL ORDER BY done_at DESC LIMIT 1", sid)
-        out["last"] = m and {"name": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", m[0])), "at": m[1]}
+        # and the team's (_team): its scans of this QR said as the team's, never counted among the guests
+        m = one(con, """SELECT m.user_id, m.done_at, m.session_id != ? AS team FROM qr_marks m WHERE m.done_at IS NOT NULL AND (m.session_id = ?
+            OR m.session_id = (SELECT id FROM qr_sessions WHERE crew_event_id = ?)) ORDER BY m.done_at DESC LIMIT 1""", sid, sid, s["event_id"])
+        out["last"] = m and {"name": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", m[0])), "at": m[1], "team": bool(m[2])}
     return {**out, "title": _title_for(con, s, v.id, True)[0]} if act == "show" and not _runs(con, v, s) else out  # a helper: the title as helper() showed it
 
 
@@ -388,6 +397,8 @@ def _finish(con, s, by: int | None) -> None:
         t = now()
         if con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (t, s["id"])).rowcount:
             logic.vol.finished(con, s, by, t)  # who ran the door: there to the end; every other open shift waits for an answer
+            if s["event_id"]:  # one QR at the door: finishing it finishes the event's team check-in too (its marks stay)
+                con.execute("UPDATE qr_sessions SET ended_at = ? WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (t, s["event_id"]))
         con.execute("DELETE FROM qr_helpers WHERE session_id = ?", (s["id"],))
 
 
@@ -419,7 +430,10 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
             logic.vol.meet(con, one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)[0], e["org_id"])
         if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # the code goes to this member: mark's "own"
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{one(con, 'SELECT id FROM qr_sessions WHERE event_id = ?', eid)[0]}:{v.id}",))
-        return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
+        x = one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid)
+        if x["started_at"] and not x["ended_at"]:  # its organizer opening the running guests' QR: the team's session too (one QR at the door)
+            crew_open(con, v, e)
+        return _row(con, key, x)
 
 
 def handed(con, key: bytes, v: Viewer, token: object) -> dict:
@@ -575,6 +589,8 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
     fresh = 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT and (s["lease_until"] is None or s["lease_until"] >= now())
     if (out or not had) and not fresh:
         raise ApiError("bad_input", "qr_old")
+    if out and not had and s["event_id"] and (r := _team_left(con, s, uid)):  # came in on its team's list (_team): leaves there
+        return r
     if out and not had and not logic.vol.on_shift(con, s, uid):  # (who runs the ledger's door came by marking others in: their check-out counts)
         # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
         raise ApiError("bad_input", "qr_not_in")
@@ -585,6 +601,10 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
     if e and not out and _guests(con, e, sid):
         if one(con, "SELECT 1 FROM meta WHERE key = ?", f"qrshow:{sid}:{uid}") and not logic.cohosts.runs(con, v, e):  # as the scanner: who works the door doesn't check themselves in (a plain member who came as a guest does)
             raise ApiError("forbidden", "own")
+        if not had and student and (r := _team(con, v, e, s, t)):  # the club's own team: its team's list, never a guest
+            return r
+        if not had and logic.door_shut(e, t) == "not_open":  # a guest before the door: refused before any mark (no count to undo)
+            raise ApiError("closed", "not_open", {"at": logic.door_at(e)})
         r = e["price"] and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
         if r and r["checked_in_at"] and not had:  # this ticket came in already (a screenshot at the scanner): the door must see it
             return {"title": s["title"], "done": False, "left": False, "already": r["checked_in_at"]}
@@ -607,6 +627,59 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
     title, event = _title_for(con, s, uid, student)
     # event: the confirmation's cover and the sheet it settles into; again: counted by an earlier scan already
     return {"title": title, "done": came, "left": out, "event": event, "again": bool(came and not out and had and had["done_at"])}
+
+
+def _team(con, v: Viewer, e, s, t: int) -> dict | None:
+    """One QR at the door (owner, Nov 14): at a public event (_guests), a member of its own club (org_members now) with
+    no guest seat ('going': a paid one, a let-in team_ask, a President's) scanning the guests' QR is marked in its team's
+    session (crew), exactly as a scan of that QR; on the event's day, the door open or not (a team comes early), never
+    after its end. Only a team's session already running, made by its organizer opening this QR (crew_open); none (or
+    finished), a co-host's or partner's member, someone not signed in yet: None, the guest's way, as before. ponytail: a forwarded photo of the QR marks a member at home within its
+    SCAN_OK, as the team's own QR does; a per-person proof (the badge, a geofence) if that gets abused."""
+    if e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400 \
+            or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], v.id) \
+            or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+        return None
+    with tx(con):
+        x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", e["id"])
+        if not x:
+            return None
+        had = one(con, "SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?", x[0], v.id)
+        con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (x[0], v.id, t))
+        con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, x[0], v.id))
+    title, event = _title_for(con, s, v.id, True)
+    return {"title": title, "done": True, "left": False, "event": event, "again": bool(had and had["done_at"]), "team": True}
+
+
+def _team_left(con, s, uid: int) -> dict | None:
+    """The guests' QR marking leaving, scanned by whom _team marked in: the leaving goes on that team mark."""
+    t = now()
+    with tx(con):
+        x = one(con, """SELECT x.id FROM qr_sessions x JOIN qr_marks m ON m.session_id = x.id AND m.user_id = ? AND m.done_at IS NOT NULL
+            WHERE x.crew_event_id = ? AND x.ended_at IS NULL""", uid, s["event_id"])
+        if not x:
+            return None
+        con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, x[0], uid))
+    title, event = _title_for(con, s, uid, True)
+    return {"title": title, "done": True, "left": True, "event": event, "team": True}
+
+
+def crew_open(con, v: Viewer, e) -> None:
+    """The team's session of a public event made and started as its own organizer opens the guests' QR on the event's
+    day (for_event; _team routes the club's own scans there): the whole club expected as of now, under that organizer,
+    outside the club caps (one per event, never more)."""
+    t = now()
+    if not (v.role == "admin" or can(con, v, e["org_id"], "events")) or not _guests(con, e, None) or e["status"] != "published" \
+            or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400 or logic.door_shut(e, t) == "closed" \
+            or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", e["org_id"]):  # Almaty's day
+        return
+    with tx(con):
+        x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ?", e["id"])
+        sid = x and x[0]
+        if not sid:
+            sid = new(con, e["title"][:64] + " · team", _people(con, e["org_id"]), e["org_id"], e["id"])
+            log_action(con, v.id, "checkin_new", f"qr:{sid}", json.dumps({"org": e["org_id"], "who": "club", "event": e["id"]}))
+        con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (t, t + LEASE, sid))
 
 
 def _marker(con, uid: int | None) -> str:
