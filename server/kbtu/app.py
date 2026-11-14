@@ -1662,7 +1662,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         try:
-            msgs, rooms, events = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
+            msgs, ok = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
@@ -1671,7 +1671,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
             raise
-        return await run_in_threadpool(logic.assistant.reply, con, text, rooms, events, lang, msgs[-1]["content"])
+        return await run_in_threadpool(logic.assistant.reply, con, text, ok, lang, msgs[-1]["content"])
 
     # its feedback (logic/assistant.py): a 👍/👎 on an answer's signed topic; on 👎, the one question and answer if sent
     @app.post("/api/assistant/vote", status_code=204)

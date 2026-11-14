@@ -1,12 +1,18 @@
 <script lang="ts">
   // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
   // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
-  // three buttons (a room on the map, an event), checked by the server against what it told the model. Under an answer
-  // 👍/👎 (on 👎, the student may send that one question and answer); when the server sees distress, its fixed help card
-  // with the helplines (review, Oct 31: nothing of it is kept or sent by us; the student calls or writes themselves).
+  // three buttons (a room on the map, an event, a club, my classes, a Settings page, the Gallery, the news), checked by
+  // the server against what it told the model. Under an answer 👍/👎 (on 👎, the student may send that one question
+  // and answer); when the server sees distress, its fixed help card with the helplines (review, Oct 31: nothing of
+  // it is kept or sent by us; the student calls or writes themselves).
   import { untrack } from 'svelte';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import Users from '@lucide/svelte/icons/users';
+  import CalendarClock from '@lucide/svelte/icons/calendar-clock';
+  import Settings from '@lucide/svelte/icons/settings';
+  import Images from '@lucide/svelte/icons/images';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
   import ThumbsDown from '@lucide/svelte/icons/thumbs-down';
   import Phone from '@lucide/svelte/icons/phone';
@@ -15,8 +21,9 @@
   import { api, ApiErr } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { eventById } from '../../lib/state/data.svelte';
+  import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import type { AssistAction } from '../../lib/api/types';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { PSYCHOLOGIST } from '../../lib/academic';
@@ -58,8 +65,22 @@
       if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
     } finally { busy = false; }
   }
-  const label = (a: NonNullable<Turn['actions']>[number]) => a.type === 'map' ? t('as.onMap', { room: a.room }) : eventById(a.id)?.title ?? t('as.event');
-  const go = (a: NonNullable<Turn['actions']>[number]) => { if (a.type === 'map') sheets.map(a.room); else sheets.event(a.id); };
+  // labels from our own strings and store, never the model's words
+  const SET = { school: 'look.school', course: 'pd.course', notify: 'me.notifications' } as const;
+  const label = (a: AssistAction) => a.type === 'map' ? t('as.onMap', { room: a.room })
+    : a.type === 'event' ? eventById(a.id)?.title ?? t('as.event')
+    : a.type === 'club' ? [...data.orgs, ...data.small].find((o) => o.id === a.id)?.name ?? t('as.club')
+    : a.type === 'settings' ? t(SET[a.kind]) : t(a.type === 'timetable' ? 'list.classes' : a.type === 'gallery' ? 'gallery.title' : 'page.news');
+  const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper };
+  function go(a: AssistAction) {
+    if (a.type === 'map') sheets.map(a.room);
+    else if (a.type === 'event') sheets.event(a.id);
+    else if (a.type === 'club') sheets.club(a.id);
+    else if (a.type === 'settings') sheets.settings(a.kind);
+    else if (a.type === 'timetable') sheets.week();
+    else if (a.type === 'gallery') sheets.gallery();
+    else sheets.news();
+  }
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
@@ -96,7 +117,7 @@
           {#if m.actions?.length}
             <div class="acts">{#each m.actions as a, k (k)}
               <Button kind="tinted" size="s" onclick={() => go(a)}>
-                {#snippet icon()}{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}{/snippet}
+                {#snippet icon()}{@const Icon = ICON[a.type]}<Icon size={15} />{/snippet}
                 {label(a)}
               </Button>
             {/each}</div>

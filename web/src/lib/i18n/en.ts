@@ -207,6 +207,7 @@ const en: Dict = {
   'as.s4': "Where can I eat?",
   'as.ph': "Ask…",
   'as.onMap': "Room {room} on the map",
+  'as.club': "Club",
   'as.event': "Event",
   'as.thinking': "Thinking",
   'as.note': "Answers are written by KRI and can be wrong. Questions aren't saved; we only see topics and ratings of answers, without names.",

@@ -102,8 +102,8 @@ def test_assistant_brief_has_the_documents(env, tmp_path, monkeypatch):
     got, real = [], docs.Index.search  # the curricula of the student's intake (from their year, in the brief) first
     monkeypatch.setattr(docs.Index, "search", lambda self, q, qvec=None, k=4, intake=None: got.append(intake) or real(self, q, qvec, k, intake))
     ask(ASK)
-    year = re.search(r"most likely intake (\d{4})", seen[-1][0]["content"])
-    assert got == [int(year[1]) if year else None] and "programme unknown" in seen[-1][0]["content"]
+    year = re.search(r"most likely intake (\d{4})", seen[-1][1]["content"])
+    assert got == [int(year[1]) if year else None] and "programme unknown" in seen[-1][1]["content"]
     ask("and when?", [{"role": "user", "text": ASK}, {"role": "assistant", "text": "..."}])  # a follow-up searches with the turn before
     assert "[First year FAQ, Money]" in seen[-1][-2]["content"] and seen[-1][-1]["content"] == "and when?"
     monkeypatch.setattr(logic.assistant, "DOCS", docs.Index(str(tmp_path / "missing.db")))

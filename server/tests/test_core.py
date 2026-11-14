@@ -7051,15 +7051,16 @@ def test_assistant(env, monkeypatch):
     monkeypatch.setattr(llm, "chat", fake)
     r = c.post("/api/assistant", headers=tma(1), json={"q": "where is my dean's office?", "history": [{"role": "user", "text": "hi"}]}).json()
     assert r == {"text": "Room 180, floor 1.", "actions": [{"type": "map", "room": "180"}, {"type": "event", "id": 7}]}  # nothing made up
-    brief = seen[0][0]["content"]
+    brief = seen[0][1]["content"]
+    assert "Hackathon" not in seen[0][0]["content"] and brief.endswith("</facts>")       # the facts: data, out of the rules
     assert "SITE" in brief and "Physics" in brief and "room 256" in brief and "Hackathon" in brief and "Ann" not in brief and "24Bann" not in brief
-    assert [m["role"] for m in seen[0]] == ["system", "user", "user"]
+    assert [m["role"] for m in seen[0]] == ["system", "user", "user", "user"]
     assert "Their classes tomorrow: none" in brief                                           # today's Physics isn't tomorrow's too
     for bad in ({"q": "x"}, {"q": "y" * 301}, {"q": "ok?", "history": "nope"}):
         assert c.post("/api/assistant", headers=tma(1), json=bad).status_code == 400
     from kbtu.logic import assistant
-    assert assistant.answer('{"text": "hi", "actions": 5}', set(), {1}) == {"text": "hi", "actions": []}       # not a 500
-    assert assistant.answer('{"text": "hi", "actions": [{"type": "event", "id": true}]}', set(), {1})["actions"] == []
+    assert assistant.answer('{"text": "hi", "actions": 5}', {"event": {1}}) == {"text": "hi", "actions": []}       # not a 500
+    assert assistant.answer('{"text": "hi", "actions": [{"type": "event", "id": true}]}', {"event": {1}})["actions"] == []
     con.execute("UPDATE schedule_classes SET room = '256A'")                                   # the portal's capital letter
     assert "256a" in assistant.brief(con, logic.Viewer(ann["id"], "user", True))[1]
 
@@ -7119,7 +7120,7 @@ def test_campus_places(env, monkeypatch, capsys):
     by = {p["code"]: p for p in got}
     assert len(got) == 20 and all(p["stale"] and p["verifiedAt"] is None and p["nameRu"] is None and p["updatedBy"] is None for p in got)
     assert (by["library"]["room"], by["canteen"]["location"], by["site"]["kind"], by["site"]["school"]) == ("158", "the basement, floor 0", "dean", "SITE")
-    text, rooms, _ = assistant.brief(con, v, "ru")
+    text, rooms, *_ = assistant.brief(con, v, "ru")
     assert "Library: room 158" in text and "Canteen: the basement, floor 0" in text and "school SITE (School of IT and Engineering)" in text
     assert "KMA (Kazakhstan Maritime Academy): room 255. Other schools' dean's offices: unknown." in text and {"158", "400a", "180", "1"} <= rooms
     lib = by["library"]["id"]
@@ -7131,10 +7132,10 @@ def test_campus_places(env, monkeypatch, capsys):
     p = next(x for x in c.patch(f"/api/admin/places/{lib}", headers=M, json={"room": "160\u0410", "nameRu": lib_ru, "aliases": " lib ,, books ",
                                                                               "verified": True}).json() if x["id"] == lib)
     assert (p["room"], p["aliases"], p["stale"], p["updatedBy"]["id"], p["code"]) == ("160a", "lib, books", False, mod["id"], "library")
-    text, rooms, _ = assistant.brief(con, v, "ru")
+    text, rooms, *_ = assistant.brief(con, v, "ru")
     assert f"{lib_ru} (also: lib, books): room 160a" in text and "160a" in rooms and "158" not in rooms
     assert "Library (also: lib, books): room 160a" in assistant.brief(con, v, "kk")[0]           # no Kazakh name: the English one
-    assert assistant.answer('{"text": "160a", "actions": [{"type": "map", "room": "160A"}, {"type": "map", "room": "158"}]}', rooms, set())["actions"] == [
+    assert assistant.answer('{"text": "160a", "actions": [{"type": "map", "room": "160A"}, {"type": "map", "room": "158"}]}', {"map": rooms})["actions"] == [
         {"type": "map", "room": "160a"}]
     a = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'place_edit'").fetchone()
     assert (a[0], a[1]) == (mod["id"], f"place:{lib}") and json.loads(a[2])["room"] == ["158", "160a"] and json.loads(a[2])["verified"] is True

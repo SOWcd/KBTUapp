@@ -127,7 +127,10 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
   assistant: { unknown: { topic: string; n: number }[]; down: { topic: string; n: number }[]; up: number; downs: number;
     sent: { id: Id; day: number; q: string; a: string }[]; care: { week: number; n: number }[] } }
 /** The assistant's answer: its buttons, the signed topic a 👍/👎 sends back, the fixed help card when the model sees distress. */
-export interface AssistReply { text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[]; mark?: string; pair?: string; care?: true; help?: string }
+/** KRI's buttons (server assistant.answer's whitelist): each opens a screen, nothing changes until the student taps */
+export type AssistAction = { type: 'map'; room: string } | { type: 'event' | 'club'; id: number } | { type: 'timetable' | 'gallery' | 'news' }
+  | { type: 'settings'; kind: 'school' | 'course' | 'notify' };
+export interface AssistReply { text: string; actions: AssistAction[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'dmp' | 'creator_laugh' | 'creator_found' | 'init26' | 'init26f' | 'init26p' | 'supporter' | 'club_founder'; at: Ts; person: PersonRef }
 export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc' | 'fpost'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc' | 'fpost' | 'gallery'; id: Id; link?: string | null; msg?: number /* fpost: its message in the forum channel */ }; count: number; reasons: Partial<Record<ReportReason, number>>;
