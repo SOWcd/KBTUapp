@@ -9,6 +9,8 @@
   // (`names`): it opens on the people expected, marked by name ("Who came").
   import { onMount, untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
+  import Hand from '@lucide/svelte/icons/hand';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
@@ -36,7 +38,8 @@
   // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
   // qr: the door screen (owner, Nov 14): «QR | Scanner» on top (the phone remembers; first time: the scanner for a paid
   // event, the QR for a free one), the code or the camera, the count, then two quiet buttons: a helper, by hand
-  let { overlay, id, names = false, only = false, qr = false }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean; qr?: boolean } = $props();
+  // hand: the door's «By hand», its own screen over the door (owner, Nov 14): the ticket code and the list by name, no camera
+  let { overlay, id, names = false, only = false, qr = false, hand = false, ondone }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean; qr?: boolean; hand?: boolean; ondone?: () => void } = $props();
   let mode = $state<'scan' | 'qr'>(untrack(() => (qr ? doorMode() ?? (eventById(id)?.price ? 'scan' : 'qr') : 'scan')));
 
   let detail = $state<EventFull | null>(null);
@@ -53,7 +56,7 @@
   let busy = $state(false);
   let panel: HTMLDivElement;
   let gone = false;
-  let cam = $state(untrack(() => !names));  // off when leaving: the light goes out with the fade, not after it
+  let cam = $state(untrack(() => !names && !hand));  // off when leaving: the light goes out with the fade, not after it
 
   // the door's count from its list (who's going, who came) and the team's own session (server checkin._team), read as
   // the screen opens and as the QR counts someone; a scan's answer brings the guests' count itself
@@ -69,11 +72,12 @@
     try { const s = await api.eventScreen(id); if (!s.started) await api.screenAct(s.session, 'start'); sheets.handQr(s.session); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  let manual = $state(false); // the door's «By hand»: the typed code and the list by name, folded away until asked
-  function byHand() { haptic.tap(); manual = !manual; if (manual && !byName) void openByName(); }
+  const manual = untrack(() => hand);
+  // the camera rests while By hand is open over it, and the count catches up when it closes
+  function byHand() { haptic.tap(); cam = false; sheets.scanner(id, false, false, true, () => { if (!gone) { cam = true; recount(); } }); }
 
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
-  $effect(() => { overlay.title = qr ? t('door.in') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
+  $effect(() => { overlay.title = hand ? t('ledg.byHand') : qr ? t('door.in') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
   const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
@@ -132,10 +136,11 @@
 
   onMount(() => {
     panel.animate([{ opacity: 0, transform: 'translate3d(0,40px,0)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1)' });
-    if (names) void openByName();
+    if (names || hand) void openByName();
     else if (live === 'failed' && camera && mode === 'scan') scan();
     if (qr) recount();
-    return hideChrome();
+    const show = hideChrome();
+    return () => { show?.(); ondone?.(); };
   });
 
   function leave() {
@@ -164,7 +169,7 @@
       <p class="count">{count ? t('scan.came', count) : tn('event.going', e.taken)}</p>
     {/if}
 
-    {#if !names && live !== 'failed' && mode === 'scan'}
+    {#if !names && !hand && live !== 'failed' && mode === 'scan'}
       <!-- the camera stays outside {#key}: a new <video> per scan had no stream (black after the first scan) -->
       <div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already'} class:bad={!!res && res.result !== 'ok' && res.result !== 'already'}>
         {#if cam}<QrCam bind:live paused={busy} onscan={(v) => void check(v)} />{/if}
@@ -190,8 +195,8 @@
       {/if}
     {/key}
 
-    {#if !names && mode === 'scan'}
-      {#if live !== 'on' && camera}
+    {#if !names && !hand && mode === 'scan'}
+      {#if live === 'failed' && camera}
         <Button kind="primary" size="l" full onclick={scan}>{#snippet icon()}<ScanLine size={20} />{/snippet}{t('scan.open')}</Button>
       {:else if live === 'failed'}
         <p class="t-callout hint">{t('scan.noCamera')}</p>
@@ -204,8 +209,8 @@
         {#if team}<p class="t-foot">{t('door.team', { n: team.expected ? team.came ?? 0 : team.done })}</p>{/if}
       </div>
       <div class="quiet">
-        {#if board}<Button kind="plain" size="m" onclick={addHelper}>{t('door.addHelper')}</Button>{/if}
-        {#if !only}<Button kind="plain" size="m" onclick={byHand}>{t('ledg.byHand')}</Button>{/if}
+        {#if board}<Button kind="secondary" size="m" full onclick={addHelper}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('door.addHelper')}</Button>{/if}
+        {#if !only}<Button kind="secondary" size="m" full onclick={byHand}>{#snippet icon()}<Hand size={18} />{/snippet}{t('ledg.byHand')}</Button>{/if}
       </div>
     {/if}
 
@@ -261,7 +266,7 @@
   .tally { text-align: center; }
   .big { display: flex; align-items: baseline; justify-content: center; gap: var(--s-2); color: var(--text-3); font-size: var(--fs-t3); }
   .big .count { margin: 0; color: var(--text); font-size: calc(var(--fs-title) * 1.9); line-height: 1; }
-  .quiet { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--s-2); }
+  .quiet { display: flex; gap: var(--s-2); }
 
   .res { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--r-l); text-align: center;
     animation: pop 360ms cubic-bezier(.2, .9, .25, 1.2); }
@@ -275,7 +280,7 @@
   @keyframes pop { from { opacity: 0; transform: scale(0.92); } }
 
   .hint { color: var(--text-2); }
-  .cam { position: relative; flex: none; width: 100%; aspect-ratio: 1; max-height: 44vh; border-radius: var(--r-l); overflow: hidden; background: #000; }
+  .cam { position: relative; flex: none; width: min(100%, 56vh); margin-inline: auto; aspect-ratio: 1; border-radius: var(--r-l); overflow: hidden; background: #000; }
   .wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.5); }
   .aim { position: absolute; inset: 18%; border-radius: 22px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 0 999px rgba(0, 0, 0, 0.28); pointer-events: none; }
   .cam.good .aim { box-shadow: 0 0 0 4px var(--success), 0 0 0 999px rgba(0, 0, 0, 0.28); }

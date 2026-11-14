@@ -48,8 +48,10 @@
   });
 </script>
 
-<video bind:this={video} playsinline muted></video>
+<video bind:this={video} class:on={live === 'on'} playsinline muted></video>
 
 <style>
-  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* fades in once playing: no frame of the stream's own size before it fills the square */
+  video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.25s ease; }
+  video.on { opacity: 1; }
 </style>
