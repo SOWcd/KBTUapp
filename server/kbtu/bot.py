@@ -93,6 +93,8 @@ def premium(text: str) -> str:
     """Our plain emoji as the pack's, in HTML (parse_mode HTML everywhere the bot writes)."""
     if not _custom_re:
         return text
+    if "<tg-emoji" in text:  # already the pack's (a mention's mark): wrapped once, never inside itself
+        return re.sub(r"(<tg-emoji[^>]*>.*?</tg-emoji>)|([^<]+)", lambda m: m.group(1) or premium(m.group(2)), text, flags=re.S)
     return _custom_re.sub(lambda m: f'<tg-emoji emoji-id="{_custom[m.group(0).replace(chr(0xFE0F), "")]}">{m.group(0)}</tg-emoji>', text)
 
 
@@ -1727,9 +1729,10 @@ async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict,
     for _ in range(5):
         await asyncio.sleep(gap)
         try:
-            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=fancy(params))
+            f = fancy(params)
+            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=f)
             answer = r.json()
-            if r.status_code == 400 and fancy(params) is not params and re.search(r"emoji|entit", str(answer.get("description")), re.I):
+            if r.status_code == 400 and f is not params and re.search(r"emoji|entit", str(answer.get("description")), re.I):
                 r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)  # the pack refused: plain
                 answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
