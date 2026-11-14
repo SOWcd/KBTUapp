@@ -42,7 +42,7 @@
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
                                 ago (edited by hand in campus_places)
-  .venv/bin/python -m kbtu.admin checkin expect <sid> <base64 gzip json>   add people to a session's expected list
+  .venv/bin/python -m kbtu.admin checkin expect <sid> <base64 gzip json> [--only]   add people to a session's expected list (--only: replace it)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone
@@ -213,13 +213,15 @@ def main(args: list[str]) -> None:
             sys.exit(str(exc))
         print(f"rows {got['rows']}, new {got['added']}, clubs made {len(got['orgs_made'])}, joined now {got['joined']}, "
               f"a President on the sheet made Vice (the club has one in the app) {got['president_as_vice']}")  # counts only
-    elif cmd == "checkin" and len(args) == 4 and args[1] == "expect":
+    elif cmd == "checkin" and len(args) in (4, 5) and args[1] == "expect" and args[4:] in ([], ["--only"]):
         # ponytail: a session's expected list from a base64 gzip JSON argument ([{"name", "studentId"}]), for a team
         # list wanted on the spot (Nov 14, the Senate at the Talent Show); no file reaches the container otherwise
         import base64
         import gzip
         sid, people = int(args[2]), json.loads(gzip.decompress(base64.b64decode(args[3])))
         with db.tx(con):
+            if args[4:]:  # --only: this list replaces the one frozen before (the club's roster)
+                con.execute("DELETE FROM qr_expected WHERE session_id = ?", (sid,))
             for p in people:
                 con.execute("INSERT OR IGNORE INTO qr_expected (session_id, email, full_name, student_id) VALUES (?, ?, ?, ?)",
                             (sid, f"id:{p['studentId']}".lower(), p["name"], p["studentId"]))
