@@ -16,7 +16,7 @@ def _aud(c, tg, eid, a):
 
 
 def _row(c, tg, eid, key):
-    return next(r for r in c.get(f"/api/events/{eid}/team", headers=tma(tg)).json()["rows"] if r["key"] == key)
+    return next(r for r in c.get(f"/api/events/{eid}/door-team", headers=tma(tg)).json()["rows"] if r["key"] == key)
 
 
 def test_audience_routes_the_scan(env):
@@ -53,27 +53,27 @@ def test_team_list_by_department_and_hand_marks(env):
     con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (tag, ann["id"]))
     rid = con.execute("INSERT INTO roster_pending (key, org_id, sheet, role, dept, full_name, tg, created_at) VALUES ('k1', ?, 's', 'member', 'Media', 'Petrov Zhan', 'zhan', 0)",
                       (oid,)).lastrowid
-    lst = c.get(f"/api/events/{eid}/team", headers=tma(9)).json()
+    lst = c.get(f"/api/events/{eid}/door-team", headers=tma(9)).json()
     assert lst["session"] is None and len(lst["rows"]) == 3                                # dana, ann, the roster row
     zhan = _row(c, 9, eid, f"r{rid}")
     assert zhan == {"key": f"r{rid}", "name": "Petrov Zhan", "group": "Media", "at": None, "manual": False, "app": False}
     assert _row(c, 9, eid, f"u{ann['id']}")["group"] == "Media"
 
-    m = c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"r{rid}"}).json()  # before the QR: its organizer opens the team session
+    m = c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"r{rid}"}).json()  # before the QR: its organizer opens the team session
     assert m["session"] == _crew(con, eid)["id"]
     zhan = next(r for r in m["rows"] if r["key"] == f"r{rid}")
     assert zhan["at"] and zhan["manual"]
-    c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"u{ann['id']}"})
+    c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}"})
     assert _row(c, 9, eid, f"u{ann['id']}")["manual"]
-    c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})  # undo
+    c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})  # undo
     assert _row(c, 9, eid, f"u{ann['id']}")["at"] is None and _marks(con, _crew(con, eid)["id"]) == 0
-    assert c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": "r999999"}).status_code == 404
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": "r999999"}).status_code == 404
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_hand'").fetchone()[0] == 2
 
     # a scan stays (it proves they came): undo takes back hand marks only
     _, q = _qr(c, 9, eid)
     assert _scan(c, 1, q["param"]).json()["team"]
-    c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})
+    c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})
     assert _row(c, 9, eid, f"u{ann['id']}")["at"] and not _row(c, 9, eid, f"u{ann['id']}")["manual"]
 
     # the roster row's student signs up and is matched: the hand mark is theirs now
@@ -91,12 +91,12 @@ def test_who_sees_the_names(env):
     con = db.connect(cfg.db_path)
     oid, ann, eid = _setup(c, con)
     con.execute("INSERT INTO roster_pending (key, org_id, sheet, role, full_name, created_at) VALUES ('k2', ?, 's', 'member', 'Petrov Zhan Olegovich', 0)", (oid,))
-    assert c.get(f"/api/events/{eid}/team", headers=tma(1)).status_code == 403            # a plain member: no list
+    assert c.get(f"/api/events/{eid}/door-team", headers=tma(1)).status_code == 403            # a plain member: no list
     h = login(c, 4, "hel")
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'scan', 1, 0)", (eid, h["id"], oid))
-    assert c.get(f"/api/events/{eid}/team", headers=tma(4)).status_code == 403            # scanner only: no list
+    assert c.get(f"/api/events/{eid}/door-team", headers=tma(4)).status_code == 403            # scanner only: no list
     con.execute("UPDATE event_crew SET kind = 'door' WHERE user_id = ?", (h["id"],))
-    names = {r["name"] for r in c.get(f"/api/events/{eid}/team", headers=tma(4)).json()["rows"]}
+    names = {r["name"] for r in c.get(f"/api/events/{eid}/door-team", headers=tma(4)).json()["rows"]}
     assert "Zhan P" in names and not any("Olegovich" in n for n in names)                   # the President gave the list: short names
     con.close()
 
@@ -107,10 +107,10 @@ def test_hand_marks_close_at_midnight_after_the_end(env, monkeypatch):
     oid, ann, eid = _setup(c, con)
     _qr(c, 9, eid)
     c.post(f"/api/screens/{_qr(c, 9, eid)[0]}/finish", headers=tma(9))                     # the door closed: lists still fixed
-    assert c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"u{ann['id']}"}).status_code == 200
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}"}).status_code == 200
     e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
     monkeypatch.setattr(checkin, "now", lambda: checkin._until(e) + 1)
-    assert c.post(f"/api/events/{eid}/team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False}).status_code == 409
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False}).status_code == 409
     con.close()
 
 
@@ -122,8 +122,8 @@ def test_a_markers_account_deleted_keeps_the_mark(env):
     h = login(c, 4, "hel")
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, h["id"], oid))
     _qr(c, 9, eid)
-    assert c.post(f"/api/events/{eid}/team", headers=tma(4), json={"key": f"r{rid}"}).status_code == 200
-    assert c.post(f"/api/events/{eid}/team", headers=tma(4), json={"key": f"u{ann['id']}"}).status_code == 200
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"r{rid}"}).status_code == 200
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{ann['id']}"}).status_code == 200
     delete_now(c, cfg, tma(4))
     assert con.execute("SELECT marked_by FROM qr_hand_marks").fetchone()[0] is None        # the mark stays, its marker gone
     assert _row(c, 9, eid, f"r{rid}")["manual"] and _row(c, 9, eid, f"u{ann['id']}")["at"]
