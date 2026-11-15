@@ -41,6 +41,7 @@ REST = 60             # a limited or busy link without a Retry-After rests this 
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
+RACE_MOST = 3   # race: links asked at once, at most (each a request on someone's rate limit)
 
 
 class Busy(Exception):
@@ -161,7 +162,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             text, cut = None, False
         answered = True
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
-            log.warning("ai %s: unusable answer", link.name)
+            log.warning("ai %s: unusable answer (%s)", link.name, "cut at max_tokens" if cut else "empty" if not isinstance(text, str) or not text.strip() else "failed the check")
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         log.warning("ai %s answered in %.1f s", link.name, time.time() - t0)  # a warning: the server's log keeps warnings, the timing shows there
@@ -174,17 +175,18 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     if race and len(order) > 1:
         firm = lambda x: x.provider.removesuffix("eu")  # noqa: E731  munitoeu and munito: one company's two hosts
         other = next((x for x in order[1:] if firm(x) != firm(order[0])), order[1])  # another company: its own outage
-        pair = [order[0], other]
-        order = [x for x in order if x not in pair]
-        first = asyncio.ensure_future(ask(pair[0]))
-        tasks = {first: pair[0]}
+        # staggered (Nov 15: a 30 s ReadTimeout on the EU host and a resting second held the fill a minute, then the rest
+        # were asked one by one): each HEDGE s without an answer, or at once on a failure, the next link joins, at most
+        # RACE_MOST in flight; the usual day is still one call
+        waiting = [order[0], other] + [x for x in order if x not in (order[0], other)]
+        order, tasks = [], {}
         try:
-            await asyncio.wait([first], timeout=HEDGE)  # the usual day: one call, the other company never asked
-            if first.done() and first.result() is not None:
-                return first.result(), pair[0].name
-            tasks[asyncio.ensure_future(ask(pair[1]))] = pair[1]  # slow or failed: the other company at once
-            while tasks:
-                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            while waiting or tasks:
+                if waiting and len(tasks) < RACE_MOST:
+                    link = waiting.pop(0)
+                    tasks[asyncio.ensure_future(ask(link))] = link
+                done, _ = await asyncio.wait(tasks, timeout=HEDGE if waiting and len(tasks) < RACE_MOST else None,
+                                             return_when=asyncio.FIRST_COMPLETED)
                 for t in done:
                     link = tasks.pop(t)
                     if t.result() is not None:

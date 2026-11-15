@@ -68,3 +68,30 @@ def test_a_lone_link_gets_one_more_try(monkeypatch):
         raise AssertionError("not busy")
     except llm.Busy:
         assert len(hits) == 2
+
+
+def test_race_goes_on_down_the_chain(monkeypatch):
+    """Nov 15: the first link hung, the other company's failed: the rest joined one by one, not after the hang."""
+    asked = []
+
+    async def reply(req):
+        asked.append(req.url.host)
+        if req.url.host.startswith("hang"):
+            await asyncio.sleep(5)
+        if req.url.host.startswith("down"):
+            return httpx.Response(429)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}]})
+    links = [N(name=f"{p}:m", provider=p, url=f"https://{h}.example/v1", token="t", model="m")
+             for p, h in (("munitoeu", "hang"), ("groq", "down"), ("munito", "good"))]
+    monkeypatch.setattr(llm, "links", lambda cfg, chain=None: links)
+    monkeypatch.setattr(llm, "HEDGE", 0.2)
+
+    async def go():
+        llm._rest.clear()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+            t = asyncio.get_running_loop().time()
+            out = await llm.chat(None, http, [], race=True, check=lambda w: w == "OK")
+            return out, asyncio.get_running_loop().time() - t
+    (_, link), took = asyncio.run(go())
+    llm._rest.clear()
+    assert link == "munito:m" and took < 1 and asked == ["hang.example", "down.example", "good.example"]
