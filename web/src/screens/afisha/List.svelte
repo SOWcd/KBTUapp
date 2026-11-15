@@ -30,6 +30,8 @@
   import { inner } from '../../lib/perms';
   import Poster from '../../ui/Poster.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Tag from '../../ui/Tag.svelte';
   import CastingBlock from '../../ui/CastingBlock.svelte';
@@ -128,7 +130,7 @@
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
 
   const past = $derived(data.past); // "Past": mine that ended, newest first (the server's order)
-  let allPast = $state(false);
+  let allPast = $state(false), pastOpen = $state(false);
 
   // the pull-down search: the events held, upcoming and mine that ended, by title, place or club
   let q = $state('');
@@ -310,12 +312,15 @@
   {#if galleryAt === undefined}<GalleryCard />{/if}
 
   {#if past.length}
-    <!-- where I've been: the events I was signed up for or came to, newest first (their albums, my rating) -->
-    <h2 class="sec">{t('list.past')}</h2>
+    <!-- where I've been: the events I was signed up for or came to, newest first (their albums, my rating); folded
+         into one row until tapped (owner, Nov 15: the main tab is what is ahead) -->
+    <div class="pastrow"><Group><Row title={t('list.past')} value={String(past.length)} accessory="disclosure" open={pastOpen} onclick={() => { haptic.select(); pastOpen = !pastOpen; }} /></Group></div>
+    {#if pastOpen}
     <div class="past">
       {#each allPast ? past : past.slice(0, 5) as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />{/each}
       {#if past.length > 5 && !allPast}<span class="lnk"><Button kind="plain" size="s" onclick={() => (allPast = true)}>{t('common.more')}</Button></span>{/if}
     </div>
+    {/if}
   {/if}
 
   {#if data.eventsReady && shown.length < 6}
@@ -338,6 +343,8 @@
   .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
   .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
   .off { margin: 12px 4px 0; color: var(--text-2); }
+  .pastrow { margin-top: var(--s-4); }
+  .pastrow + .past { margin-top: 8px; }
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
