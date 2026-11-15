@@ -479,6 +479,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         if e["price"] and not after["price"]:  # free now: whoever was about to pay is simply in
             for (uid,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status = 'hold'", eid):
                 con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE event_id = ? AND user_id = ?", (core.now(), eid, uid))
+                evteams.paid(con, one(con, "SELECT id FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)[0])
                 _remind(con, uid, after)
         _changed(con, v, e, after)
         _log_full(con, v, e["org_id"], eid, body)

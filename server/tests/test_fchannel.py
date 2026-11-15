@@ -412,6 +412,9 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("DROP TRIGGER event_team_want_done")  # 175's
+    con.execute("ALTER TABLE registrations DROP COLUMN team_want")
+    con.execute("ALTER TABLE events DROP COLUMN team_cap")
     con.execute("ALTER TABLE appeal_sends DROP COLUMN desk")  # 174's
     con.execute("DROP TABLE help_consents")  # 173's
     con.execute("DROP TABLE help_staff")

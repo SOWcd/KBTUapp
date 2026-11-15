@@ -5,6 +5,9 @@ it("an invite's Join never cancels a sign-up waiting for a seat", () => {
   expect(inviteStep('going')).toBe('join');
   expect(inviteStep('waitlist')).toBe('noSeat');
   expect(inviteStep('hold')).toBe('noSeat');
+  expect(inviteStep('hold', true)).toBe('pay');   // a paid seat on hold: the link is kept until the receipt
+  expect(inviteStep('waitlist', true)).toBe('noSeat');
+  expect(inviteStep('going', true)).toBe('join');
   for (const s of [undefined, null, 'cancelled']) expect(inviteStep(s)).toBe('signup');
 });
 

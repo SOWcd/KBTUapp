@@ -417,8 +417,9 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     // the event's own questions: answered here, sent with the same tap (closed: no sign-up)
     const answers = !leaving && before.form?.length ? await sheets.answers(before.title, before.form) : undefined;
     if (answers === null) return;
-    // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap
-    const pick = !leaving && before.teamMax ? team ?? await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax) : undefined;
+    // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap. A paid one
+    // asks nothing: the captain pays first and makes the team after the receipt (the sheet's "Create team")
+    const pick = !leaving && before.teamMax ? team ?? (before.price ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
     if (pick === null) return;
     if (pick && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;

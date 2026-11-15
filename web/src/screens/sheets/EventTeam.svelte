@@ -4,6 +4,8 @@
   // app for teammates, renames, makes a new link, removes someone; anyone leaves. Each tap answers at once and goes back
   // if refused. Teams' own consent (lib/teamConsent.ts): asked before a team of my own; one signed up without it (the
   // event became a team event later) gives it here; anyone takes it back here (out of the teams of events not started).
+  // A paid event: each pays their own ticket; a team is made after the receipt; a seat on hold by an invite link shows
+  // the team it will join once the receipt is in; paid by a link whose team had no room left: said here.
   import { copyText } from '../../ui/copy';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserPlus from '@lucide/svelte/icons/user-plus';
@@ -101,13 +103,15 @@
   </Group>
   {#if !tm.locked}<span class="out"><Button kind="plain" size="s" onclick={leave}>{t('tm.leave')}</Button></span>{/if}
 {:else if going && !tm.locked}
-  <Group footnote={agreed ? t('tm.waitingSub') : t('tm.consentNeed')}>
+  <Group footnote={tm.missed ? t('tm.missed') : agreed ? t('tm.waitingSub') : t('tm.consentNeed')}>
     <Row icon={UsersRound} title={t('tm.waiting')} subtitle={t('tm.size', { min: tm.min, max: tm.max })} />
     {#if !agreed}<Row icon={ShieldCheck} tone="action" title={t('tm.consentRow')} onclick={() => setTeamConsent(true)} />{/if}
     <Row tone="add" title={t('tm.create')} disabled={making} onclick={create} />
   </Group>
+{:else if tm.want && detail.my?.status === 'hold' && !tm.locked}
+  <Group footnote={t('tm.wantSub')}><Row icon={UsersRound} title={t('tm.want', { name: tm.want })} subtitle={t('tm.size', { min: tm.min, max: tm.max })} /></Group>
 {:else}
-  <Group><Row icon={UsersRound} title={t('tm.event')} subtitle={t('tm.size', { min: tm.min, max: tm.max })} /></Group>
+  <Group footnote={detail.price && !tm.locked ? t('tm.paidNote') : undefined}><Row icon={UsersRound} title={t('tm.event')} subtitle={tm.cap ? t('tm.sizeCap', { min: tm.min, max: tm.max, cap: tm.cap }) : t('tm.size', { min: tm.min, max: tm.max })} /></Group>
 {/if}
 {#if going && agreed && !tm.locked}<span class="off"><Button kind="plain" size="s" onclick={withdraw}>{t('tm.offRow')}</Button></span>{/if}
 

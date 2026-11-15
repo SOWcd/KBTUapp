@@ -717,7 +717,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         hold = core.now() + HOLD if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
-            con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, answers = ?, updated_at = ?
+            con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, answers = ?, team_want = NULL, updated_at = ?
                 WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), r["id"]))
         else:
             # someone already in keeps whoever was first (this branch is new rows only); never myself
@@ -792,6 +792,7 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
                                                       got.get("paid_at"), flags, core.now()))
         if not old:
             con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE id = ?", (core.now(), r["id"]))
+            evteams.paid(con, r["id"])  # the team its invite link was for, if it still has room
             _remind(con, v.id, e)
         # files are named by their content: the picture stays while any row (this new one too) has the same path
         gone = [f["path"]] if f and not one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else []
@@ -847,7 +848,8 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
         con.execute("UPDATE receipts SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?", ("rejected" if reject else "accepted", v.id, core.now(), rid))
         if reject:
             log_action(con, v.id, "receipt_reject", f"receipt:{rid}")
-            if c["reg"] == "going":
+            # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket
+            if c["reg"] == "going" and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
                 con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
                 con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
                 notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}")
@@ -889,7 +891,7 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, evteams  # noqa: E402
 from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
 from .teams import team  # noqa: E402

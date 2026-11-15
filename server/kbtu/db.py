@@ -1791,6 +1791,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL) STRICT;"""),
     # (Nov 15, review) each desk its own day's count: three questions to a person never block an appeal to SG
     (174, """ALTER TABLE appeal_sends ADD COLUMN desk TEXT NOT NULL DEFAULT 'sg';"""),
+    # (Nov 15) paid team events (evteams.py): an event's cap on the number of teams (NULL: no cap); a paid seat on hold
+    # keeps the invite token it came by until the receipt is in (then joined if there's room), '-' once it missed
+    (175, """ALTER TABLE events ADD COLUMN team_cap INTEGER;
+    ALTER TABLE registrations ADD COLUMN team_want TEXT;
+    CREATE TRIGGER event_team_want_done AFTER INSERT ON event_team_members BEGIN
+      UPDATE registrations SET team_want = NULL WHERE event_id = NEW.event_id AND user_id = NEW.user_id AND team_want IS NOT NULL;
+    END;"""),
 ]
 
 

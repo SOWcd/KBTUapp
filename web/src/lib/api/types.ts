@@ -406,6 +406,7 @@ export interface EventCard {
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
   teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
   teamMax?: number;
+  teamCap?: number | null;      // at most this many teams; null: no cap
   teamAsk?: 'pending' | 'yes' | 'no';  // the host club's member: my ask to come as a guest (none: never asked)
 }
 
@@ -413,11 +414,14 @@ export interface EventCard {
  *  token to the captain alone */
 export interface EventTeam { id: Id; name: string; open: boolean; captain: Id | null; members: PersonRef[]; token?: string }
 /** The event sheet's part: the sizes for everyone, my team once I'm in one; count: the organizers' */
-export interface EventTeams { min: number; max: number; locked: boolean; team: EventTeam | null; count?: number }
+/** want: on a paid seat on hold, the team its invite link was for (joined once the receipt is in; null: gone since);
+ *  missed: paid by a link whose team had no room left by then */
+export interface EventTeams { min: number; max: number; cap: number | null; locked: boolean; team: EventTeam | null; count?: number; want?: string | null; missed?: boolean }
 /** The organizer's teams screen: every team, then those with none yet (sign-up order); placed/left: after Form teams */
-export interface TeamsBoard { min: number; max: number; locked: boolean; teams: EventTeam[]; solo: (PersonRef & { consent: boolean })[]; placed?: number; left?: number; noConsent?: number }
+/** unchecked: paid players whose receipt nobody checked yet (Form teams waits for them) */
+export interface TeamsBoard { min: number; max: number; cap: number | null; unchecked: Id[]; locked: boolean; teams: EventTeam[]; solo: (PersonRef & { consent: boolean })[]; placed?: number; left?: number; noConsent?: number }
 /** What an invite link opens to: the team's name, its captain and how many it has, never the other members */
-export interface TeamInvite { event: Id; title: string; team: { name: string; captain: PersonRef | null; count: number }; min: number; max: number; room: boolean; mine: boolean; locked: boolean }
+export interface TeamInvite { event: Id; title: string; team: { name: string; captain: PersonRef | null; count: number }; min: number; max: number; room: boolean; mine: boolean; locked: boolean; paid: boolean }
 /** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */
 export type TeamPick = { create: string } | { join: string };
 
@@ -532,8 +536,9 @@ export interface EventInput {
   form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1
-  teamMin?: number | null;     // a team event: both 2..10, min <= max; both null: off; left out: kept (free events only)
+  teamMin?: number | null;     // a team event: both 2..10, min <= max; both null: off; left out: kept
   teamMax?: number | null;
+  teamCap?: number | null;     // at most this many teams (2..500); null: no cap; a paid one needs seats <= cap x max
   visibility?: 'public' | 'members' | 'leaders';  // left out: kept as it is; leaders only from an oversight org
   meeting?: boolean;           // a club meeting: only team-only, no seats, no price
   meetingTag?: Id | null; forBoard?: boolean;

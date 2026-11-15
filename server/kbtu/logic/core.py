@@ -541,7 +541,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
         **({"school": e["school"]} if e["school"] else {}),  # only its students see it (seats.school_ok): their label
-        **({"teamMin": e["team_min"], "teamMax": e["team_max"]} if e["team_max"] is not None else {}),  # a team event (evteams.py)
+        **({"teamMin": e["team_min"], "teamMax": e["team_max"], "teamCap": e["team_cap"]} if e["team_max"] is not None else {}),  # a team event (evteams.py)
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
         **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
     } for e in evs}

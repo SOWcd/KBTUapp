@@ -1,7 +1,8 @@
 <script lang="ts">
   // A captain's invite link (startapp=et_<token>, server evteams.invite): the team's name, its captain and how many,
   // one tap to join. Not signed up yet: the tap signs up and joins at once (the event's own questions and phone first,
-  // as any sign-up); waiting for a seat: said, nothing changes (lib/teams.ts inviteStep).
+  // as any sign-up); waiting for a seat: said, nothing changes (lib/teams.ts inviteStep). A paid event: "I'm going in
+  // this team", then the payment sheet; the server keeps the link and the receipt puts me in (or says the team is full).
   import { onMount } from 'svelte';
   import { api, ApiErr, type TeamInvite } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -30,13 +31,15 @@
     const eid = inv.event;
     busy = true; haptic.tap();
     try {
-      const step = inviteStep((await cardFor(eid))?.my?.status);
+      const card = await cardFor(eid);
+      const step = inviteStep(card?.my?.status, !!card?.price);
       if (step === 'noSeat') { haptic.soft(); say(t('tm.noSeat'), 'pleading_face_3d'); return; }
-      if (step === 'join') {
+      if (step === 'join' || step === 'pay') {
         if (!(await teamConsentOk())) return; // a no: nothing changes
         await api.teamJoin(eid, token);
+        if (step === 'pay') { haptic.ok(); say(t('tm.afterPay'), 'sparkles_3d'); close(overlay.id); sheets.event(eid); sheets.pay(eid); return; }
         haptic.ok(); say(t('tm.joined'), 'party_popper_3d');
-      } else toggleGoing(eid, undefined, { join: token }); // says what came of it itself
+      } else toggleGoing(eid, () => sheets.pay(eid), { join: token }); // says what came of it itself; paid: the payment sheet
       close(overlay.id); sheets.event(eid);
     } catch (e) { haptic.error(); say(e instanceof ApiErr ? errorText(e) : t('common.error'), 'pleading_face_3d'); }
     finally { busy = false; }
@@ -67,7 +70,7 @@
       {#if inv.mine}<Button kind="neutral" size="l" full disabled>{t('tm.inThis')}</Button>
       {:else if inv.locked}<Button kind="neutral" size="l" full disabled>{t('tm.locked')}</Button>
       {:else if !inv.room}<Button kind="neutral" size="l" full disabled>{t('tm.full')}</Button>
-      {:else}<Button kind="primary" size="l" full loading={busy} onclick={join}>{t('tm.join')}</Button>{/if}
+      {:else}<Button kind="primary" size="l" full loading={busy} onclick={join}>{t(inv.paid ? 'tm.joinPaid' : 'tm.join')}</Button>{/if}
     {/if}
   {/snippet}
 </Sheet>

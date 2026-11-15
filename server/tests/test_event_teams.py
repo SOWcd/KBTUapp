@@ -69,18 +69,18 @@ def test_editor_switch(club):
     c, con = club
     eid = _event(c, **TEAMS)
     card = _sheet(c, eid, 10)
-    assert (card["teamMin"], card["teamMax"]) == (2, 4) and card["teams"] == {"min": 2, "max": 4, "locked": False, "team": None}
+    assert (card["teamMin"], card["teamMax"]) == (2, 4) and card["teams"] == {"min": 2, "max": 4, "cap": None, "locked": False, "team": None}
     assert "teamMin" not in _sheet(c, _event(c), 10)  # an ordinary event says nothing
     base = {"title": "X", "place": "Hall", "startsAt": int(time.time()) + 9000, "emoji": "laptop_3d", "color": "#3B6BFF"}
     for bad in ({"teamMin": 1, "teamMax": 4}, {"teamMin": 5, "teamMax": 4}, {"teamMin": 2, "teamMax": 11}, {"teamMin": 2},
-                {"teamMin": "2", "teamMax": 4}, {**TEAMS, **PAID}, {**TEAMS, "lateSignup": True}):
+                {"teamMin": "2", "teamMax": 4}, {**TEAMS, "teamCap": 1}, {**TEAMS, "teamCap": "16"}, {**TEAMS, "lateSignup": True}):
         r = c.post("/api/orgs/1/events", headers=tma(20), json={**base, **bad})
         assert r.status_code in (400, 403), (bad, r.text)
-    # a paid event can't become one, a team event can't become paid
+    # a paid event can become one, a team event can become paid (test_paid_teams.py)
     paid = _event(c, **PAID)
     edit = {**base, "title": "Case Cup"}
-    assert c.patch(f"/api/events/{paid}", headers=tma(20), json={**edit, **TEAMS}).json()["message"] == "teams"
-    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**edit, **PAID}).json()["message"] == "teams"
+    assert c.patch(f"/api/events/{paid}", headers=tma(20), json={**edit, **TEAMS}).json()["teamMax"] == 4
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**edit, **PAID}).json()["price"] == 2000
 
 
 def test_switch_on_and_off_with_sign_ups(club):
@@ -158,7 +158,7 @@ def test_who_sees_rosters(club):
     _go(c, eid, cap, {"create": "Owls"})
     _go(c, eid, mate, {"join": _mine(c, eid, cap)["token"]})
     out = _sheet(c, eid, outsider)
-    assert out["teams"] == {"min": 2, "max": 4, "locked": False, "team": None} and "Owls" not in str(out)
+    assert out["teams"] == {"min": 2, "max": 4, "cap": None, "locked": False, "team": None} and "Owls" not in str(out)
     assert c.get(f"/api/events/{eid}/teams", headers=tma(outsider)).status_code == 403
     assert c.get(f"/api/events/{eid}/teams", headers=tma(mate)).status_code == 403  # the whole list: organizers
     mine = _mine(c, eid, mate)

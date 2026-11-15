@@ -3,6 +3,8 @@
   // captain first), then those with no team yet; "Form teams" fills the teams looking for people and makes new ones of
   // the rest; a person's ⌃⌄ moves them to another team or to none, after a confirm. All fixed once the event starts.
   // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py).
+  // A paid event: a player whose receipt nobody checked yet is marked too, and Form teams waits for them; a refund is
+  // recorded by rejecting the receipt in the attendees list, which takes the player out of the team.
   import { onMount } from 'svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { api, ApiErr, type Id, type PersonRef, type TeamsBoard } from '../../lib/api';
@@ -60,7 +62,8 @@
 
 <Sheet {overlay} icon={UsersRound} full title={t('tm.board')}>
   {#if b}
-    <p class="t-foot sub">{t('tm.size', { min: b.min, max: b.max })}{b.locked ? ' · ' + t('tm.locked') : ''}</p>
+    <p class="t-foot sub">{b.cap ? t('tm.sizeCap', { min: b.min, max: b.max, cap: b.cap }) : t('tm.size', { min: b.min, max: b.max })}{b.locked ? ' · ' + t('tm.locked') : ''}</p>
+    {#if b.unchecked.length}<p class="t-foot sub">{t('tm.uncheckedNote', { n: b.unchecked.length })}</p>{/if}
     {#if !b.teams.length && !b.solo.length}
       <EmptyState inline text={t('tm.none')} />
     {:else}
@@ -68,7 +71,7 @@
         {#each b.teams as tm (tm.id)}
           <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.open && tm.members.length < b.max ? ' · ' + t('tm.looking') : ''}">
             {#each tm.members as p (p.id)}
-              <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} menu={b.locked ? undefined : menuOf(p, tm.id)}>
+              <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} value={b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : menuOf(p, tm.id)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}
@@ -77,7 +80,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={p.consent ? undefined : t('tm.noConsent')} menu={b.locked || !b.teams.length || !p.consent ? undefined : menuOf(p, null)}>
+              <Row dense title={p.name} value={!p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || !b.teams.length || !p.consent ? undefined : menuOf(p, null)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}

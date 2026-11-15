@@ -1,4 +1,5 @@
-"""Team events (case championships, hackathons, cybersport): a free event's people sign up in teams of team_min..team_max.
+"""Team events (case championships, hackathons, cybersport): an event's people sign up in teams of team_min..team_max,
+at most team_cap teams (NULL: no cap; a new team can't be made past it, an open one can still be joined).
 
 A captain signs up and creates a team, sends its invite link (startapp=et_<token>) to friends, who join by it; a team
 short of people asks the app for teammates ("open"); a student without one signs up alone and waits. The organizer's
@@ -6,6 +7,23 @@ short of people asks the app for teammates ("open"); a student without one signs
 (seats, the door, awards work per person); migration 161's triggers take anyone who leaves the event out of their team,
 and an empty team goes. The roster is ordered by when each came (the member row's id); its first is the captain.
 Teams lock when the event starts, so a later bracket gets a fixed list (a team: id, name, ordered roster, captain).
+
+A paid event: each player pays their own ticket by the Kaspi receipt, as a solo ticket (seats.py); no team payment, no
+captain paying for others. The payment-state rule:
+- in a team (made or joined by the player): 'going' only, i.e. the receipt is in (looked at or not yet) or a 1st-year
+  free seat (counted as paid on purpose: the club gave it). A 30-min hold or the waitlist never (pay_first): the app
+  signs a captain up alone, and he makes the team once the receipt is in. A teammate's invite link on a hold is kept on
+  the registration (team_want, checked then: consent, room); the receipt joins them (paid()), or, if the team filled up
+  or broke up meanwhile, they keep the paid seat with no team ('-': the sheet says so, and the bot). The seat is held
+  only by the hold's 30 minutes; the team's place is not held.
+- Form teams places only paid ones the organizer checked: the latest receipt reviewed and accepted, or a free seat; an
+  unchecked receipt (maybe a fake) waits, and the organizer's list marks each unchecked member (teams_list `unchecked`).
+- out: any status but 'going' (migration 161's triggers): a rejected receipt, a self-cancel, a deleted account. A refund
+  happens outside the app and is recorded as rejecting the receipt (works on an accepted one too), which takes them out.
+- seats: a paid team event with a cap holds at most cap x max seats (settings_ok), so nobody pays for a place no team
+  can take; a team still under min at the deadline loses its slot by the organizer's move (team null), and the captain
+  can't remove anyone after the sign-up deadline (Form teams places the rest before the start).
+- price: a team event can't turn paid while anyone is signed up (they'd stay in their teams unpaid).
 
 The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
@@ -26,6 +44,7 @@ from ..db import tx
 from .core import PERSON_COLS, ApiError, Viewer, full, need_student, one, person_ref, rows
 
 SIZE = (2, 10)    # the editor's bounds for a team's min and max
+CAP = (2, 500)    # and for the number of teams
 NAME_MAX = 40
 CONSENT = "tm1"   # the privacy policy's teams clause, agreed to before the first team
 
@@ -69,25 +88,32 @@ def _consent(con, uid: int) -> None:
 # ------------------------------------------------------------ the editor's switch
 
 def settings(body: dict) -> dict:
-    """teamMin and teamMax from the editor: absent keeps them, both null turns teams off."""
+    """teamMin, teamMax and teamCap (null: no cap) from the editor: absent keeps them, both sizes null turns teams off."""
     if "teamMax" not in body and "teamMin" not in body:
         return {}
-    lo, hi = body.get("teamMin"), body.get("teamMax")
+    lo, hi, cap = body.get("teamMin"), body.get("teamMax"), body.get("teamCap")
     if lo is None and hi is None:
-        return {"team_min": None, "team_max": None}
-    if type(lo) is not int or type(hi) is not int or not SIZE[0] <= lo <= hi <= SIZE[1]:
+        return {"team_min": None, "team_max": None, "team_cap": None}
+    if type(lo) is not int or type(hi) is not int or not SIZE[0] <= lo <= hi <= SIZE[1] or \
+            cap is not None and (type(cap) is not int or not CAP[0] <= cap <= CAP[1]):
         raise ApiError("bad_input", "teams")
-    return {"team_min": lo, "team_max": hi}
+    return {"team_min": lo, "team_max": hi, "team_cap": cap}
 
 
 def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
-    """Teams only on a free event of ours, without late sign-up (it would move the roster after the start), never a
-    meeting. On an existing event: set before the start only; switching on keeps everyone signed up as "no team yet";
-    a smaller max can't cut a team already bigger; switching off lets every team go (the editor confirms)."""
+    """Teams only on an event of ours (free or paid), without late sign-up (it would move the roster after the start),
+    never a meeting. On an existing event: set before the start only; switching on keeps everyone signed up as "no team
+    yet"; a smaller max can't cut a team already bigger, a smaller cap can't drop teams already made; switching off lets
+    every team go (the editor confirms)."""
     get = lambda k: f[k] if k in f else e[k] if e else None  # noqa: E731
-    if get("team_max") is not None and (get("price") or get("late_signup") or get("meeting") or get("guest_host") or get("external_url")):
+    if get("team_max") is not None and get("price") and get("team_cap") and (get("seats") is None or get("seats") > get("team_cap") * get("team_max")):
+        raise ApiError("bad_input", "team_seats")  # nobody pays for a place no team can take
+    if get("team_max") is not None and e and get("price") and not e["price"] and \
+            one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", e["id"]):
+        raise ApiError("conflict", "team_paid")
+    if get("team_max") is not None and (get("late_signup") or get("meeting") or get("guest_host") or get("external_url")):
         raise ApiError("bad_input", "teams")
-    if not e or (get("team_min"), get("team_max")) == (e["team_min"], e["team_max"]):
+    if not e or (get("team_min"), get("team_max"), get("team_cap")) == (e["team_min"], e["team_max"], e["team_cap"]):
         return
     if e["status"] != "draft" and e["starts_at"] <= core.now():
         raise ApiError("closed", "locked")
@@ -95,6 +121,8 @@ def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
         con.execute("DELETE FROM event_teams WHERE event_id = ?", (e["id"],))
     elif one(con, "SELECT 1 FROM event_team_members WHERE event_id = ? GROUP BY team_id HAVING COUNT(*) > ?", e["id"], get("team_max")):
         raise ApiError("conflict", "team_size")
+    elif get("team_cap") is not None and one(con, "SELECT COUNT(*) FROM event_teams WHERE event_id = ?", e["id"])[0] > get("team_cap"):
+        raise ApiError("conflict", "team_cap")
 
 
 # ------------------------------------------------------------ reading
@@ -133,7 +161,13 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict | None:
     """The event sheet's part: the sizes for everyone; my own team (or that I wait for one) once I'm signed up."""
     if e["team_max"] is None:
         return None
-    out = {"min": e["team_min"], "max": e["team_max"], "locked": e["starts_at"] <= core.now(), "team": None}
+    out = {"min": e["team_min"], "max": e["team_max"], "cap": e["team_cap"], "locked": e["starts_at"] <= core.now(), "team": None}
+    r = one(con, "SELECT status, team_want FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], v.id)
+    if r and r["team_want"] == "-" and r["status"] == "going":
+        out["missed"] = True  # paid by a link whose team had no room left by then
+    elif r and r["team_want"] and r["status"] == "hold":
+        w = one(con, "SELECT name FROM event_teams WHERE token = ? AND event_id = ?", r["team_want"], e["id"])
+        out["want"] = w["name"] if w else None  # the team I'll be in once my receipt is in
     t = one(con, "SELECT t.* FROM event_team_members m JOIN event_teams t ON t.id = m.team_id WHERE m.event_id = ? AND m.user_id = ?", e["id"], v.id)
     if t:
         people = _rosters(con, e["id"], t["id"]).get(t["id"], [])
@@ -156,7 +190,8 @@ def invite(con, v: Viewer, token: str) -> dict:
     mine = one(con, "SELECT team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", e["id"], v.id)
     team = {"name": t["name"], "captain": person_ref(people[0]) if people else None, "count": len(people)}
     return {"event": e["id"], "title": e["title"], "team": team, "max": e["team_max"], "min": e["team_min"],
-            "room": len(people) < e["team_max"], "mine": bool(mine and mine[0] == t["id"]), "locked": e["starts_at"] <= core.now()}
+            "room": len(people) < e["team_max"], "mine": bool(mine and mine[0] == t["id"]), "locked": e["starts_at"] <= core.now(),
+            "paid": bool(e["price"])}  # "I'm going in this team", then the payment
 
 
 def teams_list(con, v: Viewer, eid: int) -> dict:
@@ -167,12 +202,20 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
         raise ApiError("not_found")
     teams = rows(con, "SELECT * FROM event_teams WHERE event_id = ? ORDER BY id", eid)
     rosters = _rosters(con, eid)
+    # paid players whose latest receipt nobody checked yet (maybe a fake): the organizer sees them; never the members
+    unchecked = [r[0] for r in rows(con, f"""SELECT r.user_id FROM registrations r WHERE r.event_id = ? AND r.status = 'going' AND NOT ({_CHECKED})""", eid)] \
+        if e["price"] else []
     solo = rows(con, f"""SELECT {PERSON_COLS}, c.user_id IS NOT NULL AS consent FROM registrations r JOIN users u ON u.id = r.user_id
         LEFT JOIN students s ON s.user_id = u.id LEFT JOIN team_consents c ON c.user_id = u.id AND c.version = '{CONSENT}'
         WHERE r.event_id = ? AND r.status = 'going' AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
         ORDER BY r.created_at, r.id""", eid)
-    return {"min": e["team_min"], "max": e["team_max"], "locked": e["starts_at"] <= core.now(),
-            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"])} for p in solo]}
+    return {"min": e["team_min"], "max": e["team_max"], "cap": e["team_cap"], "locked": e["starts_at"] <= core.now(),
+            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"])} for p in solo], "unchecked": unchecked}
+
+
+# a paid registration the organizer checked: a free seat, or its latest receipt reviewed and accepted (r: registrations)
+_CHECKED = """r.free = 1 OR EXISTS (SELECT 1 FROM receipts c WHERE c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
+    AND c.status = 'accepted' AND c.reviewed_at IS NOT NULL)"""
 
 
 # ------------------------------------------------------------ a student's own
@@ -193,9 +236,11 @@ def name_key(s: str) -> str:
 
 
 def _going(con, e: sqlite3.Row, uid: int) -> None:
-    """Only a seat counts: someone on the waitlist (or out) has no team until they're in."""
-    if not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid):
-        raise ApiError("closed", "not_going")
+    """Only a ticket counts: someone on the waitlist (or out) has no team until they're in, a paid seat on hold until
+    its receipt is in."""
+    r = one(con, "SELECT status FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
+    if not r or r[0] != "going":
+        raise ApiError("closed", "pay_first" if r and r[0] == "hold" else "not_going")
 
 
 def _free(con, e: sqlite3.Row, uid: int) -> None:
@@ -211,6 +256,9 @@ def _add(con, e: sqlite3.Row, tid: int, uid: int) -> None:
 
 
 def _new_team(con, e: sqlite3.Row, name: str) -> int:
+    """Under the write lock: never past the event's cap on teams."""
+    if e["team_cap"] is not None and one(con, "SELECT COUNT(*) FROM event_teams WHERE event_id = ?", e["id"])[0] >= e["team_cap"]:
+        raise ApiError("full", "team_cap")
     try:
         return con.execute("INSERT INTO event_teams (event_id, name, name_key, token, created_at) VALUES (?, ?, ?, ?, ?)",
                            (e["id"], name, name_key(name), secrets.token_hex(12), core.now())).lastrowid
@@ -231,10 +279,36 @@ def _join(con, v: Viewer, e: sqlite3.Row, token: object) -> None:
     if not t:
         raise ApiError("not_found", "team_link")  # gone, replaced by a new one, or another event's link
     _open_now(e)
+    if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'hold'", e["id"], v.id):
+        _consent(con, v.id)  # a paid seat on hold: the link kept until the receipt is in (paid()), if the team has room now
+        if one(con, "SELECT COUNT(*) FROM event_team_members WHERE team_id = ?", t["id"])[0] >= e["team_max"]:
+            raise ApiError("full", "team_full")
+        con.execute("UPDATE registrations SET team_want = ? WHERE event_id = ? AND user_id = ?", (t["token"], e["id"], v.id))
+        return
     _going(con, e, v.id)
     _consent(con, v.id)
     _free(con, e, v.id)
     _add(con, e, t["id"], v.id)
+
+
+def paid(con, rid: int) -> None:
+    """The receipt is in (seats.add_receipt, under its lock): into the team the invite link was for, if it still has
+    room; else the paid seat stays with no team ('-') and the bot says so."""
+    r = one(con, "SELECT * FROM registrations WHERE id = ?", rid)
+    if not r or not r["team_want"] or r["team_want"] == "-":
+        return
+    e = one(con, "SELECT * FROM events WHERE id = ?", r["event_id"])
+    t = one(con, "SELECT * FROM event_teams WHERE token = ? AND event_id = ?", r["team_want"], e["id"])
+    try:
+        if not t or e["team_max"] is None:
+            raise ApiError("not_found", "team_link")
+        _open_now(e)
+        _consent(con, r["user_id"])
+        _free(con, e, r["user_id"])
+        _add(con, e, t["id"], r["user_id"])  # its trigger clears team_want
+    except ApiError:
+        con.execute("UPDATE registrations SET team_want = '-' WHERE id = ?", (rid,))
+        notify(con, r["user_id"], "team_missed", f"tm:{e['id']}:{core.now()}")
 
 
 def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers=None) -> dict:
@@ -320,9 +394,12 @@ def new_link(con, v: Viewer, eid: int) -> dict:
 
 
 def remove(con, v: Viewer, eid: int, uid: int) -> dict:
-    """The captain takes someone off the team; they stay signed up with no team, and the bot tells them."""
+    """The captain takes someone off the team; they stay signed up with no team, and the bot tells them. Not after the
+    sign-up deadline: a paid player kicked at the last minute would have no time to be placed."""
     with tx(con):
         e, t = _mine(con, v, eid, captain=True)
+        if e["reg_until"] and e["reg_until"] <= core.now():
+            raise ApiError("closed", "locked")
         if uid == v.id or not con.execute("DELETE FROM event_team_members WHERE team_id = ? AND user_id = ?", (t["id"], uid)).rowcount:
             raise ApiError("not_found")
         notify(con, uid, "team_removed", f"tr:{eid}:{core.now()}")
@@ -348,9 +425,10 @@ def _team_word(con, v: Viewer) -> str:
 
 def form(con, v: Viewer, eid: int) -> dict:
     """"Form teams": the open teams filled up to max from those alone (the smallest team first, people in the order they
-    signed up), then new teams of the rest (sizes()), each named "<Team> N" in the organizer's language, its first member
+    signed up), then new teams of the rest (sizes(), no more than the cap leaves room for), each named "<Team> N" in the organizer's language, its first member
     captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. A banned user
-    is never placed, nor anyone without the teams consent (`noConsent`: how many). Everyone placed hears it from the bot.
+    is never placed, nor anyone without the teams consent (`noConsent`: how many), nor on a paid event anyone whose
+    receipt the organizer hasn't checked (`unchecked` in the list). Everyone placed hears it from the bot.
     The answer: the list as teams_list, with `placed` and `left` (who couldn't be)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
@@ -359,9 +437,9 @@ def form(con, v: Viewer, eid: int) -> dict:
         _open_now(e)
         alone = rows(con, """SELECT r.user_id, c.user_id IS NOT NULL AS ok FROM registrations r JOIN users u ON u.id = r.user_id AND u.banned_at IS NULL
             LEFT JOIN team_consents c ON c.user_id = r.user_id AND c.version = ?
-            WHERE r.event_id = ? AND r.status = 'going'
+            WHERE r.event_id = ? AND r.status = 'going' AND (? OR {_CHECKED})
             AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
-            ORDER BY r.created_at, r.id""", CONSENT, eid)
+            ORDER BY r.created_at, r.id""".replace("{_CHECKED}", _CHECKED), CONSENT, eid, int(not e["price"]))
         solo = [r[0] for r in alone if r[1]]
         placed: list[tuple[int, int]] = []
         for t in rows(con, """SELECT t.id, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
@@ -370,7 +448,8 @@ def form(con, v: Viewer, eid: int) -> dict:
                 placed.append((t["id"], solo.pop(0)))
         word, n = _team_word(con, v), 0
         taken = {r[0] for r in rows(con, "SELECT name_key FROM event_teams WHERE event_id = ?", eid)}
-        for size in sizes(len(solo), e["team_min"], e["team_max"]):
+        room = len(solo) if e["team_cap"] is None else max(0, e["team_cap"] - len(taken))
+        for size in sizes(len(solo), e["team_min"], e["team_max"])[:room]:
             n += 1
             while name_key(f"{word} {n}") in taken:
                 n += 1
