@@ -102,7 +102,15 @@ Con = Annotated[sqlite3.Connection, Depends(conn)]
 # his own joining, following, tickets and receipts: those are his as himself), and the reads its log leaves out
 STUDIO_NOT_LENT = frozenset({("DELETE", "/api/orgs/{oid}"), ("POST", "/api/orgs/{oid}/transfer"), ("POST", "/api/orgs/{oid}/join-requests"),
                              ("DELETE", "/api/orgs/{oid}/join-requests/mine"), ("PUT", "/api/orgs/{oid}/subscription"), ("DELETE", "/api/orgs/{oid}/subscription"),
-                             ("POST", "/api/events/{eid}/receipt"), ("POST", "/api/events/{eid}/registration"), ("DELETE", "/api/events/{eid}/registration")})
+                             ("POST", "/api/events/{eid}/receipt"), ("POST", "/api/events/{eid}/registration"), ("DELETE", "/api/events/{eid}/registration"),
+                             # his own on an event, as any student: saved, a team of his, volunteering, a seat, a rating, a friend invited
+                             ("PUT", "/api/events/{eid}/saved"), ("DELETE", "/api/events/{eid}/saved"),
+                             ("POST", "/api/events/{eid}/team"), ("DELETE", "/api/events/{eid}/team"), ("PATCH", "/api/events/{eid}/team"),
+                             ("POST", "/api/events/{eid}/team/join"), ("POST", "/api/events/{eid}/team/link"), ("DELETE", "/api/events/{eid}/team/members/{uid}"),
+                             ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
+                             ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
+                             ("POST", "/api/events/{eid}/seats"), ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"),
+                             ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
 STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
 
 
@@ -179,7 +187,8 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     yield v
     # reached only when the route answered: every write and every list of people (attendees, a meeting's answers, the
     # volunteers) the owner's log names; the event's own card alone isn't
-    if v.used and (request.method != "GET" or request.scope["route"].path != "/api/events/{eid}"):
+    # (the creator's: every one, whatever decided it, can() or role_in; as the Studio's X-Staff-Org)
+    if (v.used or v.lent_full) and (request.method != "GET" or request.scope["route"].path != "/api/events/{eid}"):
         logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}", **({"full": True, "org": v.staff_org} if v.lent_full else {})}))
 
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:

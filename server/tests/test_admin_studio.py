@@ -63,7 +63,9 @@ def test_creator_sets_the_kaspi_payee(env):
     assert (e["payToName"], e["payPhone"]) == ("Dana S", "+77011234567")
     r = c.patch(f"/api/events/{e['id']}", headers=_org(60), json=_body(**pay | {"payToName": "Aru K"}))
     assert r.status_code == 200 and r.json()["payToName"] == "Aru K"
-    assert [t for _, t, _ in [(a, t, d) for a, t, d in con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'staff_kaspi'")]] == ["org:1", "org:1"]
+    lines = [(t, json.loads(d)) for t, d in con.execute("SELECT target, data FROM audit_log WHERE action = 'staff_kaspi' ORDER BY id")]
+    assert lines == [("org:1", {"event": None, "was": {"name": None, "phone": None}, "now": {"name": "Dana S", "phone": "+77011234567"}}),
+                     ("org:1", {"event": e["id"], "was": {"name": "Dana S", "phone": "+77011234567"}, "now": {"name": "Aru K", "phone": "+77011234567"}})]
     # once someone paid, fixed for him as for anyone
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'TCK9', 0, 0)", (e["id"], ids["ali"]))
     con.execute("INSERT INTO files (id, sha256, kind, mime, bytes, path, created_at) VALUES (900, 'x', 'receipt', 'image/webp', 1, 'r/x', 0)")
@@ -90,3 +92,24 @@ def test_view_as_is_enforced(env):
     assert c.patch("/api/events/1", headers=as_("member"), json=_body()).status_code == 403
     assert c.patch("/api/orgs/1", headers=as_("r99999"), json={"recruiting": True}).status_code == 403  # not this club's role
     assert {"as": "vice"}.items() <= _studio(con)[0][2].items()
+
+
+def test_his_own_actions_stay_his(env):
+    """Saving, volunteering, a team, a rating, a seat on the club's event: his as any student's, never lent; the header refused there."""
+    c, con, ids = _full_setup(env)
+    for method, path in (("PUT", "/api/events/1/saved"), ("POST", "/api/events/1/volunteer"), ("POST", "/api/events/1/team"),
+                         ("POST", "/api/events/1/team/join"), ("POST", "/api/events/1/team-ask"), ("POST", "/api/events/1/decline"),
+                         ("PUT", "/api/events/1/rating"), ("POST", "/api/events/1/seats"), ("POST", "/api/events/1/invites")):
+        assert c.request(method, path, headers=_org(60), json={}).status_code == 403, path
+    assert c.put("/api/events/1/saved", headers=tma(60)).status_code == 204  # as himself
+    assert not _studio(con)
+
+
+def test_creator_on_the_event_path_is_always_logged(env):
+    """X-Staff-Event from Admin: every request of his but the card in the log, even one decided by role_in alone (the door helpers)."""
+    from test_admin_events import _as
+    c, con, ids = _full_setup(env)
+    assert c.put("/api/events/1/crew", headers=_as(60), json={"userId": ids["mod"], "kind": "scan"}).status_code == 200
+    assert c.get("/api/events/1", headers=_as(60)).status_code == 200
+    done = [json.loads(d)["do"] for (d,) in con.execute("SELECT data FROM audit_log WHERE action = 'staff_event'")]
+    assert done == ["PUT /api/events/{eid}/crew"]

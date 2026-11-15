@@ -32,8 +32,9 @@ const staffOf = (method: string, path: string): Record<string, string> => {
   if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
   if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
-  // his own ticket, receipt and comments stay his (the server never lends those routes)
-  if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id) && !/^\/events\/\d+\/(?:registration|receipt|comments)/.test(path))) return orgHead();
+  // his own on an event (a ticket, receipt, comment, team, save, rating...) stays his: the server never lends those (STUDIO_NOT_LENT)
+  if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id)
+    && !/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|seats|decline|rating|invites)(?:[/?]|$)/.test(path))) return orgHead();
   return {};
 };
 
