@@ -24,7 +24,9 @@
 
   const me = $derived(session.me);
   const p = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
-  $effect(() => { void me?.showcase; if (me?.student) void loadMyCard(); }); // opened: refreshed
+  // opened: refreshed (joining a load on its way); a later run is my showcase changed, and its refresh must see it
+  let opened = false;
+  $effect(() => { void me?.showcase; if (!me?.student) return; void loadMyCard(!opened); opened = true; });
 
   // two tabs (awards plan, Nov 3): Medals (levels, the way up) and Pins (one time: the app's, then the events'). The
   // statuses are no award: they stay as the seal by the name. All from the one card: no fetch

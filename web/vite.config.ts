@@ -5,6 +5,12 @@ import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
+// the tabs App.svelte loads as chunks of their own (tabPages), by the source file their chunk starts at
+const TAB_CHUNKS: Record<string, string> = {
+  club: '/src/screens/afisha/Clubs.svelte',
+  profile: '/src/screens/profile/Me.svelte',
+};
+
 // What the first screen needs is asked for with the HTML, not after the bundle runs: Inter's latin and cyrillic files
 // (the CSS names them only once it is parsed) and a Kazakh or English student's language chunk (main.ts waits for it
 // before the first render). The URLs carry the build's hashes, so they are written in at build time.
@@ -30,9 +36,38 @@ function preloads(): Plugin {
   if (!urls[l]) return;
   var k = document.createElement('link'); k.rel = 'modulepreload'; k.crossOrigin = ''; k.href = './' + urls[l]; document.head.appendChild(k);
 })();`;
+        // the tabs in chunks of their own (App.svelte tabPages): a student who left the app on one opens it there, so its
+        // code and CSS (and the chunks only it uses) are asked for with the HTML, as when it was in the start's bundle
+        const chunks = Object.values(ctx.bundle ?? {}).filter((c) => c.type === 'chunk');
+        const entry = chunks.find((c) => c.isEntry);
+        if (!entry) throw new Error('kb-preloads: the entry was not found');
+        const closure = (from: string, into = new Set<string>()): Set<string> => {
+          if (into.has(from)) return into;
+          into.add(from);
+          const c = ctx.bundle![from];
+          if (c?.type === 'chunk') for (const i of c.imports) closure(i, into);
+          return into;
+        };
+        const atStart = closure(entry.fileName);
+        const tabs: Record<string, { js: string[]; css: string[] }> = {};
+        for (const [tab, src] of Object.entries(TAB_CHUNKS)) {
+          const page = chunks.find((c) => c.facadeModuleId?.endsWith(src));
+          if (!page) throw new Error(`kb-preloads: the chunk of ${src} was not found`);
+          const js = [...closure(page.fileName)].filter((f) => !atStart.has(f));
+          const css = [...new Set(js.flatMap((f) => { const c = ctx.bundle![f]; return c.type === 'chunk' ? [...(c.viteMetadata?.importedCss ?? [])] : []; }))];
+          tabs[tab] = { js, css };
+        }
+        const tab = `(function () {
+  var tabs = ${JSON.stringify(tabs)}, t = null;
+  try { t = JSON.parse(localStorage.getItem('kb-nav') || 'null').tab; } catch (e) {}
+  if (!tabs.hasOwnProperty(t) || /^\\/(show|screen)\\/?$/.test(location.pathname)) return;
+  tabs[t].js.forEach(function (f) { var k = document.createElement('link'); k.rel = 'modulepreload'; k.crossOrigin = ''; k.href = './' + f; document.head.appendChild(k); });
+  tabs[t].css.forEach(function (f) { var k = document.createElement('link'); k.rel = 'preload'; k.as = 'style'; k.crossOrigin = ''; k.href = './' + f; document.head.appendChild(k); });
+})();`;
         return [
           ...fonts.map((f) => ({ tag: 'link', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: './' + f, crossorigin: '' }, injectTo: 'head' as const })),
           { tag: 'script', children: pick, injectTo: 'head' as const },
+          { tag: 'script', children: tab, injectTo: 'head' as const },
         ];
       },
     },

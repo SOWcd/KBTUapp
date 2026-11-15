@@ -31,8 +31,6 @@
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
-  import Clubs from './screens/afisha/Clubs.svelte';
-  import Me from './screens/profile/Me.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
@@ -99,6 +97,22 @@
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
+  // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
+  // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
+  // index.html preloads the kept tab's chunk (vite.config.ts preloads(), the same files); otherwise each comes with the
+  // first data, ahead of a tap or a link and of prebuild()
+  const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
+    club: () => import('./screens/afisha/Clubs.svelte'),
+    profile: () => import('./screens/profile/Me.svelte'),
+  };
+  const pages = $state<Partial<Record<Tab, Component>>>({});
+  const pageLoads: Partial<Record<Tab, Promise<void>>> = {};
+  const pageReady = (k: Tab) => !tabPages[k] || !!pages[k];
+  function loadPage(k: Tab): Promise<void> {
+    const load = tabPages[k];
+    if (!load || pages[k]) return Promise.resolve();
+    return (pageLoads[k] ??= load().then((m) => { pages[k] = m.default; }, (e) => { delete pageLoads[k]; throw e; }));
+  }
   // the policy changed since this student agreed: nobody is asked on opening the app (owner, Nov 13); the gate comes
   // when they do what the server holds for the policy in force (a post, the assistant: api "forbidden"/"consent" ->
   // sheets.consent), and may be declined. Staff and students added by hand have no consent of theirs; a deletion
@@ -283,6 +297,8 @@
   const built = $state<Record<string, boolean>>({});
   // (the Clubs tab waits for who I am: the copy or the server, a frame; else a member's hidden catalogue built too)
   $effect(() => { if (ui.tab === 'club' && !session.ready) return; if (!built[ui.tab]) built[ui.tab] = true; });
+  // a built tab's chunk (offline: tried again on the next switch of tab)
+  $effect(() => { void ui.tab; for (const k of TABS) if (built[k] && !pageReady(k)) loadPage(k).catch(() => {}); });
   // ...and once the start has settled, the rest are built one per idle moment, so the first tap on a tab only shows it
   // (a cold mount was the one long task left on a switch: ~1 s at 4x CPU). Away they cost nothing more: the hidden tab
   // is skipped by the engine (.tab below); their effects wait for ui.tab (loads, the badge's drop, the forum's seen line).
@@ -298,17 +314,19 @@
     // the map opens it at once, no blank frame)
     if (!k) { idle(warmMap); return; }
     built[k] = true;
-    idle(() => {
+    const draw = () => idle(() => {
       if (ui.tab === k) { idle(prebuild); return; }
       drawing = k;
       requestAnimationFrame(() => setTimeout(() => { drawing = null; idle(prebuild); }));
     });
+    // a tab in its own chunk is drawn unseen once the chunk is in (else the first tap would lay it out)
+    if (pageReady(k)) draw(); else loadPage(k).then(draw, draw);
   }
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   $effect(() => { count(`tab.${ui.tab}`); });
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
   let measured = false;
-  $effect(() => { if (measured || !built[ui.tab] || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });
+  $effect(() => { if (measured || !built[ui.tab] || !pageReady(ui.tab) || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   // The top overlay that speaks decides (a Pane at rest is quiet but still the top: the capsule never names the page
@@ -677,7 +695,7 @@
     wasStudent = st;
   });
   function loadMine() {
-    void loadFriends(); void loadMyCard(); void loadNews(true); // StoryRow's refresh at the same launch joins it
+    void loadFriends(); void loadMyCard(true); void loadNews(true); // StoryRow's refresh at the same launch joins it
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
     if (session.me?.oversee) void loadRegistry();
@@ -762,6 +780,7 @@
     Promise.all([loadMe(), loadAfisha()]).then(() => {
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
       for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
+      for (const k of TABS) loadPage(k).catch(() => {});
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
@@ -783,8 +802,8 @@
       {:else if tab === 'forum'}
         {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
       {:else if tab === 'club'}
-        {#if built.club}<Clubs />{/if}
-      {:else if built.profile}<Me />{/if}
+        {#if built.club && pages.club}<pages.club />{/if}
+      {:else if built.profile && pages.profile}<pages.profile />{/if}
     </section>
   {/each}
 

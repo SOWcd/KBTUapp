@@ -170,11 +170,20 @@ export async function deleteGallery(p: AlbumPhoto): Promise<AlbumPhoto[] | null>
   catch { haptic.error(); say(t('common.error'), 'warning_3d'); return null; }
 }
 
-/** My card (the Profile hero's numbers, the Awards page), in the background like friends. */
-export async function loadMyCard(): Promise<void> {
-  const me = session.me;
-  if (!me?.student) { data.myCard = null; return; }
-  try { data.myCard = await api.person(me.id); } catch { /* the last copy stays */ }
+/** My card (the Profile hero's numbers, the Awards page), in the background like friends. join: a quiet refresh (the
+ * app's start, Profile or Awards coming into view) takes the load already on its way, as loadNews does: a launch on
+ * Profile asked for the same card three times at once. A refresh after a write never joins: it must see the write. */
+let cardLoad: Promise<void> | null = null;
+export function loadMyCard(join = false): Promise<void> {
+  if (join && cardLoad) return cardLoad;
+  const p = (async () => {
+    const me = session.me;
+    if (!me?.student) { data.myCard = null; return; }
+    try { data.myCard = await api.person(me.id); } catch { /* the last copy stays */ }
+  })();
+  cardLoad = p;
+  void p.finally(() => { if (cardLoad === p) cardLoad = null; });
+  return p;
 }
 
 /** News for a club member (broadcasts, my clubs' and followed clubs' posts), in the background like friends; their photos
