@@ -35,8 +35,8 @@
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
   type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
-    children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
+    children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold }: Props = $props();
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
   // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
   const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
@@ -141,11 +141,12 @@
   // keyboard and screen readers: focus goes into the sheet as it opens (unless a field in it took it) and back to what
   // opened it when it goes (never to a text field: that would bring the keyboard up)
   onMount(() => {
-    const opener = document.activeElement as HTMLElement | null;
+    // opener: what the tap focused, when a stand-in field took the focus before the sheet mounted (the assistant)
+    const from = opener ?? document.activeElement as HTMLElement | null;
     // a frame later: focus needs the sheet laid out, and at mount that was a whole extra layout inside the tap (the frame
     // lays it out anyway right after)
     requestAnimationFrame(() => { if (panel.isConnected && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true }); });
-    const back = () => { if (opener?.isConnected && !opener.matches('input, textarea, [contenteditable]')) opener.focus({ preventScroll: true }); };
+    const back = () => { if (from?.isConnected && !from.matches('input, textarea, [contenteditable]')) from.focus({ preventScroll: true }); };
     const ro = new ResizeObserver(resized);
     ro.observe(panel);
     panel.addEventListener('touchstart', onStart, { passive: true });

@@ -209,7 +209,7 @@ const en: Dict = {
   'as.club': "Club",
   'as.event': "Event",
   'as.thinking': "Thinking",
-  'as.note': "KRI can be wrong. Questions aren't stored; we see only topics and ratings, no names.",
+  'as.note': "KRI can be wrong · We keep no questions, only topics and ratings without names.",
   'as.limit': "No more questions today — tomorrow again",
   'as.busy': "KRI is busy, try in a minute",
   'as.consent': "Accept the updated policy first",

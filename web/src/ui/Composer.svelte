@@ -5,7 +5,8 @@
   //   value (bindable), placeholder, onsend, sending (the button spins), maxlength, label (the send button's name)
   //   as  { me, anon, onchange }: me as the first choice, anonymous (the mask) as the second
   //   pill  one rounded field with the send button inside its right end (the AI apps' bar: the assistant)
-  //   focus  takes the focus as it mounts (a stand-in field may hold it till then: App's assistant)
+  //   focus  takes the focus as it mounts (a stand-in field may hold it till then: App's assistant); its words count as unsent;
+  //     a microtask later, so Sheet's unsent-text guard (its onMount runs after ours) sees the focus
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Avatar from './Avatar.svelte';
@@ -39,7 +40,8 @@
       {:else}<Avatar person={as.me} size={32} tappable={false} />{/if}
     </button>
   {/if}
-  <textarea bind:value rows="1" {maxlength} {placeholder} enterkeyhint="send" {@attach (el) => { if (focus) el.focus({ preventScroll: true }); }} onkeydown={key} use:grow={132}></textarea>
+  <textarea bind:value rows="1" {maxlength} {placeholder} enterkeyhint="send" data-unsent={focus || undefined}
+    {@attach (el) => { if (focus) queueMicrotask(() => { if (el.isConnected) el.focus({ preventScroll: true }); }); }} onkeydown={key} use:grow={132}></textarea>
   <IconButton kind="filled" icon={ArrowUp} size={pill ? 's' : 'm'} label={label ?? t('cm.send')} disabled={empty} loading={sending} onclick={send} />
 </div>
 

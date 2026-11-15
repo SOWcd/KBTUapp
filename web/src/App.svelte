@@ -19,7 +19,7 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
+  import { backButton, haptic, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -139,16 +139,18 @@
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   // a new conversation opens with the keyboard up, as every AI app does. iOS raises it only for a focus inside the tap,
   // and the chunk may come later: a stand-in field takes the focus now, the assistant's own field takes it over as it
-  // mounts (iOS keeps the keyboard across the move); a reopened conversation keeps the keyboard down to read it
+  // mounts (iOS keeps the keyboard across the move) with any words typed meanwhile; a reopened conversation keeps the
+  // keyboard down to read it. The stand-in goes as it loses the focus, or soon after a failed load.
   const assistant = () => import('./screens/assistant/Assistant.svelte');
   sheets.assistant = (ctx) => asStudent(() => {
-    const kb = fresh(ctx) ? standIn() : null;
-    void lazy(assistant, { ctx }, 'sheet.assistant').then(() => setTimeout(() => kb?.remove(), 600)); // failed or slow: let it go
+    const opener = document.activeElement as HTMLElement | null, focus = fresh(ctx);
+    const keyboard = focus && onIos ? standIn() : null;
+    void lazy(assistant, { ctx, focus, keyboard, opener }, 'sheet.assistant').then(() => setTimeout(() => keyboard?.remove(), 600));
   });
   function standIn(): HTMLInputElement {
     const f = document.createElement('input');
-    f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
-    f.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0';
+    f.tabIndex = -1; f.maxLength = 300; f.autocomplete = 'off'; f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;top:0;left:-10000px;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none';
     f.style.fontSize = '16px'; // iOS zooms into a smaller one
     document.body.append(f);
     f.focus({ preventScroll: true });

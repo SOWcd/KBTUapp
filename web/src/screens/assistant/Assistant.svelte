@@ -39,15 +39,11 @@
   import Composer from '../../ui/Composer.svelte';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
-  let { overlay, ctx }: { overlay: Overlay; ctx?: AskCtx } = $props();
-  // fresh: the keyboard comes up with it (App's stand-in held the focus from the tap); a conversation to read: down
-  const start = untrack(() => {
-    if (!fresh(ctx)) return false;
-    chat.turns = []; chat.ctx = ctx ?? null;
-    return true;
-  });
-  const first = session.me?.student?.firstName;
-  let draft = $state(''), busy = $state(false);
+  let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
+  // focus (a fresh one): the keyboard comes up with it, App's stand-in held it from the tap; a conversation to read: down
+  untrack(() => { if (fresh(ctx)) { chat.turns = []; chat.ctx = ctx ?? null; } });
+  const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
+  let draft = $state(untrack(() => keyboard?.value ?? '')), busy = $state(false);
   let list = $state<HTMLDivElement>();
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
     : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
@@ -104,13 +100,13 @@
   }
 </script>
 
-<Sheet {overlay} icon={Sparkles} tall title={t('as.title')}>
+<Sheet {overlay} {opener} icon={Sparkles} tall title={t('as.title')}>
   <div class="list" bind:this={list}>
     {#if !chat.turns.length}
       <!-- as in every AI app: the greeting alone in the middle, the suggestions at the bottom over the field -->
       <div class="hello">
         <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={32} /></span>
-        <h2 class="t-h1">{t('as.hello', { name: first ? ', ' + first : '' })}</h2>
+        <h2 class="greeting">{t('as.hello', { name: first ? ', ' + first : '' })}</h2>
         {#if chat.ctx}<p class="about clamp-2">{t('as.about', { title: chat.ctx.title })}</p>{/if}
       </div>
     {:else if chat.ctx}
@@ -161,7 +157,7 @@
     {#if !chat.turns.length}
       <div class="sugg">{#each SUGGEST as k (k)}<Chip selected={false} onclick={() => { haptic.tap(); void ask(t(k)); }}>{t(k)}</Chip>{/each}</div>
     {/if}
-    <Composer bind:value={draft} placeholder={t('as.ph')} maxlength={300} sending={busy} label={t('cm.send')} onsend={() => ask(draft)} pill focus={start} />
+    <Composer bind:value={draft} placeholder={t('as.ph')} maxlength={300} sending={busy} label={t('cm.send')} onsend={() => ask(draft)} pill {focus} />
     <p class="note">{t('as.note')}</p>
   {/snippet}
 </Sheet>
@@ -169,7 +165,7 @@
 <style>
   .list { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding: 6px 0 4px; }
   .hello { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: var(--s-3); padding: 0 6px 8vh; }
-  .hello h2 { overflow-wrap: anywhere; }
+  .greeting { font: 700 var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; }
   .about { max-width: 320px; font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
   .orb { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, var(--accent-soft), transparent 70%), var(--surface-2);
@@ -177,6 +173,7 @@
   @keyframes orb { 50% { transform: translateY(-4px) scale(1.04); } }
   .sugg { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-3);
     animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) 120ms backwards; }
+  .sugg :global(.fc) { max-width: 100%; height: auto; min-height: var(--ctl-s); padding-block: 8px; white-space: normal; text-align: left; line-height: 1.3; } /* a long one wraps */
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 600 var(--fs-cap)/1 var(--font-text); }

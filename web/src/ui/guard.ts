@@ -12,7 +12,8 @@ export function unsent(get: () => Overlay) {
     focusin(e: FocusEvent) {
       const el = e.target;
       const text = el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && /^(text|url|email|tel|number|)$/.test(el.getAttribute('type') ?? '') && el.enterKeyHint !== 'search');
-      if (text && !was.has(el)) was.set(el, el.value);
+      // a field marked data-unsent may already hold words typed into a stand-in while its chunk loaded: they count
+      if (text && !was.has(el)) was.set(el, el.hasAttribute('data-unsent') ? '' : el.value);
     },
     typed: () => !!get().byUser && [...was].some(([el, v]) => el.isConnected && el.value.trim() !== v.trim()),
     async ask() {
