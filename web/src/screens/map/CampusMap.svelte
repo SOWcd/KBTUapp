@@ -1,23 +1,42 @@
+<script lang="ts" module>
+  import { setWorkerUrl, prewarm } from 'maplibre-gl';
+  // MapLibre's worker as a file of ours (it looks for one next to itself, which a bundle doesn't have); through the
+  // build, so its syntax is lowered for old iOS like the rest
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+  import { overview as sheet, tilesOf as tilesAt, Z0 as SHEET_Z } from '../../lib/mapgl';
+  setWorkerUrl(workerUrl);
+  const warmed: HTMLImageElement[] = [];
+  /** Ahead of the first tap (lib/map.ts warmMap, in an idle moment after the app starts; owner, Nov 15: the first tap
+   *  opens the map at once): MapLibre's workers started, the floor the map opens on by default decoded as its overview,
+   *  its first tiles in the browser's cache. This chunk itself is loaded by whoever calls this */
+  export function warm(): void {
+    if (warmed.length) return;
+    prewarm();
+    const im = new Image(); im.src = sheet('main', false, 1); void im.decode().catch(() => {}); warmed.push(im);
+    const at = 2 ** SHEET_Z;
+    for (const x of [at, at + 1]) for (const y of [at, at + 1]) fetch(tilesAt('main', false, 1).replace('{z}', String(SHEET_Z + 1)).replace('{x}_{y}', `${x}_${y}`)).catch(() => {});
+  }
+</script>
+
 <script lang="ts">
   // The campus map (CONTEXT): a floor of the main building full screen, pinch to zoom and drag to look around, a
   // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Three versions, picked from a list at the top left
-  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floors 1 and 2 so far): the main one, Uni-Q's plans (credited under the map), and the old one, our vector redraw with red
-  // walls (floors 1-5 from the 2023 plans, which nobody updates, so it says so). Opens on a room's floor ("Aud. 305"
+  // (owner, Oct 6 and Oct 27): ours, KBTU App's, the main one, Uni-Q's plans (credited under the map), and the old one, our redraw of
+  // the 2023 plans (floors 1-5, which nobody updates, so it says so; every wall one ink, and a switch lays the plan as it was given over it: owner, Nov 15). Opens on a room's floor ("Aud. 305"
   // → 3), rings the room's number and glides in to it (owner, Oct 5: "show where the room is"); a room the plan
   // doesn't number frames its nearest numbers on the floor, "somewhere here, look yourself", or just says it couldn't
   // find it (the old plan won't have it either: owner, Oct 6).
-  // While fingers move the plan is only scaled as a picture (smooth); once they let go it is laid out at the new size,
-  // so the browser draws it sharp again: the old map's vectors, or the main map's tiles of the level that size needs,
-  // only those on screen, over the floor's overview while they come. An animated zoom in (the glide to a room, a double
-  // tap) is laid out at the size it lands at before it moves (prepare), so it is sharp all the way. Opened on a room, the
-  // whole floor shows first and the landing is prepared and decoded while one looks at it, then it flies in (owner,
-  // Oct 12: "show the whole map first, then zoom", "why is it blurry first, then sharp"). The main plans are black on white: the dark look inverts them (the
+  // MapLibre GL moves and draws it (owner, Nov 15: a ready, fast library, not our own pan and zoom): each plan is a
+  // pyramid of tiles (lib/mapgl.ts), the level the size on screen needs fading in over the coarser one, and the room
+  // numbers are its labels, at a size one can read at any zoom, as many as fit without touching, halls and bigger rooms
+  // first, fading in and out (owner, Nov 15: "zoomed out the map is empty"). Opened on a room, the whole floor shows
+  // first, then it flies in (owner, Oct 12: "show the whole map first, then zoom"). The main plans are black on white: the dark look inverts them (the
   // colours keep their hue). The capsule says "Map · floor 3", or "Room 305 · floor 3" (SPEC §8.2). The magnifier at the top
   // turns the whole top row into a search box (owner, Oct 12: one row, not a big box), which finds a room by its number or a hall by its name (roomOf), goes to its floor and glides to it (owner, Oct 12).
   // The sun/moon at the top right turns the map light or dark (owner, Oct 5: "let the student pick right on the map"),
   // the map only and for this look: the app keeps its own theme, and the map opens in it again next time (owner: "I
   // turn white on, look at it, and that's it; the app stays dark"). The panel carries the theme as a class (tokens.css).
-  import { flushSync, onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Check from '@lucide/svelte/icons/check';
   import Search from '@lucide/svelte/icons/search';
@@ -29,7 +48,10 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { FLOORS, KBTU_FLOORS, TILES, SPOTS, loadSvg, roomOf, floorOf, normRoom, nearRooms, spotOf } from '../../lib/map';
+  import { SPOTS, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
+  import { FRAMES, HAS, Z0, LEVELS, lngLat, uvOf, zoomFor, widthAt, tilesOf, overview, scan, SCAN_AT, tileSize, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
+  import { Map as GLMap, LngLat, type MapMouseEvent, type StyleSpecification, type SourceSpecification, type LayerSpecification, type GeoJSONSource, type ImageSource } from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css';
   import uniq from '../../assets/map/uniq-tiles.json';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass, jelly } from '../../ui/glass';
@@ -57,7 +79,6 @@
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
   // which map (owner, Oct 27: a list at the top left): Uni-Q's, ours (floors 1 and 2 so far, not the default yet), the 2023 plan
-  type Ver = 'main' | 'kbtu' | 'old';
   const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); Uni-Q stays the default for now
   let ver = $state<Ver>('main');
   let menu = $state(false);
@@ -74,7 +95,7 @@
   if (untrack(() => exit)) void openRoute();
   /** show a step: its floor, framed */
   async function go(f: number, pts: { u: number; v: number }[]) {
-    if (f !== cur) { halt(); cur = f; tiles = []; touched++; pickTiles(); }
+    if (f !== cur) { halt(); cur = f; touched++; }
     framed = pts.map((p) => [p.u, p.v]);
     await tick(); // the step's card, not the tall one it replaces (owner, Oct 15: the first step was framed far off)
     reframe();
@@ -86,166 +107,143 @@
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
   const routeFloors = $derived(new Set(rt.route?.legs.map((l) => l.f) ?? []));
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
-  const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
-  let svg = $state('');
-  // our map's words in the UI language: a <text data-t="canteen"> is 'kmap.canteen' of the i18n files (the SVG holds the
-  // English, so the file reads on its own; map.test.ts checks every key is there)
-  const shown = $derived(svg.replace(/(<text[^>]*\sdata-t="(\w+)"[^>]*>)[^<]*/g,
-    (_, open: string, k: string) => open + t(`kmap.${k}` as 'kmap.canteen').replace(/&/g, '&amp;').replace(/</g, '&lt;')));
-  // another room: a clean plan, without the last one's rings
-  $effect(() => {
-    const n = cur, url = ver === 'old' ? FLOORS[n] : ver === 'kbtu' ? KBTU_FLOORS[n]?.[look === 'dark' ? 1 : 0] : null; // ours is drawn light and dark
-    void room; svg = '';
-    if (url) loadSvg(url).then((m) => { if (n === cur) svg = m; }, () => {});
-  });
-
+  const AR = $derived(FRAMES[ver].ar); // the plan's height to its width
   let panel: HTMLDivElement;
   let stage: HTMLDivElement;
+  let gl: HTMLDivElement;
+  let first: HTMLDivElement;
   let plan: HTMLDivElement;
   let gone = false;
 
-  // the plan's transform: translate (x, y) then scale s, origin top-left; written straight to the style per frame. It is
-  // laid out at scale `base` (drawn sharp there); between base and s it is a CSS scale until the fingers let go.
-  let s = 1, x = 0, y = 0, base = 1, settleT = 0;
+  // The camera is MapLibre's (owner, Nov 15: our own pan and zoom "perceived gestures badly"): it draws the floor's tiles
+  // of the level the size on screen needs, a finer level fading in over the coarser one, and the labels, which fade in
+  // and out as they find room. Here the plan's scale is 1 when it is as wide as the stage, up to MAX; a place on it is
+  // (u, v), fractions of its width and height (lib/mapgl.ts turns those into MapLibre's own).
+  let map: GLMap;
+  let ready = $state(false);
+  const fr = $derived(FRAMES[ver]);
   const MAX = 8;
-  const paint = (ease = '') => {
-    plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`;
-    if (!pts.size) tiers();
-  };
-  /** our map's zoom tiers. Not while fingers move it (Nov 7, Low Power Mode lag): each tier's fade repainted the whole
-   *  plan every frame of the pinch; it fades in at the let-go instead, with the settle's own redraw */
-  function tiers() {
-    const px = stage.clientWidth * s / 1000; // our map's px a unit
-    plan.classList.toggle('mid', px >= 0.7); // room numbers and door signs (Oct 28: far off they were specks)
-    plan.classList.toggle('near', px >= 1.1); // fine detail: windows, doors, WC fixtures
+  const W = () => stage.clientWidth, H = () => stage.clientHeight;
+  const scale = () => widthAt(fr, map.getZoom()) / W();
+  /** the camera that shows the plan at scale k with its (u, v) at the stage's (sx, sy) */
+  function cam(k: number, u: number, v: number, sx = W() / 2, sy = H() / 2) {
+    const pw = W() * k;
+    return { center: lngLat(fr, u + (W() / 2 - sx) / pw, v + (H() / 2 - sy) / (pw * AR)), zoom: zoomFor(fr, pw) };
   }
-  /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
-  function settle() {
-    clearTimeout(settleT);
-    if (base !== s) { base = s; plan.style.width = `${s * 100}%`; paint(); }
-    tiers();
-    pickTiles();
+  /** the plan's point under a point of the stage */
+  function uvAt(px: number, py: number): [number, number] { const at = map.unproject([px, py]); return uvOf(fr, at.lng, at.lat); }
+  /** the screen's middle stays on the plan, so half a screen of room past each edge: a corner, or a route under the
+   *  card, can be dragged to the middle (owner, Oct 15); never smaller than the stage's width, never past MAX */
+  function within(at: LngLat, zoom: number) {
+    const [u, v] = uvOf(fr, at.lng, at.lat), on = (n: number) => Math.min(1, Math.max(0, n));
+    return { center: new LngLat(...lngLat(fr, on(u), on(v))), zoom: Math.min(zoomFor(fr, W() * MAX), Math.max(zoomFor(fr, W()), zoom)) };
   }
-  const settleSoon = (ms: number) => { clearTimeout(settleT); settleT = window.setTimeout(settle, ms); };
-  /** keep the plan on screen, with half a screen of room past each edge: a corner, or a route under the card, can be
-   *  dragged to the middle (owner, Oct 15) */
-  function bounds(s: number): [number, number, number, number] {
-    const W = stage.clientWidth, H = stage.clientHeight, pw = W * s, ph = pw * AR; // as wide as the stage at s = 1
-    return [Math.min(0, W - pw) - W / 2, Math.max(0, W - pw) + W / 2, Math.min(0, H - ph) - H / 2, Math.max(0, H - ph) + H / 2];
+  /** what stands on the plan follows the camera: the overlay as wide as the plan is on screen (its pins keep their
+   *  size), the overview under the canvas by a transform alone */
+  function follow() {
+    const p = map.project(lngLat(fr, 0, 0)), pw = widthAt(fr, map.getZoom());
+    plan.style.width = `${pw}px`; plan.style.transform = `translate3d(${p.x}px,${p.y}px,0)`;
+    first.style.transform = `translate3d(${p.x}px,${p.y}px,0) scale(${pw / fr.fx / 512})`;
   }
-  function clamped(s: number, x: number, y: number): [number, number] {
-    const [x0, x1, y0, y1] = bounds(s);
-    return [Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y))];
-  }
-  const clamp = () => { [x, y] = clamped(s, x, y); };
   // the stage runs under Telegram's header (full-bleed, owner Nov 4); the plan rests below it, where .side starts
   let side: HTMLDivElement;
   const head = () => side.offsetTop - 10;
-  function reset() { halt(); s = 1; x = 0; y = head() + Math.max(0, (stage.clientHeight - head() - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
   /** the view a floor opens in: on the main map the building (u .12-.85 of Uni-Q's sheet, white margins round it) fills
-   *  the width (owner, Oct 24: "why is it so far away"); the old plan has no margins, the whole of it */
-  function home(): [number, number, number] {
-    const k = ver === 'main' ? 1.3 : 1;
-    return [k, ...centered(k)];
-  }
-  /** where the plan sits zoomed out at scale k: the building in the middle (home's place, at any scale) */
-  function centered(k: number): [number, number] {
-    const W = stage.clientWidth, H = stage.clientHeight;
-    return clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, head() + (H - head() - W * AR * k) / 2);
-  }
-  // one finger past where the plan may rest follows it less and less (a rubber band), and the plan springs back on the
-  // let-go, its size kept: zoomed out it may rest only in the middle, zoomed in anywhere within bounds() (owner: "the
-  // map doesn't listen": it stopped dead at an edge, then flew to the middle and zoomed by itself)
-  const out = () => s < home()[0] * 1.05;
-  function rest(): [number, number, number, number] {
-    if (!out()) return bounds(s);
-    const [cx, cy] = centered(s);
-    return [cx, cx, cy, cy];
-  }
-  const band = (r: number, lo: number, hi: number, size: number) => {
-    const o = r < lo ? lo - r : r > hi ? r - hi : 0, k = size * 0.35 * (1 - 1 / (1 + o / size));
-    return r < lo ? lo - k : r > hi ? hi + k : r;
-  };
-  let rx = 0, ry = 0; // one finger's position for the plan without the band
-  function goHome() { [s, x, y] = home(); settle(); paint(); }
-
-  // the main map's tiles on screen at scale s and offset (x, y), from the level that size needs; none while the overview will do
-  type Tile = { key: string; src: string; l: number; t: number; w: number; h: number };
-  let tiles = $state<Tile[]>([]);
-  const pickTiles = () => { if (ver === 'main') tiles = tilesAt(s, x, y); };
-  function tilesAt(s: number, x: number, y: number): Tile[] {
-    const W = stage.clientWidth, H = stage.clientHeight, pw = W * s, ph = pw * AR, T = uniq.tile;
-    const need = (pw * Math.min(3, devicePixelRatio || 1)) / 1.4; // device px across the plan; a level may stretch 1.4 times
-    if (need <= uniq.w / 4) return [];
-    const levels = uniq.floors[cur], i = levels.findIndex((l) => l.w >= need), k = i < 0 ? levels.length - 1 : i, lv = levels[k];
-    const cols = Math.ceil(lv.w / T), rows = Math.ceil(lv.h / T);
-    const c0 = Math.max(0, Math.floor(((-x / pw) * lv.w) / T)), c1 = Math.min(cols - 1, Math.floor((((W - x) / pw) * lv.w) / T));
-    const r0 = Math.max(0, Math.floor(((-y / ph) * lv.h) / T)), r1 = Math.min(rows - 1, Math.floor((((H - y) / ph) * lv.h) / T));
-    const next: Tile[] = [];
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
-      if (lv.has[r * cols + c] !== '1') continue; // blank paper: the overview has it
-      const name = `${cur}/${k + 1}/${c}_${r}`; // each tile reaches a pixel into its right and bottom neighbours
-      next.push({ key: name, src: `${TILES}f${name}.webp`, l: (c * T * 100) / lv.w, t: (r * T * 100) / lv.h,
-        w: ((Math.min(lv.w, c * T + T + 1) - c * T) * 100) / lv.w, h: ((Math.min(lv.h, r * T + T + 1) - r * T) * 100) / lv.h });
-    }
-    return next;
-  }
-  /** scale s·k around the point (cx, cy) of the stage, kept on screen: [scale, x, y] */
-  function around(k: number, cx: number, cy: number): [number, number, number] {
-    const ns = Math.min(MAX, Math.max(1, s * k)), [nx, ny] = clamped(ns, cx - ((cx - x) * ns) / s, cy - ((cy - y) * ns) / s);
-    return [ns, nx, ny];
-  }
-  function zoomAt(k: number, cx: number, cy: number) { [s, x, y] = around(k, cx, cy); paint(); }
-  /** The landing, before the move: the tiles it lands on go into the plan, and going in, the plan is laid out at the size
-   *  it lands at and shown where it is now (scaled down). WebKit draws a layer at its laid-out size and only stretches
-   *  that picture for a transform (GraphicsLayerCA::updateRootRelativeScale), so a small plan scaled up is blurry until
-   *  it settles (owner, Oct 7 and Oct 12), while a big one scaled down stays sharp all the way. Going out, the big plan
-   *  just shrinks. A 3.2x glide on a phone is about 50 MB of tiles for a moment (WebKit caps a layer at 156). */
-  function prepare(ns: number, nx: number, ny: number): Tile[] {
-    const next = ver === 'main' ? tilesAt(ns, nx, ny) : [];
-    if (next.length) flushSync(() => { tiles = [...tiles.filter((a) => !next.some((b) => b.key === a.key)), ...next]; });
-    if (ns > base) { base = ns; plan.style.width = `${ns * 100}%`; paint(); void plan.offsetWidth; }
-    return next;
-  }
-  let anim: Animation | null = null;
-  function zoomTo(ns: number, nx: number, ny: number, ms: number) {
-    halt();
-    prepare(ns, nx, ny);
-    // the scale in even steps to the eye (geometric, not linear: a linear one rushed at the start) around the one point of
-    // the plan that stays put on screen, so nothing swerves; a pan alone moves straight. Timed by a critically
-    // damped spring baked into the frames: off at once, settles without a crawl (owner, Oct 12: an easy ease was "very
-    // slow", the spring "was good"; Oct 9: an ease-out one crawled at the end)
-    const s0 = s, x0 = x, y0 = y, n = 32, frames: Keyframe[] = [];
-    const fx = ns !== s0 ? (x0 - nx) / (ns - s0) : 0, fy = ns !== s0 ? (y0 - ny) / (ns - s0) : 0;
-    for (let i = 0; i <= n; i++) {
-      const p = i / n, k = i === n ? 1 : 1 - (1 + 10 * p) * Math.exp(-10 * p), sk = s0 * (ns / s0) ** k;
-      const xk = ns !== s0 ? x0 + fx * (s0 - sk) : x0 + (nx - x0) * k, yk = ns !== s0 ? y0 + fy * (s0 - sk) : y0 + (ny - y0) * k;
-      frames.push({ transform: `translate3d(${xk}px,${yk}px,0) scale(${sk / base})` });
-    }
-    s = ns; x = nx; y = ny;
-    paint();
-    anim = plan.animate(frames, { duration: ms, easing: 'linear' });
-    anim.onfinish = () => { anim = null; settle(); };
-  }
-  /** a running zoom stops where it is on screen (a finger, a floor, the other version came) */
-  function halt() {
-    if (!anim) return;
-    const m = new DOMMatrix(getComputedStyle(plan).transform);
-    anim.cancel(); anim = null;
-    s = m.a * base; x = m.e; y = m.f;
-    paint();
+   *  the width (owner, Oct 24: "why is it so far away"); the drawn plans have no margins, the whole of them */
+  const homeK = () => (ver === 'main' ? 1.3 : 1);
+  /** the building in the middle of what's under the header, at scale k: where the plan rests zoomed out */
+  const middle = (k = homeK()) => cam(k, ver === 'main' ? 0.485 : 0.5, 0.5, W() / 2, head() + (H() - head()) / 2);
+  const out = () => scale() < homeK() * 1.05;
+  function reset() { halt(); map.jumpTo(middle()); }
+  /** a running glide stops where it is on screen (a finger, a floor, the other version came) */
+  const halt = () => map.stop();
+  // off at once, settles without a crawl: a critically damped spring (owner, Oct 12: an easy ease was "very slow", the
+  // spring "was good"; Oct 9: an ease-out one crawled at the end)
+  const spring = (p: number) => (p >= 1 ? 1 : 1 - (1 + 10 * p) * Math.exp(-10 * p));
+  /** fingers let the plan go: zoomed out it may rest only in the middle and goes back there at the size they left it;
+   *  zoomed in it stays where it was left (owner, Oct 15) */
+  function rest() {
+    if (fingers || !out()) return;
+    const to = middle(scale()), a = map.project(to.center), b = map.project(map.getCenter());
+    if (Math.hypot(a.x - b.x, a.y - b.y) > 0.5) map.easeTo({ center: to.center, duration: 380, easing: spring });
   }
 
-  // ---- fingers: one drags, two pinch around their middle; a quick second tap zooms in or out ----
-  const pts = new Map<number, { x: number; y: number }>();
-  let from: { d: number; cx: number; cy: number } | null = null;
+  // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
+  type RasterPaint = 'raster-brightness-min' | 'raster-brightness-max' | 'raster-hue-rotate';
+  const INVERT: Record<RasterPaint, number> = { 'raster-brightness-min': 0.95, 'raster-brightness-max': 0.05, 'raster-hue-rotate': 180 }; // as the CSS did: invert(0.95) hue-rotate(180deg), the colours keep their hue
+  const PLAIN: Record<RasterPaint, number> = { 'raster-brightness-min': 0, 'raster-brightness-max': 1, 'raster-hue-rotate': 0 };
+  /** Uni-Q's plans and the 2023 one are black on white paper: the dark look inverts them; ours is drawn twice */
+  const ink = () => (ver !== 'kbtu' && look === 'dark' ? INVERT : PLAIN);
+  const inked = (layer: string) => { for (const [k, v] of Object.entries(ink())) map.setPaintProperty(layer, k as RasterPaint, v); };
+  const corner = (u: number, v: number) => lngLat(fr, u, v);
+  function planSource(): SourceSpecification {
+    const [w, n] = corner(0, 0), [e, s] = corner(1, 1);
+    return { type: 'raster', tiles: [tilesOf(ver, look === 'dark', cur)], tileSize: tileSize(devicePixelRatio || 1), minzoom: Z0, maxzoom: Z0 + LEVELS, bounds: [w, s, e, n] };
+  }
+  const planLayer = (): LayerSpecification => ({ id: 'plan', type: 'raster', source: 'plan', paint: { ...ink(), 'raster-fade-duration': 300 } });
+  let orig = $state(false); // the 2023 plan as it was given, over our redraw
+  // the room looked for is the first to get its place among the labels: its ring is never round nothing
+  const words = () => labelData(fr, orig && ver === 'old' ? [] : labelsOf(ver, cur, look === 'dark', (k) => t(`kmap.${k}` as 'kmap.canteen'), room ?? ''));
+  const wordsNow = () => `${ver}|${cur}|${look}|${i18n.lang}|${orig}|${room}`;
+  /** the labels: one layer a tier (always; from mid zoom; up close: owner, Oct 28, far off the small ones were specks).
+   *  Uni-Q's numbers stand on a plate of the paper's colour over the tiny printed ones, and fade away as those get big
+   *  enough to read (the plan 720 to 920 px wide: printed digits 5 to 6.5 px tall, still under the plate), so a number is never seen twice. By zoom alone: mixed with a
+   *  label's own data MapLibre only reads such a value at whole zooms */
+  function wordFade(): { 'text-opacity': unknown; 'icon-opacity': unknown } {
+    const by = (from: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 720), from, zoomFor(FRAMES.main, 920), 0];
+    return ver === 'main' ? { 'text-opacity': by(1), 'icon-opacity': by(0.92) } : { 'text-opacity': ['get', 'alpha'], 'icon-opacity': 0 };
+  }
+  function wordLayers(): LayerSpecification[] {
+    const f = FRAMES.old;
+    return [0, 1, 2].map((tier) => ({
+      id: `words${tier}`, type: 'symbol', source: 'words', filter: ['==', ['get', 'tier'], tier], minzoom: tier ? zoomFor(f, tier === 1 ? 700 : 1100) : 0,
+      layout: {
+        'text-field': ['get', 't'], 'text-font': ['Inter Variable Semibold', 'Inter Variable'], 'text-size': ['get', 'px'], // the first names the weight, the second the family: the glyphs are drawn from the page's own fonts
+        'text-rotate': ['get', 'turn'], 'text-anchor': ['case', ['get', 'left'], 'left', 'center'],
+        'text-letter-spacing': ['get', 'space'], 'text-max-width': 60, 'text-padding': 2, 'symbol-sort-key': ['get', 'rank'],
+        'icon-image': ['case', ['get', 'plate'], 'plate', ''], 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 3, 1, 3],
+      },
+      paint: {
+        'text-color': ['get', 'color'], 'text-halo-color': ['case', ['==', ['get', 'halo'], ''], 'rgba(0,0,0,0)', ['to-color', ['get', 'halo']]], 'text-halo-width': 1.3,
+        'icon-color': ['get', 'halo'], ...wordFade(),
+      },
+    }) as unknown as LayerSpecification);
+  }
+  // the state the map was last given; whatever changed since (the floor, the version, the look, the language, the
+  // original) is given again: the source anew for other tiles, paint for the look, the labels' data
+  let planKey = '', inkKey = '', wordsKey = '', fadeVer = '', scanOn = 0, scanT = 0;
+  $effect(() => {
+    if (!ready) return;
+    const dark = look === 'dark', pk = `${ver}|${cur}|${ver === 'kbtu' && dark}`, ik = `${ver}|${dark}`, wk = wordsNow(), sc = ver === 'old' && orig ? cur : 0;
+    untrack(() => {
+      if (pk !== planKey) { planKey = pk; inkKey = ik; map.removeLayer('plan'); map.removeSource('plan'); map.addSource('plan', planSource()); map.addLayer(planLayer(), map.getLayer('scan') ? 'scan' : 'words0'); }
+      else if (ik !== inkKey) { inkKey = ik; inked('plan'); }
+      if (ver !== fadeVer) { fadeVer = ver; for (const tier of [0, 1, 2]) for (const [k, v] of Object.entries(wordFade())) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); }
+      if (wk !== wordsKey) { wordsKey = wk; (map.getSource('words') as GeoJSONSource).setData(words()); }
+      if (sc !== scanOn) {
+        clearTimeout(scanT);
+        const [l, tp, r, bt] = SCAN_AT[sc || scanOn];
+        const at = { url: scan(sc || scanOn), coordinates: [corner(l, tp), corner(r, tp), corner(r, bt), corner(l, bt)] as [[number, number], [number, number], [number, number], [number, number]] };
+        const src = map.getSource('scan') as ImageSource | undefined;
+        if (!sc) { map.setPaintProperty('scan', 'raster-opacity', 0); scanT = window.setTimeout(() => { map.removeLayer('scan'); map.removeSource('scan'); }, 350); } // fades out, then goes
+        else if (src) { src.updateImage(at); map.setPaintProperty('scan', 'raster-opacity', 1); }
+        else {
+          map.addSource('scan', { type: 'image', ...at });
+          map.addLayer({ id: 'scan', type: 'raster', source: 'scan', paint: { ...ink(), 'raster-opacity': 0, 'raster-opacity-transition': { duration: 300, delay: 0 }, 'raster-fade-duration': 0 } }, 'words0');
+          requestAnimationFrame(() => { if (!gone && map.getLayer('scan') && scanOn) map.setPaintProperty('scan', 'raster-opacity', 1); });
+        }
+        scanOn = sc;
+      }
+      if (map.getLayer('scan')) inked('scan');
+      follow();
+    });
+  });
+  // ---- fingers: MapLibre drags, pinches around the fingers' middle and takes the wheel. Ours on top of it: a hold in
+  // place, the taps, and the floor swipe while zoomed out ----
+  let fingers = 0, held = false;
   let lastTap = 0, tapAt = { x: 0, y: 0 };
   const local = (e: PointerEvent) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  function mid() {
-    const [a, b] = [...pts.values()];
-    return b ? { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 } : { d: 0, cx: a.x, cy: a.y };
-  }
-  let press: { x: number; y: number; t: number } | null = null; // a finger down, for a tap or a hold in place
+  let press: { x: number; y: number } | null = null; // the first finger down, for a hold in place
   // a long press in place: "something's wrong here" (owner, Oct 29: the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
   let holdT: ReturnType<typeof setTimeout> | undefined;
@@ -255,12 +253,12 @@
   type Flaw = { id: number; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string };
   let mine = $state<Flaw[]>([]);
   let draft = $state<{ ver: Ver; f: number; u: number; v: number } | null>(null);
-  let okId = $state(0), seen = $state(0), okT = 0, pressFlaw = 0;
+  let okId = $state(0), seen = $state(0), okT = 0;
   const canFlaw = () => !!session.me?.student && session.board; // where the policy's section 12 is in force (BOARD), for everyone it covers
   $effect(() => { if (canFlaw()) api.mapFlawsMine().then((l) => (mine = l), () => {}); });
   // "free now" by the timetable (lib/rooms): fetched as the map opens, nothing of it shows until it comes or if the
   // server has no timetable (404); the rooms the main map numbers, tinted where their number is printed
-  let week = $state<Record<string, RoomWeek> | null>(null), freeOn = $state(false), clock = $state(nowTs()), pressRoom = '';
+  let week = $state<Record<string, RoomWeek> | null>(null), freeOn = $state(false), clock = $state(nowTs());
   api.mapRooms().then((r) => (week = r.rooms), () => {});
   const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) =>
     week![r] ? ps.map(([u, v]) => ({ r, u, v, free: roomNow(week![r], clock).free })) : []));
@@ -277,14 +275,14 @@
     const [u, v] = m.ver === ver ? [m.u, m.v] : m.px != null && m.py != null ? fromPlan(ver, m.px, m.py) : [-1, -1];
     return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [{ id: m.id, u, v, body: m.body }] : [];
   }));
-  function flaw(at: { x: number; y: number }) {
-    const W = stage.clientWidth * s, u = (at.x - x) / W, v = (at.y - y) / (W * AR);
-    if (u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return;
-    haptic.soft(); press = null; lastTap = 0; seen = 0;
+  function flaw(at: { x: number; y: number }): boolean {
+    const [u, v] = uvAt(at.x, at.y);
+    if (u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return false;
+    haptic.soft(); held = true; press = null; lastTap = 0; seen = 0;
     const [px, py] = toPlan(ver, u, v), f = cur, vr = ver;
     draft = { ver: vr, f, u, v };
     // zoomed in, a spot low on the screen comes up above the sheet the note is written in
-    if (!out() && at.y > stage.clientHeight * 0.4) zoomTo(s, ...clamped(s, x, y - (at.y - stage.clientHeight * 0.3)), 420);
+    if (!out() && at.y > H() * 0.4) map.panBy([0, at.y - H() * 0.3], { duration: 420 });
     void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: f }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
       .then((body) => body ? api.mapFlaw({ ver: vr, floor: f, u, v, px, py, body }).then(() => {
         haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d');
@@ -294,65 +292,55 @@
       }) : undefined)
       .catch(() => say(t('common.error'), 'warning_3d'))
       .finally(() => (draft = null));
+    return true;
   }
   function down(e: PointerEvent) {
-    menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
-    // the first finger of a new touch: any finger still listed is stale (iOS sends no up for one held while the flaw's
+    menu = false; clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
+    clearTimeout(holdT); held = false;
+    // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
     // sheet opened over it, so every later press read as a second finger and never held: owner, Nov 15)
-    if (e.isPrimary) pts.clear();
-    press = pts.size ? null : { ...local(e), t: performance.now() };
-    pressFlaw = Number((e.target as Element).closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0);
-    pressRoom = (e.target as Element).closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
-    clearTimeout(holdT);
-    if (press && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
-    stage.setPointerCapture(e.pointerId);
-    if (pts.size) swipeEnd(true); // a second finger: a pinch, never a floor
-    else if (!rt.route && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
-    pts.set(e.pointerId, local(e));
-    from = mid();
-    rx = x; ry = y;
+    fingers = e.isPrimary ? 1 : fingers + 1;
+    if (!e.isPrimary) { press = null; swipeEnd(true); return; } // a second finger: a pinch, never a hold or a floor
+    const at = (press = local(e)), id = e.pointerId;
+    if (rt.route) return;
+    // held: the finger is the stage's from here on, and the click its let-go may bring is swallowed, so neither lands
+    // on the note's sheet that has just opened under the finger and shuts it
+    holdT = setTimeout(() => {
+      if (!flaw(at)) return;
+      try { stage.setPointerCapture(id); } catch { /* the finger is gone */ }
+      window.addEventListener('click', eat, { capture: true, once: true });
+    }, 600);
+    if (out()) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
   }
   function move(e: PointerEvent) {
-    if (!pts.has(e.pointerId) || !from) return;
-    if (pts.size === 1 && swipeMove(e.clientX, e.clientY)) { press = null; lastTap = 0; clearTimeout(holdT); return; }
-    pts.set(e.pointerId, local(e));
-    if (press && Math.hypot(local(e).x - press.x, local(e).y - press.y) > 8) clearTimeout(holdT); // it moved: not a hold
-    const m = mid();
-    if (pts.size > 1 && from.d) { x += m.cx - from.cx; y += m.cy - from.cy; zoomAt(m.d / from.d, m.cx, m.cy); rx = x; ry = y; }
-    else {
-      rx += m.cx - from.cx; ry += m.cy - from.cy;
-      const [x0, x1, y0, y1] = rest();
-      x = band(rx, x0, x1, stage.clientWidth); y = band(ry, y0, y1, stage.clientHeight);
-      paint();
-    }
-    from = m;
+    if (!e.isPrimary || !press) return;
+    const p = local(e);
+    if (Math.hypot(p.x - press.x, p.y - press.y) > 8) clearTimeout(holdT); // it moved: not a hold
+    if (swipeMove(e.clientX, e.clientY)) lastTap = 0;
   }
+  const eat = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
   function up(e: PointerEvent) {
     clearTimeout(holdT);
-    if (sw?.on) { pts.delete(e.pointerId); from = pts.size ? mid() : null; press = null; swipeEnd(); return; }
-    sw = null;
-    const p = pts.has(e.pointerId) ? local(e) : null;
-    pts.delete(e.pointerId); from = pts.size ? mid() : null; if (!pts.size) settleSoon(120);
-    // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15);
-    // either way at the size the fingers left it, and only from the rubber band's stretch
-    const tap = !!press && !!p && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 300;
-    if (!pts.size && !tap) {
-      const [x0, x1, y0, y1] = rest(), tx = Math.min(x1, Math.max(x0, x)), ty = Math.min(y1, Math.max(y0, y));
-      if (Math.hypot(x - tx, y - ty) > 0.5) zoomTo(s, tx, ty, 380);
-    }
-    // a double tap: two taps, the second let go within 300 ms of the first and near it, zooms in (or back out)
-    // a tap on my own pin shows what I wrote there; any other tap puts it away
-    if (tap && !pts.size && (pressFlaw || seen)) { if (pressFlaw) haptic.tap(); seen = pressFlaw && pressFlaw !== seen ? pressFlaw : 0; }
-    // a tap on a tinted room: its card, with when it is free (no glide: it is on screen already)
-    if (tap && !pts.size && pressRoom && !pressFlaw) { haptic.tap(); at = null; room = pressRoom; glided = true; lastTap = 0; }
-    else if (tap && !pts.size && p && !pressFlaw) {
-      if (lastTap && performance.now() - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, p.x, p.y), 380); lastTap = 0; }
-      else { lastTap = performance.now(); tapAt = p; }
-    } else if (!tap) lastTap = 0;
-    press = null;
+    if (held) setTimeout(() => window.removeEventListener('click', eat, true), 350); // no click came: the next one is a real one
+    fingers = Math.max(0, fingers - 1);
+    if (e.isPrimary) { press = null; swipeEnd(); }
   }
-  function wheel(e: WheelEvent) { e.preventDefault(); halt(); const p = { x: e.clientX - stage.getBoundingClientRect().left, y: e.clientY - stage.getBoundingClientRect().top }; zoomAt(Math.exp(-e.deltaY * 0.002), p.x, p.y); settleSoon(200); }
-
+  /** a tap (MapLibre's click: a finger that didn't move): my own pin shows what I wrote there, a tinted room opens its
+   *  card, a second tap within 300 ms of the first and near it zooms in, or back out to the whole floor */
+  function tap(e: MapMouseEvent) {
+    if (held) { held = false; return; } // the let-go of a hold
+    const el = e.originalEvent.target as Element, p = e.point, now = performance.now();
+    const pin = Number(el.closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0), tinted = el.closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
+    if (pin || seen) { if (pin) haptic.tap(); seen = pin && pin !== seen ? pin : 0; }
+    if (pin) return;
+    // a tap on a tinted room: its card, with when it is free (no glide: it is on screen already)
+    if (tinted) { haptic.tap(); at = null; room = tinted; glided = true; lastTap = 0; return; }
+    if (lastTap && now - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) {
+      haptic.tap(); lastTap = 0;
+      if (scale() > 1.5) fit();
+      else map.easeTo({ zoom: map.getZoom() + Math.log2(2.5), around: map.unproject(p), duration: 380, easing: spring });
+    } else { lastTap = now; tapAt = p; }
+  }
   /** the circle grows from the switch, as the app's does; Telegram's bars follow once it has covered the screen */
   function flip(from: Element) {
     haptic.select();
@@ -369,40 +357,41 @@
   // changes on the let-go.
   let knob = $state<HTMLSpanElement>();
   let kp = $state(0), dragging = $state(false);
-  let sw: { x0: number; y0: number; px: number; py: number; dx: number; on: boolean; hist: [number, number][]; rail: boolean; k0: number } | null = null;
+  let sw: { x0: number; y0: number; c: LngLat; dx: number; on: boolean; hist: [number, number][]; rail: boolean; k0: number } | null = null;
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
   // the change itself (owner, Oct 25: "the picture just swaps, give it a push so you feel the floor changed"): a lift's
   // depth. Going up, the floor you leave sinks away under you and the new one comes down from above, settling to size;
   // going down, the other way. Both pictures scale about the middle of the screen; opacity and transform only.
+  let ghost = $state<string | null>(null), ghostEl = $state<HTMLImageElement>();
   async function goTo(n: number) {
     if (n === cur) return;
     haptic.select(); halt();
-    const up = Math.sign(idxOf(n) - idxOf(cur)), was = ver === 'main' ? plan.querySelector<HTMLImageElement>('.sheet img.ov') : null;
-    let ghost: HTMLImageElement | null = null;
-    if (was) { ghost = was.cloneNode() as HTMLImageElement; ghost.classList.add('ghost'); was.parentElement!.prepend(ghost); }
-    cur = n; tiles = []; touched++; pickTiles();
-    if (!ghost) return;
+    const up = Math.sign(idxOf(n) - idxOf(cur));
+    ghost = overview(ver, look === 'dark', cur); // the floor being left, as its overview
+    cur = n; touched++;
     await tick();
-    const k = s / base, o = `${(stage.clientWidth / 2 - x) / k}px ${(stage.clientHeight / 2 - y) / k}px`;
-    const fresh = plan.querySelector<HTMLImageElement>('.sheet img.ov:not(.ghost)');
-    const ease = { duration: 480, easing: 'cubic-bezier(.3, .75, .25, 1)' };
-    ghost.style.transformOrigin = o;
-    ghost.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, ease).finished.catch(() => {}).finally(() => ghost.remove());
-    if (fresh) { fresh.style.transformOrigin = o; fresh.animate({ transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] }, ease); }
+    if (!ghostEl) return;
+    const m = new DOMMatrix(getComputedStyle(first).transform), o = `${(W() / 2 - m.e) / m.a}px ${(H() / 2 - m.f) / m.a}px`;
+    const fresh = first.querySelector<HTMLImageElement>('img:not(.ghost)');
+    const ease = { duration: 480, easing: 'cubic-bezier(.3, .75, .25, 1)' }, come = { transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] };
+    const el = ghostEl, src = ghost;
+    el.style.transformOrigin = o;
+    el.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, { ...ease, fill: 'forwards' }).finished.catch(() => {}).finally(() => { if (ghost === src) ghost = null; });
+    if (fresh) { fresh.style.transformOrigin = o; fresh.animate(come, ease); }
+    map.getCanvas().animate(come, ease); // the new floor's tiles and labels come with its overview, about the screen's middle
   }
-  // the floors next to this one decoded ahead, so the new one is there the moment the floor changes (a swipe goes one
-  // floor; a far one on the rail decodes from the cache under the cross-fade). Held only while the main map shows: all
-  // six were ~60 MB of decoded pixels kept for the whole visit, on the other maps too (the glass went grey, Oct 31)
+  // the floors next to this one decoded ahead (each one's overview: its coarsest tile), so the new one is there the
+  // moment the floor changes (a swipe goes one floor; a far one on the rail decodes from the cache under the
+  // cross-fade). Only the neighbours: all six were ~60 MB of decoded pixels kept for the whole visit (the glass went grey, Oct 31)
   $effect(() => {
-    if (ver !== 'main') return;
-    const i = railFloors.indexOf(cur);
-    const held = railFloors.slice(Math.max(0, i - 1), i + 2).map((f) => { const im = new Image(); im.src = `${TILES}f${f}/o.webp`; void im.decode().catch(() => {}); return im; });
+    const i = railFloors.indexOf(cur), dark = ver === 'kbtu' && look === 'dark';
+    const held = railFloors.slice(Math.max(0, i - 1), i + 2).map((f) => { const im = new Image(); im.src = overview(ver, dark, f); void im.decode().catch(() => {}); return im; });
     return () => { held.length = 0; };
   });
   function pick(n: number) { void goTo(n); }
-  function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
+  function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, c: map.getCenter(), dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
   /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
   function swipeMove(px: number, py: number): boolean {
     if (!sw) return false;
@@ -411,7 +400,7 @@
       if (dx * dx + dy * dy < 144) return false;
       if (Math.abs(dx) <= Math.abs(dy) * 2) { sw = null; return false; } // not clearly sideways (a diagonal pan): the map pans as before
       sw.on = true; dragging = true;
-      x = sw.px; y = sw.py; paint(); // the few pixels it panned before the lock go back
+      map.dragPan.disable(); map.jumpTo({ center: sw.c }); // MapLibre lets go of the finger; the few pixels it panned before the lock go back
     }
     sw.dx = dx;
     const now = performance.now();
@@ -419,7 +408,7 @@
     while (sw.hist.length > 2 && now - sw.hist[0][0] > 90) sw.hist.shift();
     const last = railFloors.length - 1, fb = knob?.offsetWidth || 42;
     // on the rail the knob stays under the finger; on the map a half screen's swipe is one floor, the other way
-    let p = sw.rail ? sw.k0 + dx / fb : sw.k0 - Math.max(-1, Math.min(1, dx / (stage.clientWidth / 2)));
+    let p = sw.rail ? sw.k0 + dx / fb : sw.k0 - Math.max(-1, Math.min(1, dx / (W() / 2)));
     if (p < 0) p = -(1 - 1 / (1 - p * 0.6)); else if (p > last) p = last + (1 - 1 / (1 + (p - last) * 0.6)); // a rubber band at the ends
     kp = p;
     return true;
@@ -428,7 +417,7 @@
   function swipeEnd(cancel = false) {
     const z = sw; sw = null;
     if (!z?.on) return;
-    dragging = false;
+    dragging = false; map.dragPan.enable();
     const h = z.hist, last = railFloors.length - 1;
     const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
     const fling = Math.abs(vx) > 0.4 ? Math.sign(vx) * (z.rail ? 0.4 : -0.6) : 0;
@@ -471,14 +460,12 @@
   /** another map: the same part of the building stays on screen at the same size (owner, Oct 27: it zoomed out) */
   function setVer(v: Ver) {
     if (v === ver) return;
-    haptic.select();
-    const W = stage.clientWidth, H = stage.clientHeight, zoomed = !out();
-    const P = toPlan(ver, (W / 2 - x) / (W * s), (H / 2 - y) / (W * AR * s)), k = s * UNITS[v] / UNITS[ver];
-    ver = v; if ((v === 'old' && !cur) || (v === 'kbtu' && !KBTU_FLOORS[cur])) cur = 1; glided = false; clearTimeout(glideT); touched++; reset();
-    if (!zoomed) { goHome(); return; }
+    haptic.select(); halt();
+    const zoomed = !out(), P = toPlan(ver, ...uvAt(W() / 2, H() / 2)), k = scale() * UNITS[v] / UNITS[ver];
+    ver = v; orig = false; if (!HAS[v].includes(cur)) cur = 1; glided = false; clearTimeout(glideT); touched++;
+    if (!zoomed) { reset(); return; }
     const [u, w] = fromPlan(v, ...P);
-    s = Math.min(MAX, Math.max(home()[0], k)); x = W / 2 - u * W * s; y = H / 2 - w * W * AR * s;
-    clamp(); settle(); paint();
+    map.jumpTo(cam(Math.min(MAX, Math.max(homeK(), k)), u, w));
   }
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
@@ -514,7 +501,7 @@
     if (sp && sp.f != null) {
       room = null; at = { f: sp.f, u: sp.u!, v: sp.v!, label: text }; glided = false;
       if (ver !== 'main') { ver = 'main'; reset(); }
-      if (sp.f !== cur) { halt(); cur = sp.f; tiles = []; touched++; pickTiles(); }
+      if (sp.f !== cur) { halt(); cur = sp.f; touched++; }
       glideTo(sp.u!, sp.v!, 3.2, true);
       return;
     }
@@ -524,36 +511,35 @@
     room = r;
     const f = floorOf(r)!;
     if (ver === 'kbtu' || (!f && ver === 'old')) { ver = 'main'; reset(); } // rooms are ringed on Uni-Q's; the basement is there only
-    if (f !== cur) { halt(); cur = f; tiles = []; touched++; pickTiles(); }
+    if (f !== cur) { halt(); cur = f; touched++; }
   }
   const dest = $derived(room ?? at?.label ?? null);
   const cardTitle = $derived(at ? at.label : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
   const card = $derived(!pad && !routing && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
-  function fit() { halt(); framed = null; zoomTo(...home(), 420); }
-  const railFloors = $derived([0, 1, 2, 3, 4, 5].filter((n) => ver === 'main' || (ver === 'old' ? FLOORS[n] : KBTU_FLOORS[n])));
+  function fit() { halt(); framed = null; map.easeTo({ ...middle(), duration: 420, easing: spring }); }
+  const railFloors = $derived(HAS[ver]);
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
     if (glided) return;
     glided = true;
     glideT = window.setTimeout(async () => { // after onMount: the stage has its size
       if (gone) return;
-      const W = stage.clientWidth, ns = fit ? zoom : Math.max(s, zoom), { top, bottom } = fit ? free() : { top: head(), bottom: 0 };
-      const [nx, ny] = clamped(ns, W / 2 - u * W * ns, (top + stage.clientHeight - bottom) / 2 - v * W * AR * ns);
+      const ns = fit ? zoom : Math.max(scale(), zoom), { top, bottom } = fit ? free() : { top: head(), bottom: 0 };
+      const to = cam(ns, u, v, W() / 2, (top + H() - bottom) / 2);
       // just opened: the whole floor for a blink (owner, Oct 12: "you can't see where it came from"; "less than a tenth of
-      // a second", no waiting for tiles), the landing laid out big meanwhile (prepare: sharp all the way); its tiles come
-      // while it moves
+      // a second", no waiting for tiles); the landing's tiles come while it moves, over the coarser ones
       const t0 = ++touched;
-      prepare(ns, nx, ny);
       await new Promise((done) => setTimeout(done, Math.max(0, shownAt + 90 - performance.now())));
       await new Promise((done) => requestAnimationFrame(done));
       if (gone || touched !== t0) return; // a finger, a floor or the other version came first
-      zoomTo(ns, nx, ny, 800); // the spring: an easy ease (0.95 s, then 0.62 s) was "very slow", 0.52 s "too fast" (owner, Oct 12)
+      map.easeTo({ ...to, duration: 800, easing: spring }); // the spring: an easy ease (0.95 s, then 0.62 s) was "very slow", 0.52 s "too fast" (owner, Oct 12)
     });
   }
-  // the main map: where the number is printed (uniq-rooms.json, read off the plan); 251a is another room than 251
-  const spots = $derived(ver !== 'main' ? [] : onRoomFloor ? (ROOMS[cur][room!] ?? []) : at && at.f === cur ? [[at.u, at.v]] : []);
+  // where the room's number stands on this map (Uni-Q's: read off the plan; the drawn ones: their own labels); 251a is
+  // another room than 251. A named place is a point of Uni-Q's plan
+  const spots = $derived(onRoomFloor ? roomAt(ver, cur, room!) : ver === 'main' && at && at.f === cur ? [[at.u, at.v]] : []);
   // not numbered on the plan: its nearest numbers show roughly where it is (nearRooms)
   const near = $derived(ver !== 'main' || !onRoomFloor || spots.length ? [] : nearRooms(ROOMS[cur], room!, AR).map(([, at]) => at));
   /** the stage's part nothing covers: above the bottom card or sheet (data-cover); measured, so the card's height and
@@ -572,36 +558,12 @@
     glideTo((Math.min(...us) + Math.max(...us)) / 2, (Math.min(...vs) + Math.max(...vs)) / 2, Math.min(3.2, Math.max(1, Math.min(1 / bw, H / (bh * W)))), true);
   }
   $effect(() => {
-    if (ver !== 'main' || !onRoomFloor) return;
+    if (!onRoomFloor) return;
     if (spots.length) glideTo(spots[0][0], spots[0][1], 3.2, true); // framed above the room's card
     else if (glided) return;
-    else if (near.length) { say(t('map.lookHere', { room: room! }), 'pleading_face_3d'); frame(near); }
-    else { glided = true; say(t('map.notFound', { room: room! }), 'pleading_face_3d'); } // the old plan won't have it either
+    else if (ver === 'main' && near.length) { say(t('map.lookHere', { room: room! }), 'pleading_face_3d'); frame(near); }
+    else { glided = true; say(t(ver === 'main' ? 'map.notFound' : 'map.noRoom', { room: room! }), 'pleading_face_3d'); } // the old plan won't have it either
   });
-  // the old map: the number is real text in the SVG
-  $effect(() => {
-    if (ver !== 'old' || !svg || !onRoomFloor) return;
-    const el = plan.querySelector('svg');
-    if (!el) return;
-    const hits = [...el.querySelectorAll<SVGTextElement>('.t-room text')].filter((x) => normRoom(x.textContent ?? '') === room);
-    if (!hits.length) { if (!glided) { glided = true; say(t('map.noRoom', { room: room! }), 'pleading_face_3d'); } return; }
-    const rings = hits.map((h) => {
-      const b = h.getBBox(), c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx', String(b.x + b.width / 2)); c.setAttribute('cy', String(b.y + b.height / 2));
-      c.setAttribute('r', String(Math.max(b.width, b.height) / 2 + 9));
-      c.setAttribute('class', 'hl');
-      if (h.getAttribute('transform')) c.setAttribute('transform', h.getAttribute('transform')!); // a label set sideways
-      el.insertBefore(c, el.querySelector('g.t'));
-      h.classList.add('hl-t');
-      return c;
-    });
-    // the ring's centre in the plan's own pixels (getCTM: not thrown off by the panel's opening scale), at scale 1
-    const m = rings[0].getCTM();
-    if (!m) return;
-    const c = new DOMPoint(+rings[0].getAttribute('cx')!, +rings[0].getAttribute('cy')!).matrixTransform(m), W = stage.clientWidth * base;
-    glideTo(c.x / W, c.y / W);
-  });
-
   // the panel shows at once, or with its glide when it opens on a room (glideTo; a nearly transparent panel still gets painted)
   let appeared = false, shownAt = 0, undoChrome = () => {};
   function appear() {
@@ -685,16 +647,34 @@
   }
 
   onMount(() => {
-    reset(); goHome();
+    const dark = look === 'dark';
+    planKey = `${ver}|${cur}|${ver === 'kbtu' && dark}`; inkKey = `${ver}|${dark}`; wordsKey = wordsNow(); fadeVer = ver;
+    map = new GLMap({
+      container: gl, ...middle(), attributionControl: false, renderWorldCopies: false, fadeDuration: 250,
+      dragRotate: false, pitchWithRotate: false, touchPitch: false, keyboard: false, boxZoom: false, doubleClickZoom: false,
+      pixelRatio: Math.min(3, devicePixelRatio || 1), transformConstrain: within,
+      style: { version: 8, sources: { plan: planSource(), words: { type: 'geojson', data: words() } }, layers: [planLayer(), ...wordLayers()] } as StyleSpecification,
+    });
+    map.touchZoomRotate.disableRotation();
+    map.getCanvasContainer().append(plan); // over the canvas, inside what MapLibre listens on
+    // a label's plate (Uni-Q's numbers cover the tiny printed ones): one flat square, coloured and stretched by the layer
+    map.once('style.load', () => map.addImage('plate', { width: 4, height: 4, data: new Uint8Array(64).fill(255) }, { sdf: true }));
+    map.on('move', follow); map.on('resize', follow);
+    map.on('moveend', (e) => { if ((e as { originalEvent?: Event }).originalEvent) rest(); });
+    map.on('click', tap);
+    map.once('load', () => { ready = true; });
+    // the first frame with the floor's tiles in it, for the QA scripts' "tap to plan" time (the overview is there from frame one)
+    const drawn = () => { if (map.areTilesLoaded()) { map.off('render', drawn); performance.mark('map-drawn'); } };
+    map.on('render', drawn);
+    follow();
     if (at) glideTo(at.u, at.v, 3.2, true);
     appear();
-    const ro = new ResizeObserver(() => { clamp(); paint(); clearTimeout(reframeT); reframeT = window.setTimeout(reframe, 200); });
+    const ro = new ResizeObserver(() => { clearTimeout(reframeT); reframeT = window.setTimeout(reframe, 200); });
     const d = document.documentElement.dataset;
     d.map = ''; // the toast drops under the floor row there (Toast.svelte)
     ro.observe(stage);
-    stage.addEventListener('wheel', wheel, { passive: false });
     const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
-    return () => { clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
+    return () => { clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); clearTimeout(scanT); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
@@ -758,18 +738,13 @@
   $effect(() => { if (overlay.closing) leave(); });
 </script>
 
-<div class="panel theme-{look}" class:main={ver === 'main'} bind:this={panel}>
+<div class="panel theme-{look}" class:main={ver !== 'kbtu'} class:kbtu={ver === 'kbtu'} bind:this={panel}>
   {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
   <div class="stage" bind:this={stage} role="img" aria-label={title}
        onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
-    <div class="plan" bind:this={plan} style:aspect-ratio={ver === 'main' ? `${uniq.w} / ${uniq.h}` : '1'}>
-      {#if ver === 'main'}
-        <div class="sheet">
-          {#key cur}<img class="ov" src="{TILES}f{cur}/o.webp" alt="" draggable="false" />{/key}
-          {#each tiles as tl (tl.key)}
-            <img src={tl.src} alt="" draggable="false" decoding="async" style:left="{tl.l}%" style:top="{tl.t}%" style:width="{tl.w}%" style:height="{tl.h}%" />
-          {/each}
-        </div>
+    <div class="first" bind:this={first}>{#if ghost}{#key ghost}<img class="ghost" bind:this={ghostEl} src={ghost} alt="" draggable="false" />{/key}{/if}{#key `${ver}${cur}`}<img src={overview(ver, look === 'dark', cur)} alt="" draggable="false" />{/key}</div>
+    <div class="gl" bind:this={gl}></div>
+    <div class="plan" bind:this={plan} style:aspect-ratio="1 / {AR}">
         {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
           {#if i === 0 && card}<span class="pin flag" style:left="{u * 100}%" style:top="{v * 100}%">{cardTitle}</span>{/if}{/each}
         {#each near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
@@ -796,9 +771,6 @@
           {:else}<span class="pin end" style:left="{b.u * 100}%" style:top="{b.v * 100}%"></span>
             {#if rt.ends}<span class="pin flag" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{rt.ends[1]}</span>{/if}{/if}
         {/each}
-      {:else}
-        {@html shown}
-      {/if}
       {#each flawsHere as m (m.id)}
         <span class="pin mark" class:ok={m.id === okId} data-flaw={m.id} style:left="{m.u * 100}%" style:top="{m.v * 100}%"><Check size={11} strokeWidth={3.4} /></span>
         {#if m.id === seen}<span class="pin memo" style:left="{m.u * 100}%" style:top="{m.v * 100}%">{m.body}</span>{/if}
@@ -836,6 +808,11 @@
   {#if week && ver === 'main'}
     <button class="freeb glass glass-pill" class:on={freeOn} class:away={!!rt.route} use:glass onclick={toggleFree} aria-pressed={freeOn}>
       <i aria-hidden="true"></i>{t('map.freeNow')}</button>
+  {/if}
+  <!-- the 2023 plan as it was given, over our redraw of it, to compare (owner, Nov 15) -->
+  {#if ver === 'old'}
+    <button class="freeb glass glass-pill" class:on={orig} use:glass onclick={() => { haptic.select(); orig = !orig; }} aria-pressed={orig}>
+      <i aria-hidden="true"></i>{t('map.orig')}</button>
   {/if}
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
   <p class="note" class:away={pad || card || routing}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
@@ -877,43 +854,29 @@
     background: radial-gradient(circle, rgba(170, 195, 255, 0.55), rgba(120, 160, 255, 0.22) 45%, transparent 70%); }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
-  /* the main map's paper all round, white, or inverted with the plan in the dark look */
+  /* the paper all round: white, or inverted with the plan in the dark look (Uni-Q's and the 2023 plan); ours has its ground */
   .panel.main { background: #fff; }
   .panel.main.theme-dark { background: #0d0d0d; }
+  .panel.kbtu { background: #DCE0EA; }
+  .panel.kbtu.theme-dark { background: #0A0B10; }
   .x { position: absolute; z-index: 2; left: 12px; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); width: 38px; height: 38px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-solid); color: var(--text); }
-  .stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; }
+  .stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
   .rail { touch-action: none; }
-  .plan { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 1; transform-origin: 0 0; will-change: transform;
-    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-    --m-wall: #d70b19; --m-col: #b9d3bd; --m-col-line: #3a4a3d; --m-ink: #1c1c1e; --m-soft: #a1a1a6; --m-part: #a3192b; --m-dot: #c7c7cc; }
-  .theme-dark .plan { --m-wall: #e5484d; --m-col: #3d5444; --m-col-line: #8fb59a; --m-ink: #e5e5ea; --m-soft: #6e6e73; --m-part: #d4525f; --m-dot: #48484a; }
-  /* the SVG carries light-theme colours of its own (so it reads on its own); the theme's win here */
-  /* no hit testing through ~1,700 shapes on every touch (the stage takes the fingers, the pins are spans) */
-  .plan :global(svg) { display: block; width: 100%; height: 100%; pointer-events: none; }
-  .plan :global(.fine) { opacity: 0; transition: opacity 0.25s; }
-  .plan:global(.near) :global(.fine) { opacity: 1; }
-  .plan:global(.near) :global(.shade) { display: none; } /* the soft shadow's blur, redrawn over a plan laid out 8x wide, made zooming lag; up close it's off screen anyway */
-  .plan :global(.mid) { opacity: 0; transition: opacity 0.25s; }
-  .plan:global(.mid) :global(.mid) { opacity: 1; }
-  .plan :global(.w) { fill: var(--m-wall); }
-  .plan :global(.c) { fill: var(--m-col); stroke: var(--m-col-line); }
-  .plan :global(.lk) { stroke: var(--m-ink); }
-  .plan :global(.k) { fill: var(--m-ink); }
-  .plan :global(.lg) { stroke: var(--m-soft); }
-  .plan :global(.lr) { stroke: var(--m-part); }
-  .plan :global(.o) { fill: var(--m-dot); stroke: var(--m-ink); }
-  .plan :global(.t) { fill: var(--text); font-family: var(--font-text); }
-  .plan :global(.hl) { fill: var(--accent); fill-opacity: 0.16; stroke: var(--accent); stroke-width: 2.6; animation: ring 1.6s ease-in-out infinite; }
-  .plan :global(.hl-t) { fill: var(--accent-text); font-weight: 800; }
-  :global(html.lowfx) .plan :global(.hl) { animation: none; } /* power saving: the old plan's ring repainted the SVG every frame */
-  @keyframes ring { 50% { stroke-opacity: 0.3; fill-opacity: 0.08; } }
-  .sheet { position: absolute; inset: 0; }
-  .sheet img { position: absolute; display: block; pointer-events: none; -webkit-user-drag: none; }
-  .sheet .ov { inset: 0; width: 100%; height: 100%; }
-  /* on each picture, not the sheet: iOS stopped drawing the sheet's filter once the iris animated the panel and the
-     stage over it (owner's screenshot, Oct 26: a white plan in the dark look) */
-  .theme-dark .sheet img { filter: invert(0.95) hue-rotate(180deg); }
+  /* MapLibre's canvas, clear where it has drawn nothing yet: the floor's overview shows through from under it */
+  .gl { position: absolute; inset: 0; }
+  .gl :global(canvas) { touch-action: none; outline: none; }
+  /* the floor's whole sheet in one small picture, there from the first frame and under the tiles ever after; it
+     follows the camera by a transform alone */
+  .first { position: absolute; left: 0; top: 0; width: 512px; height: 512px; transform-origin: 0 0; will-change: transform; pointer-events: none; }
+  .first img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; -webkit-user-drag: none; }
+  /* on the picture itself: iOS stopped drawing a filter on its parent once the iris animated the panel and the stage
+     over it (owner's screenshot, Oct 26: a white plan in the dark look). The tiles are inverted the same in MapLibre */
+  .theme-dark.main .first img { filter: invert(0.95) hue-rotate(180deg); }
+  /* what stands on the plan (rings, pins, the way): laid over the canvas inside MapLibre's own container, so a finger
+     on a pin still moves the map; as wide as the plan is on screen, moved with the camera */
+  .plan { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; pointer-events: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   /* the room found: a ring that breathes out, its name in a blue flag above (mockup, Oct 24) */
   .spot { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
     border: 3px solid var(--accent-text); background: rgba(59, 107, 255, 0.14); box-shadow: 0 0 22px rgba(59, 107, 255, 0.6); }

@@ -1,45 +1,11 @@
-// Campus map (CONTEXT), two versions. Main: Uni-Q's plans of floors 0-5 (another team's work, credited
-// on the map), cut into an overview and tiles (design/map/tools/uniq) under public/map/u1, which the server caches for
-// a year; their rooms' numbers and where they sit on the plan, read off it, so the map glides to a room. Old: our
-// vector redraw, floors 1-5 from the 2023 plans (design/map/tools: walls on a shared grid, the rotunda in polar
-// coordinates, the labels as real text checked by eye, one frame for all floors), the basement (0) from Uni-Q's plan
-// (design/map/tools/basement). A Mini App always loads from the network, so the promise is "opens at once", not
-// "offline": the main map's overviews are fetched quietly soon after the first launch.
+// Campus map (CONTEXT): rooms, halls and places by name. The plans themselves are tiles under public/map, drawn by
+// MapLibre (lib/mapgl.ts has their frame and labels, tools/map/tiles.mjs cuts them): Uni-Q's plans of floors 0-5
+// (another team's work, credited on the map) with their rooms' numbers and where they sit on the plan, read off it, so
+// the map glides to a room; our redraw of the 2023 plans, floors 1-5 (src/assets/map/floor-N.svg: walls on a shared
+// grid, the rotunda in polar coordinates, one frame for all floors); and our own map (kbtu-N.svg, tools/map).
+// A Mini App always loads from the network, so the promise is "opens at once", not "offline".
 import ru from './i18n/ru';
 import { KK_SPOTS, EN_SPOTS } from './i18n/spots';
-import f1 from '../assets/map/floor-1.svg?url';
-import f2 from '../assets/map/floor-2.svg?url';
-import f3 from '../assets/map/floor-3.svg?url';
-import f4 from '../assets/map/floor-4.svg?url';
-import f5 from '../assets/map/floor-5.svg?url';
-import k1 from '../assets/map/kbtu-1.svg?url';
-import k1d from '../assets/map/kbtu-1-dark.svg?url';
-import k2 from '../assets/map/kbtu-2.svg?url';
-import k2d from '../assets/map/kbtu-2-dark.svg?url';
-import k3 from '../assets/map/kbtu-3.svg?url';
-import k3d from '../assets/map/kbtu-3-dark.svg?url';
-import k4 from '../assets/map/kbtu-4.svg?url';
-import k4d from '../assets/map/kbtu-4-dark.svg?url';
-import k5 from '../assets/map/kbtu-5.svg?url';
-import k5d from '../assets/map/kbtu-5-dark.svg?url';
-
-/** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off Uni-Q's) */
-export const FLOORS = [null, f1, f2, f3, f4, f5];
-
-/** Our own map's floors (owner, Oct 27): light and dark, built by tools/map from one geometry file a floor and one style; floors 1-5 (the floor switch offers what is here; the basement is the main map's only) */
-export const KBTU_FLOORS: Record<number, [string, string]> = { 1: [k1, k1d], 2: [k2, k2d], 3: [k3, k3d], 4: [k4, k4d], 5: [k5, k5d] };
-
-const loaded = new Map<string, Promise<string>>();
-/** A floor's SVG markup by its url; fetched once per launch, a failed fetch is tried again next time. */
-export function loadSvg(url: string): Promise<string> {
-  let p = loaded.get(url);
-  if (!p) {
-    p = fetch(url).then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))));
-    loaded.set(url, p);
-    p.catch(() => loaded.delete(url));
-  }
-  return p;
-}
 
 /** The main-building room in a place: "Aud. 305" (in Russian), "305", "Room 412", "251a" → "305", "305", "412", "251a".
  *  Only a room at the start counts, so a street address ("Abaya 150") never sends anyone to the KBTU map. A letter
@@ -132,16 +98,14 @@ export const atBldg2 = (place: string | null | undefined): boolean => !!place &&
 const BLDG2_LEAD = new RegExp(`^(?:${BLDG2.source})[\\s,.:-]*`, 'i');
 export const bldg2Room = (place: string): string | null => place.trim().replace(BLDG2_LEAD, '').match(/^\d+[^\s(,]*/)?.[0] ?? null;
 
-/** The main map's tiles: public/map/u1, next to index.html */
-export const TILES = `${import.meta.env.BASE_URL}map/u1/`;
-
-/** Fetch the main map's floor overviews with the map's first opening (about 0.6 MB, once: the server caches them a year;
- *  most students never open it, so nobody pays for it at the start) */
+/** The map ahead of its first opening (owner, Nov 15: the first tap opens it at once): its chunk with MapLibre, the
+ *  workers, the first floor's overview and tiles (screens/map/CampusMap.svelte warm). Called in an idle moment after the
+ *  app has started and again on the tap; once */
 let warmed = false;
 export function warmMap(): void {
   if (warmed) return;
   warmed = true;
-  FLOORS.forEach((_, n) => fetch(`${TILES}f${n}/o.webp`).catch(() => {}));
+  import('../screens/map/CampusMap.svelte').then((m) => m.warm(), () => { warmed = false; });
 }
 
 /** A room the plan doesn't number: the nearest numbers below and above it on its floor (within 10), both when they sit

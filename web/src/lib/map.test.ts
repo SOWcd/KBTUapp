@@ -86,3 +86,47 @@ it("our map's SVGs are built from the geometry and the style as they are now", a
     for (const dark of [0, 1]) expect(made[`/src/assets/map/kbtu-${n}${dark ? '-dark' : ''}.svg`] === render(src, dark), `floor ${n}: run node tools/map/build.mjs`).toBe(true);
   }
 });
+
+// The map on MapLibre (lib/mapgl.ts): a plan's (u, v) to the library's degrees and back, sizes as zooms, the labels.
+describe('the map frame', () => {
+  it('a point of a plan goes to MapLibre and back, on every map', async () => {
+    const { FRAMES, lngLat, uvOf, zoomFor, widthAt, Z0 } = await import('./mapgl');
+    for (const f of Object.values(FRAMES)) {
+      for (const [u, v] of [[0, 0], [1, 1], [0.485, 0.5], [0.8054, 0.199]]) {
+        const [u2, v2] = uvOf(f, ...lngLat(f, u, v));
+        expect(u2).toBeCloseTo(u, 9); expect(v2).toBeCloseTo(v, 9);
+      }
+      expect(lngLat(f, 0, 0)).toEqual([0, 0]); // the sheet hangs from the world's middle: its tiles start at a tile's corner
+      expect(widthAt(f, zoomFor(f, 487.5))).toBeCloseTo(487.5, 9);
+    }
+    expect(widthAt(FRAMES.old, Z0)).toBe(512); // the whole sheet is one tile at its coarsest level
+    expect(widthAt(FRAMES.main, Z0 + 4)).toBeCloseTo(6613, 6); // Uni-Q's finest level is its own pixels
+  });
+  it('a floor is a pyramid of tiles named as web-mercator ones; a screen with more pixels takes smaller tiles', async () => {
+    const { tilesOf, overview, tileSize } = await import('./mapgl');
+    expect(tilesOf('kbtu', true, 2)).toMatch(/map\/k2d\/f2\/\{z\}\/\{x\}_\{y\}\.webp$/);
+    expect(overview('main', true, 0)).toMatch(/map\/u2\/f0\/6\/32_32\.webp$/); // inverted in the dark look, not another cut
+    expect(tileSize(3)).toBeLessThan(tileSize(2));
+    expect(512 / tileSize(3)).toBeGreaterThan(3 / 1.5); // at least 2/3 of a picture's pixel a screen pixel
+  });
+  it("the drawn maps' labels are their SVGs' words as they are now", async () => {
+    const { allLabels } = await import('../../tools/map/labels.mjs' as string);
+    const svgs = import.meta.glob('/src/assets/map/*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+    const made = (await import('../assets/map/labels.json')).default;
+    expect(JSON.stringify(made) === JSON.stringify(allLabels((f: string) => svgs[`/src/assets/map/${f}`])), 'run node tools/map/labels.mjs').toBe(true);
+  });
+  it('room numbers are labels on every map: found by the room, never under a size one can read, halls first', async () => {
+    const { roomAt, labelsOf } = await import('./mapgl');
+    for (const ver of ['main', 'old', 'kbtu'] as const) expect(roomAt(ver, 3, '303'), ver).toHaveLength(1);
+    expect(roomAt('kbtu', 3, '349b')).toHaveLength(1); // the label says it in the UI's language, the room is the same
+    expect(roomAt('old', 3, '999')).toEqual([]);
+    const word = (k: string) => `<${k}>`;
+    const main = labelsOf('main', 4, true, word), hall = main.find((l) => l.t === '400a')!, any = main.find((l) => l.t === '412')!;
+    expect(main.every((l) => l.px >= 10 && l.plate && l.tier === 0)).toBe(true);
+    expect(hall.rank).toBeLessThan(any.rank);
+    const ours = labelsOf('kbtu', 1, false, word);
+    expect(ours.find((l) => l.t === '<canteen>')).toBeTruthy(); // its words come from the i18n files
+    expect(ours.filter((l) => /^\d{3}$/.test(l.t)).every((l) => l.px >= 10 && l.tier === 0)).toBe(true); // numbers at every zoom
+    expect(labelsOf('old', 1, false, word).some((l) => l.t === 'Tole bi street')).toBe(true);
+  });
+});

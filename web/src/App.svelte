@@ -293,7 +293,10 @@
   const idle = (fn: () => void) => { if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 4000 }); else setTimeout(fn, 500); };
   function prebuild() {
     const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
-    if (!k || session.banned) return;
+    if (session.banned) return;
+    // the tabs are built: now the map, with MapLibre, its workers and the first floor (owner, Nov 15: the first tap on
+    // the map opens it at once, no blank frame)
+    if (!k) { idle(warmMap); return; }
     built[k] = true;
     idle(() => {
       if (ui.tab === k) { idle(prebuild); return; }

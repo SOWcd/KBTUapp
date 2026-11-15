@@ -780,6 +780,7 @@ const kk: Dict = {
   'pad.a': "А",
   'pad.b': "Б",
   'map.freeNow': "Бос",
+  'map.orig': "Түпнұсқа",
   'map.freeHint': "Жасылдары қазір бос — кесте бойынша, аудиторияны біреу алып қоюы мүмкін",
   'map.freeUntil': "{time} дейін бос",
   'map.freeEvening': "Кешке дейін бос",

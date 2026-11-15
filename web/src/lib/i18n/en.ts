@@ -780,6 +780,7 @@ const en: Dict = {
   'pad.a': "A",
   'pad.b': "B",
   'map.freeNow': "Free now",
+  'map.orig': "Original",
   'map.freeHint': "Green rooms are free now, by the timetable: someone may still be there",
   'map.freeUntil': "Free until {time}",
   'map.freeEvening': "Free until the evening",

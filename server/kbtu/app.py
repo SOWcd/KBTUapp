@@ -2505,7 +2505,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         if not path or path == "index.html" or not f.is_file() or dist not in f.parents:
             return None
         # Vite puts a content hash into every name under assets/, so those never change; nor do the map's tiles, whose
-        # folder names their cut (map/u1/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
+        # folder names their cut (map/u2/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
         # video) changes rarely: a day, then revalidated in the background; a page (.html) is always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
                  "no-cache" if f.suffix == ".html" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
