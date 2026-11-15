@@ -98,6 +98,39 @@ async def conn(request: Request) -> AsyncIterator[sqlite3.Connection]:
 # every route's connection and caller (create() keeps the pool and the config in app.state)
 Con = Annotated[sqlite3.Connection, Depends(conn)]
 
+# the creator's whole Studio of a club (app.viewer, X-Staff-Org): what it never lends (the club's end, its hand-over,
+# his own joining, following, tickets and receipts: those are his as himself), and the reads its log leaves out
+STUDIO_NOT_LENT = frozenset({("DELETE", "/api/orgs/{oid}"), ("POST", "/api/orgs/{oid}/transfer"), ("POST", "/api/orgs/{oid}/join-requests"),
+                             ("DELETE", "/api/orgs/{oid}/join-requests/mine"), ("PUT", "/api/orgs/{oid}/subscription"), ("DELETE", "/api/orgs/{oid}/subscription"),
+                             ("POST", "/api/events/{eid}/receipt"), ("POST", "/api/events/{eid}/registration"), ("DELETE", "/api/events/{eid}/registration")})
+STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
+
+
+def _studio_route(con, request: Request, route: tuple[str, str], org: int) -> bool:
+    """A route of this club's Studio: the club's own (/api/orgs/{oid}...) or one of its events' (/api/events/{eid}...)."""
+    p = request.path_params
+    if route in STUDIO_NOT_LENT:
+        return False
+    if route[1].startswith("/api/orgs/{oid}"):
+        return str(p.get("oid")) == str(org)
+    eid = str(p.get("eid", ""))
+    return route[1].startswith("/api/events/{eid}") and eid.isascii() and eid.isdigit() and len(eid) < 12 \
+        and logic.one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ?", int(eid), org) is not None
+
+
+def _lent_role(con, request: Request, org: int) -> dict:
+    """The creator's "view as" in a club's Studio (X-Staff-Role): a level, or one of that club's own roles ("r<id>"),
+    whose rights he then acts with (core.can, role_in) instead of the President's; none: its President."""
+    r = request.headers.get("x-staff-role") or "president"
+    if r in ("president", "vice", "head", "member"):
+        return {"lent_role": r}
+    t = logic.one(con, "SELECT level, rights FROM org_roles WHERE id = ? AND org_id = ?", int(r[1:]), org) \
+        if r[:1] == "r" and r[1:].isascii() and r[1:].isdigit() and len(r) < 12 else None
+    if not t:
+        raise ApiError("forbidden", "staff")
+    return {"lent_role": t["level"], "lent_rights": t["rights"]}
+
+
 def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     cfg = request.app.state.cfg
     head = request.headers.get("authorization", "")
@@ -115,13 +148,21 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         route = (request.method, request.scope["route"].path)
         # the creator alone acts as the club's President there (core.can, lent_full), so his video uploads too
         full = v.role == "admin" and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
-        if v.role != "admin" or not o or "x-staff-event" in request.headers or not (
-                route == ("POST", "/api/photos") or full and route == ("POST", "/api/videos")
-                or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid):
+        draft = route == ("POST", "/api/photos") or full and route == ("POST", "/api/videos") \
+            or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid
+        # ...and the creator opens that club's whole Studio from Admin (owner, Nov 15): every route of the club and of its
+        # events, as its President; never the club's end or hand-over, nor his own joining or tickets (STUDIO_NOT_LENT)
+        studio = full and bool(o) and not draft and _studio_route(con, request, route, o["id"])
+        if v.role != "admin" or not o or "x-staff-event" in request.headers or not (draft or studio):
             raise ApiError("forbidden", "staff")
-        yield Viewer(v.id, v.role, v.student, staff_org=o["id"], lent_full=full)
+        v = Viewer(v.id, v.role, v.student, staff_org=o["id"], lent_full=full, **(_lent_role(con, request, o["id"]) if full else {}))
+        yield v
         if route[1] in ("/api/photos", "/api/videos"):  # reached only when the upload was kept; the draft itself: logic.staff_create_event
             logic.log_action(con, v.id, "staff_photo" if route[1] == "/api/photos" else "staff_video", f"org:{oid}")
+        elif studio and route not in STUDIO_QUIET:  # every write and every read but the club's and its events' cards
+            eid = request.path_params.get("eid")
+            logic.log_action(con, v.id, "staff_studio", f"org:{oid}", json.dumps({"do": f"{route[0]} {route[1]}", **({"event": int(eid)} if eid else {}),
+                                                                                  **({"as": request.headers["x-staff-role"]} if v.lent_role != "president" else {})}))
         return
     if (eid := request.headers.get("x-staff-event")) is None:
         yield v
@@ -134,7 +175,7 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     # the creator runs any event from Admin as its club's President would (core.can, core.role_in), to test it before
     # it goes live; every other admin keeps STAFF_RIGHTS. The one place this is decided
     full = bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
-    v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"], lent_full=full)
+    v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"], lent_full=full, **(_lent_role(con, request, e["org_id"]) if full else {}))
     yield v
     # reached only when the route answered: every write and every list of people (attendees, a meeting's answers, the
     # volunteers) the owner's log names; the event's own card alone isn't
@@ -854,6 +895,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/orgs/{oid}")
     def get_org(oid: int, con: Con, v: Me):
         return logic.org(con, v, oid)
+
+    @app.get("/api/orgs/{oid}/lent")  # the creator's Studio of a club he isn't in (X-Staff-Org): its President's membership
+    def lent_studio(oid: int, con: Con, v: Me):
+        return logic.lent_studio(con, v, oid)
 
     # ------------------------------------------------------------ an org's own chats (PLAN 86)
 

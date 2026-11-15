@@ -620,7 +620,8 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
     if r["multi"] and not member:
         raise ApiError("not_found")  # a link for many never gives a role with rights (team_link can't make one; belt and braces)
     # a link lives while its maker may still make it: one removed from the team (or a demoted admin) leaves none behind
-    if not (r["created_by"] and ("team" in rights_of(con, r["created_by"], o["id"]) if member
+    # (the creator's from that club's Studio in Admin lives while he is the creator and an admin: app.viewer's lent_full)
+    if not (r["created_by"] and ("team" in rights_of(con, r["created_by"], o["id"]) or bool(one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1 AND role = 'admin' AND banned_at IS NULL", r["created_by"])) if member
                                  else one(con, "SELECT 1 FROM users WHERE id = ? AND role = 'admin' AND banned_at IS NULL", r["created_by"]))):
         raise ApiError("not_found")
     if member and banned(con, o["id"], v.id):

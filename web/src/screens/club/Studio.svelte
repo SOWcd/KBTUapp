@@ -54,6 +54,7 @@
   import { nameOf } from '../../lib/short';
   import { photosFirst } from '../../lib/faces';
   import Avatar from '../../ui/Avatar.svelte';
+  import { creator, pickRole } from '../../lib/state/creator.svelte';
 
   // onTitle: in a pane, the club's name scrolled under the capsule (the pane's quiet capsule speaks then)
   let { onTitle }: { onTitle?: (gone: boolean) => void } = $props();
@@ -116,6 +117,11 @@
     if (org && staff && !m?.org.official) api.officialPath(org).then((x) => { if (m?.org.id === org) path = x; }).catch(() => {});
     else path = null;
   });
+  // the creator from Admin (lib/state/creator): "view as" any role of the club's model; the server enforces it too
+  const asCreator = $derived(!!m && creator.org === m.org.id);
+  const viewAs = (ev: MouseEvent) => menu(ev.currentTarget as Element, creator.roles.map((r) => ({
+    label: roleName(r.level, titleOf(r)), checked: r.key === creator.role, onselect: () => { haptic.tap(); pickRole(r.key); seg = 0; },
+  })));
   const presVice = $derived(m?.role === 'president' || m?.role === 'vice');
   // the volunteers ledger's club (server logic/vol.py): the list for its President and whom she grants, my own hours for each volunteer
   const vol = $derived(session.me?.vol && session.me.vol.org === m?.org.id ? session.me.vol : null);
@@ -242,7 +248,11 @@
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
-          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, titleOf(m))}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
+          {#if asCreator}
+            <button class="t-foot role as" onclick={viewAs} disabled={!creator.roles.length}>{t('studio.asCreator')} · {roleName(m.role, titleOf(m))}<ChevronDown size={14} strokeWidth={2.6} /></button>
+          {:else}
+          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, titleOf(m))}{members ? ' · ' + tn('studio.members', members) : ''}</p>
+          {/if}</span>
       {/snippet}
       <div class="top">
         {#if multi}
@@ -401,6 +411,8 @@
   .pick { margin-top: var(--s-3); }
   .role { display: flex; align-items: center; gap: 5px; }
   .role :global(svg) { color: var(--gold); }
+  .as { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+  .as :global(svg) { color: currentColor; }
   /* the Team row's faces: as many whole ones as fit (the wrap hides the rest), overlapping */
   /* engine: Row's detail taking the width the title leaves (here: the title keeps its words, the faces get the rest) */
   .tools :global(.row:has(.faces) .txt) { flex: none; max-width: 42%; }

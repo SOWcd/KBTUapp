@@ -63,6 +63,10 @@ class Viewer:
     # the creator (users.is_founder) from Admin: a President's rights on that club's new event and on any of its events
     # (app.viewer; can, role_in), never its reports; never set for another admin
     lent_full: bool = False
+    # his "view as" in that club's Studio (X-Staff-Role, app.viewer): the level and a club role's toggles he acts with
+    # instead of the President's, so what he sees there is exactly what works for that role
+    lent_role: str = "president"
+    lent_rights: str | None = None
     used: list = field(default_factory=list, compare=False, hash=False)
 
 
@@ -138,7 +142,7 @@ def need_student(v: Viewer) -> None:
 def role_in(con, v: Viewer, org: int) -> str | None:
     """My role in an org. Only students can be members (a guest's old rows don't count)."""
     if v.lent_full and org == v.staff_org:  # the creator from Admin, on that one event's club (app.viewer)
-        return "president"
+        return v.lent_role
     if not v.student:
         return None
     r = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", org, v.id)
@@ -232,8 +236,8 @@ def can(con, v: Viewer, oid: int | None, right: str) -> bool:
     if v.student and oid and right in rights_of(con, v.id, oid):
         return True
     # reports are the club team's own, with their own consent (evreports.py): never lent, not even to the creator
-    if oid and oid == v.staff_org and (right in STAFF_RIGHTS or v.lent_full and right != "reports" and right in club_rights(
-            "president", None, one(con, "SELECT official, top_at FROM orgs WHERE id = ?", oid))):
+    if oid and oid == v.staff_org and (not v.lent_full and right in STAFF_RIGHTS or v.lent_full and right != "reports" and right in club_rights(
+            v.lent_role, v.lent_rights, one(con, "SELECT official, top_at FROM orgs WHERE id = ?", oid))):
         v.used.append(right)
         return True
     return False
@@ -257,7 +261,10 @@ def organizes(con, v: Viewer) -> bool:
 
 def _roles(con, v: Viewer) -> dict[int, str]:
     """My role in each org I'm in (students only: a guest's old rows don't count)."""
-    return {r[0]: r[1] for r in rows(con, "SELECT org_id, role FROM org_members WHERE user_id = ?", v.id)} if v.student else {}
+    out = {r[0]: r[1] for r in rows(con, "SELECT org_id, role FROM org_members WHERE user_id = ?", v.id)} if v.student else {}
+    if v.lent_full and v.staff_org:  # the creator from Admin, that club's President (app.viewer), as role_in
+        out[v.staff_org] = v.lent_role
+    return out
 
 
 def short_name(p: sqlite3.Row) -> str:

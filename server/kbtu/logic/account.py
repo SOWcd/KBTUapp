@@ -410,6 +410,35 @@ def _channel(c) -> dict | None:
     return {"title": c["title"], "mirror": bool(c["mirror"] and c["kind"] == "channel" and mirror.username(c["url"]))} if c else None
 
 
+def _membership(con, m, mains: dict, logos: dict) -> dict:
+    """One of /api/me's memberships (and the creator's lent one, lent_studio)."""
+    return {"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
+            "oversee": bool(m["can_oversee"] and m["role"] != "member"),
+            **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
+            # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
+            **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
+               and m["kind"] == "club" and not stories_open(con, m) else {})}
+
+
+def lent_studio(con, v: Viewer, oid: int) -> dict:
+    """The creator's Studio of a club he isn't in (Admin, X-Staff-Org, app.viewer): its President's membership as /api/me
+    would give it, and every role of the club's model for his "view as" (the levels, then the club's own roles): each
+    one's rights as the server lends them with X-Staff-Role. Never its reports: their consent names the club's team alone (evreports.py)."""
+    o = one(con, "SELECT * FROM orgs WHERE id = ?", oid)
+    if not (v.lent_full and v.staff_org == oid and o):
+        raise ApiError("forbidden", "staff")
+    main = one(con, "SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id = ?", oid)
+    m = {**dict(o), "role": "president", "rights": None, "title": None, "title_kk": None, "title_en": None}
+    out = _membership(con, m, {oid: main} if main else {}, core._by_id(con, "files", [o["logo_file_id"]]))
+    lent = lambda lv, r: [x for x in _ordered(core.club_rights(lv, r, o)) if x != "reports"]  # noqa: E731
+    out["rights"] = lent("president", None)
+    own = rows(con, "SELECT id, name, name_kk, name_en, level, rights FROM org_roles WHERE org_id = ? ORDER BY id", oid)
+    return {"membership": out, "roles": [{"key": lv, "level": lv, "title": None, "titleKk": None, "titleEn": None, "rights": lent(lv, None)}
+                                         for lv in ("president", "vice", "head", "member")]
+            + [{"key": f"r{r['id']}", "level": r["level"], "title": r["name"], "titleKk": r["name_kk"], "titleEn": r["name_en"],
+                "rights": lent(r["level"], r["rights"])} for r in sorted(own, key=lambda r: -RANK[r["level"]])]}
+
+
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
     if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
@@ -467,12 +496,7 @@ def me(con, v: Viewer) -> dict:
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
-        "memberships": [{"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
-                         "oversee": bool(m["can_oversee"] and m["role"] != "member"),
-                         **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
-                         # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
-                         **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
-                            and m["kind"] == "club" and not stories_open(con, m) else {})} for m in members],
+        "memberships": [_membership(con, m, mains, logos) for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)

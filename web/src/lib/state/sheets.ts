@@ -165,7 +165,7 @@ export const sheets = {
   /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */
   adminForum: () => {},
   /** a club of mine: its Studio pushed over the Clubs tab (the tab's Mine row, the bot's links) */
-  studio: (_org: Id) => {},
+  studio: (_org: Id, _asCreator?: boolean) => {},
   /** all my clubs as rows (the Clubs tab's "All" circle, 3+ of them); role: mine there (a club I only follow: null) */
   clubList: (_view: 'all' | 'schools' | 'quiet' | OrgCategory) => {},
   myClubs: (_rows: { org: OrgRef; role: string | null; sub: string }[], _title?: string) => {},

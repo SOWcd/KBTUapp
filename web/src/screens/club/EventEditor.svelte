@@ -92,7 +92,7 @@
   const opts = (s: string) => [...new Set(s.split(',').map((o) => o.trim()).filter(Boolean))];
   const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
   // the name Kaspi prints for the recipient ("Alikhan S.", my short name): mine, as the one setting it up usually takes the money
-  const myKaspiName = session.me?.student && !untrack(() => asStaff) ? session.me.name : ''; // the creator never: the club's are used
+  const myKaspiName = session.me?.student && !untrack(() => asStaff) ? session.me.name : ''; // staff from Admin type the club's own
 
   const EMOJI = PICK_EMOJI;
   // eleven around the colour wheel and night (10-12, no RGB picker); BRAND when nothing else is set
@@ -179,8 +179,8 @@
     place: f.tba || f.place.trim() ? '' : t('ed.need'),
     seats: f.seats === '' || (Number.isInteger(+f.seats) && +f.seats > 0) ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
-    payTo: !f.paid || lent || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
-    payPhone: !f.paid || lent || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
+    payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
+    payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
     freeFirst: !f.paid || !f.freeFirst || (Number.isInteger(+f.freeFirst) && +f.freeFirst >= 0 && +f.freeFirst <= 5000) ? '' : t('ed.need'),
     host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
     link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
@@ -411,7 +411,7 @@
     } catch (x) {
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
-        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial') : x instanceof ApiErr && x.message === 'kaspi' ? t('ed.payNone')
+        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
         : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
@@ -839,12 +839,9 @@
             onchange={(v) => { touch(); f.paid = v === 'paid'; }} />
           {#if f.paid}
             <Field label={t('ed.price')} bind:value={f.price} type="number" inputmode="numeric" placeholder="2000" error={tried && err.price ? err.price : undefined} />
-            {#if lent}<p class="hint">{saved?.payToName ? `${saved.payToName} · ${fmtPhone(saved.payPhone ?? '')}. ` : ''}{t('ed.payClub')}</p>
-            {:else}
             <Field label={t('ed.payTo')} bind:value={f.payTo} maxlength={80} placeholder={t('ed.payToPh')} error={tried && err.payTo ? err.payTo : undefined} />
             <Field label={t('ed.payPhone')} bind:value={f.payPhone} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" error={tried && err.payPhone ? err.payPhone : undefined} />
             <p class="hint">{t('ed.payHint')}</p>
-            {/if}
             <Field label={t('ed.freeFirst')} bind:value={f.freeFirst} type="number" inputmode="numeric" placeholder={t('ed.freeFirstPh')} error={tried && err.freeFirst ? err.freeFirst : undefined} />
             <p class="hint">{t('ed.freeFirstHint')}</p>
           {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}

@@ -9,7 +9,7 @@ from test_admin_create_event import _body, _lines, _org
 from test_admin_events import _as, _setup
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
-PAY = {"price": 500, "payToName": "Boss Himself", "payPhone": "87770000000"}  # what he types is never used
+PAY = {"price": 500, "payToName": "Boss Himself", "payPhone": "87770000000"}  # he sets the payee as its President would (Nov 15)
 MEMO = {"room": {"any": True, "projector": False, "capacity": None}}
 
 
@@ -31,16 +31,13 @@ def _club_kaspi(con, ids, oid: int = 1, eid: int = 10) -> None:
 
 def test_creator_has_every_option_for_any_club(env):
     c, con, ids = _full_setup(env)
-    # no Kaspi details of the club's own yet: the price is refused, never set to his
-    r = c.post("/api/orgs/1/events", headers=_org(60), json=_body(**PAY))
-    assert (r.status_code, r.json()["message"]) == (403, "kaspi")
     _club_kaspi(con, ids)
     _club_kaspi(con, ids, 2, 11)
     for oid in (1, 2):  # any club
         r = c.post(f"/api/orgs/{oid}/events", headers=_org(60, oid), json=_body(**PAY, freeFirst=3, volunteers=5, memo=MEMO))
         assert r.status_code == 200, r.text
         e = r.json()
-        assert (e["price"], e["payToName"], e["payPhone"], e["freeFirst"], e["lentFull"]) == (500, "Dana S", "+77011234567", 3, True)
+        assert (e["price"], e["payToName"], e["payPhone"], e["freeFirst"], e["lentFull"]) == (500, "Boss Himself", "+77770000000", 3, True)
         assert e["memo"] == MEMO and e["volunteers"]["need"] == 5
         assert _lines(con, "staff_full")[-1] == (ids["boss"], f"org:{oid}", {"event": e["id"], "price": 500, "freeFirst": 3, "volunteers": 5, "memo": MEMO})
     eid = e["id"]
@@ -52,9 +49,9 @@ def test_creator_has_every_option_for_any_club(env):
     assert _lines(con, "staff_full")[-1] == (ids["boss"], "org:1", {"event": r.json()["id"], "guestHost": "Astana Hub"})
     assert c.post("/api/videos", headers=_org(60, 2), json={"size": 10}).status_code == 200
     assert _lines(con, "staff_video") == [(ids["boss"], "org:2", {})]
-    # then he runs it as its President: the price again (the club's details kept), the door, a co-host
-    r = c.patch(f"/api/events/{eid}", headers=_as(60, eid), json=_body(price=700, payToName="Me", payPhone="87770000000", volunteers=6))
-    assert r.status_code == 200 and (r.json()["price"], r.json()["payToName"]) == (700, "Dana S")
+    # then he runs it as its President: the price and the payee again, the door, a co-host
+    r = c.patch(f"/api/events/{eid}", headers=_as(60, eid), json=_body(price=700, payToName="Me Too", payPhone="87770000000", volunteers=6))
+    assert r.status_code == 200 and (r.json()["price"], r.json()["payToName"]) == (700, "Me Too")
     assert _lines(con, "staff_full")[-1] == (ids["boss"], "org:2", {"event": eid, "price": 700, "volunteers": 6})
     assert json.loads(con.execute("SELECT data FROM audit_log WHERE action = 'staff_event' ORDER BY id DESC").fetchone()[0])["full"]
     assert c.get(f"/api/events/{eid}/door", headers=_as(60, eid)).status_code == 200
@@ -71,9 +68,8 @@ def test_the_money_stays_the_clubs(env):
     con.execute("INSERT INTO files (id, sha256, kind, mime, bytes, path, created_at) VALUES (900, 'x', 'receipt', 'image/webp', 1, 'r/x', 0)")
     rid = con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, recipient_name, created_at)
         VALUES ((SELECT id FROM registrations WHERE event_id = ?), 900, 'app', 500, 'R-1', 'Dana S', 0)""", (eid,)).lastrowid
-    # the payee is the club's; once paid, the details are fixed for him as for anyone
-    assert con.execute("SELECT pay_to_name, pay_phone FROM events WHERE id = ?", (eid,)).fetchone()[:] == ("Dana S", "+77011234567")
-    assert c.patch(f"/api/events/{eid}", headers=_as(60, eid), json=_body(price=900)).status_code == 409
+    # once paid, the details are fixed for him as for anyone
+    assert c.patch(f"/api/events/{eid}", headers=_as(60, eid), json=_body(**PAY | {"price": 900})).status_code == 409
     # receipts: reviewed by the club's people alone; their routes never take the headers, the list hides them
     assert c.get(f"/api/events/{eid}/attendees", headers=_as(60, eid)).json()[0]["receipt"] is None
     for h in (_as(60, eid), _org(60), tma(60)):
@@ -118,7 +114,7 @@ def test_headers_lend_nothing_else(env):
     assert c.patch("/api/events/1", headers=_as(60, mine), json=_body(price=1)).status_code == 403
     assert c.get("/api/events/10/attendees", headers=_as(60, mine)).status_code == 403
     for method, path in (("GET", "/api/orgs/1/memo"), ("POST", "/api/orgs/1/memo/sent"), ("PATCH", "/api/orgs/1"), ("GET", "/api/orgs/1/events")):
-        assert c.request(method, path, headers=_org(60), json=[mine]).status_code == 403, path
+        assert c.request(method, path, headers=_org(65), json=[mine]).status_code == 403, path  # another admin: the draft's routes alone
     assert c.get("/api/events/10", headers=_as(65, 10)).json()["payToName"] is None  # another admin on the club's own event: no money shown
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == n
 

@@ -1,6 +1,6 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved } from './types';
+import type { ApiError, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -22,12 +22,19 @@ function first(path: string): Promise<Response> | undefined {
  *  each write in the owner's log. Only Admin adds to it. */
 export const staffEvents = new Set<Id>();
 /** Admin → "an event for a club": while that editor is open, the new event and its cover go as the admin's for this club
- *  (server app.viewer, X-Staff-Org: those routes alone; a video the creator's alone). Only that editor sets it. */
-export const staffOrg = { id: 0 as Id };
+ *  (server app.viewer, X-Staff-Org: those routes alone; a video the creator's alone). Only that editor sets it.
+ *  full: the creator's whole Studio of this club from Admin (lib/state/creator): every route of the club and of its own
+ *  events (`events`) goes as its President, or as the role he views it as (`role`, X-Staff-Role). */
+export const staffOrg = { id: 0 as Id, full: false, role: 'president', events: new Set<Id>() };
+const orgHead = (): Record<string, string> => ({ 'X-Staff-Org': String(staffOrg.id), ...(staffOrg.full && staffOrg.role !== 'president' ? { 'X-Staff-Role': staffOrg.role } : {}) });
 const staffOf = (method: string, path: string): Record<string, string> => {
-  if (staffOrg.id && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${staffOrg.id}/events` || path === `/orgs/${staffOrg.id}/events/fill`)) return { 'X-Staff-Org': String(staffOrg.id) };
+  const o = staffOrg.id;
+  if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
-  return id && staffEvents.has(+id) ? { 'X-Staff-Event': id } : {};
+  if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
+  // his own ticket, receipt and comments stay his (the server never lends those routes)
+  if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id) && !/^\/events\/\d+\/(?:registration|receipt|comments)/.test(path))) return orgHead();
+  return {};
 };
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -52,6 +59,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
   if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
+  // an event the creator made in the Studio: its routes go as the club's from here on
+  if (staffOrg.full && method === 'POST' && path === `/orgs/${staffOrg.id}/events`) staffOrg.events.add((data as { id: Id }).id);
   return localize(data) as T;
 }
 
@@ -205,6 +214,8 @@ export const server = {
 
   // Studio (own org, SPEC §6): Member+ reads and scans, Head+ creates, edits and sees attendees
   orgEvents: (org: Id): Promise<EventCard[]> => call('GET', `/orgs/${org}/events`),
+  /** the creator's Studio of a club he isn't in (Admin; X-Staff-Org): its President's membership and every role to view it as */
+  lentStudio: (org: Id): Promise<LentStudio> => call('GET', `/orgs/${org}/lent`),
   /** next week's memo to DMP, signed by me (Head+) */
   memo: (org: Id, later?: boolean): Promise<MemoDraft> => call('GET', `/orgs/${org}/memo${later ? '?later=true' : ''}`),
   /** "Open in Outlook" / "Copy": the others see it */

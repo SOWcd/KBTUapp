@@ -5,6 +5,7 @@
   // admins' numbers card; then the places, one group of rows. A moderator gets the queue and his two places only.
   // Events in the same search (owner, Nov 7): a tap runs one as its organizers do in Studio (EventManage, staff).
   // "An event for a club" (owner, Nov 11: clubs ask the creator to post theirs): pick the club, the usual editor as staff.
+  // "A club's Studio", the creator's alone (owner, Nov 15): pick the club, its whole Studio as its President.
   // The map's flaws: a quiet row at the very bottom (owner, Nov 7: the card on top pulled from moderation).
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Building from '@lucide/svelte/icons/building-2';
@@ -16,6 +17,7 @@
   import Bell from '@lucide/svelte/icons/bell';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import { untrack, type Component } from 'svelte';
   import { api, staffEvents, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
   import { hit } from '../../lib/clubs';
@@ -143,6 +145,7 @@
         {@render place(MedalIcon, t('adm.awards'), () => open(AdminAwards, {}))}
         {@render place(Building, t('adm.clubs'), () => sheets.adminClubs())}
         {@render place(CalendarPlus, t('adm.eventFor'), () => open(AdminEventFor, {}))}
+        {#if owner}{@render place(LayoutDashboard, t('adm.studioFor'), () => open(AdminEventFor, { studio: true }))}{/if}
       {/if}
       {@render place(TelegramMark, t('adm.chats'), () => sheets.adminChats())}
       {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}

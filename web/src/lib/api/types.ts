@@ -272,6 +272,10 @@ export interface StudentProfile {
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile' | 'reports';
 export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null; storiesLocked?: true }  // storiesLocked: a writer of a student initiative below the Ascent's collab (server clubs.stories_open); rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
 
+/** The creator's Studio of a club he isn't in (GET /orgs/{id}/lent): its President's membership, and every role of the
+ *  club's model (the levels, then the club's own) with the rights the server lends him as it (X-Staff-Role: key) */
+export interface LentStudio { membership: Membership; roles: { key: string; level: OrgRole; title: string | null; titleKk: string | null; titleEn: string | null; rights: Right[] }[] }
+
 export interface Me {
   id: Id;
   tg: { id: number; username: string | null; firstName: string; lastName: string };

@@ -90,7 +90,7 @@
   sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
   // a club's Studio is for its members only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/StudioPane.svelte');
-  sheets.studio = (org) => lazy(studioPage, { org }, 'sheet.studio');
+  sheets.studio = (org, asCreator) => lazy(studioPage, { org, asCreator }, 'sheet.studio');
   const teamPage = () => import('./screens/club/Team.svelte');
   const feedPage = () => import('./screens/afisha/Feed.svelte');
   // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame

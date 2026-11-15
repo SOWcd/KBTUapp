@@ -288,21 +288,13 @@ def kz_phone(raw: object) -> str | None:
 
 
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
-    """The price and where students send it (§4.3): only an official club's Vice+ set them (any club's Vice+ makes it free), and they are fixed once the
+    """The price and where students send it (§4.3): only an official club's Vice+ set them (the creator from Admin too, logged) (any club's Vice+ makes it free), and they are fixed once the
     first receipt is in. Absent keeps them; a null price makes the event free. The phone is kept as +7XXXXXXXXXX.
     freeFirst: how many 1st-year students come free (the first ones to register); it can change any time.
     ponytail: a raised freeFirst doesn't turn 1st-years already holding a seat free; they pay or let it go."""
     if not any(k in body for k in ("price", "payToName", "payPhone", "freeFirst")):
         return {}
     price, name, phone, first = body.get("price"), None, None, None
-    if price is not None and v.staff_org == org["id"]:
-        # the creator from Admin (lent_full): the money goes where the club's own goes, never to him. The event's own
-        # details if it has them, else those of the club's latest paid event one of its people made; none: refused
-        k = e if e and e["pay_phone"] else one(con, """SELECT pay_to_name, pay_phone FROM events WHERE org_id = ? AND pay_phone IS NOT NULL
-            AND created_by != ? ORDER BY id DESC LIMIT 1""", org["id"], v.id)
-        if not k:
-            raise ApiError("forbidden", "kaspi")
-        body = {**body, "payToName": k["pay_to_name"], "payPhone": k["pay_phone"]}
     if price is not None:
         name = " ".join(str(body.get("payToName") or "").split())
         phone = kz_phone(body.get("payPhone"))
@@ -320,6 +312,9 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     if e and any(new[k] != old[k] for k in ("price", "pay_to_name", "pay_phone")) \
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
         raise ApiError("conflict", "paid")  # someone has paid by these details already
+    if v.lent_full and v.staff_org == org["id"] and price is not None and (new["pay_to_name"], new["pay_phone"]) != (old["pay_to_name"], old["pay_phone"]):
+        # the creator from Admin sets the club's payee as its President would (owner, Nov 15): named in the owner's log
+        log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None}))
     return new
 
 
