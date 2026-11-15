@@ -61,6 +61,7 @@ export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefine
 export const inner = (e: { visibility?: string }): boolean => e.visibility === 'members' || e.visibility === 'leaders';
 
 /** The host club's own people at its public event: the team, not a guest, unless its President or a Vice said yes
- *  (owner, Nov 7; server seats.team_guest); a President or a Vice needs nobody's yes */
-export const onTeam = (e: { org: { id: unknown }; visibility?: string; teamAsk?: string }, ms: { org: { id: unknown }; role: OrgRole }[] | undefined): boolean =>
-  !inner(e) && e.teamAsk !== 'yes' && !!ms?.some((m) => m.org.id === e.org.id && m.role !== 'president' && m.role !== 'vice');
+ *  (owner, Nov 7; server seats.team_guest); a President or a Vice needs nobody's yes; a team event (a tournament) is
+ *  everyone's to play in, its club's people too (owner, Nov 15) */
+export const onTeam = (e: { org: { id: unknown }; visibility?: string; teamAsk?: string; teamMax?: number }, ms: { org: { id: unknown }; role: OrgRole }[] | undefined): boolean =>
+  !inner(e) && e.teamMax == null && e.teamAsk !== 'yes' && !!ms?.some((m) => m.org.id === e.org.id && m.role !== 'president' && m.role !== 'vice');

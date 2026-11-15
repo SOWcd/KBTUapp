@@ -290,3 +290,13 @@ def test_review_absent_cap_kept(env):
     _club(c, cfg)
     eid = _event(c, **CS2)
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **PAID, "seats": 80, "teamMin": 5, "teamMax": 5}).json()["teamCap"] == 16
+
+
+def test_club_members_play_their_own_tournament(env):
+    """A team event is the host club's members' to play in too, no President's yes (owner, Nov 15)."""
+    c, cfg = env
+    con = _club(c, cfg)
+    eid = _event(c, **CS2)
+    (m,) = _people(c, 1)
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (_uid(con, m),))
+    assert _go(c, eid, m).json()["my"]["status"] == "hold"
