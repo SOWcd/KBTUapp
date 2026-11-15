@@ -9,7 +9,7 @@ import time
 
 from PIL import Image
 
-from kbtu import logic
+from kbtu import bot, logic
 from test_core import env, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import _event, _go, _list, _mine, _people, _sheet
 from test_team_guests import PAID, _club, _uid
@@ -245,3 +245,48 @@ def test_link_team_filled_while_paying(env):
     c.delete(f"/api/events/{eid}/team", headers=tma(slow))  # the captain alone leaves: the team goes
     _receipt(c, eid, late)
     assert _sheet(c, eid, late)["teams"]["missed"] is True
+    # the bot's "your ticket is yours" only while it is (review, Nov 15)
+    row = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'team_missed' AND user_id = ?", (_uid(con, late),)).fetchone()
+    assert bot._render(con, row) is not None
+    c.delete(f"/api/events/{eid}/registration", headers=tma(late))
+    assert bot._render(con, row) is None
+
+
+def test_review_unpaid_ticket_then_teams_on(env):
+    """Review (Nov 15) fix 1: free sign-ups, the price set (no teams yet), then teams on: refused while anyone 'going'
+    has neither a free seat nor a receipt not rejected."""
+    c, cfg = env
+    _club(c, cfg)
+    eid = _event(c)
+    (a,) = _people(c, 1)
+    assert _go(c, eid, a).json()["my"]["status"] == "going"
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **PAID}).json()["price"] == 2000
+    r = c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **PAID, "teamMin": 2, "teamMax": 2, "teamCap": 2, "seats": 4}).json()
+    assert r["message"] == "team_paid"
+    c.delete(f"/api/events/{eid}/registration", headers=tma(a))
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **PAID, "teamMin": 2, "teamMax": 2, "teamCap": 2, "seats": 4}).json()["teamCap"] == 2
+
+
+def test_review_old_receipt_spares_a_free_ticket(env):
+    """Review fix 2: paid with R1, cancelled, back on a 1st-year free seat: rejecting the old R1 leaves the free ticket."""
+    c, cfg = env
+    con = _club(c, cfg)
+    eid = _event(c, **CS2)
+    (a,) = _people(c, 1)
+    _pay(c, eid, a)
+    old = _rid(con, eid, a)
+    c.delete(f"/api/events/{eid}/registration", headers=tma(a))
+    con.execute("UPDATE students SET course = 1 WHERE user_id = ?", (_uid(con, a),))
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **CS2, "freeFirst": 5}).status_code == 200
+    assert _go(c, eid, a).json()["my"]["status"] == "going"
+    assert _team(c, eid, a, "Vision").status_code == 200
+    assert c.post(f"/api/receipts/{old}/review", headers=tma(20), json={"reject": True}).status_code == 204
+    assert _sheet(c, eid, a)["my"]["status"] == "going" and _mine(c, eid, a)["name"] == "Vision"
+
+
+def test_review_absent_cap_kept(env):
+    """Review fix 3: an edit without teamCap (an old app, another client) keeps the cap."""
+    c, cfg = env
+    _club(c, cfg)
+    eid = _event(c, **CS2)
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **PAID, "seats": 80, "teamMin": 5, "teamMax": 5}).json()["teamCap"] == 16

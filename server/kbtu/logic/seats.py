@@ -839,7 +839,7 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
     if not isinstance(reject, bool):
         raise ApiError("bad_input")
     with tx(con):
-        c = one(con, "SELECT c.*, r.event_id, r.user_id, r.status AS reg FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.id = ?", rid)
+        c = one(con, "SELECT c.*, r.event_id, r.user_id, r.status AS reg, r.free FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.id = ?", rid)
         if not c:
             raise ApiError("not_found")
         e = _staff_event(con, v, c["event_id"], "events")
@@ -848,8 +848,9 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
         con.execute("UPDATE receipts SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?", ("rejected" if reject else "accepted", v.id, core.now(), rid))
         if reject:
             log_action(con, v.id, "receipt_reject", f"receipt:{rid}")
-            # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket
-            if c["reg"] == "going" and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
+            # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a
+            # free one (1st-year seat), not one on an event free now, not one paid by a newer receipt
+            if c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
                 con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
                 con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
                 notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}")

@@ -362,6 +362,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind in ("team_placed", "team_removed", "team_missed"):  # tp:<event>:<team> / tr: / tm:<event>:<when>, evteams.py; quiet once it started or changed since
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND starts_at > ?", int(ref[1]), logic.now())
         x = e and one(con, "SELECT team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"])
+        if kind == "team_missed" and not (e and e["team_max"] is not None and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], m["user_id"])):
+            return None  # "your ticket is yours" only while it is
         if not e or kind == "team_placed" and not (x and x[0] == int(ref[2])) or kind != "team_placed" and x:
             return None
         return (*texts.bot_message(lang, kind, **ev(e)), f"ev_{e['id']}")

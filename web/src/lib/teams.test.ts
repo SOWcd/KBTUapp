@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { inviteStep, teamError } from './teams';
+import { inviteStep, teamError, teamSize } from './teams';
 
 it("an invite's Join never cancels a sign-up waiting for a seat", () => {
   expect(inviteStep('going')).toBe('join');
@@ -22,3 +22,5 @@ it("a team's refusal says its own words, not the event's", () => {
   expect(teamError('full', 'full')).toBeUndefined();
   expect(teamError('bad_input', 'name')).toBeUndefined(); // a club's name, not a team's
 });
+
+it('a size of 5-5 reads 5', () => { expect(teamSize(5, 5)).toBe('5'); expect(teamSize(2, 5)).toBe('2–5'); });

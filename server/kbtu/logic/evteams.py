@@ -97,7 +97,7 @@ def settings(body: dict) -> dict:
     if type(lo) is not int or type(hi) is not int or not SIZE[0] <= lo <= hi <= SIZE[1] or \
             cap is not None and (type(cap) is not int or not CAP[0] <= cap <= CAP[1]):
         raise ApiError("bad_input", "teams")
-    return {"team_min": lo, "team_max": hi, "team_cap": cap}
+    return {"team_min": lo, "team_max": hi, **({"team_cap": cap} if "teamCap" in body else {})}  # absent: the cap kept
 
 
 def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
@@ -108,8 +108,10 @@ def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
     get = lambda k: f[k] if k in f else e[k] if e else None  # noqa: E731
     if get("team_max") is not None and get("price") and get("team_cap") and (get("seats") is None or get("seats") > get("team_cap") * get("team_max")):
         raise ApiError("bad_input", "team_seats")  # nobody pays for a place no team can take
-    if get("team_max") is not None and e and get("price") and not e["price"] and \
-            one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", e["id"]):
+    # a paid team event never holds a ticket nobody paid for (signed up while it was free, the price set later, teams
+    # on after): whichever of the two changes now, anyone 'going' without a free seat or a receipt not rejected refuses it
+    if get("team_max") is not None and get("price") and e and one(con, """SELECT 1 FROM registrations r WHERE r.event_id = ?
+            AND r.status = 'going' AND r.free = 0 AND NOT EXISTS (SELECT 1 FROM receipts c WHERE c.registration_id = r.id AND c.status != 'rejected')""", e["id"]):
         raise ApiError("conflict", "team_paid")
     if get("team_max") is not None and (get("late_signup") or get("meeting") or get("guest_host") or get("external_url")):
         raise ApiError("bad_input", "teams")

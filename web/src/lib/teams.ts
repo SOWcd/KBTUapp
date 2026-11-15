@@ -8,6 +8,9 @@ export function inviteStep(status: string | null | undefined, paid = false): 'jo
   return status === 'going' ? 'join' : status === 'hold' && paid ? 'pay' : status === 'waitlist' || status === 'hold' ? 'noSeat' : 'signup';
 }
 
+/** A team's size as said: "5" when min and max are the same, else "2–5" */
+export const teamSize = (min: number, max: number): string => (min === max ? `${min}` : `${min}–${max}`);
+
 // a team's refusals, by the server's code and message; looked up before the generic "closed" and "full"
 const ERR: Record<string, Key> = {
   'full/team_full': 'tm.full', 'conflict/name_taken': 'tm.nameTaken', 'bad_input/team_name': 'tm.nameBad', 'closed/not_going': 'tm.noSeat',

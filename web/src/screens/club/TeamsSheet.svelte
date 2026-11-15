@@ -5,6 +5,7 @@
   // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py).
   // A paid event: a player whose receipt nobody checked yet is marked too, and Form teams waits for them; a refund is
   // recorded by rejecting the receipt in the attendees list, which takes the player out of the team.
+  import { teamSize } from '../../lib/teams';
   import { onMount } from 'svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { api, ApiErr, type Id, type PersonRef, type TeamsBoard } from '../../lib/api';
@@ -62,7 +63,7 @@
 
 <Sheet {overlay} icon={UsersRound} full title={t('tm.board')}>
   {#if b}
-    <p class="t-foot sub">{b.cap ? t('tm.sizeCap', { min: b.min, max: b.max, cap: b.cap }) : t('tm.size', { min: b.min, max: b.max })}{b.locked ? ' · ' + t('tm.locked') : ''}</p>
+    <p class="t-foot sub">{b.cap ? t('tm.sizeCap', { size: teamSize(b.min, b.max), cap: b.cap }) : t('tm.size', { size: teamSize(b.min, b.max) })}{b.locked ? ' · ' + t('tm.locked') : ''}</p>
     {#if b.unchecked.length}<p class="t-foot sub">{t('tm.uncheckedNote', { n: b.unchecked.length })}</p>{/if}
     {#if !b.teams.length && !b.solo.length}
       <EmptyState inline text={t('tm.none')} />

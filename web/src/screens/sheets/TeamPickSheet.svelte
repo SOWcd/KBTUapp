@@ -2,6 +2,7 @@
   // A team event's sign-up (server evteams.py): make a team (its name; you're its captain and invite friends by link)
   // or "I have no team" (the app places you). Joining a friend's team comes by their link, not here. Closed without a
   // choice: no sign-up.
+  import { teamSize } from '../../lib/teams';
   import { onDestroy } from 'svelte';
   import type { TeamPick } from '../../lib/api';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
@@ -34,7 +35,7 @@
   <div class="page">
     <div class="hd">
       <h2 class="fs-sec">{t('tm.pickTitle')}</h2>
-      <p class="fs-sub dim">{t('tm.size', { min, max })}</p>
+      <p class="fs-sub dim">{t('tm.size', { size: teamSize(min, max) })}</p>
     </div>
     <Group>
       <Row title={t('tm.create')} subtitle={t('tm.pickCreateSub')} accessory="check" checked={way === 'create'} onclick={() => choose('create')} />

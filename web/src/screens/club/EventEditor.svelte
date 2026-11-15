@@ -8,6 +8,7 @@
   // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
   // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
   // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
+  import { teamSize } from '../../lib/teams';
   import { onMount, untrack } from 'svelte';
   import { fmtPhone } from '../../lib/phone';
   import MemoAsksForm from './MemoAsks.svelte';
@@ -736,7 +737,7 @@
       {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
       {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
-      {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${f.teamMin}–${f.teamMax}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
+      {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
       {#if canPartner && !isMeeting && saved?.guestHost}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
