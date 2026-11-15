@@ -409,6 +409,7 @@
   .sower .meta { color: rgba(232, 232, 231, 0.7); }
   .sower .id { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.6), 0 0 14px rgba(14, 14, 14, 0.5); } /* over the print's halftone */
   .sower .badge { background: rgb(30, 30, 30); }
+  .sower .medal { right: 20px; } /* the seal between the hand's two raised fingers (gen-owner.py GAP) */
   .sower .strap { background: linear-gradient(90deg, rgb(206, 206, 202), rgb(246, 246, 244) 50%, rgb(206, 206, 202)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); } /* the strip's white paper: graphite vanished on the dark page */
   .sower .strap span { color: rgb(30, 30, 30); letter-spacing: 0.3em; }
   /* the template's clubs (lib/awards.ts CLUB_LOOKS, as CSS variables): the card under the band, the strap, the photo's

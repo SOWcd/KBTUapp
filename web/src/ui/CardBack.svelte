@@ -77,6 +77,7 @@
   .bside > * { flex: none; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
+  .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
   .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
@@ -96,7 +97,7 @@
   .kbtumag :global(.near) { opacity: 0.45; }
   .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
   /* SOWER: the hand stands where this side sets the name: quieter here, the name lifted off it */
-  .sower :global(.near) { opacity: 0.6; }
+  .sower :global(.near) { opacity: 0.45; }
   .sower .bside { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.8), 0 0 10px rgba(14, 14, 14, 0.7); }
   .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }

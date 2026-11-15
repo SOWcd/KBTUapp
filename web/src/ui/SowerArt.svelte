@@ -1,9 +1,10 @@
 <script lang="ts">
-  // The creator's own lanyard (owner, Nov 6: the holographic one went; in his photo's colours, a halftone hand cut out of
-  // white paper on graphite). Its layers far to near (assets/lanyards/sower, drawn by
-  // .claude/reports/sower-lanyard/gen-sower.py; as pictures: tools/scene-rasters.mjs): a print's halftone and the
-  // spotlights' grain far, moving with the tilt (base.css .z); torn paper and the beams' light still; the hand in their
-  // light near, moving the most. `wide`: the profile's card and its back; else the full-screen badge (MyQr).
+  // The creator's own lanyard (owner, Nov 16: from scratch, his avatar itself): the photo's horns hand screened again at
+  // the card's size on its torn white paper, the creator's seal held between its two fingers (Hero: .sower .medal), on
+  // the avatar's charcoal checker that turns into a print's halftone behind it; crop marks, one red dot. Layers far to
+  // near (assets/lanyards/sower, made by .claude/reports/club-lanyards/owner/round1/gen/gen-owner.py; as pictures:
+  // tools/scene-rasters.mjs): the checker moving with the tilt (base.css .z), the marks still, the hand moving the
+  // most. `wide`: the profile's card and its back; else the full-screen badge (MyQr).
   import far from '../assets/lanyards/sower/far-card.webp';
   import mid from '../assets/lanyards/sower/mid-card.webp';
   import near from '../assets/lanyards/sower/near-card.webp';
@@ -17,7 +18,7 @@
 
 <style>
   .sa { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none;
-    background: radial-gradient(70% 90% at 92% 0%, rgba(232, 232, 231, 0.12), transparent 70%), linear-gradient(160deg, rgb(46, 46, 46), rgb(30, 30, 30) 50%, rgb(14, 14, 14)); }
+    background: linear-gradient(160deg, rgb(46, 46, 46), rgb(28, 28, 28) 50%, rgb(14, 14, 14)); }
   img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
   .far { --z: -2; --zs: 1.03; }
   .near { --z: 3; --zs: 1.03; }
