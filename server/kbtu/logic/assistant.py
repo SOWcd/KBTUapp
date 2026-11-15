@@ -507,7 +507,7 @@ Reply with JSON only, no other text:
 {{"title": "...", "date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM", "place": "...", "description": "...", "price": 0, "emoji": "...", "color": "..."}}
 title: the event's name, at most 80 characters, no emoji, no date. date: the day it happens (no year given: the next
 such date from today). end_date: only when it lasts several days (21.11 – 22.11), its last day, else null. start, end: 24-hour local time. place: as written (a room number, a hall, an address), at most
-80 characters. price: tenge, a whole number, only if it says it's paid.
+80 characters. price: tenge, a whole number, only if it says it's paid; always one person's price (a fee per team and per player: the player's).
 description: the announcement rewritten cleanly for the event's page in the app, in its own language and with its own
 facts, at most 2000 characters, without the title, date, time and place (the form shows them). Shape it to be read on a
 phone: a one-line hook first, then short paragraphs separated by an empty line (\n\n in the JSON string); what awaits
