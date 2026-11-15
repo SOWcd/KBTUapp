@@ -24,7 +24,8 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
-  import { chat, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import { session } from '../../lib/state/session.svelte';
   import type { AssistAction } from '../../lib/api/types';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
@@ -39,10 +40,13 @@
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx }: { overlay: Overlay; ctx?: AskCtx } = $props();
-  untrack(() => {
-    if (chat.ctx?.kind === ctx?.kind && chat.ctx?.id === ctx?.id) return;
+  // fresh: the keyboard comes up with it (App's stand-in held the focus from the tap); a conversation to read: down
+  const start = untrack(() => {
+    if (!fresh(ctx)) return false;
     chat.turns = []; chat.ctx = ctx ?? null;
+    return true;
   });
+  const first = session.me?.student?.firstName;
   let draft = $state(''), busy = $state(false);
   let list = $state<HTMLDivElement>();
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
@@ -103,11 +107,11 @@
 <Sheet {overlay} icon={Sparkles} tall title={t('as.title')}>
   <div class="list" bind:this={list}>
     {#if !chat.turns.length}
+      <!-- as in every AI app: the greeting alone in the middle, the suggestions at the bottom over the field -->
       <div class="hello">
-        <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={44} /></span>
-        {#if chat.ctx}<h2 class="t-h2 clamp-2">{t('as.about', { title: chat.ctx.title })}</h2>
-        {:else}<h2 class="t-h2">{t('as.hello')}</h2><p class="hi">{t('as.helloText')}</p>{/if}
-        <div class="sugg">{#each SUGGEST as k (k)}<Chip selected={false} onclick={() => { haptic.tap(); void ask(t(k)); }}>{t(k)}</Chip>{/each}</div>
+        <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={32} /></span>
+        <h2 class="t-h1">{t('as.hello', { name: first ? ', ' + first : '' })}</h2>
+        {#if chat.ctx}<p class="about clamp-2">{t('as.about', { title: chat.ctx.title })}</p>{/if}
       </div>
     {:else if chat.ctx}
       <!-- engine: ui/Tag could truncate a long label with "…" (an event's title); till then this pill is local -->
@@ -152,48 +156,51 @@
     {/each}
     {#if busy}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
   </div>
-  <p class="note">{t('as.note')}</p>
 
   {#snippet footer()}
-    <div class="row"><Composer bind:value={draft} placeholder={t('as.ph')} maxlength={300} sending={busy} label={t('cm.send')} onsend={() => ask(draft)} /></div>
+    {#if !chat.turns.length}
+      <div class="sugg">{#each SUGGEST as k (k)}<Chip selected={false} onclick={() => { haptic.tap(); void ask(t(k)); }}>{t(k)}</Chip>{/each}</div>
+    {/if}
+    <Composer bind:value={draft} placeholder={t('as.ph')} maxlength={300} sending={busy} label={t('cm.send')} onsend={() => ask(draft)} pill focus={start} />
+    <p class="note">{t('as.note')}</p>
   {/snippet}
 </Sheet>
 
 <style>
-  .list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
-  .hello { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s-2); padding: 14px 6px 8px; }
-  .hi { max-width: 320px; font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
-  .orb { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%;
+  .list { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding: 6px 0 4px; }
+  .hello { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: var(--s-3); padding: 0 6px 8vh; }
+  .hello h2 { overflow-wrap: anywhere; }
+  .about { max-width: 320px; font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
+  .orb { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, var(--accent-soft), transparent 70%), var(--surface-2);
     animation: orb 3.2s ease-in-out infinite; }
   @keyframes orb { 50% { transform: translateY(-4px) scale(1.04); } }
-  .sugg { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); margin-top: var(--s-2); padding: 4px 0;
+  .sugg { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-3);
     animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) 120ms backwards; }
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 600 var(--fs-cap)/1 var(--font-text); }
-  /* the chat's bubbles: bespoke content (no ui/ part draws a message), on the tokens */
-  .b { max-width: 86%; padding: 10px 14px; border-radius: var(--r-l); animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  /* the chat, as in ChatGPT and Claude: my words in a bubble on the right, KRI's plain on the ground (bespoke content: no ui/ part draws a message) */
+  .b { max-width: 86%; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
   @keyframes in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
   .b p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .b.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); border-bottom-right-radius: var(--r-xs); }
-  .b.assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: var(--r-xs); }
+  .b.user { align-self: flex-end; padding: 10px 14px; border-radius: var(--r-l); background: var(--fill); }
+  .b.assistant { align-self: stretch; max-width: none; padding: 0 2px; }
   .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s-2); }
   .acts :global(.btn) { max-width: 100%; }
   .rate { display: flex; gap: 2px; margin: -4px 0 0 0; --plain-ink: var(--text-3); }
   .rate :global(.btn[aria-pressed='true']) { color: var(--accent-text); opacity: 1; }
   .offer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 86%; margin: -2px 0 0 0; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
   .offer p { padding: 0 var(--s-2); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
-  .help { max-width: 92%; }
+  .b.help { padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-2); }
   .lines { display: flex; flex-direction: column; gap: 6px; margin-top: var(--s-3); }
   .lines a { display: flex; align-items: center; justify-content: center; gap: var(--s-2); height: var(--ctl-m); padding: 0 var(--s-5); border-radius: var(--r-full);
     background: var(--accent); color: var(--on-accent); font: 600 var(--fs-body)/1 var(--font-text); text-decoration: none; }
   .lines a:active { opacity: 0.8; }
-  .typing { display: flex; gap: 5px; padding: 14px 16px; }
+  .typing { display: flex; gap: 5px; padding: 6px 2px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: dot 1s ease-in-out infinite; }
   .typing i:nth-child(2) { animation-delay: 150ms; } .typing i:nth-child(3) { animation-delay: 300ms; }
   @keyframes dot { 30% { transform: translateY(-4px); opacity: 1; } 0%, 60%, 100% { opacity: 0.4; } }
-  .note { margin: var(--s-2) 0 2px; text-align: center; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
-  .row { width: 100%; }
+  .note { margin: var(--s-2) 4px 0; text-align: center; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
   :global(html.lowfx) .orb { animation: none; }
 </style>

@@ -4,6 +4,7 @@
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
+  import { fresh } from './lib/state/assistant.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
   import { CONSENT_VOL } from './lib/legal';
   import { askAfterTeamMark } from './lib/reports';
@@ -136,7 +137,24 @@
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.eventReport = (id, org) => lazy(() => import('./screens/club/EventReport.svelte'), { id, org });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
-  sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }, 'sheet.assistant'));
+  // a new conversation opens with the keyboard up, as every AI app does. iOS raises it only for a focus inside the tap,
+  // and the chunk may come later: a stand-in field takes the focus now, the assistant's own field takes it over as it
+  // mounts (iOS keeps the keyboard across the move); a reopened conversation keeps the keyboard down to read it
+  const assistant = () => import('./screens/assistant/Assistant.svelte');
+  sheets.assistant = (ctx) => asStudent(() => {
+    const kb = fresh(ctx) ? standIn() : null;
+    void lazy(assistant, { ctx }, 'sheet.assistant').then(() => setTimeout(() => kb?.remove(), 600)); // failed or slow: let it go
+  });
+  function standIn(): HTMLInputElement {
+    const f = document.createElement('input');
+    f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0';
+    f.style.fontSize = '16px'; // iOS zooms into a smaller one
+    document.body.append(f);
+    f.focus({ preventScroll: true });
+    f.addEventListener('blur', () => f.remove(), { once: true });
+    return f;
+  }
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.doorPeople = (id, onchange) => lazy(() => import('./screens/club/People.svelte'), { id, onchange });
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });

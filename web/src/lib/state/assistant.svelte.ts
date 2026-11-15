@@ -6,3 +6,5 @@ export type Turn = { role: 'user' | 'assistant'; text: string } & Partial<Omit<A
 /** the card "Ask AI" was tapped on: its id goes with each question (the server reads its facts), the title is only shown */
 export type AskCtx = { kind: 'event' | 'club'; id: Id; title: string };
 export const chat = $state<{ turns: Turn[]; ctx: AskCtx | null }>({ turns: [], ctx: null });
+/** opening the assistant from this card (or none) starts a new conversation: none yet, or another card's */
+export const fresh = (ctx?: AskCtx): boolean => !chat.turns.length || chat.ctx?.kind !== ctx?.kind || chat.ctx?.id !== ctx?.id;

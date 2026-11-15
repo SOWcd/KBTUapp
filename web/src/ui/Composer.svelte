@@ -4,6 +4,8 @@
   // placeholder says which one is on (the caller's words), never a silent toggle.
   //   value (bindable), placeholder, onsend, sending (the button spins), maxlength, label (the send button's name)
   //   as  { me, anon, onchange }: me as the first choice, anonymous (the mask) as the second
+  //   pill  one rounded field with the send button inside its right end (the AI apps' bar: the assistant)
+  //   focus  takes the focus as it mounts (a stand-in field may hold it till then: App's assistant)
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Avatar from './Avatar.svelte';
@@ -14,8 +16,8 @@
 
   type Me = { id: number; name: string; avatar?: string | null };
   type Props = { value?: string; placeholder: string; onsend: () => void; sending?: boolean; maxlength?: number; label?: string;
-    as?: { me: Me; anon: boolean; onchange: (anon: boolean) => void } };
-  let { value = $bindable(''), placeholder, onsend, sending = false, maxlength = 500, label, as }: Props = $props();
+    as?: { me: Me; anon: boolean; onchange: (anon: boolean) => void }; pill?: boolean; focus?: boolean };
+  let { value = $bindable(''), placeholder, onsend, sending = false, maxlength = 500, label, as, pill = false, focus = false }: Props = $props();
 
   const empty = $derived(!value.trim());
   const send = () => { if (!empty && !sending) onsend(); };
@@ -30,15 +32,15 @@
   }
 </script>
 
-<div class="cmp">
+<div class={['cmp', { pill }]}>
   {#if as}
     <button class="as" aria-haspopup="menu" aria-label={as.anon ? t('bd.asAnon') : as.me.name} onclick={who}>
       {#if as.anon}<span class="mask"><VenetianMask size={18} strokeWidth={2} /></span>
       {:else}<Avatar person={as.me} size={32} tappable={false} />{/if}
     </button>
   {/if}
-  <textarea bind:value rows="1" {maxlength} {placeholder} enterkeyhint="send" onkeydown={key} use:grow={132}></textarea>
-  <IconButton kind="filled" icon={ArrowUp} label={label ?? t('cm.send')} disabled={empty} loading={sending} onclick={send} />
+  <textarea bind:value rows="1" {maxlength} {placeholder} enterkeyhint="send" {@attach (el) => { if (focus) el.focus({ preventScroll: true }); }} onkeydown={key} use:grow={132}></textarea>
+  <IconButton kind="filled" icon={ArrowUp} size={pill ? 's' : 'm'} label={label ?? t('cm.send')} disabled={empty} loading={sending} onclick={send} />
 </div>
 
 <style>
@@ -48,4 +50,7 @@
   textarea { flex: 1; min-width: 0; min-height: var(--ctl-m); padding: 11px var(--s-4); border-radius: var(--r-l); resize: none;
     background: var(--fill); color: var(--text); font: 450 var(--fs-row)/1.3 var(--font-text); letter-spacing: -0.012em; }
   textarea::placeholder { color: var(--text-3); }
+  /* the pill: the field's ground on the whole bar, the button 4 px in from its right end; a pill on one line (28 px past its half height), a rounded block as it grows */
+  .pill { gap: 0; padding: 4px; border-radius: var(--r-xl); background: var(--fill); }
+  .pill textarea { min-height: var(--ctl-s); padding: 7px var(--s-2) 7px var(--s-4); background: none; border-radius: 0; }
 </style>
