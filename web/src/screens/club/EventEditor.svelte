@@ -442,7 +442,7 @@
     touch(); filling = true;
     try {
       const adding = !first && more;
-      const now = { title: f.title, date: f.date, start: f.start, end: f.end, place: f.tba ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
+      const now = { title: f.title, date: f.date, endDate: f.endDate, start: f.start, end: f.end, place: f.tba ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
       const dflt = { date: blank.date, start: blank.start };
       // the form so far, as data (the server bounds it): a default the organiser never set isn't sent
       const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
@@ -464,7 +464,7 @@
       const { price, emoji, color, ...rest } = x; // the server sends only the fields it found, named as the form's
       // from the paste screen a date or time it didn't find stays empty (not next week's default): listed on top, and
       // the form's own rule stops a publish without them
-      if (first && Object.keys(x).length) { f.date = rest.date ?? ''; f.start = rest.start ?? ''; }
+      if (first && Object.keys(x).length) { f.date = rest.date ?? ''; f.start = rest.start ?? ''; f.endDate = rest.endDate ?? ''; }
       Object.assign(f, rest);
       if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
       if (price && canPrice) { f.paid = true; f.price = String(price); }
@@ -535,9 +535,11 @@
   const askVal = $derived([f.needsPhone ? t('ed.formPhone') : '', f.form.length ? tn('ed.formN', f.form.length) : ''].filter(Boolean).join(', ') || t('ex.no'));
   const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
   const regVal = $derived(regMode === 'end' ? t('ex.untilEnd') : regMode === 'date' && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
-  const dayText = $derived(Number.isFinite(startTs) ? `${weekdayShort(startTs)}, ${dayMonthShort(startTs)}` : '—');
+  // the day shows as soon as it's set, a time or not (a fill without one left it looking empty)
+  const dayTs = $derived(fromInputs(f.date, '12:00'));
+  const dayText = $derived(Number.isFinite(dayTs) ? `${weekdayShort(dayTs)}, ${dayMonthShort(dayTs)}` : '—');
   // the end's day: its own date when set, else the day the end time falls on (dimmed: nothing chosen)
-  const endDay = $derived(endTs != null ? endTs : Number.isFinite(startTs) ? startTs : null);
+  const endDay = $derived(f.endDate ? fromInputs(f.endDate, '12:00') : endTs != null ? endTs : Number.isFinite(dayTs) ? dayTs : null);
   const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
   const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
   const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;

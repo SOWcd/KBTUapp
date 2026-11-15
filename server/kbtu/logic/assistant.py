@@ -504,9 +504,9 @@ FILL_COLORS = {"red": "#F2542D", "orange": "#FF8A3D", "amber": "#FFB23D", "lime"
                "sky": "#18A9DB", "blue": "#3B6BFF", "violet": "#7C4DFF", "purple": "#AF52DE", "pink": "#FF4FA3", "night": "#2A2340"}
 FILL = """You read a student club's event announcement and fill the event form. Today is {today} (Almaty).
 Reply with JSON only, no other text:
-{{"title": "...", "date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM", "place": "...", "description": "...", "price": 0, "emoji": "...", "color": "..."}}
+{{"title": "...", "date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM", "place": "...", "description": "...", "price": 0, "emoji": "...", "color": "..."}}
 title: the event's name, at most 80 characters, no emoji, no date. date: the day it happens (no year given: the next
-such date from today). start, end: 24-hour local time. place: as written (a room number, a hall, an address), at most
+such date from today). end_date: only when it lasts several days (21.11 – 22.11), its last day, else null. start, end: 24-hour local time. place: as written (a room number, a hall, an address), at most
 80 characters. price: tenge, a whole number, only if it says it's paid.
 description: the announcement rewritten cleanly for the event's page in the app, in its own language and with its own
 facts, at most 2000 characters, without the title, date, time and place (the form shows them). Shape it to be read on a
@@ -572,7 +572,7 @@ def fill_answered(text: str) -> bool:
     """The model gave the form: an object of its fields (nulls for what the text doesn't say), or an empty one. Else the
     next model is asked."""
     x = _parse(text)
-    return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "start", "end", "price"}))
+    return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "end_date", "start", "end", "price"}))
 
 
 def filled(text: str) -> dict:
@@ -587,6 +587,14 @@ def filled(text: str) -> dict:
         try:
             time.strptime(x["date"], "%Y-%m-%d")
             out["date"] = x["date"]
+        except ValueError:
+            pass
+    # several days: the last one, after the first (the form's endDate)
+    if "date" in out and isinstance(x.get("end_date"), str) and re.fullmatch(r"20\d\d-[01]\d-[0-3]\d", x["end_date"]):
+        try:
+            time.strptime(x["end_date"], "%Y-%m-%d")
+            if x["end_date"] > out["date"]:
+                out["endDate"] = x["end_date"]
         except ValueError:
             pass
     for k in ("start", "end"):

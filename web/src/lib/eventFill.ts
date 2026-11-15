@@ -1,12 +1,12 @@
 // The announcement fill (server logic/assistant.py `filled`): which of the editor's rows the AI filled, to mark them
 // until the organiser touches one, and which of date, time and place it couldn't find, the short list at the top.
-export type Filled = { title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number };
+export type Filled = { title?: string; date?: string; endDate?: string; start?: string; end?: string; place?: string; description?: string; price?: number };
 export type Marked = 'title' | 'when' | 'place' | 'about' | 'price';
 
 export function marked(x: Filled, canPrice: boolean): Marked[] {
   return [
     ...(x.title ? ['title' as const] : []),
-    ...(x.date || x.start || x.end ? ['when' as const] : []),
+    ...(x.date || x.endDate || x.start || x.end ? ['when' as const] : []),
     ...(x.place ? ['place' as const] : []),
     ...(x.description ? ['about' as const] : []),
     ...(x.price && canPrice ? ['price' as const] : []),
@@ -19,7 +19,7 @@ export function missing(f: { date: string; start: string; place: string; tba: bo
 }
 
 /** the form's fields "Add more" works on, as typed (price: '' when free) */
-export type FillForm = { title: string; date: string; start: string; end: string; place: string; description: string; price: string };
+export type FillForm = { title: string; date: string; endDate: string; start: string; end: string; place: string; description: string; price: string };
 export type Differs = 'date' | 'start' | 'end' | 'place' | 'price';
 
 /** "Add more" (owner, Nov 13): a second message into a form already filled. What the form has is never overwritten, an
@@ -30,6 +30,7 @@ export function merge(now: FillForm, x: Filled, dflt: Partial<FillForm> = {}): {
   const empty = (k: keyof FillForm) => !now[k].trim() || now[k] === dflt[k];
   if (x.title && empty('title')) set.title = x.title;
   if (x.description) set.description = x.description;
+  if (x.endDate && empty('endDate')) set.endDate = x.endDate; // a later day only fills an empty one
   const got: [Differs, string | undefined][] = [['date', x.date], ['start', x.start], ['end', x.end], ['place', x.place], ['price', x.price ? String(x.price) : undefined]];
   for (const [k, v] of got) {
     if (!v) continue;

@@ -7269,6 +7269,8 @@ def test_event_fill(env, monkeypatch):
                  "emoji": "microphone_3d", "color": "#7C4DFF"}
     assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": "short"}).status_code == 400
     from kbtu.logic import assistant
+    assert assistant.filled('{"date": "2026-11-21", "end_date": "2026-11-22"}') == {"date": "2026-11-21", "endDate": "2026-11-22"}
+    assert assistant.filled('{"date": "2026-11-21", "end_date": "2026-11-21"}') == {"date": "2026-11-21"}
     assert assistant.filled('{"date": "2026-02-31", "price": true, "title": 5, "emoji": "bomb", "color": "#000000"}') == {} and assistant.filled("nope") == {}
     # what counts as the model's answer (else the next model is asked): its form, even all empty; not junk
     assert [assistant.fill_answered(x) for x in ('{"title": null, "date": null}', "{}", "```json\n{\"place\": \"256\"}\n```",
