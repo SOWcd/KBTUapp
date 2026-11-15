@@ -153,19 +153,28 @@
   const homeK = () => (ver === 'main' ? 1.3 : 1);
   /** the building in the middle of what's under the header, at scale k: where the plan rests zoomed out */
   const middle = (k = homeK()) => cam(k, ver === 'main' ? 0.485 : 0.5, 0.5, W() / 2, head() + (H() - head()) / 2);
-  const out = () => scale() < homeK() * 1.05;
+  /** zoomed out: the whole floor, where one finger turns floors and never pans (owner, Nov 15: the swipe "doesn't
+   *  understand what I want"); a hair of zoom left by a pinch still counts, and the let-go takes it back (rest) */
+  const NEAR = 1.15;
+  const out = () => scale() < homeK() * NEAR;
   function reset() { halt(); map.jumpTo(middle()); }
   /** a running glide stops where it is on screen (a finger, a floor, the other version came) */
   const halt = () => map.stop();
   // off at once, settles without a crawl: a critically damped spring (owner, Oct 12: an easy ease was "very slow", the
   // spring "was good"; Oct 9: an ease-out one crawled at the end)
   const spring = (p: number) => (p >= 1 ? 1 : 1 - (1 + 10 * p) * Math.exp(-10 * p));
-  /** fingers let the plan go: zoomed out it may rest only in the middle and goes back there at the size they left it;
-   *  zoomed in it stays where it was left (owner, Oct 15) */
+  /** fingers let the plan go: zoomed out it may rest only in the middle and goes back there, at the size they left it
+   *  under the whole floor's, or at the whole floor's from a hair over it; zoomed in it stays where it was left (owner, Oct 15) */
   function rest() {
     if (fingers || !out()) return;
-    const to = middle(scale()), a = map.project(to.center), b = map.project(map.getCenter());
-    if (Math.hypot(a.x - b.x, a.y - b.y) > 0.5) map.easeTo({ center: to.center, duration: 380, easing: spring });
+    const to = middle(Math.min(scale(), homeK())), a = map.project(to.center), b = map.project(map.getCenter());
+    if (Math.hypot(a.x - b.x, a.y - b.y) > 0.5 || Math.abs(to.zoom - map.getZoom()) > 0.005) easeFit(to, 380);
+  }
+  /** a glide to the whole floor: a finger in the middle of it lands it at once (it was halfway, neither out nor in) */
+  let fitting = false;
+  function easeFit(to: { center: LngLat | [number, number]; zoom: number }, duration: number) {
+    fitting = true; map.once('moveend', () => (fitting = false));
+    map.easeTo({ ...to, duration, easing: spring });
   }
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
@@ -186,21 +195,33 @@
   const words = () => labelData(fr, orig && ver === 'old' ? [] : labelsOf(ver, cur, look === 'dark', (k) => t(`kmap.${k}` as 'kmap.canteen'), room ?? ''));
   const wordsNow = () => `${ver}|${cur}|${look}|${i18n.lang}|${orig}|${room}`;
   /** the labels: one layer a tier (always; from mid zoom; up close: owner, Oct 28, far off the small ones were specks).
-   *  Uni-Q's numbers stand on a plate of the paper's colour over the tiny printed ones, and fade away as those get big
-   *  enough to read (the plan 720 to 920 px wide: printed digits 5 to 6.5 px tall, still under the plate), so a number is never seen twice. By zoom alone: mixed with a
-   *  label's own data MapLibre only reads such a value at whole zooms */
+   *  Each is printed on the plan (owner, Nov 15): its size (lib/mapgl.ts, in units of a 1000-wide plan) grows with the
+   *  plan, and it fades in as it gets big enough to read. Uni-Q's numbers stand on a plate of the paper's colour over the
+   *  tiny printed ones, and fade away as those get big enough to read (the plan 720 to 920 px wide: printed digits 5 to
+   *  6.5 px tall, still under the plate), so a number is never seen twice. A value of both the zoom and a label's own
+   *  data MapLibre reads at whole zooms only (between them it blends): Uni-Q's hand-over is by zoom alone */
+  const ZS = [-1, 0, 1, 2, 3, 4].map((n) => Z0 + n);
+  const px = (z: number) => ['min', 250, ['*', ['get', 's'], widthAt(fr, z) / 1000]];
+  // the size by two stops round every zoom the map goes to: MapLibre sizes a label between the stops round its tile's
+  // zoom and holds it past them, so stops a zoom apart froze labels of a tile kept from another zoom at a wrong size
+  function wordSize() { return ['interpolate', ['exponential', 2], ['zoom'], ZS[0], px(ZS[0]), ZS[5], px(ZS[5])]; }
   function wordFade(): { 'text-opacity': unknown; 'icon-opacity': unknown } {
-    const by = (from: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 720), from, zoomFor(FRAMES.main, 920), 0];
-    return ver === 'main' ? { 'text-opacity': by(1), 'icon-opacity': by(0.92) } : { 'text-opacity': ['get', 'alpha'], 'icon-opacity': 0 };
+    if (ver === 'main') {
+      const by = (top: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 330), 0, zoomFor(FRAMES.main, 430), top, zoomFor(FRAMES.main, 720), top, zoomFor(FRAMES.main, 920), 0];
+      return { 'text-opacity': by(1), 'icon-opacity': by(0.92) };
+    }
+    // gone under 6 px, whole from 9 px (blended between whole zooms)
+    const seen = (z: number) => ['*', ['get', 'alpha'], ['max', 0, ['min', 1, ['/', ['-', px(z), 6], 3]]]];
+    return { 'text-opacity': ['interpolate', ['linear'], ['zoom'], ...ZS.flatMap((z) => [z, seen(z)])], 'icon-opacity': 0 };
   }
   function wordLayers(): LayerSpecification[] {
     const f = FRAMES.old;
     return [0, 1, 2].map((tier) => ({
       id: `words${tier}`, type: 'symbol', source: 'words', filter: ['==', ['get', 'tier'], tier], minzoom: tier ? zoomFor(f, tier === 1 ? 700 : 1100) : 0,
       layout: {
-        'text-field': ['get', 't'], 'text-font': ['Inter Variable Semibold', 'Inter Variable'], 'text-size': ['get', 'px'], // the first names the weight, the second the family: the glyphs are drawn from the page's own fonts
-        'text-rotate': ['get', 'turn'], 'text-anchor': ['case', ['get', 'left'], 'left', 'center'],
-        'text-letter-spacing': ['get', 'space'], 'text-max-width': 60, 'text-padding': 2, 'symbol-sort-key': ['get', 'rank'],
+        'text-field': ['get', 't'], 'text-font': ['Inter Variable Semibold', 'Inter Variable'], 'text-size': wordSize(), // the first names the weight, the second the family: the glyphs are drawn from the page's own fonts
+        'text-rotate': ['get', 'turn'], 'text-anchor': ['case', ['get', 'left'], 'left', 'center'], 'text-line-height': 1.1,
+        'text-letter-spacing': ['get', 'space'], 'text-max-width': 60, 'text-padding': 1, 'symbol-sort-key': ['get', 'rank'],
         'icon-image': ['case', ['get', 'plate'], 'plate', ''], 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 3, 1, 3],
       },
       paint: {
@@ -209,6 +230,12 @@
       },
     }) as unknown as LayerSpecification);
   }
+  /** my flaws' pins win over the labels (owner, Nov 15): each holds its place among them as an empty mark, so a label
+   *  under a pin gives way */
+  const pinData = () => ({ type: 'FeatureCollection' as const, features: [...flawsHere, ...(draft && draft.f === cur && draft.ver === ver ? [draft] : [])]
+    .map(({ u, v }) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: lngLat(fr, u, v) } })) });
+  const pinLayer = { id: 'pins', type: 'symbol', source: 'pins', layout: { 'icon-image': 'pin', 'icon-allow-overlap': true } } as LayerSpecification;
+  $effect(() => { const d = pinData(); if (ready) untrack(() => (map.getSource('pins') as GeoJSONSource).setData(d)); });
   // the state the map was last given; whatever changed since (the floor, the version, the look, the language, the
   // original) is given again: the source anew for other tiles, paint for the look, the labels' data
   let planKey = '', inkKey = '', wordsKey = '', fadeVer = '', scanOn = 0, scanT = 0;
@@ -218,7 +245,7 @@
     untrack(() => {
       if (pk !== planKey) { planKey = pk; inkKey = ik; map.removeLayer('plan'); map.removeSource('plan'); map.addSource('plan', planSource()); map.addLayer(planLayer(), map.getLayer('scan') ? 'scan' : 'words0'); }
       else if (ik !== inkKey) { inkKey = ik; inked('plan'); }
-      if (ver !== fadeVer) { fadeVer = ver; for (const tier of [0, 1, 2]) for (const [k, v] of Object.entries(wordFade())) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); }
+      if (ver !== fadeVer) { fadeVer = ver; for (const tier of [0, 1, 2]) { for (const [k, v] of Object.entries(wordFade())) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); map.setLayoutProperty(`words${tier}`, 'text-size', wordSize() as unknown as number); } }
       if (wk !== wordsKey) { wordsKey = wk; (map.getSource('words') as GeoJSONSource).setData(words()); }
       if (sc !== scanOn) {
         clearTimeout(scanT);
@@ -295,12 +322,13 @@
     return true;
   }
   function down(e: PointerEvent) {
-    menu = false; clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
+    menu = false; clearTimeout(glideT); touched++; framed = null; // a finger first: the glide gives way
+    if (fitting && e.isPrimary) { fitting = false; map.jumpTo(middle(Math.min(scale(), homeK()))); } else halt();
     clearTimeout(holdT); held = false;
     // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
     // sheet opened over it, so every later press read as a second finger and never held: owner, Nov 15)
     fingers = e.isPrimary ? 1 : fingers + 1;
-    if (!e.isPrimary) { press = null; swipeEnd(true); return; } // a second finger: a pinch, never a hold or a floor
+    if (!e.isPrimary) { press = null; swipeEnd(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
     const at = (press = local(e)), id = e.pointerId;
     if (rt.route) return;
     // held: the finger is the stage's from here on, and the click its let-go may bring is swallowed, so neither lands
@@ -310,7 +338,9 @@
       try { stage.setPointerCapture(id); } catch { /* the finger is gone */ }
       window.addEventListener('click', eat, { capture: true, once: true });
     }, 600);
-    if (out()) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
+    // zoomed out one finger is ours alone: MapLibre doesn't pan (the plan would only spring back), a sideways move turns
+    // the floor; a second finger gives the map back its pinch and pan
+    if (out()) { map.dragPan.disable(); swipeStart(e.clientX, e.clientY); }
   }
   function move(e: PointerEvent) {
     if (!e.isPrimary || !press) return;
@@ -323,7 +353,7 @@
     clearTimeout(holdT);
     if (held) setTimeout(() => window.removeEventListener('click', eat, true), 350); // no click came: the next one is a real one
     fingers = Math.max(0, fingers - 1);
-    if (e.isPrimary) { press = null; swipeEnd(); }
+    if (e.isPrimary) { press = null; swipeEnd(); map.dragPan.enable(); }
   }
   /** a tap (MapLibre's click: a finger that didn't move): my own pin shows what I wrote there, a tinted room opens its
    *  card, a second tap within 300 ms of the first and near it zooms in, or back out to the whole floor */
@@ -357,7 +387,7 @@
   // changes on the let-go.
   let knob = $state<HTMLSpanElement>();
   let kp = $state(0), dragging = $state(false);
-  let sw: { x0: number; y0: number; c: LngLat; dx: number; on: boolean; hist: [number, number][]; rail: boolean; k0: number } | null = null;
+  let sw: { x0: number; y0: number; dx: number; on: boolean; hist: [number, number][]; rail: boolean; k0: number } | null = null;
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
@@ -391,16 +421,17 @@
     return () => { held.length = 0; };
   });
   function pick(n: number) { void goTo(n); }
-  function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, c: map.getCenter(), dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
+  function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
   /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
   function swipeMove(px: number, py: number): boolean {
     if (!sw) return false;
     const dx = px - sw.x0, dy = py - sw.y0;
     if (!sw.on) {
-      if (dx * dx + dy * dy < 144) return false;
-      if (Math.abs(dx) <= Math.abs(dy) * 2) { sw = null; return false; } // not clearly sideways (a diagonal pan): the map pans as before
+      if (dx * dx + dy * dy < 100) return false;
+      // on the map more sideways than up or down is a floor (a natural swipe runs a bit diagonal); up or down, nothing:
+      // zoomed out the plan has nowhere to go. Along the rail only a clear drag
+      if (Math.abs(dx) <= Math.abs(dy) * (sw.rail ? 2 : 1)) { sw = null; return false; }
       sw.on = true; dragging = true;
-      map.dragPan.disable(); map.jumpTo({ center: sw.c }); // MapLibre lets go of the finger; the few pixels it panned before the lock go back
     }
     sw.dx = dx;
     const now = performance.now();
@@ -417,7 +448,7 @@
   function swipeEnd(cancel = false) {
     const z = sw; sw = null;
     if (!z?.on) return;
-    dragging = false; map.dragPan.enable();
+    dragging = false;
     const h = z.hist, last = railFloors.length - 1;
     const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
     const fling = Math.abs(vx) > 0.4 ? Math.sign(vx) * (z.rail ? 0.4 : -0.6) : 0;
@@ -518,7 +549,7 @@
   const card = $derived(!pad && !routing && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
-  function fit() { halt(); framed = null; map.easeTo({ ...middle(), duration: 420, easing: spring }); }
+  function fit() { halt(); framed = null; easeFit(middle(), 420); }
   const railFloors = $derived(HAS[ver]);
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
@@ -653,12 +684,15 @@
       container: gl, ...middle(), attributionControl: false, renderWorldCopies: false, fadeDuration: 250,
       dragRotate: false, pitchWithRotate: false, touchPitch: false, keyboard: false, boxZoom: false, doubleClickZoom: false,
       pixelRatio: Math.min(3, devicePixelRatio || 1), transformConstrain: within,
-      style: { version: 8, sources: { plan: planSource(), words: { type: 'geojson', data: words() } }, layers: [planLayer(), ...wordLayers()] } as StyleSpecification,
+      style: { version: 8, sources: { plan: planSource(), words: { type: 'geojson', data: words() }, pins: { type: 'geojson', data: pinData() } }, layers: [planLayer(), ...wordLayers(), pinLayer] } as StyleSpecification,
     });
     map.touchZoomRotate.disableRotation();
     map.getCanvasContainer().append(plan); // over the canvas, inside what MapLibre listens on
     // a label's plate (Uni-Q's numbers cover the tiny printed ones): one flat square, coloured and stretched by the layer
-    map.once('style.load', () => map.addImage('plate', { width: 4, height: 4, data: new Uint8Array(64).fill(255) }, { sdf: true }));
+    map.once('style.load', () => {
+      map.addImage('plate', { width: 4, height: 4, data: new Uint8Array(64).fill(255) }, { sdf: true });
+      map.addImage('pin', { width: 24, height: 24, data: new Uint8Array(24 * 24 * 4) }); // a pin's place, drawn by the overlay
+    });
     map.on('move', follow); map.on('resize', follow);
     map.on('moveend', (e) => { if ((e as { originalEvent?: Event }).originalEvent) rest(); });
     map.on('click', tap);

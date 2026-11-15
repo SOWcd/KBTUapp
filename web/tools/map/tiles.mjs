@@ -15,20 +15,20 @@ import { createRequire } from 'node:module';
 const here = path.dirname(new URL(import.meta.url).pathname), web = path.join(here, '../..');
 const OUT = path.join(web, 'public/map'), SVG = path.join(web, 'src/assets/map');
 const Z0 = 6, TOP = 4, T = 512; // the sheet is one tile at zoom Z0; TOP levels finer
-const name = (cut, f, l, c, r) => { const o = 2 ** (Z0 + l - 1); return path.join(OUT, cut, `f${f}`, String(Z0 + l), `${o + c}_${o + r}.webp`); };
+export const name = (cut, f, l, c, r) => { const o = 2 ** (Z0 + l - 1); return path.join(OUT, cut, `f${f}`, String(Z0 + l), `${o + c}_${o + r}.webp`); };
 
 /** The 2023 redraw for the app: no words (they are labels), every wall one ink and one weight (owner, Nov 15: red and
  *  black walls look the same in the building), a free-standing column with its shaft in it, as the plan draws them
  *  (they were empty rings) */
-const OLD = `<style>.t{display:none}.w{fill:#1c1c1e;stroke:#1c1c1e;stroke-width:.5}.lr{stroke:#1c1c1e;stroke-width:1.5}.lk{stroke:#1c1c1e}
+export const OLD = `<style>.t{display:none}.w{fill:#1c1c1e;stroke:#1c1c1e;stroke-width:.5}.lr{stroke:#1c1c1e;stroke-width:1.5}.lk{stroke:#1c1c1e}
 .lg{stroke:#9a9aa0}.c{fill:#d4d4d8;stroke:#1c1c1e}.o{fill:#c7c7cc;stroke:#1c1c1e}.oo{fill:#fff}</style>`;
-const shafts = (svg) => svg.replace(/<circle class="oo"[^>]*cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"\/>/g,
+export const shafts = (svg) => svg.replace(/<circle class="oo"[^>]*cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"\/>/g,
   (m, x, y, r) => `${m}<circle cx="${x}" cy="${y}" r="${(r * 0.5).toFixed(1)}"/>`);
 /** ours by level: far off no small things (the classes the SVG marks them with), then all of it; never its words */
-const tier = (l) => `<style>text{display:none}${l < 1 ? '.mid{display:none}' : ''}${l < 2 ? '.fine{display:none}' : ''}</style>`;
+export const tier = (l) => `<style>text{display:none}${l < 1 ? '.mid{display:none}' : ''}${l < 2 ? '.fine{display:none}' : ''}</style>`;
 const sized = (svg, css) => svg.replace(/<svg ([^>]*)>/, (_, at) => `<svg width="${T * 2 ** TOP}" height="${T * 2 ** TOP}" ${at}>${css}`);
 
-async function chrome() {
+export async function chrome() {
   const { chromium } = createRequire(import.meta.url)(process.env.PW ?? 'playwright-core');
   const b = await chromium.launch({ executablePath: process.env.CHROME || undefined });
   const p = await b.newPage();

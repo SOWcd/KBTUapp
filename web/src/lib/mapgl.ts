@@ -6,6 +6,7 @@
 import labels from '../assets/map/labels.json';
 import uniq from '../assets/map/uniq-tiles.json';
 import uniqRooms from '../assets/map/uniq-rooms.json';
+import boxes from '../assets/map/boxes.json';
 import { SPOTS, normRoom } from './map';
 
 export const Z0 = 6, LEVELS = 4, SHEET = 8192;
@@ -66,20 +67,64 @@ export function roomAt(ver: Ver, floor: number, room: string): number[][] {
   return (DRAWN[ver][floor] ?? []).filter((r) => isRoom(r) && roomName(r) === room).map((r) => [r[0], r[1]]);
 }
 
-export type Label = { u: number; v: number; t: string; px: number; turn: number; left: boolean; tier: number; color: string; halo: string; space: number; alpha: number; rank: number; plate: boolean };
+export type Label = { u: number; v: number; t: string; s: number; turn: number; left: boolean; tier: number; color: string; halo: string; space: number; alpha: number; rank: number; plate: boolean };
 const INK = ['#1c1c1e', '#e5e5ea'], PAPER = ['#ffffff', '#0d0d0d'];
-/** A floor's labels, each at one size on screen whatever the zoom (owner, Nov 15: "zoomed out the map is empty", the
- *  numbers shrank with the plan to dots): the collision of labels decides which show, halls and bigger rooms first,
- *  more as one zooms in. Room numbers and names always; the small print of our map (a legend, a two-line name) from
- *  mid zoom, where it has room. word: a kmap.* key in the UI's language; sought: the room looked for, placed first */
+
+// ---- a label printed inside its own room (owner, Nov 15: labels "pasted on top" ran over walls) ----
+type Box = number[]; // tools/map/boxes.mjs: [l, r] free along the words for each band of half-height BANDS[i]
+const BOXES = boxes as unknown as { kbtu: Record<string, Box[]>; old: Record<string, Box[]>; main: Record<string, Record<string, Box[]>> };
+const BANDS = [3, 5, 8, 12, 18];
+/** a text's width in em, Inter Semibold near enough (no font to measure in the tests): a margin covers the rest */
+export function ems(t: string, space = 0): number {
+  let w = 0;
+  for (const c of t) w += /\d/.test(c) ? 0.6 : c === ' ' ? 0.27 : /[.,:;'"\u00ab\u00bb\u201c\u201d#()-]/.test(c) ? 0.32 : /[A-Z\u0410-\u042f\u0401]/.test(c) ? 0.7
+    : /[\u0436\u0448\u0449\u044b\u044e\u043c\u0444mw]/.test(c) ? 0.78 : 0.57;
+  return w + space * [...t].length;
+}
+/** the biggest size (in units of a 1000-wide plan) the words take inside their box, and the words as they stand: on
+ *  one line, or two when that makes them much bigger. low: only the length counts (Uni-Q's plate covers the
+ *  printed number round it). 0: they fit nowhere */
+export function fit(t: string, box: Box, left: boolean, space = 0, low = false): [number, string] {
+  const size = (lines: string[]) => {
+    const w = Math.max(...lines.map((l) => ems(l, space))) * 1.1, half = 0.5 + 0.6 * (lines.length - 1);
+    let best = 0;
+    BANDS.forEach((h, i) => {
+      const room = left ? box[i * 2 + 1] : 2 * Math.min(box[i * 2], box[i * 2 + 1]);
+      best = Math.max(best, Math.min(low ? Infinity : h / half, room / w));
+    });
+    return best;
+  };
+  const one = size([t]), cut = t.lastIndexOf(' ', t.length / 2) + 1 || t.indexOf(' ') + 1;
+  if (!cut || low) return [one, t];
+  const two = [t.slice(0, cut - 1), t.slice(cut)], s2 = size(two);
+  return s2 > one * 1.15 ? [s2, two.join('\n')] : [one, t];
+}
+/** a label's size: as big as its room lets it, never more than CAP times its print; a box that read nothing (the
+ *  point on a piece of furniture) leaves the print as drawn */
+const CAP = 2.5, MAXS = 30;
+function sized(t: string, box: Box | undefined, print: number, left: boolean, space: number, low = false): [number, string] {
+  if (!box || box.every((n) => !n)) return [print, t];
+  const [s, words] = fit(t, box, left, space, low);
+  return [Math.min(s, CAP * print, MAXS), words];
+}
+
+/** A floor's labels, printed on the plan (owner, Nov 15): each in its own room at the biggest size the room takes,
+ *  growing and shrinking with the plan as one zooms, gone while too small to read (CampusMap's layers). The collision
+ *  of labels still decides between two that meet, halls and bigger rooms first. Room numbers and names always; the
+ *  small print of our map (a legend, a two-line name) from mid zoom. word: a kmap.* key in the UI's language;
+ *  sought: the room looked for, placed first */
 export function labelsOf(ver: Ver, floor: number, dark: boolean, word: (key: string) => string, sought = ''): Label[] {
   const d = dark ? 1 : 0, rank = (room: string) => (room === sought ? -1 : rankOf(room));
-  if (ver === 'main') return Object.entries(ROOMS[floor] ?? {}).flatMap(([room, at]) => at.map(([u, v]) => (
-    { u, v, t: room, px: 10.5, turn: 0, left: false, tier: 0, color: INK[d], halo: PAPER[d], space: 0, alpha: 1, rank: rank(room), plate: true })));
-  return (DRAWN[ver][floor] ?? []).map((r) => {
+  if (ver === 'main') return Object.entries(ROOMS[floor] ?? {}).flatMap(([room, at]) => at.map(([u, v], i) => {
+    const [s, t] = sized(room, BOXES.main[floor]?.[room]?.[i], 16, false, 0, true);
+    return { u, v, t, s, turn: 0, left: false, tier: 0, color: INK[d], halo: PAPER[d], space: 0, alpha: 1, rank: rank(room), plate: true };
+  }));
+  const bx = BOXES[ver][floor] ?? [];
+  return (DRAWN[ver][floor] ?? []).map((r, i) => {
     const room = isRoom(r), street = r[4] >= 30 || r[12] > 0.2, small = !room && !street && (r[4] < 9 || /^(level0|staff)$/.test(r[3]));
-    return { u: r[0], v: r[1], t: r[3] ? word(r[3]) : r[2], px: room ? 11 : street ? (ver === 'old' ? 13 : 9) : small ? 9 : 10,
-      turn: r[5], left: r[6] === 1, tier: room ? 0 : small ? Math.max(1, r[7]) : r[7], color: (r[8 + d] as string) || INK[d], halo: (r[10 + d] as string) || (ver === 'old' ? PAPER[d] : ''),
+    const [s, t] = sized(r[3] ? word(r[3]) : r[2], bx[i], r[4], r[6] === 1, r[12]);
+    return { u: r[0], v: r[1], t, s, turn: r[5], left: r[6] === 1, tier: room ? 0 : small ? Math.max(1, r[7]) : r[7],
+      color: (r[8 + d] as string) || INK[d], halo: (r[10 + d] as string) || (ver === 'old' ? PAPER[d] : ''),
       space: r[12], alpha: r[13], rank: room ? rank(roomName(r)) : street ? 40 : small ? 30 : 1, plate: false };
   });
 }

@@ -115,18 +115,35 @@ describe('the map frame', () => {
     const made = (await import('../assets/map/labels.json')).default;
     expect(JSON.stringify(made) === JSON.stringify(allLabels((f: string) => svgs[`/src/assets/map/${f}`])), 'run node tools/map/labels.mjs').toBe(true);
   });
-  it('room numbers are labels on every map: found by the room, never under a size one can read, halls first', async () => {
+  it('room numbers are labels on every map: found by the room, sized to it, halls first', async () => {
     const { roomAt, labelsOf } = await import('./mapgl');
     for (const ver of ['main', 'old', 'kbtu'] as const) expect(roomAt(ver, 3, '303'), ver).toHaveLength(1);
     expect(roomAt('kbtu', 3, '349b')).toHaveLength(1); // the label says it in the UI's language, the room is the same
     expect(roomAt('old', 3, '999')).toEqual([]);
     const word = (k: string) => `<${k}>`;
     const main = labelsOf('main', 4, true, word), hall = main.find((l) => l.t === '400a')!, any = main.find((l) => l.t === '412')!;
-    expect(main.every((l) => l.px >= 10 && l.plate && l.tier === 0)).toBe(true);
+    expect(main.every((l) => l.s > 5 && l.s <= 30 && l.plate && l.tier === 0)).toBe(true);
     expect(hall.rank).toBeLessThan(any.rank);
     const ours = labelsOf('kbtu', 1, false, word);
     expect(ours.find((l) => l.t === '<canteen>')).toBeTruthy(); // its words come from the i18n files
-    expect(ours.filter((l) => /^\d{3}$/.test(l.t)).every((l) => l.px >= 10 && l.tier === 0)).toBe(true); // numbers at every zoom
+    const nums = ours.filter((l) => /^\d{3}$/.test(l.t));
+    expect(nums.every((l) => l.s > 0 && l.tier === 0)).toBe(true);
+    expect(nums.filter((l) => l.s >= 12).length).toBeGreaterThan(nums.length * 0.7); // most read zoomed out, the rest come closer
     expect(labelsOf('old', 1, false, word).some((l) => l.t === 'Tole bi street')).toBe(true);
+  });
+  it('a label is printed inside its own room: never wider than the free run round it, two lines when that is bigger', async () => {
+    const { fit, ems } = await import('./mapgl');
+    const labels = (await import('../assets/map/labels.json')).default as unknown as Record<string, Record<string, unknown[]>>;
+    const boxes = (await import('../assets/map/boxes.json')).default as unknown as Record<string, Record<string, unknown>>;
+    for (const ver of ['kbtu', 'old']) for (const f of ['1', '2', '3', '4', '5']) expect((boxes[ver][f] as unknown[]).length, `${ver} ${f}: node tools/map/boxes.mjs`).toBe(labels[ver][f].length);
+    const box = [20, 24, 20, 24, 20, 24, 0, 0, 0, 0]; // a room 44 wide, 16 tall round the point
+    const [s, t] = fit('100', box, false);
+    expect(t).toBe('100');
+    expect(s * ems('100')).toBeLessThanOrEqual(40);
+    expect(s * 0.5).toBeLessThanOrEqual(8);
+    const wide = [100, 100, 100, 100, 100, 100, 100, 100, 100, 100], narrow = [30, 30, 30, 30, 30, 30, 30, 30, 30, 30];
+    expect(fit('Halyk Co-working', wide, false)[1]).toBe('Halyk Co-working');
+    expect(fit('Halyk Co-working', narrow, false)[1]).toBe('Halyk\nCo-working');
+    expect(fit('Canteen', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], true)[0]).toBe(0); // a wall right at it: it waits forever
   });
 });
