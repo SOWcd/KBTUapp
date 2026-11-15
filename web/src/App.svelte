@@ -324,6 +324,16 @@
     const today = dayNo(now);
     const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now
       && (e.endsAt ?? e.startsAt) - e.startsAt < 86400); // not one of several days (a casting over a week: owner, Nov 3)
+    // my club hosts (or co-hosts) it: an hour before till the end, its card with the team's tools (scanner: EventSheet) (owner, Nov 15)
+    const mine = new Set(session.me?.memberships.map((x) => x.org.id));
+    const host = data.events.find((e) => e.status !== 'cancelled' && (mine.has(e.org.id) || (!!e.coHost && mine.has(e.coHost.id)))
+      && e.startsAt - 3600 <= now && (e.endsAt ?? e.startsAt + 3 * 3600) > now && (e.endsAt ?? e.startsAt) - e.startsAt < 86400);
+    if (host) {
+      const mins = Math.ceil((host.startsAt - now) / 60);
+      return { kind: 'event', title: host.title, at: host.startsAt, emoji: host.emoji ?? host.org.emoji, tint: host.tint,
+        label: mins > 0 ? t('cap.inMin', { n: mins }) : host.endsAt ? t('cap.until', { time: time(host.endsAt) }) : time(host.startsAt),
+        onopen: () => sheets.event(host.id) };
+    }
     const cls = classesLeft(data.schedule, now).find((x) => x.b - now <= 3600 && !skipped.has(classKey(today, x.c)));
     if (cls) {
       const mins = Math.ceil((cls.b - now) / 60);
