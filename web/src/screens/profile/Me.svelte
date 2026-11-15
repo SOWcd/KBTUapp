@@ -56,7 +56,7 @@
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   const me = $derived(session.me);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
-  $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(loadMyCard); });
+  $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(() => loadMyCard(true)); });
   const shown = $derived(myShown()); // at once from what the app knows (looks.svelte.ts)
 
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
