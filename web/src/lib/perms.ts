@@ -60,8 +60,11 @@ export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefine
  *  none; the organizers mark who came by name */
 export const inner = (e: { visibility?: string }): boolean => e.visibility === 'members' || e.visibility === 'leaders';
 
+/** clubs whose own people sign up like anyone (server seats.GUESTS_OK) */
+const GUESTS_OK = new Set(['cybersportkbtu']);
+
 /** The host club's own people at its public event: the team, not a guest, unless its President or a Vice said yes
  *  (owner, Nov 7; server seats.team_guest); a President or a Vice needs nobody's yes; a team event (a tournament) is
  *  everyone's to play in, its club's people too (owner, Nov 15) */
-export const onTeam = (e: { org: { id: unknown }; visibility?: string; teamAsk?: string; teamMax?: number }, ms: { org: { id: unknown }; role: OrgRole }[] | undefined): boolean =>
-  !inner(e) && e.teamMax == null && e.teamAsk !== 'yes' && !!ms?.some((m) => m.org.id === e.org.id && m.role !== 'president' && m.role !== 'vice');
+export const onTeam = (e: { org: { id: unknown; slug?: string }; visibility?: string; teamAsk?: string; teamMax?: number }, ms: { org: { id: unknown }; role: OrgRole }[] | undefined): boolean =>
+  !inner(e) && e.teamMax == null && !GUESTS_OK.has(e.org.slug ?? '') && e.teamAsk !== 'yes' && !!ms?.some((m) => m.org.id === e.org.id && m.role !== 'president' && m.role !== 'vice');

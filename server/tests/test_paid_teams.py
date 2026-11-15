@@ -300,3 +300,14 @@ def test_club_members_play_their_own_tournament(env):
     (m,) = _people(c, 1)
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (_uid(con, m),))
     assert _go(c, eid, m).json()["my"]["status"] == "hold"
+
+
+def test_cybersport_members_sign_up_like_anyone(env):
+    """CyberSport's own people sign up to any of its events, no President's yes (owner, Nov 15)."""
+    c, cfg = env
+    con = _club(c, cfg)
+    con.execute("UPDATE orgs SET slug = 'cybersportkbtu' WHERE id = 1")
+    eid = _event(c)
+    (m,) = _people(c, 1)
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (_uid(con, m),))
+    assert _go(c, eid, m).json()["my"]["status"] == "going"

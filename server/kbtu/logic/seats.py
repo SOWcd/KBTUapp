@@ -571,11 +571,17 @@ ANSWER_MAX = 200  # one answer to an event's question at sign-up
 # a host club's member's guest seat at its own upcoming public event: a free event's, or a waitlist place anywhere (a
 # paid seat or hold stays: money; a check-in stays: it's history). Migration 135 ran the same rule once over old data.
 # A President's or a Vice's seat stays, and so does a member's whom one of them let in (team_ask).
+# ponytail: clubs whose own people sign up to its events like anyone (owner, Nov 15: CyberSport's members play its
+# cups); a per-club switch in Admin if more clubs want it
+GUESTS_OK = frozenset({"cybersportkbtu"})
+
+
 TEAM_SEATS = """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND e.org_id = ?
-    AND e.status = 'published' AND e.visibility = 'public' AND e.team_max IS NULL AND e.starts_at > ? AND r.checked_in_at IS NULL
+    AND e.status = 'published' AND e.visibility = 'public' AND e.team_max IS NULL AND e.starts_at > ?
+    AND (SELECT slug FROM orgs WHERE id = e.org_id) NOT IN ({}) AND r.checked_in_at IS NULL
     AND (r.status = 'waitlist' OR r.status IN ('going', 'hold') AND e.price IS NULL)
     AND NOT EXISTS (SELECT 1 FROM team_asks a WHERE a.event_id = e.id AND a.user_id = r.user_id AND a.status = 'yes')
-    AND NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = e.org_id AND m.user_id = r.user_id AND m.role IN ('president', 'vice'))"""
+    AND NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = e.org_id AND m.user_id = r.user_id AND m.role IN ('president', 'vice'))""".format(", ".join(f"'{x}'" for x in sorted(GUESTS_OK)))
 
 
 def joined(con, oid: int, uid: int) -> None:
@@ -608,7 +614,9 @@ def team_guest(con, e: sqlite3.Row, uid: int) -> bool | None:
     if not m:
         return None
     # a team event (a tournament) is the club's members' to play in too (owner, Nov 15: CyberSport's own play its cups)
-    return e["team_max"] is not None or m["role"] in ("president", "vice") or bool(one(
+    if e["team_max"] is not None or one(con, "SELECT slug FROM orgs WHERE id = ?", e["org_id"])["slug"] in GUESTS_OK:
+        return True
+    return m["role"] in ("president", "vice") or bool(one(
         con, "SELECT 1 FROM team_asks WHERE event_id = ? AND user_id = ? AND status = 'yes'", e["id"], uid))
 
 
