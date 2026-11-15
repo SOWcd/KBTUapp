@@ -464,3 +464,40 @@ def test_help_desk_apart_from_sg(env):
     c2 = TestClient(server.create(dataclasses.replace(cfg, appeals="all")))
     assert c2.get("/api/ask", headers=tma(ANN)).status_code == 404 and "ask" not in c2.get("/api/me", headers=tma(ANN)).json()
     con.close()
+
+
+def test_help_desk_review_cases(env, monkeypatch):
+    """Review of 42d2a7e8: a day's count per desk, no "Ask a person" beside the helplines, delete only through its own
+    desk, no answer message where the desk is off for its author."""
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, appeals="all", ask="all")))
+    con = db.connect(cfg.db_path)
+    for tg, name in ((ANN, "ann"), (HELPER, "hel")):
+        login(c, tg, name)
+    appeals.grant(con, None, _uid(c, HELPER), True, "help")
+    q = {"text": "who signs the internship form?", "anon": True, "consent": appeals.ASK_CONSENT}
+    ids = [c.post("/api/ask", headers=tma(ANN), json={**q, "text": f"q{i}"}).json()["id"] for i in range(appeals.A_DAY)]
+    assert c.post("/api/ask", headers=tma(ANN), json=q).status_code == 429
+    s = _send(c, ANN, "sg one")
+    assert s.status_code == 200                                                        # SG's count apart
+    # the helplines alone: no button to a 5-day queue beside them
+    said = '{"text": "call", "actions": [{"type": "ask"}, {"type": "news"}], "known": false, "care": true}'
+    r = assistant.reply(con, said, {"ask": True}, "ru", "hello")
+    assert r.get("care") and {"type": "ask"} not in r["actions"]
+    # delete through its own desk only
+    assert c.delete(f"/api/appeals/{ids[0]}", headers=tma(ANN)).status_code == 404
+    assert c.delete(f"/api/ask/{s.json()['id']}", headers=tma(ANN)).status_code == 404
+    assert c.delete(f"/api/ask/{ids[0]}", headers=tma(ANN)).status_code == 204
+    assert con.execute("SELECT 1 FROM audit_log WHERE action = 'help_delete'").fetchone()
+    # ASK off: no help route, no delete through SG's
+    c2 = TestClient(server.create(dataclasses.replace(cfg, appeals="all")))
+    assert c2.get("/api/help/appeals", headers=tma(HELPER)).status_code == 404
+    assert c2.delete(f"/api/appeals/{ids[1]}", headers=tma(ANN)).status_code == 404
+    # the answer's message: only while the desk opens for its author
+    appeals.notify(con, _uid(c, ANN), "ask_answer", f"apl:{ids[1]}")
+    m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'ask_answer'").fetchone()
+    monkeypatch.setattr(appeals, "ASK", "")
+    assert bot._render(con, m) is None
+    monkeypatch.setattr(appeals, "ASK", "all")
+    assert bot._render(con, m)[2] == "ask"
+    con.close()

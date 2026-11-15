@@ -1789,6 +1789,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 15, review) each desk its own day's count: three questions to a person never block an appeal to SG
+    (174, """ALTER TABLE appeal_sends ADD COLUMN desk TEXT NOT NULL DEFAULT 'sg';"""),
 ]
 
 

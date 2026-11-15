@@ -354,6 +354,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
+    logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
@@ -1679,7 +1680,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.delete("/api/ask/{aid}", status_code=204)
     def drop_ask(con: Con, v: Asker, aid: int):
-        logic.appeals.delete(con, v, aid)
+        logic.appeals.delete(con, v, aid, "help")
 
     @app.get("/api/help/appeals")
     def help_queue(con: Con, v: Asker):

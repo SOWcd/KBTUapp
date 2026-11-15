@@ -379,8 +379,8 @@ def reply(con, text: str, ok: dict, lang: str, q: str = "") -> dict:
     no vote: nothing of it is kept); else the topic is kept when the model didn't know. `mark` (topic, day, a one-time
     nonce, signed) is for one 👍/👎; `pair` signs this question and answer, the only ones a 👎 may send."""
     out, x = answer(text, ok), _json(text) or {}
-    if x.get("care") is True or distress(q):
-        return out | care(con, lang)
+    if x.get("care") is True or distress(q):  # the helplines, never "Ask a person" (a 5-day queue) beside them
+        return {**out, "actions": [a for a in out["actions"] if a["type"] != "ask"]} | care(con, lang)
     topic = _topic(x.get("topic"))
     if topic:
         day, nonce = now() // 86400, secrets.token_hex(8)

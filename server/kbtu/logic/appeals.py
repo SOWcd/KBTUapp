@@ -45,9 +45,18 @@ def is_sg(con, uid: int, desk: str = "sg") -> bool:
     return one(con, f"SELECT 1 FROM {DESKS[desk][2]} WHERE user_id = ?", uid) is not None
 
 
+ASK = ""  # the ASK switch for the bot's answer message (app.py sets it from the config, as vol.ORG)
+
+
 def ask_on(con, mode: str, v: Viewer) -> bool:
     """ASK=all: everyone; staff: admins, moderators and the help desk's people."""
     return mode == "all" or mode == "staff" and (v.role in ("admin", "moderator") or is_sg(con, v.id, "help"))
+
+
+def ask_open(con, uid: int) -> bool:
+    """ask_on by user id, for the bot: an answer's message only where its button opens the help desk."""
+    r = one(con, "SELECT role FROM users WHERE id = ?", uid)
+    return ASK == "all" or ASK == "staff" and r is not None and (r[0] in ("admin", "moderator") or is_sg(con, uid, "help"))
 
 
 def on(con, mode: str, v: Viewer) -> bool:
@@ -173,12 +182,12 @@ def send(con, v: Viewer, body: dict, desk: str = "sg") -> dict:
             a = one(con, "SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id WHERE a.nonce = ? AND w.user_id = ? AND a.desk = ?", key, v.id, desk)
             if a:
                 return _shape(a, t)
-        if one(con, "SELECT COUNT(*) FROM appeal_sends WHERE user_id = ? AND at > ?", v.id, t - 86400)[0] >= A_DAY:
-            raise ApiError("rate_limited", "appeals")
+        if one(con, "SELECT COUNT(*) FROM appeal_sends WHERE user_id = ? AND at > ? AND desk = ?", v.id, t - 86400, desk)[0] >= A_DAY:
+            raise ApiError("rate_limited", "appeals")  # each desk its own day's count (review #1)
         aid = con.execute("INSERT INTO appeals (topic, body, anon, created_at, due_at, nonce, desk) VALUES (?, ?, ?, ?, ?, ?, ?)",
                           (topic, text, 1 if body.get("anon") is True else 0, t, due(t), key, desk)).lastrowid
         con.execute("INSERT INTO appeal_authors (appeal_id, user_id) VALUES (?, ?)", (aid, v.id))
-        con.execute("INSERT INTO appeal_sends (user_id, at) VALUES (?, ?)", (v.id, t))
+        con.execute("INSERT INTO appeal_sends (user_id, at, desk) VALUES (?, ?, ?)", (v.id, t, desk))
     return _shape(one(con, "SELECT * FROM appeals WHERE id = ?", aid), t)
 
 
@@ -194,12 +203,13 @@ def _drop(con, aid: int) -> None:
     con.execute("DELETE FROM appeals WHERE id = ?", (aid,))  # its author link goes with it (ON DELETE CASCADE)
 
 
-def delete(con, v: Viewer, aid: int) -> None:
+def delete(con, v: Viewer, aid: int, desk: str = "sg") -> None:
+    """Mine, through its own desk's route only (the other desk's switch off never reaches it)."""
     with tx(con):
-        if not one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", aid, v.id):
+        if not one(con, "SELECT 1 FROM appeal_authors w JOIN appeals a ON a.id = w.appeal_id WHERE w.appeal_id = ? AND w.user_id = ? AND a.desk = ?", aid, v.id, desk):
             raise ApiError("not_found")
         _drop(con, aid)
-        log_action(con, None, "appeal_delete", f"appeal:{aid}")  # no actor: the line would tie me to it
+        log_action(con, None, f"{DESKS[desk][4]}_delete", f"appeal:{aid}")  # no actor: the line would tie me to it
 
 
 # ------------------------------------------------------------ SG's queue
