@@ -49,7 +49,7 @@
   import OrgTag from '../../ui/OrgTag.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
-  import { floorOf } from '../../lib/map';
+  import { floorOf, addressGis } from '../../lib/map';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
@@ -85,6 +85,7 @@
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
+  const gis = $derived(e ? e.placeUrl || addressGis(e.place) : null);
   let pic = $state(0); // which of the header's photos is on screen
   let hero = $state<HTMLDivElement>();
   let land = () => {};
@@ -449,9 +450,10 @@
 
     <Group>
       <Row icon={CalendarClock} title={multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)} subtitle="{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}" />
-      {#if e.placeUrl}
-        <!-- off campus: the place opens in 2GIS, so it wears their mark -->
-        <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(e.placeUrl!)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
+      {#if gis}
+        <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
+             2GIS for it (owner, Nov 15: a street address stayed plain text) -->
+        <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(gis)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
       {:else if floorOf(e.place) != null}
         <Row icon={MapIcon} title={e.place} subtitle={floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
       {:else}
