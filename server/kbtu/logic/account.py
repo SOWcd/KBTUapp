@@ -525,7 +525,8 @@ LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskb
             "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
             "choice", "teentertainmentkbtu", "klubanimeshnikov",
             "kbtumag",  # kbtu.mag: matched by its name (SKINNED)
-            "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu")  # round 10
+            "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu",  # round 10
+            "kbtucinema", "nisalumnikbtuchapter")  # round 17
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug,
 # Nov 4), as the web's awards.ts lookKey

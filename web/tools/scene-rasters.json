@@ -5,6 +5,9 @@
  "scenes/ai-mol-card.svg": "f48467feda7f",
  "scenes/ch-crest-card.svg": "4d85c7a235e9",
  "scenes/ch-shield-card.svg": "1d3fca8ddf5d",
+ "scenes/cin-far-card.svg": "248001b6c418",
+ "scenes/cin-mid-card.svg": "3f7497b2f15e",
+ "scenes/cin-near-card.svg": "9340f0fe63c4",
  "scenes/cr-facets-card.svg": "f9d350ef24f5",
  "scenes/cr-gem-card.svg": "7e31c8dd7dd7",
  "scenes/cr-spectrum-card.svg": "8f7c141afce5",
@@ -30,6 +33,9 @@
  "scenes/mk-mid-card.svg": "f057f5468362",
  "scenes/mk-near-card.svg": "023b44523b46",
  "scenes/mk-sky-card.svg": "424c3d0bb1b0",
+ "scenes/nis-far-card.svg": "a179e0a5e808",
+ "scenes/nis-mid-card.svg": "5552ba40d6bd",
+ "scenes/nis-near-card.svg": "4a9b99f00221",
  "scenes/ote-arch-card.svg": "13ae758443c1",
  "scenes/ote-far-card.svg": "f14d87af46f4",
  "scenes/ote-ground-card.svg": "74a21ecf3437",
@@ -83,5 +89,5 @@
  "sower/near-card.svg": "dc3b0a142eed",
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
- "minis": "434eadb20a29"
+ "minis": "6afa31c86bf1"
 }

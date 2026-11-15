@@ -30,6 +30,10 @@ import litTurtle from '../assets/lanyards/literature-turtle.webp';
 import tumarDombra from '../assets/lanyards/tumar-dombra.webp';
 import web3St from '../assets/lanyards/web3-st.webp';
 import zhurekHeart from '../assets/lanyards/zhurek-heart.webp';
+// round 17 (.claude/reports/club-lanyards/round17/gen): Cinema's film camera redrawn in their gold line (their AI logo set
+// aside, owner), NIS Alumni's tree in white off its navy
+import cinemaCamera from '../assets/lanyards/cinema-camera.webp';
+import nisTree from '../assets/lanyards/nis-tree.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -315,6 +319,11 @@ export const CLUB_LOOKS = {
   zhylyzhurekkbtu: { strap: 'ZHYLY\nZHUREK', strip: 'ZHYLY ZHUREK', bg: ['#FBEFEA', '#F6E2DC', '#EDCBC4'], straps: ['#B73F55', '#E06A7C', '#FFF4F0'],
     holo: ['#E06A7C', '#B73F55', '#FFF4F0'], role: '#B23A50', qr: ['#8E2840', '#5E1626'], plate: ['#FBEFEA', '#F4EBDC'], mark: zhurekHeart,
     ink: ['#3A1018', 'rgba(58, 16, 24, 0.66)'] },
+  // round 17 (Nov 15): Cinema in their logo's navy and champagne gold; NIS Alumni in their navy and silver
+  kbtucinema: { strap: 'CINEMA', strip: 'CINEMA CLUB', short: 'Cinema', bg: ['#22357A', '#16245A', '#0A1230'], straps: ['#121D4A', '#26387E', '#E8D2A0'],
+    holo: ['#F4E4BC', '#CDAE6E', '#16245A'], role: '#E8D2A0', qr: ['#16245A', '#2A3C82'], plate: ['#22357A', '#0A1230'], mark: cinemaCamera },
+  nisalumnikbtuchapter: { strap: 'NIS\nALUMNI', strip: 'NIS ALUMNI', short: 'NIS Alumni', bg: ['#2A4A75', '#1F3A5F', '#0E1E36'], straps: ['#16304F', '#2E5482', '#FFFFFF'],
+    holo: ['#F4F7FB', '#C9D3E0', '#1F3A5F'], role: '#CFE0F5', qr: ['#1F3A5F', '#0E1E36'], plate: ['#2E5482', '#16304F'], mark: nisTree },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh

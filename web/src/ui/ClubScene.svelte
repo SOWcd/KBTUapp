@@ -27,6 +27,8 @@
   import tumLogo from '../assets/lanyards/tumar-logo.webp';
   import w3St from '../assets/lanyards/web3-st.webp';
   import zhHeart from '../assets/lanyards/zhurek-heart.webp';
+  import cinCamera from '../assets/lanyards/cinema-camera.webp';
+  import nisTree from '../assets/lanyards/nis-tree.webp';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -34,8 +36,8 @@
   const CARD = import.meta.glob('../assets/lanyards/scenes/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
   // round 11's scenes (their files' prefix) and the marks on their badge's band
-  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh' };
-  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart };
+  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis' };
+  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -360,7 +362,12 @@
   .sc.tumarorchestrakbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(230, 194, 122, 0.2), transparent 65%), linear-gradient(160deg, rgb(20, 56, 143), rgb(11, 36, 112) 55%, rgb(4, 17, 58)); }
   .sc.web { background: radial-gradient(60% 80% at 100% 0%, rgba(255, 228, 92, 0.22), transparent 65%), linear-gradient(160deg, rgb(74, 163, 186), rgb(42, 127, 151) 55%, rgb(15, 70, 86)); }
   .sc.zhylyzhurekkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.6), transparent 65%), linear-gradient(160deg, rgb(251, 239, 234), rgb(246, 226, 220) 55%, rgb(237, 203, 196)); }
+  /* round 17 (.claude/reports/club-lanyards/round17/gen/gen-r17.py): Cinema's navy hall lit from the screen, NIS Alumni's navy */
+  .sc.kbtucinema { background: radial-gradient(70% 90% at 100% 0%, rgba(126, 152, 255, 0.24), transparent 65%), linear-gradient(160deg, rgb(34, 53, 122), rgb(22, 36, 90) 55%, rgb(10, 18, 48)); }
+  .sc.nisalumnikbtuchapter { background: radial-gradient(70% 90% at 100% 0%, rgba(207, 224, 247, 0.22), transparent 65%), linear-gradient(160deg, rgb(42, 74, 117), rgb(31, 58, 95) 55%, rgb(14, 30, 54)); }
   .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
+  .bw.kbtucinema { top: 22px; height: 70px; filter: drop-shadow(0 0 10px rgba(244, 221, 166, 0.35)); }
+  .bw.nisalumnikbtuchapter { top: 10px; height: 96px; filter: drop-shadow(0 2px 10px rgba(6, 16, 31, 0.55)); }
   .bw.enactuskbtu { top: 30px; height: 50px; }
   .bw.caseclubkbtu { top: 16px; height: 90px; }
   .bw.knlknolimits { top: 8px; height: 58px; } /* round 15: over the car on the band */
