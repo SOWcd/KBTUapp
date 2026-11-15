@@ -7,6 +7,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 // the tabs App.svelte loads as chunks of their own (tabPages), by the source file their chunk starts at
 const TAB_CHUNKS: Record<string, string> = {
+  club: '/src/screens/afisha/Clubs.svelte',
   profile: '/src/screens/profile/Me.svelte',
 };
 

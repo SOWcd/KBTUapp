@@ -31,7 +31,6 @@
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
-  import Clubs from './screens/afisha/Clubs.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
@@ -99,10 +98,11 @@
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
-  // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS. index.html preloads the kept tab's chunk
-  // (vite.config.ts preloads(), the same files); otherwise each comes with the first data, ahead of a tap or a link and
-  // of prebuild()
+  // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
+  // index.html preloads the kept tab's chunk (vite.config.ts preloads(), the same files); otherwise each comes with the
+  // first data, ahead of a tap or a link and of prebuild()
   const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
+    club: () => import('./screens/afisha/Clubs.svelte'),
     profile: () => import('./screens/profile/Me.svelte'),
   };
   const pages = $state<Partial<Record<Tab, Component>>>({});
@@ -802,7 +802,7 @@
       {:else if tab === 'forum'}
         {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
       {:else if tab === 'club'}
-        {#if built.club}<Clubs />{/if}
+        {#if built.club && pages.club}<pages.club />{/if}
       {:else if built.profile && pages.profile}<pages.profile />{/if}
     </section>
   {/each}
