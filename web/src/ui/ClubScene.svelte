@@ -29,7 +29,7 @@
   import zhHeart from '../assets/lanyards/zhurek-heart.webp';
   import cinCamera from '../assets/lanyards/cinema-camera.webp';
   import nisTree from '../assets/lanyards/nis-tree.webp';
-  import cybPanther from '../assets/lanyards/cyber-panther.webp';
+  import cybPan from '../assets/lanyards/cyber-pan.webp'; // round 19: their panther in full colour, cut off its badge
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -38,7 +38,7 @@
   // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
   // round 11's scenes (their files' prefix) and the marks on their badge's band
   const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb' };
-  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPanther };
+  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -369,7 +369,11 @@
   /* round 18 (round18/gen/gen-r18.py): CyberSport's black-violet, its one magenta glow from the top right */
   .sc.cybersportkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(214, 58, 240, 0.34), transparent 65%), linear-gradient(160deg, rgb(34, 9, 64), rgb(17, 4, 38) 55%, rgb(5, 1, 12)); }
   .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
-  .bw.cybersportkbtu { top: 8px; height: 98px; filter: drop-shadow(0 0 12px rgba(214, 58, 240, 0.45)); }
+  .bw.cybersportkbtu { top: 4px; height: 118px; max-width: none; filter: drop-shadow(0 0 14px rgba(214, 58, 240, 0.55)); }
+  /* round 19: a holographic foil sheen sliding with the tilt, a neon rim round the card */
+  .cybersportkbtu .gloss { background: linear-gradient(115deg, transparent 38%, rgba(255, 120, 255, 0.1) 45%, rgba(140, 200, 255, 0.09) 50%, rgba(255, 230, 150, 0.06) 54%, transparent 60%) calc(55% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.12), transparent 65%);
+    box-shadow: inset 0 1px 0 rgba(255, 190, 255, 0.55), inset 0 0 0 1px rgba(232, 90, 255, 0.4), inset 0 0 18px rgba(214, 58, 240, 0.18); }
   .bw.kbtucinema { top: 22px; height: 70px; filter: drop-shadow(0 0 10px rgba(244, 221, 166, 0.35)); }
   .bw.nisalumnikbtuchapter { top: 10px; height: 96px; filter: drop-shadow(0 2px 10px rgba(6, 16, 31, 0.55)); }
   .bw.enactuskbtu { top: 30px; height: 50px; }

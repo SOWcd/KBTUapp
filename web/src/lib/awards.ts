@@ -328,7 +328,7 @@ export const CLUB_LOOKS = {
     holo: ['#F4F7FB', '#C9D3E0', '#1F3A5F'], role: '#CFE0F5', qr: ['#1F3A5F', '#0E1E36'], plate: ['#2E5482', '#16304F'], mark: nisTree },
   // round 18 (Nov 15): CyberSport in their badge's black-violet and one magenta neon
   cybersportkbtu: { strap: 'CYBER\nSPORT', strip: 'KBTU CYBERSPORT', bg: ['#22093F', '#110426', '#05010C'], straps: ['#10041C', '#2A0C46', '#F07CFF'],
-    holo: ['#F3D0FF', '#C84BEC', '#14031F'], role: '#F49CFF', qr: ['#4A0F66', '#22063A'], plate: ['#2A0E46', '#07020F'], mark: cyberPanther },
+    holo: ['#1A0630', '#2C0B4C', '#F7A8FF'], ring: 'linear-gradient(135deg, #FFD0FF, #E85AFF 45%, #7A3CFF)', role: '#F49CFF', qr: ['#4A0F66', '#22063A'], plate: ['#2A0E46', '#07020F'], mark: cyberPanther },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh

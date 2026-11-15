@@ -155,6 +155,8 @@
   .plate { position: relative; margin: 14px 18px 0; padding: 16px; border-radius: 22px; background: #fff;
     box-shadow: 0 16px 30px -18px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(10, 15, 36, 0.05); }
 
+  /* round 19: CyberSport's QR in a neon frame */
+  .cybersportkbtu .plate { box-shadow: 0 0 0 1.5px rgb(240, 124, 255), 0 0 0 5px rgba(232, 90, 255, 0.16), 0 0 26px rgba(214, 58, 240, 0.6), 0 16px 30px -18px rgba(0, 0, 0, 0.6); }
   /* each look's body and strap below its band (LanyardBand), as on the badge (Hero.svelte) */
   .cheer { --role: #FFC83D; }
   .cheer .pass { background: linear-gradient(180deg, rgb(24, 26, 52) 124px, rgb(9, 10, 20)); } /* from the band's last colour where it ends: no seam */

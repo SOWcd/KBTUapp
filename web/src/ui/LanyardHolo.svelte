@@ -93,4 +93,14 @@
   /* óte and kbtu.mag: their colours, matte (the specular dimmed, no white rim) */
   .teentertainmentkbtu, .kbtumag { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
   .club .ch { white-space: nowrap; }
+  /* CyberSport (round 19): dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
+  .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);
+    box-shadow: inset 0 0 0 1px rgba(240, 124, 255, 0.9), inset 0 0 10px rgba(232, 90, 255, 0.28), 0 0 14px rgba(214, 58, 240, 0.5); }
+  /* a jersey's cut corners, their diagonals drawn in the edge's neon */
+  .cybersportkbtu { border-radius: 0; clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+    background: linear-gradient(135deg, transparent 5.6px, rgb(240, 124, 255) 5.6px 6.9px, transparent 6.9px) 0 0 / 14px 14px no-repeat,
+      linear-gradient(315deg, transparent 5.6px, rgb(240, 124, 255) 5.6px 6.9px, transparent 6.9px) 100% 100% / 14px 14px no-repeat,
+      linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); }
 </style>
