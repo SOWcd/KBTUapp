@@ -38,6 +38,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       method,
       headers: { Authorization: `tma ${tg.initData}`, ...staffOf(method, path), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+      // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
+      // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
+      signal: raw ? undefined : AbortSignal.timeout?.(100_000),
     }));
   } catch {
     throw new ApiErr('unavailable', 'network');
