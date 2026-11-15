@@ -57,7 +57,7 @@
 </button>
 
 <style>
-  .row { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card); text-align: left; }
+  .row { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); text-align: left; }
   .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .txt.pr .title { padding-right: 16px; }
   .saved { position: absolute; top: 10px; right: 10px; display: flex; color: var(--warning-text); } /* the themed amber: plain gold faded on a light row */

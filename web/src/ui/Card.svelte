@@ -1,6 +1,7 @@
 <script lang="ts">
   // A card for rich content only (an event, a club, a post); a list of things is Rows in a Group.
-  // --surface, --r-l, 16 inside; a soft shadow in the light theme, none in the dark (never a hairline with a shadow).
+  // --surface, --r-l, 16 inside; a soft shadow in the light theme, none in the dark. Under .opal (tokens.css): 24 round,
+  // 20 inside, a hair rim (--card-rim).
   //   onclick   the whole card opens something (a press that gives; Enter and Space too). A card with buttons inside
   //             keeps them its own: they don't trigger the card
   import type { Snippet } from 'svelte';
@@ -17,7 +18,7 @@
 {/if}
 
 <style>
-  .card { position: relative; padding: var(--s-4); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card); text-align: left; }
+  .card { position: relative; padding: var(--card-pad, var(--s-4)); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); text-align: left; }
   .tap { cursor: pointer; transition: transform 450ms var(--ease-bounce); }
   .tap:active:not(:has(button:active)) { transform: scale(0.98); transition-duration: 80ms; }
   .tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

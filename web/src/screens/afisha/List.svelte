@@ -17,7 +17,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ui } from '../../lib/state/ui.svelte';
-  import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { classesOn, classesLeft } from '../../lib/classes';
@@ -40,6 +40,9 @@
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import StatRow from '../../ui/StatRow.svelte';
+  import ActionCard from '../../ui/ActionCard.svelte';
+  import Emoji from '../../ui/Emoji.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
   import { hit as orgHit } from '../../lib/clubs';
@@ -111,6 +114,16 @@
   const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
   const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
 
+  // Opal's one hero: my next event, else the nearest coming one (a real cover first: the hero carries the screen's colour)
+  const coming = $derived(shown.filter((e) => endOf(e) > now).sort((a, b) => a.startsAt - b.startsAt));
+  const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
+  const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
+  const stats = $derived([
+    { label: t('list.statWeek'), value: weekCount, key: true },
+    { label: t('list.statGoing'), value: going.length },
+    ...(showClasses && data.schedule.length ? [{ label: t('list.statLeft'), value: left.length }] : []),
+  ]);
+
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
 
@@ -176,11 +189,11 @@
   {/if}
 {/snippet}
 
-<div class="page scroll stagger">
+<div class="page scroll stagger opal">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
+  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   <header class="hd">
-    <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
-      <h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
+    <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the assistant (with the forum's switch), the Feed full screen, the Gallery, the clubs' news -->
     <span class="tools">
       {#if session.board}<IconButton icon={Sparkles} label={t('as.ask')} onclick={() => sheets.assistant()} />{/if}
@@ -198,37 +211,52 @@
   <StoryRow />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
-  {#if going.length}
+  {#if hero}
+    {@const e = hero}
+    {@const mine = e.my?.status === 'going'}
+    <!-- the hero: my next event (its ticket and the way there), else the nearest; its cover, or its 3D mark lit on black -->
+    <section class="hero" class:pic={heroPic} style="--c:{e.color ?? e.tint}">
+      <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+      {#if heroPic}<Poster item={e} big radius={0} />{:else}<span class="glow"></span><span class="mark"><Emoji name={e.emoji ?? 'sparkles_3d'} size={128} /></span>{/if}
+      <div class="shade"></div>
+      <div class="hero-tx">
+        <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
+        <b class="clamp-2">{e.title}</b>
+        <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
+        {#if mine}
+          <span class="acts">
+            <Button kind="glass" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button>
+            {#if floorOf(e.place) != null}<Button kind="glass" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={17} />{/snippet}{t('route.open')}</Button>{/if}
+          </span>
+        {:else}<span class="hsub">{@render status(e)}</span>{/if}
+      </div>
+    </section>
+  {/if}
+  {#if data.eventsReady}<div class="stats"><StatRow items={stats} /></div>{/if}
+
+  {#if going.length > 1}
+    <!-- the rest of my week: one grouped card, a ticket pill at each row's end -->
     <h2 class="sec">{t('list.yours')}</h2>
-    <div class="heroes" class:one={going.length === 1}>
-      {#each going as e (e.id)}
-        <!-- an event I'm going to: its cover, how soon, the way there and the ticket -->
-        <section class="hero" style="--c:{e.color ?? e.tint}">
+    <div class="list">
+      {#each going.slice(1) as e (e.id)}
+        <div class="row mine">
           <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-          <Poster item={e} big radius={0} />
-          <div class="shade"></div>
-          <div class="hero-tx">
-            <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
-            <b class="clamp-2">{e.title}</b>
-            <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
-            <!-- over the cover: the glass buttons -->
-            <span class="acts">
-              <Button kind="glass" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button>
-              {#if floorOf(e.place) != null}<Button kind="glass" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={17} />{/snippet}{t('route.open')}</Button>{/if}
-            </span>
-          </div>
-        </section>
+          <Poster item={e} size={48} radius={12} />
+          <span class="tx"><b class="ellipsis title">{e.title}</b>
+            <span class="meta num ellipsis">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)} · {placeOf(e.place)}</span></span>
+          <span class="end"><Button kind="secondary" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button></span>
+        </div>
       {/each}
     </div>
   {/if}
   {#if showClasses && askSched}
     <!-- no timetable yet: one card at the top, under my events (owner, Nov 8: an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
-    <div class="ask"><Button kind="primary" size="l" full onclick={() => sheets.schedHowTo()}>{#snippet icon()}<CalendarPlus size={20} />{/snippet}{t('sched.cardTitle')}</Button><p class="fs-sub">{t('sched.cardSub')}</p></div>
+    <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} text={t('sched.cardSub')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
   {/if}
 
   <div class="events-head">
-    <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
+    <h2 class="sec two">{t('list.title')}</h2>
     <label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>
   </div>
 
@@ -259,7 +287,7 @@
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
             <div class="row" class:cancelled={e.status === 'cancelled'}>
               <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-              <Poster item={e} size={76} radius={16} dim={e.status === 'cancelled'} />
+              <Poster item={e} size={64} radius={14} dim={e.status === 'cancelled'} />
               <span class="tx">
                 <span class="org">{#if e.coHost}<span class="pair"><OrgLogo org={e.org} size={16} /><OrgLogo org={e.coHost} size={16} /></span><span class="ellipsis">{nameOf(e.org)} × {nameOf(e.coHost)}</span>{:else}<OrgLogo org={e.org} size={16} /><span class="ellipsis">{nameOf(e.org)}</span>{/if}{#if inner(e)}<UsersRound size={13} strokeWidth={2.2} />{/if}{#if e.saved && e.status !== 'cancelled'}<Bookmark class="sv" size={13} strokeWidth={2.4} fill="currentColor" aria-label={t('event.saved')} />{/if}</span>
                 <b class="clamp-2 title">{e.title}</b>
@@ -299,103 +327,110 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
+  /* Opal (design-spec-opal.md): black first, one hero, big left title, near-black cards with a hair rim, grey caps */
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
   .hd > span:first-child { min-width: 0; }
   /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
      at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
   .hd > span:first-child { flex: 1 0 120px; }
-  .kick { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); margin-bottom: 2px; }
-  .kick::first-letter { text-transform: uppercase; }
-  .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
+  .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
+  .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
   .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
   .off { margin: 12px 4px 0; color: var(--text-2); }
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  /* Luma's section titles: bold, the second line grey at the same size */
-  .sec { margin: 26px 0 12px; font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .events-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: 34px 0 12px; }
-  .sec.two { display: flex; flex-direction: column; min-width: 0; margin: 0; font-size: var(--fs-sec); gap: var(--s-1); }
-  /* the timetable's switch: centred on the heading's first line, not on its two lines */
-  .cls { flex: none; display: flex; align-items: center; gap: 10px; height: calc(var(--fs-sec) * 1.1); font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
-  .sec.two span { font: 500 var(--fs-sub)/1.3 var(--font-text); letter-spacing: normal; color: var(--text-3); }
-  .class-label { margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-1); border-radius: var(--r-m) var(--r-m) 0 0; background: var(--surface); font: 600 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
+  .sec { margin: 30px var(--s-1) 12px; font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px var(--s-1) 4px; }
+  .sec.two { min-width: 0; margin: 0; }
+  .cls { flex: none; display: flex; align-items: center; gap: 10px; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
+  /* a day's classes inside its card: a grey caps label over them */
+  .class-label { position: relative; padding: var(--s-3) 0 var(--s-1); font: 600 var(--fs-micro)/1.3 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+  .list > .class-label:not(:first-child)::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 0.5px; background: var(--separator); }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
-  .day { margin: 22px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); content-visibility: auto; contain-intrinsic-size: auto 360px; }
-  .day > .dh { margin-top: 0; }
-  .dh { margin: 22px 0 6px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
+  .day { margin: 26px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); content-visibility: auto; contain-intrinsic-size: auto 360px; }
+  .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
   .dh span { color: var(--text-3); font-weight: 600; }
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* "Your events": covers side by side, the next one peeks in; room below for the covers' glow (the scroller clipped
-     it into a hard band) */
-  .heroes { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)) -28px; padding: 0 var(--gutter) 28px; scroll-padding: 0 var(--gutter); scrollbar-width: none; }
-  .heroes::-webkit-scrollbar { display: none; }
-  .hero { position: relative; flex: none; width: calc(100% - 28px); height: 210px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
-    box-shadow: inset 0 0 0 1px var(--line), 0 18px 36px -24px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
+  /* the hero: one rich visual, everything else monochrome. A cover; without one the event's 3D mark lit on black */
+  .hero { position: relative; height: min(340px, 88vw); overflow: hidden; border-radius: var(--r-xl); background: var(--media);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 48px -30px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
-  .heroes.one .hero { width: 100%; }
   .hero :global(.poster) { position: absolute; inset: 0; }
-  /* an emoji cover: its mark in the top corner, clear of the title and the buttons (centred, it sat on "tomorrow · 18:30") */
-  .hero :global(.poster .emoji) { position: absolute; top: 16px; right: 16px; width: 64px; height: 64px; filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35)); }
-  .shade { position: absolute; inset: 35% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.64)); pointer-events: none; }
-  .hero-tx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 3px; padding: 16px; color: var(--on-accent); pointer-events: none; }
-  .when { font: 600 var(--fs-sub)/1.2 var(--font-text); opacity: 0.85; }
-  .hero-tx b { font: 800 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
-  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); opacity: 0.75; }
+  .glow { position: absolute; inset: 0; opacity: 0.6; background: radial-gradient(62% 48% at 50% 34%, var(--c), transparent 74%); }
+  .mark { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); filter: drop-shadow(0 22px 30px rgba(0, 0, 0, 0.6)); animation: float 6s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translate(-50%, calc(-50% - 6px)); } }
+  @media (prefers-reduced-motion: reduce) { .mark { animation: none; } }
+  .shade { position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.82)); pointer-events: none; }
+  .hero:not(.pic) .shade { inset: 50% 0 0; }
+  .hero-tx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 4px; padding: var(--s-5); color: var(--on-accent); pointer-events: none; }
+  .when { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.66); }
+  .hero-tx b { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.035em; }
+  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.66); }
   .acts { position: relative; z-index: 2; display: flex; gap: 8px; margin-top: 12px; pointer-events: auto; }
-
+  .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 6px; }
+  .hsub:empty { display: none; }
+  .hsub .fr { color: rgba(255, 255, 255, 0.66); }
+  .hsub :global(.av) { box-shadow: 0 0 0 1.5px var(--media); }
+  .stats { margin: 22px 0 6px; }
 
   /* the featured post: its own card, the body folded to two lines */
-  .pin { margin-bottom: 4px; }
+  .pin { margin: 10px 0 0; }
   .pin :global(.card) { display: flex; flex-direction: column; gap: 6px; }
   .pin-top { display: flex; align-items: center; gap: 8px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
   .pin b { font: 700 var(--fs-card)/1.25 var(--font-text); }
   .pin-b { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); }
 
-  /* the rows of a day: a hairline between them, inset to the text (Luma) */
-  .list { display: flex; flex-direction: column; }
-  .row { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 0; }
-  .row + .row::before { content: ''; position: absolute; top: 0; left: 90px; right: 0; height: 0.5px; background: var(--separator); }
+  /* a day's rows: one grouped card (Opal's), a hairline between them inset to the text */
+  .list { display: flex; flex-direction: column; padding: 0 var(--s-4); border-radius: var(--r-group); background: var(--surface); box-shadow: var(--card-rim); }
+  .list:empty { display: none; }
+  .list > :global(.cc) { margin: 10px 0; background: var(--surface-2); box-shadow: none; }
+  .row { position: relative; display: flex; align-items: center; gap: 14px; padding: 14px 0; }
+  .row + .row::before { content: ''; position: absolute; top: 0; left: 78px; right: 0; height: 0.5px; background: var(--separator); }
+  .row.mine { padding: 10px 0; }
+  .row.mine + .row.mine::before { left: 62px; }
   .row :global(.poster) { box-shadow: inset 0 0 0 1px var(--line); transition: transform var(--t-fast) var(--ease); }
   .row:has(> .hit:active) :global(.poster) { transform: scale(0.96); }
+  .end { position: relative; z-index: 2; flex: none; }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
   .tx :global(button), .tx :global(a) { pointer-events: auto; }
-  .org { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .org { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
   .org :global(.logo) { box-shadow: 0 0 0 1px var(--line); }
   /* a co-hosted event: both marks, the second over the first's edge (as ui/OrgTag) */
   .pair { display: flex; flex: none; }
-  .pair :global(.logo + .logo) { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--bg); }
+  .pair :global(.logo + .logo) { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--surface); }
   .org :global(svg) { flex: none; color: var(--accent-text); }
   .org :global(.sv) { color: var(--warning-text); } /* saved: the themed amber */
-  .title { font: 700 var(--fs-card)/1.22 var(--font-text); letter-spacing: -0.01em; }
+  .title { font: 700 var(--fs-card)/1.22 var(--font-text); letter-spacing: -0.015em; }
   .cancelled .title { text-decoration: line-through; color: var(--text-2); }
   .meta { display: flex; flex-wrap: wrap; gap: 2px 12px; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .meta span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+  .meta.ellipsis { display: block; }
   .meta :global(svg) { flex: none; color: var(--text-3); }
   .sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .sub:empty { display: none; }
   .fr { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
   .av { flex: none; display: flex; }
   .av :global(.av + .av) { margin-left: -5px; }
-  .av :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
+  .av :global(.av) { box-shadow: 0 0 0 1.5px var(--surface); }
 
   /* a class: its times in the covers' column, the room at the row's end */
-  .cl { min-height: 56px; padding: 8px var(--s-3); gap: var(--s-2); background: var(--surface); cursor: pointer; }
-  .cl:last-child { border-radius: 0 0 var(--r-m) var(--r-m); }
+  .cl { min-height: 56px; padding: 8px 0; gap: var(--s-2); cursor: pointer; }
   .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
   .cl.skip .cl-s b { text-decoration: line-through; }
+  .class-label + .cl::before { display: none; }
   /* the class on now: its times in the accent, what's left, a thin line of how far it's gone under the text */
   .cl.live .cl-t b { color: var(--accent-text); }
   .soon { font-weight: 600; color: var(--accent-text); }
-  .prog { position: absolute; left: 90px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
-  .cl-t { flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
+  .prog { position: absolute; left: 78px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
+  .cl-t { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .cl-t b { font: 600 var(--fs-body)/1 var(--font-text); color: var(--text); }
-  .cl-s { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .cl-s { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; margin-left: 6px; }
   .cl-s b { font: 600 var(--fs-body)/1.25 var(--font-text); }
   .cl-s small { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
   .cl-k { font-style: normal; }
@@ -406,9 +441,8 @@
   /* a room in the main building opens the map on its floor; the dorm and the second building open 2GIS */
   .cl-r.on { display: flex; justify-content: flex-end; }
   .cl-r.on :global(.btn) { max-width: 100%; }
-  .free { padding: 6px 0 0 90px; }
+  .free { margin: 0 var(--s-1); color: var(--text-3); }
 
-  .ask { margin-top: 20px; }
-  .ask p { margin: 8px 0 0; text-align: center; color: var(--text-3); }
+  .ask { margin-top: 14px; }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

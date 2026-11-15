@@ -20,7 +20,7 @@
 
 <style>
   .grp { display: flex; flex-direction: column; }
-  .box { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--group-bg, var(--surface)); }
+  .box { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--group-bg, var(--surface)); box-shadow: var(--card-rim, none); }
   .gcap { margin: 0 var(--s-1) 10px; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }
   .note { margin-left: 0.3em; white-space: nowrap; color: var(--text-3); font-weight: 600; }
   .foot { margin: var(--s-2) var(--s-4) 0; font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
