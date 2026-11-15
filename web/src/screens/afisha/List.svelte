@@ -120,7 +120,7 @@
   const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
   const stats = $derived([
     { label: t('list.statWeek'), value: weekCount, key: true },
-    { label: t('list.statGoing'), value: going.length },
+    ...(going.length ? [{ label: t('list.statGoing'), value: going.length }] : []), // no "0": shown only when I'm going somewhere
     ...(showClasses && data.schedule.length ? [{ label: t('list.statLeft'), value: left.length }] : []),
   ]);
 
