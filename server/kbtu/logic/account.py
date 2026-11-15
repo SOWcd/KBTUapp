@@ -1080,7 +1080,7 @@ _DEL_GONE = {
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
-    ("appeal_authors", "user_id"), ("appeal_sends", "user_id"), ("appeal_consents", "user_id"), ("appeal_staff", "user_id"),  # my appeals go first (delete_me)
+    ("appeal_authors", "user_id"), ("appeal_sends", "user_id"), ("appeal_consents", "user_id"), ("appeal_staff", "user_id"), ("help_staff", "user_id"), ("help_consents", "user_id"),  # my appeals go first (delete_me)
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)

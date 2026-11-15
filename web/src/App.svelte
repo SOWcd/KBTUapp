@@ -10,7 +10,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, opened } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -126,6 +126,10 @@
   sheets.myAppeal = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id });
   sheets.sgQueue = () => lazy(() => import('./screens/appeals/SgQueue.svelte'), {});
   sheets.sgAppeal = (id) => lazy(() => import('./screens/appeals/SgAppeal.svelte'), { id });
+  sheets.askHuman = (q) => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), { desk: 'help', q }));
+  sheets.myAsk = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id, desk: 'help' });
+  sheets.helpQueue = () => lazy(() => import('./screens/appeals/SgQueue.svelte'), { desk: 'help' });
+  sheets.helpAppeal = (id) => lazy(() => import('./screens/appeals/SgAppeal.svelte'), { id, desk: 'help' });
   sheets.volLedger = () => lazy(() => import('./screens/club/VolLedger.svelte'), { vol: true });
   sheets.volDoor = (sid, title) => lazy(() => import('./screens/club/VolDoor.svelte'), { sid, title });
   sheets.volPerson = (id, mine) => lazy(() => import('./screens/club/VolPerson.svelte'), { id, mine, vol: true });
@@ -424,6 +428,7 @@
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
+    if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
@@ -646,6 +651,8 @@
     if (session.me?.vol?.ledger) void loadVol();
     if (session.me?.appeals) void loadAppeals();
     if (session.me?.appeals?.sg) void loadSg();
+    if (session.me?.ask) void loadAsks();
+    if (session.me?.ask?.staff) void loadHelpq();
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)

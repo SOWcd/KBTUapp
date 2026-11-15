@@ -292,6 +292,16 @@ def appeals_viewer(request: Request, v: Me, con: Con) -> Viewer:
 Appeals = Annotated[Viewer, Depends(appeals_viewer)]
 
 
+def ask_viewer(request: Request, v: Me, con: Con) -> Viewer:
+    """The help desk (KRI's "Ask a person", logic/appeals.py): ASK=1 everyone, staff the admins, moderators and its people; off: not here."""
+    if not logic.appeals.ask_on(con, request.app.state.cfg.ask, v):
+        raise ApiError("not_found")
+    return v
+
+
+Asker = Annotated[Viewer, Depends(ask_viewer)]
+
+
 def reports_viewer(request: Request, v: Me) -> Viewer:
     """Clubs' event reports (logic/evreports.py): REPORTS=1; off, not here (their policy clause comes first)."""
     if not request.app.state.cfg.reports:
@@ -395,7 +405,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
-                                   **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {})}
+                                   **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
+                                   **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -1657,6 +1668,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def sg_solved_restore(con: Con, v: Appeals, sid: int):
         return logic.appeals.solved_restore(con, v, sid)
 
+    # the help desk (logic/appeals.py, desk "help"): KRI's question handed to a person; mine, a new one, delete mine; its queue
+    @app.get("/api/ask")
+    def my_asks(con: Con, v: Asker):
+        return logic.appeals.mine(con, v, "help")
+
+    @app.post("/api/ask")
+    def new_ask(con: Con, v: Asker, body: dict = Body(...)):
+        return logic.appeals.send(con, v, body, "help")
+
+    @app.delete("/api/ask/{aid}", status_code=204)
+    def drop_ask(con: Con, v: Asker, aid: int):
+        logic.appeals.delete(con, v, aid)
+
+    @app.get("/api/help/appeals")
+    def help_queue(con: Con, v: Asker):
+        return logic.appeals.queue(con, v, "help")
+
+    @app.get("/api/help/appeals/{aid}")
+    def help_appeal(con: Con, v: Asker, aid: int):
+        return logic.appeals.detail(con, v, aid, "help")
+
+    @app.post("/api/help/appeals/{aid}")
+    def help_act(con: Con, v: Asker, aid: int, body: dict = Body(...)):
+        return logic.appeals.act(con, v, aid, body, "help")
+
     async def question_vec(body: dict):
         """DOCS=hybrid: the question's embedding for the documents' search, from Cloudflare, only where the policy names
         Cloudflare for the assistant's questions (ai_on) and the docs file has vectors to compare it with; 3 s at most in
@@ -1678,7 +1714,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         try:
-            msgs, ok = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
+            msgs, ok = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang, cfg.ask)
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)

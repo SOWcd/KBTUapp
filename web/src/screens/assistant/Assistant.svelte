@@ -4,7 +4,8 @@
   // three buttons (a room on the map, an event, a club, my classes, a Settings page, the Gallery, the news), checked by
   // the server against what it told the model. Under an answer 👍/👎 (on 👎, the student may send that one question
   // and answer); when the server sees distress, its fixed help card with the helplines (review, Oct 31: nothing of
-  // it is kept or sent by us; the student calls or writes themselves).
+  // it is kept or sent by us; the student calls or writes themselves). When KRI didn't know, "Ask a person" (ASK): the
+  // help desk's composer with the question in it, sent only on the student's tap.
   import { untrack } from 'svelte';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
@@ -13,6 +14,7 @@
   import Settings from '@lucide/svelte/icons/settings';
   import Images from '@lucide/svelte/icons/images';
   import Newspaper from '@lucide/svelte/icons/newspaper';
+  import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
   import ThumbsDown from '@lucide/svelte/icons/thumbs-down';
   import Phone from '@lucide/svelte/icons/phone';
@@ -70,15 +72,16 @@
   const label = (a: AssistAction) => a.type === 'map' ? t('as.onMap', { room: a.room })
     : a.type === 'event' ? eventById(a.id)?.title ?? t('as.event')
     : a.type === 'club' ? [...data.orgs, ...data.small].find((o) => o.id === a.id)?.name ?? t('as.club')
-    : a.type === 'settings' ? t(SET[a.kind]) : t(a.type === 'timetable' ? 'list.classes' : a.type === 'gallery' ? 'gallery.title' : 'page.news');
-  const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper };
-  function go(a: AssistAction) {
+    : a.type === 'settings' ? t(SET[a.kind]) : t(a.type === 'timetable' ? 'list.classes' : a.type === 'gallery' ? 'gallery.title' : a.type === 'ask' ? 'ask.button' : 'page.news');
+  const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper, ask: MessageCircleQuestion };
+  function go(a: AssistAction, q?: string) {
     if (a.type === 'map') sheets.map(a.room);
     else if (a.type === 'event') sheets.event(a.id);
     else if (a.type === 'club') sheets.club(a.id);
     else if (a.type === 'settings') sheets.settings(a.kind);
     else if (a.type === 'timetable') sheets.week();
     else if (a.type === 'gallery') sheets.gallery();
+    else if (a.type === 'ask') sheets.askHuman(q);
     else sheets.news();
   }
   // optimistic: the tap shows at once; a failed call quietly takes it back
@@ -116,7 +119,7 @@
           <p class="selectable">{m.text}</p>
           {#if m.actions?.length}
             <div class="acts">{#each m.actions as a, k (k)}
-              <Button kind="tinted" size="s" onclick={() => go(a)}>
+              <Button kind="tinted" size="s" onclick={() => go(a, m.q)}>
                 {#snippet icon()}{@const Icon = ICON[a.type]}<Icon size={15} />{/snippet}
                 {label(a)}
               </Button>

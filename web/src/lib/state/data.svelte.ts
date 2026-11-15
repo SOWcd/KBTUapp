@@ -44,6 +44,8 @@ export const data = $state({
   appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
   solved: [] as Solved[],                     // "Solved by your appeals": with my appeals, one request
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
+  asks: null as Appeal[] | null,              // my questions to the help desk (ASK on): with the app, never kept on the phone
+  helpq: null as SgQueue | null,              // the help desk's queue (its granted people): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
   inbox: null as Inbox | null,                // the staff's Admin → Inbox: loaded with the app, again each time Admin opens
@@ -218,6 +220,13 @@ export async function loadAppeals(): Promise<void> {
 }
 export async function loadSg(): Promise<void> {
   try { data.sg = await api.sgQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.sg = null; }
+}
+
+export async function loadAsks(): Promise<void> {
+  try { data.asks = (await api.myAsks()).items; } catch { /* offline: the last copy stays */ }
+}
+export async function loadHelpq(): Promise<void> {
+  try { data.helpq = await api.helpQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.helpq = null; }
 }
 
 export async function loadVol(): Promise<void> {

@@ -171,6 +171,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "appeal_answer":  # apl:<appeal>, to its author: SG answered (a template, never the words); gone: nothing
         mine = one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", int(ref[1]), m["user_id"])
         return (*texts.bot_message(lang, kind), "apl") if mine else None
+    if kind == "ask_answer":  # apl:<question>, to its author: a person answered the question KRI couldn't (a template)
+        mine = one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, kind), "ask") if mine else None
     if kind == "sid_check":  # sc:<student id>, to its holder: someone else typed it; quiet once they changed theirs
         held = one(con, "SELECT 1 FROM students WHERE user_id = ? AND student_id = ?", m["user_id"], ref[1])
         return (*texts.bot_message(lang, kind, sid=ref[1]), "me") if held else None

@@ -413,3 +413,54 @@ def test_no_link_to_any_appeal(ap):
     cols = {r[1] for r in con.execute("PRAGMA table_info(appeal_solved)")}
     assert cols == {"id", "raised", "changed", "topic", "created_by", "created_at", "gone_at"}
     assert not con.execute("PRAGMA foreign_key_list(appeal_solved)").fetchall()[1:]   # users alone
+
+
+# ------------------------------------------------------------ the help desk (KRI's "Ask a person", ASK)
+
+HELPER = 5
+
+
+def test_help_desk_apart_from_sg(env):
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, appeals="all", ask="all")))
+    con = db.connect(cfg.db_path)
+    for tg, name in ((ANN, "ann"), (BEK, "bek"), (SG, "sec"), (HELPER, "hel")):
+        login(c, tg, name)
+    appeals.grant(con, None, _uid(c, SG), True)
+    appeals.grant(con, None, _uid(c, HELPER), True, "help")
+    # KRI's button: whitelisted only where the help desk is open and the model didn't know
+    said = '{"text": "no idea", "actions": [{"type": "ask"}], "known": %s}'
+    assert assistant.answer(said % "false", {"ask": True})["actions"] == [{"type": "ask"}]
+    assert assistant.answer(said % "true", {"ask": True})["actions"] == []
+    assert assistant.answer(said % "false", {"ask": False})["actions"] == []
+    assert assistant.answer('{"text": "x", "actions": [{"type": "ask", "url": "evil"}], "known": false}', {"ask": True})["actions"] == [{"type": "ask"}]
+    # its own consent, never SG's
+    q = {"text": "who signs the internship form?", "anon": True}
+    assert c.post("/api/ask", headers=tma(ANN), json={**q, "consent": appeals.CONSENT}).status_code == 403
+    assert c.get("/api/me", headers=tma(ANN)).json()["ask"] == {"consent": False, "staff": False}
+    h = c.post("/api/ask", headers=tma(ANN), json={**q, "consent": appeals.ASK_CONSENT, "topic": "food"}).json()
+    assert h["anon"] and h["topic"] is None                                            # no topics at the help desk
+    s = _send(c, BEK, "the SG one").json()
+    assert [x["id"] for x in c.get("/api/ask", headers=tma(ANN)).json()["items"]] == [h["id"]]
+    assert c.get("/api/appeals", headers=tma(ANN)).json()["items"] == []               # mine at SG: none
+    # SG's people never see a help question, nor the help desk's people an appeal to SG
+    assert c.get("/api/help/appeals", headers=tma(SG)).status_code == 403
+    assert [x["id"] for x in c.get("/api/sg/appeals", headers=tma(SG)).json()["items"]] == [s["id"]]
+    assert c.get(f"/api/sg/appeals/{h['id']}", headers=tma(SG)).status_code == 404
+    assert c.post(f"/api/sg/appeals/{h['id']}", headers=tma(SG), json={"answer": "x"}).status_code == 404
+    assert c.get("/api/sg/appeals", headers=tma(HELPER)).status_code == 403
+    assert c.get(f"/api/help/appeals/{s['id']}", headers=tma(HELPER)).status_code == 404
+    hq = c.get("/api/help/appeals", headers=tma(HELPER))
+    assert [x["id"] for x in hq.json()["items"]] == [h["id"]]
+    # the anonymous question never shows its author
+    d = c.get(f"/api/help/appeals/{h['id']}", headers=tma(HELPER))
+    for body in (hq.text, d.text):
+        assert "Ann" not in body and "author" not in body
+    # the answer: its own template message, never the words
+    assert c.post(f"/api/help/appeals/{h['id']}", headers=tma(HELPER), json={"answer": "The dean's office", "status": "closed"}).status_code == 200
+    assert con.execute("SELECT kind FROM bot_outbox WHERE ref = ?", (f"apl:{h['id']}",)).fetchone()[0] == "ask_answer"
+    assert {"help_view", "help_answer", "help_grant"} <= {r[0] for r in con.execute("SELECT action FROM audit_log")}
+    # off: no button, no route
+    c2 = TestClient(server.create(dataclasses.replace(cfg, appeals="all")))
+    assert c2.get("/api/ask", headers=tma(ANN)).status_code == 404 and "ask" not in c2.get("/api/me", headers=tma(ANN)).json()
+    con.close()

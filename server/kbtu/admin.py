@@ -88,6 +88,7 @@
   .venv/bin/python -m kbtu.admin appeals list                    who has it
   .venv/bin/python -m kbtu.admin appeals reveal <appeal id>      the author (an anonymous one's too): the creator alone, audited
   .venv/bin/python -m kbtu.admin appeals funnel [days]           the composer's anonymous counters and the months' topics
+  .venv/bin/python -m kbtu.admin help grant|revoke|list [<@username | telegram id>]   the help desk (KRI's questions handed to a person; ASK)
   .venv/bin/python -m kbtu.admin chatsync link <club slug> <chat id> main | dept "<department tag>"   a club's Telegram chat
                                 mirrored into its members (CHAT_SYNC=1; the bot an admin there): main = the membership, dept =
                                 that department (logic/chatsync.py). chatsync list | chatsync unlink <chat id>
@@ -658,6 +659,18 @@ def main(args: list[str]) -> None:
                 print(f"{k:<10} {one(con, 'SELECT COALESCE(SUM(n), 0) FROM usage_days WHERE key = ? AND day >= ?', k, day - days)[0]}")
             for m in appeals.months(con):
                 print(m["month"], m["total"], " ".join(f"{k} {n}" for k, n in sorted(m["topics"].items())))
+        else:
+            sys.exit(__doc__)
+    elif cmd == "help" and len(args) >= 2:
+        from .logic import appeals
+        owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'") or sys.exit("no owner (the founder admin) yet")
+        if args[1] in ("grant", "revoke") and len(args) == 3:
+            u = _user(con, args[2])
+            appeals.grant(con, owner[0], u["id"], args[1] == "grant", "help")
+            print(f"{args[1]}: @{u['tg_username'] or '-'} {u['tg_first_name']}")
+        elif args[1] == "list":
+            for u in rows(con, "SELECT u.tg_id, u.tg_username, u.tg_first_name FROM help_staff a JOIN users u ON u.id = a.user_id ORDER BY a.at"):
+                print(f"{u['tg_id']:>12}  @{u['tg_username'] or '-':<20} {u['tg_first_name']}")
         else:
             sys.exit(__doc__)
     elif cmd == "chatsync":

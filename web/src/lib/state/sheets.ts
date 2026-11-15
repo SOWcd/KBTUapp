@@ -74,6 +74,11 @@ export const sheets = {
   myAppeal: (_id: Id) => {},
   sgQueue: () => {},
   sgAppeal: (_id: Id) => {},
+  /** the help desk: the composer with KRI's question in it (sent only on the student's tap) and my questions; one of mine; its queue and one question in it */
+  askHuman: (_q?: string) => {},
+  myAsk: (_id: Id) => {},
+  helpQueue: () => {},
+  helpAppeal: (_id: Id) => {},
   volLedger: () => {},
   volDoor: (_session: Id, _title: string) => {}, // a session's door: who left without checking out, the hand-over link
   volPerson: (_id: Id, _mine?: boolean) => {}, // an event's door helpers (a running club's President or Vice)

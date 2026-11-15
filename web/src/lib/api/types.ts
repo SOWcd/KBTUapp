@@ -129,7 +129,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
     sent: { id: Id; day: number; q: string; a: string }[]; care: { week: number; n: number }[] } }
 /** The assistant's answer: its buttons, the signed topic a 👍/👎 sends back, the fixed help card when the model sees distress. */
 /** KRI's buttons (server assistant.answer's whitelist): each opens a screen, nothing changes until the student taps */
-export type AssistAction = { type: 'map'; room: string } | { type: 'event' | 'club'; id: number } | { type: 'timetable' | 'gallery' | 'news' }
+export type AssistAction = { type: 'map'; room: string } | { type: 'event' | 'club'; id: number } | { type: 'timetable' | 'gallery' | 'news' | 'ask' }
   | { type: 'settings'; kind: 'school' | 'course' | 'notify' };
 export interface AssistReply { text: string; actions: AssistAction[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
@@ -301,6 +301,7 @@ export interface Me {
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   checkin?: MyCheckin | null;   // my running check-in: the capsule
   appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
+  ask?: { consent: boolean; staff: boolean };  // the help desk (KRI's "Ask a person", ASK) is on for me; its own consent; its queue mine
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;

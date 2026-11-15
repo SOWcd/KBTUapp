@@ -1779,6 +1779,16 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
       DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.email;
     END;"""),
+    # (Nov 15) the help desk beside SG's (logic/appeals.py, ASK): questions KRI couldn't answer, handed to a person; its
+    # own people and its own consent (appeal_consents holds one version a person: a table of its own, not a row there)
+    (173, """ALTER TABLE appeals ADD COLUMN desk TEXT NOT NULL DEFAULT 'sg' CHECK (desk IN ('sg', 'help'));
+    CREATE TABLE help_staff (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE help_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

@@ -253,6 +253,13 @@ export const server = {
   dropAppeal: (id: Id): Promise<void> => call('DELETE', `/appeals/${id}`),
   appealHelp: (text: string, lang: string, consent?: string): Promise<AppealHelp> => call('POST', '/appeals/help', { text, lang, consent }),
   sgQueue: (): Promise<SgQueue> => call('GET', '/sg/appeals'),
+  /** the help desk (the same appeals, desk "help"): KRI's question handed to a person; its own consent version */
+  myAsks: (): Promise<{ items: Appeal[] }> => call('GET', '/ask'),
+  sendAsk: (a: { text: string; anon: boolean; key: string; consent?: string }): Promise<Appeal> => call('POST', '/ask', a),
+  dropAsk: (id: Id): Promise<void> => call('DELETE', `/ask/${id}`),
+  helpQueue: (): Promise<SgQueue> => call('GET', '/help/appeals'),
+  helpAppeal: (id: Id): Promise<Appeal> => call('GET', `/help/appeals/${id}`),
+  helpAct: (id: Id, change: { status?: AppealStatus; answer?: string }): Promise<Appeal> => call('POST', `/help/appeals/${id}`, change),
   sgAppeal: (id: Id): Promise<Appeal> => call('GET', `/sg/appeals/${id}`),
   sgAct: (id: Id, change: { status?: AppealStatus; answer?: string }): Promise<Appeal> => call('POST', `/sg/appeals/${id}`, change),
   solvedAdd: (e: { raised: string; changed: string; topic: AppealTopic | null }): Promise<Solved> => call('POST', '/sg/solved', e),

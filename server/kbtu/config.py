@@ -57,6 +57,8 @@ class Config:
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
     appeals: str = ""
+    # ASK=1: KRI's "Ask a person", the help desk of appeals for everyone (logic/appeals.py); staff: admins, moderators and its people
+    ask: str = ""
     # GALLERY=1: everyone posts to the Gallery (logic/gallery.py: KBTU's own photos beside the albums); staff: admins and moderators
     gallery: str = ""
     # CHAT_SYNC=1: clubs' members mirrored from their linked Telegram chats (logic/chatsync.py); off: none of it runs
@@ -143,6 +145,7 @@ def load() -> Config:
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
+        ask={"1": "all", "staff": "staff"}.get(env.get("ASK", "").strip(), ""),
         gallery={"1": "all", "staff": "staff"}.get(env.get("GALLERY", "").strip(), ""),
         chat_sync=env.get("CHAT_SYNC", "").strip() == "1",
         docs={"1": "fts", "hybrid": "hybrid"}.get(env.get("DOCS", "").strip(), ""),

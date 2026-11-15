@@ -5,6 +5,8 @@
 
   export const TOPICS: AppealTopic[] = ['study', 'dorm', 'food', 'campus', 'events', 'money', 'other'];
   export const CONSENT = 'apl1'; // the policy's appeals section (server appeals.CONSENT)
+  export const ASK_CONSENT = 'ask1'; // the help desk's own (server appeals.ASK_CONSENT)
+  export type Desk = 'sg' | 'help';
   /** a list row's grey line: the status (or overdue) and the day it was sent */
   export const statusOf = (a: Appeal): string => (a.overdue && a.status !== 'closed' ? t('apl.overdue') : t(`apl.st.${a.status}`));
   export const lineOf = (a: Appeal): string => `${a.topic ? t(`apl.t.${a.topic}`) + ' · ' : ''}${dayMonth(a.at)}`;
@@ -16,11 +18,14 @@
   // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). The draft stays on
   // this phone only (localStorage), never on the server. My appeals under it. The section's consent: asked once, on the
   // first send or AI help. "Solved by your appeals" on top: the proof that writing changes things. The funnel counts taps (lib/stats), never a word.
-  import { onMount } from 'svelte';
+  // desk 'help': KRI's "Ask a person": the same composer with the question in it (q, editable, sent only on the tap),
+  // its own consent, no topics, no AI tips (KRI tried), no Solved feed, no funnel; my questions under it.
+  import { onMount, untrack } from 'svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, ApiErr } from '../../lib/api';
-  import { data, loadAppeals } from '../../lib/state/data.svelte';
+  import { data, loadAppeals, loadAsks } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -37,15 +42,17 @@
   import Notice from '../../ui/Notice.svelte';
   import Solved from './Solved.svelte';
 
-  let { overlay }: { overlay: Overlay } = $props();
+  let { overlay, desk = 'sg', q }: { overlay: Overlay; desk?: Desk; q?: string } = $props();
+  const sg = untrack(() => desk === 'sg');
+  const k = (key: 'text' | 'ph' | 'anonOn' | 'anonOff' | 'who' | 'sent' | 'consentT' | 'consentText' | 'mine') => t(sg ? `apl.${key}` : `ask.${key}`);
 
-  const DRAFT = 'kb-appeal';
+  const DRAFT = sg ? 'kb-appeal' : 'kb-ask';
   type Draft = { text: string; topic: AppealTopic | null; anon: boolean };
   function readDraft(): Draft {
     try { const j = JSON.parse(localStorage.getItem(DRAFT) || 'null'); if (j && typeof j.text === 'string') return j; } catch { /* blocked */ }
     return { text: '', topic: null, anon: false };
   }
-  const first = readDraft();
+  const first = untrack(() => (q?.trim() ? { text: q.trim(), topic: null, anon: false } : readDraft()));
   let text = $state(first.text), topic = $state<AppealTopic | null>(first.topic), anon = $state(first.anon);
   let tips = $state<string[]>([]), care = $state<string | null>(null), helping = $state(false), down = $state(false);
   let typed = !!first.text, sent = false;
@@ -53,9 +60,10 @@
   $effect(() => {
     const d: Draft = { text, topic, anon };
     try { if (d.text.trim()) localStorage.setItem(DRAFT, JSON.stringify(d)); else localStorage.removeItem(DRAFT); } catch { /* blocked: in memory only */ }
-    if (text && !typed) { typed = true; count('apl.typed'); }
+    if (text && !typed) { typed = true; if (sg) count('apl.typed'); }
   });
   onMount(() => {
+    if (!sg) { void loadAsks(); return; }
     count('apl.open');
     void loadAppeals();
     return () => { if (typed && !sent && text.trim()) count('apl.drop'); };
@@ -63,11 +71,14 @@
 
   /** undefined: agreed before; the version: just agreed; null: said no */
   async function agree(): Promise<string | undefined | null> {
-    if (session.me?.appeals?.consent) return undefined;
-    const yes = await sheets.ask({ title: t('apl.consentT'), text: t('apl.consentText'), ok: t('apl.consentOk'), cancel: t('common.cancel') });
-    return yes ? CONSENT : null;
+    if (sg ? session.me?.appeals?.consent : session.me?.ask?.consent) return undefined;
+    const yes = await sheets.ask({ title: k('consentT'), text: k('consentText'), ok: t('apl.consentOk'), cancel: t('common.cancel') });
+    return yes ? (sg ? CONSENT : ASK_CONSENT) : null;
   }
-  const agreed = () => { if (session.me?.appeals) session.me.appeals.consent = true; };
+  const agreed = () => { const m = sg ? session.me?.appeals : session.me?.ask; if (m) m.consent = true; };
+  const list = () => (sg ? data.appeals : data.asks) ?? [];
+  const mine = $derived(list());
+  const setList = (xs: Appeal[]) => { if (sg) data.appeals = xs; else data.asks = xs; };
 
   async function help() {
     const body = text.trim();
@@ -90,33 +101,36 @@
     sent = true;
     const was = { topic, anon }, key = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const temp: Appeal = { id: -Date.now(), topic, text: body, anon, status: 'new', answer: null, at: nowTs(), due: nowTs() + 7 * 86400, answeredAt: null, closedAt: null, overdue: false };
-    data.appeals = [temp, ...(data.appeals ?? [])];
+    setList([temp, ...list()]);
     text = ''; topic = null; tips = []; care = null; down = false;
-    haptic.ok(); say(t('apl.sent'), 'raising_hands_3d_default');
+    haptic.ok(); say(k('sent'), 'raising_hands_3d_default');
     try {
-      const a = await api.sendAppeal({ text: body, topic: was.topic, anon: was.anon, key, consent });
-      agreed(); count('apl.sent');
-      data.appeals = (data.appeals ?? []).map((x) => (x.id === temp.id ? a : x));
+      const a = sg ? await api.sendAppeal({ text: body, topic: was.topic, anon: was.anon, key, consent })
+        : await api.sendAsk({ text: body, anon: was.anon, key, consent });
+      agreed(); if (sg) count('apl.sent');
+      setList(list().map((x) => (x.id === temp.id ? a : x)));
     } catch (e) {
-      data.appeals = (data.appeals ?? []).filter((x) => x.id !== temp.id);
+      setList(list().filter((x) => x.id !== temp.id));
       text = body; topic = was.topic; sent = false; haptic.error();
-      say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'apl.slow' : e instanceof ApiErr && e.code === 'unavailable' ? 'common.offline' : 'common.error'), 'pleading_face_3d');
+      say(t(e instanceof ApiErr && e.code === 'rate_limited' ? (sg ? 'apl.slow' : 'ask.slow') : e instanceof ApiErr && e.code === 'unavailable' ? 'common.offline' : 'common.error'), 'pleading_face_3d');
       return;
     }
     sent = false; typed = false;
   }
 </script>
 
-<Sheet {overlay} title={t('apl.row')} icon={Megaphone} full>
+<Sheet {overlay} title={t(sg ? 'apl.row' : 'ask.button')} icon={sg ? Megaphone : MessageCircleQuestion} full>
   <div class="page">
-    <Solved />
-    <div class="chips" role="group" aria-label={t('apl.row')}>
-      {#each TOPICS as k (k)}
-        <Chip selected={topic === k} onclick={() => { haptic.select(); topic = topic === k ? null : k; }}>{t(`apl.t.${k}`)}</Chip>
-      {/each}
-    </div>
-    <Field label={t('apl.text')} placeholder={t('apl.ph')} bind:value={text} multiline rows={5} maxlength={4000} />
-    <Group footnote={anon ? t('apl.anonOn') : t('apl.anonOff')}>
+    {#if sg}
+      <Solved />
+      <div class="chips" role="group" aria-label={t('apl.row')}>
+        {#each TOPICS as c (c)}
+          <Chip selected={topic === c} onclick={() => { haptic.select(); topic = topic === c ? null : c; }}>{t(`apl.t.${c}`)}</Chip>
+        {/each}
+      </div>
+    {/if}
+    <Field label={k('text')} placeholder={k('ph')} bind:value={text} multiline rows={5} maxlength={4000} />
+    <Group footnote={anon ? k('anonOn') : k('anonOff')}>
       <Row title={t('apl.anon')} accessory="switch" checked={anon} onchange={(on) => { haptic.select(); anon = on; }} />
     </Group>
 
@@ -125,14 +139,14 @@
       <Notice tone="accent" title={t('apl.tips')}><ul class="tips">{#each tips as tip, i (i)}<li>{tip}</li>{/each}</ul></Notice>
     {/if}
     {#if down}<Notice text={t('apl.helpDown')} />{/if}
-    <Button kind="secondary" full loading={helping} onclick={help}>{#snippet icon()}<Sparkles size={18} />{/snippet}{t('apl.help')}</Button>
-    <p class="fs-sub faint fine">{t('apl.who')}</p>
+    {#if sg}<Button kind="secondary" full loading={helping} onclick={help}>{#snippet icon()}<Sparkles size={18} />{/snippet}{t('apl.help')}</Button>{/if}
+    <p class={['fs-sub faint fine', { alone: !sg }]}>{k('who')}</p>
 
-    {#if data.appeals?.length}
-      <Group caption={t('apl.mine')}>
-        {#each data.appeals as a (a.id)}
+    {#if mine.length}
+      <Group caption={k('mine')}>
+        {#each mine as a (a.id)}
           <Row dense title={headOf(a)} subtitle={`${statusOf(a)} · ${lineOf(a)}`} accessory="chevron"
-            onclick={() => { if (a.id > 0) { haptic.tap(); sheets.myAppeal(a.id); } }} />
+            onclick={() => { if (a.id > 0) { haptic.tap(); if (sg) sheets.myAppeal(a.id); else sheets.myAsk(a.id); } }} />
         {/each}
       </Group>
     {/if}
@@ -150,4 +164,5 @@
   .tips { margin: var(--s-1) 0 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; }
   .pre { white-space: pre-line; margin: var(--s-1) 0 0; }
   .fine { margin-top: calc(-1 * var(--s-2)); padding: 0 var(--s-4); }
+  .fine.alone { margin-top: 0; }
 </style>

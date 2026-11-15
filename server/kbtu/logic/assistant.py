@@ -50,7 +50,8 @@ these: {{"type": "map", "room": R}} a room in the facts; {{"type": "event", "id"
 for "sign me up": it opens the event, the student signs up there); {{"type": "club", "id": N}} a club id in the facts;
 {{"type": "timetable"}} the student's week of classes; {{"type": "settings", "kind": "school" | "course" | "notify"}}
 their school, year of study or notifications in Settings (to change them there); {{"type": "gallery"}} photos from
-events; {{"type": "news"}} the clubs' news. Never a link or any other button.
+events; {{"type": "news"}} the clubs' news; {{"type": "ask"}} only with known false, when you truly can't answer: it lets
+the student send the question to a real person. Never a link or any other button.
 known: false only when the student asked for a fact these facts don't hold. topic: what was asked, 2-6 words in
 lowercase English (acronyms as they are), no names of people and nothing about the student.
 care: true only when the student's latest message speaks of wanting to die, hurting themselves, not wanting to live,
@@ -173,7 +174,7 @@ def _spend(con, v: Viewer) -> None:
         con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
 
 
-def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], dict]:
+def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "") -> tuple[list[dict], dict]:
     """The messages for the model, after the day's allowance (counted here, before the model is asked), and what each
     button may open. The rules in the system message; the facts (clubs' and students' words among them) in a bounded
     data message of their own, quoted, which they can't close."""
@@ -195,7 +196,8 @@ def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], dict]:
         if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("text"), str):
             msgs.append({"role": m["role"], "content": m["text"][:Q_MAX * 2]})
     msgs.append({"role": "user", "content": q})
-    return msgs, {"map": rooms, "event": events, "club": clubs}
+    from .appeals import ask_on
+    return msgs, {"map": rooms, "event": events, "club": clubs, "ask": ask_on(con, ask, v)}  # ask: the help desk open to me (ASK)
 
 
 # ------------------------------------------------------------ the university's documents (DOCS, kbtu/docs.py)
@@ -273,7 +275,8 @@ def usable(text: str) -> bool:
 
 def answer(text: str, ok: dict) -> dict:
     """The model's JSON, its buttons kept only where the brief had them (ok: the rooms, events and clubs this request's
-    brief named; nothing invented opens), rebuilt from the whitelist alone (no other type or field), each once, 3 at most."""
+    brief named; nothing invented opens), rebuilt from the whitelist alone (no other type or field), each once, 3 at most.
+    "Ask a person" only where the help desk is open to the student and the model said it didn't know."""
     x = _json(text) or {"text": text.strip()[:600], "actions": []}
     acts: list[dict] = []
     for a in x["actions"] if isinstance(x.get("actions"), list) else []:  # a model told otherwise may send anything
@@ -284,6 +287,8 @@ def answer(text: str, ok: dict) -> dict:
             b = {"type": k, "id": a["id"]}
         elif k == "settings" and isinstance(a.get("kind"), str) and a["kind"] in SETTINGS:
             b = {"type": k, "kind": a["kind"]}
+        elif k == "ask" and ok.get("ask") and x.get("known") is False:
+            b = {"type": k}
         elif isinstance(k, str) and k in BARE:
             b = {"type": k}
         else:

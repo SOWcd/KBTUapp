@@ -19,6 +19,7 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import Landmark from '@lucide/svelte/icons/landmark';
+  import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
@@ -71,6 +72,7 @@
   const asks = $derived(staff ? me!.counters.inbox : 0);
   // the Student Government's people (appeals.sg): their own panel, with the appeals nobody took yet
   const sg = $derived(!!me?.appeals?.sg), sgNew = $derived(sg ? data.sg?.items.filter((a) => a.status === 'new').length ?? 0 : 0);
+  const hd = $derived(!!me?.ask?.staff), hdNew = $derived(hd ? data.helpq?.items.filter((a) => a.status === 'new').length ?? 0 : 0);
 
   let page = $state<HTMLDivElement>();
 
@@ -252,12 +254,13 @@
 
 <div class="page scroll stagger" class:set class:mode={phase !== 'idle'} class:hold bind:this={page}>
   <div class="gears" class:out={!me?.student && !set}>
-    {#if me?.student && (staff || sg)}
+    {#if me?.student && (staff || sg || hd)}
       <!-- the panels (the only staff things on a normal tab), each with what waits for it: the admin's (a moderator's
         is the content part) and the Student Government's (its queue of appeals) -->
       <span class="shield" bind:this={shield}>
         {#if staff}<button class="gear" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>{/if}
         {#if sg}<button class="gear" onclick={() => { haptic.tap(); sheets.sgQueue(); }} aria-label={t('apl.sg')}><Landmark size={19} />{#if sgNew}<b class="cnt num">{sgNew}</b>{/if}</button>{/if}
+        {#if hd}<button class="gear" onclick={() => { haptic.tap(); sheets.helpQueue(); }} aria-label={t('ask.queue')}><MessageCircleQuestion size={19} />{#if hdNew}<b class="cnt num">{hdNew}</b>{/if}</button>{/if}
       </span>
     {/if}
     <!-- settings in place; in them, the check that ends them (a tap while the motion runs is ignored) -->

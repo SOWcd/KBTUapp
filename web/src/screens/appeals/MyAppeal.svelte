@@ -1,7 +1,10 @@
 <script lang="ts">
   // One of my appeals: its status, by when the answer is due (overdue stays overdue), my words, SG's answer, Delete.
+  // desk 'help': one of my questions to a person, the same way.
+  import { untrack } from 'svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import { api, type Id } from '../../lib/api';
+  import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
+  import { api, type Appeal, type Id } from '../../lib/api';
   import { data } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -13,23 +16,27 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
-  import { statusOf, lineOf } from './Appeals.svelte';
+  import { statusOf, lineOf, type Desk } from './Appeals.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
-  const a = $derived(data.appeals?.find((x) => x.id === id));
-  $effect(() => { if (data.appeals && !a) { say(t('apl.gone'), 'pleading_face_3d'); close(overlay.id, false); } });
+  let { overlay, id, desk = 'sg' }: { overlay: Overlay; id: Id; desk?: Desk } = $props();
+  const sg = untrack(() => desk === 'sg');
+  const k = (key: 'gone' | 'deleteQ' | 'delete' | 'deleted' | 'mine' | 'answer') => t(sg ? `apl.${key}` : `ask.${key}`);
+  const mine = $derived(sg ? data.appeals : data.asks);
+  const a = $derived(mine?.find((x) => x.id === id));
+  $effect(() => { if (mine && !a) { say(k('gone'), 'pleading_face_3d'); close(overlay.id, false); } });
 
   async function drop() {
     if (!a) return;
-    if (!(await sheets.ask({ title: t('apl.deleteQ'), text: t('apl.deleteText'), ok: t('apl.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    const was = data.appeals ?? [];
-    data.appeals = was.filter((x) => x.id !== id);
-    close(overlay.id, false); haptic.ok(); say(t('apl.deleted'), 'raising_hands_3d_default'); count('apl.del');
-    try { await api.dropAppeal(id); } catch { data.appeals = was; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    if (!(await sheets.ask({ title: k('deleteQ'), text: t('apl.deleteText'), ok: k('delete'), cancel: t('common.cancel'), danger: true }))) return;
+    const was = mine ?? [], set = (xs: Appeal[]) => { if (sg) data.appeals = xs; else data.asks = xs; };
+    set(was.filter((x) => x.id !== id));
+    close(overlay.id, false); haptic.ok(); say(k('deleted'), 'raising_hands_3d_default');
+    if (sg) count('apl.del');
+    try { await (sg ? api.dropAppeal(id) : api.dropAsk(id)); } catch { set(was); haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
 </script>
 
-<Sheet {overlay} title={t('apl.mine')} icon={Megaphone} tall>
+<Sheet {overlay} title={k('mine')} icon={sg ? Megaphone : MessageCircleQuestion} tall>
   {#if a}
     <div class="page">
       <div class="hd">
@@ -38,9 +45,9 @@
       </div>
       <p class="body selectable">{a.text}</p>
       {#if a.answer}
-        <Group caption={t('apl.answer')}><p class="body selectable ans">{a.answer}</p></Group>
+        <Group caption={k('answer')}><p class="body selectable ans">{a.answer}</p></Group>
       {/if}
-      <Group><Row title={t('apl.delete')} tone="destructive" onclick={drop} /></Group>
+      <Group><Row title={k('delete')} tone="destructive" onclick={drop} /></Group>
     </div>
   {/if}
 </Sheet>

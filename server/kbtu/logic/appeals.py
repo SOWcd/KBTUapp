@@ -8,7 +8,12 @@ message), only the app's creator reveals it, from the server (admin `appeals rev
 SG's people: a right of its own (appeal_staff), granted and revoked by the creator from the server, never by a club
 role. 5 working days to answer; overdue stays overdue whatever the status. Closing needs an answer. Every look, status
 change, answer, grant, revoke and reveal goes to the audit log (ids only, never the words). Kept 90 days after
-closing, 180 at most from sending; the author deletes theirs whenever. No drafts here: those stay on the phone."""
+closing, 180 at most from sending; the author deletes theirs whenever. No drafts here: those stay on the phone.
+
+Two desks share it all (the column appeals.desk): `sg` the Student Government's appeals, `help` the questions KRI (the
+assistant) couldn't answer and the student handed to a person (ASK=1 everyone, ASK=staff the pilot; owner, Nov 15).
+Each desk has its own people (appeal_staff, help_staff) and its own consent (appeal_consents, help_consents); a desk's
+people never see the other's. The help desk has no topics, no AI tips (KRI tried already) and no "Solved" feed."""
 from __future__ import annotations
 
 import datetime as dt
@@ -26,14 +31,23 @@ STATUSES = ("new", "work", "closed")    # Received / In progress / Closed
 MAX = 4000
 A_DAY = 3                               # sent in 24 h; deleting one gives nothing back (appeal_sends)
 CONSENT = "apl1"                        # the privacy policy's appeals section, agreed to on the first send (or AI help)
+ASK_CONSENT = "ask1"                    # the help desk's own: new recipients read the question (its policy clause: Codex's)
+# a desk: its consent table and version, its people's table, the answer's bot message kind, the audit's prefix
+DESKS = {"sg": ("appeal_consents", CONSENT, "appeal_staff", "appeal_answer", "appeal"),
+         "help": ("help_consents", ASK_CONSENT, "help_staff", "ask_answer", "help")}
 DUE_DAYS = 5                            # working days to answer
 KEEP_CLOSED, KEEP_MAX = 90 * 86400, 180 * 86400
 FEW = 5                                 # a topic's month with fewer authors goes into "other" in SG's numbers
 ALMATY = dt.timezone(dt.timedelta(hours=5))
 
 
-def is_sg(con, uid: int) -> bool:
-    return one(con, "SELECT 1 FROM appeal_staff WHERE user_id = ?", uid) is not None
+def is_sg(con, uid: int, desk: str = "sg") -> bool:
+    return one(con, f"SELECT 1 FROM {DESKS[desk][2]} WHERE user_id = ?", uid) is not None
+
+
+def ask_on(con, mode: str, v: Viewer) -> bool:
+    """ASK=all: everyone; staff: admins, moderators and the help desk's people."""
+    return mode == "all" or mode == "staff" and (v.role in ("admin", "moderator") or is_sg(con, v.id, "help"))
 
 
 def on(con, mode: str, v: Viewer) -> bool:
@@ -47,6 +61,12 @@ def summary(con, v: Viewer) -> dict:
             "sg": is_sg(con, v.id)}
 
 
+def ask_summary(con, v: Viewer) -> dict:
+    """/api/me's part for the help desk: its own consent given, its queue mine to open."""
+    return {"consent": one(con, "SELECT 1 FROM help_consents WHERE user_id = ? AND version = ?", v.id, ASK_CONSENT) is not None,
+            "staff": is_sg(con, v.id, "help")}
+
+
 def due(t: int) -> int:
     """DUE_DAYS working days (Mon-Fri, Almaty) after t, the same time of day."""
     d, left = dt.datetime.fromtimestamp(t, ALMATY), DUE_DAYS
@@ -56,14 +76,15 @@ def due(t: int) -> int:
     return int(d.timestamp())
 
 
-def _agree(con, v: Viewer, body: dict) -> None:
+def _agree(con, v: Viewer, body: dict, desk: str = "sg") -> None:
     """The section agreed to once (the staff pilot too: the section promises its own consent); the app sends `consent`
-    with the first send or AI help after asking."""
-    if one(con, "SELECT 1 FROM appeal_consents WHERE user_id = ? AND version = ?", v.id, CONSENT):
+    with the first send or AI help after asking. Each desk its own."""
+    table, version = DESKS[desk][:2]
+    if one(con, f"SELECT 1 FROM {table} WHERE user_id = ? AND version = ?", v.id, version):
         return
-    if body.get("consent") != CONSENT:
+    if body.get("consent") != version:
         raise ApiError("forbidden", "consent")
-    con.execute("INSERT OR REPLACE INTO appeal_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT, core.now()))
+    con.execute(f"INSERT OR REPLACE INTO {table} (user_id, version, at) VALUES (?, ?, ?)", (v.id, version, core.now()))
 
 
 def agree_given(con, v: Viewer, body: dict) -> None:
@@ -140,36 +161,36 @@ def help_reply(con, answer: str, text: str, lang: str) -> dict:
     return {"tips": x["tips"]}
 
 
-def send(con, v: Viewer, body: dict) -> dict:
+def send(con, v: Viewer, body: dict, desk: str = "sg") -> dict:
     need_student(v)
     text = _text(body.get("text"))
-    topic = body.get("topic") if body.get("topic") in TOPICS else None
+    topic = body.get("topic") if desk == "sg" and body.get("topic") in TOPICS else None
     key = body.get("key") if isinstance(body.get("key"), str) and 8 <= len(body["key"]) <= 64 else None
     t = core.now()
     with tx(con):
-        _agree(con, v, body)
+        _agree(con, v, body, desk)
         if key:  # the same tap sent twice (a retry after a lost answer): the one already there
-            a = one(con, "SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id WHERE a.nonce = ? AND w.user_id = ?", key, v.id)
+            a = one(con, "SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id WHERE a.nonce = ? AND w.user_id = ? AND a.desk = ?", key, v.id, desk)
             if a:
                 return _shape(a, t)
         if one(con, "SELECT COUNT(*) FROM appeal_sends WHERE user_id = ? AND at > ?", v.id, t - 86400)[0] >= A_DAY:
             raise ApiError("rate_limited", "appeals")
-        aid = con.execute("INSERT INTO appeals (topic, body, anon, created_at, due_at, nonce) VALUES (?, ?, ?, ?, ?, ?)",
-                          (topic, text, 1 if body.get("anon") is True else 0, t, due(t), key)).lastrowid
+        aid = con.execute("INSERT INTO appeals (topic, body, anon, created_at, due_at, nonce, desk) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                          (topic, text, 1 if body.get("anon") is True else 0, t, due(t), key, desk)).lastrowid
         con.execute("INSERT INTO appeal_authors (appeal_id, user_id) VALUES (?, ?)", (aid, v.id))
         con.execute("INSERT INTO appeal_sends (user_id, at) VALUES (?, ?)", (v.id, t))
     return _shape(one(con, "SELECT * FROM appeals WHERE id = ?", aid), t)
 
 
-def mine(con, v: Viewer) -> dict:
-    """My appeals and the "Solved" feed, in one request (the screen's only one)."""
+def mine(con, v: Viewer, desk: str = "sg") -> dict:
+    """My appeals (or questions) and the "Solved" feed, in one request (the screen's only one)."""
     t = core.now()
     return {"items": [_shape(a, t) for a in rows(con, """SELECT a.* FROM appeals a JOIN appeal_authors w ON w.appeal_id = a.id
-        WHERE w.user_id = ? ORDER BY a.id DESC""", v.id)], "solved": solved(con, is_sg(con, v.id))}
+        WHERE w.user_id = ? AND a.desk = ? ORDER BY a.id DESC""", v.id, desk)], "solved": solved(con, is_sg(con, v.id)) if desk == "sg" else []}
 
 
 def _drop(con, aid: int) -> None:
-    con.execute("DELETE FROM bot_outbox WHERE kind = 'appeal_answer' AND ref = ?", (f"apl:{aid}",))
+    con.execute("DELETE FROM bot_outbox WHERE kind IN ('appeal_answer', 'ask_answer') AND ref = ?", (f"apl:{aid}",))
     con.execute("DELETE FROM appeals WHERE id = ?", (aid,))  # its author link goes with it (ON DELETE CASCADE)
 
 
@@ -183,8 +204,8 @@ def delete(con, v: Viewer, aid: int) -> None:
 
 # ------------------------------------------------------------ SG's queue
 
-def _sg(con, v: Viewer) -> None:
-    if not is_sg(con, v.id):
+def _sg(con, v: Viewer, desk: str = "sg") -> None:
+    if not is_sg(con, v.id, desk):
         raise ApiError("forbidden")
 
 
@@ -197,28 +218,29 @@ def _for_sg(con, a, t: int) -> dict:
     return out
 
 
-def queue(con, v: Viewer) -> dict:
-    """The whole queue (one audit line for the look) and the months' counts by topic."""
-    _sg(con, v)
+def queue(con, v: Viewer, desk: str = "sg") -> dict:
+    """The desk's whole queue (one audit line for the look) and the months' counts by topic."""
+    _sg(con, v, desk)
     t = core.now()
-    items = [_for_sg(con, a, t) for a in rows(con, "SELECT * FROM appeals ORDER BY status = 'closed', id DESC")]
-    log_action(con, v.id, "appeal_queue", "appeals")
-    return {"items": items, "months": months(con)}
+    items = [_for_sg(con, a, t) for a in rows(con, "SELECT * FROM appeals WHERE desk = ? ORDER BY status = 'closed', id DESC", desk)]
+    log_action(con, v.id, f"{DESKS[desk][4]}_queue", "appeals")
+    return {"items": items, "months": months(con, desk)}
 
 
-def detail(con, v: Viewer, aid: int) -> dict:
-    _sg(con, v)
-    a = one(con, "SELECT * FROM appeals WHERE id = ?", aid)
+def detail(con, v: Viewer, aid: int, desk: str = "sg") -> dict:
+    _sg(con, v, desk)
+    a = one(con, "SELECT * FROM appeals WHERE id = ? AND desk = ?", aid, desk)
     if not a:
         raise ApiError("not_found")
-    log_action(con, v.id, "appeal_view", f"appeal:{aid}")
+    log_action(con, v.id, f"{DESKS[desk][4]}_view", f"appeal:{aid}")
     return _for_sg(con, a, core.now())
 
 
-def act(con, v: Viewer, aid: int, body: dict) -> dict:
+def act(con, v: Viewer, aid: int, body: dict, desk: str = "sg") -> dict:
     """A status and/or the answer. Closing needs an answer (the new one or the one already given). The author's bot
     message (a template, no words) goes once, with the first answer."""
-    _sg(con, v)
+    _sg(con, v, desk)
+    pre = DESKS[desk][4]
     status = body.get("status")
     if status is not None and status not in STATUSES:
         raise ApiError("bad_input")
@@ -229,7 +251,7 @@ def act(con, v: Viewer, aid: int, body: dict) -> dict:
             raise ApiError("bad_input", "length")
     t = core.now()
     with tx(con):
-        a = one(con, "SELECT * FROM appeals WHERE id = ?", aid)
+        a = one(con, "SELECT * FROM appeals WHERE id = ? AND desk = ?", aid, desk)
         if not a:
             raise ApiError("not_found")
         new_answer = answer if answer is not None else a["answer"]
@@ -238,23 +260,23 @@ def act(con, v: Viewer, aid: int, body: dict) -> dict:
             raise ApiError("bad_input", "answer")
         if answer is not None and answer != (a["answer"] or ""):
             con.execute("UPDATE appeals SET answer = ?, answered_at = COALESCE(answered_at, ?) WHERE id = ?", (answer or None, t, aid))
-            log_action(con, v.id, "appeal_answer", f"appeal:{aid}")
+            log_action(con, v.id, f"{pre}_answer", f"appeal:{aid}")
             if answer:
                 w = one(con, "SELECT user_id FROM appeal_authors WHERE appeal_id = ?", aid)
                 if w:
-                    notify(con, w[0], "appeal_answer", f"apl:{aid}")
+                    notify(con, w[0], DESKS[desk][3], f"apl:{aid}")
         if status != a["status"]:
             con.execute("UPDATE appeals SET status = ?, closed_at = ? WHERE id = ?", (status, t if status == "closed" else None, aid))
-            log_action(con, v.id, "appeal_status", f"appeal:{aid}", json.dumps({"from": a["status"], "to": status}))
+            log_action(con, v.id, f"{pre}_status", f"appeal:{aid}", json.dumps({"from": a["status"], "to": status}))
     return _for_sg(con, one(con, "SELECT * FROM appeals WHERE id = ?", aid), t)
 
 
-def months(con) -> list[dict]:
+def months(con, desk: str = "sg") -> list[dict]:
     """Sent appeals a month by topic (Almaty months); a topic with fewer than FEW appeals that month goes into "other"
     (none chosen counts as other). Read from the appeals alone, never their authors: the numbers say nothing the queue
     doesn't (counting authors told SG when a named and an anonymous appeal were one person's; Codex, Nov 10)."""
     got: dict[str, dict[str, int]] = {}
-    for r in rows(con, "SELECT created_at, topic FROM appeals"):
+    for r in rows(con, "SELECT created_at, topic FROM appeals WHERE desk = ?", desk):
         m = dt.datetime.fromtimestamp(r["created_at"], ALMATY).strftime("%Y-%m")
         t = got.setdefault(m, {})
         t[r["topic"] or "other"] = t.get(r["topic"] or "other", 0) + 1
@@ -340,7 +362,7 @@ def _quoted(con, *lines: str) -> None:
         return {tuple(w[i:i + SOLVED_QUOTE]) for i in range(len(w) - SOLVED_QUOTE + 1)}
     mine = set().union(*map(runs, lines))
     # ponytail: every appeal read on each add (hundreds at most, 10 adds a month); an index if appeals grow to many thousands
-    if mine and any(mine & runs(b) for (b,) in rows(con, "SELECT body FROM appeals")):
+    if mine and any(mine & runs(b) for (b,) in rows(con, "SELECT body FROM appeals WHERE desk = 'sg'")):
         raise ApiError("bad_input", "quote")
 
 
@@ -354,7 +376,7 @@ def solved_add(con, v: Viewer, body: dict) -> dict:
         _quoted(con, raised, changed)
         # a topic few wrote about could point at them (an entry right after the one appeal): none then, as SG's
         # numbers merge a small one into "other" (appeals counted, never authors: months())
-        if topic and one(con, "SELECT COUNT(*) FROM appeals WHERE topic = ? AND created_at >= ?", topic, t - SOLVED_TOPIC)[0] < FEW:
+        if topic and one(con, "SELECT COUNT(*) FROM appeals WHERE desk = 'sg' AND topic = ? AND created_at >= ?", topic, t - SOLVED_TOPIC)[0] < FEW:
             topic = None
         sid = con.execute("INSERT INTO appeal_solved (raised, changed, topic, created_by, created_at) VALUES (?, ?, ?, ?, ?)",
                           (raised, changed, topic, v.id, t)).lastrowid
@@ -385,13 +407,14 @@ def solved_restore(con, v: Viewer, sid: int) -> dict:
 
 # ------------------------------------------------------------ the creator, from the server (admin.py)
 
-def grant(con, actor: int | None, uid: int, on_: bool) -> None:
+def grant(con, actor: int | None, uid: int, on_: bool, desk: str = "sg") -> None:
+    table, pre = DESKS[desk][2], DESKS[desk][4]
     with tx(con):
         if on_:
-            con.execute("INSERT OR IGNORE INTO appeal_staff (user_id, at) VALUES (?, ?)", (uid, core.now()))
+            con.execute(f"INSERT OR IGNORE INTO {table} (user_id, at) VALUES (?, ?)", (uid, core.now()))
         else:
-            con.execute("DELETE FROM appeal_staff WHERE user_id = ?", (uid,))
-        log_action(con, actor, "appeal_grant" if on_ else "appeal_revoke", f"user:{uid}")
+            con.execute(f"DELETE FROM {table} WHERE user_id = ?", (uid,))
+        log_action(con, actor, f"{pre}_grant" if on_ else f"{pre}_revoke", f"user:{uid}")
 
 
 def reveal(con, actor: int, aid: int):
