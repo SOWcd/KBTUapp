@@ -152,6 +152,7 @@
   // the end: a time on the start's day, earlier than the start meaning the next day (a night hackathon); an end date
   // of its own for an event of several days (a casting, 2-12 Nov), taken as it is
   const endTs = $derived.by(() => {
+    if (f.endDate && !f.end) return fromInputs(f.endDate, '23:59'); // a last day with no time: the end is optional
     const e = fromInputs(f.endDate || f.date, f.end);
     if (!Number.isFinite(e) || !Number.isFinite(startTs)) return null;
     return f.endDate || e > startTs ? e : e + 86400;

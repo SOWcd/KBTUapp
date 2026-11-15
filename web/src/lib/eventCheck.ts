@@ -41,11 +41,17 @@ export function priceIn(text: string): number | null {
   return n >= 100 && n <= 1_000_000 ? n : null;
 }
 
+/** every sum the text names, in tenge */
+export function pricesIn(text: string): number[] {
+  return [...text.matchAll(new RegExp(MONEY.source, 'gi'))].map((m) => +m[1].replace(/\D/g, ''));
+}
+
 export function check(x: { title: string; description: string; paid: boolean; price: number | null; tba: boolean; place: string;
   startTs: number; now: number; live: boolean; cover: boolean; seats: number | null; club?: string[] }): Finding[] {
   const out: Finding[] = [], said = priceIn(x.description);
   if (said && !x.paid) out.push({ id: 'priceText', n: said });
-  if (said && x.paid && x.price && said !== x.price) out.push({ id: 'priceDiff', n: said });
+  // only when the ticket's price is none of the text's sums (a prize fund or a team's fee beside it is not the ticket)
+  if (said && x.paid && x.price && !pricesIn(x.description).includes(x.price)) out.push({ id: 'priceDiff', n: said });
   if (!x.live && Number.isFinite(x.startTs) && x.startTs <= x.now) out.push({ id: 'past' });
   if (x.tba || !x.place.trim()) out.push({ id: 'noPlace' });
   const seats = x.description.match(SEATS);

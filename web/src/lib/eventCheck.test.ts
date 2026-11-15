@@ -15,6 +15,7 @@ describe('event check', () => {
   it('the trip marked free while the text asks 7500', () => {
     expect(check({ ...ok, description: 'Trip to Shymbulak, 7500 \u20b8 for the bus' })[0]).toEqual({ id: 'priceText', n: 7500 });
     expect(check({ ...ok, description: 'Trip, 7500 tg', paid: true, price: 5000 })[0]).toEqual({ id: 'priceDiff', n: 7500 });
+    expect(check({ ...ok, description: 'Prize fund 160 000 ₸, 2 000 ₸ a player', paid: true, price: 2000 }).map((f) => f.id)).not.toContain('priceDiff');
     expect(check({ ...ok, description: 'Trip to the mountains, 7500 tg', paid: true, price: 7500 })).toEqual([]);
   });
   it('gaps', () => {
