@@ -1,16 +1,15 @@
 <script lang="ts">
   // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
-  // Student: my badge (the same hero as everyone else sees), then groups of rows, the phone's own way (owner, Nov 15:
-  // redone from scratch): what needs me (the KBTU sign-in, a deletion on its way), my people (friends: the Friends sheet;
-  // my invite: RefSheet); my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
-  // under it (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
+  // Student: my badge (the same hero as everyone else sees), two squares: my friends (the Friends sheet: requests,
+  // everyone, Add) and my invite (RefSheet), then groups of rows (owner, Nov 15); my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it); in a group of its own KBTU's psychologist
+  // (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
   // on Me, not Settings).
   // Top right: the admin panel's shield, the Student Government's panel and the gear (a guest's too). Settings open in place under the lanyard
   // (settings-spec-final.md): the gear or my photo; the blocks below leave ([data-away]), the list (SettingsList, its own
   // chunk) rises under the badge, the gear turns into a check; the check, Telegram's Back (SettingsMode, an overlay) or
   // Escape take it back.
   import Check from '@lucide/svelte/icons/check';
-  import UsersRound from '@lucide/svelte/icons/users-round';
+  import Plus from '@lucide/svelte/icons/plus';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
@@ -63,7 +62,10 @@
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
   const friends = $derived(data.friends?.friends ?? []);
   const asked = $derived(me?.counters.friendRequests ?? 0);
-  // whose faces: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
+  // the faces' cluster: [width, left, top] in % of its box (132 × 104; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
+  // packed so seventeen faces fill the box without holes (owner, Nov 2: as many faces as fit, the whole tile above its name); fewer friends take the biggest
+  const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
+  // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
   const faces = $derived(photosFirst(friends));
   const staff = $derived(me?.role === 'admin' || me?.role === 'moderator');
   const asks = $derived(staff ? me!.counters.inbox : 0);
@@ -269,6 +271,18 @@
     <!-- my photo: settings, or in them the photo's menu at it -->
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
       onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on' && !edit) list?.photoMenu(el); }} /></div>{/if}
+    <!-- two squares (owner, Nov 1): my friends as a cluster of faces, and my invite -->
+    {#if rest}<div class="duo" data-away>
+      <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
+        {#if friends.length}
+          <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
+            {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
+        {:else}<span class="cluster ghost" aria-hidden="true">{#each SPOTS.slice(0, 9) as [w, x, y], i (i)}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%">{#if !i}<Plus size={22} strokeWidth={2.4} />{/if}</span>{/each}</span>{/if}
+        {#if asked}<b class="req num">{asked}</b>{/if}
+        <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
+      </button>
+      {#if me.referrals}<Invite r={me.referrals} ach={card?.awards.achievements.find((a) => a.code === 'referral')} />{/if}
+    </div>{/if}
   {:else if session.failed}
     <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->
     <section class="failed surface" data-away>
@@ -284,27 +298,9 @@
     </section>
   {/if}
   {#if rest}
-  {#if me?.student && !me.student.ms}
-    <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings -->
-    <div data-away><Group footnote={t('me.msText')}>
-      <Row title={t('me.msTitle')} accessory="chevron" onclick={() => { haptic.tap(); sheets.login(); }}>{#snippet lead()}
-        <svg viewBox="0 0 21 21" width="24" height="24" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>{/snippet}</Row>
-    </Group></div>
-  {/if}
   {#if me?.deleteAt}
     <!-- the week to change my mind (DeleteSheet), with the way back -->
     <div data-away><Notice tone="danger" text={t('del.soon', { date: dayMonth(me.deleteAt) })} action={{ label: t('del.keep'), onclick: keepAccount }} /></div>
-  {/if}
-
-  {#if me?.student}
-    <!-- my people: friends (a few faces, how many, the requests waiting) and my invite -->
-    <div data-away><Group>
-      <Row title={t('page.friends')} subtitle={friends.length ? tn('fr.count', friends.length) : t('fr.add')} count={asked} accessory="chevron" onclick={() => { haptic.tap(); sheets.friends(); }}>
-        {#snippet lead()}<span class="ppl"><UsersRound size={20} strokeWidth={2} /></span>{/snippet}
-        {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces.slice(0, 3) as r (r.person.id)}<span class="face"><Avatar person={r.person} size={26} tappable={false} /></span>{/each}</span>{/snippet}
-      </Row>
-      {#if me.referrals}<Invite r={me.referrals} ach={card?.awards.achievements.find((a) => a.code === 'referral')} />{/if}
-    </Group></div>
   {/if}
 
   <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it; out of term the row
@@ -330,6 +326,10 @@
     {:else}
       <Row icon={CalendarDays} title={t('acad.title')} subtitle={up ? `${nameOf(up)} · ${whenOf(up)}` : t(terms === MASTER ? 'acad.subM' : 'acad.sub')} accessory="chevron" onclick={() => sheets.academic()} />
     {/if}
+  </Group></div>
+
+  <!-- KBTU's own: its psychologist, the anthem, and the big screen / appeals where they show -->
+  <div data-away><Group>
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <Row icon={MessageCircleHeart} title={t('psy.kbtu')}>{#snippet trailing()}
       <Button kind="secondary" size="s" onclick={() => openLink(PSYCHOLOGIST)}><span class="bk">{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></span></Button>{/snippet}</Row>
@@ -369,11 +369,27 @@
   .failed p { color: var(--text-2); }
   .mark { color: #fff; width: 64px; height: 64px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 
-  /* my friends: a quiet accent mark the medal's size, a few faces overlapping before the row's end */
-  .ppl { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--accent-text); background: var(--accent-soft); }
-  .faces { display: flex; padding-left: 8px; }
-  .face { display: flex; margin-left: -8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-solid); }
-  .face :global(.seal) { display: none; }
+  /* my friends and my invite: two squares under the badge (Invite.svelte is the right one) */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sq { position: relative; overflow: hidden; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; border-radius: var(--r-l); text-align: left; }
+  .sq:active { transform: scale(0.97); }
+  .fr { background: radial-gradient(90% 70% at 15% 0%, var(--accent-soft), transparent 70%), var(--surface); }
+  .cluster { position: relative; display: block; width: 100%; aspect-ratio: 132 / 104; }
+  .spot { position: absolute; aspect-ratio: 1; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-solid), 0 6px 14px -8px rgba(0, 0, 0, 0.45);
+    z-index: calc(10 - var(--i)); animation: pop 520ms cubic-bezier(.2, .9, .25, 1.2) backwards; animation-delay: calc(120ms + var(--i) * 55ms); }
+  .spot :global(.av) { width: 100% !important; height: 100% !important; }
+  .spot :global(.seal) { display: none; }
+  :global(html.lowfx) .spot { animation: none; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
+  /* no friends yet: the places waiting for them, the biggest with a plus (owner, Nov 2: not a waving hand) */
+  .ghost .spot { align-items: center; justify-content: center; background: var(--fill); box-shadow: none; color: var(--accent); }
+  .ghost .spot:not(:first-child) { opacity: 0.55; }
+  .ft { display: flex; align-items: baseline; gap: 8px; }
+  .ft b { font: 700 var(--fs-body)/1.2 var(--font-text); }
+  .ft i { font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
+  .fn { font: 700 var(--fs-body)/1 var(--font-text); color: var(--text-3); }
+  .sq .req { position: absolute; top: 12px; right: 12px; z-index: 11; }
+  .req { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); text-align: center; }
   /* the shield and the gear: in the lanyard's gap right of its strap */
   .gears { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; display: flex; gap: 8px; }
   /* a guest's gear sits over the sign-in card's corner: in it, on its glass */
@@ -398,7 +414,7 @@
   .sem > * { width: 100%; }
   .sem-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .sem-h b { font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
-  @media (max-width: 359px) { .sem-h b { font-size: 17px; white-space: nowrap; } } /* 320 px: the week on one line beside what's left */
+  @media (max-width: 359px) { .sem-h b { font-size: var(--fs-card); white-space: nowrap; } } /* 320 px: the week on one line beside what's left */
   .left { flex: none; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .track { position: relative; height: 10px; margin: 6px 0 2px; border-radius: 5px; background: var(--surface-3); }
   .track i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }

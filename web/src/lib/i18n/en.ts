@@ -1944,8 +1944,6 @@ const en: Dict = {
   'pd.cityBad': "That can't be a city: letters, spaces and hyphens only",
   'pd.cityDelAsk': "Delete your city?",
   'pd.cityNote': "Shown on your profile unless you hide it",
-  'me.msTitle': "Confirm your KBTU account",
-  'me.msText': "One Microsoft sign-in and your profile is the real thing",
   'me.notifications': "Notifications",
   'sem.week': "Week {n} of {of}",
   'sem.over': "Classes are over",

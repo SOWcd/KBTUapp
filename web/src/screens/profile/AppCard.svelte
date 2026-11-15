@@ -1,7 +1,8 @@
 <script lang="ts">
   // The app's own block, last on Profile (owner, Nov 15: only these): its channel, the bugs-and-ideas group, GitHub and
   // the creator's contact. One group of rows like every other on the page: a label, a grey value, an arrow out.
-  // The voluntary support page and the main admin are not here: Settings has the first, Admin knows the second.
+  // The voluntary support row stays (owner, Nov 15) and opens Settings' donate page; the main admin is not here, Admin knows him.
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import GitHubMark from '../../ui/GitHubMark.svelte';
@@ -13,6 +14,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import { writeOwner, OWNER } from '../../lib/feedback';
   import { session } from '../../lib/state/session.svelte';
+  import { sheets } from '../../lib/state/sheets';
 
   // the app's own Telegram: news in the channel, talk in the topics group (BUGS / IDEAS / QUESTIONS)
   const TG_NEWS = 'https://t.me/KBTUappNews', TG_TALK = 'https://t.me/KBTUappTop', CODE = 'https://github.com/SOWcd/KBTUapp';
@@ -26,6 +28,7 @@
     <Row icon={Megaphone} title={t('app.channel')} value={t('app.channelSub')} accessory="external" onclick={() => go(TG_NEWS)} />
     <Row icon={MessagesSquare} title={t('app.group')} value={t('app.groupSub')} accessory="external" onclick={() => go(TG_TALK)} />
     <Row icon={GitHubMark} title="GitHub" value={t('app.codeSub')} accessory="external" onclick={() => go(CODE)} />
+    {#if session.donate}<Row icon={HandHeart} title={t('app.donateRow')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     <!-- a tap opens his Telegram with a draft that says it's from the app -->
     {#if creator}
       <Row title={creator.realName ?? creator.name} subtitle="{t('app.creator')} · @{creator.username}" accessory="external"
