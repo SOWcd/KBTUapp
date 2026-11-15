@@ -1544,9 +1544,54 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 
 
+INLINE_EVENTS = 5  # the empty query's upcoming events; a typed one shows up to 20 matches
+
+
+def inline_answer(cfg: Config, con, q: dict) -> dict:
+    """answerInlineQuery's body for "@KBTUappBot <words>" in any chat: only our templates, each with a button into the
+    app. A student: my friend link, each club whose team link is live and that I may share (the "team" right; a typing
+    pop-up never makes one), and the afisha's upcoming events as an anonymous student sees them. Anyone else: one button."""
+    tg = (q.get("from") or {}).get("id")
+    me = _student(con, tg)
+    lang = me["lang"] if me else str((q.get("from") or {}).get("language_code") or "")[:2]
+    body: dict = {"inline_query_id": q["id"], "results": [], "is_personal": True, "cache_time": 10}
+    if not me:
+        body["button"] = {"text": texts.bot_message(lang, "welcome")[1], "web_app": {"url": f"https://{cfg.domain}/"}}
+        return body
+    app = f"https://t.me/{cfg.bot_username}?startapp="
+
+    def article(rid: str, title: str, text: str, button: str, start: str, **more) -> dict:
+        return {"type": "article", "id": rid, "title": title, **more,
+                "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
+                "reply_markup": {"inline_keyboard": [[{"text": button, "url": app + start}]]}}
+
+    words = logic.search.fold(q.get("query"))[:64]
+    out = body["results"]
+    if not words:
+        v = logic.Viewer(me["id"], me["role"], True)
+        name = logic.shown_name(one(con, logic.PERSON + " WHERE u.id = ?", me["id"]))
+        out.append(article("rf", *texts.share_invite("rf", lang, name=name), f"r_{logic._qr_code(con, me['id'], 'link_code')}"))
+        mine = [oid for oid, r in logic._rights(con, v).items() if "team" in r]
+        for o in rows(con, f"""SELECT o.id, o.name, i.token, i.expires_at FROM orgs o JOIN org_invites i ON i.org_id = o.id AND i.multi = 1
+                AND i.revoked_at IS NULL AND i.expires_at > ? WHERE o.status = 'active' AND o.id IN ({','.join('?' * len(mine)) or 'NULL'})
+                ORDER BY o.name""", now(), *mine):
+            title, text, button = texts.share_invite("jm", lang, club=o["name"], until=texts.when(o["expires_at"], lang).split(",")[0])
+            out.append(article(f"jm-{o['id']}", title, text, button, f"join_{o['id']}_{o['token']}"))
+    # the afisha as a nobody sees it: published, public, on the general afisha (never drafts, hidden or members-only)
+    evs = [e for e in logic.seats.events(con, logic.Viewer(0, "user", False)) if e["status"] == "published"
+           and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]
+    for e in evs[:20 if words else INLINE_EVENTS]:
+        org = " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])])
+        caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"], org, e["price"], e["taken"])
+        poster = f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
+        out.append(article(f"ev-{e['id']}", e["title"], caption, button, f"ev_{e['id']}", thumbnail_url=poster,
+                           description=" · ".join([texts.when(e["startsAt"], lang), *([e["place"]] if e["place"] else [])])))
+    return body
+
+
 def _wanted(cfg: Config) -> str:
     # edits: the forum's group, and a club's group with its swear filter on (an edit mustn't smuggle a word in)
-    return json.dumps(["message", "edited_message", "callback_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
+    return json.dumps(["message", "edited_message", "callback_query", "inline_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
                        # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
                        *(["message_reaction_count"] if cfg.forum_channel else []),
                        # someone joining or leaving a club's linked chat (logic/chatsync.py; sent only where the bot is an admin)
@@ -1674,12 +1719,15 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 if (msg.get("chat") or {}).get("type") == "private" and str(msg.get("text") or "").split("@")[0].split()[:1] == ["/paysupport"]:  # before the ban skip: Telegram's rules want it for every payer
                     await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "paysupport", tg_id=msg["chat"]["id"])))
                     continue
-                sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
+                sender = ((upd.get("callback_query") or upd.get("inline_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
                 group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
                 if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
                     continue  # banned: the bot neither answers nor acts for him
                 if "callback_query" in upd:
                     await _tapped(cfg, http, con, upd["callback_query"])
+                    continue
+                if "inline_query" in upd:  # "@KBTUappBot ..." typed in any chat (inline mode, BotFather /setinline)
+                    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerInlineQuery", json=inline_answer(cfg, con, upd["inline_query"]))
                     continue
                 if "chat_join_request" in upd:
                     if not upd["chat_join_request"].get("query_id"):  # a guarded one was answered above
