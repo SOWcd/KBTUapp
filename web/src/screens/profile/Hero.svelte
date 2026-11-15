@@ -416,6 +416,10 @@
   .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; } /* lookVars: two lines, or a long word a size smaller */
+  /* round 18: CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
+  .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
+    box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
+  .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .club .id { text-shadow: var(--tsh); }

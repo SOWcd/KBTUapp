@@ -188,6 +188,10 @@
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; }
+  /* round 18: CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
+  .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
+    box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
+  .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
   .club .ph { background: var(--ring); }
 
   .hint { max-width: 300px; text-align: center; font: 550 13px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.66); }
