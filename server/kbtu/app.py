@@ -322,8 +322,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         anyio.to_thread.current_default_thread_limiter().total_tokens = THREADS
         task = asyncio.create_task(bot.run(cfg)) if cfg.background else None
         yield
-        if task:
+        if task:  # awaited: the bot's children are cancelled and done before the lock file is let go
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         if http := getattr(app.state, "http", None):
             await http.aclose()
 

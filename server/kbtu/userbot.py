@@ -121,6 +121,8 @@ class Mirror:
         except Exception:  # noqa: BLE001
             log.exception("userbot post")
 
+    # ponytail: mirror's writes on self.con run on the event loop (a busy database holds it up to busy_timeout); the
+    # handlers share one connection, so a thread each needs its own connection or a lock: do it if the loop ever stalls
     async def post(self, m) -> None:
         """A channel post (new or edited) into its org's news; anything from a chat we don't mirror is dropped unread."""
         channel = getattr(m.peer_id, "channel_id", None)

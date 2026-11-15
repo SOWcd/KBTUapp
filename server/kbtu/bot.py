@@ -674,8 +674,10 @@ def backup_day(cfg: Config, con) -> None:
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
         if bak.stat().st_mtime < time.time() - 14 * 86400:
             bak.unlink(missing_ok=True)
+    global _backup_retry
     local = int(time.time()) + 5 * 3600
-    if local % 86400 < 4 * 3600 or not logic._once(con, "backup_day", str(local // 86400)):
+    day = str(local // 86400)
+    if local % 86400 < 4 * 3600 or time.time() < _backup_retry or one(con, "SELECT 1 FROM meta WHERE key = 'backup_day' AND value = ?", day):
         return
     root = db_path.parent / "backups"
     root.mkdir(exist_ok=True)
@@ -687,8 +689,10 @@ def backup_day(cfg: Config, con) -> None:
     except sqlite3.Error as exc:
         log.warning("backup failed: %s", exc)
         tmp.unlink(missing_ok=True)
+        _backup_retry = time.time() + 3600  # the day isn't marked: tried again in an hour, not every round
         return
     tmp.replace(out)
+    con.execute("INSERT INTO meta (key, value) VALUES ('backup_day', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (day,))
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
     for old in root.glob("kbtu-*.db"):  # by age too: skipped nights mustn't stretch a deleted account's life past 30 days
@@ -697,6 +701,7 @@ def backup_day(cfg: Config, con) -> None:
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
+_backup_retry = 0.0  # a failed nightly copy waits until this (time.time()) before the next try
 _offsite: asyncio.Task | None = None  # the upload running in its thread; one at a time
 
 
@@ -722,7 +727,7 @@ def offsite_round(cfg: Config, con) -> None:
     so the postman isn't held; a day counts only after R2's 200, tried again hourly until then. Each object is named
     with its time: the bucket's lock refuses to overwrite one that a lost answer left behind."""
     global _offsite
-    if not offsite.ready() or (_offsite and not _offsite.done()):
+    if _offsite and not _offsite.done():
         return
     local = int(time.time()) + 5 * 3600
     if local % 86400 < 4 * 3600:
@@ -730,6 +735,13 @@ def offsite_round(cfg: Config, con) -> None:
     date, home = time.strftime("%Y-%m-%d", time.gmtime(local)), Path(cfg.db_path).resolve().parent
     stamp, done = time.strftime("%Y-%m-%d-%H%M", time.gmtime(local)), lambda key: one(con, "SELECT 1 FROM meta WHERE key = ? AND value = ?", key, date)
     copy = home / "backups" / f"kbtu-{date}.db"
+    if not offsite.ready():  # no R2 keys or no age: nothing leaves the server; the creator hears it once (meta offsite_unset),
+        # on the image only (DB_MUST_EXIST=1): development and tests run without R2 on purpose
+        if os.environ.get("DB_MUST_EXIST") == "1" and copy.exists() and logic._once(con, "offsite_unset", "1"):
+            log.warning("offsite: not configured, the nightly copy stays on this server")
+            for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
+                logic.notify(con, uid, "backup_failed", f"bf:{date}")
+        return
     yday = time.strftime("%Y-%m-%d", time.gmtime(local - 86400))
     # two nights without a copy off the server (six tries tonight already): the admins hear it once per outage
     # (meta offsite_alert: the day it was raised), and once more when a copy gets through again
@@ -1767,28 +1779,31 @@ async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
 async def _videos(cfg: Config) -> None:
     """Event videos (video.py), one at a time in this one process: whatever was being compressed when the last postman
     died starts over. Videos no event holds leave the disk a day after their upload."""
-    con = db.connect(cfg.db_path)
+    con = db.connect(cfg.db_path)  # one thread at a time uses it (check_same_thread=False), as in send_due
     root = Path(cfg.db_path).resolve().parent
-    con.execute("UPDATE videos SET status = 'queued' WHERE status = 'working'")
-    swept = 0.0
+    swept, reset = 0.0, False
     while True:
         try:
+            if not reset:  # inside the guard: a busy database at start is tried again, not the loop's end
+                await anyio.to_thread.run_sync(con.execute, "UPDATE videos SET status = 'queued' WHERE status = 'working'")
+                reset = True
             if time.monotonic() - swept > 3600:
                 swept = time.monotonic()
-                for vid, path in logic.stale_videos(con):
+                for vid, path in await anyio.to_thread.run_sync(logic.stale_videos, con):
                     (root / "uploads" / str(vid)).unlink(missing_ok=True)
                     for ext in (".mp4", ".webp", ".t.webp", ".jpg") if path else ():
                         (root / "media" / f"{path}{ext}").unlink(missing_ok=True)
-            x = logic.next_video(con)
+            x = await anyio.to_thread.run_sync(logic.next_video, con)
             if not x:
                 await asyncio.sleep(3)
                 continue
             src = root / "uploads" / str(x["id"])
             try:
-                logic.video_done(con, x["id"], await video.compress(src, root / "media", bool(x["wide"])))
+                done = await video.compress(src, root / "media", bool(x["wide"]))
+                await anyio.to_thread.run_sync(logic.video_done, con, x["id"], done)
             except (video.BadVideo, OSError) as exc:
                 log.warning("video %d: %s", x["id"], str(exc)[-200:])
-                logic.video_done(con, x["id"], None, "too_long" if str(exc) == "too_long" else "not_a_video")
+                await anyio.to_thread.run_sync(logic.video_done, con, x["id"], None, "too_long" if str(exc) == "too_long" else "not_a_video")
             src.unlink(missing_ok=True)
         except Exception:  # noqa: BLE001 - the loop must outlive one bad video
             log.exception("videos")
@@ -1885,5 +1900,14 @@ async def run(cfg: Config) -> None:
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
             await _commands(cfg, http)
-            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
-                                 *([_chat_sync(cfg, http)] if cfg.chat_sync else []))
+            # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
+            # poller outlives leadership (gather left them running after the lock was let go)
+            while True:
+                try:
+                    async with asyncio.TaskGroup() as tg:
+                        for job in (_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
+                                    *([_chat_sync(cfg, http)] if cfg.chat_sync else [])):
+                            tg.create_task(job)
+                except Exception:  # noqa: BLE001 - restarted under the same lock; a cancel (shutdown) goes through
+                    log.exception("bot children")
+                    await asyncio.sleep(5)
