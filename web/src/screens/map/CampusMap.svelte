@@ -297,6 +297,9 @@
   }
   function down(e: PointerEvent) {
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
+    // the first finger of a new touch: any finger still listed is stale (iOS sends no up for one held while the flaw's
+    // sheet opened over it, so every later press read as a second finger and never held: owner, Nov 15)
+    if (e.isPrimary) pts.clear();
     press = pts.size ? null : { ...local(e), t: performance.now() };
     pressFlaw = Number((e.target as Element).closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0);
     pressRoom = (e.target as Element).closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
