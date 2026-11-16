@@ -1762,6 +1762,7 @@ const en: Dict = {
   'ct.kept': "{n} synced",
   'ct.dmp': "Clubs' groups",
   'ct.dmpSub': "Club → main group → departments",
+  'ct.none': "No groups",
   'ct.dmpNote': "Groups our bot is in. Synced: the club's list in the app is kept from the group.",
   'ct.whySynced': "The sync sets this group's place",
   'ct.whyMain': "The club's main group is synced already",

@@ -17,8 +17,10 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   $effect(() => { void loadChatTrees(); }); // shown from the store at once, refreshed quietly
-  // the organisations with groups first, then the ones the bot hasn't reached
-  const list = $derived([...(data.chatTrees ?? [])].sort((a, b) => Number(b.groups > 0) - Number(a.groups > 0)));
+  // the organisations with groups; the ones the bot hasn't reached folded into one last row
+  const list = $derived((data.chatTrees ?? []).filter((x) => x.groups > 0));
+  const none = $derived((data.chatTrees ?? []).filter((x) => !x.groups));
+  let noneOpen = $state(false);
   let open = $state<Id[]>([]);
   const toggle = (id: Id) => { haptic.select(); open = open.includes(id) ? open.filter((x) => x !== id) : [...open, id]; };
   const line = (x: Tree) => [tn('ct.groups', x.groups), x.kept ? t('ct.kept', { n: x.kept }) : '', x.last ? ago(x.last) : ''].filter(Boolean).join(' · ');
@@ -34,6 +36,10 @@
         </Row>
         {#if open.includes(x.org.id)}<ChatTree tree={x} base={1} />{/if}
       {/each}
+      {#if none.length}
+        <Row dense title={t('ct.none')} value={String(none.length)} accessory="disclosure" open={noneOpen} onclick={() => { haptic.select(); noneOpen = !noneOpen; }} />
+        {#if noneOpen}{#each none as x (x.org.id)}<Row dense title={x.org.name}>{#snippet lead()}<OrgLogo org={x.org} size={28} />{/snippet}</Row>{/each}{/if}
+      {/if}
     </Group>
   {/if}
 </Sheet>

@@ -51,8 +51,10 @@
   let tree = $state<Tree | null>(null);
   const loadTree = () => api.chatTree(org).then((x) => (tree = x)).catch(() => {});
   $effect(() => { void chats.length; void loadTree(); });
+  let placing = false; // one placement at a time: a later one's answer can't be undone by an earlier one's rollback
   async function setPlace(c: TreeChat, place: 'main' | 'dept' | 'other' | null, tag?: Id) {
-    if (!tree) return;
+    if (!tree || placing) return;
+    placing = true;
     const was = tree;
     tree = moved(tree, c, place, tag);
     haptic.select();
@@ -61,10 +63,10 @@
       tree = was;
       haptic.error();
       say(t(e instanceof ApiErr && e.message === 'synced' ? 'ct.whySynced' : e instanceof ApiErr && e.message === 'main' ? 'ct.whyMain' : 'common.error'), 'warning_3d');
-    }
+    } finally { placing = false; }
   }
   function placeMenu(c: TreeChat, at: Element) {
-    if (!tree || c.id == null) return;
+    if (!tree || c.id == null || placing) return;
     const g = c.guess;
     const pick = (label: string, place: 'main' | 'dept' | 'other', tag?: Id) => ({ label, place, tag, likely: g?.place === place && (place !== 'dept' || g.tag === tag) });
     const opts = [pick(t('ct.toMain'), 'main'), ...tree.depts.map((d) => pick(t('ct.toDept', { name: d.name }), 'dept', d.id)), pick(t('ct.toOther'), 'other')]
