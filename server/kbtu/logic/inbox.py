@@ -80,7 +80,7 @@ def count(con, v: Viewer) -> int:
 
 # ---- Done: the decisions of the last DONE_DAYS, newest first; an Undo where the action has one and nothing came after
 
-UNDOABLE = ("report_remove", "tg_confirm", "post_hide", "fchan_hide", "fchan_reply_hide", "capp_no", "opath_yes", "opath_no", "chat_decline", "chat_remove",
+UNDOABLE = ("subject_lift", "report_remove", "tg_confirm", "post_hide", "fchan_hide", "fchan_reply_hide", "capp_no", "opath_yes", "opath_no", "chat_decline", "chat_remove",
             "event_delete", "tg_report_close")
 NO_UNDO_KINDS = ("ask",)  # a forum request a moderator hid has no way back here
 
@@ -173,6 +173,8 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
         undo_official(con, v, tid)
     elif act in ("chat_decline", "chat_remove"):
         undo_chat(con, v, tid)
+    elif act == "subject_lift":  # a subject listing's take-down lifted: made again, its deadline as it was
+        subjects.unlift(con, v, json.loads(a["data"] or "{}"))
     elif act == "event_delete":
         undo_delete_event(con, v, tid)
     elif act == "tg_report_close" and kind == "tgreport":
@@ -183,7 +185,7 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
 
 
 # the other domains', imported last: they import this one too
-from . import fchannel, tgcomments  # noqa: E402
+from . import fchannel, subjects, tgcomments  # noqa: E402
 from .account import roster_requests  # noqa: E402
 from .chatlist import pending_chats, undo_chat  # noqa: E402
 from .clubs import club_applications, official_requests, undo_club_refusal, undo_official  # noqa: E402

@@ -1816,10 +1816,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX asks_subject ON asks(subject, user_id) WHERE subject IS NOT NULL;
     ALTER TABLE contacts ADD COLUMN token TEXT;
     UPDATE contacts SET token = lower(hex(randomblob(16))) WHERE token IS NULL;
-    -- a moderator's take-down of a subject listing, apart from the listing (logic/subjects.py): while it stands (lifted_at
-    -- NULL, until that term's end) the author can't list on that subject again; leaving still deletes the listing
+    -- a moderator's take-down of a subject listing, apart from the listing (logic/subjects.py): one per author and
+    -- subject; while it stands (until the listing's own end) the listing is out of sight and listing again is refused;
+    -- lifting deletes it (Done's Undo makes it again). Ids never come back (AUTOINCREMENT): a stale tap only misses
     CREATE TABLE subject_holds (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       subject TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -1827,8 +1828,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       why TEXT NOT NULL,
       at INTEGER NOT NULL,
       until INTEGER NOT NULL,
-      lifted_at INTEGER) STRICT;
-    CREATE INDEX subject_holds_by ON subject_holds(user_id, subject);"""),
+      UNIQUE (user_id, subject)) STRICT;
+    -- asks and contacts never hand a deleted row's id to the next one (core.next_id; a rebuild for AUTOINCREMENT is
+    -- not allowed): their high-water marks from here on
+    INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:asks', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM asks;
+    INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:contacts', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM contacts;"""),
 ]
 
 

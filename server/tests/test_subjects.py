@@ -176,8 +176,8 @@ def _ann_offer(c, con, sid: str, by: int) -> tuple[int, str]:
 
 
 def test_old_accept_never_answers_a_reused_offer(subj):
-    """Review P1: Bob offers, Ann leaves (the offer goes with her row) and lists again, Doug offers and takes the freed
-    id. Ann's old Accept naming Bob must not share her Telegram with Doug; the old message renders nothing."""
+    """Review P1: Bob offers, Ann leaves (the offer goes with her row) and lists again, Doug offers. Doug's offer never
+    gets Bob's freed id, and Ann's old Accept naming Bob does nothing; the old message renders nothing."""
     c, con, p, sid, _ = subj
     login(c, 4, "doug")
     con.execute("UPDATE students SET consent_version = ?", (logic.CONSENT,))
@@ -185,7 +185,7 @@ def test_old_accept_never_answers_a_reused_offer(subj):
     old = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "en"}
     assert c.delete(f"/api/subjects/{sid}/me", headers=tma(1)).status_code == 204
     doug_id, doug_tok = _ann_offer(c, con, sid, 4)
-    assert doug_id == bob_id and doug_tok != bob_tok                                     # SQLite gave Doug Bob's old id
+    assert doug_id != bob_id and doug_tok != bob_tok                                     # never Bob's old id (core.next_id)
     assert bot._render(con, old) is None                                                  # Bob's card: gone, not Doug's
     assert logic.decide_contact(con, p["ann"], bob_id, True, bob_tok) is None            # Bob's Accept: nothing
     assert logic.decide_contact(con, p["ann"], bob_id, True) is None                     # nor a button without a token
@@ -206,7 +206,7 @@ def test_old_accept_on_the_forum_path_too(subj):
     con.execute("DELETE FROM asks WHERE id = ?", (a1["id"],))
     a2 = logic.create_ask(con, ann, {"kind": "help", "title": "Umbrella?"}, True)
     logic.contact(con, cat, aid=a2["id"])
-    assert con.execute("SELECT id FROM contacts").fetchone()[0] == cid
+    assert con.execute("SELECT id FROM contacts").fetchone()[0] != cid                    # a new id, never the freed one
     assert logic.decide_contact(con, p["ann"], cid, True, tok) is None
 
 
@@ -240,15 +240,92 @@ def test_take_down_is_its_own_record(subj):
     assert card["mine"] is None and card["restricted"] and not con.execute("SELECT 1 FROM asks").fetchone()  # gone for real
     assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["message"] == "restricted"  # leaving and again: refused
     hold = c.get("/api/forum/mod", headers=tma(3)).json()["holds"]
-    assert [(h["title"], h["lifted"]) for h in hold] == [(CALC, False)]
-    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(2), json={}).status_code == 404  # a student: no
-    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(3), json={}).status_code == 204  # lifted
+    assert [h["title"] for h in hold] == [CALC]
+    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(2)).status_code == 404  # a student: no
+    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(3)).status_code == 204  # lifted: the record goes
+    assert not con.execute("SELECT 1 FROM subject_holds").fetchone()
     assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"]["status"] == "live"
-    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(3), json={"back": True}).status_code == 204  # the lift undone
-    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"] == []
-    assert {r[0] for r in con.execute("SELECT action FROM audit_log")} >= {"subject_lift", "subject_hold"}
+    assert [x["person"]["id"] for x in c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"]] == [p["ann"]]
+    done = [d for d in c.get("/api/admin/inbox", headers=tma(3)).json()["done"] if d["action"] == "subject_lift"]
+    assert done[0]["undo"] and done[0]["text"] == CALC
+    assert c.post(f"/api/admin/done/{done[0]['id']}/undo", headers=tma(3)).status_code == 204  # Done's Undo: the hold again
+    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"] == []            # out of sight in the read itself
+    assert c.get(f"/api/subjects/{sid}", headers=tma(1)).json()["mine"]["status"] == "hidden"
     end = con.execute("SELECT until FROM subject_holds").fetchone()[0]
-    assert end == logic.subjects.term_end(logic.now())                                    # it ends with this term
+    assert end == con.execute("SELECT expires_at FROM asks").fetchone()[0]                 # the listing's own end
+
+
+def test_hide_lift_hide_keeps_one_hold(subj):
+    """Review 3: hide, lift, hide again: one take-down at a time, and the listing out of sight while it stands."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
+    h1 = c.get("/api/forum/mod", headers=tma(3)).json()["holds"][0]["id"]
+    assert c.post(f"/api/forum/holds/{h1}", headers=tma(3)).status_code == 204
+    assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
+    assert con.execute("SELECT COUNT(*) FROM subject_holds").fetchone()[0] == 1
+    lift_line = con.execute("SELECT id FROM audit_log WHERE action = 'subject_lift'").fetchone()[0]
+    assert c.post(f"/api/admin/done/{lift_line}/undo", headers=tma(3)).status_code in (404, 409)  # decided again since: no
+    assert c.post(f"/api/forum/holds/{h1}", headers=tma(3)).status_code == 404                     # the old one is gone
+    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"] == []
+
+
+def test_expired_listing_report_makes_no_hold(subj, monkeypatch):
+    """Review 3: a listing over on Jan 9, its report decided on Jan 10: the report closes, no take-down for spring."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    at = lambda *d: int(datetime(*d, tzinfo=logic.subjects.ALMATY).timestamp())  # noqa: E731
+    set_clock(monkeypatch, lambda: at(2026, 12, 1))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    assert c.post("/api/reports", headers=tma(2), json={"target": "ask", "id": aid, "reason": "spam"}).status_code == 204
+    set_clock(monkeypatch, lambda: at(2027, 1, 10))
+    logic.resolve_report(con, logic.Viewer(p["cat"], "moderator", True), "ask", aid, True)
+    assert con.execute("SELECT status FROM reports").fetchone()[0] == "actioned"
+    assert not con.execute("SELECT 1 FROM subject_holds").fetchone()
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"]["status"] == "live"
+
+
+def test_ids_never_come_back(subj):
+    """Review 3, the root: the newest request or offer deleted, the next one gets a new id (core.next_id)."""
+    c, con, p, sid, _ = subj
+    ann, bob = logic.Viewer(p["ann"], "user", True), logic.Viewer(p["bob"], "user", True)
+    a1 = logic.create_ask(con, ann, {"kind": "help", "title": "Charger?"}, True)
+    logic.contact(con, bob, aid=a1["id"])
+    c1 = con.execute("SELECT id FROM contacts").fetchone()[0]
+    con.execute("DELETE FROM asks WHERE id = ?", (a1["id"],))                              # its offer goes with it
+    a2 = logic.create_ask(con, ann, {"kind": "help", "title": "Umbrella?"}, True)
+    logic.contact(con, bob, aid=a2["id"])
+    assert a2["id"] > a1["id"] and con.execute("SELECT id FROM contacts").fetchone()[0] > c1
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    s1 = con.execute("SELECT id FROM asks WHERE subject IS NOT NULL").fetchone()[0]
+    c.delete(f"/api/subjects/{sid}/me", headers=tma(1))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(2), json={})
+    assert con.execute("SELECT id FROM asks WHERE subject IS NOT NULL").fetchone()[0] > s1
+
+
+def test_telegram_only_from_the_listings_own_author(subj):
+    """Review 3, P1: an accepted offer shows a Telegram only where it was made to that listing's author."""
+    c, con, p, sid, _ = subj
+    login(c, 4, "doug")
+    con.execute("UPDATE students SET consent_version = ?", (logic.CONSENT,))
+    cid, tok = _ann_offer(c, con, sid, 2)
+    con.execute("UPDATE asks SET user_id = ? WHERE user_id = ?", (4, p["ann"]))           # the row now Doug's, by any path
+    assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
+    assert "telegram" not in json.dumps(c.get(f"/api/subjects/{sid}", headers=tma(2)).json())
+
+
+def test_late_ai_verdict_only_on_its_own_row(subj, monkeypatch):
+    """Review 3: the AI's word on reports, come late, hides only the row it read (same author, same making)."""
+    c, con, p, sid, _ = subj
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    aid = con.execute("SELECT id, created_at FROM asks").fetchone()
+    logic.hide_ask(con, aid[0], "reports", made=(p["bob"], aid[1]))                          # read on someone else's
+    assert con.execute("SELECT status FROM asks").fetchone()[0] == "live"
+    logic.hide_ask(con, aid[0], "reports", made=(p["ann"], aid[1]))
+    assert con.execute("SELECT status FROM asks").fetchone()[0] == "hidden"
 
 
 def test_cap_holds_under_two_at_once(subj, monkeypatch):

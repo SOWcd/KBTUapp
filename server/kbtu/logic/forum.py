@@ -237,8 +237,8 @@ def create_ask(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
         if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ? AND subject IS NULL", v.id, _now())[0] >= OPEN_ASKS:
             raise ApiError("rate_limited", "asks")
         status, why = ("live", None) if verdict else ("held", "ai" if verdict is False else "check")
-        aid = con.execute("INSERT INTO asks (user_id, kind, title, body, status, why, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                          (v.id, kind, title, text, status, why, _now(), _now() + days * 86400)).lastrowid
+        aid = con.execute("INSERT INTO asks (id, user_id, kind, title, body, status, why, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                          (core.next_id(con, "asks"), v.id, kind, title, text, status, why, _now(), _now() + days * 86400)).lastrowid
         con.executemany("INSERT INTO ask_skills (ask_id, skill_id) VALUES (?, ?)", [(aid, i) for i in ids])
         con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(_now(), i) for i in ids])
         if status == "live":
@@ -339,24 +339,25 @@ def ask_people(con, v: Viewer, aid: int) -> list[dict]:
 def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
     """"I can help" on a request (to its author), or "get in touch" with someone found by a skill (open to projects)."""
     need_student(v)
-    if isinstance(aid, int) and not isinstance(aid, bool):
-        a = one(con, "SELECT user_id FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", aid, _now())
-        if not a:
+    with tx(con):  # whose the request is, read in the same write as the offer: never a row that changed hands meanwhile
+        if isinstance(aid, int) and not isinstance(aid, bool):
+            a = one(con, "SELECT user_id FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", aid, _now())
+            if not a:
+                raise ApiError("not_found")
+            to = a["user_id"]
+        elif isinstance(to, int) and not isinstance(to, bool):
+            aid = None
+            if not one(con, f"SELECT 1 FROM users u WHERE u.id = ? AND {_FINDABLE}", to):
+                raise ApiError("not_found")
+        else:
+            raise ApiError("bad_input")
+        if to == v.id or one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", to, v.id, v.id, to):
             raise ApiError("not_found")
-        to = a["user_id"]
-    elif isinstance(to, int) and not isinstance(to, bool):
-        aid = None
-        if not one(con, f"SELECT 1 FROM users u WHERE u.id = ? AND {_FINDABLE}", to):
-            raise ApiError("not_found")
-    else:
-        raise ApiError("bad_input")
-    if to == v.id or one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", to, v.id, v.id, to):
-        raise ApiError("not_found")
-    with tx(con):
         if one(con, "SELECT COUNT(*) FROM contacts WHERE from_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= CONTACTS_A_DAY:
             raise ApiError("rate_limited")
-        token = secrets.token_hex(4)  # the offer's own: its id may come back for another once this one is deleted
-        cur = con.execute("INSERT OR IGNORE INTO contacts (from_id, to_id, ask_id, created_at, token) VALUES (?, ?, ?, ?, ?)", (v.id, to, aid, _now(), token))
+        token = secrets.token_hex(4)  # the offer's own, beside an id that never comes back (core.next_id)
+        cur = con.execute("INSERT OR IGNORE INTO contacts (id, from_id, to_id, ask_id, created_at, token) VALUES (?, ?, ?, ?, ?, ?)",
+                          (core.next_id(con, "contacts"), v.id, to, aid, _now(), token))
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
     return {"status": "pending"}
@@ -427,18 +428,21 @@ def _enough_at(con, aid: int) -> int | None:
     return at[HIDE_AT - 1] if len(at) >= HIDE_AT else None
 
 
-def hide_ask(con, aid: int, why: str, by: int | None = None, close_reports: bool = True) -> None:
+def hide_ask(con, aid: int, why: str, by: int | None = None, close_reports: bool = True, made: tuple[int, int] | None = None) -> None:
     """Out of the lists, the author told why (the AI agreeing with the reports, or a moderator). A subject's listing
-    gets its take-down on record too (logic/subjects.hold). close_reports: False when the caller closes them itself as
-    part of the same decision (moderation.resolve_report: one place closes them, so the decision commits as one)."""
-    if con.execute("UPDATE asks SET status = 'hidden', why = ? WHERE id = ? AND status IN ('live', 'held')", (why, aid)).rowcount:
+    gets its take-down on record too (logic/subjects.hold). One already over is left as it is (no take-down for a
+    term gone). close_reports: False when the caller closes them itself in the same decision (moderation.resolve_report).
+    made: (author, created_at) the decision was taken on (a deferred AI verdict): any other row, nothing."""
+    guard = " AND user_id = ? AND created_at = ?" if made else ""
+    if con.execute("UPDATE asks SET status = 'hidden', why = ? WHERE id = ? AND status IN ('live', 'held') AND expires_at > ?" + guard,
+                   (why, aid, _now(), *(made or ()))).rowcount:
         a = one(con, "SELECT user_id, subject, expires_at FROM asks WHERE id = ?", aid)
         if a["subject"]:
             subjects.hold(con, a["user_id"], a["subject"], by, why, a["expires_at"])
         notify(con, a["user_id"], "ask_hidden", f"ah:{aid}")
-        if close_reports:
-            con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
-                        (by, _now(), aid))
+    if close_reports:
+        con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
+                    (by, _now(), aid))
 
 
 def forum_sweep(con) -> None:

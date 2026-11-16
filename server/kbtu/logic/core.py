@@ -87,6 +87,16 @@ def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
     return con.execute(sql, args).fetchone()
 
 
+def next_id(con, table: str) -> int:
+    """A new row's id that no row ever had (asks, contacts: SQLite gives a deleted newest row's id to the next insert,
+    and a stale button, report or verdict then lands on someone else's). A high-water mark in meta, moved inside the
+    caller's transaction; table: a name from our code only."""
+    key = f"seq:{table}"
+    n = max(int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0]), one(con, f"SELECT COALESCE(MAX(id), 0) FROM {table}")[0]) + 1
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n)))
+    return n
+
+
 def chat_owners(con, tg_chat: int) -> set[int]:
     """The clubs holding a Telegram chat by any of its three ways: a sync link, a card on the page, an event's group.
     Every claim checks them all: another club's chat stays theirs (Codex review, Nov 14)."""
@@ -109,10 +119,10 @@ FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
 
 
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
-MOD_DONE = ("report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
+MOD_DONE = ("subject_lift", "report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
             "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "chat_approve", "chat_decline", "chat_remove")
 ADMIN_DONE = ("capp_yes", "capp_no", "opath_yes", "opath_no", "roster_ok", "roster_no", "event_delete", "tg_report_close")
-UNDOES = ("restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "opath_undo", "chat_undo", "event_undo",
+UNDOES = ("subject_unlift", "restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "opath_undo", "chat_undo", "event_undo",
           "tg_report_open")
 DECISIONS = MOD_DONE + ADMIN_DONE + UNDOES
 

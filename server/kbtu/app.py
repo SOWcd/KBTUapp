@@ -1706,10 +1706,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
             # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
             if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
-                return logic.one(con, "SELECT title, body FROM asks WHERE id = ?", body["id"])
+                return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ?", body["id"])
         a = await run_in_threadpool(file_it)
-        if a and await screen(f"{a['title']}\n{a['body']}") is False:
-            await run_in_threadpool(logic.hide_ask, con, body["id"], "reports")
+        if a and await screen(f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
+            await run_in_threadpool(lambda: logic.hide_ask(con, body["id"], "reports", made=(a["user_id"], a["created_at"])))
 
     async def eu_ai(con, msgs: list[dict], whole: float = 30, **kw) -> str:
         """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503."""
@@ -2545,9 +2545,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.release_ask(con, m[0], aid, m[1])
 
     @app.post("/api/forum/holds/{hid}", status_code=204)
-    def subject_hold_lift(hid: int, con: Con, m: AskMod, body: dict = Body(default={})):
-        """A subject listing's take-down lifted (Admin, confirmed first), or put back (back: the lift's undo)."""
-        logic.subjects.lift(con, m[0], hid, body.get("back") is True)
+    def subject_hold_lift(hid: int, con: Con, m: AskMod):
+        """A subject listing's take-down lifted (Admin, confirmed first; Done's Undo makes it again)."""
+        logic.subjects.lift(con, m[0], hid)
 
     @app.get("/api/forum/asks/{aid}/people")
     def forum_ask_people(aid: int, con: Con, v: Forum):

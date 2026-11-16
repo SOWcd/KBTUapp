@@ -32,9 +32,9 @@
   async function decide(a: ModAsk, live: boolean) {
     try { await (live ? api.releaseAsk(a.id) : api.hideAsk(a.id)); haptic.ok(); load(); changed(); } catch (e) { fail(e); }
   }
-  async function lift(h: SubjectHold) {
-    if (!h.lifted && !(await sheets.ask({ title: t('fo.mod.liftAsk'), text: t('fo.mod.liftText', { name: h.name, title: h.title }), ok: t('fo.mod.lift'), cancel: t('common.cancel') }))) return;
-    try { await api.liftHold(h.id, h.lifted); haptic.ok(); load(); changed(); } catch (e) { fail(e); }
+  async function lift(h: SubjectHold) {  // asked first; Admin's Done can undo it
+    if (!(await sheets.ask({ title: t('fo.mod.liftAsk'), text: t('fo.mod.liftText', { name: h.name, title: h.title }), ok: t('fo.mod.lift'), cancel: t('common.cancel') }))) return;
+    try { await api.liftHold(h.id); haptic.ok(); load(); changed(); } catch (e) { fail(e); }
   }
   function pick(s: Skill) { open = open?.id === s.id ? null : s; name = s.name; into = ''; }
   async function change(s: Skill, c: Parameters<typeof api.skillMod>[1]) {
@@ -64,12 +64,12 @@
     {/if}
 
     {#if mod.holds.length}
-      <!-- the subjects' take-downs this term: lift one (asked first; an accidental hide undone), or put a lift back -->
+      <!-- the subjects' take-downs standing: lift one (asked first; an accidental hide undone; Done's Undo makes it again) -->
       <Group caption={t('fo.mod.holds')}>
         {#each mod.holds as h (h.id)}
-          <Row dense title={h.title} subtitle={`${h.name} · ${h.lifted ? t('fo.mod.lifted') : t('fo.mod.holdUntil', { when: dayMonth(h.until) })}`}>
+          <Row dense title={h.title} subtitle={`${h.name} · ${t('fo.mod.holdUntil', { when: dayMonth(h.until) })}`}>
             {#snippet lead()}<Avatar person={h.person} size={32} />{/snippet}
-            {#snippet trailing()}<Button kind="gray" size="s" onclick={() => lift(h)}>{t(h.lifted ? 'fo.mod.putBack' : 'fo.mod.lift')}</Button>{/snippet}
+            {#snippet trailing()}<Button kind="gray" size="s" onclick={() => lift(h)}>{t('fo.mod.lift')}</Button>{/snippet}
           </Row>
         {/each}
       </Group>

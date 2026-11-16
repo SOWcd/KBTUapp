@@ -294,8 +294,12 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                 for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
                                 (tid, p["added_by"], json.dumps(dict(p)), tid, core.now()))
-            elif target == "ask":  # its reports close below, with this decision (hide_ask leaves them to it)
-                hide_ask(con, tid, "moderator", v.id, close_reports=False)
+            elif target == "ask":  # its reports close below, with this decision (hide_ask leaves them to it); only the row
+                # the reports were made on (there when the first came, its author the same since): else they just close
+                a = one(con, """SELECT user_id, created_at FROM asks WHERE id = ? AND created_at <= (SELECT MIN(created_at) FROM reports
+                    WHERE target = 'ask' AND target_id = ? AND status = 'open')""", tid, tid)
+                if a:
+                    hide_ask(con, tid, "moderator", v.id, close_reports=False, made=(a["user_id"], a["created_at"]))
             elif target == "user":  # the nick, the own photo and "about me" go, the Telegram photo is back; kept 30 days for an undo
                 u = one(con, "SELECT nick, bio, avatar_tg, avatar_file_id FROM users WHERE id = ?", tid)
                 if u and (u["nick"] or u["bio"] or u["avatar_file_id"]):

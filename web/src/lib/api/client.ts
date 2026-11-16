@@ -390,7 +390,7 @@ export const server = {
   subjectOffer: (ask: Id): Promise<{ status: 'pending' }> => call('POST', '/subjects/offer', { ask }),
   releaseAsk: (id: Id): Promise<Ask> => call('POST', `/forum/asks/${id}/release`),
   hideAsk: (id: Id): Promise<void> => call('POST', `/forum/asks/${id}/hide`),
-  liftHold: (id: Id, back = false): Promise<void> => call('POST', `/forum/holds/${id}`, { back }), // a subject take-down lifted, or put back
+  liftHold: (id: Id): Promise<void> => call('POST', `/forum/holds/${id}`), // a subject take-down lifted (Done's Undo makes it again)
   skillMod: (id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null> => call('PATCH', `/forum/skills/${id}`, change),
   refer: (code: string): Promise<void> => call('POST', '/referral', { code }), // opened by someone's invite link
   channelRevealed: (): Promise<{ revealed: number; next: number | null /* when I may post again (the pace); null: now */ }> => call('GET', '/forum-posts/revealed'), // how many anonymous authors were ever revealed (a count)
