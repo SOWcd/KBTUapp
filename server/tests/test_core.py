@@ -4204,6 +4204,18 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.get("/api/me", headers=tma(24)).json()["msPending"] is None
     assert c.post("/api/ms/claim", headers=tma(23), json=held).json() == {"ok": True}  # its starter's own app
     assert c.post("/api/ms/claim", headers=tma(23), json=held).status_code == 403      # once
+    # the start link opened nothing (Telegram's own browser on Android): nothing is taken without the secret until the
+    # browser releases it ("Link to <name>?"), then only its starter's app takes it, once
+    graph["id"] = "oid-8"
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid(25)), "token": token()}).json()
+    assert c.post("/api/ms/claim", headers=tma(25), json={"claim": ""}).status_code == 403
+    assert c.post("/api/ms/release", json={"claim": "x" * 24}).status_code == 403
+    assert c.post("/api/ms/release", json=held).status_code == 204
+    assert c.post("/api/ms/claim", headers=tma(24), json={"claim": ""}).status_code == 403   # released for 25 alone
+    assert c.get("/api/me", headers=tma(24)).json()["msPending"] is None
+    assert c.post("/api/ms/claim", headers=tma(25), json={"claim": ""}).json() == {"ok": True}
+    assert c.post("/api/ms/claim", headers=tma(25), json={"claim": ""}).status_code == 403
+    assert c.post("/api/ms/release", json=held).status_code == 403                           # taken: nothing to release
     graph["id"] = "oid-1"
     me = c.get("/api/me", headers=tma(21)).json()
     assert "msCode" not in me

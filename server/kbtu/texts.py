@@ -1265,7 +1265,7 @@ def place_or_tba(place: str, lang: str) -> str:
 
 
 # /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set.
-# Each state: a title and a line.
+# Each state: a title and a line. "ask"/"yes"/"here": the way in when the start link opens nothing ("stuck").
 MS_PAGE = {
     "ru": {"wait": ("Секунду…", "Проверяем аккаунт КБТУ"),
            "ask": ("Привязать к Telegram {name}?", "Если это не твой Telegram, закрой страницу: кто-то прислал тебе свою ссылку."),
@@ -1277,7 +1277,8 @@ MS_PAGE = {
            "otherMs": ("Уже подтверждено", "Твой профиль подтверждён другим аккаунтом КБТУ."),
            "notKbtu": ("Нужен аккаунт КБТУ", "Войди с логином вида s_familiya@kbtu.kz — личный или чужой аккаунт Microsoft не подойдёт. Вернись в приложение и попробуй снова."),
            "expired": ("Ссылка устарела", "Ссылка для входа живёт 15 минут. Вернись в приложение и нажми кнопку ещё раз."),
-           "open": "Вернуться в Telegram"},
+           "open": "Вернуться в Telegram",
+           "stuck": "Не открывается?", "here": ("Готово!", "Закрой эту страницу и вернись в приложение.")},
     "kk": {"wait": ("Бір сәт…", "ҚБТУ аккаунты тексерілуде"),
            "ask": ("Telegram {name} аккаунтына байлайық па?", "Бұл сенің Telegram-ың болмаса, бетті жап: біреу саған өз сілтемесін жіберген."),
            "yes": "Байлау",
@@ -1288,7 +1289,8 @@ MS_PAGE = {
            "otherMs": ("Расталған", "Профилің басқа ҚБТУ аккаунтымен расталған."),
            "notKbtu": ("ҚБТУ аккаунты керек", "s_tegi@kbtu.kz түріндегі логинмен кір — жеке не басқа Microsoft аккаунты келмейді. Қосымшаға оралып, қайта көр."),
            "expired": ("Сілтеменің мерзімі өтті", "Кіру сілтемесі 15 минут жарамды. Қосымшаға оралып, батырманы қайта бас."),
-           "open": "Telegram-ға оралу"},
+           "open": "Telegram-ға оралу",
+           "stuck": "Ашылмай тұр ма?", "here": ("Дайын!", "Бұл бетті жауып, қосымшаға орал.")},
     "en": {"wait": ("One moment…", "Checking your KBTU account"),
            "ask": ("Link to Telegram {name}?", "If this isn't your Telegram, close this page: someone sent you their own link."),
            "yes": "Link",
@@ -1299,7 +1301,8 @@ MS_PAGE = {
            "otherMs": ("Already confirmed", "Your profile is confirmed with another KBTU account."),
            "notKbtu": ("A KBTU account is needed", "Sign in with your login like s_lastname@kbtu.kz — a personal or another organization's Microsoft account won't work. Go back to the app and try again."),
            "expired": ("The link expired", "A sign-in link lasts 15 minutes. Go back to the app and tap the button again."),
-           "open": "Back to Telegram"},
+           "open": "Back to Telegram",
+           "stuck": "Doesn't open?", "here": ("Done!", "Close this page and go back to the app.")},
 }
 
 # The bot's command menu (Telegram's "/" list), per scope and language (bot._commands): groups get /all, private chats /start

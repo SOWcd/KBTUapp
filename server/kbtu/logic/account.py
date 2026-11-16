@@ -356,9 +356,25 @@ def ms_hold(con, uid: int, who: dict) -> str:
     return secret
 
 
+def ms_release(con, secret: str) -> None:
+    """The browser's "it didn't open": the start link never reached the Mini App (Telegram's own browser on Android shows
+    t.me as a web page), so the one who signed in agrees, seeing the Telegram's name, that its app may take the sign-in
+    by itself (ms_claim with no secret). The same guard the page's "Link to <name>?" tap was: a forwarded link still
+    binds nothing unseen."""
+    if not re.fullmatch(r"[\w-]{24}", secret) or not con.execute(
+            "UPDATE meta SET value = json_set(value, '$.open', 1) WHERE key = ? AND json_extract(value, '$.at') >= ?",
+            (f"ms_claim:{secret}", core.now() - MS_CLAIM_TTL)).rowcount:
+        raise ApiError("forbidden", "ms")
+
+
 def ms_claim(con, v: Viewer, secret: str) -> bool:
-    """The Mini App's own step after the browser: only the Telegram that started the sign-in takes it (ms_apply's bool)."""
+    """The Mini App's own step after the browser: only the Telegram that started the sign-in takes it (ms_apply's bool).
+    No secret: my newest sign-in the browser released (ms_release), when the start link didn't bring it."""
     with tx(con):
+        if not secret:
+            mine = one(con, """SELECT key FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.uid') = ?
+                AND json_extract(value, '$.open') = 1 ORDER BY json_extract(value, '$.at') DESC LIMIT 1""", v.id)
+            secret = mine[0][len("ms_claim:"):] if mine else ""
         row = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"ms_claim:{secret}") if re.fullmatch(r"[\w-]{24}", secret) else None
         held = json.loads(row[0]) if row else None
         if not held or held["uid"] != v.id or held["at"] < core.now() - MS_CLAIM_TTL:

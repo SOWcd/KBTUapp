@@ -699,9 +699,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # not applied here: the Mini App of the Telegram that started it takes it (/api/ms/claim)
             return {"claim": logic.ms_hold(con, uid, who)}
 
+    @app.post("/api/ms/release", status_code=204)
+    def ms_release(con: Con, body: dict = Body(...)):
+        """/ms.html's "Doesn't open?" then "Link": the browser holds the one-time secret, so only who signed in can say it"""
+        logic.ms_release(con, str(body.get("claim") or ""))
+
     @app.post("/api/ms/claim")
     def ms_claim(con: Con, v: Me, body: dict = Body(...)):
-        """The app's ms_<secret> start link from /ms.html: the sign-in lands only on the Telegram that asked for it"""
+        """The app's ms_<secret> start link from /ms.html: the sign-in lands only on the Telegram that asked for it. With
+        no secret (the app, back in sight): mine that the browser released"""
         logic.ms_claim(con, v, str(body.get("claim") or ""))
         return {"ok": True}
 
@@ -2658,7 +2664,8 @@ small{display:block;margin-top:12px;font-size:13px;color:rgba(255,255,255,.6)}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
 <h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
-<button class="btn main" id="yes" hidden></button><a class="btn main" id="open" hidden href="tg://"></a></main><script>
+<button class="btn main" id="yes" hidden></button><a class="btn main" id="open" hidden href="tg://"></a>
+<button class="btn ghost" id="stuck" hidden></button></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
@@ -2666,18 +2673,36 @@ function show([h, t], mark) { $("h").textContent = h; $("t").textContent = t; $(
   if (mark) { $("badge").textContent = mark === "ok" ? "\u2713" : "!"; $("badge").className = "badge " + mark; $("badge").hidden = false; } }
 function end(state, mark) { show(L[state], mark); $("open").textContent = L.open; $("open").hidden = false; }
 show(L.wait);
+// the sign-in is done and held for the Mini App: the start link (tried at once unless it already went nowhere from this
+// browser: a browser may ask or refuse without a tap), its button, and "Doesn't open?" for a browser where t.me opens
+// nothing (Telegram's own on Android shows it as a web page): then "Link to <name>?", and the app takes the sign-in
+// when it is back in sight
+function done(claim, name, auto) {
+  const go = "https://t.me/__BOT__?startapp=ms_" + claim;
+  end("ok", "ok"); $("open").href = go; $("stuck").textContent = L.stuck; $("stuck").hidden = false;
+  $("stuck").onclick = () => { show([L.ask[0].replace("{name}", name), L.ask[1]], ""); $("badge").hidden = $("open").hidden = $("stuck").hidden = true;
+    $("yes").textContent = L.yes; $("yes").hidden = false; };
+  $("yes").onclick = async () => { $("yes").hidden = true; $("w").hidden = false;
+    const r = await fetch("/api/ms/release", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim }) }).catch(() => null);
+    if (r && r.ok) show(L.here, "ok"); else end("fail", "bad"); };
+  if (auto) { try { localStorage.setItem("ms_went", Date.now()); } catch {} location.href = go; }
+}
+const kept = () => { try { const k = JSON.parse(sessionStorage.getItem("ms") || "null"); return k && Date.now() - k.at < 9e5 ? k : null; } catch { return null; } };
 (async () => {
   const code = q.get("code"), state = q.get("state");
   // Microsoft's own refusals come back as error=: a cancel, or an account from outside KBTU (AADSTS50020 a personal or
   // another directory's account, 50034 no such user in KBTU's)
   const nope = (e, d) => /AADSTS500(20|34)/.test(d || "") ? "notKbtu" : e === "access_denied" ? "nope" : "fail";
   if (q.get("error")) return end(nope(q.get("error"), q.get("error_description")), "bad");
+  // Back from t.me to this page, or through Microsoft again (the same link: used): the finished sign-in, not "didn't work"
+  const k = kept();
+  if (k && (!state || state === k.state)) return done(k.claim, k.name, false);
   if (!code || !state) return end("fail", "bad");
   const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : r.status === 404 ? 404 : null);
   if (v === 404) return end("expired", "bad");  // the link is older than 15 minutes (or not ours)
   if (!v) return end("fail", "bad");
-  // no "link to <name>?" tap any more (owner, Nov 13): the claim below lands only on the Telegram that started the sign-in,
-  // so a forwarded link ties nothing whoever finishes it here
+  // no "link to <name>?" tap on the usual way (owner, Nov 13): the claim below lands only on the Telegram that started the
+  // sign-in, so a forwarded link ties nothing whoever finishes it here
   const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
@@ -2685,8 +2710,9 @@ show(L.wait);
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
   // the app's start link carries a one-time claim that only the Telegram which started the sign-in can take (so a
-  // forwarded sign-in link binds nothing). Tried at once (a browser may ask or refuse without a tap), the button stays for that
-  if (r.ok) { const go = "https://t.me/__BOT__?startapp=ms_" + j.claim; end("ok", "ok"); $("open").href = go; location.href = go; return; }
+  // forwarded sign-in link binds nothing). It went nowhere from this browser within the hour: no second try by itself
+  if (r.ok) { let went = 0; try { sessionStorage.setItem("ms", JSON.stringify({ state, claim: j.claim, name: v.name, at: Date.now() })); went = +localStorage.getItem("ms_went"); } catch {}
+    return done(j.claim, v.name, !(Date.now() - went < 36e5)); }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

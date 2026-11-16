@@ -36,7 +36,8 @@
   }
   $effect(() => {
     if (!away) return;
-    const back = () => { if (!document.hidden) void loadMe(); };
+    // first the sign-in the browser released for me, if its start link opened nothing (/ms.html's "Doesn't open?"): 403 when none
+    const back = () => { if (!document.hidden) void api.msClaim('').catch(() => {}).then(() => loadMe()); };
     document.addEventListener('visibilitychange', back);
     const off = on('activated', back);
     return () => { document.removeEventListener("visibilitychange", back); off(); };
