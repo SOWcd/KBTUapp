@@ -4636,7 +4636,10 @@ def test_app_team(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    assert not sent and logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"   # the bot keeps quiet
+    # the bot keeps quiet to him. Only his chat counts: send_due also runs the chores, and on a Monday from 9:00 (Almaty)
+    # stats.week() sends the owner (a founder here) the week's digest (was: `not sent`, which failed every Monday)
+    assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
+    assert logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"
     assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200
 
     log = c.get("/api/admin/audit", headers=O).json()
