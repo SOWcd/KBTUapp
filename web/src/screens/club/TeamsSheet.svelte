@@ -4,7 +4,10 @@
   // the rest; a person's ⌃⌄ moves them to another team or to none, after a confirm. All fixed once the event starts.
   // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py).
   // A paid event: a player whose receipt nobody checked yet is marked too, and Form teams waits for them; a refund is
-  // recorded by rejecting the receipt in the attendees list, which takes the player out of the team.
+  // recorded by rejecting the receipt in the attendees list, which takes the player out of the team. A short team says
+  // how many it lacks; a paid event's top line counts short teams and paid players with none. Form teams completes the
+  // fullest team first; once sign-up closed it fills every short team, before that only those looking (or all, if the
+  // organizer says so in a second question).
   import { teamSize } from '../../lib/teams';
   import { onMount } from 'svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -49,10 +52,12 @@
 
   let forming = $state(false);
   async function form() {
-    if (!b || forming || !(await sheets.ask({ title: t('tm.formAsk'), text: t('tm.formText'), ok: t('tm.form'), cancel: t('common.cancel') }))) return;
+    if (!b || forming || !(await sheets.ask({ title: t('tm.formAsk'), text: t(b.regShut ? 'tm.formTextAll' : 'tm.formText'), ok: t('tm.form'), cancel: t('common.cancel') }))) return;
+    const closedShort = !b.regShut && b.teams.some((x) => !x.open && x.members.length < b!.max);
+    const all = closedShort && (await sheets.ask({ title: t('tm.fillAllAsk'), text: t('tm.fillAllText'), ok: t('tm.fillAll'), cancel: t('tm.onlyOpen') }));
     forming = true; haptic.tap();
     try {
-      b = await api.teamsForm(id);
+      b = await api.teamsForm(id, all);
       const skipped = b.noConsent ? ' · ' + t('tm.skipped', { n: b.noConsent }) : ''; // no consent yet: not placed
       if (!b.placed) { haptic.soft(); say(t('tm.nothing') + skipped, 'thinking_face_3d'); }
       else { haptic.ok(); say((b.left ? t('tm.formedLeft', { n: b.placed, left: b.left }) : t('tm.formed', { n: b.placed })) + skipped, 'party_popper_3d'); }
@@ -64,13 +69,14 @@
 <Sheet {overlay} icon={UsersRound} full title={t('tm.board')}>
   {#if b}
     <p class="t-foot sub">{b.cap ? t('tm.sizeCap', { size: teamSize(b.min, b.max), cap: b.cap }) : t('tm.size', { size: teamSize(b.min, b.max) })}{b.locked ? ' · ' + t('tm.locked') : ''}</p>
+    {#if b.paid}<p class="t-foot sub">{t('tm.summary', { short: b.teams.filter((x) => x.members.length < b!.max).length, solo: b.solo.length })}</p>{/if}
     {#if b.unchecked.length}<p class="t-foot sub">{t('tm.uncheckedNote', { n: b.unchecked.length })}</p>{/if}
     {#if !b.teams.length && !b.solo.length}
       <EmptyState inline text={t('tm.none')} />
     {:else}
       <div class="list">
         {#each b.teams as tm (tm.id)}
-          <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.open && tm.members.length < b.max ? ' · ' + t('tm.looking') : ''}">
+          <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.members.length < b.max ? ' · ' + t('tm.shortBy', { n: b.max - tm.members.length }) : ''}{tm.open && tm.members.length < b.max ? ' · ' + t('tm.looking') : ''}">
             {#each tm.members as p (p.id)}
               <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} value={b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : menuOf(p, tm.id)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}

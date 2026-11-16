@@ -860,6 +860,7 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
             # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a
             # free one (1st-year seat), not one on an event free now, not one paid by a newer receipt
             if c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
+                evteams.left(con, e["id"], c["user_id"])  # the captain hears it
                 con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
                 con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
                 notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}")
@@ -882,6 +883,7 @@ def unregister(con, v: Viewer, eid: int) -> dict:
         if not signup_open(e):
             raise ApiError("closed")
         freed = r["status"] in ("going", "hold")
+        evteams.left(con, eid, v.id)  # the captain hears it
         con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'self', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
             WHERE id = ?""", (core.now(), r["id"]))
         con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (v.id, f"event:{eid}:%"))

@@ -322,7 +322,7 @@ export const server = {
   teamRemove: (id: Id, user: Id): Promise<EventFull> => call('DELETE', `/events/${id}/team/members/${user}`),
   teamInvite: (token: string): Promise<TeamInvite> => call('GET', `/team-invites/${encodeURIComponent(token)}`),
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
-  teamsForm: (id: Id): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`),
+  teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
   /** the host club's member asks its President or a Vice to come as a guest, or takes it back; they list and answer */
   teamAsk: (id: Id): Promise<EventCard> => call('POST', `/events/${id}/team-ask`),

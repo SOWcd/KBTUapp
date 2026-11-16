@@ -224,8 +224,8 @@ def test_waitlist(club):
     (2, 5, 0, [], [], 0),                 # nothing to do
     (4, 5, 7, [], [5], 2),                # 7 alone, 4..5: one full team, two left (fewer than 4)
     (3, 3, 10, [], [3, 3, 3], 1),
-    (2, 4, 6, [3, 1], [2], 0),            # open teams first, smallest first (1 -> 4, then 3 -> 4), the rest new
-    (2, 4, 2, [1, 3], [], 0),             # both go to the open teams: the one of 1 takes them (smallest first)
+    (2, 4, 6, [3, 1], [2], 0),            # open teams first, fullest first (3 -> 4, then 1 -> 4), the rest new
+    (2, 4, 2, [1, 3], [], 0),             # both go to the open teams: the one of 3 completes first, the one of 1 gets the other
     (2, 10, 25, [], [9, 8, 8], 0),
 ])
 def test_form_teams_shapes(club, lo, hi, solos, open_teams, want_new, want_left):
@@ -259,7 +259,7 @@ def test_form_teams_shapes(club, lo, hi, solos, open_teams, want_new, want_left)
     assert all(t["captain"] == t["members"][0]["id"] for t in new)
     if open_teams:
         assert len(next(t for t in r["teams"] if t["id"] == closed)["members"]) == 1
-        assert sorted(len(t["members"]) for t in r["teams"] if t["name"].startswith("Open")) == ([3, 3] if solos == 2 else [hi, hi])
+        assert sorted(len(t["members"]) for t in r["teams"] if t["name"].startswith("Open")) == ([2, 4] if solos == 2 else [hi, hi])
     assert r["placed"] == solos - want_left
     # placed people hear it, once; run again: nothing moves
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'team_placed'").fetchone()[0] == r["placed"]

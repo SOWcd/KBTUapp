@@ -114,7 +114,7 @@
       </div>
       {#if until}<Notice tone={until < nowTs() ? 'danger' : 'warning'} text={until < nowTs() ? t('pay.expired') : t('pay.until', { time: time(until) })} />{/if}
       <Notice tone="accent" icon={TelegramMark} text={t('pay.bot')} />
-      <p class="fs-sub faint note">{t('pay.note')}</p>
+      <p class="fs-sub faint note">{t(e.teamMax ? 'pay.teamNote' : 'pay.note')}</p>
       <div class="rel"><Button kind="plain" size="m" onclick={release}>{t('pay.release')}</Button></div>
     </div>
   {/if}

@@ -359,6 +359,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not x or x["status"] != kind.split("_")[1]:
             return None
         return (*texts.bot_message(lang, kind, org=e["org_name"], **ev(e)), f"ev_{e['id']}")
+    if kind == "team_left":  # tl:<event>:<team>:<when>, evteams.left: to its captain while the team stands and the event hasn't started
+        e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND starts_at > ?", int(ref[1]), logic.now())
+        if not e or not one(con, "SELECT 1 FROM event_team_members WHERE team_id = ? AND user_id = ?", int(ref[2]), m["user_id"]):
+            return None
+        return (*texts.bot_message(lang, kind, **ev(e)), f"ev_{e['id']}")
     if kind in ("team_placed", "team_removed", "team_missed"):  # tp:<event>:<team> / tr: / tm:<event>:<when>, evteams.py; quiet once it started or changed since
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND starts_at > ?", int(ref[1]), logic.now())
         x = e and one(con, "SELECT team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"])

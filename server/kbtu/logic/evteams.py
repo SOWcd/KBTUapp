@@ -24,6 +24,12 @@ captain paying for others. The payment-state rule:
   can take; a team still under min at the deadline loses its slot by the organizer's move (team null), and the captain
   can't remove anyone after the sign-up deadline (Form teams places the rest before the start).
 - price: a team event can't turn paid while anyone is signed up (they'd stay in their teams unpaid).
+- Form teams completes teams, it doesn't spread people: the fullest short team first (a team of 4 gets the fifth before
+  a team of 1 gets anyone). Before the sign-up deadline it fills only teams marked open; once the deadline passed (or
+  the organizer confirms "fill all"), every short team, open or not, so closed teams of 4 can't strand paid soloists
+  (the Fable review, hole 1). Still only checked receipts, as above.
+- a paid player leaving a team (a self-cancel, a rejected receipt): its captain hears it from the bot (left()); no
+  money rule changes with it.
 
 The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
@@ -212,6 +218,8 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
         WHERE r.event_id = ? AND r.status = 'going' AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
         ORDER BY r.created_at, r.id""", eid)
     return {"min": e["team_min"], "max": e["team_max"], "cap": e["team_cap"], "locked": e["starts_at"] <= core.now(),
+            "regShut": bool(e["reg_until"] and e["reg_until"] <= core.now()),  # Form teams fills every short team now
+            "paid": bool(e["price"]),
             "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"])} for p in solo], "unchecked": unchecked}
 
 
@@ -425,9 +433,10 @@ def _team_word(con, v: Viewer) -> str:
     return texts.pick(texts.TEAM_NAME, lang[0] if lang else "ru")
 
 
-def form(con, v: Viewer, eid: int) -> dict:
-    """"Form teams": the open teams filled up to max from those alone (the smallest team first, people in the order they
-    signed up), then new teams of the rest (sizes(), no more than the cap leaves room for), each named "<Team> N" in the organizer's language, its first member
+def form(con, v: Viewer, eid: int, fill_all: object = False) -> dict:
+    """"Form teams": the open teams filled up to max from those alone (the fullest short team first, so teams are
+    completed rather than spread; people in the order they signed up); after the sign-up deadline, or with fill_all (the
+    organizer confirmed it), every short team, open or not; then new teams of the rest (sizes(), no more than the cap leaves room for), each named "<Team> N" in the organizer's language, its first member
     captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. A banned user
     is never placed, nor anyone without the teams consent (`noConsent`: how many), nor on a paid event anyone whose
     receipt the organizer hasn't checked (`unchecked` in the list). Everyone placed hears it from the bot.
@@ -437,6 +446,7 @@ def form(con, v: Viewer, eid: int) -> dict:
         if e["team_max"] is None:
             raise ApiError("not_found")
         _open_now(e)
+        every = fill_all is True or bool(e["reg_until"] and e["reg_until"] <= core.now())
         alone = rows(con, """SELECT r.user_id, c.user_id IS NOT NULL AS ok FROM registrations r JOIN users u ON u.id = r.user_id AND u.banned_at IS NULL
             LEFT JOIN team_consents c ON c.user_id = r.user_id AND c.version = ?
             WHERE r.event_id = ? AND r.status = 'going' AND (? OR {_CHECKED})
@@ -445,7 +455,7 @@ def form(con, v: Viewer, eid: int) -> dict:
         solo = [r[0] for r in alone if r[1]]
         placed: list[tuple[int, int]] = []
         for t in rows(con, """SELECT t.id, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
-                WHERE t.event_id = ? AND t.open = 1 GROUP BY t.id ORDER BY n, t.id""", eid):
+                WHERE t.event_id = ? AND (t.open = 1 OR ?) GROUP BY t.id ORDER BY n DESC, t.id""", eid, int(every)):
             for _ in range(min(e["team_max"] - t["n"], len(solo))):
                 placed.append((t["id"], solo.pop(0)))
         word, n = _team_word(con, v), 0
@@ -492,6 +502,15 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
         elif now_in:
             notify(con, uid, "team_removed", f"tr:{eid}:{core.now()}")  # as the captain's remove
     return teams_list(con, v, eid)
+
+
+def left(con, eid: int, uid: int) -> None:
+    """Before a player's ticket ends (a self-cancel, a rejected receipt; the trigger then takes them out): the team's
+    captain hears a player left (the next in line if the captain is the one leaving). Who left isn't in the message."""
+    m = one(con, "SELECT id, team_id FROM event_team_members WHERE event_id = ? AND user_id = ?", eid, uid)
+    cap = m and one(con, "SELECT user_id FROM event_team_members WHERE team_id = ? AND user_id != ? ORDER BY id LIMIT 1", m["team_id"], uid)
+    if cap:  # the ref's last part: the membership row that ended (one message per leaving, no user id)
+        notify(con, cap[0], "team_left", f"tl:{eid}:{m['team_id']}:{m['id']}")
 
 
 def cancelled(con, eid: int) -> None:

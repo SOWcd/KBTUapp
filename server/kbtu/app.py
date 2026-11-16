@@ -876,8 +876,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.evteams.teams_list(con, v, eid)
 
     @app.post("/api/events/{eid}/teams/form")
-    def teams_form(eid: int, con: Con, v: Me):
-        return logic.evteams.form(con, v, eid)
+    def teams_form(eid: int, con: Con, v: Me, body: dict = Body(default={})):
+        return logic.evteams.form(con, v, eid, body.get("all", False))  # all: every short team, open or not
 
     @app.put("/api/events/{eid}/teams/people/{uid}")
     def teams_move(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):

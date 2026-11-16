@@ -5,7 +5,9 @@
   // if refused. Teams' own consent (lib/teamConsent.ts): asked before a team of my own; one signed up without it (the
   // event became a team event later) gives it here; anyone takes it back here (out of the teams of events not started).
   // A paid event: each pays their own ticket; a team is made after the receipt; a seat on hold by an invite link shows
-  // the team it will join once the receipt is in; paid by a link whose team had no room left: said here.
+  // the team it will join once the receipt is in; paid by a link whose team had no room left: said here. Until I'm in a
+  // team, a paid event says how it works in three short steps (the first ticked once my ticket is in); no promise the
+  // app can't keep: placing those without a team is the organizer's (Form teams).
   import { teamSize } from '../../lib/teams';
   import { copyText } from '../../ui/copy';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -13,12 +15,14 @@
   import Copy from '@lucide/svelte/icons/copy';
   import Search from '@lucide/svelte/icons/search';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Wallet from '@lucide/svelte/icons/wallet';
+  import Shuffle from '@lucide/svelte/icons/shuffle';
   import { api, ApiErr, type EventFull, type EventTeam, type EventTeams } from '../../lib/api';
   import { errorText } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { say } from '../../lib/state/ui.svelte';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, money } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { setTeamConsent, teamConsentOk } from '../../lib/teamConsent';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -84,6 +88,13 @@
   }
 </script>
 
+{#if detail.price && !team && !tm.locked}
+  <Group caption={t('tm.howTitle')}>
+    <Row dense icon={Wallet} title={t('tm.how1', { price: money(detail.price) })} accessory={going ? 'check' : 'none'} checked={going} />
+    <Row dense icon={UsersRound} title={t('tm.how2')} />
+    <Row dense icon={Shuffle} title={t('tm.how3')} />
+  </Group>
+{/if}
 {#snippet edit()}<Button kind="gray" size="s" onclick={rename}>{t('tm.rename')}</Button>{/snippet}
 {#if team}
   <Group caption={t('tm.yours')} footnote={captain && !tm.locked && team.members.length < tm.max ? t('tm.openHint') : undefined}>
@@ -104,7 +115,7 @@
   </Group>
   {#if !tm.locked}<span class="out"><Button kind="plain" size="s" onclick={leave}>{t('tm.leave')}</Button></span>{/if}
 {:else if going && !tm.locked}
-  <Group footnote={tm.missed ? t('tm.missed') : agreed ? t('tm.waitingSub') : t('tm.consentNeed')}>
+  <Group footnote={tm.missed ? t('tm.missed') : !agreed ? t('tm.consentNeed') : detail.price ? undefined : t('tm.waitingSub')}>
     <Row icon={UsersRound} title={t('tm.waiting')} subtitle={t('tm.size', { size: teamSize(tm.min, tm.max) })} />
     {#if !agreed}<Row icon={ShieldCheck} tone="action" title={t('tm.consentRow')} onclick={() => setTeamConsent(true)} />{/if}
     <Row tone="add" title={t('tm.create')} disabled={making} onclick={create} />
@@ -112,7 +123,7 @@
 {:else if tm.want && detail.my?.status === 'hold' && !tm.locked}
   <Group footnote={t('tm.wantSub')}><Row icon={UsersRound} title={t('tm.want', { name: tm.want })} subtitle={t('tm.size', { size: teamSize(tm.min, tm.max) })} /></Group>
 {:else}
-  <Group footnote={detail.price && !tm.locked ? t('tm.paidNote') : undefined}><Row icon={UsersRound} title={t('tm.event')} subtitle={tm.cap ? t('tm.sizeCap', { size: teamSize(tm.min, tm.max), cap: tm.cap }) : t('tm.size', { size: teamSize(tm.min, tm.max) })} /></Group>
+  <Group><Row icon={UsersRound} title={t('tm.event')} subtitle={tm.cap ? t('tm.sizeCap', { size: teamSize(tm.min, tm.max), cap: tm.cap }) : t('tm.size', { size: teamSize(tm.min, tm.max) })} /></Group>
 {/if}
 {#if going && agreed && !tm.locked}<span class="off"><Button kind="plain" size="s" onclick={withdraw}>{t('tm.offRow')}</Button></span>{/if}
 
