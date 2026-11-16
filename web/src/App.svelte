@@ -11,6 +11,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
+  import { loadSubjects } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, opened } from './lib/greet';
@@ -133,6 +134,8 @@
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
+  // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
+  const warmSubjects = () => { if (session.me?.subjects) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
   sheets.deepLink = (p) => deepLink(p);
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone });
@@ -255,6 +258,8 @@
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
   sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
   sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {}, 'sheet.week');
+  sheets.subjects = () => asStudent(() => { void loadSubjects(true); return lazy(() => import('./screens/subjects/Subjects.svelte'), {}); });
+  sheets.subject = (id) => asStudent(() => { void loadSubjects(); return lazy(() => import('./screens/subjects/Subject.svelte'), { id }); });
   sheets.forum = (ask) => lazy(() => import('./screens/forum/Forum.svelte'), { ask });
   sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
   sheets.newAsk = (onmade) => lazy(() => import('./screens/forum/NewAsk.svelte'), { onmade });
@@ -520,6 +525,8 @@
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
     if (fp) { channel.focus = fp[1] ? Number(fp[1]) : null; if (session.channel) ui.tab = 'forum'; return; }
+    const sj = p.match(/^sj_([0-9a-f]{10})$/); // the bot: my listing on a subject was hidden: its card
+    if (sj) { sheets.subject(sj[1]); return; }
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link (Nov 2: the one link): noted for them as a referral,
@@ -792,7 +799,7 @@
       // mine, if the browser released one (403 otherwise: one read, no write)
       if (session.me && !session.me.student?.ms && !session.me.msPending && !tg.startParam?.startsWith('ms_'))
         void api.msClaim('').then(async () => { await loadMe(); haptic.ok(); if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); msBack(true); }, () => {});
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(prebuild, 2500);
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       // DMP at a computer: its registry, wide, instead of the phone hint (once per launch; Back leaves it for the app)
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);

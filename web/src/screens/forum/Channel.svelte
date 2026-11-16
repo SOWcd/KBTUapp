@@ -28,6 +28,7 @@
   import { menu } from '../../ui/menu';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import BookOpen from '@lucide/svelte/icons/book-open';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Avatar from '../../ui/Avatar.svelte';
   import { initials } from '../../ui/OrgLogo.svelte';
@@ -217,6 +218,14 @@
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
   <!-- the other way to speak up (APPEALS): a post is for everyone, an appeal goes to the Student Government alone -->
+  <!-- the subjects' cards (SUBJECTS_FILE): find people to study a subject with -->
+  {#if me?.subjects}
+    <button class="appeal" onclick={() => { haptic.tap(); sheets.subjects(); }}>
+      <span class="seat" aria-hidden="true"><BookOpen size={18} strokeWidth={2} /></span>
+      <span class="aw"><b class="ellipsis">{t('sj.row')}</b><span class="as">{t('sj.rowSub')}</span></span>
+      <span class="chev" aria-hidden="true"><ChevronRight size={18} /></span>
+    </button>
+  {/if}
   {#if me?.appeals}
     <button class="appeal" onclick={() => { haptic.tap(); sheets.appeals(); }}>
       <span class="seat" aria-hidden="true"><Megaphone size={18} strokeWidth={2} /></span>

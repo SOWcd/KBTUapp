@@ -176,6 +176,9 @@ export const sheets = {
   schedHowTo: () => {},
   /** my whole week of classes */
   week: () => {},
+  /** the subjects' cards: the list with its search; one subject's card (who's looking for study partners) */
+  subjects: () => {},
+  subject: (_id: string) => {},
   /** the forum (F1 find people), a request opened in it */
   forum: (_ask?: Id) => {},
   forumSkills: (_onsaved?: () => void) => {},

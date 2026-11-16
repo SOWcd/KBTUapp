@@ -294,6 +294,7 @@ export interface Me {
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
+  subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in
   teams?: { consent: boolean };   // GET /api/me only: my own consent to team events (server evteams.CONSENT)
   reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
@@ -769,7 +770,7 @@ export interface Ask {
 export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
 /** What waits for a moderator: held requests (the AI said no or couldn't tell) and reported ones, each due a day on */
 export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
-export interface ForumMod { held: ModAsk[]; skills: Skill[] }
+export interface ForumMod { held: ModAsk[]; skills: Skill[] | null /* null: the forum is off, only subjects' listings wait here */ }
 export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }
 
 /** The volunteers ledger of one club (server logic/vol.py). minutes: the starting balance + closed shifts (one never
@@ -805,3 +806,10 @@ export interface Solved { id?: Id; raised: string; changed: string; topic: Appea
 export interface SgQueue { items: Appeal[]; months: { month: string; total: number; topics: Partial<Record<AppealTopic, number>> }[] }
 export interface AppealHelp { tips: string[]; care?: boolean; help?: string } // help: the helplines (signs of self-harm)
 export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }
+
+// the subjects' cards (server logic/subjects.py): one per subject name (its codes), "looking for people to study it with"
+export interface Subject { id: string; name: string; codes: string[] }
+export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
+export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
+  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
+export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null }

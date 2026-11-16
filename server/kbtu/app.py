@@ -249,6 +249,31 @@ def forum_viewer(request: Request, v: Me, con: Con) -> Viewer:
 Forum = Annotated[Viewer, Depends(forum_viewer)]
 
 
+def ask_mod_viewer(request: Request, v: Me, con: Con) -> Viewer:
+    """The find-people requests' moderation (Admin): the forum's, and a subject's listings (SUBJECTS_FILE) for the staff."""
+    if v.role in ("admin", "moderator") and logic.subjects.on(request.app.state.cfg.subjects_file):
+        return v
+    return forum_viewer(request, v, con)
+
+
+AskMod = Annotated[Viewer, Depends(ask_mod_viewer)]
+
+
+def subj_writer(request: Request, v: Me, con: Con) -> Viewer:
+    """Listing myself on a subject: a student Microsoft confirmed (others see the name), on the policy in force (its
+    section 3 names find-people requests): an earlier one gets the in-place gate (forbidden/consent), never on opening."""
+    logic.need_student(v)
+    s = logic.one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", v.id)
+    if not s or s["manual"]:
+        raise ApiError("need_student")
+    if not logic.account.on_policy(s["consent_version"], request.app.state.policy) and s["consent_version"] not in ("staff", "admin"):
+        raise ApiError("forbidden", "consent")
+    return v
+
+
+SubjWrite = Annotated[Viewer, Depends(subj_writer)]
+
+
 def board_on(cfg, v: Viewer) -> bool:
     """The policy's section 12 is in force for this person (BOARD=1 everyone, BOARD=staff the admins and moderators):
     the assistant, an event's sign-up questions, the map's flaws. Its old in-app forum is off for good (its code removed):
@@ -453,6 +478,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def get_me(con: Con, v: Me):
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
+                                   **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **({"reports": logic.evreports.summary(con, v)} if app.state.cfg.reports else {}),  # Studio's event reports (REPORTS): my consent
                                    "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
@@ -2492,15 +2518,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.close_ask(con, v, aid, body.get("found"))
 
     @app.get("/api/forum/mod")
-    def forum_mod(con: Con, v: Forum):
-        return logic.mod_queue(con, v)
+    def forum_mod(con: Con, v: AskMod):
+        return logic.mod_queue(con, v, cfg.forum or cfg.forum_founder)
 
     @app.post("/api/forum/asks/{aid}/hide", status_code=204)
-    def forum_hide_ask(aid: int, con: Con, v: Forum):
+    def forum_hide_ask(aid: int, con: Con, v: AskMod):
         logic.mod_hide_ask(con, v, aid)
 
     @app.post("/api/forum/asks/{aid}/release")
-    def forum_release_ask(aid: int, con: Con, v: Forum):
+    def forum_release_ask(aid: int, con: Con, v: AskMod):
         return logic.release_ask(con, v, aid)
 
     @app.get("/api/forum/asks/{aid}/people")
@@ -2524,6 +2550,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not isinstance(body.get("yes"), bool) or not logic.decide_contact(con, v.id, cid, body["yes"]):
             raise ApiError("not_found")
         return logic.contacts(con, v)
+
+    # ------------------------------------------------------------ the subjects' cards (logic/subjects.py; SUBJECTS_FILE)
+    @app.get("/api/subjects")
+    def subjects_list(con: Con, v: Me):
+        return logic.subjects.subjects(con, v, cfg.subjects_file)
+
+    @app.get("/api/subjects/{sid}")
+    def subject_card(sid: str, con: Con, v: Me):
+        return logic.subjects.card(con, v, cfg.subjects_file, sid)
+
+    @app.put("/api/subjects/{sid}/me")
+    async def subject_join(sid: str, con: Con, v: SubjWrite, body: dict = Body(default={})):
+        logic.subjects.catalogue(cfg.subjects_file)  # off: 404 before the AI is asked
+        note = logic.subjects.note_of(body)
+        verdict = await screen(note) if note else True  # no answer: held for a moderator
+        return await run_in_threadpool(logic.subjects.join, con, v, cfg.subjects_file, sid, note, verdict)
+
+    @app.delete("/api/subjects/{sid}/me", status_code=204)
+    def subject_leave(sid: str, con: Con, v: Me):
+        logic.subjects.leave(con, v, sid)
+
+    @app.post("/api/subjects/offer")
+    def subject_offer(con: Con, v: SubjWrite, body: dict = Body(...)):
+        logic.subjects.catalogue(cfg.subjects_file)
+        return logic.subjects.offer(con, v, body.get("ask"))
 
     @app.post("/api/forum/blocks", status_code=204)
     def forum_block(con: Con, v: Me, body: dict = Body(...)):  # every student: the student forum hides blocked people too

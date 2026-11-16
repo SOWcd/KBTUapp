@@ -54,6 +54,8 @@ name, else its folder's, is the intake.
 
 The timetable scrape never goes in the repo. `python3 -I server/tools/rooms.py <progress.json> rooms.json` (busy hours by
 room only), copy it next to the database (`/var/lib/kbtu/rooms.json`) or point `ROOMS_FILE` at it; no file: no "Free now".
+`python3 -I server/tools/subjects.py <progress.json> subjects.json` (names and codes only), next to the database or
+`SUBJECTS_FILE`; no file: no subjects' cards.
 
 ## Contributing
 

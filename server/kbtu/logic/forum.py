@@ -215,7 +215,7 @@ def asks(con, v: Viewer, skill: object = None) -> list[dict]:
     by = "AND EXISTS (SELECT 1 FROM ask_skills k WHERE k.ask_id = a.id AND k.skill_id = :skill)" if isinstance(skill, int) else ""
     found = con.execute(f"""SELECT a.* FROM asks a WHERE a.expires_at > :now AND (a.user_id = :me OR (a.status = 'live'
             AND {_UNBLOCKED.format(u='a.user_id')} AND a.id NOT IN (SELECT target_id FROM reports WHERE target = 'ask'
-                AND reporter_id = :me AND status = 'open'))) {by}
+                AND reporter_id = :me AND status = 'open'))) AND a.subject IS NULL {by}
         ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": _now(), "me": v.id, "skill": skill}).fetchall()
     return [_ask_shape(con, v, a) for a in found]
 
@@ -233,7 +233,7 @@ def create_ask(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
     with tx(con):
         if ids and len(rows(con, f"SELECT id FROM skills WHERE id IN ({','.join('?' * len(ids))})", *ids)) != len(ids):
             raise ApiError("bad_input")
-        if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ?", v.id, _now())[0] >= OPEN_ASKS:
+        if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ? AND subject IS NULL", v.id, _now())[0] >= OPEN_ASKS:
             raise ApiError("rate_limited", "asks")
         status, why = ("live", None) if verdict else ("held", "ai" if verdict is False else "check")
         aid = con.execute("INSERT INTO asks (user_id, kind, title, body, status, why, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -274,8 +274,9 @@ def release_ask(con, v: Viewer, aid: int) -> dict:
     return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
 
 
-def mod_queue(con, v: Viewer) -> dict:
-    """What waits for a moderator: requests the AI didn't pass (or couldn't read), and skills not public yet."""
+def mod_queue(con, v: Viewer, catalog: bool = True) -> dict:
+    """What waits for a moderator: requests the AI didn't pass (or couldn't read), a subject's listings too
+    (logic/subjects.py), and skills not public yet (catalog: the forum is on; else null)."""
     _mod(v)
     held = [_ask_shape(con, v, a) | {"status": "held", "why": a["why"], "dueAt": a["created_at"] + DECIDE_IN}
             for a in rows(con, "SELECT * FROM asks WHERE status = 'held' AND expires_at > ? ORDER BY id", _now())]
@@ -285,7 +286,7 @@ def mod_queue(con, v: Viewer) -> dict:
             held.append(_ask_shape(con, v, a) | {"status": "reported", "why": "reports", "dueAt": at + DECIDE_IN})
     held.sort(key=lambda a: a["dueAt"])
     fresh = [s for s in (_skill(con, x) for x in rows(con, "SELECT * FROM skills WHERE approved = 0 ORDER BY created_at DESC LIMIT 100")) if not s["public"]]
-    return {"held": held, "skills": fresh}
+    return {"held": held, "skills": fresh if catalog else None}
 
 
 def mod_hide_ask(con, v: Viewer, aid: int) -> None:

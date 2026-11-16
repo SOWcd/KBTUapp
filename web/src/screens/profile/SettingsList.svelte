@@ -135,7 +135,7 @@
       <Row icon={ThemeGlyph} title={t('me.guestTheme')} value={t(`theme.${theme.current}`)} menu={(['dark', 'light'] as const).map((x) => ({ label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, glyph.el) }))} />
       {#if me?.student}
         <!-- updating and deleting the timetable, subscribing and resetting the calendar: each at its own row -->
-        {#if data.schedule.length && !me.deleteAt}<Row icon={CalendarPlus} title={t('set.schedule')} menu={[{ label: t('sched.update'), onselect: () => sheets.schedHowTo() }, { label: t('sched.del'), destructive: true, onselect: () => void dropWeek() }]} />
+        {#if data.schedule.length && !me.deleteAt}<Row icon={CalendarPlus} title={t('set.schedule')} menu={[{ label: t('sched.weekTitle'), onselect: () => sheets.week() }, { label: t('sched.update'), onselect: () => sheets.schedHowTo() }, { label: t('sched.del'), destructive: true, onselect: () => void dropWeek() }]} />
         {:else}<Row icon={CalendarPlus} title={t('set.schedule')} accessory="chevron" onclick={() => { haptic.tap(); sheets.schedHowTo(); }} />{/if}
         {#if me.deleteAt}<Row icon={CalendarDays} title={t('set.calShort')} accessory="external" onclick={() => { haptic.tap(); void subscribe(); }} />
         {:else}<Row icon={CalendarDays} title={t('set.calShort')} menu={[{ label: t('set.calSub'), onselect: () => void subscribe() }, { label: t('set.calReset'), destructive: true, onselect: () => void resetCal() }]} />{/if}

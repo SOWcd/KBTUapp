@@ -1807,6 +1807,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       tag_id INTEGER REFERENCES org_tags(id) ON DELETE CASCADE,
       at INTEGER NOT NULL,
       CHECK ((place = 'dept') = (tag_id IS NOT NULL))) STRICT;"""),
+    # (Nov 16) the subjects' cards (logic/subjects.py): "looking for people to study it with" is a find-people request
+    # on a subject (its card's id), one per person and subject; the requests' moderation, contact and expiry as they are
+    # and an offer's token (forum.contact): a bot button or message carries it, so a deleted offer's reused id never
+    # answers another (an old Accept naming Bob shared Ann's Telegram with Doug, review Nov 16); old rows keep NULL
+    (177, """ALTER TABLE asks ADD COLUMN subject TEXT;
+    CREATE UNIQUE INDEX asks_subject ON asks(subject, user_id) WHERE subject IS NOT NULL;
+    ALTER TABLE contacts ADD COLUMN token TEXT;"""),
 ]
 
 

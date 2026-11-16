@@ -205,9 +205,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
         if not p:
             return None
-        a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
+        a = one(con, "SELECT title, subject FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
         skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
-        text = texts.bot_message(lang, "contact_ask" if a else "contact_ask_plain", name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
+        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
     if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
@@ -219,9 +220,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         text, button = texts.bot_message(lang, kind, name=logic.short_name(p))
         return text, None, [[{"text": button, "url": logic.telegram_of(con, other)}]]
     if kind == "ask_hidden":  # ah:<request>, to its author: why it's gone from the lists
-        a = one(con, "SELECT title, why FROM asks WHERE id = ? AND status = 'hidden'", int(ref[1]))
+        a = one(con, "SELECT title, why, subject FROM asks WHERE id = ? AND status = 'hidden'", int(ref[1]))
         why = texts.pick(texts.ASK_WHY, lang).get(a["why"] or "") if a else None
-        return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"fa_{ref[1]}") if why else None
+        return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"sj_{a['subject']}" if a["subject"] else f"fa_{ref[1]}") if why else None
     if kind in ("backup_failed", "backup_ok", "userbot_off", "userbot_ok"):  # bf/bo:<day> to the admins; uo/ub:<since> to the owner
         return (*texts.bot_message(lang, kind), "")
     if kind in ("prefill_no_match", "prefill_other_id", "prefill_id_held"):  # pn/pf:<user>, ph:<user>:<holder>, to the owner (account.ms_link)

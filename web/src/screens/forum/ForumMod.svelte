@@ -57,6 +57,7 @@
       </Group>
     {/if}
 
+    {#if mod.skills}<!-- the forum off: a subject's listings alone, no catalog -->
     <Section title={t('fo.mod.catalog')}>
       <SearchField bind:value={q} placeholder={t('fo.mod.catalogPh')} />
       <Group>
@@ -80,6 +81,7 @@
         {/each}
       </Group>
     </Section>
+    {/if}
   </div>
 {/if}
 
