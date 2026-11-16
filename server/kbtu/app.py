@@ -2680,7 +2680,7 @@ show(L.wait);
 function done(claim, name, auto) {
   const go = "https://t.me/__BOT__?startapp=ms_" + claim;
   end("ok", "ok"); $("open").href = go; $("stuck").textContent = L.stuck; $("stuck").hidden = false;
-  $("stuck").onclick = () => { show([L.ask[0].replace("{name}", name), L.ask[1]], ""); $("badge").hidden = $("open").hidden = $("stuck").hidden = true;
+  $("stuck").onclick = () => { show([L.ask[0].replace("{name}", () => name), L.ask[1]], ""); $("badge").hidden = $("open").hidden = $("stuck").hidden = true;
     $("yes").textContent = L.yes; $("yes").hidden = false; };
   $("yes").onclick = async () => { $("yes").hidden = true; $("w").hidden = false;
     const r = await fetch("/api/ms/release", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim }) }).catch(() => null);

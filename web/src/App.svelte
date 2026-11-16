@@ -784,6 +784,10 @@
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
+      // a Microsoft sign-in whose way back opened nothing (/ms.html's "Doesn't open?") and the app was reopened since:
+      // mine, if the browser released one (403 otherwise: one read, no write)
+      if (session.me && !session.me.student?.ms && !session.me.msPending && !tg.startParam?.startsWith('ms_'))
+        void api.msClaim('').then(async () => { await loadMe(); haptic.ok(); if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); msBack(true); }, () => {});
       deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));

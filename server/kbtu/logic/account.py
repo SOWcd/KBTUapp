@@ -369,17 +369,19 @@ def ms_release(con, secret: str) -> None:
 
 def ms_claim(con, v: Viewer, secret: str) -> bool:
     """The Mini App's own step after the browser: only the Telegram that started the sign-in takes it (ms_apply's bool).
-    No secret: my newest sign-in the browser released (ms_release), when the start link didn't bring it."""
+    No secret: my newest sign-in the browser released (ms_release), when the start link didn't bring it. The secret from
+    another Telegram proves the link was forwarded: the hold is gone for good (review, Nov 16: it stayed, and the page's
+    "Doesn't open?" then led the one who signed in to release it to the link's sender)."""
+    if not secret:  # read first: no write lock for the usual "nothing waits"
+        mine = one(con, """SELECT key FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.uid') = ?
+            AND json_extract(value, '$.open') = 1 ORDER BY json_extract(value, '$.at') DESC LIMIT 1""", v.id)
+        secret = mine[0][len("ms_claim:"):] if mine else ""
     with tx(con):
-        if not secret:
-            mine = one(con, """SELECT key FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.uid') = ?
-                AND json_extract(value, '$.open') = 1 ORDER BY json_extract(value, '$.at') DESC LIMIT 1""", v.id)
-            secret = mine[0][len("ms_claim:"):] if mine else ""
         row = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"ms_claim:{secret}") if re.fullmatch(r"[\w-]{24}", secret) else None
         held = json.loads(row[0]) if row else None
-        if not held or held["uid"] != v.id or held["at"] < core.now() - MS_CLAIM_TTL:
-            raise ApiError("forbidden", "ms")
-        return ms_apply(con, v.id, held["who"])
+        if held and held["uid"] == v.id and held["at"] >= core.now() - MS_CLAIM_TTL:
+            return ms_apply(con, v.id, held["who"])
+    raise ApiError("forbidden", "ms")
 
 
 def ms_apply(con, uid: int, who: dict) -> bool:

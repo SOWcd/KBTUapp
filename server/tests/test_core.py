@@ -4202,6 +4202,10 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.post("/api/ms/claim", headers=tma(24), json=held).status_code == 403   # not the Telegram that asked
     assert c.post("/api/ms/claim", headers=tma(24), json={"claim": "x"}).status_code == 403
     assert c.get("/api/me", headers=tma(24)).json()["msPending"] is None
+    # ... and that proved the link was forwarded: the hold is gone, nothing left to release to its sender
+    assert c.post("/api/ms/release", json=held).status_code == 403
+    assert c.post("/api/ms/claim", headers=tma(23), json=held).status_code == 403
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid(23)), "token": token()}).json()
     assert c.post("/api/ms/claim", headers=tma(23), json=held).json() == {"ok": True}  # its starter's own app
     assert c.post("/api/ms/claim", headers=tma(23), json=held).status_code == 403      # once
     # the start link opened nothing (Telegram's own browser on Android): nothing is taken without the secret until the
@@ -4216,6 +4220,17 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.post("/api/ms/claim", headers=tma(25), json={"claim": ""}).json() == {"ok": True}
     assert c.post("/api/ms/claim", headers=tma(25), json={"claim": ""}).status_code == 403
     assert c.post("/api/ms/release", json=held).status_code == 403                           # taken: nothing to release
+    # released, then the start link opens after all: the secret still takes it, once; a released one past its 15 minutes: no
+    graph["id"] = "oid-9"
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid(26)), "token": token()}).json()
+    assert c.post("/api/ms/release", json=held).status_code == 204
+    assert c.post("/api/ms/claim", headers=tma(26), json=held).json() == {"ok": True}
+    assert c.post("/api/ms/claim", headers=tma(26), json={"claim": ""}).status_code == 403
+    graph["id"] = "oid-10"
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid(27)), "token": token()}).json()
+    assert c.post("/api/ms/release", json=held).status_code == 204
+    con.execute("UPDATE meta SET value = json_set(value, '$.at', json_extract(value, '$.at') - 901) WHERE key = ?", (f"ms_claim:{held['claim']}",))
+    assert c.post("/api/ms/claim", headers=tma(27), json={"claim": ""}).status_code == 403
     graph["id"] = "oid-1"
     me = c.get("/api/me", headers=tma(21)).json()
     assert "msCode" not in me
