@@ -226,6 +226,10 @@
   .gl { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; opacity: 0.16; mix-blend-mode: screen; pointer-events: none; }
 
   .medal { position: absolute; z-index: 3; top: 16px; right: 16px; width: 52px; height: 52px; }
+  /* CyberSport's panther is the card's hero, but here the ticket's facts sit on it: the art dimmed under the text,
+     clear at the right edge (owner, Nov 16: unreadable) */
+  .pass.cybersportkbtu .main::before { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(90deg, rgba(17, 4, 38, 0.9), rgba(17, 4, 38, 0.74) 60%, rgba(17, 4, 38, 0.3)); }
   /* a club without a lanyard: its logo set in a silver rim, as a medallion */
   .rim { display: block; padding: 3px; border-radius: var(--r-m); background: linear-gradient(145deg, white, rgb(176, 184, 202) 42%, rgb(244, 246, 251) 62%, rgb(140, 150, 172));
     box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.7), 0 2px 5px rgba(0, 0, 0, 0.28); }
@@ -265,6 +269,7 @@
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .pill { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
   .pill:active { transform: scale(0.96); }
+  .acts .pill { padding: 0 16px; } /* the calendar and the cancel in one row at 375: a second row ended up half under the x (owner, Nov 16) */
   .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
   .doubt { height: 40px; padding: 0 18px; color: #FFD27A; background-color: rgba(255, 176, 32, 0.18); font-size: 14px; }
 </style>
