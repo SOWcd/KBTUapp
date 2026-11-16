@@ -11,7 +11,7 @@
   import Copy from '@lucide/svelte/icons/copy';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import { api, ApiErr, type EventFull, type Id } from '../../lib/api';
-  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, overlays, say, type Overlay } from '../../lib/state/ui.svelte';
   import { eventById, put, toggleGoing } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
@@ -45,9 +45,12 @@
   let busy = $state(false);
   let picker = $state<HTMLInputElement>();
   function paid() {
-    haptic.ok(); burst(false, undefined, e?.emoji); say(t('pay.done'), 'party_popper_3d'); // the ticket: a moment
+    const team = e?.teamMax != null;
+    haptic.ok(); burst(false, undefined, e?.emoji); say(t(team ? 'pay.doneTeam' : 'pay.done'), 'party_popper_3d'); // the ticket: a moment
     close(overlay.id);
-    sheets.ticket(id);
+    // a team event: the next step is the team (the event page's block; the ticket is one tap away there), owner Nov 16
+    if (!team) sheets.ticket(id);
+    else if (!overlays.some((o) => !o.closing && o.stat === 'sheet.event' && o.props.id === id)) sheets.event(id);
   }
   async function upload(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];

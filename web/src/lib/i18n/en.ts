@@ -1486,6 +1486,7 @@ const en: Dict = {
   'pay.expired': "The hold expired. Tap Going again if seats are left",
   'pay.upload': "Upload the receipt",
   'pay.done': "The ticket is yours!",
+  'pay.doneTeam': "The ticket is yours! Now your team",
   'pay.release': "Release the seat",
   'pay.note': "The money goes straight to the organizers; the app never touches it. Refunds go through them too.",
   'pay.bot': "Fastest: in Kaspi tap “Share” → Telegram → KBTU\u00a0App. The ticket comes by itself.",
