@@ -113,3 +113,17 @@ def test_creator_on_the_event_path_is_always_logged(env):
     assert c.get("/api/events/1", headers=_as(60)).status_code == 200
     done = [json.loads(d)["do"] for (d,) in con.execute("SELECT data FROM audit_log WHERE action = 'staff_event'")]
     assert done == ["PUT /api/events/{eid}/crew"]
+
+
+def test_creator_gives_roles(env):
+    """Roles from the lent Studio (Codex's review, Nov 16: every one was refused, his own absent membership was read):
+    the creator gives any level below President; viewed as a Head he gives none."""
+    c, con, ids = _full_setup(env)
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (ids["ali"],))
+    url = f"/api/orgs/1/members/{ids['ali']}"
+    assert c.patch(url, headers={**_org(60), "X-Staff-Role": "head"}, json={"role": "head", "roleId": None}).status_code == 403
+    for role in ("head", "vice", "member"):
+        assert c.patch(url, headers=_org(60), json={"role": role, "roleId": None}).status_code == 200, role
+        assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ids["ali"],)).fetchone()[0] == role
+    assert c.patch(url, headers=_org(60), json={"role": "president", "roleId": None}).status_code == 403
+    assert c.patch(url, headers=tma(60), json={"role": "head", "roleId": None}).status_code == 403  # no header: nothing lent

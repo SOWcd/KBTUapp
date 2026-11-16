@@ -23,8 +23,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
     mine = role_in(con, v, oid)
     if not mine:
         raise ApiError("forbidden")
-    r = rights_of(con, v.id, oid)
-    vice, head = "team" in r, "people" in r
+    vice, head = can(con, v, oid, "team"), can(con, v, oid, "people")
     found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, {core.TITLES}, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
@@ -76,6 +75,13 @@ def depts_of(con, oid: int, uid: int, own: bool = False) -> list[int]:
     hand, the ones a Head manages; one the chat sync gave (member_tags.sync) never adds to a Head's powers."""
     return [r[0] for r in rows(con, f"""SELECT g.id FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
         WHERE g.org_id = ? AND mt.user_id = ? AND g.department = 1 {"AND mt.sync = 0" if own else ""} ORDER BY g.id""", oid, uid)]
+
+
+def _has(con, v: Viewer, oid: int, rights) -> bool:
+    """Every one of these rights is mine here (a role is given and edited only within them, as in Telegram): my own, or
+    the ones lent to the creator from Admin, as the role he views the club as. Reports are never lent (core.can), so
+    a role that carries them doesn't stop him: handing a role out reads no report."""
+    return all(k == "reports" and v.lent_full and oid == v.staff_org or can(con, v, oid, k) for k in rights)
 
 
 def _manage(con, v: Viewer, oid: int, uid: int) -> str:
@@ -243,7 +249,7 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
         raise ApiError("bad_input")
     rights = _ordered(rights)
     level = max((RIGHTS[r] for r in rights), key=RANK.__getitem__, default="member")
-    if RANK[level] >= RANK[mine] or not set(rights) <= rights_of(con, v.id, oid):
+    if RANK[level] >= RANK[mine] or not _has(con, v, oid, rights):
         raise ApiError("forbidden")
     with tx(con):
         r = None
@@ -298,7 +304,7 @@ def delete_role(con, v: Viewer, oid: int, rid: int) -> dict:
     if RANK[r["level"]] >= RANK[mine] or r["fixed"]:
         raise ApiError("forbidden")
     # its holders fall back to the level's rights: never ones the editor hasn't (save_role's rule)
-    if not LEVEL_RIGHTS[r["level"]] <= rights_of(con, v.id, oid) and one(con, "SELECT 1 FROM org_members WHERE role_id = ?", rid):
+    if not _has(con, v, oid, LEVEL_RIGHTS[r["level"]]) and one(con, "SELECT 1 FROM org_members WHERE role_id = ?", rid):
         raise ApiError("forbidden")
     con.execute("DELETE FROM org_roles WHERE id = ?", (rid,))
     return team_setup(con, v, oid)
@@ -359,7 +365,7 @@ def _set_role(con, v: Viewer, oid: int, uid: int, rid: object, level: object) ->
         rid = _official(con, oid, role)  # a Vice or Head level is its official role
         if rid:
             given = _rights_from(role, one(con, "SELECT rights FROM org_roles WHERE id = ?", rid)[0])
-    if (RANK[role] != RANK[mine] if uid == v.id else RANK[role] >= RANK[mine]) or not given <= rights_of(con, v.id, oid):  # only rights I have myself (as in Telegram)
+    if (RANK[role] != RANK[mine] if uid == v.id else RANK[role] >= RANK[mine]) or not _has(con, v, oid, given):  # only rights I have myself (as in Telegram)
         raise ApiError("forbidden")
     con.execute("UPDATE org_members SET role = ?, role_id = ? WHERE org_id = ? AND user_id = ?", (role, rid, oid, uid))
     log_action(con, v.id, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": role, "roleId": rid, "by": "team"}))
@@ -377,7 +383,7 @@ def assign_role(con, v: Viewer, oid: int, rid: int, body: dict) -> dict:
         raise ApiError("not_found")
     mine = role_in(con, v, oid)
     if r["fixed"] or not can(con, v, oid, "team") or not mine or RANK[r["level"]] >= RANK[mine] \
-            or not _rights_from(r["level"], r["rights"]) <= rights_of(con, v.id, oid):  # only a role with rights I have (Astra)
+            or not _has(con, v, oid, _rights_from(r["level"], r["rights"])):  # only a role with rights I have (Astra)
         raise ApiError("forbidden")
     want, skipped = set(users), 0
     with tx(con):

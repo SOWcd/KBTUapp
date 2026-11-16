@@ -3,7 +3,7 @@
   // I may give them as rows (what each can do, how many hold it, theirs checked), their departments, probation as a
   // switch, then handing the club over and removing, each its own row at the bottom. Telegram's Back closes it.
   // The rules are Team's (perms.ts, the server's): this sheet only shows what I may do.
-  import { api, ApiErr, type ClubRole, type ClubTag, type Id, type OrgRole, type TeamMember, type TeamSetup } from '../../lib/api';
+  import { api, ApiErr, staffOrg, type ClubRole, type ClubTag, type Id, type OrgRole, type TeamMember, type TeamSetup } from '../../lib/api';
   import Sheet from '../../ui/Sheet.svelte';
   import UserCog from '@lucide/svelte/icons/user-cog';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -35,6 +35,10 @@
   const holders = (r: ClubRole | null) => list.filter((y) => (r ? y.roleId === r.id : y.role === 'member' && !y.roleId)).length;
   const holds = (r: ClubRole | null) => !!x && (r ? x.roleId === r.id : x.role === 'member' && !x.roleId);
   let busy = $state(false);
+  // gone meanwhile (removed by another leader): the roster is here without them, so the sheet closes
+  $effect(() => { if (data.team[org] && !x) close(overlay.id); });
+  // the creator's borrowed Studio (Admin): a club is never handed over from there (the server refuses)
+  const lent = $derived(staffOrg.id === org);
 
   /** true when the job went through (a failure says so itself) */
   async function run(job: () => Promise<TeamMember[] | void>, done: string, emoji: string): Promise<boolean> {
@@ -64,11 +68,16 @@
     const ok = await run(() => api.updateMember(org, p.person.id, r ? { roleId: r.id } : { role: 'member' as OrgRole, roleId: null }),
       t('team.roleSet', { name: p.person.name, role: r ? roleTitle(r) : t('role.member') }), 'raising_hands_3d_default');
     if (!ok) Object.assign(p, was);
+    else if (me) void loadMe(); // my own role: my rights follow it
   }
   const setDept = (p: TeamMember, g: ClubTag, on: boolean) => !busy &&
     run(() => api.updateMember(org, p.person.id, on ? { addDept: g.id } : { dropDept: g.id }), t(on ? 'team.deptSet' : 'team.deptOff', { name: p.person.name, dept: g.name }), 'raising_hands_3d_default');
-  const probation = (p: TeamMember, on: boolean) =>
-    run(() => api.updateMember(org, p.person.id, { probation: on }), t(on ? 'team.probationSet' : 'team.probationPassed', { name: p.person.name }), on ? 'sparkles_3d' : 'party_popper_3d');
+  // the switch moves at once; a refusal puts it back (off first, so the native switch follows)
+  async function probation(p: TeamMember, on: boolean) {
+    p.probation = on;
+    if (!(await run(() => api.updateMember(org, p.person.id, { probation: on }), t(on ? 'team.probationSet' : 'team.probationPassed', { name: p.person.name }), on ? 'sparkles_3d' : 'party_popper_3d')))
+      p.probation = !on;
+  }
   async function handOver(p: TeamMember) {
     if (!(await sheets.ask({ title: t('team.transferAsk', { name: p.person.name }), text: t('team.transferText', { name: p.person.name }), ok: t('team.transfer'), cancel: t('common.cancel'), danger: true }))) return;
     if (await run(() => api.transfer(org, p.person.id), t('team.transferred', { name: p.person.name }), 'party_popper_3d')) { void loadMe(); close(overlay.id); }
@@ -124,7 +133,7 @@
         <Group>
           <Row title={t('team.probation')} accessory="switch" checked={!!p.probation} disabled={busy || (!!p.probation && !vice)} onchange={(on) => probation(p, on)} />
         </Group>
-        {#if m?.role === 'president'}<Group><Row tone="action" title={t('team.transfer')} disabled={busy} onclick={() => handOver(p)} /></Group>{/if}
+        {#if m?.role === 'president' && !lent}<Group><Row tone="action" title={t('team.transfer')} disabled={busy} onclick={() => handOver(p)} /></Group>{/if}
         <Group><Row tone="destructive" title={manage ? t('roles.remove') : t('team.askRemove')} disabled={busy} onclick={() => remove(p)} /></Group>
       {/if}
     </div>

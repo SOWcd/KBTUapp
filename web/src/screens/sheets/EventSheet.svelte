@@ -56,7 +56,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
+  import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -449,7 +449,7 @@
     {/if}
 
     <Group>
-      <Row icon={CalendarClock} title={multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)} subtitle="{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}" />
+      <Row icon={CalendarClock} title={multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)} subtitle="{time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}" />
       {#if gis}
         <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
              2GIS for it (owner, Nov 15: a street address stayed plain text) -->
