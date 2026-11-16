@@ -50,7 +50,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 
 - **English everywhere outside UI strings**: code, comments, commits, docs. UI text only in `web/src/lib/i18n/`
   (all three languages at once) and the bot's in `texts.py`. A pre-commit hook refuses Cyrillic elsewhere; in tests
-  write it as `\u` escapes.
+  write it as `\u` escapes. The hook is `.githooks/pre-commit`: turn it on once per clone with
+  `git config core.hooksPath .githooks`; CI runs the same check on what a PR adds.
 - **The database**: never edit `schema.sql`; append a migration (one transaction). A CHECK can't be altered in
   SQLite and a table rebuild with foreign keys on cascades deletes into its children: prefer a new table or column.
 - **Personal data**: never in the repo, logs or screenshots. One policy by data categories, one consent
