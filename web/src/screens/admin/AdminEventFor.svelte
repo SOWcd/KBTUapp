@@ -28,8 +28,14 @@
   let rest = $state<OrgRef[]>([]);
   if (untrack(() => studio)) api.adminOrgs().then((l) => (rest = l)).catch(() => {});
   const more = $derived(rest.filter((o) => !data.orgs.some((d) => d.id === o.id) && (!s || hit(o, s) || o.slug.includes(s))));
-  const found = $derived<OrgRef[]>([...clubs, ...more]);
+  // the ones I opened last come first (owner, Nov 16: running an event with one club, he searched it every time);
+  // this device only
+  const KEY = 'adm.recentOrgs';
+  const recent: number[] = (() => { try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); } catch { return []; } })();
+  const at = (o: OrgRef) => { const i = recent.indexOf(o.id); return i < 0 ? recent.length : i; };
+  const found = $derived<OrgRef[]>([...clubs, ...more].sort((a, b) => at(a) - at(b)));
   const pick = (o: OrgRef) => {
+    try { localStorage.setItem(KEY, JSON.stringify([o.id, ...recent.filter((x) => x !== o.id)].slice(0, 5))); } catch { /* private mode */ }
     haptic.tap(); close(overlay.id);
     if (studio) { openAsCreator(o); sheets.studio(o.id, true); } else sheets.editor(o.id, undefined, true);
   };

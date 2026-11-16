@@ -94,6 +94,15 @@
 
   {#if s}
     <div class="page">
+      {#if clubs.length}
+        <Group caption={t('adm.clubs')}>
+          {#each clubs as o (o.id)}
+            <Row dense title={o.name} accessory="chevron" onclick={() => go(() => sheets.adminClubs(o.id))}>
+              {#snippet lead()}<OrgLogo org={o} size={36} />{/snippet}
+            </Row>
+          {/each}
+        </Group>
+      {/if}
       {#if people?.length}
         <Group caption={t('adm.people')}>
           {#each people as p (p.person.id)}
@@ -109,15 +118,6 @@
           {#each events as e (e.id)}
             <Row dense title={e.title} subtitle={[e.org.name, relDay(e.startsAt), status(e)].filter(Boolean).join(' · ')} accessory="chevron" onclick={() => go(() => manage(e))}>
               {#snippet lead()}<Poster item={e} size={36} radius={10} dim={e.status !== 'published'} />{/snippet}
-            </Row>
-          {/each}
-        </Group>
-      {/if}
-      {#if clubs.length}
-        <Group caption={t('adm.clubs')}>
-          {#each clubs as o (o.id)}
-            <Row dense title={o.name} accessory="chevron" onclick={() => go(() => sheets.adminClubs(o.id))}>
-              {#snippet lead()}<OrgLogo org={o} size={36} />{/snippet}
             </Row>
           {/each}
         </Group>

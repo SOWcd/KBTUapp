@@ -993,7 +993,7 @@
   .x { position: absolute; left: var(--s-3); pointer-events: auto; }
 
   /* the main page's lists on the event's tinted ground: the pills' glass, Settings' rows */
-  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); margin-top: max(48px, var(--top)); padding: var(--s-2) var(--gutter) 0;
+  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); padding: calc(max(48px, var(--top)) + var(--s-2)) var(--gutter) 0; /* the page runs up to the screen's edge under Telegram's buttons, never cut at them */
     --group-bg: var(--pill); }
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
   .body > :global(section) { margin-top: var(--s-4); }
