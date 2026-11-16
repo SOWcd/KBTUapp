@@ -93,6 +93,13 @@
   /* óte and kbtu.mag: their colours, matte (the specular dimmed, no white rim) */
   .teentertainmentkbtu, .kbtumag { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
   .club .ch { white-space: nowrap; }
+  /* Dice and Destiny (round 21): engraved brass: brushed, bevelled, the letters cut into it (a dark cut, light on its
+     lower lip), one light sliding with the tilt */
+  .diceanddestinykbtu { color: rgb(52, 28, 10); text-shadow: 0 1px 0 rgba(255, 238, 196, 0.6), 0 -0.5px 0 rgba(40, 20, 4, 0.55);
+    background: linear-gradient(100deg, transparent 38%, rgba(255, 246, 220, 0.5) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      repeating-linear-gradient(180deg, rgba(255, 238, 196, 0.12) 0 0.5px, transparent 0.5px 2px),
+      linear-gradient(180deg, rgb(230, 196, 122), rgb(184, 142, 66) 52%, rgb(138, 100, 42));
+    box-shadow: inset 0 0 0 1px rgba(255, 232, 170, 0.75), inset 0 1px 0 rgba(255, 250, 228, 0.7), inset 0 -1.5px 2px rgba(60, 30, 6, 0.5), 0 0 0 0.5px rgba(40, 14, 4, 0.8), 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
   /* CyberSport (round 19): dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);

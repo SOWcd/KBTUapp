@@ -17,6 +17,9 @@
  "scenes/cyb-far-card.svg": "2507f56dcdac",
  "scenes/cyb-mid-card.svg": "645210252f49",
  "scenes/cyb-near-card.svg": "dd53d0e5cab0",
+ "scenes/dd-far-card.svg": "6f335c2510e9",
+ "scenes/dd-mid-card.svg": "0525ee59032c",
+ "scenes/dd-near-card.svg": "5e3ecc9b603e",
  "scenes/en-far-card.svg": "6c32101d25e7",
  "scenes/en-mid-card.svg": "cc781dbf91e9",
  "scenes/en-near-card.svg": "389f848556fd",
@@ -92,5 +95,5 @@
  "sower/near-card.svg": "d11a3c3485d1",
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
- "minis": "30b7402bee61"
+ "minis": "25431aeaef90"
 }

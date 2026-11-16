@@ -413,6 +413,10 @@
   /* the name's lines end before the hand's paper (its left edge 97 px in from the card's): a long name cuts, a long title wraps */
   .sower .id { padding-right: 84px; }
   .sower .nm, .sower .id > .role { padding-right: 0; }
+  /* Dice and Destiny (round 21): the lines end before the dragon's wing (a long name cuts, a long title wraps) */
+  .diceanddestinykbtu .id { padding-right: 104px; }
+  .diceanddestinykbtu .nm, .diceanddestinykbtu .id > .role { padding-right: 0; }
+  @media (max-width: 359px) { .diceanddestinykbtu .id { padding-right: 88px; } }
   .sower .role { letter-spacing: 0.07em; } /* "CREATOR · KBTU APP" on one line beside the hand at 375 */
   .sower .strap { background: linear-gradient(90deg, rgb(206, 206, 202), rgb(246, 246, 244) 50%, rgb(206, 206, 202)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); } /* the strip's white paper: graphite vanished on the dark page */
   .sower .strap span { color: rgb(30, 30, 30); letter-spacing: 0.3em; }
@@ -425,6 +429,8 @@
   .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
     box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
   .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
+  /* round 21: Dice and Destiny's strap stitched along both edges in old gold */
+  .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .club .id { text-shadow: var(--tsh); }

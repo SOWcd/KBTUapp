@@ -30,6 +30,7 @@
   import cinCamera from '../assets/lanyards/cinema-camera.webp';
   import nisTree from '../assets/lanyards/nis-tree.webp';
   import cybPan from '../assets/lanyards/cyber-pan.webp'; // round 19: their panther in full colour, cut off its badge
+  import ddDragon from '../assets/lanyards/dd-dragon.webp'; // round 20: Dice and Destiny's dragon and dice, cut off their logo's white
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -37,8 +38,8 @@
   const CARD = import.meta.glob('../assets/lanyards/scenes/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
   // round 11's scenes (their files' prefix) and the marks on their badge's band
-  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb' };
-  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan };
+  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb', diceanddestinykbtu: 'dd' };
+  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan, diceanddestinykbtu: ddDragon };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -150,8 +151,8 @@
          the steppe's engraved strata, its rays running on into a network, the eagle near; Zhyly Zhurek's view a town with
          lit windows, a garland of heart lights, a knitted runner. The badge's band: the far and mid
          layers, their mark on top -->
-    {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
-    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{/if}
+    {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}
+    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -369,6 +370,15 @@
   /* round 18 (round18/gen/gen-r18.py): CyberSport's black-violet, its one magenta glow from the top right */
   .sc.cybersportkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(214, 58, 240, 0.34), transparent 65%), linear-gradient(160deg, rgb(34, 9, 64), rgb(17, 4, 38) 55%, rgb(5, 1, 12)); }
   .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
+  /* round 20 (round20/gen/gen-r20.py, A): Dice and Destiny by candlelight, the warm light from behind the dragon */
+  .sc.diceanddestinykbtu { background: radial-gradient(60% 80% at 80% 40%, rgba(224, 64, 47, 0.26), transparent 65%), linear-gradient(160deg, rgb(46, 8, 8), rgb(20, 4, 5) 55%, rgb(6, 2, 3)); }
+  /* round 21: a candle's light from the right, below the frame: warm, breathing unevenly (opacity and scale only) */
+  .flick { right: -60px; bottom: -40px; width: 230px; height: 200px; border-radius: 50%; mix-blend-mode: screen; transform-origin: 70% 75%;
+    background: radial-gradient(closest-side, rgba(255, 170, 80, 0.34), rgba(224, 64, 47, 0.14) 55%, transparent); animation: ddflick 6s ease-in-out infinite; }
+  .sc:not(.wide) .flick { right: auto; left: 50%; margin-left: -115px; bottom: -110px; }
+  @keyframes ddflick { 0%, 100% { opacity: 0.85; transform: scale(1); } 18% { opacity: 1; transform: scale(1.03); } 31% { opacity: 0.78; transform: scale(0.98); }
+    47% { opacity: 0.95; transform: scale(1.02); } 63% { opacity: 0.82; } 80% { opacity: 1; transform: scale(1.025); } }
+  .bw.diceanddestinykbtu { top: 4px; height: 116px; filter: drop-shadow(0 0 12px rgba(255, 120, 50, 0.45)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)); }
   .bw.cybersportkbtu { top: 4px; height: 118px; max-width: none; filter: drop-shadow(0 0 14px rgba(214, 58, 240, 0.55)); }
   /* round 19: a holographic foil sheen sliding with the tilt, a neon rim round the card */
   .cybersportkbtu .gloss { background: linear-gradient(115deg, transparent 38%, rgba(255, 120, 255, 0.1) 45%, rgba(140, 200, 255, 0.09) 50%, rgba(255, 230, 150, 0.06) 54%, transparent 60%) calc(55% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
@@ -385,8 +395,8 @@
   .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash { animation: none; } .spark { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash, .flick { animation: none; } .spark { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, 
-  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash { animation: none; }
+  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash, :global(html.lowfx) .flick { animation: none; }
   :global(html.lowfx) .spark { display: none; }
 </style>

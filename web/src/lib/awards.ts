@@ -36,6 +36,8 @@ import cinemaCamera from '../assets/lanyards/cinema-camera.webp';
 import nisTree from '../assets/lanyards/nis-tree.webp';
 // round 18 (.claude/reports/club-lanyards/round18/gen): CyberSport's sticker badge cut off its black
 import cyberPanther from '../assets/lanyards/cyber-panther.webp';
+// round 20 (.claude/reports/club-lanyards/round20/gen): Dice and Destiny's dragon round its two d20s, cut off their logo's white
+import ddDragon from '../assets/lanyards/dd-dragon.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -329,6 +331,10 @@ export const CLUB_LOOKS = {
   // round 18 (Nov 15): CyberSport in their badge's black-violet and one magenta neon
   cybersportkbtu: { strap: 'CYBER\nSPORT', strip: 'KBTU CYBERSPORT', bg: ['#22093F', '#110426', '#05010C'], straps: ['#10041C', '#2A0C46', '#F07CFF'],
     holo: ['#1A0630', '#2C0B4C', '#F7A8FF'], ring: 'linear-gradient(135deg, #FFD0FF, #E85AFF 45%, #7A3CFF)', role: '#F49CFF', qr: ['#4A0F66', '#22063A'], plate: ['#2A0E46', '#07020F'], mark: cyberPanther },
+  // round 20 (Nov 16, owner's pick A; polished in round 21): Dice and Destiny by candlelight: black, blood red, bone, old
+  // gold; the strip engraved brass (LanyardHolo)
+  diceanddestinykbtu: { strap: 'DICE &\nDESTINY', strip: 'DICE AND DESTINY', short: 'DD', bg: ['#2E0808', '#140405', '#060203'], straps: ['#5E0E0B', '#A3191A', '#F0DDB4'],
+    holo: ['#D9B46A', '#9C7634', '#341C0A'], ring: 'linear-gradient(135deg, #F0DDB4, #C9A15A 45%, #7A1410)', role: '#E8B867', qr: ['#7A1410', '#2A0806'], plate: ['#3A0E0B', '#120504'], mark: ddDragon },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh

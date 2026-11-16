@@ -230,6 +230,8 @@
      clear at the right edge (owner, Nov 16: unreadable) */
   .pass.cybersportkbtu .main::before { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
     background: linear-gradient(90deg, rgba(17, 4, 38, 0.9), rgba(17, 4, 38, 0.74) 60%, rgba(17, 4, 38, 0.3)); }
+  .pass.diceanddestinykbtu .main::before { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(90deg, rgba(20, 4, 5, 0.9), rgba(20, 4, 5, 0.8) 72%, rgba(20, 4, 5, 0.3)); }
   /* a club without a lanyard: its logo set in a silver rim, as a medallion */
   .rim { display: block; padding: 3px; border-radius: var(--r-m); background: linear-gradient(145deg, white, rgb(176, 184, 202) 42%, rgb(244, 246, 251) 62%, rgb(140, 150, 172));
     box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.7), 0 2px 5px rgba(0, 0, 0, 0.28); }

@@ -194,6 +194,8 @@
   .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
     box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
   .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
+  /* round 21: Dice and Destiny's strap stitched along both edges in old gold */
+  .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
   .club .ph { background: var(--ring); }
 
   .hint { max-width: 300px; text-align: center; font: 550 13px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.66); }
