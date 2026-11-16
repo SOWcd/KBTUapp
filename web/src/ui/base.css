@@ -36,6 +36,8 @@ img { max-width: 100%; }
 /* a computer's wide window (or a tablet): the phone layout stays a phone-wide column in the middle instead of stretching
    (Oct 11); the transform makes the column the frame of everything fixed inside the app (bars, sheets, toasts) */
 @media (min-width: 600px) { #app { left: 50%; right: auto; width: 480px; transform: translateX(-50%); } }
+/* ...but DMP's registry opened wide (screens/dmp/RegistrySheet.svelte) takes the whole window while it is up */
+:root[data-wide] #app { left: 0; right: 0; width: auto; transform: none; }
 
 /* ---- type scale ---- */
 .t-h1 { font: 800 28px/1.08 var(--font-display); letter-spacing: -0.03em; }

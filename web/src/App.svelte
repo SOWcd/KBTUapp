@@ -19,7 +19,8 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
+  import { backButton, haptic, inTelegram, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
+  import { deskRegistry } from './lib/desk';
   import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -791,7 +792,9 @@
         void api.msClaim('').then(async () => { await loadMe(); haptic.ok(); if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); msBack(true); }, () => {});
       deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
-      moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
+      // DMP at a computer: its registry, wide, instead of the phone hint (once per launch; Back leaves it for the app)
+      const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
+      moment(tgComment); moment(desk ? () => sheets.registry() : computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 

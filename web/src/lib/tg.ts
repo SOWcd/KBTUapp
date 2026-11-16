@@ -84,6 +84,9 @@ export const tg = {
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   can,
+  /** a computer's Mini App window to full screen (Bot API 8.0+); false where the client can't */
+  canFullscreen: (): boolean => onComputer && can('8.0') && !W?.isFullscreen,
+  fullscreen: (): void => tgTry((w) => w.requestFullscreen?.()),
 };
 
 let felt = 0; // when the last haptic fired: the app-wide tap below stays quiet when a handler already gave one

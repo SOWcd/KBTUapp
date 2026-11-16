@@ -26,7 +26,7 @@
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayNo, dayMonth, duration } from '../../lib/time';
   import Clock from '@lucide/svelte/icons/clock';
-  import { may, byRank, roleName, titleOf } from '../../lib/perms';
+  import { may, byRank, roleName, roleLabel, titleOf } from '../../lib/perms';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Poster from '../../ui/Poster.svelte';
   import EventRow from '../../ui/EventRow.svelte';
@@ -249,9 +249,9 @@
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
           {#if asCreator}
-            <button class="t-foot role as" onclick={viewAs} disabled={!creator.roles.length}>{t('studio.asCreator')} · {roleName(m.role, titleOf(m))}<ChevronDown size={14} strokeWidth={2.6} /></button>
+            <button class="t-foot role as" onclick={viewAs} disabled={!creator.roles.length}>{t('studio.asCreator')} · {roleLabel(m)}<ChevronDown size={14} strokeWidth={2.6} /></button>
           {:else}
-          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, titleOf(m))}{members ? ' · ' + tn('studio.members', members) : ''}</p>
+          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleLabel(m)}{members ? ' · ' + tn('studio.members', members) : ''}</p>
           {/if}</span>
       {/snippet}
       <div class="top">
@@ -264,7 +264,7 @@
         <div class="pick" transition:fold>
           <Group>
             {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
-              <Row dense title={nameOf(x.org)} subtitle={roleName(x.role, titleOf(x))} onclick={() => { ui.club = x.org.id; seg = 0; picking = false; }}>
+              <Row dense title={nameOf(x.org)} subtitle={roleLabel(x)} onclick={() => { ui.club = x.org.id; seg = 0; picking = false; }}>
                 {#snippet lead()}<OrgLogo org={x.org} size={30} />{/snippet}
               </Row>
             {/each}
