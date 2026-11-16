@@ -1,5 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
+import type { ClubTag, TeamMember, TeamSetup } from '../api';
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
@@ -117,6 +118,8 @@ export const sheets = {
   joinApply: (_org: Id) => {},
   /** Team 2.0 (§2b): the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
   teamSetup: (_org: Id, _onchange?: () => void) => {},
+  /** one person of a club's Team, their own sheet over it: roles, departments, probation, hand-over, removal */
+  member: (_org: Id, _user: Id, _setup: () => TeamSetup | null, _depts: (x: TeamMember) => ClubTag[], _onchange: () => void) => {},
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
   /** the pages pushed from the settings under my lanyard (Me): about me, notifications, my name, privacy and its pages, about */

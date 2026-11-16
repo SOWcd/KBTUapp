@@ -1,5 +1,5 @@
 // The rank rule from SPEC §2, the UI's copy: it hides what you can't do; the server enforces it (logic.py).
-import type { ClubLevel, Membership, OrgRole, Right } from './api/types';
+import type { ClubLevel, ClubRole, Membership, OrgRole, Right } from './api/types';
 import { i18n, t } from './i18n/index.svelte';
 
 export const RANK: Record<OrgRole, number> = { member: 1, head: 2, vice: 3, president: 4 };
@@ -46,6 +46,15 @@ export const titleOf = (x: { title?: string | null; titleKk?: string | null; tit
 export const roleLabel = (m: { role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null }): string => {
   const own = titleOf(m);
   return own && own !== ROLE_NAME[m.role] ? own : t(`role.${m.role}`);
+};
+/** A club role's name in the app's language: a fixed one (Vice, Head) is its level's own word, never the English. */
+export const roleTitle = (r: Pick<ClubRole, 'name' | 'nameKk' | 'nameEn' | 'level' | 'fixed'>): string => (r.fixed ? t(`role.${r.level}`) : inLang(r.name, r.nameKk, r.nameEn));
+/** What a role lets its holder do, one line (Team's role rows, the Vice ask): its rights by name, every one in a few
+ *  words; the door is everyone's, so a role with nothing else says just that. reports: the server has them on. */
+export const rightsLine = (rights: Right[], reports: boolean): string => {
+  const all = RIGHTS.filter((x) => x.key !== 'door' && (x.key !== 'reports' || reports));
+  const on = all.filter((x) => rights.includes(x.key));
+  return on.length === all.length ? t('roles.all') : on.length ? on.map((x) => t(`right.${x.key}` as 'right.door')).join(', ') : t('right.door');
 };
 /** an organizer's line: the real name, the nick beside it */
 export const withNick = (real: string, p: { nick?: string | null }): string => (p.nick ? `${real} · ${p.nick}` : real);
