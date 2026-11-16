@@ -516,3 +516,73 @@ def test_an_undone_lift_cant_be_replayed(subj):
     assert c.post(f"/api/forum/holds/{h2}", headers=tma(3)).status_code == 204
     assert c.post(f"/api/admin/done/{line1}/undo", headers=tma(3)).status_code in (404, 409)
     assert not con.execute("SELECT 1 FROM subject_holds").fetchone()
+
+
+def test_reports_show_a_listing_only_to_a_reader(subj):
+    """Review 5: with FORUM off, a reported listing's words reach a moderator through the reports and the inbox (and can
+    be decided) only when they could read the listing itself: a student on the policy in force."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "secret words"})
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    assert c.post("/api/reports", headers=tma(2), json={"target": "ask", "id": aid, "reason": "spam"}).status_code == 204
+    con.execute("UPDATE students SET consent_version = '1' WHERE user_id = ?", (p["cat"],))
+    assert "secret" not in json.dumps(c.get("/api/admin/reports", headers=tma(3)).json())
+    assert "secret" not in json.dumps(c.get("/api/admin/inbox", headers=tma(3)).json())
+    assert c.get("/api/me", headers=tma(3)).json()["counters"]["inbox"] == 0
+    assert c.post(f"/api/admin/reports/ask/{aid}", headers=tma(3), json={"remove": True}).status_code == 404
+    con.execute("UPDATE students SET consent_version = ? WHERE user_id = ?", (logic.CONSENT, p["cat"]))
+    assert "secret" in json.dumps(c.get("/api/admin/reports", headers=tma(3)).json())
+
+
+def test_join_rechecks_the_account_after_the_ai(subj):
+    """Review 5: the account deleted while the AI looked at the note: the late write makes nothing."""
+    c, con, p, sid, path = subj
+    ann = logic.Viewer(p["ann"], "user", True)
+    s = logic.subjects.reserve(con, ann, str(path), sid)
+    con.execute("DELETE FROM students WHERE user_id = ?", (p["ann"],))                   # gone meanwhile
+    with pytest.raises(logic.ApiError):
+        logic.subjects.join(con, ann, str(path), s, "late words", True)
+    assert not con.execute("SELECT 1 FROM asks").fetchone()
+
+
+def test_undo_of_a_lift_holds_the_write_lock(subj, env, monkeypatch):  # noqa: F811
+    """Review 5: the newest-decision check and the undo are one write: another moderator can't slip in between."""
+    import sqlite3
+    c, con, p, sid, _ = subj
+    _, cfg = env
+    line = _lifted(c, con, p, sid)
+    real, seen = logic.subjects.unlift, []
+
+    def between(*a, **k):
+        other = sqlite3.connect(cfg.db_path, timeout=0)
+        try:
+            other.execute("BEGIN IMMEDIATE")                                                # a second moderator's write
+            seen.append("got in")
+        except sqlite3.OperationalError:
+            seen.append("locked")
+        finally:
+            other.close()
+        return real(*a, **k)
+    monkeypatch.setattr(logic.subjects, "unlift", between)
+    assert c.post(f"/api/admin/done/{line}/undo", headers=tma(3)).status_code == 204
+    assert seen == ["locked"]
+
+
+def test_an_old_workers_tokenless_offer_heals(subj):
+    """Review 5: an offer written without a token (an old worker during a deploy): its card gets one when it's sent,
+    offering again gives it one and a new card; a button without a token still does nothing."""
+    c, con, p, sid, _ = subj
+    cid, _tok = _ann_offer(c, con, sid, 2)
+    con.execute("UPDATE contacts SET token = NULL")
+    card = bot._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]})
+    tok = con.execute("SELECT token FROM contacts").fetchone()[0]
+    assert tok and card[2][0][0]["callback_data"] == f"ct:{cid}:{tok}:y"
+    assert logic.decide_contact(con, p["ann"], cid, True) is None
+    con.execute("UPDATE contacts SET token = NULL")
+    before = con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()[0]
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    assert c.post("/api/subjects/offer", headers=tma(2), json={"ask": aid}).status_code == 200  # offering again
+    tok2 = con.execute("SELECT token FROM contacts").fetchone()[0]
+    assert tok2 and con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()[0] == before + 1
+    assert logic.decide_contact(con, p["ann"], cid, True, tok2) == "accepted"

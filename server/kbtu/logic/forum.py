@@ -270,10 +270,12 @@ _SUBJ = " AND subject IS NOT NULL"  # only a subject's listings: the forum's own
 def may_touch_ask(con, aid: object) -> bool:
     """The one rule for whether a request may surface for this caller at all (reporting it, the reports' queue and its
     decision, Admin's count and Done): every one for the forum's people (app.viewer's asks_all: FORUM's gate), else a
-    subject's listing alone (logic/subjects.py). No caller (the bot, a job): every one."""
+    subject's listing alone (logic/subjects.py), and that only to a student on the policy in force. No caller (the bot,
+    a job): every one."""
     c = core.CALLER.get()
     return c is None or c.get("asks_all", True) or bool(
-        isinstance(aid, int) and one(con, "SELECT 1 FROM asks WHERE id = ? AND subject IS NOT NULL", aid))
+        isinstance(aid, int) and one(con, "SELECT 1 FROM asks WHERE id = ? AND subject IS NOT NULL", aid)
+        and subjects.may_read(con, c.get("uid", 0)))  # the subject reads' own gate, wherever a report shows one
 
 
 def release_ask(con, v: Viewer, aid: int, subjects_only: bool = False) -> dict:
@@ -360,6 +362,11 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
                           (core.next_id(con, "contacts"), v.id, to, aid, _now(), token))
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
+        # an offer an old worker wrote without a token (a rolling deploy): it gets one now and a fresh card goes out
+        elif old := one(con, "SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0) AND token IS NULL",
+                        v.id, to, aid):
+            con.execute("UPDATE contacts SET token = ? WHERE id = ?", (token, old["id"]))
+            notify(con, to, "contact_ask", f"ct:{old['id']}:{token}")
     return {"status": "pending"}
 
 

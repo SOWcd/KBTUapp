@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 
+from ..db import tx
 from .core import ApiError, PERSON, Viewer, now, one, rows, shown_name
 
 DONE_DAYS = 30  # the take-downs' own undo window (moderation.TAKEDOWN_KEEP)
@@ -61,8 +62,9 @@ def count(con, v: Viewer) -> int:
         OR r.target = 'photo' AND EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = r.target_id AND user_id = :me)
         OR r.target = 'ask' AND EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND user_id = :me)
         OR r.target = 'fpost' AND EXISTS (SELECT 1 FROM fchan_posts WHERE id = r.target_id AND user_id = :me)
-        OR r.target = 'ask' AND ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND subject IS NOT NULL))""".replace(":me", "?"),
-            *[v.id] * 6, int(not may_touch_ask(con, None)))[0]  # the ?: not the forum's (may_touch_ask's rule)
+        OR r.target = 'ask' AND ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND subject IS NOT NULL)
+        OR r.target = 'ask' AND ? AND EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND subject IS NOT NULL))""".replace(":me", "?"),
+            *[v.id] * 6, int(limited := not may_touch_ask(con, None)), int(limited and not subjects.may_read(con, v.id)))[0]  # may_touch_ask's rule
     n += one(con, """SELECT COUNT(*) FROM tgc_comments c WHERE (c.status IN ('open', 'queued') OR c.review = 1)
         AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)
         AND EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id)""", v.id, v.id)[0]  # tgcomments.queue_items' rule
@@ -173,8 +175,11 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
         undo_official(con, v, tid)
     elif act in ("chat_decline", "chat_remove"):
         undo_chat(con, v, tid)
-    elif act == "subject_lift":  # a subject listing's take-down lifted: made again, its deadline as it was
-        subjects.unlift(con, v, a["target"], json.loads(a["data"] or "{}"))
+    elif act == "subject_lift":  # a subject listing's take-down lifted: made again, its deadline as it was; the check that
+        with tx(con):            # this lift is still the newest decision and the undo itself are one write (two moderators at once)
+            if one(con, f"""SELECT MAX(id) FROM audit_log WHERE target = ? AND action IN ({','.join('?' * len(DECISIONS))})""", a["target"], *DECISIONS)[0] != aid:
+                raise decided(con, a["target"])
+            subjects.unlift(con, v, a["target"], json.loads(a["data"] or "{}"))
     elif act == "event_delete":
         undo_delete_event(con, v, tid)
     elif act == "tg_report_close" and kind == "tgreport":

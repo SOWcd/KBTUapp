@@ -19,6 +19,7 @@ import logging
 import os
 import random
 import re
+import secrets
 import sqlite3
 import time
 from collections import deque
@@ -201,7 +202,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
     if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
-        tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's; none: nothing
+        tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
+        if not tok and (old := one(con, "SELECT id FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token IS NULL", int(ref[1]), m["user_id"])):
+            tok = secrets.token_hex(4)  # an offer an old worker wrote without one (a rolling deploy): its card carries a fresh token
+            con.execute("UPDATE contacts SET token = ? WHERE id = ?", (tok, old["id"]))
         c = tok and one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", int(ref[1]), m["user_id"], tok)
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
         if not p:

@@ -55,6 +55,14 @@ def term_end(t: int) -> int:
     return min(e for yy in (y, y + 1) for m, d in TERM_ENDS if (e := int(datetime(yy, m, d, tzinfo=ALMATY).timestamp())) > t)
 
 
+def may_read(con, uid: int) -> bool:
+    """The subject listings are find-people data (the policy's section 3): a student Microsoft confirmed, on the policy
+    in force (staff and admins' own rows are exempt), as app.subj_reader asks. For the routes that only reach them
+    through a report (forum.may_touch_ask) and for a write the AI made wait (join)."""
+    s = one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", uid)
+    return bool(s) and not s["manual"] and (on_policy(s["consent_version"], CONSENT) or s["consent_version"] in ("staff", "admin"))
+
+
 _SEEN = """a.subject IS NOT NULL AND a.status = 'live' AND a.expires_at > :now AND a.user_id != :me
     AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.user_id = :me AND b.blocked_id = a.user_id) OR (b.user_id = a.user_id AND b.blocked_id = :me))
     AND a.id NOT IN (SELECT target_id FROM reports WHERE target = 'ask' AND reporter_id = :me AND status = 'open')
@@ -140,6 +148,8 @@ def join(con, v: Viewer, path: str, s: dict, note: str, verdict: bool | None) ->
     the write: two lists at once at the cap end with one."""
     sid = s["id"]
     with tx(con):
+        if not may_read(con, v.id):  # the AI took its time: the account may be gone, or no longer on the policy
+            raise ApiError("forbidden", "consent")
         _may_list(con, v.id, sid)
         status, why = ("live", None) if not note or verdict else ("held", "ai" if verdict is False else "check")
         con.execute("""INSERT INTO asks (id, user_id, kind, title, body, status, why, created_at, expires_at, subject)
@@ -218,3 +228,4 @@ def _now() -> int:
 from . import core  # noqa: E402
 from .forum import contact, telegram_of  # noqa: E402
 from .oversight import _mod  # noqa: E402
+from .account import CONSENT, on_policy  # noqa: E402

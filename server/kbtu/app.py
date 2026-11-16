@@ -149,6 +149,7 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     v = _upsert(con, tg, cfg.admins)
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
+        caller["uid"] = v.id  # forum.may_touch_ask reads whether I may see a subject's listings (subjects.may_read)
         # the find-people forum's own requests surface for its people alone (FORUM, forum_viewer's rule): forum.may_touch_ask
         caller["asks_all"] = cfg.forum and v.role in ("admin", "moderator") or cfg.forum_founder and bool(
             logic.one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", v.id))
