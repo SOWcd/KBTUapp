@@ -96,7 +96,9 @@ function precompress(): Plugin {
     apply: 'build',
     writeBundle(opts, bundle) {
       for (const [name, out] of Object.entries(bundle)) {
-        if (!/^assets\/.+\.(js|css|svg|json)$/.test(name)) continue;
+        // .wasm too: the QR scanner's zxing reader (QrCam.svelte) is 1.09 MB and went out as it is (or gzipped by
+        // GZipMiddleware on every request); ready, it is about 0.4 MB in brotli
+        if (!/^assets\/.+\.(js|css|svg|json|wasm)$/.test(name)) continue;
         const raw = Buffer.from(out.type === 'chunk' ? out.code : out.source);
         if (raw.length < 1024) continue;
         const file = join(opts.dir!, name);
