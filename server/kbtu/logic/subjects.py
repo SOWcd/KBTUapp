@@ -160,6 +160,7 @@ def leave(con, v: Viewer, sid: str) -> None:
 
 def hold(con, uid: int, sid: str, by: int | None, why: str, until: int) -> None:
     title = one(con, "SELECT title FROM asks WHERE user_id = ? AND subject = ?", uid, sid)
+    con.execute("DELETE FROM subject_holds WHERE user_id = ? AND subject = ? AND until <= ?", (uid, sid, _now()))  # a past term's
     con.execute("INSERT OR IGNORE INTO subject_holds (user_id, subject, title, by_id, why, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (uid, sid, title[0] if title else sid, by, why, _now(), until))
 
@@ -184,14 +185,15 @@ def lift(con, v: Viewer, hid: int) -> None:
         log_action(con, v.id, "subject_lift", f"subject_hold:{hid}", json.dumps({k: h[k] for k in ("user_id", "subject", "title", "by_id", "why", "at", "until")}))
 
 
-def unlift(con, v: Viewer, data: dict) -> None:
-    """Done's Undo of a lift: the same take-down again, its deadline as it was (gone by now: nothing to undo)."""
+def unlift(con, v: Viewer, target: str, data: dict) -> None:
+    """Done's Undo of a lift: the same take-down again, its deadline as it was (gone by now, or its author no longer a
+    student: nothing to undo). Logged on the lift's own target, so that lift counts as decided."""
     with tx(con):
         if data.get("until", 0) <= _now() or not con.execute("""INSERT OR IGNORE INTO subject_holds (user_id, subject, title, by_id, why, at, until)
-                SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM users WHERE id = ?)""",
+                SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM students WHERE user_id = ?)""",
                 (data["user_id"], data["subject"], data["title"], data["by_id"], data["why"], data["at"], data["until"], data["user_id"])).rowcount:
             raise ApiError("not_found")
-        log_action(con, v.id, "subject_unlift", f"subject_hold:{data['subject']}")
+        log_action(con, v.id, "subject_unlift", target)
 
 
 def sweep_counters(con) -> None:

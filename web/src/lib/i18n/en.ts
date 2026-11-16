@@ -410,6 +410,8 @@ const en: Dict = {
   'audit.a.ban': "banned",
   'audit.a.unban': "lifted a ban",
   'audit.a.report_remove': "took down on a report",
+  'audit.a.subject_lift': "gave back listing on a subject",
+  'audit.a.subject_unlift': "took off a subject again",
   'audit.a.report_keep': "kept after a report",
   'audit.a.restore': "restored",
   'audit.a.post_hide': "hid a post",

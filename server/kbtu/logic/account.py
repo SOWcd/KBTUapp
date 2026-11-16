@@ -1308,6 +1308,9 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             con.execute("DELETE FROM bot_outbox WHERE kind = ? AND ref LIKE ?", (kind, ref))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
+        # a lifted take-down of my subject listing (logic/subjects.lift) names me and the subject: it and its undo go
+        con.execute("""DELETE FROM audit_log WHERE action IN ('subject_lift', 'subject_unlift') AND target IN (SELECT target FROM audit_log
+            WHERE action = 'subject_lift' AND json_extract(data, '$.user_id') = ?)""", (v.id,))
         con.execute("UPDATE audit_log SET data = json_remove(data, '$.by') WHERE action IN ('team_link_join', 'grant_link_used') AND json_extract(data, '$.by') = ?", (v.id,))  # who made the link
         con.execute("UPDATE reports SET note = NULL WHERE (target = 'user' AND target_id = ?) OR reporter_id IS NULL", (v.id,))
         log_action(con, None, "delete_my_data", "user")

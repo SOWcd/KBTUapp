@@ -426,3 +426,93 @@ def test_migration_gives_old_offers_tokens(env):  # noqa: F811
     con = db.connect(cfg.db_path)
     assert len(con.execute("SELECT token FROM contacts").fetchone()[0]) == 32
     con.close()
+
+
+def test_subject_moderation_needs_the_policy_too(subj):
+    """Review 4: a moderator who isn't the forum's sees subject listings in the queue only as a student on the policy in force."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    con.execute("UPDATE students SET consent_version = '1' WHERE user_id = ?", (p["cat"],))
+    assert c.get("/api/forum/mod", headers=tma(3)).json()["message"] == "consent"
+    con.execute("UPDATE students SET consent_version = ?, manual = 1 WHERE user_id = ?", (logic.CONSENT, p["cat"]))
+    assert c.get("/api/forum/mod", headers=tma(3)).status_code in (401, 403)
+    con.execute("UPDATE students SET manual = 0 WHERE user_id = ?", (p["cat"],))
+    assert c.get("/api/forum/mod", headers=tma(3)).status_code == 200
+
+
+def _lifted(c, con, p, sid) -> int:
+    """Ann listed, hidden, lifted by Cat: the lift's audit line id."""
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    aid = con.execute("SELECT id FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0]
+    assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
+    hid = con.execute("SELECT id FROM subject_holds").fetchone()[0]
+    assert c.post(f"/api/forum/holds/{hid}", headers=tma(3)).status_code == 204
+    return con.execute("SELECT id FROM audit_log WHERE action = 'subject_lift' ORDER BY id DESC").fetchone()[0]
+
+
+def test_deleted_author_leaves_no_lift_to_undo(subj, env):  # noqa: F811
+    """Review 4: deleting the account takes the lift's audit lines (they name the author and subject), and an Undo
+    for someone no longer a student makes nothing."""
+    c, con, p, sid, _ = subj
+    _, cfg = env
+    line = _lifted(c, con, p, sid)
+    data = json.loads(con.execute("SELECT data FROM audit_log WHERE id = ?", (line,)).fetchone()[0])
+    con.execute("DELETE FROM students WHERE user_id = ?", (p["ann"],))
+    with pytest.raises(logic.ApiError):
+        logic.subjects.unlift(con, logic.Viewer(p["cat"], "moderator", True), f"subject_hold:{1}", data)
+    con.execute("INSERT INTO students (user_id, student_id, first_name, last_name, course, school, consent_version, consent_at, verified_at, synced_at) "
+                "VALUES (?, '24Bann', 'Ann', 'Testov', 2, 'SITE', ?, 0, 0, 0)", (p["ann"], logic.CONSENT))
+    delete_now(c, cfg, tma(1))
+    assert not con.execute("SELECT 1 FROM audit_log WHERE action IN ('subject_lift', 'subject_unlift')").fetchone()
+    assert not con.execute("SELECT 1 FROM subject_holds").fetchone()
+
+
+def test_hide_with_the_row_gone_is_quiet(subj):
+    """Review 4: hide_ask is one write; a row gone (left) meanwhile: nothing, no error; a hide records its hold whole."""
+    c, con, p, sid, _ = subj
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    row = con.execute("SELECT id, created_at FROM asks").fetchone()
+    c.delete(f"/api/subjects/{sid}/me", headers=tma(1))
+    logic.hide_ask(con, row[0], "reports", made=(p["ann"], row[1]))                       # left before the verdict: quiet
+    assert not con.execute("SELECT 1 FROM subject_holds").fetchone()
+
+    # one transaction: a failure part way (here the hold's write) leaves the listing as it was, never half hidden
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    row = con.execute("SELECT id FROM asks").fetchone()
+
+    def broken(*a, **k):
+        raise RuntimeError("mid-way")
+    import kbtu.logic.subjects as subj_mod
+    real, subj_mod.hold = subj_mod.hold, broken
+    try:
+        with pytest.raises(RuntimeError):
+            logic.hide_ask(con, row[0], "moderator", p["cat"])
+    finally:
+        subj_mod.hold = real
+    assert con.execute("SELECT status FROM asks").fetchone()[0] == "live" and not con.in_transaction
+
+
+def test_a_past_terms_hold_never_blocks_a_new_one(subj, monkeypatch):
+    """Review 4: last term's hold, over, makes way: the new take-down is recorded (a new row) and stands."""
+    c, con, p, sid, _ = subj
+    con.execute("INSERT INTO subject_holds (user_id, subject, title, why, at, until) VALUES (?, ?, 'x', 'moderator', 0, 1)", (p["ann"], sid))
+    old = con.execute("SELECT id FROM subject_holds").fetchone()[0]
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    logic.hide_ask(con, aid, "moderator", p["cat"])
+    rows = con.execute("SELECT id, until FROM subject_holds").fetchall()
+    assert len(rows) == 1 and rows[0][0] != old and rows[0][1] > logic.now()
+    c.delete(f"/api/subjects/{sid}/me", headers=tma(1))
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["message"] == "restricted"
+
+
+def test_an_undone_lift_cant_be_replayed(subj):
+    """Review 4: lift H1, undo it (the hold again: H2), lift H2: H1's Undo is decided and does nothing."""
+    c, con, p, sid, _ = subj
+    line1 = _lifted(c, con, p, sid)
+    assert c.post(f"/api/admin/done/{line1}/undo", headers=tma(3)).status_code == 204
+    h2 = con.execute("SELECT id FROM subject_holds").fetchone()[0]
+    assert c.post(f"/api/forum/holds/{h2}", headers=tma(3)).status_code == 204
+    assert c.post(f"/api/admin/done/{line1}/undo", headers=tma(3)).status_code in (404, 409)
+    assert not con.execute("SELECT 1 FROM subject_holds").fetchone()

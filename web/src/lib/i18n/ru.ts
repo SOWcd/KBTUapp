@@ -410,6 +410,8 @@ const ru = {
   'audit.a.ban': "забанил",
   'audit.a.unban': "снял бан",
   'audit.a.report_remove': "убрал по жалобе",
+  'audit.a.subject_lift': "вернул право отмечаться на предмете",
+  'audit.a.subject_unlift': "снова снял с предмета",
   'audit.a.report_keep': "оставил после жалобы",
   'audit.a.restore': "вернул",
   'audit.a.post_hide': "скрыл пост",

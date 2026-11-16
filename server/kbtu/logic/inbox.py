@@ -174,7 +174,7 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
     elif act in ("chat_decline", "chat_remove"):
         undo_chat(con, v, tid)
     elif act == "subject_lift":  # a subject listing's take-down lifted: made again, its deadline as it was
-        subjects.unlift(con, v, json.loads(a["data"] or "{}"))
+        subjects.unlift(con, v, a["target"], json.loads(a["data"] or "{}"))
     elif act == "event_delete":
         undo_delete_event(con, v, tid)
     elif act == "tg_report_close" and kind == "tgreport":

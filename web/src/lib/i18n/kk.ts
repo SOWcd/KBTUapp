@@ -410,6 +410,8 @@ const kk: Dict = {
   'audit.a.ban': "бұғаттады",
   'audit.a.unban': "бұғатты алды",
   'audit.a.report_remove': "шағым бойынша алып тастады",
+  'audit.a.subject_lift': "пәнге белгілену құқығын қайтарды",
+  'audit.a.subject_unlift': "пәннен қайта алды",
   'audit.a.report_keep': "шағымнан кейін қалдырды",
   'audit.a.restore': "қайтарды",
   'audit.a.post_hide': "постты жасырды",

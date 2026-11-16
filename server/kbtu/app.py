@@ -259,7 +259,7 @@ def ask_mod_viewer(request: Request, v: Me, con: Con) -> tuple[Viewer, bool]:
         return forum_viewer(request, v, con), False
     except ApiError:
         if v.role in ("admin", "moderator") and logic.subjects.on(request.app.state.cfg.subjects_file):
-            return v, True
+            return subj_reader(request, v, con), True  # the listings are find-people data: a student on the policy in force, as to read them
         raise
 
 

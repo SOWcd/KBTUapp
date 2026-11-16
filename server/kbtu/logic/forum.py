@@ -434,15 +434,16 @@ def hide_ask(con, aid: int, why: str, by: int | None = None, close_reports: bool
     term gone). close_reports: False when the caller closes them itself in the same decision (moderation.resolve_report).
     made: (author, created_at) the decision was taken on (a deferred AI verdict): any other row, nothing."""
     guard = " AND user_id = ? AND created_at = ?" if made else ""
-    if con.execute("UPDATE asks SET status = 'hidden', why = ? WHERE id = ? AND status IN ('live', 'held') AND expires_at > ?" + guard,
-                   (why, aid, _now(), *(made or ()))).rowcount:
-        a = one(con, "SELECT user_id, subject, expires_at FROM asks WHERE id = ?", aid)
-        if a["subject"]:
-            subjects.hold(con, a["user_id"], a["subject"], by, why, a["expires_at"])
-        notify(con, a["user_id"], "ask_hidden", f"ah:{aid}")
-    if close_reports:
-        con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
-                    (by, _now(), aid))
+    with tx(con):  # one write (joins the caller's): a leave in between finds it whole or not at all
+        a = one(con, "UPDATE asks SET status = 'hidden', why = ? WHERE id = ? AND status IN ('live', 'held') AND expires_at > ?" + guard
+                + " RETURNING user_id, subject, expires_at", why, aid, _now(), *(made or ()))
+        if a:
+            if a["subject"]:
+                subjects.hold(con, a["user_id"], a["subject"], by, why, a["expires_at"])
+            notify(con, a["user_id"], "ask_hidden", f"ah:{aid}")
+        if close_reports:
+            con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
+                        (by, _now(), aid))
 
 
 def forum_sweep(con) -> None:
