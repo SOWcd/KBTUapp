@@ -145,8 +145,8 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     elif target == "user":  # a profile: its nick, own photo and "about me"
         if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
             raise ApiError("not_found")
-    elif target == "ask":  # a forum request (forum.py): not my own, still up
-        if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id):
+    elif target == "ask":  # a forum request (forum.py): not my own, still up, one this caller may see
+        if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id) or not may_touch_ask(con, tid):
             raise ApiError("not_found")
     elif target == "fpost":  # a post in the forum channel (fchannel.py): in the channel now, not my own; whose stays hidden
         if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0 AND user_id != ?", tid, v.id):
@@ -214,7 +214,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
             # a Gallery post of no event: the photo itself opens (where: gallery)
             text, where = (f"media/{p['path']}.t.webp", ("event", p["eid"]) if p["eid"] else ("gallery", r["target_id"])) if p else (None, None)
         elif r["target"] == "ask":  # a forum request: its words (forum.py hides it only with three reports and the AI, or here)
-            a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
+            a = may_touch_ask(con, r["target_id"]) and one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
         elif r["target"] == "fpost":  # a forum channel post: its words, and the way to it in the channel (an anonymous one names nobody)
             p = one(con, f"SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND {FPOST_UP}", r["target_id"])
@@ -261,6 +261,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
     _mod(v)
     if _about(con, target, tid) == v.id:
         raise ApiError("forbidden")
+    if target == "ask" and not may_touch_ask(con, tid):
+        raise ApiError("not_found")
     if not one(con, "SELECT 1 FROM reports WHERE target = ? AND target_id = ? AND status = 'open'", target, tid):
         raise core.decided(con, f"{target}:{tid}")  # another moderator came first (or it went by itself)
     if target == "fpost":  # the channel's own take-down (its audit line fchan_hide, the minute's Undo) and its reports close, as one
@@ -292,8 +294,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                 for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
                                 (tid, p["added_by"], json.dumps(dict(p)), tid, core.now()))
-            elif target == "ask":
-                hide_ask(con, tid, "moderator", v.id)
+            elif target == "ask":  # its reports close below, with this decision (hide_ask leaves them to it)
+                hide_ask(con, tid, "moderator", v.id, close_reports=False)
             elif target == "user":  # the nick, the own photo and "about me" go, the Telegram photo is back; kept 30 days for an undo
                 u = one(con, "SELECT nick, bio, avatar_tg, avatar_file_id FROM users WHERE id = ?", tid)
                 if u and (u["nick"] or u["bio"] or u["avatar_file_id"]):
@@ -371,7 +373,7 @@ def purge_takedowns(con) -> list[str]:
 from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
 from .clubs import org  # noqa: E402
-from .forum import hide_ask  # noqa: E402
+from .forum import hide_ask, may_touch_ask  # noqa: E402
 from . import fchannel, gallery  # noqa: E402
 from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402

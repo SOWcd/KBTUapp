@@ -201,8 +201,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
     if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
-        tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
-        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending' AND token IS ?", int(ref[1]), tok)
+        tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's; none: nothing
+        c = tok and one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", int(ref[1]), m["user_id"], tok)
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
         if not p:
             return None
@@ -211,10 +211,12 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
         text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
-        k = f"ct:{c['id']}:{tok}" if tok else f"ct:{c['id']}"
+        k = f"ct:{c['id']}:{tok}"
         return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
-    if kind == "contact_ok":  # co:<contact>:to|from[:<token>]: accepted; each side gets the other's Telegram
-        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted' AND token IS ?", int(ref[1]), ref[3] if len(ref) > 3 else None)
+    if kind == "contact_ok":  # co:<contact>:to|from:<token>: accepted; each side gets the other's Telegram, never a stranger's
+        c = len(ref) > 3 and one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted' AND token = ?", int(ref[1]), ref[3])
+        if c and m["user_id"] != (c["from_id"] if ref[2] == "to" else c["to_id"]):  # rendered for its own recipient only
+            c = None
         other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
         p = other and one(con, logic.PERSON + " WHERE u.id = ?", other)
         if not p:

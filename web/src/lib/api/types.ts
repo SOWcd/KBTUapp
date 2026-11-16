@@ -770,7 +770,9 @@ export interface Ask {
 export interface Contact extends ForumCard { id: Id; token: string | null /* the offer's own: answered with it (server forum.decide_contact) */; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
 /** What waits for a moderator: held requests (the AI said no or couldn't tell) and reported ones, each due a day on */
 export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
-export interface ForumMod { held: ModAsk[]; skills: Skill[] | null /* null: the forum is off, only subjects' listings wait here */ }
+export interface ForumMod { held: ModAsk[]; skills: Skill[] | null /* null: the forum is off, only subjects' listings wait here */; holds: SubjectHold[] }
+// a moderator's take-down of a subject listing (server subjects.holds): standing (lift it) or lifted (put it back), this term
+export interface SubjectHold { id: Id; title: string; person: PersonRef; name: string; why: string; at: Ts; until: Ts; lifted: boolean }
 export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }
 
 /** The volunteers ledger of one club (server logic/vol.py). minutes: the starting balance + closed shifts (one never
@@ -812,4 +814,5 @@ export interface Subject { id: string; names: Record<'ru' | 'kk' | 'en', string>
 export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
 export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
   offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
-export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null }
+export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
+  restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }

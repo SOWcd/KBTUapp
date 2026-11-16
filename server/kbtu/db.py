@@ -1810,10 +1810,25 @@ MIGRATIONS: list[tuple[int, str]] = [
     # (Nov 16) the subjects' cards (logic/subjects.py): "looking for people to study it with" is a find-people request
     # on a subject (its card's id), one per person and subject; the requests' moderation, contact and expiry as they are
     # and an offer's token (forum.contact): a bot button or message carries it, so a deleted offer's reused id never
-    # answers another (an old Accept naming Bob shared Ann's Telegram with Doug, review Nov 16); old rows keep NULL
+    # answers another (an old Accept naming Bob shared Ann's Telegram with Doug, review Nov 16); old rows get one too, so
+    # every button without one stops working
     (177, """ALTER TABLE asks ADD COLUMN subject TEXT;
     CREATE UNIQUE INDEX asks_subject ON asks(subject, user_id) WHERE subject IS NOT NULL;
-    ALTER TABLE contacts ADD COLUMN token TEXT;"""),
+    ALTER TABLE contacts ADD COLUMN token TEXT;
+    UPDATE contacts SET token = lower(hex(randomblob(16))) WHERE token IS NULL;
+    -- a moderator's take-down of a subject listing, apart from the listing (logic/subjects.py): while it stands (lifted_at
+    -- NULL, until that term's end) the author can't list on that subject again; leaving still deletes the listing
+    CREATE TABLE subject_holds (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      title TEXT NOT NULL,
+      by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      why TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      until INTEGER NOT NULL,
+      lifted_at INTEGER) STRICT;
+    CREATE INDEX subject_holds_by ON subject_holds(user_id, subject);"""),
 ]
 
 

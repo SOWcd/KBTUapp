@@ -35,7 +35,7 @@
   function fail(e: unknown) {
     if (e instanceof ApiErr && e.code === 'forbidden') return; // the policy's gate asks in place (api client)
     haptic.error();
-    say(t(e instanceof ApiErr && e.message === 'link' ? 'sj.linkErr' : e instanceof ApiErr && e.message === 'subjects' ? 'sj.many' : 'common.error'), 'pleading_face_3d');
+    say(t(e instanceof ApiErr && e.message === 'link' ? 'sj.linkErr' : e instanceof ApiErr && e.message === 'subjects' ? 'sj.many' : e instanceof ApiErr && e.message === 'restricted' ? 'sj.restricted' : 'common.error'), 'pleading_face_3d');
   }
   // my mark in the list's "mine" too
   function listed(on: boolean) { if (subj.all) subj.all.mine = on ? [...new Set([...subj.all.mine, id])] : subj.all.mine.filter((x) => x !== id); }
@@ -62,7 +62,7 @@
   }
   const more = (e: MouseEvent, p: SubjectPerson) => menu(e.currentTarget as Element,
     [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('ask', p.ask, p.note ?? p.name) }], 'end');
-  const status = $derived(mine?.status === 'held' ? t('sj.held') : mine?.status === 'hidden' ? t('sj.hidden') : null);
+  const status = $derived(mine?.status === 'held' ? t('sj.held') : mine?.status === 'hidden' ? t('sj.hidden') : card?.restricted ? t('sj.restricted') : null);
 </script>
 
 <Sheet {overlay} tall heading={base ? nameOf(base, i18n.lang) : t('sj.title')} icon={BookOpen}>
@@ -71,7 +71,7 @@
     {#if base}<p class="codes num">{[base.codes.join(' · '), base.credits ? tn('sj.credits', base.credits) : '', schoolShort(base.school)].filter(Boolean).join(' · ')}</p>{/if}
 
     <Group footnote={status ?? (mine?.until ? t('sj.listNote', { when: dayMonth(mine.until) }) : t('sj.listOff'))}>
-      <Row title={t('sj.listMe')} accessory="switch" checked={!!mine} disabled={!card || mine?.status === 'hidden'} onchange={toggle} />
+      <Row title={t('sj.listMe')} accessory="switch" checked={!!mine} disabled={!card || (!mine && !!card.restricted)} onchange={toggle} />
     </Group>
     {#if mine && mine.status !== 'hidden'}
       <div class="note">

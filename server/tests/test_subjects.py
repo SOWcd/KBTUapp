@@ -189,6 +189,8 @@ def test_old_accept_never_answers_a_reused_offer(subj):
     assert bot._render(con, old) is None                                                  # Bob's card: gone, not Doug's
     assert logic.decide_contact(con, p["ann"], bob_id, True, bob_tok) is None            # Bob's Accept: nothing
     assert logic.decide_contact(con, p["ann"], bob_id, True) is None                     # nor a button without a token
+    bot_tap = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask' ORDER BY id DESC").fetchone()) | {"lang": "en"}
+    assert bot._render(con, bot_tap | {"user_id": p["bob"]}) is None                    # Doug's card renders for Ann alone
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending"
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'contact_ok'").fetchone()
     assert logic.decide_contact(con, p["ann"], doug_id, True, doug_tok) == "accepted"    # Doug's own card works
@@ -222,20 +224,73 @@ def test_moderators_without_forum_see_subjects_only(subj, monkeypatch):
     assert [r[0] for r in con.execute("SELECT status FROM asks WHERE subject IS NULL ORDER BY id")] == ["held", "live"]
 
 
-def test_take_down_survives_resubmit_and_relist(subj):
-    """Review P2: a moderator's hide stays through the same note sent again and through leaving and listing again,
-    until a moderator lets it go."""
+def test_take_down_is_its_own_record(subj):
+    """Review 2, P2: leaving is always real (gone from mine, no slot, its offers with it); a moderator's take-down is a
+    record of its own: listing again on that subject is refused while it stands, Admin lists it and lifts it (an
+    accidental hide undone, the listing back if its author kept it), the lift can be put back, and it ends with the term."""
     c, con, p, sid, _ = subj
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
     c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"})
     aid = con.execute("SELECT id FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0]
     assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
-    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"}).json()["mine"]["status"] == "hidden"
+    r = c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"})
+    assert r.status_code == 409 and r.json()["message"] == "restricted"                  # the same note again: refused
     assert c.delete(f"/api/subjects/{sid}/me", headers=tma(1)).status_code == 204
-    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"]["status"] == "hidden"
+    card = c.get(f"/api/subjects/{sid}", headers=tma(1)).json()
+    assert card["mine"] is None and card["restricted"] and not con.execute("SELECT 1 FROM asks").fetchone()  # gone for real
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["message"] == "restricted"  # leaving and again: refused
+    hold = c.get("/api/forum/mod", headers=tma(3)).json()["holds"]
+    assert [(h["title"], h["lifted"]) for h in hold] == [(CALC, False)]
+    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(2), json={}).status_code == 404  # a student: no
+    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(3), json={}).status_code == 204  # lifted
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"]["status"] == "live"
+    assert c.post(f"/api/forum/holds/{hold[0]['id']}", headers=tma(3), json={"back": True}).status_code == 204  # the lift undone
     assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"] == []
-    assert c.post(f"/api/forum/asks/{aid}/release", headers=tma(3)).status_code == 200    # a moderator lifts it
-    assert [x["person"]["id"] for x in c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"]] == [p["ann"]]
+    assert {r[0] for r in con.execute("SELECT action FROM audit_log")} >= {"subject_lift", "subject_hold"}
+    end = con.execute("SELECT until FROM subject_holds").fetchone()[0]
+    assert end == logic.subjects.term_end(logic.now())                                    # it ends with this term
+
+
+def test_cap_holds_under_two_at_once(subj, monkeypatch):
+    """Review 2, P2: two lists at once at the cap minus one: both pass reserve() (the AI is slow), one listing ends up."""
+    c, con, p, sid, path = subj
+    monkeypatch.setattr(logic.subjects, "LISTED_MAX", 1)
+    ann = logic.Viewer(p["ann"], "user", True)
+    gas, calc = tool.cards(scrape())
+    a, b = (logic.subjects.reserve(con, ann, str(path), x["id"]) for x in (gas, calc))
+    logic.subjects.join(con, ann, str(path), a, "", True)
+    with pytest.raises(logic.ApiError):
+        logic.subjects.join(con, ann, str(path), b, "", True)
+    assert con.execute("SELECT COUNT(*) FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0] == 1
+
+
+def test_report_then_remove_from_admin(subj):
+    """Review 2, P2: a reported listing removed from Admin's reports: hidden, its report closed, one decision."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"})
+    aid = con.execute("SELECT id FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0]
+    assert c.post("/api/reports", headers=tma(2), json={"target": "ask", "id": aid, "reason": "spam"}).status_code == 204
+    assert [r["id"] for r in c.get("/api/admin/reports", headers=tma(3)).json() if r["target"] == "ask"] == [aid]
+    assert c.post(f"/api/admin/reports/ask/{aid}", headers=tma(3), json={"remove": True}).status_code == 204
+    assert con.execute("SELECT status FROM asks WHERE id = ?", (aid,)).fetchone()[0] == "hidden"
+    assert con.execute("SELECT status FROM reports").fetchone()[0] == "actioned"
+    assert con.execute("SELECT COUNT(*) FROM subject_holds").fetchone()[0] == 1
+
+
+def test_reports_scope_without_forum(subj):
+    """Review 2, P2: with FORUM off, the forum's own requests never surface through reports: not reported, not in the
+    queue, not decided, not in Admin's count or Done."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id IN (?, ?)", (p["cat"], p["bob"]))
+    other = logic.create_ask(con, logic.Viewer(p["ann"], "user", True), {"kind": "help", "title": "Secret words"}, True)
+    assert c.post("/api/reports", headers=tma(3), json={"target": "ask", "id": other["id"], "reason": "spam"}).status_code == 404
+    con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'ask', ?, 'spam', 0)", (p["bob"], other["id"]))
+    assert "Secret" not in json.dumps(c.get("/api/admin/reports", headers=tma(3)).json())
+    assert c.get("/api/me", headers=tma(3)).json()["counters"]["inbox"] == 0
+    assert c.post(f"/api/admin/reports/ask/{other['id']}", headers=tma(3), json={"remove": True}).status_code == 404
+    con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'report_remove', ?, '{}', ?)", (p["bob"], f"ask:{other['id']}", logic.now()))
+    assert "Secret" not in json.dumps(c.get("/api/admin/inbox", headers=tma(3)).json())
 
 
 def test_ai_only_after_the_subject_and_the_quota(subj, monkeypatch):
@@ -260,3 +315,37 @@ def test_hourly_counters_go(subj, monkeypatch):
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:1:%'")] == [f"subj:1:{logic.now() // 3600}"]
     logic.forum_sweep(con)
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%'")] == [f"subj:1:{logic.now() // 3600}"]
+
+
+def test_tokenless_offers_never_answer(subj):
+    """Review 2, P1: an offer from before tokens whose id another took: the migration gives every row a token, and a
+    button or message without one answers or shows nothing (bot and app alike); an accepted message renders for its
+    own recipient only."""
+    c, con, p, sid, _ = subj
+    cid, tok = _ann_offer(c, con, sid, 2)
+    assert logic.decide_contact(con, p["ann"], cid, True, None) is None
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (p["ann"],))
+    forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True)))
+    assert forum.post(f"/api/forum/contacts/{cid}", headers=tma(1), json={"yes": True}).status_code == 404  # the app, no token
+    assert bot._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]}) is None
+    assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
+    ok = {"kind": "contact_ok", "ref": f"co:{cid}:to:{tok}", "lang": "en"}
+    assert bot._render(con, ok | {"user_id": p["bob"]}) and bot._render(con, ok | {"user_id": p["cat"]}) is None
+    assert bot._render(con, {"kind": "contact_ok", "ref": f"co:{cid}:to", "lang": "en", "user_id": p["bob"]}) is None
+
+
+def test_migration_gives_old_offers_tokens(env):  # noqa: F811
+    c, cfg = env
+    a, b = login(c, 1, "ann")["id"], login(c, 2, "bob")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("DROP INDEX asks_subject")
+    con.execute("ALTER TABLE asks DROP COLUMN subject")
+    con.execute("ALTER TABLE contacts DROP COLUMN token")
+    con.execute("DROP TABLE subject_holds")
+    con.execute("INSERT INTO contacts (from_id, to_id, created_at) VALUES (?, ?, 0)", (b, a))
+    con.execute("PRAGMA user_version = 176")
+    con.close()
+    db.init(cfg.db_path)
+    con = db.connect(cfg.db_path)
+    assert len(con.execute("SELECT token FROM contacts").fetchone()[0]) == 32
+    con.close()

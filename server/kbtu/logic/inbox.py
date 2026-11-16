@@ -60,8 +60,9 @@ def count(con, v: Viewer) -> int:
         OR r.target = 'photo' AND EXISTS (SELECT 1 FROM event_photos WHERE file_id = r.target_id AND added_by = :me)
         OR r.target = 'photo' AND EXISTS (SELECT 1 FROM gallery_photos WHERE file_id = r.target_id AND user_id = :me)
         OR r.target = 'ask' AND EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND user_id = :me)
-        OR r.target = 'fpost' AND EXISTS (SELECT 1 FROM fchan_posts WHERE id = r.target_id AND user_id = :me))""".replace(":me", "?"),
-            *[v.id] * 6)[0]
+        OR r.target = 'fpost' AND EXISTS (SELECT 1 FROM fchan_posts WHERE id = r.target_id AND user_id = :me)
+        OR r.target = 'ask' AND ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = r.target_id AND subject IS NOT NULL))""".replace(":me", "?"),
+            *[v.id] * 6, int(not may_touch_ask(con, None)))[0]  # the ?: not the forum's (may_touch_ask's rule)
     n += one(con, """SELECT COUNT(*) FROM tgc_comments c WHERE (c.status IN ('open', 'queued') OR c.review = 1)
         AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)
         AND EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id)""", v.id, v.id)[0]  # tgcomments.queue_items' rule
@@ -102,6 +103,8 @@ def done(con, v: Viewer) -> list[dict]:
         later.setdefault(key, a["action"])
         if a["action"] not in acts:
             continue  # an undo's own line, or another role's decision
+        if a["target"].startswith("ask:") and not may_touch_ask(con, int(a["target"][4:]) if a["target"][4:].isdigit() else None):
+            continue  # a forum request this caller isn't the forum's for (FORUM)
         out.append({"id": a["id"], "action": a["action"], "target": a["target"], "actor": a["actor_id"], "at": a["at"],
                     "data": json.loads(a["data"] or "{}"), "undone": not first and later[key] in UNDOES,
                     "undo": first and _undoable(a["action"], a["target"]) and (a["actor_id"] == v.id or v.role == "admin")})
@@ -185,6 +188,7 @@ from .account import roster_requests  # noqa: E402
 from .chatlist import pending_chats, undo_chat  # noqa: E402
 from .clubs import club_applications, official_requests, undo_club_refusal, undo_official  # noqa: E402
 from .core import ADMIN_DONE, DECISIONS, MOD_DONE, UNDOES, decided, same_targets  # noqa: E402
+from .forum import may_touch_ask  # noqa: E402
 from .moderation import report_queue, restore  # noqa: E402
 from .organizing import undo_delete_event  # noqa: E402
 from .oversight import _mod  # noqa: E402

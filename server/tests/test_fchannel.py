@@ -415,6 +415,7 @@ def test_old_board_cleaned_up(env):
     con.execute("DROP INDEX asks_subject")  # 177's
     con.execute("ALTER TABLE asks DROP COLUMN subject")
     con.execute("ALTER TABLE contacts DROP COLUMN token")
+    con.execute("DROP TABLE subject_holds")
     con.execute("DROP TABLE chat_place")  # 176's
     con.execute("DROP TRIGGER event_team_want_done")  # 175's
     con.execute("ALTER TABLE registrations DROP COLUMN team_want")

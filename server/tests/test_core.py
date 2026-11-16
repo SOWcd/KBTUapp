@@ -6478,6 +6478,8 @@ def test_forum_find_people(env, monkeypatch):
     # reports: three from accounts over two weeks old AND the AI agreeing hide it; younger accounts or no AI: it stays
     rep = lambda h: c.post("/api/reports", headers=h, json={"target": "ask", "id": ask["id"], "reason": "spam"}).status_code  # noqa: E731
     hs = [tma(82 + i) for i in (1, 3, 4)]                                                             # cat, eve, fay
+    # FORUM=1 is the staff's: only who passes its gate reports its requests (forum.may_touch_ask), so the three are staff here
+    con.execute("UPDATE users SET role = 'moderator' WHERE id IN (?, ?, ?)", tuple(people[n].id for n in ("cat", "eve", "fay")))
     monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
     assert all(rep(h) == 204 for h in hs)
     assert logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"             # new accounts don't count
@@ -6557,7 +6559,7 @@ def test_forum_moderator_queue(env):
     assert con.execute("SELECT status, why FROM asks WHERE id = ?", (other["id"],)).fetchone()[:] == ("hidden", "moderator")
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (stu.id,)).fetchone()
     assert c.patch(f"/api/forum/skills/{new['id']}", headers=tma(95), json={"approve": True}).json()["public"] is True
-    assert c.get("/api/forum/mod", headers=tma(95)).json() == {"held": [], "skills": []}
+    assert c.get("/api/forum/mod", headers=tma(95)).json() == {"held": [], "skills": [], "holds": []}
     # three reports from old accounts, no AI word: a moderator's day, counted from the third report
     t0 = int(time.time())
     for i, uid in enumerate((97, 98, 99)):

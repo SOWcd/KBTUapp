@@ -1,11 +1,13 @@
 <script lang="ts">
   // The forum's moderators: requests waiting for a word (held by the AI, or reported enough without its agreement),
   // each due a day on, to let go live or hide; and the skills catalog: new names to approve, any name to rename, merge
-  // into another, or delete. Empty and silent for everyone else (the server says no).
-  import { api, ApiErr, type ForumMod, type ModAsk, type Skill } from '../../lib/api';
+  // into another, or delete. And the subjects' take-downs, to lift. Empty and silent for everyone else (the server says no).
+  import { api, ApiErr, type ForumMod, type ModAsk, type Skill, type SubjectHold } from '../../lib/api';
+  import { sheets } from '../../lib/state/sheets';
+  import Avatar from '../../ui/Avatar.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { nowTs, duration } from '../../lib/time';
+  import { nowTs, duration, dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import SearchField from '../../ui/SearchField.svelte';
   import Group from '../../ui/Group.svelte';
@@ -30,6 +32,10 @@
   async function decide(a: ModAsk, live: boolean) {
     try { await (live ? api.releaseAsk(a.id) : api.hideAsk(a.id)); haptic.ok(); load(); changed(); } catch (e) { fail(e); }
   }
+  async function lift(h: SubjectHold) {
+    if (!h.lifted && !(await sheets.ask({ title: t('fo.mod.liftAsk'), text: t('fo.mod.liftText', { name: h.name, title: h.title }), ok: t('fo.mod.lift'), cancel: t('common.cancel') }))) return;
+    try { await api.liftHold(h.id, h.lifted); haptic.ok(); load(); changed(); } catch (e) { fail(e); }
+  }
   function pick(s: Skill) { open = open?.id === s.id ? null : s; name = s.name; into = ''; }
   async function change(s: Skill, c: Parameters<typeof api.skillMod>[1]) {
     try { await api.skillMod(s.id, c); haptic.ok(); open = null; load(); search(q, (l) => (found = l)); changed(); } catch (e) { fail(e); }
@@ -53,6 +59,18 @@
               <Button kind="gray" size="s" onclick={() => decide(a, false)}>{t('fo.mod.hide')}</Button>
             </span>
           </div>
+        {/each}
+      </Group>
+    {/if}
+
+    {#if mod.holds.length}
+      <!-- the subjects' take-downs this term: lift one (asked first; an accidental hide undone), or put a lift back -->
+      <Group caption={t('fo.mod.holds')}>
+        {#each mod.holds as h (h.id)}
+          <Row dense title={h.title} subtitle={`${h.name} · ${h.lifted ? t('fo.mod.lifted') : t('fo.mod.holdUntil', { when: dayMonth(h.until) })}`}>
+            {#snippet lead()}<Avatar person={h.person} size={32} />{/snippet}
+            {#snippet trailing()}<Button kind="gray" size="s" onclick={() => lift(h)}>{t(h.lifted ? 'fo.mod.putBack' : 'fo.mod.lift')}</Button>{/snippet}
+          </Row>
         {/each}
       </Group>
     {/if}

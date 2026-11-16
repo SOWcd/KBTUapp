@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ..db import tx
-from .core import PERSON_COLS, ApiError, Viewer, need_student, one, person_ref, short_name
+from .core import PERSON_COLS, ApiError, Viewer, log_action, need_student, one, person_ref, short_name
 
 NOTE_MAX = 140
 LISTED_MAX = 12          # subjects one person is listed on at once (a term has 6-8)
@@ -86,7 +86,7 @@ def card(con, v: Viewer, path: str, sid: str) -> dict:
                        **({"telegram": telegram_of(con, p["id"])} if p["offered"] == "accepted" else {})})
     a = one(con, "SELECT * FROM asks WHERE subject = ? AND user_id = ? AND expires_at > ?", sid, v.id, _now())
     mine = {"note": a["body"], "status": a["status"], "why": a["why"], "until": a["expires_at"]} if a else None
-    return {**s, "people": people, "mine": mine}
+    return {**s, "people": people, "mine": mine, "restricted": _held(con, v.id, sid)}
 
 
 def note_of(body: object) -> str:
@@ -111,35 +111,78 @@ def reserve(con, v: Viewer, path: str, sid: str) -> dict:
         n = int((one(con, "SELECT value FROM meta WHERE key = ?", f"subj:{v.id}:{hour}") or [0])[0])
         if n >= WRITES_AN_HOUR:
             raise ApiError("rate_limited")
-        if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND subject IS NOT NULL AND subject != ? AND expires_at > ?",
-               v.id, sid, _now())[0] >= LISTED_MAX:
-            raise ApiError("rate_limited", "subjects")
+        _may_list(con, v.id, sid)
         con.execute("DELETE FROM meta WHERE key LIKE ? AND key != ?", (f"subj:{v.id}:%", f"subj:{v.id}:{hour}"))  # my past hours
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"subj:{v.id}:{hour}", str(n + 1)))
     return s
 
 
+def _may_list(con, uid: int, sid: str) -> None:
+    """Room for one more listing (the cap, but changing one I have is fine) and no take-down standing on this subject."""
+    if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND subject IS NOT NULL AND subject != ? AND expires_at > ?",
+           uid, sid, _now())[0] >= LISTED_MAX:
+        raise ApiError("rate_limited", "subjects")
+    if _held(con, uid, sid):
+        raise ApiError("conflict", "restricted")
+
+
+def _held(con, uid: int, sid: str) -> int | None:
+    """Until when a moderator's take-down keeps me off this subject (None: it doesn't)."""
+    h = one(con, "SELECT MAX(until) FROM subject_holds WHERE user_id = ? AND subject = ? AND lifted_at IS NULL AND until > ?", uid, sid, _now())
+    return h[0] if h else None
+
+
 def join(con, v: Viewer, path: str, s: dict, note: str, verdict: bool | None) -> dict:
     """List me on a subject (reserve() first) or change my note: live at once without a note or with the AI's yes, else
-    held for a moderator (as create_ask). Until the term's end. A listing a moderator hid stays hidden whatever I send
-    (and leaving keeps it: leave()), until a moderator lets it go (forum.release_ask) or it's swept a month after its term."""
+    held for a moderator (as create_ask). Until the term's end. The cap and a take-down are checked again here, inside
+    the write: two lists at once at the cap end with one."""
     sid = s["id"]
     with tx(con):
+        _may_list(con, v.id, sid)
         status, why = ("live", None) if not note or verdict else ("held", "ai" if verdict is False else "check")
         con.execute("""INSERT INTO asks (user_id, kind, title, body, status, why, created_at, expires_at, subject)
             VALUES (?, 'help', ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (subject, user_id) WHERE subject IS NOT NULL DO UPDATE SET title = excluded.title, body = excluded.body,
-                status = CASE WHEN asks.status = 'hidden' THEN 'hidden' ELSE excluded.status END,
-                why = CASE WHEN asks.status = 'hidden' THEN asks.why ELSE excluded.why END,
-                expires_at = excluded.expires_at, found = NULL""",
+                status = excluded.status, why = excluded.why, expires_at = excluded.expires_at, found = NULL""",
                     (v.id, s["names"]["ru"], note, status, why, _now(), term_end(_now()), sid))
     return card(con, v, path, sid)
 
 
 def leave(con, v: Viewer, sid: str) -> None:
-    """Off the list at once: the row goes (its offers with it); one a moderator hid stays, hidden (else leaving and
-    listing again would undo the take-down)."""
-    con.execute("DELETE FROM asks WHERE subject = ? AND user_id = ? AND status != 'hidden'", (sid, v.id))
+    """Off the list at once and for real: the row goes, its offers with it (a take-down stands apart: subject_holds)."""
+    con.execute("DELETE FROM asks WHERE subject = ? AND user_id = ?", (sid, v.id))
+
+
+# ---- a moderator's take-down: its own record, apart from the listing (forum.hide_ask writes it), for that term
+
+def hold(con, uid: int, sid: str, by: int | None, why: str, until: int) -> None:
+    title = one(con, "SELECT title FROM asks WHERE user_id = ? AND subject = ?", uid, sid)
+    con.execute("INSERT INTO subject_holds (user_id, subject, title, by_id, why, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (uid, sid, title[0] if title else sid, by, why, _now(), max(until, term_end(_now()))))
+
+
+def holds(con) -> list[dict]:
+    """This term's take-downs for Admin: standing ones (to lift) and lifted ones (to put back), newest first."""
+    out = []
+    for h in con.execute(f"""SELECT h.id AS hid, h.title, h.why, h.at, h.until, h.lifted_at, {PERSON_COLS} FROM subject_holds h JOIN users u ON u.id = h.user_id
+            LEFT JOIN students s ON s.user_id = u.id WHERE h.until > ? ORDER BY h.id DESC LIMIT 100""", (_now(),)).fetchall():
+        out.append({"id": h["hid"], "title": h["title"], "person": person_ref(h), "name": short_name(h), "why": h["why"], "at": h["at"],
+                    "until": h["until"], "lifted": h["lifted_at"] is not None})
+    return out
+
+
+def lift(con, v: Viewer, hid: int, back: bool = False) -> None:
+    """A moderator lifts a take-down (an accidental one undone: the listing, if its author kept it, is up again), or
+    puts a lifted one back (back). Logged both ways."""
+    _mod(v)
+    with tx(con):
+        h = one(con, "SELECT * FROM subject_holds WHERE id = ? AND until > ? AND lifted_at IS " + ("NOT NULL" if back else "NULL"), hid, _now())
+        if not h:
+            raise ApiError("not_found")
+        con.execute("UPDATE subject_holds SET lifted_at = ? WHERE id = ?", (None if back else _now(), hid))
+        con.execute("UPDATE asks SET status = ?, why = ? WHERE user_id = ? AND subject = ? AND status = ?",
+                    ("hidden", h["why"], h["user_id"], h["subject"], "live") if back else ("live", None, h["user_id"], h["subject"], "hidden"))
+        log_action(con, v.id, "subject_hold" if back else "subject_lift", f"subject_hold:{hid}")
 
 
 def sweep_counters(con) -> None:
@@ -163,3 +206,4 @@ def _now() -> int:
 
 from . import core  # noqa: E402
 from .forum import contact, telegram_of  # noqa: E402
+from .oversight import _mod  # noqa: E402

@@ -149,6 +149,9 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     v = _upsert(con, tg, cfg.admins)
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
+        # the find-people forum's own requests surface for its people alone (FORUM, forum_viewer's rule): forum.may_touch_ask
+        caller["asks_all"] = cfg.forum and v.role in ("admin", "moderator") or cfg.forum_founder and bool(
+            logic.one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", v.id))
     if (oid := request.headers.get("x-staff-org")) is not None:
         # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
         # without a role in it, and may fill it from the club's announcement (the AI, nothing stored). Only these routes; the draft is then run through X-Staff-Event like any other
@@ -2540,6 +2543,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum/asks/{aid}/release")
     def forum_release_ask(aid: int, con: Con, m: AskMod):
         return logic.release_ask(con, m[0], aid, m[1])
+
+    @app.post("/api/forum/holds/{hid}", status_code=204)
+    def subject_hold_lift(hid: int, con: Con, m: AskMod, body: dict = Body(default={})):
+        """A subject listing's take-down lifted (Admin, confirmed first), or put back (back: the lift's undo)."""
+        logic.subjects.lift(con, m[0], hid, body.get("back") is True)
 
     @app.get("/api/forum/asks/{aid}/people")
     def forum_ask_people(aid: int, con: Con, v: Forum):
