@@ -99,3 +99,23 @@ def test_form_fills_closed_short_teams_after_deadline_or_fill_all(env, monkeypat
     clock[0] = t0 + 3601
     r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
     assert r["regShut"] and r["placed"] == 1 and len(_mine(c, eid, two)["members"]) == 3
+
+
+def test_deadline_alone_fills_closed_teams_to_min_only(env, monkeypatch):
+    """The review: a closed team already at min (3 friends of 3..5) gets no strangers by the deadline alone; only the
+    organizer's explicit "fill all" tops it up to max."""
+    c, cfg = env
+    con = _club(c, cfg)
+    t0 = int(time.time())
+    clock = [t0]
+    set_clock(monkeypatch, lambda: clock[0])
+    eid = _event(c, **{**CS2, "teamMin": 3}, regUntil=t0 + 3600)
+    (three,) = _short_teams(c, con, eid, [3])
+    (solo,) = _people(c, 1, first=300)
+    _pay(c, eid, solo)
+    _review(c, con, eid, solo, False)
+    clock[0] = t0 + 3601
+    r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
+    assert r["placed"] == 0 and len(_mine(c, eid, three)["members"]) == 3
+    r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20), json={"all": True}).json()
+    assert r["placed"] == 1 and len(_mine(c, eid, three)["members"]) == 4

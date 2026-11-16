@@ -435,8 +435,8 @@ def _team_word(con, v: Viewer) -> str:
 
 def form(con, v: Viewer, eid: int, fill_all: object = False) -> dict:
     """"Form teams": the open teams filled up to max from those alone (the fullest short team first, so teams are
-    completed rather than spread; people in the order they signed up); after the sign-up deadline, or with fill_all (the
-    organizer confirmed it), every short team, open or not; then new teams of the rest (sizes(), no more than the cap leaves room for), each named "<Team> N" in the organizer's language, its first member
+    completed rather than spread; people in the order they signed up); after the sign-up deadline every team under min, open
+    or not, up to min; with fill_all (the organizer confirmed it) every short team up to max; then new teams of the rest (sizes(), no more than the cap leaves room for), each named "<Team> N" in the organizer's language, its first member
     captain. Existing teams are never broken up, nobody in a team moves; run again, it does what is left. A banned user
     is never placed, nor anyone without the teams consent (`noConsent`: how many), nor on a paid event anyone whose
     receipt the organizer hasn't checked (`unchecked` in the list). Everyone placed hears it from the bot.
@@ -454,10 +454,16 @@ def form(con, v: Viewer, eid: int, fill_all: object = False) -> dict:
             ORDER BY r.created_at, r.id""".replace("{_CHECKED}", _CHECKED), CONSENT, eid, int(not e["price"]))
         solo = [r[0] for r in alone if r[1]]
         placed: list[tuple[int, int]] = []
-        for t in rows(con, """SELECT t.id, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
-                WHERE t.event_id = ? AND (t.open = 1 OR ?) GROUP BY t.id ORDER BY n DESC, t.id""", eid, int(every)):
-            for _ in range(min(e["team_max"] - t["n"], len(solo))):
-                placed.append((t["id"], solo.pop(0)))
+        teams = [dict(t) for t in rows(con, """SELECT t.id, t.open, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
+                WHERE t.event_id = ? GROUP BY t.id ORDER BY n DESC, t.id""", eid)]
+        # first every team under min up to min (a closed one only once sign-up closed or on "fill all": it can't play as
+        # it is), then up to max the teams that asked (open), a closed one only on the explicit "fill all" (the review:
+        # three friends' closed team of 3 of 3..5 gets no strangers by the deadline alone)
+        for upto, who in ((e["team_min"], lambda t: t["open"] or every), (e["team_max"], lambda t: t["open"] or fill_all is True)):
+            for t in sorted(teams, key=lambda t: (-t["n"], t["id"])):
+                while who(t) and t["n"] < upto and solo:
+                    placed.append((t["id"], solo.pop(0)))
+                    t["n"] += 1
         word, n = _team_word(con, v), 0
         taken = {r[0] for r in rows(con, "SELECT name_key FROM event_teams WHERE event_id = ?", eid)}
         room = len(solo) if e["team_cap"] is None else max(0, e["team_cap"] - len(taken))
