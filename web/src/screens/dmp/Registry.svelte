@@ -9,7 +9,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
   import RosterBody from './RosterBody.svelte';
   import { i18n } from '../../lib/i18n/index.svelte';
-  import type { OrgRef } from '../../lib/api';
+  import { chosen } from '../../lib/desk';
   import FileDown from '@lucide/svelte/icons/file-down';
   import OfficialMark from '../../ui/OfficialMark.svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -34,7 +34,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Skeleton from '../../ui/Skeleton.svelte';
 
-  let { inSheet = false, wide = false }: { inSheet?: boolean; wide?: boolean } = $props();
+  // top: nothing stands over the registry (its keys are its own only then)
+  let { inSheet = false, wide = false, top = true }: { inSheet?: boolean; wide?: boolean; top?: boolean } = $props();
   // the month: this one (loaded with the app, so the page opens full), or up to a year back (the numbers DMP used to
   // collect as monthly reports)
   let back = $state(0);
@@ -91,15 +92,19 @@
     const { col, dir } = sort;
     return [...l].sort((a, b) => { const x = val(a, col), y = val(b, col); return (typeof x === 'number' ? x - (y as number) : x.localeCompare(y as string, i18n.lang)) * dir; });
   });
-  let sel = $state<OrgRef | null>(null);
-  const pick = (o: RegistryOrg) => { sel = o.org; document.getElementById(`reg-${o.org.id}`)?.scrollIntoView({ block: 'nearest' }); };
+  // the chosen club by id: its row's current object, and only while the list on screen has it (lib/desk.ts)
+  let selId = $state<number | null>(null);
+  const sel = $derived(chosen(selId, orgs, hits));
+  const pick = (o: RegistryOrg) => { selId = o.org.id; document.getElementById(`reg-${o.org.id}`)?.scrollIntoView({ block: 'nearest' }); };
   let find = $state<HTMLDivElement>();
-  // a document listener runs before the app's own Esc on the window (which closes the sheet): Esc clears here first
+  // a document listener runs before the app's own Esc on the window (which closes the sheet): Esc clears here first.
+  // Only while the registry is on top, and from no field but its own search (a question over it keeps its keys)
   function keys(e: KeyboardEvent) {
-    if (!wide || e.metaKey || e.ctrlKey || e.altKey) return;
-    const typing = (e.target as Element | null)?.closest?.('input, textarea, [contenteditable]');
-    if (e.key === 'Escape' && (q || sel)) { e.stopPropagation(); e.preventDefault(); if (q) q = ''; else sel = null; (e.target as HTMLElement).blur?.(); return; }
-    if (typing) return;
+    if (!wide || !top || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    const field = (e.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]');
+    if (field && !find?.contains(field)) return;
+    if (e.key === 'Escape' && (q || sel)) { e.stopPropagation(); e.preventDefault(); if (q) q = ''; else selId = null; (field as HTMLElement | null)?.blur(); return; }
+    if (field) return;
     if (e.key === '/') { e.preventDefault(); find?.querySelector('input')?.focus(); return; }
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !hits && rows.length) {
       e.preventDefault();
@@ -138,7 +143,7 @@
         {#snippet lead()}<Avatar person={h.person} size={36} />{/snippet}
       </Row>
       {#each h.clubs as c (c.org.id)}
-        <Row dense title="{shortOf(c.org)} · {roleLabel(c)}" accessory="chevron" onclick={() => (wide ? (sel = c.org) : sheets.roster(c.org))}>
+        <Row dense title="{shortOf(c.org)} · {roleLabel(c)}" accessory="chevron" onclick={() => (wide ? (selId = c.org.id) : sheets.roster(c.org))}>
           {#snippet lead()}<span class="in"><OrgLogo org={c.org} size={24} /></span>{/snippet}
         </Row>
       {/each}
@@ -184,8 +189,8 @@
           <tbody>
             {#each rows as o (o.org.id)}
               <!-- a whole row is the target for a mouse; the keyboard's way is the arrows (keys above) and the club's button -->
-              <tr id="reg-{o.org.id}" class={{ on: sel?.id === o.org.id }} onclick={() => (sel = o.org)}>
-                <td><button class="club" aria-current={sel?.id === o.org.id || undefined} onclick={(e) => { e.stopPropagation(); sel = o.org; }}><OrgLogo org={o.org} size={28} /><span class="ellipsis">{nameOf(o.org)}</span></button></td>
+              <tr id="reg-{o.org.id}" class={{ on: sel?.id === o.org.id }} onclick={() => (selId = o.org.id)}>
+                <td><button class="club" aria-current={sel?.id === o.org.id || undefined} onclick={(e) => { e.stopPropagation(); selId = o.org.id; }}><OrgLogo org={o.org} size={28} /><span class="ellipsis">{nameOf(o.org)}</span></button></td>
                 <td class="pres ellipsis">{o.president?.fullName ?? '—'}</td>
                 <td class="num">{o.members}</td>
                 <td class="num">{o.month.events}</td>

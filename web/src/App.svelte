@@ -267,7 +267,8 @@
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
-  sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
+  let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
+  sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
   sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange }, 'sheet.comments');
   sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }));
@@ -794,7 +795,8 @@
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       // DMP at a computer: its registry, wide, instead of the phone hint (once per launch; Back leaves it for the app)
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
-      moment(tgComment); moment(desk ? () => sheets.registry() : computerHint); booted = true; setTimeout(() => moment(celebrate));
+      // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
+      moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
