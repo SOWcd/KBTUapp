@@ -56,6 +56,11 @@ BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Adm
     "kk": {"init26f": "Бағыштау 2026 · Қонақ", "init26": "Бағыштау 2026 · Волонтёр", "init26p": "Бағыштау 2026 · Өнер көрсетуші"},
     "en": {"init26f": "Initiation 2026 · Guest", "init26": "Initiation 2026 · Volunteer", "init26p": "Initiation 2026 · Performer"},
 }
+SHARE_POST = {  # a live forum post (share_post): the template, then the post's opening words (already public in the channel)
+    "ru": ("Пост в форуме KBTU", "💬 <b>Пост в форуме KBTU</b>{words}", "Открыть пост"),
+    "kk": ("KBTU форумындағы пост", "💬 <b>KBTU форумындағы пост</b>{words}", "Постты ашу"),
+    "en": ("Post in the KBTU forum", "💬 <b>Post in the KBTU forum</b>{words}", "Open the post"),
+}
 SHARE_ROUND = {  # a club's open recruitment round (casting.py)
     "ru": ("Набор в клуб", "📣 <b>{club}</b> набирает людей\n⚡ Заявка за минуту\n\n⏳ До {until}", "📝 Подать заявку"),
     "kk": ("Клубқа қабылдау", "📣 <b>{club}</b> адам қабылдайды\n⚡ Өтінім бір минутта\n\n⏳ {until} дейін", "📝 Өтінім беру"),
@@ -146,6 +151,19 @@ def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for my invite ('rf'), a club ('join') or a President ('pres') invite card."""
     title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "jm": SHARE_JOIN_MANY, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
+
+
+def share_post(lang: str, body: str) -> tuple[str, str, str, str]:
+    """(title, HTML text, button, the opening words) for a forum post's card. Only for a post live in the public channel:
+    its words are what the bot already published there (plain text, no links or mentions), so quoting their start
+    repeats public text; never a signature, so an anonymous post's card tells no one who wrote it."""
+    title, text, button = SHARE_POST[lang if lang in SHARE_POST else "ru"]
+    flat = " ".join(body.split())
+    words = flat if len(flat) <= SHARE_POST_WORDS else flat[:SHARE_POST_WORDS].rsplit(" ", 1)[0] + "…"
+    return title, text.format(words=f"\n\n{html.escape(words)}" if words else ""), button, words
+
+
+SHARE_POST_WORDS = 160
 
 
 def when(ts: int, lang: str) -> str:

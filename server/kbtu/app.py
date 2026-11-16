@@ -2228,8 +2228,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/share")
     async def share(request: Request, con: Con, v: Me, body: dict = Body(...)):
         """A card for shareMessage (Bot API 8.0), built by the server from its own templates, so nothing the client
-        sends ends up in a message from our bot: an event (a photo card), my friend invite, a club's invite or one of my
-        achievements (a line of text and our bot's button; no bare links in chats)."""
+        sends ends up in a message from our bot: an event (a photo card), my friend invite, a club's invite, a live forum post or
+        one of my achievements (a line of text and our bot's button; no bare links in chats)."""
         kind = body.get("kind")
         try:
             ref = int(body.get("id") or 0)
@@ -2297,6 +2297,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             result = {"type": "article", "id": f"aw-{code}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=aw_{code}"}]]}}
+        elif kind == "fp":  # a forum post live in the public channel: anyone may pass it on; the link carries its id only
+            p = logic.one(con, "SELECT body FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", ref)
+            if not p:
+                raise ApiError("closed")
+            title, text, button, words = texts.share_post(lang, p["body"])
+            result = {"type": "article", "id": f"fp-{ref}-{stamp}", "title": title, **({"description": words} if words else {}),
+                      "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
+                      "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{ref}"}]]}}
         else:
             raise ApiError("bad_input")
         try:

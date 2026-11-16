@@ -79,6 +79,8 @@ const en: Dict = {
   'fc.ad': "Any advertising is banned in the forum. Your post wasn't published",
   'fc.comments': "Discuss in Telegram",
   'fc.reactions': "Reactions",
+  'fc.gone': "This post is gone",
+  'fc.sharedPost': "Post in the KBTU forum",
   'fc.newSince': { one: "{n} new", other: "{n} new" },
   'fc.hot': "Trending",
   'fc.earlier': "Show earlier",

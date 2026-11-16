@@ -24,6 +24,7 @@
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Flag from '@lucide/svelte/icons/flag';
   import MessageCircleReply from '@lucide/svelte/icons/message-circle-reply';
+  import Share from '@lucide/svelte/icons/share';
   import { menu } from '../../ui/menu';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -37,7 +38,8 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
-  import { haptic, on, openLink } from '../../lib/tg';
+  import { haptic, on, openLink, shareCard } from '../../lib/tg';
+  import { phrase } from '../../lib/state/data.svelte';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
   import { TAB_ICON } from '../../ui/icons';
@@ -112,13 +114,17 @@
   });
 
   // the bot's "Open in the app" (startapp=fp_<id>): once the feed is fresh, that post opened in full, scrolled to the
-  // middle and lit for a moment; one not in the feed (deleted, taken down): just the tab
+  // middle and lit for a moment; one not in the feed (deleted, taken down): the tab and a quiet word, unless it may
+  // simply be older than the pages held
   let lit = $state<number | null>(null);
   async function seek() {
     const id = channel.focus;
     if (id == null) return;
     channel.focus = null;
-    if (!channel.feed?.some((p) => p.id === id)) return;
+    if (!channel.feed?.some((p) => p.id === id)) {
+      if (!channel.more || id > Math.min(...channel.feed!.filter((p) => p.id > 0).map((p) => p.id))) say(t('fc.gone'), 'thinking_face_3d');
+      return;
+    }
     showAll(); open[id] = true;
     await tick();
     document.querySelector(`[data-post="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -185,6 +191,14 @@
       { label: t('fc.delete'), icon: Trash2, destructive: true, onselect: () => drop(p) },
     ] : [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
   }
+
+  // pass a post on: our bot's card (its opening words, a button into it by id only: never whose), as an event's
+  const share = (p: ChannelFeedPost) => {
+    haptic.tap();
+    shareCard({ kind: 'fp', id: String(p.id) }, `https://t.me/KBTUappBot?startapp=fp_${p.id}`, t('fc.sharedPost'))
+      .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
+  };
 
   // the comments, in Telegram: its button alone opens them
   const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
@@ -264,6 +278,7 @@
               </span>{/if}
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
+              <span class="share"><IconButton kind="plain" size="s" icon={Share} label={t('event.share')} onclick={() => share(p)} /></span>
               <span class="talk"><Button kind="tinted" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
                 {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
               </Button></span>
@@ -376,16 +391,20 @@
     color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-sub); line-height: 1; }
   /* as many faces as the row has room for, the newest first and on top: the ones that don't fit wrap to a second
-     line, out of sight (whole faces only, never a cut one) */
-  .faces { flex: 1; min-width: 24px; display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; height: 24px; padding: 2px; overflow: hidden; }
+     line, out of sight (whole faces only, never a cut one); none when the reactions and the two buttons fill the row */
+  .faces { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; height: 24px; padding: 2px; overflow: hidden; }
+  .faces::before { content: ''; height: 20px; } /* line 1's first item, so even the first face wraps away when there is no room for it */
   .f { display: flex; }
   .f + .f { margin-left: -6px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
   .talk { flex: none; display: flex; margin-left: auto; }
-  .faces + .talk { margin-left: 0; }
+  .share + .talk { margin-left: 0; }
+  /* share: a quiet icon just before the comments, the actions together under the thumb */
+  .share { flex: none; display: flex; margin-left: auto; --plain-ink: var(--text-3); }
+  .faces + .share { margin-left: 0; }
   .go { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; } /* ↗: it leaves the app, for Telegram */
   .n { margin-left: 2px; opacity: 0.7; font-variant-numeric: tabular-nums; }
-  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } .faces + .talk { margin-left: auto; } } /* 320: the top reaction, the button on the right */
+  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } .faces + .share { margin-left: auto; } } /* 320: the top reaction, the button on the right */
 
   .earlier { display: flex; justify-content: center; padding: var(--s-3) 0; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }

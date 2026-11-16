@@ -1552,12 +1552,13 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
 
 
 INLINE_EVENTS = 5  # the empty query's upcoming events; a typed one shows up to 20 matches
+INLINE_POSTS = 3  # the empty query's own forum posts, newest first
 
 
 def inline_answer(cfg: Config, con, q: dict) -> dict:
     """answerInlineQuery's body for "@KBTUappBot <words>" in any chat: only our templates, each with a button into the
     app. A student: my friend link, each club whose team link is live and that I may share (the "team" right; a typing
-    pop-up never makes one), and the afisha's upcoming events as an anonymous student sees them. Anyone else: one button."""
+    pop-up never makes one), my recent signed forum posts live in the channel, and the afisha's upcoming events as an anonymous student sees them. Anyone else: one button."""
     tg = (q.get("from") or {}).get("id")
     me = _student(con, tg)
     lang = me["lang"] if me else str((q.get("from") or {}).get("language_code") or "")[:2]
@@ -1584,6 +1585,12 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
                 ORDER BY o.name""", now(), *mine):
             title, text, button = texts.share_invite("jm", lang, club=o["name"], until=texts.when(o["expires_at"], lang).split(",")[0])
             out.append(article(f"jm-{o['id']}", title, text, button, f"join_{o['id']}_{o['token']}"))
+        # my own live forum posts, signed ones only: the one who sends an inline card shows in the chat, so an anonymous
+        # post here would tell whose it is
+        for p in rows(con, """SELECT id, body FROM fchan_posts WHERE user_id = ? AND anon = 0 AND status = 'live' AND tg_msg > 0
+                ORDER BY id DESC LIMIT ?""", me["id"], INLINE_POSTS):
+            title, text, button, words = texts.share_post(lang, p["body"])
+            out.append(article(f"fp-{p['id']}", title, text, button, f"fp_{p['id']}", **({"description": words} if words else {})))
     # the afisha as a nobody sees it: published, public, on the general afisha (never drafts, hidden or members-only)
     evs = [e for e in logic.seats.events(con, logic.Viewer(0, "user", False)) if e["status"] == "published"
            and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]

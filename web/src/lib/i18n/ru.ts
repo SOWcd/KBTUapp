@@ -79,6 +79,8 @@ const ru = {
   'fc.ad': "Любая реклама в форуме запрещена. Пост не ушёл",
   'fc.comments': "Обсудить в Telegram",
   'fc.reactions': "Реакции",
+  'fc.gone': "Пост удалён или скрыт",
+  'fc.sharedPost': "Пост в форуме KBTU",
   'fc.newSince': { one: "{n} новый", few: "{n} новых", many: "{n} новых", other: "{n} новых" },
   'fc.hot': "Обсуждают",
   'fc.earlier': "Показать ранее",
