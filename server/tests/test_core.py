@@ -6456,8 +6456,10 @@ def test_forum_find_people(env, monkeypatch):
     before = json.dumps([logic.contacts(con, mod), logic.contacts(con, bob), logic.asks(con, bob), logic.asks(con, mod), logic.search_people(con, stu, web["id"])])
     assert "bob_tg" not in before and "mod_tg" not in before and "telegram" not in before
     cid = con.execute("SELECT id FROM contacts").fetchone()[0]
-    assert logic.decide_contact(con, bob.id, cid, True) is None                                      # only the asked side decides
-    assert logic.decide_contact(con, mod.id, cid, True) == "accepted"
+    tok = con.execute("SELECT token FROM contacts").fetchone()[0]
+    assert logic.decide_contact(con, bob.id, cid, True, tok) is None                                 # only the asked side decides
+    assert logic.decide_contact(con, mod.id, cid, True) is None                                      # never without the offer's token
+    assert logic.decide_contact(con, mod.id, cid, True, tok) == "accepted"
     assert logic.contacts(con, bob)[0]["telegram"] == "https://t.me/mod_tg" and logic.contacts(con, mod)[0]["telegram"] == "https://t.me/bob_tg"
     assert {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'contact_ok'")} == {bob.id, mod.id}
 
@@ -6508,8 +6510,8 @@ def test_forum_bot_cards(env, monkeypatch):
     assert keys[0][0]["start"] == f"fa_{ask['id']}" and keys[1][0]["callback_data"] == "ps:0"
     logic.contact(con, b, aid=ask["id"])
     text, _, keys = bot._render(con, row("contact_ask"))
-    cid = con.execute("SELECT id FROM contacts").fetchone()[0]
-    assert "Ben" in text and "A site" in text and [k["callback_data"] for k in keys[0]] == [f"ct:{cid}:y", f"ct:{cid}:n"]
+    cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
+    assert "Ben" in text and "A site" in text and [k["callback_data"] for k in keys[0]] == [f"ct:{cid}:{tok}:y", f"ct:{cid}:{tok}:n"]
     sent = []
     async def tg(cfg, http, method, body, files=None):
         sent.append(body)
@@ -6519,11 +6521,13 @@ def test_forum_bot_cards(env, monkeypatch):
             return None
     tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": who}}}))
-    tap(91, f"ct:{cid}:y")                                                                            # Ben can't accept his own offer
+    tap(91, f"ct:{cid}:{tok}:y")                                                                      # Ben can't accept his own offer
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending" and sent[-1]["text"] == texts.bot_message("ru", "contact_gone")[0]
-    tap(90, f"ct:{cid}:y")
+    tap(90, f"ct:{cid}:y")                                                                            # a button without its token: nothing
+    assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending"
+    tap(90, f"ct:{cid}:{tok}:y")
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "accepted"
-    assert bot._render(con, {**row("contact_ok"), "ref": f"co:{cid}:to"})[2][0][0]["url"].startswith("tg://user?id=")  # no username: by ID
+    assert bot._render(con, {**row("contact_ok"), "ref": f"co:{cid}:to:{tok}"})[2][0][0]["url"].startswith("tg://user?id=")  # no username: by ID
     tap(91, "ps:0")
     assert con.execute("SELECT ask_pings FROM users WHERE id = ?", (b.id,)).fetchone()[0] == 0
     assert bot._render(con, row("ask_match")) is None                                                 # pings off: quiet

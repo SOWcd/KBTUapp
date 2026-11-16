@@ -2967,6 +2967,7 @@ const en: Dict = {
   'sj.hint': "Find your subject, and people who want to study it together",
   'sj.nothing': "Nothing found",
   'sj.n': {one: "{n} looking", other: "{n} looking"},
+  'sj.credits': {one: "{n} credit", other: "{n} credits"},
   'sj.listMe': "Looking for study partners",
   'sj.listNote': "Students see you here: name, photo, year, school and note. Contacts only after your yes in the bot. Your mark ends by itself on {when}.",
   'sj.listOff': "Mark yourself, and those who study this subject see you. Nobody sees who simply takes a subject.",

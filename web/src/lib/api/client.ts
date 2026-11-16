@@ -379,7 +379,7 @@ export const server = {
   findPeople: (q: string, skill?: Id | null): Promise<ForumCard[]> => call('GET', `/forum/people?q=${encodeURIComponent(q)}${skill ? `&skill=${skill}` : ''}`),
   contacts: (): Promise<Contact[]> => call('GET', '/forum/contacts'),
   offer: (to: { ask?: Id; to?: Id }): Promise<{ status: 'pending' }> => call('POST', '/forum/contacts', to),
-  answerOffer: (id: Id, yes: boolean): Promise<Contact[]> => call('POST', `/forum/contacts/${id}`, { yes }),
+  answerOffer: (id: Id, yes: boolean, token?: string | null): Promise<Contact[]> => call('POST', `/forum/contacts/${id}`, { yes, token }), // token: the offer's own
   block: (user: Id, on: boolean = true): Promise<void> => call('POST', '/forum/blocks', { user, on }),
   forumMod: (): Promise<ForumMod> => call('GET', '/forum/mod'), // moderators: held requests, new skills
   // the subjects' cards: 404 without the server's file

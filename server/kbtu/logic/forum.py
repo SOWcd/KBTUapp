@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import difflib
 import re
+import secrets
 import unicodedata
 
 from ..db import tx
@@ -263,25 +264,32 @@ def _ping(con, aid: int) -> None:
             sent += 1
 
 
-def release_ask(con, v: Viewer, aid: int) -> dict:
-    """A moderator lets a held request go live (its pings go out then)."""
+_SUBJ = " AND subject IS NOT NULL"  # only a subject's listings: the forum's own requests stay the forum's (FORUM)
+
+
+def release_ask(con, v: Viewer, aid: int, subjects_only: bool = False) -> dict:
+    """A moderator lets a held request go live (its pings go out then), or a subject's listing they hid (logic/subjects:
+    its author can't undo a take-down, only a moderator)."""
     _mod(v)
     with tx(con):
-        if not con.execute("UPDATE asks SET status = 'live', why = NULL WHERE id = ? AND status = 'held'", (aid,)).rowcount:
+        if not con.execute("UPDATE asks SET status = 'live', why = NULL WHERE id = ? AND (status = 'held' OR status = 'hidden' AND subject IS NOT NULL)"
+                           + (_SUBJ if subjects_only else ""), (aid,)).rowcount:
             raise ApiError("not_found")
         _ping(con, aid)
         log_action(con, v.id, "ask_release", f"ask:{aid}")
     return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
 
 
-def mod_queue(con, v: Viewer, catalog: bool = True) -> dict:
+def mod_queue(con, v: Viewer, catalog: bool = True, subjects_only: bool = False) -> dict:
     """What waits for a moderator: requests the AI didn't pass (or couldn't read), a subject's listings too
-    (logic/subjects.py), and skills not public yet (catalog: the forum is on; else null)."""
+    (logic/subjects.py), and skills not public yet (catalog: the forum is on; else null). subjects_only: the caller
+    isn't the forum's (FORUM off or not theirs): a subject's listings alone."""
     _mod(v)
+    only = _SUBJ if subjects_only else ""
     held = [_ask_shape(con, v, a) | {"status": "held", "why": a["why"], "dueAt": a["created_at"] + DECIDE_IN}
-            for a in rows(con, "SELECT * FROM asks WHERE status = 'held' AND expires_at > ? ORDER BY id", _now())]
+            for a in rows(con, f"SELECT * FROM asks WHERE status = 'held' AND expires_at > ?{only} ORDER BY id", _now())]
     # reported enough without the AI's agreement: a moderator decides within a day of the report that made it enough
-    for a in rows(con, "SELECT * FROM asks WHERE status = 'live' AND expires_at > ? AND id IN (SELECT target_id FROM reports WHERE target = 'ask' AND status = 'open') ORDER BY id", _now()):
+    for a in rows(con, f"SELECT * FROM asks WHERE status = 'live' AND expires_at > ?{only} AND id IN (SELECT target_id FROM reports WHERE target = 'ask' AND status = 'open') ORDER BY id", _now()):
         if at := _enough_at(con, a["id"]):
             held.append(_ask_shape(con, v, a) | {"status": "reported", "why": "reports", "dueAt": at + DECIDE_IN})
     held.sort(key=lambda a: a["dueAt"])
@@ -289,10 +297,10 @@ def mod_queue(con, v: Viewer, catalog: bool = True) -> dict:
     return {"held": held, "skills": fresh if catalog else None}
 
 
-def mod_hide_ask(con, v: Viewer, aid: int) -> None:
+def mod_hide_ask(con, v: Viewer, aid: int, subjects_only: bool = False) -> None:
     """A moderator takes a request down (held or live); its author is told."""
     _mod(v)
-    if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')", aid):
+    if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')" + (_SUBJ if subjects_only else ""), aid):
         raise ApiError("not_found")
     with tx(con):
         hide_ask(con, aid, "moderator", v.id)
@@ -339,22 +347,26 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
     with tx(con):
         if one(con, "SELECT COUNT(*) FROM contacts WHERE from_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= CONTACTS_A_DAY:
             raise ApiError("rate_limited")
-        cur = con.execute("INSERT OR IGNORE INTO contacts (from_id, to_id, ask_id, created_at) VALUES (?, ?, ?, ?)", (v.id, to, aid, _now()))
+        token = secrets.token_hex(4)  # the offer's own: its id may come back for another once this one is deleted
+        cur = con.execute("INSERT OR IGNORE INTO contacts (from_id, to_id, ask_id, created_at, token) VALUES (?, ?, ?, ?, ?)", (v.id, to, aid, _now(), token))
         if cur.rowcount:
-            notify(con, to, "contact_ask", f"ct:{cur.lastrowid}")
+            notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
     return {"status": "pending"}
 
 
-def decide_contact(con, uid: int, cid: int, yes: bool) -> str | None:
-    """The asked side's answer (the bot's buttons or the app): accepted, both get the other's Telegram. The new status."""
+def decide_contact(con, uid: int, cid: int, yes: bool, token: str | None = None) -> str | None:
+    """The asked side's answer (the bot's buttons or the app): accepted, both get the other's Telegram. The new status.
+    token: the offer's own (the button or the app's list carries it): an id freed by a deleted offer and taken by
+    another never answers that other one; an offer made before tokens (NULL) answers only a button without one."""
     with tx(con):
-        c = one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending'", cid, uid)
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token IS ?", cid, uid, token)
         if not c:
             return None
         con.execute("UPDATE contacts SET status = ?, decided_at = ? WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
         if yes:
-            notify(con, c["from_id"], "contact_ok", f"co:{cid}:to")    # to the one who offered: the other's contact
-            notify(con, c["to_id"], "contact_ok", f"co:{cid}:from")
+            t = f":{token}" if token else ""
+            notify(con, c["from_id"], "contact_ok", f"co:{cid}:to{t}")    # to the one who offered: the other's contact
+            notify(con, c["to_id"], "contact_ok", f"co:{cid}:from{t}")
     return "accepted" if yes else "declined"
 
 
@@ -364,7 +376,7 @@ def contacts(con, v: Viewer) -> list[dict]:
     for c in con.execute("SELECT * FROM contacts WHERE (from_id = :me OR to_id = :me) AND status != 'declined' ORDER BY id DESC LIMIT 50", {"me": v.id}).fetchall():
         other = c["to_id"] if c["from_id"] == v.id else c["from_id"]
         a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        x = {"id": c["id"], "status": c["status"], "incoming": c["to_id"] == v.id, "ask": a["title"] if a else None, **_card(con, other)}
+        x = {"id": c["id"], "token": c["token"], "status": c["status"], "incoming": c["to_id"] == v.id, "ask": a["title"] if a else None, **_card(con, other)}
         if c["status"] == "accepted":
             x["telegram"] = telegram_of(con, other)
         out.append(x)
@@ -420,6 +432,7 @@ def forum_sweep(con) -> None:
     it), and the record of who was pinged after 30 days (the caps look back a week)."""
     con.execute("DELETE FROM asks WHERE expires_at < ?", (_now() - KEEP,))
     con.execute("DELETE FROM ask_pings WHERE at < ?", (_now() - KEEP,))
+    subjects.sweep_counters(con)  # the hourly search and listing counters past their hour
 
 
 def _now() -> int:
@@ -428,7 +441,7 @@ def _now() -> int:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, subjects  # noqa: E402
 from .account import me  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import notify  # noqa: E402

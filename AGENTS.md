@@ -99,6 +99,6 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
 - `REPORTS=1`: clubs' event reports in Studio (`logic/evreports.py`: the team's attendance marks); off until its clause in the privacy policy (Codex's).
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
-- `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the same scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
+- `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

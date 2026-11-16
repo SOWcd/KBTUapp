@@ -10,7 +10,8 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { subj, subjectCard, keepCard } from '../../lib/state/subjects.svelte';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { i18n, t, tn } from '../../lib/i18n/index.svelte';
+  import { nameOf } from '../../lib/subjects';
   import { schoolShort } from '../../lib/short';
   import { dayMonth } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -64,14 +65,15 @@
   const status = $derived(mine?.status === 'held' ? t('sj.held') : mine?.status === 'hidden' ? t('sj.hidden') : null);
 </script>
 
-<Sheet {overlay} tall heading={base?.name ?? t('sj.title')} icon={BookOpen}>
+<Sheet {overlay} tall heading={base ? nameOf(base, i18n.lang) : t('sj.title')} icon={BookOpen}>
   <div class="col">
-    {#if base?.codes.length}<p class="codes num">{base.codes.join(' · ')}</p>{/if}
+    <!-- the codes, credits and school: one quiet line -->
+    {#if base}<p class="codes num">{[base.codes.join(' · '), base.credits ? tn('sj.credits', base.credits) : '', schoolShort(base.school)].filter(Boolean).join(' · ')}</p>{/if}
 
     <Group footnote={status ?? (mine?.until ? t('sj.listNote', { when: dayMonth(mine.until) }) : t('sj.listOff'))}>
-      <Row title={t('sj.listMe')} accessory="switch" checked={!!mine} disabled={!card} onchange={toggle} />
+      <Row title={t('sj.listMe')} accessory="switch" checked={!!mine} disabled={!card || mine?.status === 'hidden'} onchange={toggle} />
     </Group>
-    {#if mine}
+    {#if mine && mine.status !== 'hidden'}
       <div class="note">
         <Field label={t('sj.note')} bind:value={note} placeholder={t('sj.notePh')} maxlength={140} multiline rows={2} />
         {#if note.trim() !== (mine.note ?? '')}<Button kind="tinted" size="s" loading={saving} onclick={save}>{t('sj.save')}</Button>{/if}

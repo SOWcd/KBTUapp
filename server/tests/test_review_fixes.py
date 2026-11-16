@@ -38,7 +38,8 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     for key, claimed, rejected, email in (("claimed", aid, None, mail), ("my_word", aid, None, None), ("turned_down", None, aid, None), ("someone", None, None, None)):
         con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, rejected_by, created_at)
             VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, ?, 0)""", (key, email, claimed, rejected))
-    con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999')", (f"fsearch:{aid}:1", str(aid)))
+    con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999'), (?, '1'), ('subj:999:1', '1')",
+                (f"fsearch:{aid}:1", str(aid), f"subj:{aid}:1"))
     for action, by in (("team_link_join", aid), ("grant_link_used", aid), ("team_link_join", 999)):
         con.execute("INSERT INTO audit_log (action, target, data, at) VALUES (?, 'x', ?, 0)", (action, f'{{"link": "ab", "by": {by}}}'))
     bob = login(c, 22, "bob")["id"]
@@ -54,7 +55,8 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     # who made the link leaves the line, the line stays
     assert [(r[0], r[1]) for r in con.execute("SELECT json_extract(data, '$.link'), json_extract(data, '$.by') FROM audit_log WHERE target = 'x' ORDER BY id")] == [
         ("ab", None), ("ab", None), ("ab", 999)]
-    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'fsearch:%' OR key LIKE 'rclaim:%' ORDER BY key")] == ["fsearch:999:1", "rclaim:2"]
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'fsearch:%' OR key LIKE 'rclaim:%' OR key LIKE 'subj:%' ORDER BY key")] == [
+        "fsearch:999:1", "rclaim:2", "subj:999:1"]
     # the row with my verified mail goes and a reload doesn't bring it back; one I only said was mine, turned down or never claimed is the club's
     assert [tuple(r) for r in con.execute("SELECT key, claimed_by, rejected_by FROM roster_pending ORDER BY key")] == [
         ("my_word", None, None), ("someone", None, None), ("turned_down", None, None)]

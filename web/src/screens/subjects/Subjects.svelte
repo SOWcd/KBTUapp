@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The subjects (Forum tab's row): a search over the university's ~500 (name or code, any case and keyboard), and
+  // The subjects (Forum tab's row): a search over the university's ~500 (a name in any of the three languages or another
+  // spelling, or a code; any case and keyboard), and
   // before a word is typed, mine (my timetable's classes and the ones I'm listed on) and the ones people are looking on
   // now. A row's end says how many are looking; a tap opens its card. The list came with the app (state/subjects).
   import BookOpen from '@lucide/svelte/icons/book-open';
@@ -8,9 +9,9 @@
   import { sheets } from '../../lib/state/sheets';
   import { data } from '../../lib/state/data.svelte';
   import { subj, subjIndex, subjectCard } from '../../lib/state/subjects.svelte';
-  import { subjectOf } from '../../lib/subjects';
+  import { nameOf, searchable, subjectOf } from '../../lib/subjects';
   import { hit } from '../../lib/search';
-  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { i18n, t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import SearchField from '../../ui/SearchField.svelte';
@@ -22,7 +23,7 @@
   let q = $state('');
   const all = $derived(subj.all?.subjects ?? []);
   const counts = $derived(subj.all?.counts ?? {});
-  const found = $derived(q.trim() ? all.filter((s) => hit(q, [s.name, ...s.codes])).slice(0, 60) : []);
+  const found = $derived(q.trim() ? all.filter((s) => hit(q, searchable(s))).slice(0, 60) : []);
   const mine = $derived.by(() => {
     const idx = subjIndex(), ids = [...(subj.all?.mine ?? []), ...data.schedule.map((c) => subjectOf(c, idx)?.id)];
     return all.filter((s) => ids.includes(s.id));
@@ -36,7 +37,7 @@
   <div class="g" role="group" onpointerdown={(e) => { const r = (e.target as Element).closest('.kb-row'), s = r && list[[...e.currentTarget.querySelectorAll('.kb-row')].indexOf(r)]; if (s) void subjectCard(s.id).catch(() => {}); }}>
     <Group {caption}>
       {#each list as s (s.id)}
-        <Row dense title={s.name} subtitle={s.codes.join(' · ') || undefined} value={counts[s.id] ? tn('sj.n', counts[s.id]) : undefined} whole accessory="chevron" onclick={() => go(s)} />
+        <Row dense title={nameOf(s, i18n.lang)} subtitle={s.codes.join(' · ') || undefined} value={counts[s.id] ? tn('sj.n', counts[s.id]) : undefined} whole accessory="chevron" onclick={() => go(s)} />
       {/each}
     </Group>
   </div>

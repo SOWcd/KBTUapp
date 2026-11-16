@@ -16,12 +16,11 @@
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import ScheduleHowTo from './ScheduleHowTo.svelte';
-  import { session } from '../../lib/state/session.svelte';
-  import { loadSubjects, subjIndex } from '../../lib/state/subjects.svelte';
+  import { loadSubjects, subjIndex, subjReady } from '../../lib/state/subjects.svelte';
   import { subjectOf as cardOf } from '../../lib/subjects';
 
   let { overlay }: { overlay: Overlay } = $props();
-  if (session.me?.subjects) void loadSubjects(); // with the app already, mostly: its classes open their cards
+  if (subjReady()) void loadSubjects(); // with the app already, mostly: its classes open their cards
   // a weekday's name in the app's language: 2024-01-01 was a Monday (noon UTC, the same day in Almaty)
   const dayName = (wd: number) => { const w = weekday(Date.UTC(2024, 0, wd, 12) / 1000); return w.charAt(0).toUpperCase() + w.slice(1); };
   // the week it had stays put while the sheet slides away after "Delete" (the store is empty at once, for the others)
@@ -45,7 +44,7 @@
       <Group caption={dayName(d.wd)}>
         {#each d.list as c, i (i)}
           {@const lk = lessonKind(c.kind)}
-          {@const card = session.me?.subjects ? cardOf(c, subjIndex()) : undefined}
+          {@const card = subjReady() ? cardOf(c, subjIndex()) : undefined}
           <!-- a class with its subject's card: a tap opens it (who's looking for study partners) -->
           <Row dense title={subjectOf(c)} subtitle={[lk ? t(`list.kind.${lk}Long`) : c.kind, c.room, c.teacher].filter(Boolean).join(' · ')}
             accessory={card ? 'chevron' : 'none'} onclick={card ? () => sheets.subject(card.id) : undefined}>

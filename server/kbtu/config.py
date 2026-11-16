@@ -73,7 +73,7 @@ class Config:
     reports: bool = False
     # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
     rooms_file: str = ""
-    # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names and codes only), next to the database by default; no file: off
+    # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names, codes, credits, school only), next to the database by default; no file: off
     subjects_file: str = ""
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 

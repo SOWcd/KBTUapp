@@ -767,7 +767,7 @@ export interface Ask {
   offered?: 'pending' | 'accepted' | 'declined' | null;                                                         // others'
 }
 /** an offer either way; accepted: the other's Telegram to write to */
-export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
+export interface Contact extends ForumCard { id: Id; token: string | null /* the offer's own: answered with it (server forum.decide_contact) */; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
 /** What waits for a moderator: held requests (the AI said no or couldn't tell) and reported ones, each due a day on */
 export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
 export interface ForumMod { held: ModAsk[]; skills: Skill[] | null /* null: the forum is off, only subjects' listings wait here */ }
@@ -808,7 +808,7 @@ export interface AppealHelp { tips: string[]; care?: boolean; help?: string } //
 export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }
 
 // the subjects' cards (server logic/subjects.py): one per subject name (its codes), "looking for people to study it with"
-export interface Subject { id: string; name: string; codes: string[] }
+export interface Subject { id: string; names: Record<'ru' | 'kk' | 'en', string>; alt: string[] /* other spellings, searched */; codes: string[]; credits: number | null; school: string | null }
 export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
 export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
   offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }

@@ -249,28 +249,40 @@ def forum_viewer(request: Request, v: Me, con: Con) -> Viewer:
 Forum = Annotated[Viewer, Depends(forum_viewer)]
 
 
-def ask_mod_viewer(request: Request, v: Me, con: Con) -> Viewer:
-    """The find-people requests' moderation (Admin): the forum's, and a subject's listings (SUBJECTS_FILE) for the staff."""
-    if v.role in ("admin", "moderator") and logic.subjects.on(request.app.state.cfg.subjects_file):
-        return v
-    return forum_viewer(request, v, con)
+def ask_mod_viewer(request: Request, v: Me, con: Con) -> tuple[Viewer, bool]:
+    """The find-people requests' moderation (Admin): the forum's people get all of it; the staff with the subjects'
+    cards on (SUBJECTS_FILE) and not the forum's get a subject's listings alone (True: only those)."""
+    try:
+        return forum_viewer(request, v, con), False
+    except ApiError:
+        if v.role in ("admin", "moderator") and logic.subjects.on(request.app.state.cfg.subjects_file):
+            return v, True
+        raise
 
 
-AskMod = Annotated[Viewer, Depends(ask_mod_viewer)]
+AskMod = Annotated[tuple[Viewer, bool], Depends(ask_mod_viewer)]
 
 
-def subj_writer(request: Request, v: Me, con: Con) -> Viewer:
-    """Listing myself on a subject: a student Microsoft confirmed (others see the name), on the policy in force (its
-    section 3 names find-people requests): an earlier one gets the in-place gate (forbidden/consent), never on opening."""
+def subj_reader(request: Request, v: Me, con: Con) -> Viewer:
+    """Who is listed on a subject is find-people data (the policy's section 3): read on the policy in force; an earlier
+    one gets the in-place gate (forbidden/consent), never on opening. The feature off: 404 first (no gate for nothing)."""
+    logic.subjects.catalogue(request.app.state.cfg.subjects_file)
     logic.need_student(v)
-    s = logic.one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", v.id)
-    if not s or s["manual"]:
-        raise ApiError("need_student")
-    if not logic.account.on_policy(s["consent_version"], request.app.state.policy) and s["consent_version"] not in ("staff", "admin"):
+    s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
+    if not s or not logic.account.on_policy(s["consent_version"], request.app.state.policy) and s["consent_version"] not in ("staff", "admin"):
         raise ApiError("forbidden", "consent")
     return v
 
 
+def subj_writer(request: Request, v: Me, con: Con) -> Viewer:
+    """Listing myself, offering: and a student Microsoft confirmed (others see the name)."""
+    subj_reader(request, v, con)
+    if logic.one(con, "SELECT manual FROM students WHERE user_id = ?", v.id)["manual"]:
+        raise ApiError("need_student")
+    return v
+
+
+SubjRead = Annotated[Viewer, Depends(subj_reader)]
 SubjWrite = Annotated[Viewer, Depends(subj_writer)]
 
 
@@ -2518,16 +2530,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.close_ask(con, v, aid, body.get("found"))
 
     @app.get("/api/forum/mod")
-    def forum_mod(con: Con, v: AskMod):
-        return logic.mod_queue(con, v, cfg.forum or cfg.forum_founder)
+    def forum_mod(con: Con, m: AskMod):
+        return logic.mod_queue(con, m[0], cfg.forum or cfg.forum_founder, m[1])
 
     @app.post("/api/forum/asks/{aid}/hide", status_code=204)
-    def forum_hide_ask(aid: int, con: Con, v: AskMod):
-        logic.mod_hide_ask(con, v, aid)
+    def forum_hide_ask(aid: int, con: Con, m: AskMod):
+        logic.mod_hide_ask(con, m[0], aid, m[1])
 
     @app.post("/api/forum/asks/{aid}/release")
-    def forum_release_ask(aid: int, con: Con, v: AskMod):
-        return logic.release_ask(con, v, aid)
+    def forum_release_ask(aid: int, con: Con, m: AskMod):
+        return logic.release_ask(con, m[0], aid, m[1])
 
     @app.get("/api/forum/asks/{aid}/people")
     def forum_ask_people(aid: int, con: Con, v: Forum):
@@ -2547,25 +2559,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum/contacts/{cid}")
     def forum_decide_contact(cid: int, con: Con, v: Forum, body: dict = Body(...)):
-        if not isinstance(body.get("yes"), bool) or not logic.decide_contact(con, v.id, cid, body["yes"]):
+        tok = body.get("token") if isinstance(body.get("token"), str) else None  # the offer's own (the list carries it)
+        if not isinstance(body.get("yes"), bool) or not logic.decide_contact(con, v.id, cid, body["yes"], tok):
             raise ApiError("not_found")
         return logic.contacts(con, v)
 
     # ------------------------------------------------------------ the subjects' cards (logic/subjects.py; SUBJECTS_FILE)
     @app.get("/api/subjects")
-    def subjects_list(con: Con, v: Me):
+    def subjects_list(con: Con, v: SubjRead):
         return logic.subjects.subjects(con, v, cfg.subjects_file)
 
     @app.get("/api/subjects/{sid}")
-    def subject_card(sid: str, con: Con, v: Me):
+    def subject_card(sid: str, con: Con, v: SubjRead):
         return logic.subjects.card(con, v, cfg.subjects_file, sid)
 
     @app.put("/api/subjects/{sid}/me")
     async def subject_join(sid: str, con: Con, v: SubjWrite, body: dict = Body(default={})):
-        logic.subjects.catalogue(cfg.subjects_file)  # off: 404 before the AI is asked
         note = logic.subjects.note_of(body)
-        verdict = await screen(note) if note else True  # no answer: held for a moderator
-        return await run_in_threadpool(logic.subjects.join, con, v, cfg.subjects_file, sid, note, verdict)
+        s = await run_in_threadpool(logic.subjects.reserve, con, v, cfg.subjects_file, sid)  # a real subject, the hour's count taken
+        verdict = await screen(note) if note else True  # only then the AI; no answer: held for a moderator
+        return await run_in_threadpool(logic.subjects.join, con, v, cfg.subjects_file, s, note, verdict)
 
     @app.delete("/api/subjects/{sid}/me", status_code=204)
     def subject_leave(sid: str, con: Con, v: Me):

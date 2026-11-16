@@ -200,8 +200,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
-    if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
-        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
+    if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
+        tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending' AND token IS ?", int(ref[1]), tok)
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
         if not p:
             return None
@@ -210,9 +211,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
         text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
-        return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
-    if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
-        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted'", int(ref[1]))
+        k = f"ct:{c['id']}:{tok}" if tok else f"ct:{c['id']}"
+        return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
+    if kind == "contact_ok":  # co:<contact>:to|from[:<token>]: accepted; each side gets the other's Telegram
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted' AND token IS ?", int(ref[1]), ref[3] if len(ref) > 3 else None)
         other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
         p = other and one(con, logic.PERSON + " WHERE u.id = ?", other)
         if not p:
@@ -1186,21 +1188,21 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
-    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?|an:([yn])", data):
+    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
         if not u or not msg:
             return
-        if f[4]:
-            con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[4] == "y"), u["id"]))
-            said = "announce_yes" if f[4] == "y" else "announce_no"
+        if f[5]:
+            con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[5] == "y"), u["id"]))
+            said = "announce_yes" if f[5] == "y" else "announce_no"
         elif f[1] == "ps":
             con.execute("UPDATE users SET ask_pings = 0 WHERE id = ?", (u["id"],))
             said = "ask_stopped"
         else:
-            st = logic.decide_contact(con, u["id"], int(f[2]), f[3] == "y")
+            st = logic.decide_contact(con, u["id"], int(f[2]), f[4] == "y", f[3])  # f[3]: the offer's token
             said = {"accepted": "contact_yes", "declined": "contact_no"}.get(st or "", "contact_gone")
         chat, thanks = (msg.get("chat") or {}).get("id"), texts.bot_message(u["lang"], said)[0]
-        if f[4]:  # the post stays with its link; the question's buttons give way to the thanks
+        if f[5]:  # the post stays with its link; the question's buttons give way to the thanks
             await _tg(cfg, http, "editMessageText", {"chat_id": chat, "message_id": msg["message_id"], "text": f"{msg.get('text', '')}\n\n{thanks}",
                                                      "entities": msg.get("entities") or [], "reply_markup": {"inline_keyboard": [
                                                          r for r in (msg.get("reply_markup") or {}).get("inline_keyboard", []) if all("url" in b for b in r)]}})

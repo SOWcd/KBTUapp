@@ -53,7 +53,7 @@
     try { await api.offer({ ask: a.id }); haptic.ok(); a.offered = 'pending'; say(t('fo.offerSay'), 'raising_hands_3d_default'); } catch (e) { fail(e); }
   }
   async function answer(c: Contact, yes: boolean) {
-    try { offers = await api.answerOffer(c.id, yes); haptic.ok(); } catch (e) { fail(e); }
+    try { offers = await api.answerOffer(c.id, yes, c.token); haptic.ok(); } catch (e) { fail(e); }
   }
   async function shut(a: Ask, foundIt: boolean | null) {
     try { await api.closeAsk(a.id, foundIt); haptic.ok(); closing = null; load(); } catch (e) { fail(e); }

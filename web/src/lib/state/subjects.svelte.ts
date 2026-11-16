@@ -3,6 +3,15 @@
 // each card's people asked for as the finger lands (prefetch), kept half a minute. In memory only.
 import { api, type Subject, type SubjectCard, type Subjects } from '../api';
 import { byName } from '../subjects';
+import { CONSENT_VOL } from '../legal';
+import { session } from './session.svelte';
+
+/** The cards are mine to read without asking: on (the server's file) and I agreed to the policy in force. Loads the app
+ *  makes by itself (idle, the week) wait for it: an earlier policy is asked in place, when I open the list myself. */
+export function subjReady(): boolean {
+  const s = session.me?.student;
+  return !!session.me?.subjects && !!s && ['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
+}
 
 export const subj = $state({ all: null as Subjects | null });
 let idxOf: Subject[] | null = null, idx = new Map<string, Subject>();

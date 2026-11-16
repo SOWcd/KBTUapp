@@ -23,19 +23,29 @@ import subjects as tool  # noqa: E402
 CALC = "\u0418\u0441\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435 2"  # "Calculus 2"
 
 
+SCHOOL = "\u0428\u0418\u0422\u0438\u0418"  # a school, as the portal writes it
+
+
+def row(code: str, ru: str, en: str, credits: str = "3") -> dict:
+    return {"cells": [code, ru, ru + " kk", en, SCHOOL, credits, "2/0/1", "2026-2027", "x"], "items": [{"t": "Teacher T. 305 (12/30)"}]}
+
+
 def scrape() -> dict:
     return {"done": {
-        "MAT1246": {"name": CALC, "events": []},
-        "MATH2206.": {"name": " \u0418\u0441\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435  2", "events": []},  # the same name, spaced
-        "\u0420\u0415\u04221270": {"name": "Gas", "events": []},                                                     # Cyrillic look-alikes in the code
-        "X1": {"name": "\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043d\u044f\u0442\u0438\u044f", "events": []},  # a placeholder
+        "MAT1246|y|t": row("MAT1246", CALC, "Calculus 2"),
+        "MATH2206|y|t": row("MATH2206.", "\u0418\u0441\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435 II", "Calculus II"),  # Roman: the same
+        "PET1270|y|t": row("\u0420\u0415\u04221270", "\u0413\u0430\u0437", "Gas", "4"),  # Cyrillic look-alikes in the code
     }}
 
 
-def test_tool_one_card_per_name():
+def test_tool_one_card_per_subject():
     out = tool.cards(scrape())
-    assert [(x["name"], x["codes"]) for x in out] == [("Gas", ["PET1270"]), (CALC, ["MAT1246", "MATH2206"])]
-    assert out[1]["id"] == tool.cards({"done": {"Z9": {"name": CALC + " "}}})[0]["id"]  # stable across scrapes
+    gas, calc = out
+    assert calc["names"] == {"ru": CALC, "kk": CALC + " kk", "en": "Calculus 2"} and calc["codes"] == ["MAT1246", "MATH2206"]
+    assert "Calculus II" in calc["alt"] and (calc["credits"], calc["school"]) == (3, SCHOOL)
+    assert gas["codes"] == ["PET1270"] and gas["credits"] == 4
+    assert "Teacher" not in json.dumps(out) and "305" not in json.dumps(out)              # no teachers, rooms or counts
+    assert calc["id"] == tool.cards({"done": {"z": row("Z9", CALC + " ", "x")}})[0]["id"]  # stable across scrapes
 
 
 @pytest.fixture
@@ -93,7 +103,8 @@ def test_gate_policy_and_confirmed(subj):
     con.execute("UPDATE students SET consent_version = '1' WHERE user_id = ?", (p["ann"],))
     r = c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
     assert r.status_code == 403 and r.json()["message"] == "consent"                 # the in-place gate, never on opening
-    assert c.get(f"/api/subjects/{sid}", headers=tma(1)).status_code == 200            # reading is fine
+    for url in ("/api/subjects", f"/api/subjects/{sid}"):                               # nor reading who is listed
+        assert c.get(url, headers=tma(1)).json()["message"] == "consent"
     con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (p["bob"],))
     assert c.put(f"/api/subjects/{sid}/me", headers=tma(2), json={}).json()["error"] == "need_student"
 
@@ -139,8 +150,8 @@ def test_contact_is_the_find_people_offer(subj):
     assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["offered"] == "pending"
     m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "ru"}
     assert m["user_id"] == p["ann"] and CALC in bot._render(con, m)[0] and "bob_tg" not in bot._render(con, m)[0]
-    cid = con.execute("SELECT id FROM contacts").fetchone()[0]
-    assert logic.decide_contact(con, p["ann"], cid, True) == "accepted"
+    cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
+    assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
     assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["telegram"] == logic.telegram_of(con, p["ann"])
     # a forum request (not a subject's) isn't reachable here
     other = logic.create_ask(con, logic.Viewer(p["cat"], "user", True), {"kind": "help", "title": "Charger?"}, True)
@@ -155,3 +166,97 @@ def test_account_deletion_takes_listings(subj, env):  # noqa: F811
     delete_now(c, cfg, tma(1))
     assert not con.execute("SELECT 1 FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()
     assert not con.execute("SELECT 1 FROM contacts").fetchone()
+
+
+def _ann_offer(c, con, sid: str, by: int) -> tuple[int, str]:
+    """Ann lists herself; `by` (a tma id) offers: the offer's id and token."""
+    aid = c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json() and con.execute("SELECT id FROM asks WHERE user_id = 1").fetchone()[0]
+    assert c.post("/api/subjects/offer", headers=tma(by), json={"ask": aid}).status_code == 200
+    return tuple(con.execute("SELECT id, token FROM contacts ORDER BY id DESC").fetchone())
+
+
+def test_old_accept_never_answers_a_reused_offer(subj):
+    """Review P1: Bob offers, Ann leaves (the offer goes with her row) and lists again, Doug offers and takes the freed
+    id. Ann's old Accept naming Bob must not share her Telegram with Doug; the old message renders nothing."""
+    c, con, p, sid, _ = subj
+    login(c, 4, "doug")
+    con.execute("UPDATE students SET consent_version = ?", (logic.CONSENT,))
+    bob_id, bob_tok = _ann_offer(c, con, sid, 2)
+    old = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "en"}
+    assert c.delete(f"/api/subjects/{sid}/me", headers=tma(1)).status_code == 204
+    doug_id, doug_tok = _ann_offer(c, con, sid, 4)
+    assert doug_id == bob_id and doug_tok != bob_tok                                     # SQLite gave Doug Bob's old id
+    assert bot._render(con, old) is None                                                  # Bob's card: gone, not Doug's
+    assert logic.decide_contact(con, p["ann"], bob_id, True, bob_tok) is None            # Bob's Accept: nothing
+    assert logic.decide_contact(con, p["ann"], bob_id, True) is None                     # nor a button without a token
+    assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending"
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'contact_ok'").fetchone()
+    assert logic.decide_contact(con, p["ann"], doug_id, True, doug_tok) == "accepted"    # Doug's own card works
+
+
+def test_old_accept_on_the_forum_path_too(subj):
+    """The same hole on the find-people forum's requests: a request deleted (forum_sweep, an account) frees its offers' ids."""
+    c, con, p, sid, _ = subj
+    ann, cat = logic.Viewer(p["ann"], "user", True), logic.Viewer(p["cat"], "user", True)
+    a1 = logic.create_ask(con, ann, {"kind": "help", "title": "Charger?"}, True)
+    logic.contact(con, logic.Viewer(p["bob"], "user", True), aid=a1["id"])
+    cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
+    con.execute("DELETE FROM asks WHERE id = ?", (a1["id"],))
+    a2 = logic.create_ask(con, ann, {"kind": "help", "title": "Umbrella?"}, True)
+    logic.contact(con, cat, aid=a2["id"])
+    assert con.execute("SELECT id FROM contacts").fetchone()[0] == cid
+    assert logic.decide_contact(con, p["ann"], cid, True, tok) is None
+
+
+def test_moderators_without_forum_see_subjects_only(subj, monkeypatch):
+    """Review P2: with FORUM off, the subjects' moderation never reads, lets out or hides the forum's own requests."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    ordinary = logic.create_ask(con, logic.Viewer(p["bob"], "user", True), {"kind": "help", "title": "Charger?"}, None)
+    live = logic.create_ask(con, logic.Viewer(p["bob"], "user", True), {"kind": "help", "title": "Umbrella?"}, True)
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=None))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"})
+    assert [a["title"] for a in c.get("/api/forum/mod", headers=tma(3)).json()["held"]] == [CALC]
+    assert c.post(f"/api/forum/asks/{ordinary['id']}/release", headers=tma(3)).status_code == 404
+    assert c.post(f"/api/forum/asks/{live['id']}/hide", headers=tma(3)).status_code == 404
+    assert [r[0] for r in con.execute("SELECT status FROM asks WHERE subject IS NULL ORDER BY id")] == ["held", "live"]
+
+
+def test_take_down_survives_resubmit_and_relist(subj):
+    """Review P2: a moderator's hide stays through the same note sent again and through leaving and listing again,
+    until a moderator lets it go."""
+    c, con, p, sid, _ = subj
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (p["cat"],))
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"})
+    aid = con.execute("SELECT id FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0]
+    assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "together"}).json()["mine"]["status"] == "hidden"
+    assert c.delete(f"/api/subjects/{sid}/me", headers=tma(1)).status_code == 204
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"]["status"] == "hidden"
+    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"] == []
+    assert c.post(f"/api/forum/asks/{aid}/release", headers=tma(3)).status_code == 200    # a moderator lifts it
+    assert [x["person"]["id"] for x in c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"]] == [p["ann"]]
+
+
+def test_ai_only_after_the_subject_and_the_quota(subj, monkeypatch):
+    """Review P2: a made-up subject or a spent hour never reaches the AI."""
+    c, con, p, sid, _ = subj
+    calls = []
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: calls.append(1) or asyncio.sleep(0, result=True))
+    assert c.put("/api/subjects/nope/me", headers=tma(1), json={"note": "hello"}).status_code == 404
+    assert calls == []
+    monkeypatch.setattr(logic.subjects, "WRITES_AN_HOUR", 2)
+    for _ in range(2):
+        assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "hello"}).status_code == 200
+    assert c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={"note": "hello"}).status_code == 429
+    assert len(calls) == 2
+
+
+def test_hourly_counters_go(subj, monkeypatch):
+    """Review P2: the hourly write counter: an older hour's goes with the next write and in the nightly forum_sweep."""
+    c, con, p, sid, _ = subj
+    con.execute("INSERT INTO meta (key, value) VALUES ('subj:1:5', '3'), ('subj:2:5', '1'), ('fsearch:2:5', '1')")
+    c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:1:%'")] == [f"subj:1:{logic.now() // 3600}"]
+    logic.forum_sweep(con)
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%'")] == [f"subj:1:{logic.now() // 3600}"]

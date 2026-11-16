@@ -11,7 +11,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { loadSubjects } from './lib/state/subjects.svelte';
+  import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, opened } from './lib/greet';
@@ -135,7 +135,7 @@
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
-  const warmSubjects = () => { if (session.me?.subjects) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
+  const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
   sheets.deepLink = (p) => deepLink(p);
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone });

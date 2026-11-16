@@ -99,34 +99,55 @@ def note_of(body: object) -> str:
     return note
 
 
-def join(con, v: Viewer, path: str, sid: str, note: str, verdict: bool | None) -> dict:
-    """List me on a subject (or change my note): live at once without a note or with the AI's yes, else held for a
-    moderator (as create_ask). Until the term's end."""
+def reserve(con, v: Viewer, path: str, sid: str) -> dict:
+    """Before the AI is asked about my note: the subject is real, I'm under the cap, and this write is counted (one
+    transaction), so neither a made-up subject nor a spent hour reaches the AI. The card."""
     need_student(v)
     s = catalogue(path).get(sid)
     if not s:
         raise ApiError("not_found")
-    key = f"subj:{v.id}:{_now() // 3600}"
+    hour = _now() // 3600
     with tx(con):
-        n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0])
+        n = int((one(con, "SELECT value FROM meta WHERE key = ?", f"subj:{v.id}:{hour}") or [0])[0])
         if n >= WRITES_AN_HOUR:
             raise ApiError("rate_limited")
-        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n + 1)))
         if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND subject IS NOT NULL AND subject != ? AND expires_at > ?",
                v.id, sid, _now())[0] >= LISTED_MAX:
             raise ApiError("rate_limited", "subjects")
+        con.execute("DELETE FROM meta WHERE key LIKE ? AND key != ?", (f"subj:{v.id}:%", f"subj:{v.id}:{hour}"))  # my past hours
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"subj:{v.id}:{hour}", str(n + 1)))
+    return s
+
+
+def join(con, v: Viewer, path: str, s: dict, note: str, verdict: bool | None) -> dict:
+    """List me on a subject (reserve() first) or change my note: live at once without a note or with the AI's yes, else
+    held for a moderator (as create_ask). Until the term's end. A listing a moderator hid stays hidden whatever I send
+    (and leaving keeps it: leave()), until a moderator lets it go (forum.release_ask) or it's swept a month after its term."""
+    sid = s["id"]
+    with tx(con):
         status, why = ("live", None) if not note or verdict else ("held", "ai" if verdict is False else "check")
         con.execute("""INSERT INTO asks (user_id, kind, title, body, status, why, created_at, expires_at, subject)
             VALUES (?, 'help', ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (subject, user_id) WHERE subject IS NOT NULL DO UPDATE SET title = excluded.title, body = excluded.body,
-                status = excluded.status, why = excluded.why, expires_at = excluded.expires_at, found = NULL""",
-                    (v.id, s["name"], note, status, why, _now(), term_end(_now()), sid))
+                status = CASE WHEN asks.status = 'hidden' THEN 'hidden' ELSE excluded.status END,
+                why = CASE WHEN asks.status = 'hidden' THEN asks.why ELSE excluded.why END,
+                expires_at = excluded.expires_at, found = NULL""",
+                    (v.id, s["names"]["ru"], note, status, why, _now(), term_end(_now()), sid))
     return card(con, v, path, sid)
 
 
 def leave(con, v: Viewer, sid: str) -> None:
-    """Off the list at once: the row goes (its offers with it)."""
-    con.execute("DELETE FROM asks WHERE subject = ? AND user_id = ?", (sid, v.id))
+    """Off the list at once: the row goes (its offers with it); one a moderator hid stays, hidden (else leaving and
+    listing again would undo the take-down)."""
+    con.execute("DELETE FROM asks WHERE subject = ? AND user_id = ? AND status != 'hidden'", (sid, v.id))
+
+
+def sweep_counters(con) -> None:
+    """The hourly write counters past their hour (forum_sweep, nightly): nothing of who wrote when outlives the hour."""
+    hour = _now() // 3600
+    for (k,) in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%'").fetchall():
+        if not k.split(":")[-1].isdigit() or int(k.split(":")[-1]) < hour:
+            con.execute("DELETE FROM meta WHERE key = ?", (k,))
 
 
 def offer(con, v: Viewer, aid: object) -> dict:
