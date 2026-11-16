@@ -34,7 +34,10 @@ ENV DB_PATH=/var/lib/kbtu/kbtu.db DB_MUST_EXIST=1 SQLITE_TMPDIR=/var/lib/kbtu WE
 # BOARD set on the server (Coolify) wins: BOARD=staff to try a change, BOARD=0 to close it
 ENV BOARD=1
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
+# --start-period: nothing listens until create() has run db.init, and a start that migrates first copies the whole
+# database (VACUUM INTO) and then runs the migrations. Was: no grace, so three failed looks (~90 s) read as unhealthy
+# and the deploy could be rolled back mid-start; now failures in the first 2 min don't count, the first "ok" is healthy
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
 # secrets come from the environment (Coolify): BOT_TOKEN, TOKEN_KEY, ADMIN_TG_IDS, DOMAIN
 # workers: WEB_CONCURRENCY if the host sets it, else one per core, the whole server (owner: use it to the max; the app is
 # multi-worker safe; one was the bottleneck at 300 people opening at once). exec keeps uvicorn PID 1 for the stop signal

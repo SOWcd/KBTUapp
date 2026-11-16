@@ -214,11 +214,14 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
                 or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
             def fresh_seen() -> None:  # one short transaction, skipped while a burst holds the lock: every GET comes here
                 # role and can_dm from the row as it is now, never from the read above: a demotion or ban (or the bot's
-                # "blocked") landing in between must not be written back
-                con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?,
+                # "blocked") landing in between must not be written back.
+                # Only while seen_at is still the one read above: the app's start sends six requests at once, all of
+                # them read the old row before any commits, and each wrote the same row and visit (6 writes per open);
+                # now the first writes, the others find seen_at moved on and write nothing (1 write per open)
+                if con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?,
                     role = CASE WHEN ? AND banned_at IS NULL THEN 'admin' ELSE role END, can_dm = MAX(can_dm, ?), seen_at = ?
-                    WHERE id = ?""", (*fresh, int(env), int(bool(tg.get("allows_write_to_pm"))), t, u["id"]))
-                logic.visit(con, u["id"], t)
+                    WHERE id = ? AND seen_at = ?""", (*fresh, int(env), int(bool(tg.get("allows_write_to_pm"))), t, u["id"], u["seen_at"])).rowcount:
+                    logic.visit(con, u["id"], t)
             db.maybe(con, fresh_seen)
             u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
     if u["banned_at"]:

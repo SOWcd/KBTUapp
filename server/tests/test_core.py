@@ -4255,8 +4255,13 @@ def test_suggest_chat(env, monkeypatch):
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "t.me/joinchat/AbCdEf12"}).json()["status"] == "waiting"  # the app's sheet
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "nope"}).json()["status"] == "bad"
     assert c.post("/api/chats/suggest", headers=tma(99), json={"link": "@x_chat"}).status_code == 403
+    # one clock for the two: the gate counts 10-second slots (now() // 10), and two calls a few ms apart that straddle a
+    # slot's end were two slots, so "sent" came back where "slow" was asserted (was: failed now and then, more under load)
+    real_now, frozen = bot.now, bot.now()
+    monkeypatch.setattr(bot, "now", lambda: frozen)
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_once"}).json()["status"] == "sent"
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_fast"}).json()["status"] == "slow"  # within 10 s of the last
+    monkeypatch.setattr(bot, "now", real_now)
     con.execute("DELETE FROM chats WHERE url = 'https://t.me/typed_once'")
     assert say(30, text="@second_chat").startswith("✅") and say(30, text="@third_chat").startswith("✅")
     assert asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
@@ -4636,7 +4641,10 @@ def test_app_team(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    assert not sent and logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"   # the bot keeps quiet
+    # the bot keeps quiet to him. Only his chat counts: send_due also runs the chores, and on a Monday from 9:00 (Almaty)
+    # stats.week() sends the owner (a founder here) the week's digest (was: `not sent`, which failed every Monday)
+    assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
+    assert logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"
     assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200
 
     log = c.get("/api/admin/audit", headers=O).json()

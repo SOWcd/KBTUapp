@@ -1,10 +1,21 @@
-# Runs on every push to main and every PR: the server tests, the web types and the web unit tests.
+# Runs on every push to main and every PR: English outside the UI strings, the server tests, the web types and the web unit tests.
 name: CI
 on:
   push:
     branches: [main]
   pull_request:
 jobs:
+  english:
+    # the pre-commit hook (.githooks/pre-commit) on what this PR or push adds: Cyrillic only in the UI strings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: |  # a push whose "before" isn't in the history (a force push): its last commit alone
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=HEAD~1
+          .githooks/pre-commit "$base"
   server:
     runs-on: ubuntu-latest
     steps:

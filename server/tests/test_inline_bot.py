@@ -42,7 +42,10 @@ def test_inline_answer(env):
     assert ids[0] == "rf" and not any(i.startswith("jm-") for i in ids) and {f"ev-{public}", f"ev-{other}"} <= set(ids)
     assert not leak & set(ids)
     rf = body["results"][0]["reply_markup"]["inline_keyboard"][0][0]["url"]
-    assert "startapp=r_" in rf and str(OTHER) not in rf.split("=")[1]
+    # the friend link carries the person's random link code, never their id. Was: `str(OTHER) not in` the code, and the
+    # random 10 letters of A-Z2-7 contain "25" (OTHER) by chance in about 1 run in 100 (seen: r_2573DRUGEZ)
+    code = logic.one(con, "SELECT link_code FROM users WHERE tg_id = ?", OTHER)["link_code"]
+    assert rf.endswith(f"startapp=r_{code}") and len(code) == 10 and code != str(OTHER)
 
     # a President: no club card until the team link is live (typing never makes one), then one card with it
     assert not any(i.startswith("jm-") for i in _ids(_ask(cfg, OFF)))

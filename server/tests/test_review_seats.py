@@ -103,3 +103,50 @@ def test_receipt_without_number_is_flagged(env, monkeypatch):
         mine = c.post(f"/api/events/{eid}/receipt", headers=tma(uid), content=_shot(shade)).json()["my"]
         assert mine["status"] == "going"
     assert mine["receiptFlags"] != [], "a second ticket from the same receipt, with nothing for the organizer to see"
+
+
+def test_bot_receipt_waits_out_a_locked_database(env, monkeypatch):
+    """A receipt sent to the bot while a burst of sign-ups holds the write lock: was, "database is locked" fell to the
+    catch-all, the update was consumed with no answer and the hold ran out (paid, no seat). Now the same update comes
+    again next round, and the receipt is taken then."""
+    import asyncio
+    import json
+    import sqlite3
+
+    import httpx
+
+    from kbtu import bot
+    c, cfg = env
+    con, eid = _paid(c, cfg)
+    c.post(f"/api/events/{eid}/registration", headers=tma(10), json={})
+    monkeypatch.setattr(receipt, "read", lambda im: {"amount": 2000})
+    nap = asyncio.sleep
+    monkeypatch.setattr(bot.asyncio, "sleep", lambda s: nap(0))
+    batch = [{"update_id": 5, "message": {"message_id": 1, "chat": {"id": 10, "type": "private"}, "from": {"id": 10}, "date": int(time.time()),
+                                          "document": {"file_id": "R", "mime_type": "image/png", "file_size": 900}}}]
+    sent = []
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/getUpdates"):
+            return httpx.Response(200, json={"ok": True, "result": [u for u in batch if u["update_id"] >= int(request.url.params["offset"])]})
+        if request.url.path.endswith("/getFile"):
+            return httpx.Response(200, json={"ok": True, "result": {"file_path": "R"}})
+        if "/file/" in request.url.path:
+            return httpx.Response(200, content=_shot())
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    async def hear(offset):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            return await bot.hear(cfg, http, offset)
+    add = logic.add_receipt
+
+    def locked(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(logic, "add_receipt", locked)
+    assert asyncio.run(hear(5)) == 5 and sent == []                  # not consumed: asked again next round
+    assert _status(c, eid, 10) == "hold"
+    monkeypatch.setattr(logic, "add_receipt", add)
+    assert asyncio.run(hear(5)) == 6                                  # the lock is gone: taken, answered once
+    assert _status(c, eid, 10) == "going" and [m["chat_id"] for m in sent] == [10]
+    assert con.execute("SELECT count(*) FROM receipts").fetchone()[0] == 1
