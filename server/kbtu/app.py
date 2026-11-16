@@ -2298,8 +2298,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=aw_{code}"}]]}}
         elif kind == "fp":  # a forum post live in the public channel: anyone may pass it on; the link carries its id only
-            p = logic.one(con, "SELECT body FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", ref)
-            if not p:
+            p = cfg.forum_channel and logic.one(con, "SELECT body FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", ref)
+            if not p:  # one answer for every refusal (held, hidden, gone, unknown, not out yet, the channel off): nothing to tell apart
                 raise ApiError("closed")
             title, text, button, words = texts.share_post(lang, p["body"])
             result = {"type": "article", "id": f"fp-{ref}-{stamp}", "title": title, **({"description": words} if words else {}),

@@ -70,6 +70,9 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
   taken down from Admin. In a club's group, `/all` repeats the caller's own words over each five mentions, in the very chat they wrote them (escaped, short). And a user's own text going back to them alone: a channel comment a moderator restored
   (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
+  A share card of a forum post live in the channel (`/api/share` kind `fp`, inline mode) quotes its first 160 characters,
+  escaped, never a signature; inline offers only my own signed posts. A card already sent stays in its chat after a
+  take-down, as a forward of the channel's post would.
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own

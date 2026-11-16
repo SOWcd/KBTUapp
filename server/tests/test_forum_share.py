@@ -2,9 +2,11 @@
 a button with the post's id, never a signature; inline mode offers my own live signed posts, never an anonymous one."""
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import httpx
+from fastapi.testclient import TestClient
 
 from kbtu import app as server, bot, db, logic
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
@@ -16,8 +18,11 @@ def _post(con, uid, body, anon=0, status="live", msg=7):
 
 
 def test_share_post_card_and_inline(env, monkeypatch):
-    c, cfg = env
-    ali, _ = login(c, 61, "ali"), login(c, 62, "bob")
+    c0, cfg0 = env
+    ali, _ = login(c0, 61, "ali"), login(c0, 62, "bob")
+    assert c0.post("/api/share", headers=tma(62), json={"kind": "fp", "id": 1}).json()["error"] == "closed"  # the channel off: none of it
+    cfg = dataclasses.replace(cfg0, forum_channel=-1001)
+    c = TestClient(server.create(cfg))
     con = db.connect(cfg.db_path)
     signed = _post(con, ali["id"], "Who is up for chess <b>tonight</b>?\nRoom 404")
     anon = _post(con, ali["id"], "A secret thought", anon=1)
@@ -43,9 +48,12 @@ def test_share_post_card_and_inline(env, monkeypatch):
     c.post("/api/share", headers=tma(62), json={"kind": "fp", "id": long})
     assert len(sent[-1]["result"]["description"]) <= 161 and sent[-1]["result"]["description"].endswith("…")
     # not in the channel (held, gone, unknown): no card
+    # (a moderator's take-down hides at once, inside its undo window too; a live post whose channel message isn't out yet)
     con.execute("UPDATE fchan_posts SET status = 'hidden' WHERE id = ?", (long,))
-    for pid in (held, long, 999):
-        assert c.post("/api/share", headers=tma(62), json={"kind": "fp", "id": pid}).status_code != 200
+    unsent, gone = _post(con, ali["id"], "Out in a second", msg=None), _post(con, ali["id"], "Deleted", status="gone")
+    hidden_anon = _post(con, ali["id"], "Hidden and anonymous", anon=1, status="hidden")
+    no = [c.post("/api/share", headers=tma(62), json={"kind": "fp", "id": pid}) for pid in (held, long, unsent, gone, hidden_anon, 999)]
+    assert all(r.status_code != 200 and r.json() == no[0].json() for r in no), "refusals that can be told apart"
 
     # inline: my own live signed posts only, never the anonymous one (the sender shows in the chat), nor others'
     def ask(tg):
