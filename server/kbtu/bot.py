@@ -1169,6 +1169,8 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     title = next(h["title"] for h in holds if h["id"] == eid)
     if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
         return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
+    if one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):  # a team event: the team is the next step, on the event's page
+        return say("receipt_ok_team", f"ev_{eid}", title=title)
     return say("receipt_ok", f"tk_{eid}", title=title)
 
 
