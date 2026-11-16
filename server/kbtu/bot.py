@@ -1757,8 +1757,20 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     except Exception:  # a full disk, a broken picture: answer nothing, but never get stuck on this update
                         log.exception("suggest")
                         body = None
+                elif not _sched_file(msg) and _file(msg):
+                    # a receipt behind a burst of sign-ups: was, "database is locked" fell to the catch-all below, the update
+                    # was gone with no answer and the hold ran out (paid, no seat); now this update again next round, as a
+                    # Stars payment does (the same picture is the same file, add_receipt one transaction)
+                    try:
+                        body = await _receipt(cfg, http, con, msg)
+                    except sqlite3.OperationalError as exc:
+                        if "locked" not in str(exc) and "busy" not in str(exc):
+                            raise
+                        log.warning("receipt: %s", type(exc).__name__)
+                        await asyncio.sleep(1)
+                        return upd["update_id"]
                 else:
-                    body = await _schedule(cfg, http, con, msg) if _sched_file(msg) else await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)
+                    body = await _schedule(cfg, http, con, msg) if _sched_file(msg) else _welcome(con, cfg, msg)
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
                     await _send(cfg, http, body)
