@@ -4255,8 +4255,13 @@ def test_suggest_chat(env, monkeypatch):
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "t.me/joinchat/AbCdEf12"}).json()["status"] == "waiting"  # the app's sheet
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "nope"}).json()["status"] == "bad"
     assert c.post("/api/chats/suggest", headers=tma(99), json={"link": "@x_chat"}).status_code == 403
+    # one clock for the two: the gate counts 10-second slots (now() // 10), and two calls a few ms apart that straddle a
+    # slot's end were two slots, so "sent" came back where "slow" was asserted (was: failed now and then, more under load)
+    real_now, frozen = bot.now, bot.now()
+    monkeypatch.setattr(bot, "now", lambda: frozen)
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_once"}).json()["status"] == "sent"
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_fast"}).json()["status"] == "slow"  # within 10 s of the last
+    monkeypatch.setattr(bot, "now", real_now)
     con.execute("DELETE FROM chats WHERE url = 'https://t.me/typed_once'")
     assert say(30, text="@second_chat").startswith("✅") and say(30, text="@third_chat").startswith("✅")
     assert asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
