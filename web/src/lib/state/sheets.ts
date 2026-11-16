@@ -193,6 +193,8 @@ export const sheets = {
   /** suggest any chat for the catalog: paste @name or a link */
   suggestChat: () => {},
   registry: () => {},
+  /** DMP's tree of every organisation's groups */
+  dmpChats: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
   comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
   /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */

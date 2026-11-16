@@ -269,6 +269,7 @@
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
   sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
+  sheets.dmpChats = () => lazy(() => import('./screens/dmp/ChatsTree.svelte'), {});
   sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange }, 'sheet.comments');
   sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }));

@@ -20,7 +20,10 @@
   import Field from '../../ui/Field.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
-  import { menu } from '../../ui/menu';
+  import { menu, type MenuItem } from '../../ui/menu';
+  import ChatTree from './ChatTree.svelte';
+  import { moved } from '../../lib/chattree';
+  import type { ChatTree as Tree, TreeChat } from '../../lib/api';
 
   // n: how many are linked (the profile's row says it)
   let { org, n = $bindable() }: { org: Id; n?: number } = $props();
@@ -44,6 +47,33 @@
     }
   }
   $effect(() => { void load(); });
+  // the club's groups as a tree (lib/chattree.ts): placing one is a label only, the sync stays the creator's
+  let tree = $state<Tree | null>(null);
+  const loadTree = () => api.chatTree(org).then((x) => (tree = x)).catch(() => {});
+  $effect(() => { void chats.length; void loadTree(); });
+  async function setPlace(c: TreeChat, place: 'main' | 'dept' | 'other' | null, tag?: Id) {
+    if (!tree) return;
+    const was = tree;
+    tree = moved(tree, c, place, tag);
+    haptic.select();
+    try { tree = await api.placeChat(org, c.id as Id, place, tag); }
+    catch (e) {
+      tree = was;
+      haptic.error();
+      say(t(e instanceof ApiErr && e.message === 'synced' ? 'ct.whySynced' : e instanceof ApiErr && e.message === 'main' ? 'ct.whyMain' : 'common.error'), 'warning_3d');
+    }
+  }
+  function placeMenu(c: TreeChat, at: Element) {
+    if (!tree || c.id == null) return;
+    const g = c.guess;
+    const pick = (label: string, place: 'main' | 'dept' | 'other', tag?: Id) => ({ label, place, tag, likely: g?.place === place && (place !== 'dept' || g.tag === tag) });
+    const opts = [pick(t('ct.toMain'), 'main'), ...tree.depts.map((d) => pick(t('ct.toDept', { name: d.name }), 'dept', d.id)), pick(t('ct.toOther'), 'other')]
+      .sort((a, b) => Number(b.likely) - Number(a.likely)); // the likely place first: one tap for the leader who added the bot
+    const items: MenuItem[] = opts.map((o) => ({ label: o.likely ? t('ct.likely', { x: o.label }) : o.label, checked: c.place === o.place && (o.place !== 'dept' || c.tag === o.tag),
+      onselect: () => setPlace(c, o.place, o.tag) }));
+    if (c.by === 'hand') items.push({ label: t('ct.unplace'), onselect: () => setPlace(c, null) });
+    menu(at, items);
+  }
   // back from Telegram's picker: the chat our bot was just added to shows up (the bot links it, PLAN Nov 5)
   $effect(() => {
     const back = () => { if (!document.hidden) setTimeout(load, 1500); };
@@ -132,6 +162,9 @@
 </script>
 
 <div class="oc">
+  {#if tree && tree.groups}
+    <Group caption={t('ct.title')} footnote={t('ct.note')}><ChatTree {tree} onplace={placeMenu} /></Group>
+  {/if}
   {#if waits.length}
     <Group caption={t('oc.wait')} footnote={t('oc.waitNote')}>
       {#each waits as w (w.id)}

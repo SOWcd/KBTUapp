@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk } from '../teamConsent';
@@ -47,7 +47,8 @@ export const data = $state({
   asks: null as Appeal[] | null,              // my questions to the help desk (ASK on): with the app, never kept on the phone
   helpq: null as SgQueue | null,              // the help desk's queue (its granted people): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
-  registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
+  registry: null as RegistryOrg[] | null,
+  chatTrees: null as ChatTree[] | null,       // DMP's tree of every club's groups (counts only): with the registry     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
   inbox: null as Inbox | null,                // the staff's Admin → Inbox: loaded with the app, again each time Admin opens
   adminStats: null as AdminStats | null,      // the admins' Admin → stats card: with the inbox (moderators never see it)
   staffMutes: null as StaffMute[] | null,     // Admin → My notifications: with the inbox's first load, again as the page opens
@@ -243,7 +244,10 @@ export async function loadVol(): Promise<void> {
 }
 
 export async function loadRegistry(): Promise<boolean> {
-  try { data.registry = await api.registry(0); return true; } catch { return false; }
+  try { data.registry = await api.registry(0); void loadChatTrees(); return true; } catch { return false; }
+}
+export async function loadChatTrees(): Promise<void> {
+  try { data.chatTrees = await api.registryChats(); } catch { /* offline: the last copy stays */ }
 }
 
 /** Pictures a page is about to show, into the browser's cache once the app is idle. */

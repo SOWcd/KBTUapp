@@ -1798,6 +1798,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER event_team_want_done AFTER INSERT ON event_team_members BEGIN
       UPDATE registrations SET team_want = NULL WHERE event_id = NEW.event_id AND user_id = NEW.user_id AND team_want IS NOT NULL;
     END;"""),
+    # the tree of a club's groups (logic/chattree.py, owner Nov 16): where its Vice+ placed a group the sync doesn't hold;
+    # a label only (never a sync link), counted while the group is still that club's
+    (176, """CREATE TABLE chat_place (
+      chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      place TEXT NOT NULL CHECK (place IN ('main', 'dept', 'other')),
+      tag_id INTEGER REFERENCES org_tags(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      CHECK ((place = 'dept') = (tag_id IS NOT NULL))) STRICT;"""),
 ]
 
 

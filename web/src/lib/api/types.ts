@@ -38,6 +38,12 @@ export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror:
 // Studio → Chats → Roles and admins: app names only (an app id for the club's own people), never a Telegram id
 export interface ChatRoles { state: 'ok' | 'gone' | 'notAdmin' | 'unavailable'; admins?: { id: Id | null; name: string }[]; others?: number;
   leaders?: { id: Id; name: string; inGroup: boolean }[]; capped?: boolean }
+/** A group in a club's tree (Studio → Chats, DMP): counts only. sync: the creator's chat sync link keeps the club's list from it
+ *  (paused: stopped on a doubt); by: who placed it (the sync, the club's label); guess: a loose group's likely place. */
+export interface TreeChat { id: Id | null; title: string | null; members: number | null; forum: boolean; bot: boolean;
+  sync: 'on' | 'paused' | 'off'; at: Ts | null; by: 'sync' | 'hand' | null; place: 'main' | 'dept' | 'other' | null; tag: Id | null; guess?: { place: 'main' | 'dept'; tag?: Id } | null }
+export interface ChatTree { org: OrgRef; groups: number; kept: number; last: Ts | null; main: TreeChat | null;
+  depts: { id: Id; name: string; color: string; chats: TreeChat[] }[]; other: TreeChat[]; loose: TreeChat[] }
 export interface SwearRow { person: PersonRef | null; warns: number; mutes: number; stems: string[] }
 export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 

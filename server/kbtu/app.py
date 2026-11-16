@@ -1012,6 +1012,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     log.warning("swear switch: %s", str(r.get("description"))[:120])
         return logic.org_chats(con, oid, True)
 
+    @app.get("/api/orgs/{oid}/chats/tree")
+    def chat_tree(oid: int, con: Con, v: Me):
+        """Studio -> Chats: the club's groups as a tree (logic/chattree.py); counts only."""
+        return logic.chattree.club(con, v, oid)
+
+    @app.put("/api/orgs/{oid}/chats/{cid}/place")
+    def chat_place(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
+        """Where a group goes in the club's tree: a label only, never the sync (no member added or removed)."""
+        return logic.chattree.place(con, v, oid, cid, body.get("place"), body.get("tag"))
+
     @app.get("/api/orgs/{oid}/chats/swear")
     def swear_report(oid: int, con: Con, v: Me):
         """The club's groups' swear warnings, 30 days: its President, Vice and Heads."""
@@ -2206,6 +2216,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/registry/orgs")
     def registry(con: Con, v: Me, back: int = 0):
         return logic.registry(con, v, back)
+
+    @app.get("/api/registry/chats")
+    def registry_chats(con: Con, v: Me):
+        """DMP's tree of every organisation's groups (DMP Head+ and the admin)."""
+        return logic.chattree.all_clubs(con, v)
 
     @app.get("/api/registry/memos")
     def registry_memos(con: Con, v: Me):

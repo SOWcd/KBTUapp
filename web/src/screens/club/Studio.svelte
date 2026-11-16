@@ -47,6 +47,7 @@
   import Crown from '@lucide/svelte/icons/crown';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import BookUser from '@lucide/svelte/icons/book-user';
+  import Network from '@lucide/svelte/icons/network';
   import FileDown from '@lucide/svelte/icons/file-down';
   import { ApiErr } from '../../lib/api';
   import { shareInvite } from '../../lib/invite';
@@ -326,6 +327,7 @@
       <Group caption={t('tab.dmp')}>
         <Row icon={BookUser} title={t('reg.title')} subtitle={t('reg.studioSub')} count={data.registry?.length ?? 0} accessory="chevron" onclick={() => sheets.registry()} />
         <Row icon={Mail} title={t('reg.memos')} count={memos} accessory="chevron" onclick={() => sheets.registry()} />
+        <Row icon={Network} title={t('ct.dmp')} subtitle={t('ct.dmpSub')} accessory="chevron" onclick={() => sheets.dmpChats()} />
         <Row icon={FileDown} title={t('reg.export')} subtitle={t('reg.exportSub')} disabled={exporting} onclick={exportCsv} />
       </Group>
     {/if}
