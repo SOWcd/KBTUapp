@@ -49,7 +49,7 @@
   import IconButton from '../../ui/IconButton.svelte';
   import type { MenuItem } from '../../ui/menu';
   import { check, type Finding } from '../../lib/eventCheck';
-  import { api, ApiErr, original, staffEvents, staffOrg, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type Video } from '../../lib/api';
+  import { api, ApiErr, original, staffEvents, staffOrg, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type OwnTr, type Video } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import { nameOf } from '../../lib/short';
@@ -351,7 +351,10 @@
   // "Only for <school>" (server organizing._school_only): a school's own org alone; sent once touched, else kept
   const school = $derived([data.orgs.find((o) => o.id === org) ?? mine?.org].find((o) => o?.kind === 'school'));
   let schoolOnly = $state<boolean>();
+  // the fill found the announcement in all three languages: sent with the save while its title and description stand
+  let ownTr: { tr: OwnTr; title: string; description: string } | undefined;
   const input = (): EventInput => ({
+    ...(ownTr && ownTr.title === f.title.trim() && ownTr.description === f.description.trim() ? { tr: ownTr.tr } : {}),
     ...(schoolOnly === undefined ? {} : { schoolOnly }),
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     ...(asStaff && !lent ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
@@ -467,11 +470,12 @@
         say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
         return;
       }
-      const { price, emoji, color, ...rest } = x; // the server sends only the fields it found, named as the form's
+      const { price, emoji, color, tr, ...rest } = x; // the server sends only the fields it found, named as the form's
       // from the paste screen a date or time it didn't find stays empty (not next week's default): listed on top, and
       // the form's own rule stops a publish without them
       if (first && Object.keys(x).length) { f.date = rest.date ?? ''; f.start = rest.start ?? ''; f.endDate = rest.endDate ?? ''; }
       Object.assign(f, rest);
+      ownTr = tr && { tr, title: f.title.trim(), description: f.description.trim() };
       if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
       if (price && canPrice) { f.paid = true; f.price = String(price); }
       const got = Object.keys(x).length > 0;

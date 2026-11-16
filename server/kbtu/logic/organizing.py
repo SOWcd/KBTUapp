@@ -370,6 +370,25 @@ def _school_only(org: sqlite3.Row, on: object) -> str | None:
     return org["slug"]
 
 
+def _own_tr(body: dict, f: dict) -> dict:
+    """The announcement came in all three languages (the fill's `tr`, assistant.filled): the club's own texts are kept
+    as the event's translations, so the AI never translates it. Only all three and only for the very text being saved
+    (the editor drops `tr` once the title or description is retyped); anything else: nothing, the AI's turn as ever."""
+    tr, langs = body.get("tr"), ("ru", "kk", "en")
+    if not isinstance(tr, dict) or tr.get("lang") not in langs:
+        return {}
+    out = {}
+    for k in langs:
+        if k == tr["lang"]:
+            continue
+        x = tr.get(k)
+        title, desc = (x.get("title"), x.get("description")) if isinstance(x, dict) else (None, None)
+        if not isinstance(title, str) or not isinstance(desc, str) or not title.strip():
+            return {}
+        out[k] = {"title": " ".join(title.split())[:80], "description": desc.strip()[:2000] if f["description"] else ""}
+    return {"i18n": json.dumps(out, ensure_ascii=False), "lang": tr["lang"]}
+
+
 def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
@@ -381,6 +400,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
     f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None) if org["official"] or org["top_at"] else None
     f["video_id"], f["wide_video_id"] = _video(con, v, body, None), _video(con, v, body, None, "wideVideoId")
+    f.update(_own_tr(body, f))
     with tx(con):  # bad slides leave no draft behind
         cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
             VALUES (?, 'draft', {', '.join('?' * len(f))}, ?, ?, ?, ?)""", (oid, *f.values(), shade(f["color"]), v.id, core.now(), core.now()))
@@ -470,6 +490,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
             f["memo_sent_at"] = f["memo_sent_by"] = None  # changed requests go to DMP again
         if (f["title"], f["description"]) != (e["title"], e["description"]):
             f["i18n"], f["lang"], f["ai_tries"] = None, None, 0  # translated again (ai.py)
+        f.update(_own_tr(body, f))
         con.execute(f"UPDATE events SET {', '.join(k + ' = ?' for k in f)}, tint = ?, updated_at = ? WHERE id = ?",
                     (*f.values(), shade(f["color"]), core.now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)

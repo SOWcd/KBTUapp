@@ -41,6 +41,7 @@ REST = 60             # a limited or busy link without a Retry-After rests this 
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
+EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
 RACE_MOST = 3   # race: links asked at once, at most (each a request on someone's rate limit)
 
 
@@ -116,12 +117,16 @@ def _rest_for(r: httpx.Response) -> float:
 
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
                check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
-               timeout: float = TIMEOUT, chain: str | None = None, race: bool = False) -> tuple[str, str]:
+               timeout: float = TIMEOUT, chain: str | None = None, race: bool = False, effort: str | None = None) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
     chain. race: a student waits (owner, Nov 4): the first link, and if it hasn't answered in HEDGE seconds (or failed),
-    another company's at once; the first usable answer wins, then the rest one by one. Busy: none answered; BadAnswers: none usable."""
+    another company's at once; the first usable answer wins, then the rest one by one. Busy: none answered; BadAnswers: none usable.
+    effort: Munito's `reasoning_effort` ("none": no thinking first). Measured on prod, Nov 16: an event's announcement sent
+    both DeepSeek flash models reasoning through all 3500 tokens with no answer (21-37 s each, then the next link); with
+    "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one,
+    and a 400 rests its link for hours."""
     answered = False
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
@@ -137,7 +142,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         t0 = time.time()
         try:
             r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=timeout,
-                                json={"model": link.model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature})
+                                json={"model": link.model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature,
+                                      **({"reasoning_effort": effort} if effort and link.provider in EFFORT_OK else {})})
         except httpx.HTTPError as exc:
             log.warning("ai %s: %s", link.name, type(exc).__name__)
             _rest[link.name] = time.time() + REST

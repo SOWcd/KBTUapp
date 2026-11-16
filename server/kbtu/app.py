@@ -1752,7 +1752,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         text = await run_in_threadpool(logic.appeals.help_ok, con, v, body)
         try:
             answer = await eu_ai(con, logic.appeals.help_prompt(text, lang), whole=40, max_tokens=400, temperature=0.2,
-                                 check=logic.appeals.tips_usable, timeout=20, race=True)
+                                 check=logic.appeals.tips_usable, timeout=20, race=True, effort="none")
         except ApiError:
             if logic.assistant.distress(text):
                 return {"tips": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
@@ -1834,7 +1834,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
-            text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
+            # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod, Nov 16: with
+            # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
+            # call, and the slow ones were the host's, which the race covers)
+            text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
+                               race=True, effort="none")
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
@@ -1855,7 +1859,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"))
         # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
-        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True)  # a person waits: a slow first host races another
+        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True, effort="none")  # a person waits: a slow first host races another
         return logic.assistant.filled(text)
 
     # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own

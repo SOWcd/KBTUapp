@@ -529,7 +529,10 @@ export interface MemoDraft { to: string; subject: string; text: string; from: Ts
   signFrom: string /* the signature's first line: items go in before it */ }
 export interface MemoSign { nameEn: string; kk: string; ru: string; en: string }
 
+/** an announcement that came in all three languages: the other two as the club wrote them (the fill's, server organizing._own_tr) */
+export type OwnTr = { lang: 'ru' | 'kk' | 'en' } & Partial<Record<'ru' | 'kk' | 'en', { title: string; description: string }>>;
 export interface EventInput {
+  tr?: OwnTr;
   title: string;
   description: string;
   startsAt: Ts;
