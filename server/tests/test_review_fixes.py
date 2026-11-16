@@ -299,3 +299,26 @@ def test_signature_lookalikes_refused():
     for dash in ("\u2212", "\uff0d", "\ufe58", "\u2011", "-"):
         with pytest.raises(logic.ApiError):
             logic.fchannel._clean(f"I saw it all\n{dash} Dana S")
+
+
+def test_parallel_start_requests_write_seen_at_once(env, monkeypatch):
+    """The app's start sends six requests at once, and each read the user's row before any of them committed: was, each
+    wrote the same seen_at, names and visit (six writes to users per open). Now the UPDATE holds only while seen_at is
+    still the one read, so a request that read the row before another one's write writes nothing."""
+    c, cfg = env
+    login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET seen_at = seen_at - 3600 WHERE tg_id = 10")        # last open an hour ago
+    con.execute("CREATE TABLE seen_writes (n INTEGER)")
+    con.execute("CREATE TRIGGER seen_write AFTER UPDATE ON users BEGIN INSERT INTO seen_writes VALUES (1); END")
+    stale = logic.one(con, "SELECT * FROM users WHERE tg_id = 10")
+    writes = lambda: con.execute("SELECT count(*) FROM seen_writes").fetchone()[0]  # noqa: E731
+    assert c.get("/api/me", headers=tma(10, "Ali")).status_code == 200 and writes() == 1   # the first request writes
+    real = logic.one
+
+    def before_the_write(con_, sql, *a):  # the next request read the row before the first one committed
+        return stale if sql == "SELECT * FROM users WHERE tg_id = ?" else real(con_, sql, *a)
+    monkeypatch.setattr(logic, "one", before_the_write)
+    assert c.get("/api/me", headers=tma(10, "Ali")).status_code == 200
+    assert writes() == 1, "a second write of the same row"
+    assert con.execute("SELECT count(*) FROM visits v JOIN users u ON u.id = v.user_id WHERE u.tg_id = 10").fetchone()[0] == 1
