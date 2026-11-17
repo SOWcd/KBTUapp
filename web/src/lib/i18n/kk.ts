@@ -592,6 +592,7 @@ const kk: Dict = {
   'cast.ivAdd': "+ Күнге уақыт қосу",
   'cast.ivLen': "Бір адамға минут",
   'cast.ivCap': "Бір уақытта неше адам",
+  'cast.ivOpen': "Слотсыз",
   'cast.ivPlacePh': "305 аудитория не сілтеме",
   'cast.ivAddGo': "Уақыт қосу",
   'cast.ivBad': "Күн мен уақытты тексер",

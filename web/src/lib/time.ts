@@ -43,6 +43,8 @@ function fmt(opts: Intl.DateTimeFormatOptions, ts: number): string {
 
 /** 18:00 */
 export const time = (ts: number): string => { const p = parts(ts); return p2(p.h) + ':' + p2(p.min); };
+/** An interview slot's time; an open window (longer than the form's interviews) as its whole span. */
+export const slotTime = (s: { startsAt: number; minutes: number }): string => time(s.startsAt) + (s.minutes > 45 ? '–' + time(s.startsAt + s.minutes * 60) : '');
 /** Short weekday in the UI language (Fri). */
 export const weekdayShort = (ts: number): string => fmt({ weekday: 'short' }, ts);
 /** Full weekday in the UI language (Friday). */

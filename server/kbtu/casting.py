@@ -78,9 +78,14 @@ def view(con, v: Viewer, oid: int) -> dict | None:
     return out
 
 
+OPEN_CAP = 500  # an open window's room: everyone who applied
+def _mins(s) -> int: return s["wide"] or s["minutes"]  # an open window's real span (table round_wide)
+def _cap(s) -> int: return OPEN_CAP if s["wide"] else s["capacity"]
+
+
 def _slot(con, sid: int | None) -> dict | None:
-    s = one(con, "SELECT * FROM round_slots WHERE id = ?", sid) if sid else None
-    return {"id": s["id"], "startsAt": s["starts_at"], "minutes": s["minutes"], "place": s["place"]} if s else None
+    s = one(con, "SELECT s.*, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide FROM round_slots s WHERE s.id = ?", sid) if sid else None
+    return {"id": s["id"], "startsAt": s["starts_at"], "minutes": _mins(s), "place": s["place"]} if s else None
 
 
 def _seen(a, r) -> str:
@@ -377,7 +382,8 @@ def _at(date: str, hm: str) -> int:
 
 
 def add_slots(con, v: Viewer, rid: int, body: dict) -> list[dict]:
-    """A day's slots: from..to every `minutes`, each for `capacity` people (1: one by one, more: a group), at `place`."""
+    """A day's slots: from..to every `minutes`, each for `capacity` people (1: one by one, more: a group), at `place`.
+    An open window (a club lead, Nov 17: "just come between 2 and 6"): minutes = the whole from..to, one slot for up to 500."""
     r = _get(con, rid)
     _may(con, v, r["org_id"], "casting")
     if r["status"] == "done":
@@ -387,12 +393,16 @@ def add_slots(con, v: Viewer, rid: int, body: dict) -> list[dict]:
         minutes, cap, place = int(body["minutes"]), int(body.get("capacity") or 1), " ".join(str(body.get("place") or "").split())
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
-    if not (5 <= minutes <= 180 and 1 <= cap <= 50 and len(place) <= 120 and now() < start < end <= start + 14 * 3600):
+    # an open window: the whole from..to as one slot, longer than an interview or for more than a group
+    wide = minutes if start + minutes * 60 == end and (minutes > 180 or cap > 50) else None
+    if not ((wide or 5 <= minutes <= 180 and 1 <= cap <= 50) and len(place) <= 120 and now() < start < end <= start + 14 * 3600):
         raise ApiError("bad_input")
     with tx(con):
         t = start
         while t + minutes * 60 <= end:
-            con.execute("INSERT INTO round_slots (round_id, starts_at, minutes, capacity, place) VALUES (?, ?, ?, ?, ?)", (rid, t, minutes, cap, place))
+            con.execute("INSERT INTO round_slots (round_id, starts_at, minutes, capacity, place) VALUES (?, ?, ?, ?, ?)", (rid, t, min(minutes, 180), 50 if wide else cap, place))
+            if wide:
+                con.execute("INSERT INTO round_wide (slot_id, minutes) VALUES (last_insert_rowid(), ?)", (wide,))
             t += minutes * 60
     return slots(con, v, rid)
 
@@ -422,10 +432,10 @@ def slots(con, v: Viewer, rid: int) -> list[dict]:
             JOIN students s ON s.user_id = u.id WHERE a.round_id = ? AND a.slot_id IS NOT NULL AND a.stage != 'withdrawn'""", rid):
         booked.setdefault(a["slot_id"], []).append(a)
     out = []
-    for s in rows(con, "SELECT * FROM round_slots WHERE round_id = ? ORDER BY starts_at", rid):
+    for s in rows(con, "SELECT s.*, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide FROM round_slots s WHERE s.round_id = ? ORDER BY s.starts_at", rid):
         people = booked.get(s["id"], [])
-        x = {"id": s["id"], "startsAt": s["starts_at"], "minutes": s["minutes"], "capacity": s["capacity"], "place": s["place"],
-             "left": s["capacity"] - len(people)}
+        x = {"id": s["id"], "startsAt": s["starts_at"], "minutes": _mins(s), "capacity": _cap(s), "place": s["place"],
+             "left": _cap(s) - len(people)}
         if team:
             x["people"] = [{"appId": a["app"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(),
                             "showed": None if a["came"] is None else bool(a["came"])} for a in people]
@@ -473,9 +483,9 @@ def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
         if sid is None:
             con.execute("UPDATE round_apps SET slot_id = NULL WHERE id = ?", (a["id"],))
         else:
-            s = one(con, "SELECT * FROM round_slots WHERE id = ? AND round_id = ? AND starts_at > ?", sid, rid, now())
+            s = one(con, "SELECT s.*, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide FROM round_slots s WHERE s.id = ? AND s.round_id = ? AND s.starts_at > ?", sid, rid, now())
             taken = one(con, "SELECT COUNT(*) FROM round_apps WHERE slot_id = ? AND id != ? AND stage != 'withdrawn'", sid, a["id"])[0] if s else 0
-            if not s or taken >= s["capacity"]:
+            if not s or taken >= _cap(s):
                 raise ApiError("full")
             con.execute("UPDATE round_apps SET slot_id = ? WHERE id = ?", (sid, a["id"]))
             eve = (s["starts_at"] + ASTANA) // DAY * DAY - ASTANA - 5 * 3600  # 19:00 the day before, Almaty

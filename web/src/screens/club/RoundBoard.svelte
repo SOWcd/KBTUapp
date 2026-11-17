@@ -30,7 +30,7 @@
   import { studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { dayMonth, time } from '../../lib/time';
+  import { dayMonth, time, slotTime } from '../../lib/time';
   import { haptic, openLink, shareCard } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
@@ -145,7 +145,10 @@
   let nf = $state({ date: dateInput(nowTs() + 2 * 86400), from: '15:00', to: '18:00', minutes: 20, capacity: 1, place: '' });
   async function addDay() {
     if (!r) return;
-    try { slots = await api.addSlots(r.id, nf); adding = false; haptic.ok(); say(phrase('say.slotsAdded'), 'spiral_calendar_3d'); }
+    // 0 minutes: an open window, one slot for the whole from..to and everyone at once
+    const mins = (hm: string) => +hm.slice(0, 2) * 60 + +hm.slice(3, 5);
+    const body = nf.minutes ? nf : { ...nf, minutes: mins(nf.to) - mins(nf.from), capacity: 500 };
+    try { slots = await api.addSlots(r.id, body); adding = false; haptic.ok(); say(phrase('say.slotsAdded'), 'spiral_calendar_3d'); }
     catch { haptic.error(); say(t('cast.ivBad'), 'pleading_face_3d'); }
   }
   async function dropSlot(s: RoundSlot) {
@@ -190,7 +193,7 @@
     {#if a.username}<span class="lone"><Button kind="tinted" size="s" onclick={() => openLink('https://t.me/' + a.username)}>{#snippet icon()}<TelegramMark size={16} />{/snippet}{t('cast.write')}</Button></span>{/if}
 
     {#if a.invited}
-      <Notice tone="accent" icon={CalendarClock} text={a.slot ? `${dayMonth(a.slot.startsAt)}, ${time(a.slot.startsAt)} · ${placeOf(a.slot.place)}` : t('cast.ivNoTime')}>
+      <Notice tone="accent" icon={CalendarClock} text={a.slot ? `${dayMonth(a.slot.startsAt)}, ${slotTime(a.slot)} · ${placeOf(a.slot.place)}` : t('cast.ivNoTime')}>
         {#if a.slot}<div class="wrap">
           <Chip selected={a.showed === true} onclick={() => showed(a.id, a.showed === true ? null : true)}>{t('cast.ivCame')}</Chip>
           <Chip selected={a.showed === false} onclick={() => showed(a.id, a.showed === false ? null : false)}>{t('cast.ivMissed')}</Chip>
@@ -265,9 +268,11 @@
             <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
           </div>
           <span class="lbl">{t('cast.ivLen')}</span>
-          <Segmented items={[15, 20, 30, 45].map((m) => ({ value: m, label: String(m) }))} bind:value={nf.minutes} label={t('cast.ivLen')} />
-          <span class="lbl">{t('cast.ivCap')}</span>
-          <Segmented items={[1, 3, 5, 10].map((n) => ({ value: n, label: String(n) }))} bind:value={nf.capacity} label={t('cast.ivCap')} />
+          <Segmented items={[...[15, 20, 30, 45].map((m) => ({ value: m, label: String(m) })), { value: 0, label: t('cast.ivOpen') }]} bind:value={nf.minutes} label={t('cast.ivLen')} />
+          {#if nf.minutes}
+            <span class="lbl">{t('cast.ivCap')}</span>
+            <Segmented items={[1, 3, 5, 10].map((n) => ({ value: n, label: String(n) }))} bind:value={nf.capacity} label={t('cast.ivCap')} />
+          {/if}
           <Field label={t('memo.where')} bind:value={nf.place} maxlength={120} placeholder={t('cast.ivPlacePh')} />
           <Button kind="secondary" size="m" full onclick={addDay}>{t('cast.ivAddGo')}</Button>
         </div>
@@ -276,7 +281,7 @@
         <Group caption={day}>
           {#each list as s (s.id)}
             {@const people = s.people ?? []}
-            <Row title={time(s.startsAt)} subtitle={placeOf(s.place) + (s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')}>
+            <Row title={slotTime(s)} subtitle={placeOf(s.place) + (s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')}>
               {#snippet trailing()}{#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}{/snippet}
             </Row>
             {#each people as p (p.appId)}

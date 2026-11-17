@@ -592,6 +592,7 @@ const en: Dict = {
   'cast.ivAdd': "+ Add a day's times",
   'cast.ivLen': "Minutes a person",
   'cast.ivCap': "People at once",
+  'cast.ivOpen': "No slots",
   'cast.ivPlacePh': "Room 305 or a link",
   'cast.ivAddGo': "Add the times",
   'cast.ivBad': "Check the date and times",

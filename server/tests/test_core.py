@@ -3425,6 +3425,11 @@ def test_casting(env):
     assert c.post(f"/api/rounds/{rid}/invite", headers=tma(21)).status_code == 409                          # no slots yet
     got = c.post(f"/api/rounds/{rid}/slots", headers=tma(21), json={"date": day, "from": "15:00", "to": "16:00", "minutes": 20, "place": "Room 305"}).json()
     assert len(got) == 3 and got[0]["left"] == 1
+    # an open window: the whole from..to as one slot for everyone at once; it goes again while nobody booked it
+    wide = c.post(f"/api/rounds/{rid}/slots", headers=tma(21), json={"date": day, "from": "17:00", "to": "21:00", "minutes": 240, "capacity": 500}).json()
+    assert len(wide) == 4 and wide[3]["minutes"] == 240 and wide[3]["left"] == 500
+    assert c.post(f"/api/rounds/{rid}/slots", headers=tma(21), json={"date": day, "from": "17:00", "to": "21:00", "minutes": 200, "capacity": 500}).status_code == 400  # not the whole window
+    assert len(c.delete(f"/api/round-slots/{wide[3]['id']}", headers=tma(21)).json()) == 3
     assert c.get(f"/api/rounds/{rid}/slots", headers=tma(10)).status_code == 403                              # not invited yet
     assert c.post(f"/api/rounds/{rid}/invite", headers=tma(21)).json() == {"invited": 1}                      # Ann only: next
     assert c.get("/api/orgs/1/round", headers=tma(10)).json()["mine"]["invited"]

@@ -1838,6 +1838,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     (178, """CREATE TABLE IF NOT EXISTS staff_ok (  -- IF NOT EXISTS: tests rewind user_version to rerun older ones
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       granted_at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 17) an open interview window ("just come between 2 and 6", a club lead): one slot for the whole span and
+    # everyone at once. round_slots' CHECKs cap a slot at 180 minutes and 50 people and can't be altered, so the real
+    # span lives here and the slot's row keeps the caps as stand-ins (casting._mins, _cap)
+    (179, """CREATE TABLE IF NOT EXISTS round_wide (  -- IF NOT EXISTS: tests rewind user_version
+      slot_id INTEGER PRIMARY KEY REFERENCES round_slots(id) ON DELETE CASCADE,
+      minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 840)) STRICT;"""),
 ]
 
 

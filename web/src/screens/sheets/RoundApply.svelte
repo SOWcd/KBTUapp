@@ -16,7 +16,7 @@
   import { data, loadAfisha } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { dayMonth, time } from '../../lib/time';
+  import { dayMonth, time, slotTime } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import { count } from '../../lib/stats';
   import { burst } from '../../ui/burst';
@@ -114,7 +114,7 @@
       const m = slots.find((x) => x.mine);
       if (r.mine) r.mine.slot = m ? { id: m.id, startsAt: m.startsAt, minutes: m.minutes, place: m.place } : null;
       picking = false; haptic.ok();
-      if (m) say(t('cast.ivBooked', { when: dayMonth(m.startsAt) + ', ' + time(m.startsAt) }), 'spiral_calendar_3d');
+      if (m) say(t('cast.ivBooked', { when: dayMonth(m.startsAt) + ', ' + slotTime(m) }), 'spiral_calendar_3d');
     } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'full' ? t('cast.ivFull') : t('common.error'), 'warning_3d');
       api.roundSlots(r.id).then((y) => (slots = y)).catch(() => {}); }
   }
@@ -173,7 +173,7 @@
       <!-- the interview: the time to pick, or mine -->
       {#if r.mine.slot && !picking}
         <Group caption={t('cast.ivTitle')}>
-          <Row title="{dayMonth(r.mine.slot.startsAt)}, {time(r.mine.slot.startsAt)}" subtitle={placeOf(r.mine.slot.place)} />
+          <Row title="{dayMonth(r.mine.slot.startsAt)}, {slotTime(r.mine.slot)}" subtitle={placeOf(r.mine.slot.place)} />
           <Row tone="action" title={t('cast.ivChange')} onclick={() => (picking = true)} />
         </Group>
       {:else}
@@ -181,7 +181,7 @@
           {#each days as [day, list] (day)}
             <!-- engine: ui/Row could hold a wrapping row of Chips under its title (a day's free times) -->
             <div class="kb-row ivday"><span class="dl">{day}</span>
-              <div class="chips">{#each list as s (s.id)}<Chip selected={s.mine} onclick={() => take(s)}>{time(s.startsAt)}{s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
+              <div class="chips">{#each list as s (s.id)}<Chip selected={s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
           {/each}
           <Row tone="action" title={t('cast.ivNothing')} onclick={nothingFits} />
           {#if r.mine.slot}<Row tone="action" title={t('cast.ivDrop')} onclick={() => take(null)} />{/if}
