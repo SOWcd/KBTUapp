@@ -122,6 +122,9 @@ export function layersOf(art: string): [string, number][] | null {
   // a drawn pin, built as Recruiter's (owner, Nov 4): its own field and constellation, Recruiter's light, and the coin's
   // rim of its metal, round or along the shield (PIN_SHAPE)
   const z = /^layer_zn_([a-z0-9]+)_([gs])$/.exec(art);
+  // the anthem's pin: a treble clef in gold relief, a picture (vb-anthem-clef: an image model's, cut out) over its own
+  // field under the same rim (owner, Nov 17: the constellation was ugly). vb-*: tools/medals.mjs leaves these files alone
+  if (z && z[1] === 'anthem' && PIN_SHAPE === 'round') return [['zn-anthem-field', -1], ['vb-anthem-clef', 0.5], [`zn-rim-${z[2]}`, 0]];
   if (z) { const s = PIN_SHAPE === 'shield' ? 's' : ''; return [[`zn-${z[1]}-${s}field`, -1], [`zn-${z[1]}-${s}net`, 0.5], [`rc-core-${z[2]}`, 1], [`zn-${s}rim-${z[2]}`, 0]]; }
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
   return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
