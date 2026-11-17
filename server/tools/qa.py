@@ -186,6 +186,9 @@ def fake_ai_app():
         if "Student Government" in msgs[0]["content"]:  # appeals' "Help me clarify": made-up tips (Russian, as the seed's people)
             return json.dumps({"tips": ["\u0413\u0434\u0435 \u0438\u043c\u0435\u043d\u043d\u043e \u044d\u0442\u043e \u0441\u043b\u0443\u0447\u0438\u043b\u043e\u0441\u044c?", "\u0421 \u043a\u0430\u043a\u043e\u0433\u043e \u0434\u043d\u044f?", "\u0427\u0435\u0433\u043e \u0442\u044b \u0445\u043e\u0447\u0435\u0448\u044c \u0432 \u0438\u0442\u043e\u0433\u0435?"], "care": assistant.distress(q)}), "qa"
         care = assistant.distress(q)
+        if q.lower().startswith("how"):  # "How do I ...": steps and the screens' buttons (the server keeps those this person may open)
+            return json.dumps({"text": "1. Open Studio of your club.\n2. Tap New event.\n3. Paste the announcement.", "known": True, "topic": "qa how to",
+                               "actions": [{"type": "new_event", "id": 1}, {"type": "studio", "id": 1}, {"type": "tickets"}]}), "qa"
         return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
                            "actions": [] if care else [{"type": "ask"}], "known": False, "topic": "qa made up topic", "care": care}), "qa"
     llm.chat = chat

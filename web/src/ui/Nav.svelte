@@ -2,9 +2,12 @@
   // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
   // each icon only repeated it); the active one in the accent on a raised lighter pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
-  // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The map: its own round glass
-  // button beside it.
+  // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The corner: its own round glass
+  // button beside it, KRI (owner, Nov 17: the assistant leads anywhere, the map is its first row); the map where the
+  // assistant is off (BOARD).
   import MapIcon from '@lucide/svelte/icons/map';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
+  import { session } from '../lib/state/session.svelte';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
@@ -41,16 +44,23 @@
     if (d?.on && preview != null) { const i = preview; preview = null; goTab(tabs[i]); }
     else preview = null;
   }
-  // the button gives under the finger and springs back as the map grows out of it (CampusMap's iris)
+  // the button gives under the finger and springs back as the map (CampusMap's iris) or KRI grows out of it
+  const give = (b: HTMLElement) => b.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.84)', offset: 0.35 }, { transform: 'scale(1.06)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
   function openMap(e: MouseEvent) {
     const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
     mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
     mapFrom.cap = copyCap();
-    b.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.84)', offset: 0.35 }, { transform: 'scale(1.06)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
+    give(b);
     sheets.map();
   }
-  // the map's chunk on the press, not the click: by the release it has been loading for the whole press
-  const warm = () => { void import('../screens/map/CampusMap.svelte').catch(() => {}); };
+  // the chunk on the press, not the click: by the release it has been loading for the whole press
+  const kri = $derived(session.board);
+  const warm = () => { void (kri ? import('../screens/assistant/Assistant.svelte') : import('../screens/map/CampusMap.svelte')).catch(() => {}); };
+  function corner(e: MouseEvent) {
+    if (!kri) return openMap(e);
+    give(e.currentTarget as HTMLElement);
+    sheets.assistant();
+  }
   function pick(i: number) { if (drag?.on) return; goTab(tabs[i]); }
 </script>
 
@@ -69,12 +79,12 @@
     </button>
   {/each}
 </nav>
-<!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
-     to find); a round glass button of its own, like iOS 26's search, so the tabs keep their width -->
-<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }} use:refract
-        onpointerdown={warm} onclick={openMap}>
+<!-- KRI beside the tabs, under the thumb on every screen; a round glass button of its own, like iOS 26's search, so
+     the tabs keep their width. Its class stays .mapb: the map's iris closes into it when it opened from here -->
+<button class="mapb glass glass-pill" aria-label={kri ? t('as.askAi') : t('map.open')} use:glass={{ bloom: true }} use:refract
+        onpointerdown={warm} onclick={corner}>
   <span class="tone-base" aria-hidden="true"></span>
-  <MapIcon size={24} strokeWidth={2} />
+  {#if kri}<Sparkles size={24} strokeWidth={2} />{:else}<MapIcon size={24} strokeWidth={2} />{/if}
 </button>
 </div>
 
