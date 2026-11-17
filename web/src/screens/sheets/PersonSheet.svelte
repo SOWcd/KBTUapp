@@ -204,7 +204,7 @@
         <Section title={t('person.clubs')}>
           <Group>
             {#each p.clubs as m (m.org.id)}
-              <Row dense title={nameOf(m.org)} value={m.role ? roleName(m.role, titleOf(m)) : undefined}>{#snippet lead()}<OrgLogo org={m.org} size={28} />{/snippet}</Row>
+              <Row dense title={nameOf(m.org)} value={m.role ? roleName(m.role, titleOf(m)) : undefined} accessory="chevron" onclick={() => sheets.club(m.org.id)}>{#snippet lead()}<OrgLogo org={m.org} size={28} />{/snippet}</Row>
             {/each}
           </Group>
         </Section>
@@ -215,7 +215,7 @@
         <Section title={t('person.past')}>
           <Group>
             {#each p.past as h, i (i)}
-              <Row dense title={nameOf(h.org)} subtitle={(h.role ? ROLE_NAME[h.role] + ' · ' : '') + monthYear(h.since) + (monthYear(h.since) === monthYear(h.until) ? '' : ' – ' + monthYear(h.until))}>
+              <Row dense accessory="chevron" onclick={() => sheets.club(h.org.id)} title={nameOf(h.org)} subtitle={(h.role ? ROLE_NAME[h.role] + ' · ' : '') + monthYear(h.since) + (monthYear(h.since) === monthYear(h.until) ? '' : ' – ' + monthYear(h.until))}>
                 {#snippet lead()}<OrgLogo org={h.org} size={28} />{/snippet}
               </Row>
             {/each}
