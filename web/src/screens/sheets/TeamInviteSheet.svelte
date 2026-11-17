@@ -39,7 +39,8 @@
         await api.teamJoin(eid, token);
         if (step === 'pay') { haptic.ok(); say(t('tm.afterPay'), 'sparkles_3d'); close(overlay.id); sheets.event(eid); sheets.pay(eid); return; }
         haptic.ok(); say(t('tm.joined'), 'party_popper_3d');
-      } else toggleGoing(eid, () => sheets.pay(eid), { join: token }); // says what came of it itself; paid: the payment sheet
+      } else if (await teamConsentOk()) toggleGoing(eid, () => sheets.pay(eid), { join: token }); // its own consent first; says what came of it itself; paid: the payment sheet
+      else return;
       close(overlay.id); sheets.event(eid);
     } catch (e) { haptic.error(); say(e instanceof ApiErr ? errorText(e) : t('common.error'), 'pleading_face_3d'); }
     finally { busy = false; }

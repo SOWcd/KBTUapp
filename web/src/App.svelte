@@ -648,11 +648,11 @@
     // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
     // must not sign anyone up)
     const again = () => {
-      const p = takeAgain(), go = p?.match(/^go_(\d+)(_c)?$/); // _c: the sign-up's team consent line was on screen
+      const p = takeAgain(), go = p?.match(/^go_(\d+)$/);
       if (!go) { if (p) deepLink(p); return; }
       const id = Number(go[1]), st = eventById(id)?.my?.status;
       sheets.event(id);
-      if (st !== 'going' && st !== 'hold' && st !== 'waitlist') toggleGoing(id, () => sheets.pay(id), undefined, !!go[2]);
+      if (st !== 'going' && st !== 'hold' && st !== 'waitlist') toggleGoing(id, () => sheets.pay(id));
     };
     if (session.me?.msPending) sheets.login(again);
     else if (session.me?.student && (force || !tg.startParam)) again();

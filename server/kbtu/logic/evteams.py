@@ -33,9 +33,9 @@ captain paying for others. The payment-state rule:
 
 The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
-team event waits with no team until they agree. Signing up on the event's page is the consent (Nov 18): its button says
-so in a line, and the app sends the version with the tap (signup's consent); a sign-up without it (an old app, the feed's
-quick button) writes none. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
+team event waits with no team until they agree. Signing up is the consent (Nov 18): the app asks one who hasn't agreed
+in an alert on the sign-up tap and sends the version with it (signup's consent); a sign-up without it (an old app)
+writes none and works as before. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
 once a day), never a consent. Withdrawing it takes me out of my teams on events not started yet.
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
@@ -329,7 +329,7 @@ def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers
     """Signing up for a team event in one tap: {"create": name}, {"join": token}, or nothing ("I have no team"). Under one
     lock with the registration: a full event (the waitlist) or a full team leaves no sign-up behind. Already signed up:
     the team part alone.
-    consent: the version (CONSENT) the app sends when its sign-up button showed the line on what signing up to a team
+    consent: the version (CONSENT) the app sends when its sign-up tap showed the alert on what signing up to a team
     event means (the owner, Nov 18: signing up is the consent). Written with a ticket or a hold this tap made, never
     inferred: an old app without the marker, a tap on an existing sign-up, or one that lands on the waitlist writes
     nothing."""

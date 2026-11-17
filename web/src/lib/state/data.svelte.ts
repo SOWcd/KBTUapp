@@ -4,7 +4,7 @@ import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, typ
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
-import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
+import { t, tn, type Key, subjectOf, i18n } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
@@ -422,10 +422,8 @@ export const goingBusy = new SvelteSet<Id>();
 const flying = new Set<Id>();
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
-/** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick)
- *  consent: the button showed the line on what signing up to a team event means: the sign-up is the teams consent
- *  (server evteams.signup writes it with the sign-up); without it the consent sheet asks as before */
-export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: TeamPick | 'solo', consent = false): void {
+/** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick) */
+export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: TeamPick | 'solo'): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
   asStudent(async () => {
     const before = await cardFor(id);
@@ -433,6 +431,12 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
     if (!leaving && onTeam(before, session.me?.memberships)) { haptic.tap(); say(t('event.team'), 'raising_hands_3d_default'); return; }
+    // a team event's sign-up is its teams consent (owner, Nov 18): one who hasn't agreed (or took it back) is asked
+    // first, every way in; a no signs nobody up. The waitlist isn't a sign-up yet: asked when it is a ticket.
+    const fullNow = before.seats != null && before.taken >= before.seats;
+    const agrees = !leaving && !!before.teamMax && !fullNow && !session.me?.teams?.consent;
+    if (agrees && !(await sheets.ask({ title: t('tm.consentT'), text: t('tm.signupText'), ok: t('tm.signupOk'), cancel: t('common.cancel'),
+      link: { label: t('tm.consentLink'), url: `${location.origin}/privacy?lang=${i18n.lang}` } }))) return;
     // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
@@ -448,9 +452,8 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     if (wish === null) return;
     // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap. A paid one
     // asks nothing: the captain pays first and makes the team after the receipt (the sheet's "Create team")
-    const pick = !leaving && before.teamMax ? team ?? (before.price ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
+    const pick = !leaving && before.teamMax ? team ?? (before.price || fullNow ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
     if (pick === null) return;
-    const agrees = consent && !leaving && !!before.teamMax;
     if (pick && !agrees && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
     if (flying.has(id)) return; // a second tap while the first is on its way
@@ -482,7 +485,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
     } finally { goingBusy.delete(id); flying.delete(id); taps++; }
-  }, 'go_' + id + (consent ? '_c' : '')); // _c: the line was on screen at the tap (App's msBack passes it on)
+  }, 'go_' + id);
 }
 
 /** The bot can't write to someone who never opened it: Telegram's own "allow messages", asked when it pays off (just

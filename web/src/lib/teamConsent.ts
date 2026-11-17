@@ -1,5 +1,5 @@
-// Team events' own consent (server evteams.CONSENT): mine, one for every event. The event page's sign-up is the consent
-// itself (its line, toggleGoing's consent); elsewhere asked here the first time I pick a way into
+// Team events' own consent (server evteams.CONSENT): mine, one for every event. A sign-up to a team event is the consent
+// itself (toggleGoing's alert, every way in); an invite's Join and a full event's pick ask here the first time I pick a way into
 // a team event (a team of my own, a link, "no team": the app or the organizer may place me) and on an invite's Join;
 // taken back from a team event's card, which takes me out of my teams on events not started yet.
 import { api } from './api';
