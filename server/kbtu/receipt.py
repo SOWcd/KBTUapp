@@ -47,42 +47,6 @@ def picture(data: bytes) -> Image.Image:
     return im.convert("RGB")
 
 
-def pages(data: bytes, most: int, side: int, keep) -> list:
-    """Every page of a PDF (an event's rules) rendered with its longest side `side` and handed to keep(picture) one at
-    a time, outside the lock (encoding is slow, receipts wait on the lock); what keep returned, in page order. Not a
-    PDF, a broken or locked one, none or more than `most` pages: BadImage("not_a_pdf" | "too_many_pages")."""
-    if data[:5] != b"%PDF-":
-        raise media.BadImage("not_a_pdf")
-    out, pdf = [], None
-    try:
-        with _pdfium:
-            pdf = pdfium.PdfDocument(data)
-            n = len(pdf)
-        if not n or n > most:
-            raise media.BadImage("too_many_pages" if n else "not_a_pdf")
-        for i in range(n):
-            with _pdfium:  # every PDFium call (closing too) under the lock; the document stays open between them
-                page = pdf[i]
-                try:
-                    w, h = page.get_size()
-                    bm = page.render(scale=min(4, side / max(w, h, 1)))  # a tiny page isn't blown up past 4x
-                    im = bm.to_pil().convert("RGB")
-                    bm.close()
-                finally:
-                    page.close()
-            out.append(keep(im))
-        return out
-    except media.BadImage:
-        raise
-    except (pdfium.PdfiumError, IndexError, ValueError) as exc:
-        log.info("pdf refused: %s", type(exc).__name__)
-        raise media.BadImage("not_a_pdf") from None
-    finally:
-        if pdf is not None:
-            with _pdfium:
-                pdf.close()
-
-
 def ready() -> str:
     """For the start-up log: whether OCR can run here (the image installs tesseract with the rus and kaz models)."""
     try:

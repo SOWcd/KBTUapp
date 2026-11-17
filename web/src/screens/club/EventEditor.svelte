@@ -282,7 +282,7 @@
 
   // the event's rules (a PDF, an organizer's ask, Nov 17): put at once, not on Save; the server keeps only its pages as
   // pictures (organizing.put_doc), the event's page opens them in the photo viewer
-  let docUp = $state(false);
+  let docUp = $state(false), docName = $state(''); // docName: the title while it uploads (the row's own words would wrap)
   let docPick = $state<HTMLInputElement>();
   async function pickDoc(ev: Event) {
     const input = ev.currentTarget as HTMLInputElement, file = input.files?.[0];
@@ -291,7 +291,7 @@
     if (file.size > 5 * 1024 * 1024) { haptic.error(); say(t('ed.docBig'), 'pleading_face_3d'); return; }
     const name = await sheets.askText({ title: t('ed.docName'), placeholder: t('event.doc'), value: saved.doc?.title ?? t('event.doc'), max: 40, line: true, ok: t('common.save'), cancel: t('common.cancel') });
     if (name == null || !saved) return;
-    docUp = true;
+    docUp = true; docName = name;
     try { const e = await api.putEventDoc(saved.id, file, name === t('event.doc') ? '' : name); saved = { ...saved, doc: e.doc }; haptic.ok(); }
     catch (err) { haptic.error(); say(t(err instanceof ApiErr && (err.message === 'too_many_pages' || err.message === 'too_big') ? 'ed.docBig' : 'ed.docBad'), 'pleading_face_3d'); }
     finally { docUp = false; }
@@ -769,7 +769,8 @@
       {#if saved && !plain}
         {#if saved.doc && !docUp}<Row icon={FileText} title={saved.doc.title ?? t('event.doc')} value={tn('ed.docPages', saved.doc.pages.length)}
           menu={[{ label: t('ed.docReplace'), onselect: () => docPick?.click() }, { label: t('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
-        {:else}<Row icon={FileText} title={t('ed.docAdd')} value={docUp ? t('ed.docUp') : undefined} accessory="chevron" onclick={() => !docUp && docPick?.click()} />{/if}
+        {:else if docUp}<Row icon={FileText} title={docName} value={t('ed.docUp')} />
+        {:else}<Row icon={FileText} title={t('ed.docAdd')} accessory="chevron" onclick={() => docPick?.click()} />{/if}
       {/if}
       {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}

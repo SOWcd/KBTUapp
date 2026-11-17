@@ -61,14 +61,14 @@ SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most e
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (the KBTU-password sign-in is gone since Oct 19)
 
 
-async def read_upload(request: Request) -> bytes:
-    """An upload's bytes: the file itself is the body (no multipart), at most media.MAX_BYTES."""
-    if int(request.headers.get("content-length") or 0) > media.MAX_BYTES:
+async def read_upload(request: Request, most: int = media.MAX_BYTES) -> bytes:
+    """An upload's bytes: the file itself is the body (no multipart), at most `most` (media.MAX_BYTES)."""
+    if int(request.headers.get("content-length") or 0) > most:
         raise ApiError("bad_input", "too_big")
     data = bytearray()
     async for chunk in request.stream():
         data += chunk
-        if len(data) > media.MAX_BYTES:
+        if len(data) > most:
             raise ApiError("bad_input", "too_big")
     return bytes(data)
 
@@ -1392,14 +1392,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         posting.add(v.id)
         try:
             await run_in_threadpool(logic.doc_check, con, v, eid)  # a plain no costs no upload
-            data = await read_upload(request)
+            data = await read_upload(request, logic.DOC_BYTES)
             try:
-                pages = await _img(logic.render_doc, data, photos)
+                pages = await _img(logic.render_doc, data, photos)  # the pages render in a child process (pdfpages.py)
             except media.BadImage as exc:
                 raise ApiError("bad_input", str(exc)) from None
             try:
                 out, gone = await run_in_threadpool(logic.put_doc, con, v, eid, title, pages)
-            except ApiError:  # the event went meanwhile: no files left behind without a row
+            except BaseException:  # the event went meanwhile, or anything else: no files left behind without a row
                 media.drop(photos, [p["path"] for p in pages])
                 raise
             media.drop(photos, gone)
@@ -2753,6 +2753,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         f = (photos / path).resolve()
         if not f.is_file() or photos not in f.parents:
             raise ApiError("not_found")
+        if path.startswith("doc/"):  # an event's document's pages: gone soon after it is replaced or removed
+            return FileResponse(f, headers={"Cache-Control": "public, max-age=3600"})
         return FileResponse(f, headers={"Cache-Control": "public, max-age=31536000, immutable"})  # named by content hash
 
     # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405
