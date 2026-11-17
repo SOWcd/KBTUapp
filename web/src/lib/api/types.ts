@@ -319,6 +319,7 @@ export interface Me {
   showcase: string[];
   settings: Settings;
   memberships: Membership[];
+  office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one. Owner, Oct 13:
    *  badges as skins; never picked, a new club's comes by itself. */

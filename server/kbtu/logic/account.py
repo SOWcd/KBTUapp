@@ -515,6 +515,9 @@ def me(con, v: Viewer) -> dict:
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [_membership(con, m, mains, logos) for m in members],
+        # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
+        "office": org_ref(con, o) if not s and (o := one(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
+            WHERE m.user_id = ? AND o.kind = 'office' AND o.status = 'active'""", v.id)) else None,
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)

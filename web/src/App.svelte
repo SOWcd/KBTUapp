@@ -432,7 +432,7 @@
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
   // an office's own people (DMP) are greeted as the team, once per phone: at the link that let them in, or the launch after
   function teamHi(): boolean {
-    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org;
+    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office;
     if (!o || !once('kb-hi-o' + o.id)) return false;
     say(t('say.hi.team', { org: o.abbr ?? o.name }), 'waving_hand_3d_default');
     return true;
