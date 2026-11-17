@@ -61,14 +61,14 @@ SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most e
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (the KBTU-password sign-in is gone since Oct 19)
 
 
-async def read_upload(request: Request) -> bytes:
-    """An upload's bytes: the file itself is the body (no multipart), at most media.MAX_BYTES."""
-    if int(request.headers.get("content-length") or 0) > media.MAX_BYTES:
+async def read_upload(request: Request, most: int = media.MAX_BYTES) -> bytes:
+    """An upload's bytes: the file itself is the body (no multipart), at most `most` (media.MAX_BYTES)."""
+    if int(request.headers.get("content-length") or 0) > most:
         raise ApiError("bad_input", "too_big")
     data = bytearray()
     async for chunk in request.stream():
         data += chunk
-        if len(data) > media.MAX_BYTES:
+        if len(data) > most:
             raise ApiError("bad_input", "too_big")
     return bytes(data)
 
@@ -1391,6 +1391,33 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         gone, photo = logic.delete_event(con, v, eid)
         media.drop(receipts, gone)
         media.drop(photos, photo)
+
+    # the event's one document (its rules): the PDF is the body, as in /api/photos; only its pages' pictures are kept
+    @app.put("/api/events/{eid}/doc")
+    async def put_event_doc(eid: int, request: Request, con: Con, v: Me, title: str | None = Query(None, max_length=200)):
+        if v.id in posting:  # one upload at a time per person, as the Gallery's (30 pages hold a picture thread a while)
+            raise ApiError("rate_limited", "busy")
+        posting.add(v.id)
+        try:
+            await run_in_threadpool(logic.doc_check, con, v, eid)  # a plain no costs no upload
+            data = await read_upload(request, logic.DOC_BYTES)
+            try:
+                pages = await _img(logic.render_doc, data, photos)  # the pages render in a child process (pdfpages.py)
+            except media.BadImage as exc:
+                raise ApiError("bad_input", str(exc)) from None
+            try:
+                out, gone = await run_in_threadpool(logic.put_doc, con, v, eid, title, pages)
+            except BaseException:  # the event went meanwhile, or anything else: no files left behind without a row
+                media.drop(photos, [p["path"] for p in pages])
+                raise
+            media.drop(photos, gone)
+            return out
+        finally:
+            posting.discard(v.id)
+
+    @app.delete("/api/events/{eid}/doc", status_code=204)
+    def drop_event_doc(eid: int, con: Con, v: Me):
+        media.drop(photos, logic.drop_doc(con, v, eid))
 
     # a co-host club (logic/cohosts.py): the host invites one, its Vice+ answers in Studio, either side ends it
     @app.put("/api/events/{eid}/cohost")
@@ -2734,6 +2761,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         f = (photos / path).resolve()
         if not f.is_file() or photos not in f.parents:
             raise ApiError("not_found")
+        if path.startswith("doc/"):  # an event's document's pages: gone soon after it is replaced or removed
+            return FileResponse(f, headers={"Cache-Control": "public, max-age=3600"})
         return FileResponse(f, headers={"Cache-Control": "public, max-age=31536000, immutable"})  # named by content hash
 
     # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405

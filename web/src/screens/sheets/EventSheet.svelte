@@ -31,6 +31,7 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Link from '@lucide/svelte/icons/link';
+  import FileText from '@lucide/svelte/icons/file-text';
   import { shrink } from '../../lib/photo';
   import { FACES } from '../../lib/faces';
   import { burst } from '../../ui/burst';
@@ -545,6 +546,8 @@
       </Notice>
     {/if}
 
+    <!-- its rules (a PDF the club attached): the pages as pictures in the photo viewer -->
+    {#if detail?.doc}{@const d = detail.doc}<Group><Row icon={FileText} title={d.title ?? t('event.doc')} accessory="chevron" onclick={() => sheets.photos(d.pages.map((x, k) => ({ ...x, id: -k - 1, by: null, mine: true, canDelete: false })), 0)} /></Group>{/if}
     {#if about}
       <Section title={t('event.about')}>
         <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form (an organizer, Nov 17) -->

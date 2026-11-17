@@ -1882,6 +1882,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       title TEXT NOT NULL,  -- the nomination's English name as the ceremony gives it
       created_at INTEGER NOT NULL,
       PRIMARY KEY (org_id, year, title)) STRICT;"""),
+    # an event's one document (its rules, a PDF): kept as its pages' pictures under media/, never the PDF (organizing.put_doc)
+    (183, """CREATE TABLE IF NOT EXISTS event_docs (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      title TEXT,
+      pages TEXT NOT NULL,
+      created_at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

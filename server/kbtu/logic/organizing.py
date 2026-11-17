@@ -1,10 +1,16 @@
 """Running an event: creating, editing, publishing, the door, attendees, ratings, the album."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import secrets
 import sqlite3
+import tempfile
+import unicodedata
+from pathlib import Path
 
+from .. import media, pdfpages
 from ..db import tx
 
 from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, door_shut, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
@@ -643,6 +649,7 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
             UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
         pics += [f for f in gallery.album_gone(con, eid) if f not in pics]  # a closed event's Gallery posts never turn public
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
+        doc = _doc_paths(con, eid)
         for sl in rows(con, "SELECT slug, org_id FROM short_links WHERE event_id = ?", eid):  # they go with it (cascade)
             _keep_name(con, sl["slug"], sl["org_id"])
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
@@ -653,8 +660,79 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
         if post and post[0]:
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{post[0]}", thread[0] if thread else ""))
         receipts = [p for f in paid for p in _drop_photo(con, f)]
-        photos = [p for f in pics for p in _drop_unused(con, f)]
+        photos = [p for f in pics for p in _drop_unused(con, f)] + doc  # the rules' pages: the cascade took their row
     return receipts, photos
+
+
+# ---------------------------------------------------------------- the event's document (its rules, a PDF)
+# The PDF itself is never kept nor served: its pages are rendered to pictures once, in a child process with hard limits
+# (pdfpages.py), and stored as photos are (media.store) under media/doc/ (served with a short cache: a removed
+# document's pages must not live on in caches for a year), named by a random key so no hash ties them to the file.
+DOC_BYTES = 5 * 1024 * 1024
+DOC_PAGES = 30
+DOC_SIDE = 1600              # media.store's longest side: a phone's full width, pinch to zoom
+DOC_TITLE = 40
+DOC_SECONDS = 20             # the whole document's rendering, wall time and CPU (30 plain pages: ~6 s on a laptop)
+DOC_MEMORY = 1 << 30         # the child's address space
+
+
+def doc_check(con, v: Viewer, eid: int) -> None:
+    """Who may put or remove the event's document: who may edit the event; asked before the upload is read."""
+    if _staff_event(con, v, eid, "events")["status"] == "cancelled":
+        raise ApiError("closed")
+
+
+def render_doc(data: bytes, root: Path) -> list[dict]:
+    """The PDF's pages as stored pictures under root/doc/ (in the picture threads); a refusal or a failure leaves no
+    file behind. BadImage: too_big | not_a_pdf | too_many_pages."""
+    if len(data) > DOC_BYTES:
+        raise media.BadImage("too_big")
+    kept: list[str] = []
+    try:
+        # next to the database, not /tmp (as SQLite's temp files in the image); always removed
+        with tempfile.TemporaryDirectory(dir=root.parent, prefix=".doc-") as tmp:
+            try:
+                files = pdfpages.run(data, Path(tmp), DOC_PAGES, DOC_SIDE, DOC_SECONDS, DOC_MEMORY)
+            except ValueError as exc:
+                raise media.BadImage(str(exc)) from None
+            out = []
+            for f in files:
+                im = media.decode(f.read_bytes())  # the child's PNG through the photos' own checks
+                key = secrets.token_bytes(32)
+                sha = hashlib.sha256(key).hexdigest()
+                kept.append(f"doc/{sha[:2]}/{sha}")  # before the files: a store that fails halfway is dropped too
+                s = media.store(im, key, root / "doc")
+                out.append({"path": f"doc/{s['path']}", "w": s["width"], "h": s["height"], "color": s["color"]})
+            return out
+    except BaseException:
+        media.drop(root, kept)
+        raise
+
+
+def _doc_paths(con, eid: int) -> list[str]:
+    r = one(con, "SELECT pages FROM event_docs WHERE event_id = ?", eid)
+    return [p["path"] for p in json.loads(r[0])] if r else []
+
+
+def put_doc(con, v: Viewer, eid: int, title: object, pages: list[dict]) -> tuple[dict, list[str]]:
+    """The event's one document, new or replacing the old; returns the event and the old pages' files to delete."""
+    # no control or format characters (direction marks, zero-width ones); none left: the app's own word ("Rules")
+    title = " ".join("".join(c for c in str(title or "") if unicodedata.category(c) not in ("Cc", "Cf")).split())[:DOC_TITLE] or None
+    with tx(con):
+        doc_check(con, v, eid)
+        gone = _doc_paths(con, eid)
+        con.execute("INSERT OR REPLACE INTO event_docs (event_id, title, pages, created_at) VALUES (?, ?, ?, ?)",
+                    (eid, title, json.dumps(pages), core.now()))
+    return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid)), gone
+
+
+def drop_doc(con, v: Viewer, eid: int) -> list[str]:
+    """Removes the event's document; its pages' files to delete."""
+    with tx(con):
+        doc_check(con, v, eid)
+        gone = _doc_paths(con, eid)
+        con.execute("DELETE FROM event_docs WHERE event_id = ?", (eid,))
+    return gone
 
 
 EVENT_UNDO = 86400  # Admin's delete: hidden at once, gone for good a day later (Admin → Done has the Undo till then)
