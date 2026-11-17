@@ -21,8 +21,24 @@ export function copyCap(): CapCopy | null {
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
-/** where KRI was opened from (the nav's corner button): its sheet opens out of that circle */
-export const kriFrom: { at: { x: number; y: number; r: number } | null } = { at: null };
+/** The iris: a screen opens out of the round button that was pressed (owner, Nov 17: the map's opening, more often).
+ *  The opener marks its place on the click; whichever Sheet, Pane or Feed mounts next takes it, once, if still fresh. */
+type Iris = { x: number; y: number; r: number };
+let irisAt: (Iris & { t: number }) | null = null;
+export function irisFrom(e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  irisAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2, t: performance.now() };
+}
+export function takeIris(): Iris | null {
+  const i = irisAt; irisAt = null;
+  return i && performance.now() - i.t < 1500 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? i : null;
+}
+/** the circle opening over `el`, already in its place; clip-path only, the screen under it is painted once */
+export function irisOpen(el: HTMLElement, i: Iris): Animation {
+  const b = el.getBoundingClientRect(), x = i.x - b.left, y = i.y - b.top;
+  const far = Math.hypot(Math.max(x, b.width - x), Math.max(y, b.height - y));
+  return el.animate({ clipPath: [`circle(${i.r}px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] }, { duration: 520, easing: 'cubic-bezier(.32, .8, .3, 1)' });
+}
 /** open the map out of the control that was pressed (the iris), wherever that control lives */
 export function openMapFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();

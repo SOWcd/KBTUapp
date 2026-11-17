@@ -33,7 +33,7 @@
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
   import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
-  import { sheets, openMapFrom, kriFrom } from '../../lib/state/sheets';
+  import { sheets, openMapFrom } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
   import { session, asStudent } from '../../lib/state/session.svelte';
@@ -126,7 +126,6 @@
     else compose();
   }
   const openMap = openMapFrom;
-  const iris = kriFrom.at; kriFrom.at = null; // read once: the next opening (from a card) rises as usual
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
@@ -143,7 +142,7 @@
   }
 </script>
 
-<Sheet {overlay} {opener} {iris} icon={Sparkles} tall title={t('as.title')}>
+<Sheet {overlay} {opener} icon={Sparkles} tall title={t('as.title')}>
   <div class="list" bind:this={list}>
     <!-- the map, one tap away as when it had the bar's corner: first, before any question -->
     <div class="mapr"><Group><Row icon={MapIcon} title={t('as.map')} accessory="chevron" onclick={openMap} /></Group></div>

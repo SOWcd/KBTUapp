@@ -15,6 +15,7 @@
   // The drag writes transform directly (no reactive state per frame); exit runs, then the overlay
   // is removed from the stack.
   import type { Component, Snippet } from 'svelte';
+  import { takeIris, irisOpen } from '../lib/state/sheets';
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
@@ -35,9 +36,9 @@
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
   type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
-    children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void;
-    iris?: { x: number; y: number; r: number } | null }; // opened out of this circle (the nav's corner button) instead of the rise
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold, iris = null }: Props = $props();
+    children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold }: Props = $props();
+  const iris = takeIris(); // opened out of a round button (lib/state/sheets irisFrom) instead of the rise
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
   // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
   const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
@@ -64,10 +65,8 @@
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
     const box = panel.getBoundingClientRect(), h = box.height, dh = h - height;
-    if (!lift && iris && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      // the map's iris: the sheet is in place at once and a circle opens over it from the button pressed
-      const x = iris.x - box.left, y = iris.y - box.top, far = Math.hypot(Math.max(x, box.width - x), Math.max(y, h - y));
-      height = h; lift = panel.animate({ clipPath: [`circle(${iris.r}px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] }, { duration: 520, easing: 'cubic-bezier(.32, .8, .3, 1)' });
+    if (!lift && iris) {
+      height = h; lift = irisOpen(panel, iris);
       if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));
       return;
     }

@@ -5,6 +5,7 @@
   // Telegram's is the only Back button). Its large title fits its line
   // (34 down to 24); the capsule shows the live status or nothing until that title scrolls away, then the title.
   // Text typed and not sent asks before a hand closes it, as in a Sheet.
+  import { takeIris, irisOpen } from '../lib/state/sheets';
   import type { Component, Snippet } from 'svelte';
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
@@ -43,7 +44,9 @@
     overlay.quiet = true; // its own title is in view at first
     const undo = hideChrome();
     drift();
-    el.animate([{ transform: 'translate3d(100%,0,0)' }, { transform: 'translate3d(0,0,0)' }], { duration: ms(440), easing: EASE });
+    const iris = takeIris(); // out of a round button (irisFrom), else the push from the right
+    if (iris) irisOpen(el, iris);
+    else el.animate([{ transform: 'translate3d(100%,0,0)' }, { transform: 'translate3d(0,0,0)' }], { duration: ms(440), easing: EASE });
     el.addEventListener('focusin', guard.focusin);
     return () => { undo(); undrift(); };
   });

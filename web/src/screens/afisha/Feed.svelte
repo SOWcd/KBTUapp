@@ -13,7 +13,7 @@
   import { onMount } from 'svelte';
   import { data, goingBusy, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
   import { focusPos } from '../../lib/photo';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, takeIris, irisOpen } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
   import { whenLine } from '../../lib/time';
   import { openLink, shareCard, haptic, inTelegram } from '../../lib/tg';
@@ -54,7 +54,9 @@
   $effect(() => { if (overlay.closing) leave(); });
 
   onMount(() => {
-    root.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    const iris = takeIris();
+    if (iris) irisOpen(root, iris);
+    else root.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
     const chrome = hideChrome();
     // keyboard and screen readers: focus into the Feed, back to "In a row" when it goes (as Sheet does)
     const opener = document.activeElement as HTMLElement | null;
