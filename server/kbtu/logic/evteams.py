@@ -321,7 +321,7 @@ def paid(con, rid: int) -> None:
         notify(con, r["user_id"], "team_missed", f"tm:{e['id']}:{core.now()}")
 
 
-def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers=None) -> dict:
+def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers=None, wish=None) -> dict:
     """Signing up for a team event in one tap: {"create": name}, {"join": token}, or nothing ("I have no team"). Under one
     lock with the registration: a full event (the waitlist) or a full team leaves no sign-up behind. Already signed up:
     the team part alone."""
@@ -329,7 +329,7 @@ def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers
         raise ApiError("bad_input", "team")
     name = clean_name(team["create"]) if team and "create" in team else None
     with tx(con):
-        out = register(con, v, eid, ref, phone, answers)
+        out = register(con, v, eid, ref, phone, answers, wish)
         if team:
             e = _team_event(con, v, eid)
             if name is not None:

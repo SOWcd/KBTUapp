@@ -1137,7 +1137,7 @@ def deletion_hash(home: Path, tg_id: int) -> str:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
-    ("students", "user_id"), ("staff_ok", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
+    ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
     ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
@@ -1303,6 +1303,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")
         from . import vol
         vol.gone(con, v.id)  # every volunteers-ledger record ever linked to me, unlinked since or not
+        santa.gone(con, v.id)  # Secret Santa: my Santa gives to my person instead
         fks = _user_fks(con)
         # my appeals to SG, their words and answers with them (their author links go in the loop below)
         con.execute("DELETE FROM appeals WHERE id IN (SELECT appeal_id FROM appeal_authors WHERE user_id = ?)", (v.id,))
@@ -1478,7 +1479,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, fchannel, inbox, profiles  # noqa: E402
+from . import chatlist, core, fchannel, inbox, profiles, santa  # noqa: E402
 from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402

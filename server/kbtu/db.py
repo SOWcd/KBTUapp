@@ -1844,6 +1844,20 @@ MIGRATIONS: list[tuple[int, str]] = [
     (179, """CREATE TABLE IF NOT EXISTS round_wide (  -- IF NOT EXISTS: tests rewind user_version
       slot_id INTEGER PRIMARY KEY REFERENCES round_slots(id) ON DELETE CASCADE,
       minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 840)) STRICT;"""),
+    # (Nov 17) Secret Santa on an event (logic/santa.py): the editor's switch and when it was drawn; who plays, their
+    # wishlist (kept here, not in registrations.answers: the organizers read those) and, after the draw, whom they give
+    # to. gives_to has no row of its own on purpose: a pair is read through its giver alone. 180 is another branch's
+    (181, """CREATE TABLE IF NOT EXISTS santa_events (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      drawn_at INTEGER) STRICT;
+    CREATE TABLE IF NOT EXISTS santa_people (
+      event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      wish TEXT NOT NULL,
+      gives_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS santa_people_user ON santa_people (user_id);
+    CREATE INDEX IF NOT EXISTS santa_people_to ON santa_people (gives_to);"""),
 ]
 
 

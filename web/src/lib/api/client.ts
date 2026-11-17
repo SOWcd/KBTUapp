@@ -145,7 +145,7 @@ export const server = {
   decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
   leadersAnswers: (id: Id): Promise<LeadersAnswer[]> => call('GET', `/events/${id}/leaders`), // DMP: the answers per club
   meetingAnswers: (id: Id): Promise<MeetingAnswer[]> => call('GET', `/events/${id}/meeting`), // a club meeting's Head+: everyone expected (§2b)
-  register: (id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick): Promise<EventCard> => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}), ...(team ? { team } : {}) }), // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
+  register: (id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick, wish?: string): Promise<EventCard> => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}), ...(team ? { team } : {}), ...(wish ? { wish } : {}) }), // wish: Secret Santa's wishlist // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   unregister: (id: Id): Promise<EventCard> => call('DELETE', `/events/${id}/registration`),
   setSaved: (id: Id, on: boolean): Promise<void> => call(on ? 'PUT' : 'DELETE', `/events/${id}/saved`),
 
@@ -154,6 +154,7 @@ export const server = {
   adminOrgs: (): Promise<AdminOrg[]> => call('GET', '/admin/orgs'),
   adminOrgEvents: (org: Id): Promise<AdminEvent[]> => call('GET', `/admin/orgs/${org}/events`),
   setRegUntil: (id: Id, until: Ts | 'now' | null): Promise<EventFull> => call('PUT', `/events/${id}/reg-until`, { until }), // registration closes now / then / at the start
+  santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)
   // the club's own team (SPEC §2, the rank rule): Vice+ manage people below them, the President hands the club over
   team: (org: Id): Promise<TeamMember[]> => call('GET', `/orgs/${org}/members`),

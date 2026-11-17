@@ -896,8 +896,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
         if body.get("team") is not None:  # a team event's sign-up: create a team or join one by its link (evteams.py)
-            return logic.evteams.signup(con, v, eid, body["team"], body.get("ref"), body.get("phone"), body.get("answers"))
-        return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"))
+            return logic.evteams.signup(con, v, eid, body["team"], body.get("ref"), body.get("phone"), body.get("answers"), body.get("wish"))
+        return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"), body.get("wish"))
 
     # team events (logic/evteams.py): my team (create, join by link, leave; the captain's rename, "find us teammates",
     # a new link, remove), an invite link's team, and the organizer's list, "Form teams" and moves
@@ -2265,6 +2265,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/events/{eid}/reg-until")
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_reg_until(con, v, eid, body.get("until"))
+
+    # Secret Santa (logic/santa.py): the one draw. No route reads pairs: each giver's own is on the event's page
+    @app.post("/api/events/{eid}/santa/draw")
+    def santa_draw(eid: int, con: Con, v: Me):
+        return logic.santa.draw(con, v, eid)
 
     @app.post("/api/events/{eid}/door-open")
     def open_door(eid: int, con: Con, v: Me):

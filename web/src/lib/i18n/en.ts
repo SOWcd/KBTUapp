@@ -3237,6 +3237,22 @@ const en: Dict = {
   'mk.admit': "Let in anyway",
   'mk.admitAsk': "Receipt not checked. Let in?",
   'mk.askOrg': "Call an organizer",
+  // Secret Santa on an event (server logic/santa.py)
+  'santa.title': "Secret Santa",
+  'santa.edHint': "Sign-up asks for a wishlist. The draw is in the event's management",
+  'santa.askText': "Write what would make you happy. Your name and wishlist will be shown to one participant, your Santa.",
+  'santa.wishPh': "Tea, a book, warm socks…",
+  'santa.join': "I'm in",
+  'santa.wait': "Waiting for the draw",
+  'santa.open': "See who I give to",
+  'santa.to': "You give to",
+  'santa.left': "Your person left the game. Ask the organizer",
+  'santa.draw': "Draw",
+  'santa.drawAsk': "Run the draw?",
+  'santa.drawText': "Everyone learns who they give to. Sign-up closes and it can't be redone.",
+  'santa.drawGo': "Draw",
+  'santa.few': "At least 3 participants needed",
+  'santa.done': "The draw is done",
 };
 
 export default en;

@@ -406,6 +406,8 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
             VALUES (?, 'draft', {', '.join('?' * len(f))}, ?, ?, ?, ?)""", (oid, *f.values(), shade(f["color"]), v.id, core.now(), core.now()))
         e = one(con, "SELECT * FROM events WHERE id = ?", cur.lastrowid)
         _slides(con, v, body, e, f["cover_file_id"])
+        if "santa" in body:
+            santa.set_on(con, e["id"], body["santa"])
     return full(con, v, e)
 
 
@@ -486,6 +488,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) and (v.lent_full or not v.staff_org) else e["memo"]  # the admin from Admin never touches the club's memo (the creator as its President)
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
+        if "santa" in body:  # Secret Santa's switch (santa.py); left out: kept
+            santa.set_on(con, eid, body["santa"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):
             f["memo_sent_at"] = f["memo_sent_by"] = None  # changed requests go to DMP again
         if (f["title"], f["description"]) != (e["title"], e["description"]):
@@ -1218,7 +1222,7 @@ def door_round(con) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, evteams, gallery  # noqa: E402
+from . import core, evteams, gallery, santa  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import SCHOOLS, _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402

@@ -439,6 +439,11 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     // the event's own questions: answered here, sent with the same tap (closed: no sign-up)
     const answers = !leaving && before.form?.length ? await sheets.answers(before.title, before.form) : undefined;
     if (answers === null) return;
+    // Secret Santa (server santa.py): the wishlist, with the line that says who will see it (the feature's own consent)
+    const wish = !leaving && before.santa
+      ? await sheets.askText({ title: t('santa.title'), text: t('santa.askText'), ok: t('santa.join'), cancel: t('common.cancel'), placeholder: t('santa.wishPh'), max: 300 })
+      : undefined;
+    if (wish === null) return;
     // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap. A paid one
     // asks nothing: the captain pays first and makes the team after the receipt (the sheet's "Create team")
     const pick = !leaving && before.teamMax ? team ?? (before.price ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
@@ -449,7 +454,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     flying.add(id);
     // a free event with nothing to ask and a seat left: going at once (the speed rule), the server's card settles it;
     // anything else (paid, full, a form) shows the button pressed until the answer
-    const sure = !leaving && !before.price && !answers && !phone && !joins && (before.seats == null || before.taken < before.seats);
+    const sure = !leaving && !before.price && !answers && !phone && !wish && !joins && (before.seats == null || before.taken < before.seats);
     const was = { my: before.my, taken: before.taken };
     if (sure) {
       before.my = { ...(before.my ?? { cancelReason: null, ticketCode: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going' };
@@ -458,7 +463,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     } else goingBusy.add(id);
     taps++;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish);
       if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);

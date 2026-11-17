@@ -37,6 +37,7 @@
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
+  import Gift from '@lucide/svelte/icons/gift';
 
   // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money;
   // the creator runs it as its President would (server app.viewer), all but the club's money and reports (`plain`: the rest)
@@ -70,7 +71,19 @@
   // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
-  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; }).catch(() => {}); });
+  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; santaN = x.santaN ?? 0; }).catch(() => {}); });
+  // Secret Santa (server santa.py): how many play and the one draw; who gives to whom no organizer ever sees
+  let santaN = $state(0);
+  async function drawSanta() {
+    haptic.tap();
+    if (santaN < 3) { say(t('santa.few'), 'pleading_face_3d'); return; }
+    if (!(await sheets.ask({ title: t('santa.drawAsk'), text: t('santa.drawText'), ok: t('santa.drawGo'), cancel: t('common.cancel') }))) return;
+    try {
+      const x = await api.santaDraw(id), c = eventById(id);
+      if (c) { c.santa = x.santa; c.regUntil = x.regUntil; }
+      studioChanged(); haptic.ok(); say(t('santa.done'), 'party_popper_3d');
+    } catch (err) { haptic.error(); say(t(err instanceof ApiErr && err.message === 'few' ? 'santa.few' : 'common.error'), 'warning_3d'); }
+  }
   // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
   // with the page and every 10 s (it runs in the page above this one)
   const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
@@ -215,6 +228,13 @@
         </Group>
       {/if}
 
+      {#if head && e.santa}
+        <Group>
+          <Row icon={Gift} title={t(e.santa.drawn ? 'santa.done' : 'santa.title')} value={String(santaN)} />
+          {#if !e.santa.drawn && live}<Row tone="action" title={t('santa.draw')} onclick={drawSanta} />{/if}
+        </Group>
+      {/if}
+
       {#if asks.length}
         <Group caption={t('ta.caption')}>
           {#each asks as x (x.person.id)}
@@ -264,7 +284,7 @@
               {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
             {/if}
             {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
-            {#if head && live && !e.guestHost && (!started || e.lateSignup)}
+            {#if head && live && !e.guestHost && !e.santa?.drawn && (!started || e.lateSignup)}
               {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
               {:else}<Row title={t('mg.closeReg')} onclick={closeReg} />{/if}
             {/if}

@@ -692,7 +692,7 @@ def _answers(e: sqlite3.Row, given: object) -> str | None:
     return json.dumps(out, ensure_ascii=False)
 
 
-def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None, answers: object = None) -> dict:
+def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None, answers: object = None, wish: object = None) -> dict:
     """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71).
     ref: the badge code of the club member whose link they came by ("My link", ev_<id>_<code>): the member gets the
     credit, the organizers see it in "Who brought"."""
@@ -720,6 +720,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         elif e["needs_phone"] and not one(con, "SELECT phone FROM students WHERE user_id = ?", v.id)[0]:
             raise ApiError("bad_input", "phone")  # the app asks for it and sends it with the same tap
         given = _answers(e, answers)  # the app asks the event's questions first and sends them with the same tap
+        santa.wish(con, eid, v.id, wish)  # Secret Santa: the wishlist with the same tap, kept apart from the answers
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
@@ -903,7 +904,7 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, evteams  # noqa: E402
+from . import core, evteams, santa  # noqa: E402
 from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
 from .teams import team  # noqa: E402

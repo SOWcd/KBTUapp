@@ -557,6 +557,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
     files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in [*orgs.values(), *co.values()]),
                                   *(i for s in slides.values() for i in s)])
     videos = _by_id(con, "videos", (e["video_id"] for e in evs))
+    santas = santa.parts(con, ids)  # Secret Santa is on: sign-up asks a wishlist (santa.py)
     return {e["id"]: {
         "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "coHost": org_ref(con, co[e["id"]], files) if e["id"] in co else None,
         "status": e["status"], "title": e["title"],
@@ -573,6 +574,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         **({"school": e["school"]} if e["school"] else {}),  # only its students see it (seats.school_ok): their label
         **({"teamMin": e["team_min"], "teamMax": e["team_max"], "teamCap": e["team_cap"]} if e["team_max"] is not None else {}),  # a team event (evteams.py)
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
+        **({"santa": santas[e["id"]]} if e["id"] in santas else {}),
         **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
     } for e in evs}
 
@@ -607,6 +609,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
             **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head), "teams": evteams.view(con, v, e, head),
+            **santa.view(con, v, e, head),
             "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
             # no video, no query (most events): `id = NULL` matches nothing, but it was still asked on every sheet opened
             "wideVideo": video_shape(x) if e["wide_video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
@@ -625,7 +628,7 @@ STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path",
 # when a function runs
 from .clubs import org, orgs  # noqa: E402
 from .cohosts import cohost_view, cohosts_of  # noqa: E402
-from . import evteams  # noqa: E402
+from . import evteams, santa  # noqa: E402
 from .crew import kind as crew_kind, view as crew_view  # noqa: E402
 from .organizing import _album_view, _rating_view  # noqa: E402
 from .oversight import staff  # noqa: E402

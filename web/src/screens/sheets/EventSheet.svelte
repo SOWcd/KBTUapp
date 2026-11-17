@@ -43,6 +43,7 @@
   import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
+  import Santa from './Santa.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Emoji from '../../ui/Emoji.svelte';
@@ -104,7 +105,7 @@
   let seenSt: string | null = null;
   $effect(() => {
     const now = st ?? '';
-    if (!preview && e?.teamMax && seenSt !== null && now !== seenSt) api.event(id).then((d) => (detail = d)).catch(() => {});
+    if (!preview && (e?.teamMax || e?.santa) && seenSt !== null && now !== seenSt) api.event(id).then((d) => (detail = d)).catch(() => {});
     seenSt = now;
   });
   const going = $derived(st === 'going');
@@ -360,6 +361,8 @@
          (its rise starts there), only the header shows, flying in from the poster -->
     {#if soon}
     <div class="page">
+
+    {#if going && detail?.mySanta && !cancelled}<Santa {id} mine={detail.mySanta} />{/if}
 
     {#if detail && !e.meeting && (photos.length || detail.canAddPhotos)}
       <!-- the guests' album first, right under the header (after the event it's what the sheet is about) -->

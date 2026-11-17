@@ -3259,6 +3259,22 @@ const ru = {
   'mk.admit': "Всё равно впустить",
   'mk.admitAsk': "Чек не проверен. Впустить?",
   'mk.askOrg': "Позови организатора",
+  // Secret Santa on an event (server logic/santa.py)
+  'santa.title': "Тайный Санта",
+  'santa.edHint': "Участник пишет вишлист при записи. Жеребьёвка — в управлении событием",
+  'santa.askText': "Напиши, что тебя порадует. Твоё имя и вишлист увидит один участник — твой Санта.",
+  'santa.wishPh': "Чай, книга, тёплые носки…",
+  'santa.join': "Участвую",
+  'santa.wait': "Ждём жеребьёвку",
+  'santa.open': "Узнать, кому дарю",
+  'santa.to': "Ты даришь",
+  'santa.left': "Твой человек вышел из игры. Напиши организатору",
+  'santa.draw': "Провести жеребьёвку",
+  'santa.drawAsk': "Провести жеребьёвку?",
+  'santa.drawText': "Каждый узнает, кому дарит. Запись закроется, повторить нельзя.",
+  'santa.drawGo': "Провести",
+  'santa.few': "Нужно хотя бы 3 участника",
+  'santa.done': "Жеребьёвка прошла",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };
