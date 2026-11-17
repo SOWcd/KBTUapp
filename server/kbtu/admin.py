@@ -43,7 +43,7 @@
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
-  .venv/bin/python -m kbtu.admin santa-news [--dry]  Secret Santa's announcement: queued once to every President and Vice of an active
+  .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
@@ -252,6 +252,9 @@ def main(args: list[str]) -> None:
         if not owner:
             sys.exit("no owner (the founder admin) yet")
         print(f"granted {args[3]} to {checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])['granted']} people")
+    elif cmd == "santa-news" and len(args) == 2 and args[1] != "--dry":  # to one person first
+        from .logic import santa
+        print(f"queued {santa.news(con, only=_user(con, args[1])['id'])}")
     elif cmd == "santa-news" and args[1:] in ([], ["--dry"]):  # Secret Santa's announcement to Presidents and Vices, queued once each
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))

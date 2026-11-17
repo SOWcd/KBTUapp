@@ -173,8 +173,10 @@ def test_santa_news(env, capsys, monkeypatch):
     sent = lambda: sorted(r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news'"))  # noqa: E731
     admin.main(["santa-news", "--dry"])
     assert capsys.readouterr().out.strip() == "would queue 2" and sent() == []
+    admin.main(["santa-news", "20"])  # one person first; the full run then skips them
+    assert capsys.readouterr().out.strip() == "queued 1" and sent() == [20]
     admin.main(["santa-news"])
-    assert capsys.readouterr().out.strip() == "queued 2" and sent() == [10, 20]
+    assert capsys.readouterr().out.strip() == "queued 1" and sent() == [10, 20]
     admin.main(["santa-news"])
     assert capsys.readouterr().out.strip() == "queued 0" and sent() == [10, 20]  # again: nothing new
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
