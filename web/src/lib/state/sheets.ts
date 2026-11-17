@@ -20,7 +20,7 @@ export function copyCap(): CapCopy | null {
 }
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
-export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
+export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null; el: HTMLElement | null } = { at: null, cap: null, el: null };
 /** The iris: a screen opens out of the round button that was pressed (owner, Nov 17: the map's opening, more often).
  *  The opener marks its place on the click; whichever Sheet, Pane or Feed mounts next takes it, once, if still fresh. */
 type Iris = { x: number; y: number; r: number };
@@ -44,6 +44,7 @@ export function openMapFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2 };
   mapFrom.cap = copyCap();
+  mapFrom.el = e.currentTarget as HTMLElement; // it closes back into this very control (CampusMap leave)
   sheets.map();
 }
 

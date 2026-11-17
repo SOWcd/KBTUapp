@@ -647,9 +647,9 @@
   // shrinks back into it; clip-path only, the map under it is painted once
   const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
   const iris = (() => {
-    const { at, cap } = mapFrom; mapFrom.at = mapFrom.cap = null;
+    const { at, cap, el } = mapFrom; mapFrom.at = mapFrom.cap = mapFrom.el = null;
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
-    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap });
+    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap, el });
   })();
   const BACK_AFTER = 180; // ms into the iris. Owner, Oct 26: exactly right, lands on the animation: keep it for good
   untrack(() => { if (iris) overlay.holdBack = true; }); // until a moment into the circle (appear); set before the first frame
@@ -738,10 +738,12 @@
       // slides back in as it closes, the opening's point was stale) and the button didn't react: it closes on where the
       // button comes to rest, to the button's own size, and the button takes the ring's glow, then lets it fade
       const o = { duration: 480, easing: 'cubic-bezier(.45, 0, .2, 1)' };
-      const b = document.querySelector<HTMLElement>('.mapb'), dock = b?.parentElement;
+      // back into the control it opened from (owner, Nov 17: opened from Afisha's header, it closed into the bar's corner,
+      // KRI's by then); that control gone from the page: the point it opened at. Only the bar's own button slides with its dock
+      const b = iris.el?.isConnected ? iris.el : null, dock = b?.classList.contains('mapb') ? b.parentElement : null;
       const bt = b?.getBoundingClientRect(), dm = dock && getComputedStyle(dock).transform !== 'none' ? new DOMMatrix(getComputedStyle(dock).transform) : null;
       const c = bt ? { x: bt.left + bt.width / 2 - (dm?.e ?? 0), y: bt.top + bt.height / 2 - (dm?.f ?? 0) } : iris.at;
-      const end = bt ? bt.width / 2 : 30, far = reach(c);
+      const end = bt ? Math.min(bt.width, bt.height) / 2 : iris.at.r, far = reach(c);
       // the map's own button goes back into the one it came from (owner, Oct 31: the bar stays as it was, slim or full)
       const shut = panel.querySelector<HTMLElement>('.shut'), sb = shut?.getBoundingClientRect();
       if (shut && sb?.width) shut.animate({ transform: ['none', `translate(${c.x - sb.left - sb.width / 2}px, ${c.y - sb.top - sb.height / 2}px) scale(${(end * 2) / sb.width})`] }, { ...o, fill: 'forwards' });
