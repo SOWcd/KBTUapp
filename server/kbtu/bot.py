@@ -239,6 +239,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         o = one(con, """SELECT o.name FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
             WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"ce_{ref[1]}") if o and not mirror.has_channel(con, int(ref[1])) else None
+    if kind == "auto_event":  # ae:<event>, to its club's President, once: a draft found in the club's channel; quiet once published, deleted or dismissed
+        e = one(con, """SELECT e.org_id, o.name FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
+            JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
+            WHERE e.id = ? AND e.status = 'draft' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}") if e else None
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
         return (*texts.bot_message(lang, kind, when=texts.when(at, lang).split(",")[0]), "me") if at else None

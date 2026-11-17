@@ -15,6 +15,8 @@ import logging
 import time
 from pathlib import Path
 
+import httpx
+
 from . import db, logic, media, mirror
 from .logic import chatlist
 from .config import Config
@@ -93,6 +95,7 @@ class Mirror:
         self.client, self.con, self.root = client, con, Path(cfg.db_path).resolve().parent / "media"
         self.me, self.bot = me, int(cfg.bot_token.split(":", 1)[0]) if cfg.bot_token.split(":", 1)[0].isdigit() else 0
         self.asked: dict[tuple[int, int], float] = {}  # (channel, post): when its comments were last looked at
+        self.cfg, self.http, self.looks = cfg, None, set()  # the model's looks at new posts (logic/autoev.py), in the background
 
     def listen(self) -> None:
         from telethon import events
@@ -129,9 +132,15 @@ class Mirror:
         if not channel or m.action is not None or mirror.source(self.con, channel) is None:
             return
         msg = await self.read(channel, m)
-        mirror.take(self.con, channel, msg)
+        new = not logic.one(self.con, "SELECT 1 FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
+        pid = mirror.take(self.con, channel, msg)
         if msg.photo and logic.photo_free(self.con, msg.photo["path"]):  # an album's second photo, an edit's same one
             self.drop(msg.photo["path"])
+        if new and pid and logic.autoev.worth(msg.text):  # a new post that reads like an announcement: the model looks once
+            self.http = self.http or httpx.AsyncClient()
+            t = asyncio.create_task(self.guard(logic.autoev.propose(self.con, self.cfg, self.http, pid, msg.text, msg.date)))
+            self.looks.add(t)  # held till done (the loop keeps only weak references); never holds up the listener
+            t.add_done_callback(self.looks.discard)
 
     async def read(self, channel: int, m) -> mirror.Msg:
         """A Telethon message as mirror.Msg: its photo copied (only when the post needs one), a video or a file only named."""

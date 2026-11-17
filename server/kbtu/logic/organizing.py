@@ -62,8 +62,10 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
         LEFT JOIN comment_reads r ON r.event_id = c.event_id AND r.user_id = ?
         WHERE c.as_org = 0 AND c.user_id NOT IN leads AND c.id > COALESCE(a.last_id, 0) AND c.id > COALESCE(r.last_id, 0)
         GROUP BY c.event_id""", oid, *own, v.id)) if head and own else {}
+    # drafts found in the club's channel (autoev.py): Studio's To do asks to check and publish them
+    posts = autoev.from_posts(con, [e["id"] for e in found if e["org_id"] == oid and e["status"] == "draft"]) if head else {}
     return [{**c, "questions": questions.get(e["id"], 0), "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
-             "volunteersAsked": asked.get(e["id"], 0), "teamAsks": guests.get(e["id"], 0)}
+             "volunteersAsked": asked.get(e["id"], 0), "teamAsks": guests.get(e["id"], 0), **({"fromPost": posts[e["id"]]} if e["id"] in posts else {})}
             for e, c in zip(found, cards(con, v, found))]
 
 
@@ -1218,7 +1220,7 @@ def door_round(con) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, evteams, gallery  # noqa: E402
+from . import autoev, core, evteams, gallery  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import SCHOOLS, _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
