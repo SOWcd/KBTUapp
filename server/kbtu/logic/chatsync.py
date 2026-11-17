@@ -39,7 +39,7 @@ def _consents() -> tuple[str, str]:
 
 
 # who the sync may act on: a verified student (not typed in by hand, not staff), not banned or leaving, on the policy in force
-OK = """u.tg_id > 0 AND u.banned_at IS NULL AND u.delete_at IS NULL AND s.manual = 0
+OK = f"""u.tg_id > 0 AND u.banned_at IS NULL AND u.delete_at IS NULL AND s.manual = 0 AND NOT {core.staff_sql()}
     AND s.consent_version IN (?, ?)"""  # not 'admin' (made a student by hand): they never agreed to the section
 
 

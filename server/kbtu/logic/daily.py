@@ -206,7 +206,7 @@ def stats_day(con) -> None:
     con.execute("INSERT OR REPLACE INTO stats_days (day, active, new, students) VALUES (?, ?, ?, ?)",
                 (day, one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", lo)[0],
                  one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", lo, hi)[0],
-                 one(con, "SELECT COUNT(*) FROM students WHERE verified_at < ? AND consent_version != 'staff'", hi)[0]))
+                 one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at < ? AND NOT {core.staff_sql()}", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
@@ -244,14 +244,14 @@ def admin_stats(con, v: Viewer) -> dict:
     since = lambda s: one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", t - s)[0]  # noqa: E731
     today = (t + 5 * 3600) // 86400 * 86400 - 5 * 3600
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
-            "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0],
+            "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, f"SELECT COUNT(*) FROM students s WHERE NOT {core.staff_sql()}")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
             # the number that matters (owner, Nov 3): students who finished signing up, and how many of them today
-            "studentsToday": one(con, "SELECT COUNT(*) FROM students WHERE verified_at >= ? AND consent_version != 'staff'", today)[0],
+            "studentsToday": one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at >= ? AND NOT {core.staff_sql()}", today)[0],
             # Microsoft-confirmed students by the month their account was made (counts only; "" unknown): whether the
             # dates split by intake before MS_AGE_CUTOFF is turned on (core.first_year_free)
-            "msMonths": {r[0]: r[1] for r in rows(con, """SELECT COALESCE(substr(json_extract(ms_profile, '$.createdDateTime'), 1, 7), ''), COUNT(*)
-                FROM students WHERE manual = 0 AND ms_oid IS NOT NULL AND consent_version != 'staff' GROUP BY 1 ORDER BY 1""")},
+            "msMonths": {r[0]: r[1] for r in rows(con, f"""SELECT COALESCE(substr(json_extract(ms_profile, '$.createdDateTime'), 1, 7), ''), COUNT(*)
+                FROM students s WHERE manual = 0 AND ms_oid IS NOT NULL AND NOT {core.staff_sql()} GROUP BY 1 ORDER BY 1""")},
             "msCutoff": core.MS_AGE_CUTOFF,
             "ai": ai_state(con), "today": one(con, "SELECT COUNT(*) FROM visits WHERE day = ?", day_of(t))[0],
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}

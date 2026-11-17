@@ -144,6 +144,19 @@ def decided(con, target: str) -> ApiError:
     return ApiError("conflict", "decided", {"by": shown_name(p) if p else None, "action": a["action"] if a else None, "at": a["at"] if a else None})
 
 
+# staff, not students (SPEC §1): typed in by the creator (kbtu.admin staff: consent 'staff', a real ID kept when a
+# student turned staff) or signed in on his staff-ok (a placeholder ID `staff<id>`, a policy version accepted). No
+# student ID can start with "staff" (STUDENT_ID: two digits first), and a staff row never changes its own ID
+# (account.fix_identity). The one rule for every count, card number, comment and chat sync that leaves staff out.
+def is_staff(s) -> bool:
+    return s["student_id"].startswith("staff") or s["consent_version"] == "staff"
+
+
+def staff_sql(a: str = "s") -> str:
+    """is_staff in SQL, for the students row aliased `a`."""
+    return f"({a}.student_id GLOB 'staff*' OR {a}.consent_version = 'staff')"
+
+
 def need_student(v: Viewer) -> None:
     if not v.student:
         raise ApiError("need_student")

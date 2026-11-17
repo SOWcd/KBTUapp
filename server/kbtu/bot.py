@@ -1108,7 +1108,7 @@ def _page_sid(con, uid: int, sid: str | None) -> None:
         return
     with db.tx(con):
         s = one(con, "SELECT student_id, consent_version, manual, fixed FROM students WHERE user_id = ?", uid)
-        if not s or s["manual"] or s["consent_version"] == "staff" or s["student_id"] == sid:
+        if not s or s["manual"] or logic.core.is_staff(s) or s["student_id"] == sid:
             return  # unconfirmed: its name is self-typed, so a page "matching" it proves nothing; staff: a placeholder ID
         if logic.sid_tries(con, uid) >= 5:
             return

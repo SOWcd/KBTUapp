@@ -29,6 +29,8 @@
   // Microsoft: away in the browser; back in sight, ask who I am now (confirmed, or the account's names to fill in)
   let away = $state(false);
   const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
+  // the creator's staff (server account.staff_ok): no student ID to type, only the names Microsoft lacks and the policy
+  const only = $derived(!!session.me?.msOnly);
   async function microsoft() {
     haptic.tap(); error = '';
     try { const { url } = await api.msStart(); away = true; openLink(url); }
@@ -64,7 +66,7 @@
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}(?:[A-Z]\d{5,7}|[A-Z]{2}\d{4,7})$/;  // server core.STUDENT_ID (a master's 26MD1234 too)
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
-    && SID.test(m.studentId.trim().toUpperCase()) && !busy);  // the year comes from the ID (audit M3)
+    && (only || SID.test(m.studentId.trim().toUpperCase())) && !busy);  // the year comes from the ID (audit M3)
   async function submit(ev?: Event) {
     ev?.preventDefault();
     if (!pending || !mReady) return;
@@ -84,6 +86,7 @@
       const why = e instanceof ApiErr ? e.message || e.code : '';
       error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual', { sid: sidEx }) : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
       if (why === 'ms_first') void loadMe(); // the Microsoft sign-in ran out: the button again
+      if (why === 'bad_input' && only) void loadMe(); // the creator took the staff word back meanwhile: the ID field comes back
     } finally { busy = false; }
   }
 </script>
@@ -108,13 +111,15 @@
       {@render consent()}
     {:else if pending}
       <!-- engine: ui/Notice could have a success tone (Microsoft said yes) -->
-      <div class="ok"><CircleCheck size={18} /><span><b>{t('login.msOk')}</b><i>{pending.email} · {t('login.msOkText')}</i></span></div>
+      <div class="ok"><CircleCheck size={18} /><span><b>{t('login.msOk')}</b><i>{pending.email} · {t(only ? 'login.msOkStaff' : 'login.msOkText')}</i></span></div>
       {#if !pending.last || !pending.first}
         <div {@attach caps('words')}><Field label={t('login.lastName')} bind:value={m.lastName} autocomplete="family-name" enterkeyhint="next" maxlength={40} /></div>
         <div {@attach caps('words')}><Field label={t('login.firstName')} bind:value={m.firstName} autocomplete="given-name" enterkeyhint="next" maxlength={40} /></div>
       {/if}
-      <div class="sid" {@attach caps('characters')}><Field label={t('login.sid')} bind:value={m.studentId} placeholder={t('login.sidEg', { sid: sidEx })} autocomplete="off" enterkeyhint="done" maxlength={12} /></div>
-      <p class="t-foot dim">{t('login.manualNote')}</p>
+      {#if !only}
+        <div class="sid" {@attach caps('characters')}><Field label={t('login.sid')} bind:value={m.studentId} placeholder={t('login.sidEg', { sid: sidEx })} autocomplete="off" enterkeyhint="done" maxlength={12} /></div>
+        <p class="t-foot dim">{t('login.manualNote')}</p>
+      {/if}
       {#if error}<Notice tone="danger" text={error} />{/if}
       <Button kind="primary" size="l" full type="submit" disabled={!mReady} loading={busy}>{t('login.submit')}</Button>
       {@render consent()}

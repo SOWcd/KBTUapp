@@ -148,7 +148,7 @@ def latin_names(con, apply: bool = False) -> Counter:
     n: Counter = Counter()
     cyr = re.compile("[\u0400-\u04ff]")
     with tx(con) if apply else contextlib.nullcontext():
-        for s in rows(con, "SELECT * FROM students WHERE consent_version != 'staff'"):
+        for s in rows(con, f"SELECT * FROM students s WHERE NOT {core.staff_sql()}"):
             n["students"] += 1
             ms = json.loads(s["ms_profile"] or "{}")
             n["ms_profile"] += bool(ms)
@@ -384,6 +384,24 @@ def ms_claim(con, v: Viewer, secret: str) -> bool:
     raise ApiError("forbidden", "ms")
 
 
+def staff_row(con, uid: int, first: str, last: str, school: str | None = None, consent: str = "staff") -> None:
+    """A KBTU staff member acts as a student (SPEC §1): no student ID of theirs exists, so a placeholder no real one can
+    match (`staff<id>`). consent 'staff': typed in by the creator (kbtu.admin staff), no policy gate; else the version
+    the person accepted at the sign-in (staff_ok's way)."""
+    t = core.now()
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, school, consent_version, consent_at,
+        verified_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (uid, f"staff{uid}", first, last, school, consent, t, t, t))
+
+
+def staff_ok(con, uid: int, who: dict | None) -> bool:
+    """The creator said this account is KBTU staff (kbtu.admin staff-ok), and Microsoft doesn't call it a student: its
+    sign-in asks no student ID. Office membership, roles, audit lines: never a reason (Codex review, Nov 17)."""
+    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid):
+        return False
+    # ponytail: KBTU's directory field read as is; "student" anywhere in it wins (exact values unmeasured)
+    return "student" not in str(((who or {}).get("profile") or {}).get("companyName") or "").lower()
+
+
 def ms_apply(con, uid: int, who: dict) -> bool:
     """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
     mine = ms_check(con, uid, who)
@@ -479,7 +497,7 @@ def me(con, v: Viewer) -> dict:
     # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
     # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
-    if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
+    if s and not core.is_staff(s) and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         if u["card_no"] is None and not u["is_founder"]:
@@ -498,7 +516,7 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity, _spend): for staff only the school
-                    "fixable": [k for k, c in ONCE.items() if (c not in s["fixed"].split(",") or c in ("school", "course") and s[c] is None) and (c == "school" or s["consent_version"] != "staff")],
+                    "fixable": [k for k, c in ONCE.items() if (c not in s["fixed"].split(",") or c in ("school", "course") and s[c] is None) and (c == "school" or not core.is_staff(s))],
                     # spent, yet the value before it can come back once (_spend)
                     "undo": {k: x for k, x in json.loads(s["once_was"] or "{}").items() if k in s["fixed"].split(",")}} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
@@ -506,6 +524,8 @@ def me(con, v: Viewer) -> dict:
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
                      if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
+        # the creator's staff (staff_ok): Microsoft and the policy, no student ID (the welcome's sign-in, the form without it)
+        **({"msOnly": True} if not s and not relink and staff_ok(con, v.id, ms_pending(con, v.id)) else {}),
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
@@ -722,7 +742,7 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
     # the row and its once read under the write lock (BEGIN IMMEDIATE): two taps at once can't both spend it
     with tx(con):
         s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
-        if not s or not admin and (s["manual"] or s["consent_version"] == "staff"):
+        if not s or not admin and (s["manual"] or core.is_staff(s)):
             raise ApiError("forbidden")  # unconfirmed: Microsoft's names come first; staff: the ID is a placeholder
         if not admin and col in s["fixed"].split(","):
             raise ApiError("conflict", "fixed")
@@ -875,7 +895,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         need_student(v)  # below it (a lower one would take free 1st-year seats). course_year now: September moves it on
         s = one(con, "SELECT student_id, consent_version, course, fixed, once_was FROM students WHERE user_id = ?", v.id)
         lo, val = core.course_of(s["student_id"]), patch["course"]
-        if s["consent_version"] == "staff":
+        if core.is_staff(s):
             raise ApiError("forbidden")  # the ID is a placeholder
         if lo is None or type(val) is not int or not lo <= val <= 6:
             raise ApiError("bad_input")
@@ -1117,7 +1137,7 @@ def deletion_hash(home: Path, tg_id: int) -> str:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
-    ("students", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
+    ("students", "user_id"), ("staff_ok", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
     ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),

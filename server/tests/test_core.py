@@ -190,7 +190,7 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     capsys.readouterr()
     admin.main(["stats"])  # counts only
     stats = {name: n for n, name in (line.split(None, 1) for line in capsys.readouterr().out.splitlines())}
-    assert stats["signed in with KBTU"] == "1" and stats["staff (by hand)"] == "1"
+    assert stats["signed in with KBTU"] == "1" and stats["staff"] == "1"
     admin.main(["achstats"])  # counts only, the staff left out, the hand-given ones skipped
     out = capsys.readouterr().out
     assert out.startswith("1 students, 0 came") and "regular" in out and "first50" not in out

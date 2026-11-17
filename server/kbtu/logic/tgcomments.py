@@ -36,8 +36,8 @@ LIVE = ("open", "queued")  # in the moderators' queue, still up
 def commenter(con, tg_id: int | None) -> str | None:
     """'student' may comment; 'banned' (banned in the app) is banned in the group too; None: a stranger. Students
     confirmed by Microsoft only (a typed-in ID could be anyone's), staff rows out until the owner decides (review 2)."""
-    u = one(con, """SELECT u.banned_at, EXISTS (SELECT 1 FROM students s WHERE s.user_id = u.id AND s.manual = 0
-        AND s.consent_version != 'staff') AS st FROM users u WHERE u.tg_id = ?""", tg_id)
+    u = one(con, f"""SELECT u.banned_at, EXISTS (SELECT 1 FROM students s WHERE s.user_id = u.id AND s.manual = 0
+        AND NOT {core.staff_sql()}) AS st FROM users u WHERE u.tg_id = ?""", tg_id)
     return None if not u else "banned" if u["banned_at"] else "student" if u["st"] else None
 
 
@@ -382,8 +382,8 @@ def post_of(con, root: int, username: str | None = None, post: int | None = None
 def unban_due(con) -> list[int]:
     """Strangers banned in the group who are students now (signed in with Microsoft, or unbanned in the app): their
     Telegram ids, to unban; their rows go."""
-    out = [r[0] for r in rows(con, """SELECT g.tg_id FROM tgc_strangers g JOIN users u ON u.tg_id = g.tg_id AND u.banned_at IS NULL
-        JOIN students s ON s.user_id = u.id AND s.manual = 0 AND s.consent_version != 'staff' WHERE g.banned_at IS NOT NULL""")]  # commenter()'s rule, in one read
+    out = [r[0] for r in rows(con, f"""SELECT g.tg_id FROM tgc_strangers g JOIN users u ON u.tg_id = g.tg_id AND u.banned_at IS NULL
+        JOIN students s ON s.user_id = u.id AND s.manual = 0 AND NOT {core.staff_sql()} WHERE g.banned_at IS NOT NULL""")]  # commenter()'s rule, in one read
     con.executemany("DELETE FROM tgc_strangers WHERE tg_id = ?", [(t,) for t in out])
     return out
 

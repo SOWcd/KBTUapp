@@ -14,7 +14,7 @@
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
-  import { hiNow, nextUp, once, opened } from './lib/greet';
+  import { hiNow, nextUp, once, opened, seen } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
@@ -433,10 +433,12 @@
   // an office's own people (DMP) are greeted as the team, once per phone, full screen (owner, Nov 17: the toast was missed):
   // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
+  // seen once it mounts; a chunk that fails to load still runs the link's own step (Codex review, Nov 17)
   function teamHi(then?: () => void): boolean {
-    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office;
-    if (!o || !once('kb-hi2-o' + o.id)) return false;
-    if (then) void lazy(officeWelcome, { org: o, ondone: then }); else moment(() => lazy(officeWelcome, { org: o }));
+    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office, key = 'kb-hi2-o' + o?.id;
+    if (!o || seen(key)) return false;
+    const show = () => officeWelcome().then((m) => open(m.default, { org: o, ondone: then, shown: () => once(key) }), () => then?.());
+    if (then) void show(); else moment(show);
     return true;
   }
   function greet() {
