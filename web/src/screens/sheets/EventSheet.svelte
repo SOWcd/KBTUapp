@@ -57,7 +57,7 @@
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
-  import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
+  import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf, i18n } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
@@ -167,6 +167,8 @@
   // ponytail: asking to come as a guest is off (owner, Nov 14, people lost at the Talent Show door): the club's own people
   // read a plain no; the ask flow (server seats.team_ask) stays for when it comes back
   const askable = false as boolean;
+  // a team event's sign-up says what it means, and the tap is the teams consent (server evteams.signup)
+  const teamLine = $derived(!!e?.teamMax && !cancelled && !over && !shut && !regShut && !teamOnly && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   const noGuest = $derived(teamOnly && !cancelled && !over && !e?.externalUrl);
   function setAsk(a: EventCard['teamAsk']) { const card = eventById(id); if (card) card.teamAsk = a; if (detail) detail = { ...detail, teamAsk: a }; }
   async function teamAsk() {
@@ -625,6 +627,7 @@
       {#if noGuest}<p class="tnote">{t('ta.cant')}</p>
       {:else if regNote}<p class="tnote">{t('event.regUntil', { when: relDay(e.regUntil!) + ', ' + time(e.regUntil!) })}</p>{/if}<!-- the deadline where the decision is made -->
       {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
+      {#if teamLine}<p class="tnote">{t('tm.signupLine')} <button type="button" class="pol" onclick={() => openLink(`${location.origin}/privacy?lang=${i18n.lang}`)}>{t('tm.consentLink')}</button></p>{/if}
       <div class="actions btns" inert={!!preview}>
         {#if cancelled}
           <Button kind="neutral" size="l" full disabled>{t('event.cancelledLong')}</Button>
@@ -673,9 +676,9 @@
         {:else if regShut}
           <Button kind="neutral" size="l" full disabled>{t('event.regClosed')}</Button>
         {:else if full}
-          <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id)}>{t('event.notify')}</Button>
+          <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, undefined, undefined, teamLine)}>{t('event.notify')}</Button>
         {:else}
-          <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
+          <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id), undefined, teamLine)}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
         {/if}
       </div>
     {/if}
@@ -762,6 +765,7 @@
   /* the footer: the one primary action, alone */
   .actions { display: flex; gap: 8px; align-items: center; }
   .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
+  .pol { all: unset; color: var(--accent-text); cursor: pointer; }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
   @media (max-width: 350px) { .yes :global(svg) { display: none; } } /* the words stay on one line */

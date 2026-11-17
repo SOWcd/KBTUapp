@@ -33,7 +33,10 @@ captain paying for others. The payment-state rule:
 
 The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
-team event waits with no team until they agree. Withdrawing it takes me out of my teams on events not started yet.
+team event waits with no team until they agree. Signing up on the event's page is the consent (Nov 18): its button says
+so in a line, and the app sends the version with the tap (signup's consent); a sign-up without it (an old app, the feed's
+quick button) writes none. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
+once a day), never a consent. Withdrawing it takes me out of my teams on events not started yet.
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
 an invite link's holder sees the team it invites to; anyone else, only that it is a team event and its sizes.
@@ -321,15 +324,23 @@ def paid(con, rid: int) -> None:
         notify(con, r["user_id"], "team_missed", f"tm:{e['id']}:{core.now()}")
 
 
-def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers=None, wish=None) -> dict:
+def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers=None, wish=None, consent=None) -> dict:
     """Signing up for a team event in one tap: {"create": name}, {"join": token}, or nothing ("I have no team"). Under one
     lock with the registration: a full event (the waitlist) or a full team leaves no sign-up behind. Already signed up:
-    the team part alone."""
+    the team part alone.
+    consent: the version (CONSENT) the app sends when its sign-up button showed the line on what signing up to a team
+    event means (the owner, Nov 18: signing up is the consent). Written with a sign-up this tap made, never inferred: an
+    old app without the marker, or a tap on an existing sign-up, writes nothing."""
     if team is not None and not (isinstance(team, dict) and (isinstance(team.get("create"), str) or isinstance(team.get("join"), str))):
         raise ApiError("bad_input", "team")
+    if consent is not None and consent != CONSENT:
+        raise ApiError("bad_input", "consent")  # a version this server doesn't know: the line it showed isn't ours
     name = clean_name(team["create"]) if team and "create" in team else None
     with tx(con):
+        had = one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, v.id)
         out = register(con, v, eid, ref, phone, answers, wish)
+        if consent and not had and one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):
+            con.execute("INSERT OR REPLACE INTO team_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT, core.now()))
         if team:
             e = _team_event(con, v, eid)
             if name is not None:
@@ -508,6 +519,46 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
         elif now_in:
             notify(con, uid, "team_removed", f"tr:{eid}:{core.now()}")  # as the captain's remove
     return teams_list(con, v, eid)
+
+
+# ------------------------------------------------------------ asking those signed up before signing up meant agreeing
+
+def consent_ask(con, dry: bool = False) -> int:
+    """`python -m kbtu.admin team-consent-ask [--dry]`: everyone signed up to a coming team event without the teams
+    consent (signed up before the sign-up became the consent, Nov 18) gets the bot's template once per event, a button
+    to the event with the consent sheet open (tc_<event>). Never a consent written for them. By hand, never on deploy;
+    a second run queues nobody already asked."""
+    to = rows(con, """SELECT r.user_id, r.event_id FROM registrations r JOIN events e ON e.id = r.event_id
+        WHERE e.team_max IS NOT NULL AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ?
+          AND r.status IN ('going', 'hold', 'waitlist')
+          AND NOT EXISTS (SELECT 1 FROM team_consents c WHERE c.user_id = r.user_id AND c.version = ?)
+          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = r.user_id AND b.kind = 'team_consent'
+                          AND (b.ref = 'tc:' || r.event_id OR b.ref LIKE 'tc:' || r.event_id || ':%'))
+        ORDER BY r.event_id, r.user_id""", core.now(), CONSENT)
+    if not dry:
+        with tx(con):
+            for r in to:
+                notify(con, r["user_id"], "team_consent", f"tc:{r['event_id']}")
+    return len(to)
+
+
+def remind(con, v: Viewer, eid: int, uid: int) -> dict:
+    """The organizer's "Remind about consent" on someone signed up without it: the same template, at most once a day
+    per person and event, whoever queued the last one. queued: false when asked within the day or agreed meanwhile."""
+    with tx(con):
+        e = _staff_event(con, v, eid, "events")
+        if e["team_max"] is None:
+            raise ApiError("not_found")
+        _open_now(e)
+        if not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, uid):
+            raise ApiError("not_found")
+        if consented(con, uid):
+            return {"queued": False, "consent": True}
+        if one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'team_consent' AND (ref = ? OR ref LIKE ?)
+                AND send_after > ?""", uid, f"tc:{eid}", f"tc:{eid}:%", core.now() - 86400):  # consent_ask's tc:<event> too
+            return {"queued": False, "consent": False}
+        notify(con, uid, "team_consent", f"tc:{eid}:{core.now()}")
+    return {"queued": True, "consent": False}
 
 
 def left(con, eid: int, uid: int) -> None:

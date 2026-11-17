@@ -17,6 +17,7 @@
   import { hiNow, nextUp, once, opened, seen } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
+  import { setTeamConsent } from './lib/teamConsent';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
@@ -565,6 +566,8 @@
       void api.chats().then((c) => { data.chats = c; sheets.chats(c.all); }).catch(() => {});
       return;
     }
+    const tc = p.match(/^tc_(\d+)$/); // the bot's "agree to teams": the event with the teams consent sheet over it
+    if (tc) { asStudent(() => void lazy(eventSheet, { id: Number(tc[1]) }, 'sheet.event').then(() => setTeamConsent(true))); return; } // the sheet over the event, not under it
     const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const ref = p.match(/^ev_(\d+)_([A-Z2-7]{10})$/); // a club member's "My link": the sign-up goes to them

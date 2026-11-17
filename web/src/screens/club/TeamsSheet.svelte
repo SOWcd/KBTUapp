@@ -2,7 +2,8 @@
   // A team event's teams, the organizers' (the "events" right; server evteams.py): every team with its people (the
   // captain first), then those with no team yet; "Form teams" fills the teams looking for people and makes new ones of
   // the rest; a person's ⌃⌄ moves them to another team or to none, after a confirm. All fixed once the event starts.
-  // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py).
+  // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py);
+  // its menu has one item: the bot reminds them (a template, once a day).
   // A paid event: a player whose receipt nobody checked yet is marked too, and Form teams waits for them; a refund is
   // recorded by rejecting the receipt in the attendees list, which takes the player out of the team. A short team says
   // how many it lacks; a paid event's top line counts short teams and paid players with none. Form teams completes the
@@ -44,6 +45,15 @@
     const was = b;
     b = moved(b, p, to); haptic.tap();
     try { b = await api.teamsMove(id, p.id, to); haptic.ok(); } catch (e) { b = was; fail(e); }
+  }
+  // someone signed up without the teams consent: the bot's template, at most once a day (server evteams.remind)
+  async function remind(p: PersonRef) {
+    haptic.tap();
+    try {
+      const r = await api.teamsRemind(id, p.id);
+      if (r.consent) { b = await api.teams(id); return; } // agreed meanwhile: the row is placeable now
+      haptic.ok(); say(t(r.queued ? 'tm.reminded' : 'tm.remindedToday'), 'speech_balloon_3d');
+    } catch (e) { fail(e); }
   }
   const menuOf = (p: PersonRef, from: Id | null): MenuItem[] => !b || b.locked ? [] : [
     ...b.teams.filter((tm) => tm.id !== from).map((tm) => ({ label: t('tm.toTeam', { team: tm.name, n: tm.members.length, max: b!.max }), disabled: tm.members.length >= b!.max, onselect: () => move(p, tm.id, tm.name) })),
@@ -87,7 +97,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={!p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || !b.teams.length || !p.consent ? undefined : menuOf(p, null)}>
+              <Row dense title={p.name} value={!p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }] : !b.teams.length ? undefined : menuOf(p, null)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}

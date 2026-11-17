@@ -3,7 +3,7 @@
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
-import { teamConsentOk } from '../teamConsent';
+import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
 import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
@@ -422,8 +422,10 @@ export const goingBusy = new SvelteSet<Id>();
 const flying = new Set<Id>();
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
-/** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick) */
-export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: TeamPick | 'solo'): void {
+/** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick)
+ *  consent: the button showed the line on what signing up to a team event means: the sign-up is the teams consent
+ *  (server evteams.signup writes it with the sign-up); without it the consent sheet asks as before */
+export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: TeamPick | 'solo', consent = false): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
   asStudent(async () => {
     const before = await cardFor(id);
@@ -448,7 +450,8 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     // asks nothing: the captain pays first and makes the team after the receipt (the sheet's "Create team")
     const pick = !leaving && before.teamMax ? team ?? (before.price ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
     if (pick === null) return;
-    if (pick && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
+    const agrees = consent && !leaving && !!before.teamMax;
+    if (pick && !agrees && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
     if (flying.has(id)) return; // a second tap while the first is on its way
     flying.add(id);
@@ -463,9 +466,10 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     } else goingBusy.add(id);
     taps++;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish, agrees ? TEAM_CONSENT : undefined);
       if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
+      if (agrees && session.me?.teams) session.me.teams.consent = true; // written with the sign-up
       put(after);
       const st = after.my?.status;
       if (leaving) { haptic.warn(); burst(true); say(phrase('say.cancel'), 'crying_face_3d'); }

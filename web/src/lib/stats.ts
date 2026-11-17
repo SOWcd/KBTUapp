@@ -66,7 +66,7 @@ export function flush(): void {
 /** The class of the launch's startapp parameter, for where people come from; its value never leaves this function. */
 export function launchedFrom(p: string): Source {
   if (!p) return 'from.none';
-  if (/^(ev|ph|cm|tk|mg)_/.test(p)) return 'from.event';
+  if (/^(ev|ph|cm|tk|mg|tc)_/.test(p)) return 'from.event';
   if (/^(cl|rc|iv|join|st|tm|jr|ce|memo)_/.test(p)) return 'from.club';
   if (/^(fr|r|u)_/.test(p)) return 'from.friend';
   if (/^(ci|hq|bq|sh)_/.test(p)) return 'from.qr';
