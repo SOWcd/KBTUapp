@@ -117,6 +117,7 @@ from . import config, db, texts
 from pathlib import Path
 
 from .logic.account import _DEL_GONE, staff_row
+from .logic.core import is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
@@ -398,8 +399,8 @@ def main(args: list[str]) -> None:
         print(f"@{u['tg_username'] or u['tg_id']}: staff, acts as a student")
     elif cmd == "staff" and len(args) == 2:
         u = _user(con, args[1])
-        s = one(con, "SELECT consent_version FROM students WHERE user_id = ?", u["id"])
-        if not s or s["consent_version"] == "staff":
+        s = one(con, "SELECT student_id, consent_version FROM students WHERE user_id = ?", u["id"])
+        if not s or is_staff(s):
             sys.exit(f"@{u['tg_username'] or u['tg_id']}: " + ("already staff" if s else "not signed in: use staff <who> <first> <last>"))
         no = u["card_no"]
         with db.tx(con):
@@ -435,10 +436,10 @@ def main(args: list[str]) -> None:
             sys.exit(f"refused: {e.code} {e.message}".strip())  # sid_taken: unlink the holder first
         print(f"@{u['tg_username'] or u['tg_id']}: {args[2]} changed")
     elif cmd == "stats":  # people are students only: staff aren't counted
-        real = "user_id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')"
+        real = f"user_id NOT IN (SELECT user_id FROM students s WHERE {staff_sql()})"
         for name, sql in (("opened the app", "SELECT count(*) FROM users WHERE tg_id > 0"),
                           ("signed in with KBTU", f"SELECT count(*) FROM students WHERE {real}"),
-                          ("staff (by hand)", "SELECT count(*) FROM students WHERE consent_version = 'staff'"),
+                          ("staff", f"SELECT count(*) FROM students s WHERE {staff_sql()}"),
                           ("clubs", "SELECT count(*) FROM orgs WHERE kind = 'club' AND status = 'active'"),
                           ("official clubs", "SELECT count(*) FROM orgs WHERE kind = 'club' AND status = 'active' AND official"),
                           ("people in a club's team", f"SELECT count(DISTINCT user_id) FROM org_members WHERE {real}"),
@@ -450,7 +451,7 @@ def main(args: list[str]) -> None:
             print(f"{one(con, sql)[0]!s:>10}  {name}")
     elif cmd == "achstats":  # levels set by real numbers, not guesses (owner, Oct 30: some need too many, some too few)
         from .logic.profiles import ACHIEVEMENTS, _counts
-        counts = [_counts(con, uid) for (uid,) in rows(con, "SELECT user_id FROM students WHERE consent_version != 'staff'")]
+        counts = [_counts(con, uid) for (uid,) in rows(con, f"SELECT user_id FROM students s WHERE NOT {staff_sql()}")]
         came = [c for c in counts if c["regular"]]
         print(f"{len(counts)} students, {len(came)} came to an event at least once; each level: share of all / of those who came")
         for code, _, needs, _ in ACHIEVEMENTS:

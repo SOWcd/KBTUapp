@@ -532,10 +532,10 @@ def card_no(con, uid: int) -> None:
     """A student's number on the card (§4.4): the order of first KBTU sign-in, kept for good, so a deleted account never
     frees it. The Creator's card shows 00000 and takes no number, staff none at all: the numbers count students."""
     # the last number given lives in meta: MAX + 1 alone gave the last card's number again once its account was purged
-    n = con.execute("""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
+    n = con.execute(f"""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
             (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last'))
         WHERE id = ? AND card_no IS NULL AND is_founder = 0
-        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff') RETURNING card_no""", (uid,)).fetchone()
+        AND id NOT IN (SELECT user_id FROM students s WHERE {core.staff_sql()}) RETURNING card_no""", (uid,)).fetchone()
     if n:
         con.execute("""INSERT INTO meta (key, value) VALUES ('card_last', ?)
             ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))""", (str(n[0]),))
@@ -611,11 +611,11 @@ def _rarity(con) -> tuple[int, dict, dict]:
     if _RARITY[0] > time.monotonic():
         return _RARITY[1]
     # out of students only: staff take no card and no "First 500", counted they made it "95%"
-    total = max(1, one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0])
-    at_level = {(r[0], r[1]): r[2] for r in rows(con, """SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
-        JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""") if r[0] not in PRIVATE}
+    total = max(1, one(con, f"SELECT COUNT(*) FROM students s WHERE NOT {core.staff_sql()}")[0])
+    at_level = {(r[0], r[1]): r[2] for r in rows(con, f"""SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
+        JOIN students s ON s.user_id = l.user_id WHERE NOT {core.staff_sql()} GROUP BY l.code, l.level""") if r[0] not in PRIVATE}
     badges = {b: one(con, f"""SELECT COUNT(DISTINCT l.user_id) FROM achievement_levels l JOIN students s ON s.user_id = l.user_id
-        WHERE s.consent_version != 'staff' AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total for b, vs in BADGES.items()}
+        WHERE NOT {core.staff_sql()} AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total for b, vs in BADGES.items()}
     _RARITY[:] = [time.monotonic() + 60, (total, at_level, badges)]
     return _RARITY[1]
 

@@ -148,7 +148,7 @@ def latin_names(con, apply: bool = False) -> Counter:
     n: Counter = Counter()
     cyr = re.compile("[\u0400-\u04ff]")
     with tx(con) if apply else contextlib.nullcontext():
-        for s in rows(con, "SELECT * FROM students WHERE consent_version != 'staff'"):
+        for s in rows(con, f"SELECT * FROM students s WHERE NOT {core.staff_sql()}"):
             n["students"] += 1
             ms = json.loads(s["ms_profile"] or "{}")
             n["ms_profile"] += bool(ms)
@@ -497,7 +497,7 @@ def me(con, v: Viewer) -> dict:
     # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
     # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
-    if s and s["consent_version"] != "staff" and not s["student_id"].startswith("staff") and (u["card_no"] is None and not u["is_founder"] or (
+    if s and not core.is_staff(s) and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         if u["card_no"] is None and not u["is_founder"]:
@@ -516,7 +516,7 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity, _spend): for staff only the school
-                    "fixable": [k for k, c in ONCE.items() if (c not in s["fixed"].split(",") or c in ("school", "course") and s[c] is None) and (c == "school" or s["consent_version"] != "staff")],
+                    "fixable": [k for k, c in ONCE.items() if (c not in s["fixed"].split(",") or c in ("school", "course") and s[c] is None) and (c == "school" or not core.is_staff(s))],
                     # spent, yet the value before it can come back once (_spend)
                     "undo": {k: x for k, x in json.loads(s["once_was"] or "{}").items() if k in s["fixed"].split(",")}} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
@@ -742,7 +742,7 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
     # the row and its once read under the write lock (BEGIN IMMEDIATE): two taps at once can't both spend it
     with tx(con):
         s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
-        if not s or not admin and (s["manual"] or s["consent_version"] == "staff"):
+        if not s or not admin and (s["manual"] or core.is_staff(s)):
             raise ApiError("forbidden")  # unconfirmed: Microsoft's names come first; staff: the ID is a placeholder
         if not admin and col in s["fixed"].split(","):
             raise ApiError("conflict", "fixed")
@@ -895,7 +895,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         need_student(v)  # below it (a lower one would take free 1st-year seats). course_year now: September moves it on
         s = one(con, "SELECT student_id, consent_version, course, fixed, once_was FROM students WHERE user_id = ?", v.id)
         lo, val = core.course_of(s["student_id"]), patch["course"]
-        if s["consent_version"] == "staff":
+        if core.is_staff(s):
             raise ApiError("forbidden")  # the ID is a placeholder
         if lo is None or type(val) is not int or not lo <= val <= 6:
             raise ApiError("bad_input")

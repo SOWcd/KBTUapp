@@ -109,3 +109,42 @@ def test_staff_ok_sign_in(env, monkeypatch, capsys):
     logic.delete_me(con, Viewer(h, "user", True))
     con.commit()
     assert not granted(h)
+
+
+def test_staff_stays_staff(env, monkeypatch):
+    """Codex round 2: a staff-ok row can't turn itself into a student (PATCH the ID), so revoke still finds it; and
+    staff are left out wherever students are counted or trusted (comments, chat sync, stats, rarity, card numbers)."""
+    from kbtu.logic import chatsync, daily, profiles, tgcomments
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    con = db.connect(cfg.db_path)
+    part = base64.urlsafe_b64encode(json.dumps({"tid": msauth.KBTU, "appid": msauth.CLIENT}).encode()).decode().rstrip("=")
+
+    async def get(self, url, **kw):
+        return httpx.Response(200, json={"id": "oid-s", "givenName": "Aru", "surname": "Staffova", "userPrincipalName": "a_staff@kbtu.kz"})
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    uid = c.get("/api/me", headers=tma(90)).json()["id"]
+    admin.main(["staff-ok", "90"])
+    held = c.post("/api/ms/finish", json={"state": msauth.state_for(cfg.token_key, uid), "token": f"h.{part}.s"}).json()
+    assert c.post("/api/ms/claim", headers=tma(90), json=held).json() == {"ok": True}
+    me = c.post("/api/kbtu/manual", headers=tma(90), json={"consentVersion": logic.CONSENT, "firstName": "", "lastName": "", "studentId": "", "course": 0}).json()
+    assert "studentId" not in me["student"]["fixable"]
+    # P1: the placeholder ID never changes by itself; no card number, no First 500
+    assert c.patch("/api/me", headers=tma(90), json={"studentId": "24B099803"}).status_code == 403
+    assert c.patch("/api/me", headers=tma(90), json={"course": 2}).status_code == 403
+    assert con.execute("SELECT student_id FROM students WHERE user_id = ?", (uid,)).fetchone()[0] == f"staff{uid}"
+    c.get("/api/me", headers=tma(90))
+    assert con.execute("SELECT card_no FROM users WHERE id = ?", (uid,)).fetchone()[0] is None
+    assert not con.execute("SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", (uid,)).fetchone()
+    # P2: not a student to the comments' group, its unbanning, the chat sync, the counts, the rarity
+    assert tgcomments.commenter(con, 90) is None
+    con.execute("INSERT INTO tgc_strangers (tg_id, seen_at, banned_at) VALUES (90, 1, 1)")
+    assert 90 not in tgcomments.unban_due(con)
+    assert chatsync._student(con, 90) is None
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (uid,))
+    assert daily.admin_stats(con, Viewer(uid, "admin", True))["students"] == 0
+    profiles._RARITY[0] = 0
+    assert profiles._rarity(con)[0] == 1  # max(1, 0): no students at all
+    # revoke still finds the row
+    admin.main(["staff-ok", "revoke", "90"])
+    assert con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone() is None

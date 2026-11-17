@@ -86,6 +86,7 @@
       const why = e instanceof ApiErr ? e.message || e.code : '';
       error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual', { sid: sidEx }) : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
       if (why === 'ms_first') void loadMe(); // the Microsoft sign-in ran out: the button again
+      if (why === 'bad_input' && only) void loadMe(); // the creator took the staff word back meanwhile: the ID field comes back
     } finally { busy = false; }
   }
 </script>
