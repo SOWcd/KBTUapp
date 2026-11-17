@@ -40,6 +40,8 @@ def inbox(con, v: Viewer) -> dict:
             items.append(_item("opath", r["id"], r["createdAt"], False, r))
         for r in roster_requests(con, v):
             items.append(_item("claim", r["id"], 0, False, r))
+        for e in autoev.queue(con):  # an event found in a club's channel: open its draft, or dismiss it (the event delete, its Undo)
+            items.append(_item("autoev", e["id"], e["at"], False, e))
     items.sort(key=lambda x: (not x["hidden"], not x.pop("harm"), x["at"]))
     # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide (owner, Nov 7)
     flaws = one(con, "SELECT COUNT(*) FROM map_flaws WHERE done_at IS NULL")[0] if admin else 0
@@ -76,6 +78,7 @@ def count(con, v: Viewer) -> int:
         from .. import roster  # it imports kbtu.logic itself
         n += one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0]
         n += one(con, "SELECT COUNT(*) FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0")[0]
+        n += autoev.waiting(con)
         n += len(roster.requests(con, v))  # the map's flaws aren't counted: a quiet row at Admin's bottom (owner, Nov 7)
     return n
 
@@ -190,7 +193,7 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
 
 
 # the other domains', imported last: they import this one too
-from . import fchannel, subjects, tgcomments  # noqa: E402
+from . import autoev, fchannel, subjects, tgcomments  # noqa: E402
 from .account import roster_requests  # noqa: E402
 from .chatlist import pending_chats, undo_chat  # noqa: E402
 from .clubs import club_applications, official_requests, undo_club_refusal, undo_official  # noqa: E402
