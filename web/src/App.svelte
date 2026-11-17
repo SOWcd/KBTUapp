@@ -435,7 +435,7 @@
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
   function teamHi(then?: () => void): boolean {
     const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office;
-    if (!o || !once('kb-hi-o' + o.id)) return false;
+    if (!o || !once('kb-hi2-o' + o.id)) return false;
     if (then) void lazy(officeWelcome, { org: o, ondone: then }); else moment(() => lazy(officeWelcome, { org: o }));
     return true;
   }
