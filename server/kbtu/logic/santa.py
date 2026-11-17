@@ -44,7 +44,7 @@ def news(con, dry: bool = False, only: int | None = None) -> int:
     """`python -m kbtu.admin santa-news`: the tool's announcement, a template with a button into their Studio, queued
     once per person to every President and Vice of an active organization the bot can write to (their first one's
     Studio). Run by hand, never by a deploy; a second run queues only who became one since."""
-    to = rows(con, """SELECT m.user_id, MIN(m.org_id) AS org FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.status = 'active'
+    to = rows(con, """SELECT m.user_id, MIN(m.org_id) AS org FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.status = 'active' AND o.kind != 'office'
         JOIN users u ON u.id = m.user_id AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
         WHERE m.role IN ('president', 'vice') AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = m.user_id AND b.kind = 'santa_news'))
           AND (? IS NULL OR m.user_id = ?)
