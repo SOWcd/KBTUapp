@@ -1,13 +1,24 @@
 <script lang="ts">
   // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
   // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
-  // three buttons (a room on the map, an event, a club, my classes, a Settings page, the Gallery, the news), checked by
-  // the server against what it told the model. Under an answer 👍/👎 (on 👎, the student may send that one question
+  // three buttons (a room or the whole map, an event, a club, my classes, a Settings page, the Gallery, the news, a tab,
+  // my tickets, friends, awards, the subjects, a new forum post, my club's Studio or a new event there), checked by the
+  // server against what it told the model; a button only opens a screen. The bar's corner opens it (Nav), so the map,
+  // which was there, is its first row. Under an answer 👍/👎 (on 👎, the student may send that one question
   // and answer); when the server sees distress, its fixed help card with the helplines (review, Oct 31: nothing of
   // it is kept or sent by us; the student calls or writes themselves). When KRI didn't know, "Ask a person" (ASK): the
   // help desk's composer with the question in it, sent only on the student's tap.
   import { untrack } from 'svelte';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import MapIcon from '@lucide/svelte/icons/map';
+  import Ticket from '@lucide/svelte/icons/ticket';
+  import UserRound from '@lucide/svelte/icons/user-round';
+  import Trophy from '@lucide/svelte/icons/trophy';
+  import BookOpen from '@lucide/svelte/icons/book-open';
+  import SquarePen from '@lucide/svelte/icons/square-pen';
+  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+  import { TAB_ICON } from '../../ui/icons';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Users from '@lucide/svelte/icons/users';
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
@@ -21,11 +32,11 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, asStudent } from '../../lib/state/session.svelte';
   import type { AssistAction } from '../../lib/api/types';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
@@ -37,6 +48,8 @@
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Composer from '../../ui/Composer.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
@@ -69,11 +82,21 @@
   }
   // labels from our own strings and store, never the model's words
   const SET = { school: 'look.school', course: 'pd.course', notify: 'me.notifications' } as const;
-  const label = (a: AssistAction) => a.type === 'map' ? t('as.onMap', { room: a.room })
+  const mine = (id: number) => session.me?.memberships.find((m) => m.org.id === id)?.org.name ?? t('as.club');
+  const PLAIN = { timetable: 'list.classes', gallery: 'gallery.title', ask: 'ask.button', news: 'page.news', afisha: 'tab.afisha', forum: 'tab.forum',
+    clubs: 'page.clubs', profile: 'tab.profile', tickets: 'as.tickets', friends: 'page.friends', awards: 'page.awards', subjects: 'sj.title', post: 'as.post' } as const;
+  const label = (a: AssistAction) => a.type === 'map' ? (a.room ? t('as.onMap', { room: a.room }) : t('as.map'))
     : a.type === 'event' ? eventById(a.id)?.title ?? t('as.event')
     : a.type === 'club' ? [...data.orgs, ...data.small].find((o) => o.id === a.id)?.name ?? t('as.club')
-    : a.type === 'settings' ? t(SET[a.kind]) : t(a.type === 'timetable' ? 'list.classes' : a.type === 'gallery' ? 'gallery.title' : a.type === 'ask' ? 'ask.button' : 'page.news');
-  const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper, ask: MessageCircleQuestion };
+    : a.type === 'studio' ? t('as.studio', { name: mine(a.id) }) : a.type === 'new_event' ? t('as.newEvent', { name: mine(a.id) })
+    : a.type === 'settings' ? t(SET[a.kind]) : t(PLAIN[a.type]);
+  const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper, ask: MessageCircleQuestion,
+    afisha: TAB_ICON.afisha, forum: TAB_ICON.forum, clubs: TAB_ICON.club, profile: TAB_ICON.profile, tickets: Ticket, friends: UserRound, awards: Trophy,
+    subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus };
+  const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
+  /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
+   *  are the app's own openers) */
+  function tab(k: Tab) { for (const o of overlays) close(o.id, false); goTab(k); }
   function go(a: AssistAction, q?: string) {
     if (a.type === 'map') sheets.map(a.room);
     else if (a.type === 'event') sheets.event(a.id);
@@ -82,8 +105,27 @@
     else if (a.type === 'timetable') sheets.week();
     else if (a.type === 'gallery') sheets.gallery();
     else if (a.type === 'ask') sheets.askHuman(q);
-    else sheets.news();
+    else if (a.type === 'news') sheets.news();
+    else if (a.type === 'afisha') tab('afisha');
+    else if (a.type === 'tickets') { tab('afisha'); toTickets.fn?.(); } // Afisha drops its search, its ticket in view (List.svelte)
+    else if (a.type === 'forum' || a.type === 'profile') tab(a.type);
+    else if (a.type === 'clubs') tab('club');
+    else if (a.type === 'friends') sheets.friends();
+    else if (a.type === 'awards') sheets.awards();
+    else if (a.type === 'subjects') sheets.subjects();
+    else if (a.type === 'studio') { tab('club'); sheets.studio(a.id); } // as App's toClub
+    else if (a.type === 'new_event') sheets.editor(a.id);
+    else { tab('forum'); void write(); }
   }
+  // the forum's + (Channel.svelte write): KBTU-confirmed students write, the rest sign in first
+  async function write() {
+    const { compose } = await import('../forum/ChannelCompose.svelte');
+    const me = session.me;
+    if (!me?.student) asStudent(() => compose());
+    else if (me.student.manual) sheets.login();
+    else compose();
+  }
+  const openMap = () => sheets.map();
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
@@ -102,6 +144,8 @@
 
 <Sheet {overlay} {opener} icon={Sparkles} tall title={t('as.title')}>
   <div class="list" bind:this={list}>
+    <!-- the map, one tap away as when it had the bar's corner: first, before any question -->
+    <div class="mapr"><Group><Row icon={MapIcon} title={t('as.map')} accessory="chevron" onclick={openMap} /></Group></div>
     {#if !chat.turns.length}
       <!-- as in every AI app: the greeting alone in the middle, the suggestions at the bottom over the field -->
       <div class="hello">
@@ -120,7 +164,7 @@
           {#if m.actions?.length}
             <div class="acts">{#each m.actions as a, k (k)}
               <Button kind="tinted" size="s" onclick={() => go(a, m.q)}>
-                {#snippet icon()}{@const Icon = ICON[a.type]}<Icon size={15} />{/snippet}
+                {#snippet icon()}{@const Icon = iconOf(a)}<Icon size={15} />{/snippet}
                 {label(a)}
               </Button>
             {/each}</div>
@@ -164,6 +208,7 @@
 
 <style>
   .list { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding: 6px 0 4px; }
+  .mapr { flex: none; }
   .hello { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: var(--s-3); padding: 0 6px 8vh; }
   .greeting { font: 700 var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; }
   .about { max-width: 320px; font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }

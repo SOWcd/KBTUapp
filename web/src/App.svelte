@@ -430,11 +430,13 @@
 
   // ---- greeting ----
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
-  // an office's own people (DMP) are greeted as the team, once per phone: at the link that let them in, or the launch after
-  function teamHi(): boolean {
+  // an office's own people (DMP) are greeted as the team, once per phone, full screen (owner, Nov 17: the toast was missed):
+  // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
+  const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
+  function teamHi(then?: () => void): boolean {
     const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office;
-    if (!o || !once('kb-hi-o' + o.id)) return false;
-    say(t('say.hi.team', { org: o.abbr ?? o.name }), 'waving_hand_3d_default');
+    if (!o || !once('kb-hi2-o' + o.id)) return false;
+    if (then) void lazy(officeWelcome, { org: o, ondone: then }); else moment(() => lazy(officeWelcome, { org: o }));
     return true;
   }
   function greet() {
@@ -753,8 +755,7 @@
       try {
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
-        haptic.ok(); if (!teamHi()) say(t('join.linkDone', { club: o.name }), 'party_popper_3d');
-        sheets.club(o.id);
+        haptic.ok(); if (!teamHi(() => sheets.club(o.id))) { say(t('join.linkDone', { club: o.name }), 'party_popper_3d'); sheets.club(o.id); }
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); sheets.club(org); } // used or old: the club, to apply there
     });
   }
@@ -767,8 +768,7 @@
       try {
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
-        haptic.ok(); burst(); if (!teamHi()) say(t('pres.done', { club: o.name }), 'party_popper_3d');
-        toClub(o.id);
+        haptic.ok(); burst(); if (!teamHi(() => toClub(o.id))) { say(t('pres.done', { club: o.name }), 'party_popper_3d'); toClub(o.id); }
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
     });
   }

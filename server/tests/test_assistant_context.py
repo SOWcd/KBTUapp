@@ -117,3 +117,51 @@ def test_injected_page_opens_nothing_foreign(env, monkeypatch):
     out["acts"] = [{"type": "club", "id": 1}]                               # without the page, club 1 is named nowhere
     assert c.post("/api/assistant", headers=tma(1), json={"q": "and?"}).json()["actions"] == []
     con.close()
+
+
+def test_screen_buttons_whitelist():
+    """KRI in the corner (Nov 17): a button for every screen a student opens, kept when allowed; the forum's and the
+    subjects' only where they're on; Studio and a new event open the club the server found (the model's id ignored),
+    or nothing."""
+    from kbtu.logic import assistant as a
+    ok = {"map": {"180"}, "studio": 5, "new_event": 5, "opt": {"forum", "post", "subjects"}}
+    acts = lambda ok, *xs: a.answer(json.dumps({"text": "ok", "actions": list(xs)}), ok)["actions"]  # noqa: E731
+    for k in ("afisha", "clubs", "profile", "tickets", "friends", "awards", "forum", "post", "subjects"):
+        assert acts(ok, {"type": k, "id": 3}) == [{"type": k}]
+        assert acts({}, {"type": k}) == ([{"type": k}] if k in a.BARE else [])          # forum, post, subjects: off
+    assert acts(ok, {"type": "map"}, {"type": "map", "room": "180"}) == [{"type": "map"}, {"type": "map", "room": "180"}]
+    assert acts(ok, {"type": "map", "room": "999"}) == []
+    for k in ("studio", "new_event"):
+        assert acts(ok, {"type": k}) == [{"type": k, "id": 5}]
+        assert acts(ok, {"type": k, "id": 6}) == [{"type": k, "id": 5}]                    # never the model's club
+        assert acts({}, {"type": k, "id": 5}) == [] == acts({"studio": None, "new_event": None}, {"type": k})
+    assert acts(ok, {"type": "pay"}, {"type": "signup", "id": 1}, {"type": "delete"}, {"type": "opt"}) == []
+
+
+def test_studio_buttons_only_for_a_clubs_person(env, monkeypatch):
+    """Studio and "new event" open only a club the student runs (a role past member), filled in by the server; a plain
+    member gets neither; the model never hears of the clubs; the forum's buttons only where the forum channel is on."""
+    import dataclasses
+    c, cfg = env
+    for uid, name in ((1, "ann"), (2, "bob")):
+        login(c, uid, name)
+    _board_on(c, cfg)
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (5, 'it', 'club', 'IT Club', 'IT', 'x', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (4, 'chess', 'club', 'Chess', 'C', 'x', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 4, id, 'member', 0 FROM users WHERE tg_id = 1")  # first by id, but a plain member
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 5, id, 'president', 0 FROM users WHERE tg_id = 1")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 5, id, 'member', 0 FROM users WHERE tg_id = 2")
+    seen: list = []
+
+    async def fake(cfg_, http, msgs, **kw):
+        seen.append(msgs[1]["content"])
+        return json.dumps({"text": "Here.", "actions": [{"type": "studio"}, {"type": "new_event", "id": 9}, {"type": "forum"}]}), "x"
+    monkeypatch.setattr(llm, "chat", fake)
+    ask = lambda tg: c.post("/api/assistant", headers=tma(tg), json={"q": "how do I make an event?"}).json()["actions"]  # noqa: E731
+    assert ask(1) == [{"type": "studio", "id": 5}, {"type": "new_event", "id": 5}]
+    assert "IT Club" not in seen[-1] and "club 5" not in seen[-1] and "Studio" not in seen[-1] and "The forum: off" in seen[-1]
+    assert ask(2) == []
+    c.app.state.cfg = dataclasses.replace(c.app.state.cfg, forum_channel=-100123)
+    assert ask(2) == [{"type": "forum"}]
+    con.close()

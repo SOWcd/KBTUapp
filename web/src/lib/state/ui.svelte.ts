@@ -72,6 +72,8 @@ export function open<P extends Record<string, unknown>>(component: Component<P>,
 /** Back with no overlay up: something on the tab itself to undo first (my badge turned to its QR side, Hero); its owner
  *  sets and clears it. Telegram's Back stays the only Back (AGENTS.md: One Back). */
 export const backTo = $state<{ fn: (() => void) | null }>({ fn: null });
+/** KRI's "My tickets": Afisha drops its search and brings my ticket into view; List.svelte sets it while built. */
+export const toTickets: { fn: (() => void) | null } = { fn: null };
 
 /** Ask the overlay to leave: it plays its exit animation, then calls removeOverlay(). No id: the top one, by a hand. */
 export function close(id?: number, byUser = id == null): void {

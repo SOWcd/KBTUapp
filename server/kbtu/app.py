@@ -1830,7 +1830,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         try:
-            msgs, ok = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang, cfg.ask)
+            now_cfg = request.app.state.cfg  # the forum's and the subjects' switches: their buttons only where they're on
+            msgs, ok = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang, cfg.ask, bool(now_cfg.forum_channel),
+                                               logic.subjects.on(now_cfg.subjects_file))
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
