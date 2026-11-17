@@ -286,13 +286,29 @@
   // "free now" by the timetable (lib/rooms): fetched as the map opens, nothing of it shows until it comes or if the
   // server has no timetable (404); the rooms the main map numbers, tinted where their number is printed
   let week = $state<Record<string, RoomWeek> | null>(null), freeOn = $state(false), clock = $state(nowTs());
+  // Office-hour rooms and rooms 310-318 stay on the map but must not be advertised as free.
+  const noFreeHighlight = new Set([
+    '0', '5', '9', '15', '45', '47', '58', '69', '77', '87', '102', '112',
+    '120', '140', '178', '179', '180', '181', '184', '215', '216a', '216b', '217', '218',
+    '219', '220', '228', '249', '251', '251a', '251b', '257', '268', '270', '271', '272',
+    '274', '275', '277', '278', '279', '281', '283', '284', '310', '311', '312', '313',
+    '314', '315', '316', '317', '318', '319', '321', '324', '325', '327', '328', '331',
+    '335', '336', '337', '345', '346', '348', '349', '355', '356', '357', '359', '365',
+    '372', '376', '377', '381a', '381b', '383', '384', '385', '386', '388', '389', '400a',
+    '403', '406', '409', '410', '410a', '411', '419', '420', '422', '427', '432', '433',
+    '436', '447', '454', '456', '458', '459', '473', '509', '513',
+  ]);
   api.mapRooms().then((r) => (week = r.rooms), () => {});
-  const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) =>
-    week![r] ? ps.map(([u, v]) => ({ r, u, v, free: roomNow(week![r], clock).free })) : []));
+  const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) => {
+    if (!week![r]) return [];
+    const free = roomNow(week![r], clock).free;
+    return free && noFreeHighlight.has(r) ? [] : ps.map(([u, v]) => ({ r, u, v, free }));
+  }));
   const roomLine = $derived.by(() => {
     const w = room && week?.[room];
     if (!w) return '';
     const n = roomNow(w, clock), time = `${String(n.until).padStart(2, '0')}:00`;
+    if (n.free && noFreeHighlight.has(room as string)) return ''; // an office: its card doesn't say "free" either
     return (n.free ? (n.until == null ? t('map.freeEvening') : t('map.freeUntil', { time })) : t('map.busyUntil', { time })) + ' \u00b7 ' + t('map.byTimetable');
   });
   function toggleFree() { haptic.select(); freeOn = !freeOn; clock = nowTs(); if (freeOn) say(t('map.freeHint'), 'sparkles_3d'); }

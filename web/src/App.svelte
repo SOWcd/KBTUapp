@@ -435,7 +435,7 @@
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
   // seen once it mounts; a chunk that fails to load still runs the link's own step (Codex review, Nov 17)
   function teamHi(then?: () => void): boolean {
-    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office, key = 'kb-hi-o' + o?.id;
+    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office, key = 'kb-hi2-o' + o?.id;
     if (!o || seen(key)) return false;
     const show = () => officeWelcome().then((m) => open(m.default, { org: o, ondone: then, shown: () => once(key) }), () => then?.());
     if (then) void show(); else moment(show);

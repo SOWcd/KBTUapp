@@ -135,7 +135,9 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
     sent: { id: Id; day: number; q: string; a: string }[]; care: { week: number; n: number }[] } }
 /** The assistant's answer: its buttons, the signed topic a 👍/👎 sends back, the fixed help card when the model sees distress. */
 /** KRI's buttons (server assistant.answer's whitelist): each opens a screen, nothing changes until the student taps */
-export type AssistAction = { type: 'map'; room: string } | { type: 'event' | 'club'; id: number } | { type: 'timetable' | 'gallery' | 'news' | 'ask' }
+// map without a room: the whole map; studio, new_event: a club of mine in Studio (the server names it in the brief)
+export type AssistAction = { type: 'map'; room?: string } | { type: 'event' | 'club' | 'studio' | 'new_event'; id: number }
+  | { type: 'timetable' | 'gallery' | 'news' | 'ask' | 'afisha' | 'clubs' | 'profile' | 'forum' | 'tickets' | 'friends' | 'awards' | 'subjects' | 'post' }
   | { type: 'settings'; kind: 'school' | 'course' | 'notify' };
 export interface AssistReply { text: string; actions: AssistAction[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
