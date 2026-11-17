@@ -1384,6 +1384,33 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         media.drop(receipts, gone)
         media.drop(photos, photo)
 
+    # the event's one document (its rules): the PDF is the body, as in /api/photos; only its pages' pictures are kept
+    @app.put("/api/events/{eid}/doc")
+    async def put_event_doc(eid: int, request: Request, con: Con, v: Me, title: str | None = Query(None, max_length=200)):
+        if v.id in posting:  # one upload at a time per person, as the Gallery's (30 pages hold a picture thread a while)
+            raise ApiError("rate_limited", "busy")
+        posting.add(v.id)
+        try:
+            await run_in_threadpool(logic.doc_check, con, v, eid)  # a plain no costs no upload
+            data = await read_upload(request)
+            try:
+                pages = await _img(logic.render_doc, data, photos)
+            except media.BadImage as exc:
+                raise ApiError("bad_input", str(exc)) from None
+            try:
+                out, gone = await run_in_threadpool(logic.put_doc, con, v, eid, title, pages)
+            except ApiError:  # the event went meanwhile: no files left behind without a row
+                media.drop(photos, [p["path"] for p in pages])
+                raise
+            media.drop(photos, gone)
+            return out
+        finally:
+            posting.discard(v.id)
+
+    @app.delete("/api/events/{eid}/doc", status_code=204)
+    def drop_event_doc(eid: int, con: Con, v: Me):
+        media.drop(photos, logic.drop_doc(con, v, eid))
+
     # a co-host club (logic/cohosts.py): the host invites one, its Vice+ answers in Studio, either side ends it
     @app.put("/api/events/{eid}/cohost")
     def cohost_invite(eid: int, con: Con, v: Me, body: dict = Body(...)):

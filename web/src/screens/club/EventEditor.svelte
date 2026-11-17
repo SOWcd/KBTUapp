@@ -40,6 +40,7 @@
   import Plus from '@lucide/svelte/icons/plus';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
+  import FileText from '@lucide/svelte/icons/file-text';
   import Segmented from '../../ui/Segmented.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
@@ -278,6 +279,29 @@
     $effect(() => { const x = vids[slot]; if (x?.status === 'failed') { say(t(x.error === 'too_long' ? 'ed.videoLong' : 'ed.videoBad'), 'pleading_face_3d'); vids[slot] = null; f[KEY[slot]] = null; } });
   }
   function dropVideo(slot: Slot) { vids[slot] = null; f[KEY[slot]] = null; }
+
+  // the event's rules (a PDF, an organizer's ask, Nov 17): put at once, not on Save; the server keeps only its pages as
+  // pictures (organizing.put_doc), the event's page opens them in the photo viewer
+  let docUp = $state(false);
+  let docPick = $state<HTMLInputElement>();
+  async function pickDoc(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement, file = input.files?.[0];
+    input.value = '';
+    if (!file || !saved) return;
+    if (file.size > 5 * 1024 * 1024) { haptic.error(); say(t('ed.docBig'), 'pleading_face_3d'); return; }
+    const name = await sheets.askText({ title: t('ed.docName'), placeholder: t('event.doc'), value: saved.doc?.title ?? t('event.doc'), max: 40, line: true, ok: t('common.save'), cancel: t('common.cancel') });
+    if (name == null || !saved) return;
+    docUp = true;
+    try { const e = await api.putEventDoc(saved.id, file, name === t('event.doc') ? '' : name); saved = { ...saved, doc: e.doc }; haptic.ok(); }
+    catch (err) { haptic.error(); say(t(err instanceof ApiErr && (err.message === 'too_many_pages' || err.message === 'too_big') ? 'ed.docBig' : 'ed.docBad'), 'pleading_face_3d'); }
+    finally { docUp = false; }
+  }
+  async function dropDoc() {
+    if (!saved) return;
+    const was = saved.doc;
+    saved = { ...saved, doc: null }; // optimistic; back if the server says no
+    try { await api.dropEventDoc(saved.id); haptic.soft(); } catch { if (saved) saved = { ...saved, doc: was }; haptic.error(); }
+  }
 
   // more photos after the cover, swiped sideways in the Feed and the sheet (PLAN 33): nine at most, in the order picked
   const SLIDES = 9;
@@ -739,8 +763,14 @@
       <Row icon={GraduationCap} title={t('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
     </Group>{/if}
 
+    <input class="doc-in" type="file" accept="application/pdf" bind:this={docPick} onchange={pickDoc} /><!-- outside: Rows' lines need them adjacent -->
     <Group caption={t('ex.more')}>
       {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
+      {#if saved && !plain}
+        {#if saved.doc && !docUp}<Row icon={FileText} title={saved.doc.title ?? t('event.doc')} value={tn('ed.docPages', saved.doc.pages.length)}
+          menu={[{ label: t('ed.docReplace'), onselect: () => docPick?.click() }, { label: t('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
+        {:else}<Row icon={FileText} title={t('ed.docAdd')} value={docUp ? t('ed.docUp') : undefined} accessory="chevron" onclick={() => !docUp && docPick?.click()} />{/if}
+      {/if}
       {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
@@ -984,6 +1014,7 @@
 </div>
 
 <style>
+  .doc-in { display: none; }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
     --pill: var(--surface-2); --surface-solid: transparent; } /* its buttons on the event's colour, not navy (Button's solid ground) */
   :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }

@@ -262,6 +262,9 @@ export const server = {
    *  Studio (its invites) or leaves */
   cohostInvite: (id: Id, org: Id): Promise<EventFull> => call('PUT', `/events/${id}/cohost`, { orgId: org }),
   cohostEnd: (id: Id): Promise<void> => call('DELETE', `/events/${id}/cohost`),
+  /** the event's rules (a PDF, 5 MB and 30 pages at most): its pages come back as pictures in `doc`; replaces the old one */
+  putEventDoc: (id: Id, file: Blob, title: string): Promise<EventFull> => call('PUT', `/events/${id}/doc?title=${encodeURIComponent(title)}`, file),
+  dropEventDoc: (id: Id): Promise<void> => call('DELETE', `/events/${id}/doc`),
   cohostAnswer: (id: Id, yes: boolean, mute: boolean = false): Promise<CohostInvite[]> => call('POST', `/events/${id}/cohost/answer`, { yes, mute }), // mute: "don't suggest again" (that host club)
   cohostUnmute: (org: Id, host: Id): Promise<void> => call('DELETE', `/orgs/${org}/mutes/${host}`),
   /** the volunteers ledger (server logic/vol.py): readers the list, a volunteer their own; edits the President's, each with a reason */

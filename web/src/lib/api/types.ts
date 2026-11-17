@@ -445,6 +445,9 @@ export type TeamPick = { create: string } | { join: string };
 /** A host club's member asking to come to its public event as a guest (server seats.team_asks) */
 export interface TeamAsk { person: PersonRef; createdAt: Ts }
 
+/** An event's one document (server organizing.put_doc): the PDF's pages rendered to pictures; title null: "Rules". */
+export interface EventDoc { title: string | null; pages: Media[] }
+
 export interface EventFull extends EventCard {
   description: string;
   /** volunteers: `mine` my application's state; `asked` (organizers only) how many wait */
@@ -468,6 +471,7 @@ export interface EventFull extends EventCard {
   badgeName: string | null;
   photos: AlbumPhoto[];          // the guests' album (students only), oldest first by when each was taken (EXIF), else uploaded
   wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)
+  doc?: EventDoc | null;         // its rules (a PDF the club attached), as its pages' pictures
   canAddPhotos: boolean;        // came (checked in) or the team, from the start until a week after the end, room left
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
   comments: number;             // questions and comments under the event (§4.10)

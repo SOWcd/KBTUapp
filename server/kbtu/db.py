@@ -1875,6 +1875,12 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
       DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
     END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
+    # an event's one document (its rules, a PDF): kept as its pages' pictures under media/, never the PDF (organizing.put_doc)
+    (182, """CREATE TABLE IF NOT EXISTS event_docs (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      title TEXT,
+      pages TEXT NOT NULL,
+      created_at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

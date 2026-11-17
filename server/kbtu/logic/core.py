@@ -604,6 +604,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
             "audience": e["door_audience"] or "both",  # whom its door records (checkin._team)
             "crew": crew_view(con, v, e), "myCrew": crew_kind(con, v, e),  # the door helpers (crew.py): theirs to give, mine to use
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
+            "doc": _doc_view(con, e["id"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (the talk is there)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
@@ -615,6 +616,13 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
             "wideVideo": video_shape(x) if e["wide_video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)
             **({"video": video_shape(x)} if head and e["video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["video_id"])) else {})}
+
+
+def _doc_view(con, eid: int) -> dict | None:
+    """types.ts EventDoc: the event's rules as its pages' pictures (organizing.put_doc); title None: the app says "Rules"."""
+    r = one(con, "SELECT title, pages FROM event_docs WHERE event_id = ?", eid)
+    return {"title": r["title"], "pages": [{"url": f"media/{p['path']}.webp", "thumb": f"media/{p['path']}.t.webp", "w": p["w"], "h": p["h"],
+            "blur": "", "color": p["color"]} for p in json.loads(r["pages"])]} if r else None
 
 
 # Staff work items (to admins, moderators): each may mute one for themselves (Admin -> My notifications); the value
