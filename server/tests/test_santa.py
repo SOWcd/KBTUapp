@@ -147,12 +147,16 @@ def test_one_button_starts_the_game(env):
     assert _start(c, 10).status_code == 403  # not of the club
     logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
     assert _start(c, 10).status_code == 403  # a member has no events right
+    con.execute("UPDATE users SET can_dm = 1")  # they opened the bot
     assert _start(c, 20, startsAt=1).status_code == 409  # a day in the past: nothing published, no draft left behind
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
     e = _start(c, 20).json()
     assert (e["status"], e["visibility"], e["santa"], e["title"]) == ("published", "members", {"drawn": False}, "Secret Santa")
     assert _start(c, 20).json()["id"] == e["id"]
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+    # the team hears once (a team-only event tells nobody by itself), the starter doesn't
+    told = [r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_open'")]
+    assert told == [10]
     assert _go(c, e["id"], 10, "tea").json()["my"]["status"] == "going"  # the team joins; a stranger doesn't see it
     assert _page(c, e["id"], 11).get("error") == "not_found"
     logic.daily.tba_day(con)  # no room to confirm: its maker isn't nagged

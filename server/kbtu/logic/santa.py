@@ -32,7 +32,12 @@ def start(con, v: Viewer, oid: int, body: dict) -> dict:
             return full(con, v, e)
         made = create_event(con, v, oid, {"title": body.get("title"), "place": "", "startsAt": body.get("startsAt"), "emoji": "sparkles_3d",
                                           "color": "#D7263D", "visibility": "members", "santa": True})
-        return publish_event(con, v, made["id"])
+        out = publish_event(con, v, made["id"])
+        # a team-only event tells nobody by itself (owner, Nov 17: "how do I learn my club started it?"): the team hears once
+        for r in rows(con, """SELECT m.user_id FROM org_members m JOIN users u ON u.id = m.user_id AND u.can_dm = 1 AND u.banned_at IS NULL
+                WHERE m.org_id = ? AND m.user_id != ?""", oid, v.id):
+            notify(con, r[0], "santa_open", f"event:{made['id']}")
+        return out
 
 
 def news(con, dry: bool = False, only: int | None = None) -> int:
