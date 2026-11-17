@@ -8,7 +8,7 @@
   import MapIcon from '@lucide/svelte/icons/map';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { kriCorner } from '../lib/state/session.svelte';
-  import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
+  import { sheets, openMapFrom } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
@@ -46,13 +46,7 @@
   }
   // the button gives under the finger and springs back as the map (CampusMap's iris) or KRI grows out of it
   const give = (b: HTMLElement) => b.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.84)', offset: 0.35 }, { transform: 'scale(1.06)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
-  function openMap(e: MouseEvent) {
-    const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
-    mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
-    mapFrom.cap = copyCap();
-    give(b);
-    sheets.map();
-  }
+  function openMap(e: MouseEvent) { give(e.currentTarget as HTMLElement); openMapFrom(e); }
   // the chunk on the press, not the click: by the release it has been loading for the whole press
   const kri = $derived(kriCorner());
   const warm = () => { void (kri ? import('../screens/assistant/Assistant.svelte') : import('../screens/map/CampusMap.svelte')).catch(() => {}); };

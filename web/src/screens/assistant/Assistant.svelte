@@ -33,7 +33,7 @@
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
   import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, openMapFrom } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
   import { session, asStudent } from '../../lib/state/session.svelte';
@@ -125,7 +125,7 @@
     else if (me.student.manual) sheets.login();
     else compose();
   }
-  const openMap = () => sheets.map();
+  const openMap = openMapFrom;
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;

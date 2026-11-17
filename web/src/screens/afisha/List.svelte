@@ -15,7 +15,7 @@
   import type { ClassItem, EventCard, Post } from '../../lib/api';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
   import { session, kriCorner } from '../../lib/state/session.svelte';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, openMapFrom } from '../../lib/state/sheets';
   import { ui, toTickets } from '../../lib/state/ui.svelte';
   import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
@@ -203,7 +203,7 @@
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
     <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} label={t('map.open')} onclick={() => sheets.map()} />{/if}
+      {#if kriCorner()}<IconButton icon={MapIcon} label={t('map.open')} onclick={openMapFrom} />{/if}
       {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={() => sheets.feed()} />{/if}
       <IconButton icon={Images} label={t('gallery.title')} onclick={() => sheets.gallery()} />
       <IconButton icon={Newspaper} label={t('page.news')} onclick={() => sheets.news()} />
