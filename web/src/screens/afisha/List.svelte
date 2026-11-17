@@ -11,12 +11,12 @@
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { ui } from '../../lib/state/ui.svelte';
+  import { ui, toTickets } from '../../lib/state/ui.svelte';
   import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
@@ -135,6 +135,11 @@
   // the pull-down search: the events held, upcoming and mine that ended, by title, place or club
   let q = $state('');
   const searching = $derived(!!q.trim());
+  // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
+  onMount(() => {
+    toTickets.fn = () => { q = ''; void tick().then(() => document.querySelector('.tab.on .hero')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
+    return () => { toTickets.fn = null; };
+  });
   const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
 
   function head(d: number): [string, string] {

@@ -32,7 +32,7 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
-  import { say, close, goTab, type Overlay, type Tab } from '../../lib/state/ui.svelte';
+  import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
@@ -94,8 +94,9 @@
     afisha: TAB_ICON.afisha, forum: TAB_ICON.forum, clubs: TAB_ICON.club, profile: TAB_ICON.profile, tickets: Ticket, friends: UserRound, awards: Trophy,
     subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus };
   const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
-  /** a tab: this sheet goes, the tab under it shows (the screens below are the app's own openers) */
-  function tab(k: Tab) { close(overlay.id); goTab(k); }
+  /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
+   *  are the app's own openers) */
+  function tab(k: Tab) { for (const o of overlays) close(o.id, false); goTab(k); }
   function go(a: AssistAction, q?: string) {
     if (a.type === 'map') sheets.map(a.room);
     else if (a.type === 'event') sheets.event(a.id);
@@ -105,7 +106,8 @@
     else if (a.type === 'gallery') sheets.gallery();
     else if (a.type === 'ask') sheets.askHuman(q);
     else if (a.type === 'news') sheets.news();
-    else if (a.type === 'afisha' || a.type === 'tickets') tab('afisha'); // my tickets: Afisha's top (List.svelte)
+    else if (a.type === 'afisha') tab('afisha');
+    else if (a.type === 'tickets') { tab('afisha'); toTickets.fn?.(); } // Afisha drops its search, its ticket in view (List.svelte)
     else if (a.type === 'forum' || a.type === 'profile') tab(a.type);
     else if (a.type === 'clubs') tab('club');
     else if (a.type === 'friends') sheets.friends();

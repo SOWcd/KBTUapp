@@ -188,7 +188,7 @@ def fake_ai_app():
         care = assistant.distress(q)
         if q.lower().startswith("how"):  # "How do I ...": steps and the screens' buttons (the server keeps those this person may open)
             return json.dumps({"text": "1. Open Studio of your club.\n2. Tap New event.\n3. Paste the announcement.", "known": True, "topic": "qa how to",
-                               "actions": [{"type": "new_event", "id": 1}, {"type": "studio", "id": 1}, {"type": "tickets"}]}), "qa"
+                               "actions": [{"type": "new_event"}, {"type": "tickets"}, {"type": "profile"}]}), "qa"
         return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
                            "actions": [] if care else [{"type": "ask"}], "known": False, "topic": "qa made up topic", "care": care}), "qa"
     llm.chat = chat
