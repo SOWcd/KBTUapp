@@ -10,7 +10,7 @@
   // on the back: a tap on the card or the medallion turns it over to the full-screen QR (MyQr). The code holds only a
   // link into the app (your profile), never a student ID. Other people's cards never show it.
   import type { PersonCard } from '../../lib/api';
-  import { hero, founderItem, ideaItem, staffItem } from '../../lib/awards';
+  import { hero, staffItem } from '../../lib/awards';
   import { glass } from '../../ui/glass';
   import Avatar from '../../ui/Avatar.svelte';
   import Frame from '../../ui/Frame.svelte';
@@ -49,6 +49,10 @@
   const mine = $derived(!!qr);
   const h = $derived(hero(look === face ? p : { ...p, skin: was }, mine));
   const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
+  // the text's halo in the card's own colour (--sh, r g b): its darkest under light letters, its paper under dark ones.
+  // ponytail: set here, not in lookVars (its --tsh is unused now): awards.ts is a source of the picker's minis, and a
+  // change there asks for all of them again (rasters.test.ts); move it in with the next lanyard round
+  const halo = $derived(club ? `; --sh: ${(club.ink ? club.bg[0] : club.bg[2]).match(/\w\w/g)!.map((x) => parseInt(x, 16)).join(', ')}` : '');
   // the app's moderator's or admin's shield by the name (here only, not in rows); the Creator wears his own seal alone
   const staff = $derived(p.founder ? null : p.staff ?? null);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
@@ -61,6 +65,17 @@
       at.querySelector('.av') ?? at);
   }
 
+  // the Creator's coin by the name, tapped (owner, Nov 18: the full-screen sheet said "the creator's mark" and came in
+  // badly): it turns over once on the spot, lifted toward you, the card's own flip in small, and a toast says who this
+  // is with the coin in it. Transform only; calm: the toast alone
+  function sealTap(e: MouseEvent) {
+    haptic.soft();
+    const coin = (e.currentTarget as Element).firstElementChild;
+    coin?.getAnimations().forEach((x) => x.cancel());
+    if (!calm()) coin?.animate([{ transform: 'perspective(140px) rotateY(0) scale(1)' }, { transform: 'perspective(140px) rotateY(180deg) scale(1.4)', offset: 0.45 },
+      { transform: 'perspective(140px) rotateY(360deg) scale(1)' }], { duration: 520, easing: 'cubic-bezier(.45, 0, .2, 1)' });
+    say(`${h.status}\n${t('seal.one')}`, p.founder ? 'seal:founder' : 'seal:idea');
+  }
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
   const frames = Array.from({ length: 41 }, (_, f) => {
     const s = (f / 40) * 1.4;
@@ -233,7 +248,7 @@
 {#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
 
 <section class="h">
-<div class="hang {face}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
+<div class="hang {face}" class:club={!!club} class:ink={!!club?.ink} style={lookVars(face) + halo} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" bind:this={strap} aria-hidden="true"><span>{STRAP[face]}</span></div>
     <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
@@ -251,7 +266,7 @@
         {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
         {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
-          <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
+          <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>
@@ -303,7 +318,7 @@
   .prep { position: absolute; inset: 0; z-index: -1; overflow: hidden; visibility: hidden; pointer-events: none; contain: strict; }
   .prep :global(*) { animation: none !important; }
   .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
-  .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
+  .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); --sh: 8, 12, 34; display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
   /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
   .strap { position: absolute; top: -52px; left: 50%; margin-left: -13px; width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
@@ -364,8 +379,11 @@
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
   .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
-  /* a soft shadow under the light text on every look's art (owner, Nov 10: hard to read); a look sets its own below */
-  .id { display: block; flex: 1; min-width: 0; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 0, 0, 0.35); }
+  /* a halo under the text on every look's art (owner, Nov 10: hard to read; Nov 18: better still): four soft layers in
+     the look's own dark (--sh), a hairline round the letters out to a wide one that dims the art just behind the lines;
+     black read as a drop shadow, a patch behind the column as a grey box. Dark letters (.ink): the card's paper, tighter */
+  .id { display: block; flex: 1; min-width: 0;
+    text-shadow: 0 0 1px rgba(var(--sh), 0.6), 0 1px 2px rgba(var(--sh), 0.6), 0 0 6px rgba(var(--sh), 0.6), 0 0 16px rgba(var(--sh), 0.5); }
   .nm, .id > .role { padding-right: 54px; } /* the medallion: 14 + 52 in from the edge, less the row's 18 px, and a gap */
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
   .nick, .role, .meta { display: block; }
@@ -376,7 +394,7 @@
   .seal { flex: none; display: inline-flex; padding: 10px; margin: -10px; transition: transform var(--t-fast) var(--ease); } /* a 39 px target */
   .seal:active { transform: scale(0.88); }
   .role { font: 760 10.5px/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; }
-  .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
+  .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.8); }
   .meta.nick { margin-top: 1px; font-weight: 650; }
   .top.mine .nm { font-size: 20px; }
   @media (max-width: 359px) { .nm { font-size: 20px; } }
@@ -399,15 +417,18 @@
   .faces .strap span { color: #fff; }
   /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  /* a soft shadow under the text where the art runs behind it (owner, Oct 31: a dark patch behind the column was crude) */
-  .studex .id { text-shadow: 0 1px 2px rgba(6, 18, 48, 0.6), 0 0 14px rgba(6, 18, 48, 0.55); }
-  .moments .id { text-shadow: 0 1px 2px rgba(40, 16, 8, 0.6), 0 0 14px rgba(40, 16, 8, 0.55); }
+  /* the halo in the look's own dark (owner, Oct 31: a dark patch behind the column was crude) */
+  .studex { --sh: 6, 18, 48; }
+  .moments { --sh: 40, 16, 8; }
+  .cheer { --sh: 14, 15, 34; }
+  .knights { --sh: 6, 16, 42; }
+  .faces { --sh: 0, 0, 0; }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   /* SOWER, the creator's alone (ui/SowerArt, lib/awards.ts SOWER): his photo's graphite and white paper */
   .sower { --role: rgb(192, 193, 190); }
   .sower .meta { color: rgba(232, 232, 231, 0.7); }
-  .sower .id { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.6), 0 0 14px rgba(14, 14, 14, 0.5); } /* over the print's halftone */
+  .sower { --sh: 14, 14, 14; } /* over the print's halftone */
   .sower .badge { background: rgb(30, 30, 30); }
   .sower .medal { right: 20px; } /* the seal between the hand's two raised fingers (gen-owner.py GAP) */
   /* the name's lines end before the hand's paper (its left edge 97 px in from the card's): a long name cuts, a long title wraps */
@@ -433,7 +454,7 @@
   .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
-  .club .id { text-shadow: var(--tsh); }
+  .ink .id { text-shadow: 0 0 2px rgba(var(--sh), 0.95), 0 0 7px rgba(var(--sh), 0.9), 0 0 14px rgba(var(--sh), 0.7); }
   .club .meta { color: var(--ink2); }
   /* JCC's sakura from their final PSD (round 8, .claude/reports/club-lanyards/cut-jcc-r8.py): one scale, 0.2 px per art px
      (at 375 px the card is their canvas), each piece pinned where their canvas has it: the photo's at the photo's centre
@@ -445,7 +466,7 @@
   .jl { left: -16px; top: -9.6px; width: 80px; height: 45.8px; }
   .jr { right: -14px; top: -80px; width: 122.4px; height: 123.8px; }
   /* the name over the petals, a halo of the card's pink round its letters so a flower behind them steps back */
-  .japanesecultureclub .id { position: relative; z-index: 2; text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); }
+  .japanesecultureclub .id { position: relative; z-index: 2; }
   .japanesecultureclub .medal { z-index: 3; } /* and the medallion over the name's box (it took the medallion's taps) */
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
