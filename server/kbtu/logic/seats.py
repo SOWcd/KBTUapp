@@ -771,7 +771,8 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     if r and (e["status"] != "published" or r["status"] == "hold" and r["hold_until"] < core.now()):
         r = None  # cancelled since, or the hold ran out while the file was read (OCR): the waitlist's seat
     if r and r["status"] == "going":
-        old = one(con, "SELECT * FROM receipts WHERE registration_id = ? AND status = 'accepted' AND reviewed_at IS NULL ORDER BY id DESC", r["id"])
+        old = one(con, """SELECT * FROM receipts WHERE id = (SELECT MAX(id) FROM receipts WHERE registration_id = ?)
+            AND status = 'accepted' AND reviewed_at IS NULL""", r["id"])
         if not old or (e["ends_at"] or e["starts_at"] + 3 * 3600) < core.now():
             r = None
         elif one(con, "SELECT COUNT(*) FROM receipt_replaced WHERE registration_id = ?", r["id"])[0] >= RECEIPT_TRIES:
@@ -783,8 +784,8 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
 
 def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None, via: str = "app") -> tuple[dict, list[str]]:
     """The receipt is in (§4.3), from the app or the bot: the seat becomes a ticket at once. What OCR read off it
-    (receipt.py; None = OCR didn't run) only raises flags (what isn't a receipt at all never gets here) the organizer sees first, and the
-    student too (my.receiptFlags), who may then send another file in its place (_receipt_slot, RECEIPT_TRIES times).
+    (receipt.py; None = OCR didn't run) raises flags the organizer and student see (my.receiptFlags). Only a fully
+    read, matching receipt is checked by the app; the others may be replaced (_receipt_slot, RECEIPT_TRIES times).
     Returns the card and the replaced picture's path, for the caller to drop from disk once this is committed."""
     with tx(con):
         r, e, old = _receipt_slot(con, v, eid)
@@ -797,11 +798,14 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
             con.execute("DELETE FROM files WHERE id = ? AND NOT EXISTS (SELECT 1 FROM receipts WHERE file_id = ?)", (old["file_id"], old["file_id"]))
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
+        reviewed_at = core.now() if _receipt_clean(con, e, saved["sha256"], read, flags) else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
-        con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (r["id"], fid, via, got.get("amount"), got.get("no"), got.get("sender"), got.get("recipient"),
-                                                      got.get("paid_at"), flags, core.now()))
+        cid = con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, reviewed_at, reviewed_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""", (r["id"], fid, via, got.get("amount"), got.get("no"), got.get("sender"), got.get("recipient"),
+                                                            got.get("paid_at"), flags, reviewed_at, core.now())).lastrowid
+        if reviewed_at is not None:
+            con.execute("INSERT INTO receipt_auto_checks (receipt_id) VALUES (?)", (cid,))
         if not old:
             con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE id = ?", (core.now(), r["id"]))
             evteams.paid(con, r["id"])  # the team its invite link was for, if it still has room
@@ -836,6 +840,17 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     return ",".join(out)
 
 
+def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:
+    """Auto-review requires every essential field, not just no flags. Sender isn't essential (others may pay).
+    The flags already check the payee and duplicates; this seat's replaced files and numbers also aren't new.
+    A payee typed as a first name alone matches any namesake (receipt.same_person skips the initial): a person looks."""
+    return bool(read and flags == "" and e["price"] and read.get("amount") == e["price"]
+                and read.get("recipient") and e["pay_to_name"] and len(e["pay_to_name"].split()) > 1
+                and read.get("no") and read.get("paid_at")
+                and e["created_at"] <= read["paid_at"] <= core.now()
+                and not one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? OR sha256 = ?", read["no"], sha))
+
+
 def receipt_path(con, v: Viewer, rid: int) -> str:
     """A receipt's image is private (§4.3): its sender, the event's Head+ and the admin see it."""
     c = one(con, """SELECT f.path, r.user_id, e.org_id FROM receipts c JOIN files f ON f.id = c.file_id
@@ -858,6 +873,7 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
         if c["status"] == "rejected":
             return
         con.execute("UPDATE receipts SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?", ("rejected" if reject else "accepted", v.id, core.now(), rid))
+        con.execute("DELETE FROM receipt_auto_checks WHERE receipt_id = ?", (rid,))
         if reject:
             log_action(con, v.id, "receipt_reject", f"receipt:{rid}")
             # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a

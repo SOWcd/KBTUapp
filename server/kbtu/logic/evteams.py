@@ -227,7 +227,7 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
             "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"]), "off": bool(p["off"])} for p in solo], "unchecked": unchecked}
 
 
-# a paid registration the organizer checked: a free seat, or its latest receipt reviewed and accepted (r: registrations)
+# a checked paid registration: a free seat, or its latest receipt accepted and reviewed by the app or a person (r: registrations)
 _CHECKED = """r.free = 1 OR EXISTS (SELECT 1 FROM receipts c WHERE c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
     AND c.status = 'accepted' AND c.reviewed_at IS NOT NULL)"""
 

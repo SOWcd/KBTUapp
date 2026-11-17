@@ -1542,6 +1542,7 @@ const en: Dict = {
   'rc.rejectText': "The ticket stops working and the seat goes to the next person. The bot asks the student to contact you. Any money that came, you return yourselves.",
   'rc.rejected': "Receipt rejected",
   'rc.passed': "Marked as right",
+  'rc.auto': "Checked by the app",
   'rc.compare': "Check it against your Kaspi history: the sum, the name and the time.",
   'rc.flag.duplicate': "This receipt was sent before",
   'rc.flag.amount_short': "Less than the price",

@@ -1973,6 +1973,10 @@ MIGRATIONS: list[tuple[int, str]] = [
         JOIN files x ON x.path = f.path AND x.kind = 'event_cover' AND x.owner_id IS NULL WHERE a.event_id = events.id ORDER BY x.id LIMIT 1)
     WHERE status = 'draft' AND updated_at <= created_at + 1 AND hidden_at IS NULL AND cover_file_id IS NULL
       AND id IN (SELECT a.event_id FROM auto_events a JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL WHERE p.photo_file_id IS NOT NULL);"""),
+    # NULL reviewed_by also follows deletion of a human reviewer. Keep app provenance independently, without backfill.
+    (187, """CREATE TABLE IF NOT EXISTS receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
+      receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
+    ) STRICT;"""),
 ]
 
 
