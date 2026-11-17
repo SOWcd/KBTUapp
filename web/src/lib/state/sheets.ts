@@ -21,6 +21,8 @@ export function copyCap(): CapCopy | null {
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
+/** where KRI was opened from (the nav's corner button): its sheet opens out of that circle */
+export const kriFrom: { at: { x: number; y: number; r: number } | null } = { at: null };
 /** open the map out of the control that was pressed (the iris), wherever that control lives */
 export function openMapFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();

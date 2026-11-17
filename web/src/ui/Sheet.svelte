@@ -35,8 +35,9 @@
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
   type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
-    children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold }: Props = $props();
+    children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void;
+    iris?: { x: number; y: number; r: number } | null }; // opened out of this circle (the nav's corner button) instead of the rise
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold, iris = null }: Props = $props();
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
   // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
   const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
@@ -62,7 +63,14 @@
   // the first call comes after the browser's own layout and before the first paint: the rise starts there, with the
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
-    const h = panel.getBoundingClientRect().height, dh = h - height;
+    const box = panel.getBoundingClientRect(), h = box.height, dh = h - height;
+    if (!lift && iris && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // the map's iris: the sheet is in place at once and a circle opens over it from the button pressed
+      const x = iris.x - box.left, y = iris.y - box.top, far = Math.hypot(Math.max(x, box.width - x), Math.max(y, h - y));
+      height = h; lift = panel.animate({ clipPath: [`circle(${iris.r}px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] }, { duration: 520, easing: 'cubic-bezier(.32, .8, .3, 1)' });
+      if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));
+      return;
+    }
     if (!lift) {
       height = h; lift = panel.animate([{ transform: `translate3d(0,${h}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion());
       if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));

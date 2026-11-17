@@ -8,7 +8,7 @@
   import MapIcon from '@lucide/svelte/icons/map';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { kriCorner } from '../lib/state/session.svelte';
-  import { sheets, openMapFrom } from '../lib/state/sheets';
+  import { sheets, openMapFrom, kriFrom } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
@@ -52,7 +52,9 @@
   const warm = () => { void (kri ? import('../screens/assistant/Assistant.svelte') : import('../screens/map/CampusMap.svelte')).catch(() => {}); };
   function corner(e: MouseEvent) {
     if (!kri) return openMap(e);
-    give(e.currentTarget as HTMLElement);
+    const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
+    kriFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    give(b);
     sheets.assistant();
   }
   function pick(i: number) { if (drag?.on) return; goTab(tabs[i]); }
