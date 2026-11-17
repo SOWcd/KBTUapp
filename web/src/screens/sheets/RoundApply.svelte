@@ -181,7 +181,7 @@
           {#each days as [day, list] (day)}
             <!-- engine: ui/Row could hold a wrapping row of Chips under its title (a day's free times) -->
             <div class="kb-row ivday"><span class="dl">{day}</span>
-              <div class="chips">{#each list as s (s.id)}<Chip selected={s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
+              <div class="chips">{#each list as s (s.id)}<Chip selected={!!s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
           {/each}
           <Row tone="action" title={t('cast.ivNothing')} onclick={nothingFits} />
           {#if r.mine.slot}<Row tone="action" title={t('cast.ivDrop')} onclick={() => take(null)} />{/if}

@@ -3433,6 +3433,11 @@ def test_casting(env):
     assert c.get(f"/api/rounds/{rid}/slots", headers=tma(10)).status_code == 403                              # not invited yet
     assert c.post(f"/api/rounds/{rid}/invite", headers=tma(21)).json() == {"invited": 1}                      # Ann only: next
     assert c.get("/api/orgs/1/round", headers=tma(10)).json()["mine"]["invited"]
+    w = c.post(f"/api/rounds/{rid}/slots", headers=tma(21), json={"date": day, "from": "17:00", "to": "21:00", "minutes": 240, "capacity": 500}).json()[3]
+    took = c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": w["id"]})                   # an open window is booked like any time
+    assert took.status_code == 200 and [x["id"] for x in took.json() if x.get("mine")] == [w["id"]]
+    c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": None})
+    assert len(c.delete(f"/api/round-slots/{w['id']}", headers=tma(21)).json()) == 3
     mine = c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": got[1]["id"]}).json()
     assert [x["id"] for x in mine if x.get("mine")] == [got[1]["id"]]
     refs = [x[0] for x in con.execute("SELECT ref FROM bot_outbox WHERE kind = 'round_iv_remind' AND sent_at IS NULL")]
