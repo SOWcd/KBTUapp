@@ -1865,7 +1865,16 @@ MIGRATIONS: list[tuple[int, str]] = [
       gives_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
       PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS santa_people_user ON santa_people (user_id);
-    CREATE INDEX IF NOT EXISTS santa_people_to ON santa_people (gives_to);"""),
+    CREATE INDEX IF NOT EXISTS santa_people_to ON santa_people (gives_to);"""
+     # a seat lost any way (cancelled, removed, a rejected receipt, the row deleted) takes the person out of the game
+     # for good, in the same transaction: their Santa gives to their person, their row goes. A seat given back later
+     # (a walk-in at the door) brings no Santa membership back, so a relink is never undone
+     + "".join(f"""
+    CREATE TRIGGER IF NOT EXISTS santa_left_{name} AFTER {op} ON registrations WHEN OLD.status = 'going'{when} BEGIN
+      UPDATE santa_people SET gives_to = (SELECT gives_to FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id)
+        WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
+      DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
+    END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
 ]
 
 

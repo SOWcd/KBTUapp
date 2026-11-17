@@ -82,7 +82,7 @@
       const x = await api.santaDraw(id), c = eventById(id);
       if (c) { c.santa = x.santa; c.regUntil = x.regUntil; }
       studioChanged(); haptic.ok(); say(t('santa.done'), 'party_popper_3d');
-    } catch (err) { haptic.error(); say(t(err instanceof ApiErr && err.message === 'few' ? 'santa.few' : 'common.error'), 'warning_3d'); }
+    } catch (err) { haptic.error(); say(t(err instanceof ApiErr && err.message === 'few' ? 'santa.few' : err instanceof ApiErr && err.message === 'holds' ? 'santa.holds' : 'common.error'), 'warning_3d'); }
   }
   // the team's session (server checkin.crew): who may start a club's session, in the event's own club; its state read
   // with the page and every 10 s (it runs in the page above this one)

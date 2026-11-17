@@ -3257,6 +3257,8 @@ const en: Dict = {
   'santa.drawText': "Everyone learns who they give to. Sign-up closes and it can't be redone.",
   'santa.drawGo': "Draw",
   'santa.few': "At least 3 participants needed",
+  'santa.locked': "Secret Santa can be turned on only before anyone signs up",
+  'santa.holds': "Someone is still paying for a seat. Wait for the payments",
   'santa.done': "The draw is done",
 };
 

@@ -551,6 +551,8 @@ def promote(con, e: sqlite3.Row) -> None:
     takes one of a paid event's free seats while any are left (§4.3)."""
     if e["status"] != "published" or end_of(e) <= core.now():
         return  # a cancelled or finished event hands out no seats (a hold to pay for nothing)
+    if one(con, "SELECT 1 FROM santa_events WHERE event_id = ? AND drawn_at IS NOT NULL", e["id"]):
+        return  # Secret Santa is drawn: nobody new comes in, they would have no Santa (santa.py)
     while e["seats"] is None or taken(con, e["id"]) < e["seats"]:
         nxt = one(con, "SELECT * FROM registrations WHERE event_id = ? AND status = 'waitlist' ORDER BY waitlisted_at, id LIMIT 1", e["id"])
         if not nxt:

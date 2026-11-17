@@ -1,6 +1,7 @@
 """Secret Santa on an event (owner, Nov 17): the editor's switch; signing up asks a wishlist (its line under the field
 is the feature's own consent: name and wishlist go to one participant); the organizer draws once, from three people
-going: one random cycle, so nobody gives to themselves and everyone gives and receives once; sign-up closes with it.
+going: one random cycle, so nobody gives to themselves and everyone gives and receives once; sign-up closes with it
+(no promotion from the waitlist either). Who loses their seat is out for good: db.py's triggers splice them from the ring.
 Secrecy is the point: a pair and a wishlist are read in one place, view(), by the giver alone. No list, export, log or
 audit row has them (the wishlist lives here, not in registrations.answers, which the organizers read)."""
 from __future__ import annotations
@@ -33,6 +34,8 @@ def set_on(con, eid: int, on: object) -> None:
         raise ApiError("conflict", "santa")
     if s:
         con.execute("DELETE FROM santa_events WHERE event_id = ?", (eid,))  # its people cascade
+    elif one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
+        raise ApiError("conflict", "santa_signed")  # those in wrote no wishlist and can't any more (as needs_phone)
     else:
         con.execute("INSERT INTO santa_events (event_id) VALUES (?)", (eid,))
 
@@ -59,6 +62,8 @@ def draw(con, v: Viewer, eid: int) -> dict:
             raise ApiError("not_found")
         if s["drawn_at"]:
             raise ApiError("conflict", "drawn")
+        if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status = 'hold'", eid):
+            raise ApiError("conflict", "holds")  # a seat being paid for would land in a drawn game with no Santa
         ids = [r[0] for r in rows(con, _GOING, eid)]
         if len(ids) < MIN:
             raise ApiError("conflict", "few")
@@ -67,7 +72,8 @@ def draw(con, v: Viewer, eid: int) -> dict:
         secrets.SystemRandom().shuffle(ids)  # a shuffled ring: a uniformly random single cycle
         for a, b in zip(ids, ids[1:] + ids[:1]):
             con.execute("UPDATE santa_people SET gives_to = ? WHERE event_id = ? AND user_id = ?", (b, eid, a))
-            notify(con, a, "santa_drawn", f"event:{eid}")
+        for uid in sorted(ids):  # by user id, never in the ring's order: the outbox's ids would spell out every pair
+            notify(con, uid, "santa_drawn", f"event:{eid}")
         con.execute("UPDATE santa_events SET drawn_at = ? WHERE event_id = ?", (now(), eid))
         # the app shows "Registration closed" (wish() refuses whatever the deadline says later); updated_at: lists' cached cards see the draw at once
         shut = e["reg_until"] if e["reg_until"] and e["reg_until"] <= now() else min(now(), e["starts_at"])
@@ -76,17 +82,10 @@ def draw(con, v: Viewer, eid: int) -> dict:
 
 
 def _to(con, eid: int, uid: int) -> dict | None:
-    """Whom I give to: my person, or, if they stepped out since (any way a seat is lost), theirs, and so on round the
-    ring, so nobody still in is left without a Santa. None: nobody is left but me."""
-    ring = {r["user_id"]: r for r in rows(con, """SELECT p.user_id, p.gives_to, p.wish, r.status IS 'going' AS here FROM santa_people p
-        LEFT JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id WHERE p.event_id = ?""", eid)}
-    nxt, seen = ring[uid]["gives_to"], {uid}
-    while nxt in ring and nxt not in seen:
-        if ring[nxt]["here"]:
-            return {"person": person_ref(one(con, PERSON + " WHERE u.id = ?", nxt)), "wish": ring[nxt]["wish"]}
-        seen.add(nxt)
-        nxt = ring[nxt]["gives_to"]
-    return None
+    """Whom I give to. None: everyone else left (the ring closed on me)."""
+    r = one(con, "SELECT p.user_id, p.wish FROM santa_people me JOIN santa_people p ON p.event_id = me.event_id AND p.user_id = me.gives_to"
+                 " WHERE me.event_id = ? AND me.user_id = ? AND me.gives_to != me.user_id", eid, uid)
+    return {"person": person_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])), "wish": r["wish"]} if r else None
 
 
 def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
@@ -104,7 +103,8 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
 
 
 def gone(con, uid: int) -> None:
-    """An account being deleted (account.delete_me, before its rows go): their Santa gives to their person instead."""
+    """An account being deleted (account.delete_me, before its rows go): their Santa gives to their person instead
+    (a seat already lost did this through the triggers; this covers whatever row is left)."""
     con.execute("""UPDATE santa_people SET gives_to = (SELECT x.gives_to FROM santa_people x WHERE x.event_id = santa_people.event_id AND x.user_id = ?)
         WHERE gives_to = ?""", (uid, uid))
 

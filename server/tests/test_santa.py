@@ -81,6 +81,8 @@ def test_sign_up_draw_and_who_reads_what(env):
     # the bot tells each one once, a template into the event
     sent = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'santa_drawn'").fetchall()
     assert sorted(m["user_id"] for m in sent) == sorted(_uid(con, tg) for tg in PLAYERS[:4])
+    order = [m["user_id"] for m in sorted(sent, key=lambda m: m["id"])]
+    assert order == sorted(order)  # queued by user id: the outbox's ids don't spell out the ring (review, P1)
     text, _, start = bot._render(con, sent[0])
     assert start == f"ev_{eid}" and "Testov" not in text and "wish of" not in text
 
@@ -95,8 +97,38 @@ def test_leavers_are_passed_over(env):
     c.delete(f"/api/events/{eid}/registration", headers=tma(b))  # b steps out: a gives to b's person
     assert "mySanta" not in _page(c, eid, b)
     assert _gives(c, con, eid, (a, x, y)) == {a: x, x: y, y: a}
+    # out for good (review, P2): a seat given back (a walk-in at the door) brings no Santa back and undoes no relink
+    con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL WHERE event_id = ? AND user_id = ?", (eid, _uid(con, b)))
+    assert _page(c, eid, b)["my"]["status"] == "going" and "mySanta" not in _page(c, eid, b)
+    assert _gives(c, con, eid, (a, x, y)) == {a: x, x: y, y: a}
     delete_now(c, cfg, tma(x))  # x deletes the account: a gives to x's person
     assert con.execute("SELECT 1 FROM santa_people WHERE user_id = ? OR gives_to = ?", (_uid(con, x) or 0,) * 2).fetchone() is None
     assert _gives(c, con, eid, (a, y)) == {a: y, y: a}
     c.delete(f"/api/events/{eid}/registration", headers=tma(y))
     assert _page(c, eid, a)["mySanta"]["to"] is None  # alone: "ask the organizer"
+
+
+def test_nobody_lands_in_a_drawn_game(env):
+    """Review, P2: no draw over a seat still being paid for; no promotion from the waitlist after it; no switching it
+    on over people already signed up."""
+    c, cfg = env
+    con = _club(c, cfg)
+    login(c, 13, "p13")
+    eid = _event(c, santa=True, seats=3)
+    for tg in PLAYERS[:4]:
+        _go(c, eid, tg, f"wish of {tg}")
+    assert con.execute("SELECT status FROM registrations WHERE user_id = ?", (_uid(con, 13),)).fetchone()[0] == "waitlist"
+    con.execute("UPDATE registrations SET status = 'hold' WHERE user_id = ?", (_uid(con, 13),))
+    assert _draw(c, eid).json()["message"] == "holds"
+    con.execute("UPDATE registrations SET status = 'waitlist' WHERE user_id = ?", (_uid(con, 13),))
+    assert _draw(c, eid).status_code == 200
+    c.delete(f"/api/events/{eid}/registration", headers=tma(10))
+    assert con.execute("SELECT status FROM registrations WHERE user_id = ?", (_uid(con, 13),)).fetchone()[0] == "waitlist"  # the seat stays empty
+    assert _gives(c, con, eid, (11, 12)) == {11: 12, 12: 11}
+    plain = _event(c)
+    c.post(f"/api/events/{plain}/registration", headers=tma(10), json={})
+    body = {"title": "Case", "place": "Hall", "startsAt": _page(c, plain, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
+    r = c.patch(f"/api/events/{plain}", headers=tma(20), json={**body, "santa": True})
+    assert r.status_code == 409 and r.json()["message"] == "santa_signed"
+    c.delete(f"/api/events/{plain}/registration", headers=tma(10))
+    assert c.patch(f"/api/events/{plain}", headers=tma(20), json={**body, "santa": True}).json()["santa"] == {"drawn": False}
