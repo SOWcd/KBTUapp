@@ -62,6 +62,9 @@ export function pickHi(now: number, name: string, next: Next | null, lastOpen: n
 const get = (k: string): number | null => { try { return Number(localStorage.getItem(k)) || null; } catch { return null; } };
 const put = (k: string, v: number) => { try { localStorage.setItem(k, String(v)); } catch { /* private mode: greet every time */ } };
 
+/** True the first time it's asked about this key on this phone (a greeting said once). */
+export function once(k: string): boolean { if (get(k)) return false; put(k, 1); return true; }
+
 let prevOpen: number | null | undefined; // the launch before this one, read once per launch
 
 /** Records this launch (every launch, a deep link's too) and keeps the one before it for the absence check. */

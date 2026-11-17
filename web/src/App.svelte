@@ -14,7 +14,7 @@
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
-  import { hiNow, nextUp, opened } from './lib/greet';
+  import { hiNow, nextUp, once, opened } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
@@ -430,7 +430,15 @@
 
   // ---- greeting ----
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
+  // an office's own people (DMP) are greeted as the team, once per phone: at the link that let them in, or the launch after
+  function teamHi(): boolean {
+    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org;
+    if (!o || !once('kb-hi-o' + o.id)) return false;
+    say(t('say.hi.team', { org: o.abbr ?? o.name }), 'waving_hand_3d_default');
+    return true;
+  }
   function greet() {
+    if (teamHi()) return;
     const now = nowTs(), first = session.me?.student?.firstName;
     const slots = classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(dayNo(now), x.c)));
     const next = nextUp(now, slots, data.events, (c) => subjectOf(c) + (c.room ? ' · ' + c.room : ''), classEmoji);
@@ -745,7 +753,7 @@
       try {
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
-        haptic.ok(); say(t('join.linkDone', { club: o.name }), 'party_popper_3d');
+        haptic.ok(); if (!teamHi()) say(t('join.linkDone', { club: o.name }), 'party_popper_3d');
         sheets.club(o.id);
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); sheets.club(org); } // used or old: the club, to apply there
     });
@@ -759,7 +767,7 @@
       try {
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
-        haptic.ok(); burst(); say(t('pres.done', { club: o.name }), 'party_popper_3d');
+        haptic.ok(); burst(); if (!teamHi()) say(t('pres.done', { club: o.name }), 'party_popper_3d');
         toClub(o.id);
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
     });

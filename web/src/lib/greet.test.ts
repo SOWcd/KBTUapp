@@ -62,3 +62,11 @@ test('at most once per three hours', () => {
   expect(key(now, null, null, now - EVERY)).toBe('say.hi.day');
   expect(key(now, null, null, now + 3600)).toBe('say.hi.day'); // a clock moved back doesn't silence it
 });
+
+test('a once-greeting is said one time per phone', async () => {
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+  const { once } = await import('./greet');
+  expect([once('kb-hi-o21'), once('kb-hi-o21'), once('kb-hi-o5')]).toEqual([true, false, true]);
+  vi.unstubAllGlobals();
+});
