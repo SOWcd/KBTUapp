@@ -397,17 +397,19 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
     if not o:
         raise ApiError("not_found")
     # a row of the team acts by the app's own user id, which never moves to someone else (an @username can: review
-    # Nov 17), and only on someone who is in this club; a hand-typed @username or Telegram ID finds anyone
-    uid = body.get("userId")
-    if uid is not None:
-        if isinstance(uid, bool) or not isinstance(uid, int) or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
-            raise ApiError("not_found", "who")
-    else:
-        u = find_user(con, str(body.get("who") or ""))
-        if not u:
-            raise ApiError("not_found", "who")
-        uid = u["id"]
-    set_role(con, v.id, uid, oid, str(body.get("role") or ""), "app")
+    # Nov 17), and only on someone who is in this club; a hand-typed @username or Telegram ID finds anyone.
+    # The look and the change under one write lock: someone removed in between isn't put back by the row's action
+    with tx(con):
+        uid = body.get("userId")
+        if uid is not None:
+            if isinstance(uid, bool) or not isinstance(uid, int) or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
+                raise ApiError("not_found", "who")
+        else:
+            u = find_user(con, str(body.get("who") or ""))
+            if not u:
+                raise ApiError("not_found", "who")
+            uid = u["id"]
+        set_role(con, v.id, uid, oid, str(body.get("role") or ""), "app")
     return _admin_org(con, o)
 
 

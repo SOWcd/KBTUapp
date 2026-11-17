@@ -2,6 +2,7 @@
 // opens and shared by its search, its list and an organization's page, so a change on the page shows in the list.
 import { api, type AdminOrg, type Id } from '../api';
 import { t, tn } from '../i18n/index.svelte';
+import { onStaffLoss, staffStill } from './staffAccess.svelte';
 
 const KEY = 'adm.recentOrgs';
 function read(): Id[] { try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); } catch { return []; } }
@@ -16,15 +17,23 @@ let loading: Promise<void> | null = null;
  *  nothing to show is `failed` (a retry), never an empty list. */
 export function loadAdminOrgs(): Promise<void> {
   return (loading ??= (async () => {
-    const at = rev;
+    const at = rev, still = staffStill();
     let again = false;
     try {
       const l = await api.adminOrgs();
-      if (at === rev) { adminOrgs.list = l; adminOrgs.failed = false; } else again = true;
-    } catch { if (at === rev) adminOrgs.failed = !adminOrgs.list; }
+      if (!still()) { /* the role went meanwhile: nothing is kept */ }
+      else if (at === rev) { adminOrgs.list = l; adminOrgs.failed = false; } else again = true;
+    } catch { if (at === rev && still()) adminOrgs.failed = !adminOrgs.list; }
     loading = null;
     if (again) await loadAdminOrgs();
   })());
+}
+
+/** Something changed the clubs on the server (a decision in the queue, an Undo): a list asked for before it is old,
+ *  the one in flight included, so it is asked again. */
+export function refreshAdminOrgs(): Promise<void> {
+  rev++;
+  return loadAdminOrgs();
 }
 
 /** One of them as the server has it now (a role given, hidden, a new club). */
@@ -43,6 +52,7 @@ export function clearAdminOrgs(): void {
   rev++;
   adminOrgs.list = null; adminOrgs.failed = false;
 }
+onStaffLoss((has) => { if (!has('admin')) clearAdminOrgs(); });
 
 /** The ones opened last come first (owner, Nov 16: running an event with one club, he searched it every time); this device only. */
 export function seen(id: Id): void {

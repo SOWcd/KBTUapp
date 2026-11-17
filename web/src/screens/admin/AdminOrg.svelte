@@ -9,6 +9,7 @@
   import { api, ApiErr, type AdminEvent, type AdminMember, type AdminOrg, type OrgRef, type OrgRole } from '../../lib/api';
   import { onDestroy } from 'svelte';
   import { adminOrgs, loadAdminOrgs, patchOrg, putOrg, seen } from '../../lib/state/adminOrgs.svelte';
+  import { staffStill } from '../../lib/state/staffAccess.svelte';
   import { openAsCreator } from '../../lib/state/creator.svelte';
   import { loadAfisha, loadInbox, phrase } from '../../lib/state/data.svelte';
   import { loadMe, session } from '../../lib/state/session.svelte';
@@ -58,7 +59,9 @@
     const ask = on ? { title: t('reg.officialOnAsk', { name: x.name }), ok: t('reg.officialOnOk') } : { title: t('reg.officialOffAsk', { name: x.name }), ok: t('reg.officialOffOk') };
     try {
       if (!(await sheets.ask({ ...ask, cancel: t('common.cancel'), danger: !on }))) return;
+      const still = staffStill();
       const now = (await api.setOfficial(x.id, on)).official;
+      if (!still()) return;
       patchOrg(x.id, () => ({ official: now })); // into the club as it is now: a role given meanwhile stays
       void loadAfisha(); // Clubs shows the ✓ at once
       haptic.ok(); say(phrase(now ? 'reg.officialOn' : 'reg.officialOff'), now ? 'party_popper_3d' : 'waving_hand_3d_default');
@@ -75,7 +78,10 @@
     if (r === 'none' && !(await sheets.ask({ title: t('adm.removeAsk', { name, club: x.name }), ok: t('adm.remove'), cancel: t('common.cancel'), danger: true }))) return;
     busy = true;
     try {
-      putOrg(await api.adminSetRole(x.id, whom, r));
+      const still = staffStill();
+      const fresh = await api.adminSetRole(x.id, whom, r);
+      if (!still()) return; // the role went while it was on its way: nothing of the club is put back
+      putOrg(fresh);
       haptic.ok(); say(t('adm.done', { who: name, role: roleName(r) }), 'raising_hands_3d_default');
       who = ''; adding = false;
       void loadMe(); // in case it was me
@@ -116,7 +122,9 @@
   async function revoke(x: AdminOrg, slug: string) {
     if (!(await sheets.ask({ title: t('adm.linkAsk', { link: `${location.host}/${slug}` }), ok: t('adm.linkGo'), cancel: t('tk.keep'), danger: true }))) return;
     try {
+      const still = staffStill();
       await api.dropShortLink(slug);
+      if (!still()) return;
       patchOrg(x.id, (now) => ({ shortLinks: now.shortLinks.filter((s) => s !== slug) }));
       haptic.warn();
     } catch (e) { oops(e); }
@@ -126,9 +134,11 @@
   // payments included). The confirm names what goes; hidden at once, gone in a day: Undo in the queue's Done ----
   let evOpen = $state(false), evs = $state<AdminEvent[] | null>(null), evFailed = $state(false);
   // read again on every opening (one made a moment ago, another admin's delete); the last list shows meanwhile
+  let evGen = 0; // a new read or a change here makes an older answer nobody's (a deleted event must not come back)
   function loadEvents() {
+    const g = ++evGen;
     evFailed = false;
-    api.adminOrgEvents(org.id).then((l) => (evs = l)).catch(() => (evFailed = true));
+    api.adminOrgEvents(org.id).then((l) => { if (g === evGen) evs = l; }).catch(() => { if (g === evGen) evFailed = true; });
   }
   function events() {
     haptic.select(); evOpen = !evOpen;
@@ -143,17 +153,19 @@
     const live = x.status === 'published' && (x.startsAt ?? 0) * 1000 > Date.now() && (x.people > 0 || x.paid > 0);
     if (live) {
       if (!(await sheets.ask({ title: t('adm.cancelFirst', { title: x.title }), text: t('adm.cancelFirstText'), ok: t('adm.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
-      try { await api.cancelEvent(x.id); evs = evs!.map((y) => (y.id === x.id ? { ...y, status: 'cancelled' } : y)); void loadAfisha(); }
+      try { await api.cancelEvent(x.id); evGen++; evs = evs!.map((y) => (y.id === x.id ? { ...y, status: 'cancelled' } : y)); void loadAfisha(); }
       catch (e) { oops(e); return; }
     }
     if (!(await sheets.ask({ title: t('adm.delAsk', { title: x.title }), text: t('adm.delText', n), ok: t('adm.delGo'), cancel: t('tk.keep'), danger: true }))) return;
     const before = evs;
+    evGen++;
     evs = evs!.filter((y) => y.id !== x.id);
     try {
       await api.adminDeleteEvent(x.id);
+      evGen++; // a read begun while the delete was on its way may still hold the event
       haptic.warn(); say(t('adm.evDeleted'), 'waving_hand_3d_default');
       void loadAfisha(); void loadInbox(); // its Undo is in Done
-    } catch (e) { evs = before; oops(e); }
+    } catch (e) { evs = before; oops(e); if (evOpen) loadEvents(); }
   }
 
   // hide, never delete (a lost phone must not wipe the clubs); back with one tap
@@ -161,7 +173,9 @@
     if (!x.hidden && !(await sheets.ask({ title: t('adm.hideAsk', { club: x.name }), text: t('adm.hideText'), ok: t('adm.hide'), cancel: t('tk.keep'), danger: true }))) return;
     busy = true;
     try {
+      const still = staffStill();
       const fresh = await api.adminHideOrg(x.id, !x.hidden);
+      if (!still()) return;
       putOrg(fresh);
       haptic.ok(); say(t(fresh.hidden ? 'adm.hidden' : 'adm.back'), 'waving_hand_3d_default');
       void loadAfisha();

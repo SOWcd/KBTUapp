@@ -8,6 +8,7 @@ import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
+import { staffStill, onStaffLoss } from './staffAccess.svelte';
 import { sheets } from './sheets';
 import { onTeam } from '../perms';
 import { haptic, requestWriteAccess } from '../tg';
@@ -308,23 +309,31 @@ export async function cancelCasting(p: Post): Promise<void> {
  *  numbers too (the app's start and Admin opening; not after each decision) */
 export async function loadInbox(withStats = false): Promise<void> {
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
-  if (withStats && session.me.role === 'admin') api.adminStats().then((s) => (data.adminStats = s)).catch(() => {});
+  const admin = staffStill('admin'), staff = staffStill('staff'); // an answer after the role went is not kept
+  if (withStats && session.me.role === 'admin') api.adminStats().then((s) => { if (admin()) data.adminStats = s; }).catch(() => {});
   if (withStats && !data.staffMutes) loadStaffMutes();
   try {
-    data.inbox = await api.inbox();
+    const inbox = await api.inbox();
+    if (!staff()) return;
+    data.inbox = inbox;
     if (session.me && session.me.counters.inbox !== data.inbox.items.length) session.me.counters.inbox = data.inbox.items.length;
   } catch { /* the list keeps what it had */ }
 }
 
 /** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
+onStaffLoss((has) => {
+  if (!has('admin')) data.adminStats = null;
+  if (!has('staff')) { data.inbox = null; data.staffMutes = null; }
+  else if (!has('admin')) { data.inbox = null; void loadInbox(); } // a moderator's queue, without the admin's cards
+});
 let muteTaps = 0;
 export const mutedTap = () => void muteTaps++;
 export function loadStaffMutes(): void {
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') return;
-  const at = muteTaps;
+  const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
-  api.staffMutes().then((l) => { if (muteTaps === at) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+  api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again

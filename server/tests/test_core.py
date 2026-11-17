@@ -824,6 +824,38 @@ def test_admin_clubs(env):
     assert school["official"] and logic.president_link(con, boss, school["id"])["token"]
 
 
+def test_admin_row_role_is_one_transaction(env, monkeypatch):
+    """A team row's action (userId) checks the membership and changes the role under one write lock: a removal from
+    another connection can't land between the two and be undone by the role's upsert."""
+    import dataclasses
+    import sqlite3
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}))))
+    who = lambda uid, first, username: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": first, "username": username}, BOT)}
+    A = who(20, "Owner", "owner")
+    c.get("/api/me", headers=A)
+    mid = c.get("/api/me", headers=who(22, "Next", "next_one")).json()["id"]
+    club = c.post("/api/admin/orgs", headers=A, json={"name": "Chess Club", "short": "ch", "emoji": "trophy_3d"}).json()
+    put = lambda body: c.put(f"/api/admin/orgs/{club['id']}/role", headers=A, json=body)
+    assert put({"who": "22", "role": "vice"}).status_code == 200
+    other = db.connect(cfg.db_path)
+    other.execute("PRAGMA busy_timeout = 0")
+    seen = []
+    real = logic.oversight.set_role
+
+    def racing(con, *a, **k):  # the moment between the membership check and the change: another connection tries to remove
+        seen.append(con.in_transaction)
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            other.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (club["id"], mid))
+        return real(con, *a, **k)
+    monkeypatch.setattr(logic.oversight, "set_role", racing)
+    assert put({"userId": mid, "role": "head"}).json()["team"][0]["role"] == "head" and seen == [True]
+    # once it is done the removal goes through, and the row's next action finds nobody to act on
+    other.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (club["id"], mid))
+    assert put({"userId": mid, "role": "head"}).json()["message"] == "who" and len(seen) == 1
+    assert c.get("/api/admin/orgs", headers=A).json()[0]["members"] == 0
+
+
 def test_attendees_csv(env):
     """The attendee file (SPEC §6): the club's Head+ only, Excel-friendly (BOM, ';'), a cell a spreadsheet would run
     as a formula defused, every export in the audit log."""

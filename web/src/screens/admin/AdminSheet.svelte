@@ -57,7 +57,10 @@
 
   // ---- the search: organizations and awards on the first key (held already), people and events a beat after the last
   let q = $state('');
-  const s = $derived(q.trim().toLowerCase().replace(/^@/, ''));
+  // the search is the admins' alone: a role stepping down to moderator with the sheet open leaves no query, no
+  // results and nothing hiding the queue
+  const s = $derived(admin ? q.trim().toLowerCase().replace(/^@/, '') : '');
+  $effect(() => { if (!admin) q = ''; });
   let people = $state<StaffRow[] | null>(null);
   let found = $state<{ events: EventCard[]; clubs: OrgRef[] } | null>(null);
   $effect(() => {
@@ -80,14 +83,14 @@
   const events = $derived(found?.events);
   // organizations: the admin's own list (hidden ones and offices too), the ones opened last first; until it is read,
   // the clubs the app holds
-  const all = $derived<OrgRef[]>(adminOrgs.list ?? data.orgs);
+  const all = $derived<OrgRef[]>((admin ? adminOrgs.list : null) ?? data.orgs);
   // what the server found too (a club approved a moment ago, a name the list doesn't hold): after the ones held
   const clubs = $derived.by(() => {
     if (!s) return [];
     const held = all.filter((o) => hit(o, s) || o.slug.includes(s)).sort(byRecent);
     return [...held, ...(found?.clubs ?? []).filter((o) => !held.some((h) => h.id === o.id))].slice(0, 8);
   });
-  const recent = $derived(adminOrgs.recent.map((id) => all.find((o) => o.id === id)).filter((o) => !!o).slice(0, 3));
+  const recent = $derived(!admin ? [] : adminOrgs.recent.map((id) => all.find((o) => o.id === id)).filter((o) => !!o).slice(0, 3));
   const awards = $derived(s ? CATALOG.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
   const line = (o: OrgRef) => ('team' in o ? [(o as AdminOrg).hidden ? t('adm.hiddenTag') : '', o.kind === 'school' ? t('adm.kindSchool') : '', orgLine(o as AdminOrg)].filter(Boolean).join(' · ') : undefined);
   const go = (f: () => unknown) => { haptic.tap(); f(); };

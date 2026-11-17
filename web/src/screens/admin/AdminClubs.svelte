@@ -6,6 +6,7 @@
   import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api, ApiErr, type AdminOrg } from '../../lib/api';
   import { adminOrgs, loadAdminOrgs, orgLine, putOrg } from '../../lib/state/adminOrgs.svelte';
+  import { staffStill } from '../../lib/state/staffAccess.svelte';
   import { loadAfisha } from '../../lib/state/data.svelte';
   import { open, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -45,8 +46,10 @@
   async function create(ev: Event) {
     ev.preventDefault();
     busy = true;
+    const still = staffStill();
     try {
       const o = await api.adminCreateOrg({ name: nc.name.trim(), short: initials(nc.name), emoji: nc.emoji, official: nc.official });
+      if (!still()) return;
       putOrg(o);
       adding = false; nc = { name: '', emoji: PICK_EMOJI[1], official: false };
       haptic.ok(); say(t('adm.created'), 'party_popper_3d');
