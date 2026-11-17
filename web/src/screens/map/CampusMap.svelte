@@ -201,13 +201,15 @@
    *  6.5 px tall, still under the plate), so a number is never seen twice. A value of both the zoom and a label's own
    *  data MapLibre reads at whole zooms only (between them it blends): Uni-Q's hand-over is by zoom alone */
   const ZS = [-1, 0, 1, 2, 3, 4].map((n) => Z0 + n);
-  const px = (z: number) => ['min', 250, ['*', ['get', 's'], widthAt(fr, z) / 1000]];
+  // owner, Nov 17: numbers that grew, shrank and dimmed with every pinch "look bad". A label now keeps to a reading size
+  // on screen (halls and named places a step bigger), as a city map's do: the plan's own size only between the two bounds
+  const px = (z: number) => ['max', ['case', ['<=', ['get', 'rank'], 1], 12.5, 10.5], ['min', ['case', ['<=', ['get', 'rank'], 1], 17, 14.5], ['*', ['get', 's'], widthAt(fr, z) / 1000]]];
   // the size by two stops round every zoom the map goes to: MapLibre sizes a label between the stops round its tile's
   // zoom and holds it past them, so stops a zoom apart froze labels of a tile kept from another zoom at a wrong size
   function wordSize() { return ['interpolate', ['exponential', 2], ['zoom'], ZS[0], px(ZS[0]), ZS[5], px(ZS[5])]; }
   function wordFade(): { 'text-opacity': unknown; 'icon-opacity': unknown } {
     if (ver === 'main') {
-      const by = (top: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 330), 0, zoomFor(FRAMES.main, 430), top, zoomFor(FRAMES.main, 720), top, zoomFor(FRAMES.main, 920), 0];
+      const by = (top: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 720), top, zoomFor(FRAMES.main, 920), 0];
       return { 'text-opacity': by(1), 'icon-opacity': by(0.92) };
     }
     // gone under 6 px, whole from 9 px (blended between whole zooms)
