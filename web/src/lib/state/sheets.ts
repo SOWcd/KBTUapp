@@ -162,8 +162,8 @@ export const sheets = {
   anthem: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
-  /** Admin → Clubs and schools; at: that club opened in the list (Admin's search) */
-  adminClubs: (_at?: Id) => {},
+  /** Admin → Clubs and schools: every organization by name */
+  adminClubs: () => {},
   adminChats: () => {},
   /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */
   adminForum: () => {},

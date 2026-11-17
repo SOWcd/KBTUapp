@@ -5,6 +5,7 @@
   // tick, this run's people below, each undoable) and Link (up
   // to N people for some days; sent as the bot's card). Under them its links with who used each, the owner's "everyone
   // checked in" (folded to one row), and who has it (a tap: their profile, or take it back).
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -30,6 +31,7 @@
 
   type Code = GrantItem['code'];
   let { overlay, award: a, onchange }: { overlay: Overlay; award: Manual; onchange?: () => void } = $props();
+  staffOnly(() => overlay);
   const owner = $derived(!!session.me?.founder);
   const fail = () => { haptic.error(); say(t('common.error'), 'warning_3d'); };
   // svelte-ignore state_referenced_locally

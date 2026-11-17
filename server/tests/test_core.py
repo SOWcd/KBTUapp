@@ -796,6 +796,17 @@ def test_admin_clubs(env):
     past = c.get(f"/api/users/{pid}", headers=P).json()["past"]
     assert [(x["org"]["id"], x["role"]) for x in past] == [(club["id"], None), (club["id"], None)]  # the role: to the club's team only
     assert [o["id"] for o in c.get("/api/admin/orgs", headers=A).json()] == [club["id"]]
+    # a row of the team acts by the app's user id: the @username it showed may be someone else's by now. Only on
+    # someone in this club (the one removed above is nobody's row), and written down like any role change
+    nid = team[0]["id"]
+    con.execute("UPDATE users SET tg_username = 'next_one' WHERE id = ?", (pid,))
+    con.execute("UPDATE users SET tg_username = 'renamed' WHERE id = ?", (nid,))
+    team = put({"userId": nid, "role": "head"}).json()["team"]
+    assert [(m["id"], m["username"], m["role"]) for m in team] == [(nid, "renamed", "head")]
+    assert put({"userId": pid, "role": "head"}).json()["message"] == "who" and put({"userId": True, "role": "head"}).status_code == 404
+    assert put({"userId": str(nid), "role": "head"}).status_code == 404 and put({"userId": nid, "role": "boss"}).status_code == 400
+    assert json.loads(con.execute("SELECT data FROM audit_log WHERE action = 'role_change' AND target = ? ORDER BY id DESC", (f"user:{nid}",)).fetchone()[0])["role"] == "head"
+    assert put({"userId": nid, "role": "president"}).json()["team"][0]["role"] == "president"
     # hide, never delete: gone for everyone but the admin's list, and back with one more tap
     hide = lambda on, h=A: c.put(f"/api/admin/orgs/{club['id']}/hidden", headers=h, json={"hidden": on})
     assert hide(True, P).status_code == 403
@@ -811,6 +822,38 @@ def test_admin_clubs(env):
     school = con.execute("SELECT id, official FROM orgs WHERE slug = 'site'").fetchone()
     boss = logic.Viewer(c.get("/api/me", headers=A).json()["id"], "admin", True)
     assert school["official"] and logic.president_link(con, boss, school["id"])["token"]
+
+
+def test_admin_row_role_is_one_transaction(env, monkeypatch):
+    """A team row's action (userId) checks the membership and changes the role under one write lock: a removal from
+    another connection can't land between the two and be undone by the role's upsert."""
+    import dataclasses
+    import sqlite3
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}))))
+    who = lambda uid, first, username: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": first, "username": username}, BOT)}
+    A = who(20, "Owner", "owner")
+    c.get("/api/me", headers=A)
+    mid = c.get("/api/me", headers=who(22, "Next", "next_one")).json()["id"]
+    club = c.post("/api/admin/orgs", headers=A, json={"name": "Chess Club", "short": "ch", "emoji": "trophy_3d"}).json()
+    put = lambda body: c.put(f"/api/admin/orgs/{club['id']}/role", headers=A, json=body)
+    assert put({"who": "22", "role": "vice"}).status_code == 200
+    other = db.connect(cfg.db_path)
+    other.execute("PRAGMA busy_timeout = 0")
+    seen = []
+    real = logic.oversight.set_role
+
+    def racing(con, *a, **k):  # the moment between the membership check and the change: another connection tries to remove
+        seen.append(con.in_transaction)
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            other.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (club["id"], mid))
+        return real(con, *a, **k)
+    monkeypatch.setattr(logic.oversight, "set_role", racing)
+    assert put({"userId": mid, "role": "head"}).json()["team"][0]["role"] == "head" and seen == [True]
+    # once it is done the removal goes through, and the row's next action finds nobody to act on
+    other.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (club["id"], mid))
+    assert put({"userId": mid, "role": "head"}).json()["message"] == "who" and len(seen) == 1
+    assert c.get("/api/admin/orgs", headers=A).json()[0]["members"] == 0
 
 
 def test_attendees_csv(env):

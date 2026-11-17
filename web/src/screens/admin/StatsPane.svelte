@@ -2,6 +2,7 @@
   // Admin → the numbers card → this page (pushed from the right): active in a day, a week, a month; the 30 days as bars
   // (a finger slides along them; a day picked says how many came and who); the AI translator a row away. Counts only,
   // no per-person logs; the chart is the nightly rows.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminDay } from '../../lib/api';
   import { data } from '../../lib/state/data.svelte';
@@ -19,6 +20,7 @@
   import { almatyDay, week } from './stats';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay);
   const st = $derived(data.adminStats);
   const today = almatyDay();
   const slots = $derived(st ? week(st, today, 30) : []);

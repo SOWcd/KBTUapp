@@ -11,7 +11,8 @@
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import { api, ApiErr, type ChannelModPost, type DoneRow, type InboxItem, type ReportItem, type TgcRule } from '../../lib/api';
-  import { data, loadInbox } from '../../lib/state/data.svelte';
+  import { data, loadAfisha, loadInbox } from '../../lib/state/data.svelte';
+  import { refreshAdminOrgs } from '../../lib/state/adminOrgs.svelte';
   import { loadChannel } from '../../lib/state/channel.svelte';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -67,6 +68,7 @@
       } else { delete handled[it.key]; haptic.error(); say(t('common.error'), 'warning_3d'); }
     }
     void loadInbox(); void loadMe();
+    if (admin && (it.kind === 'capp' || it.kind === 'opath' || it.kind === 'claim')) void refreshAdminOrgs(); // a club opened, made official, a leader placed
   }
 
   async function undo(d: DoneRow) {
@@ -79,6 +81,8 @@
     // the card it came from is waiting again: it comes back in the list
     for (const [k, h] of Object.entries(handled)) if (h.target === d.target) delete handled[k];
     void loadInbox(); void loadMe(); void loadChannel();
+    if (d.action === 'event_delete') void loadAfisha(); // the event is back: the lists show it again
+    if (admin) void refreshAdminOrgs();
   }
 
   // ---- reports ----

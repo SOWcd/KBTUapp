@@ -1,6 +1,7 @@
 <script lang="ts">
   // The map's flaws people marked with a long press (server logic/mapflaws.py): open ones first, oldest first; a tap marks
   // one fixed (or back). The map session reads the same list with `kbtu.admin mapflaws` (floor and the plan's units).
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import Check from '@lucide/svelte/icons/check';
   import { api } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -11,6 +12,7 @@
   import MapPinX from '@lucide/svelte/icons/map-pin-x';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay);
   let list = $state<Awaited<ReturnType<typeof api.mapFlaws>> | null>(null);
   const load = () => api.mapFlaws().then((l) => (list = l)).catch(() => (list = []));
   $effect(() => { void load(); });

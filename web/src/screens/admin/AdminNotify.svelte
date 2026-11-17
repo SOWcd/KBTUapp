@@ -3,6 +3,7 @@
   // every staff member, the creator still gets it (said in the footnote). The list comes with the app (data.staffMutes)
   // and is asked again as the page opens. A tap flips at once; each switch's saves go one after another, so the last
   // tap is what the server keeps, and a failed save rolls back only if no newer tap came since.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { untrack } from 'svelte';
   import { api, type StaffMute } from '../../lib/api';
   import { data, loadStaffMutes, mutedTap } from '../../lib/state/data.svelte';
@@ -17,6 +18,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay, 'staff');
   untrack(loadStaffMutes); // in the background: the page shows what the app holds
   // the forum channel's two only while it is on
   const shown = $derived(data.staffMutes?.filter((m) => session.me?.forumChannel || !m.kind.startsWith('fch_')) ?? []);

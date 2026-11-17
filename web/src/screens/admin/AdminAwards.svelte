@@ -3,6 +3,7 @@
   // per award in a two-column grid (owner, Nov 10) with its real medal and how many hold it; a card opens the award's
   // page (its variant, Scan, Link, the links, who has it). A person's awards are given from the person (Admin's search →
   // a person).
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api } from '../../lib/api';
   import { CATALOG, manualMedal, manualTitle } from '../../lib/awards';
   import { session } from '../../lib/state/session.svelte';
@@ -14,6 +15,7 @@
   import AwardPane from './AwardPane.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay);
   const list = $derived(CATALOG.filter((a) => !a.creator || !!session.me?.founder));
   let counts = $state<Record<string, number>>({});
   const load = () => api.awardCounts().then((c) => (counts = c)).catch(() => {});
