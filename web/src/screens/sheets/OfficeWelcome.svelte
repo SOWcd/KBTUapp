@@ -1,13 +1,16 @@
 <script lang="ts">
   // An office's own people (DMP) greeted as the team, once per phone (App.svelte teamHi): full screen, its logo, its
-  // name, one button. Was a toast (owner, Nov 17: missed it on his own phone). The award reveal's shape (Unlock), calm:
-  // a fade and a short rise, no confetti. `ondone`: the link's own sheet, once it's gone.
+  // name, one button (not signed in yet: Microsoft, and a quiet Later). Was a toast (owner, Nov 17: missed it on his
+  // own phone). The award reveal's shape (Unlock), calm: a fade and a short rise, no confetti. `ondone`: the link's own
+  // sheet, once it's gone.
   import { onMount } from 'svelte';
   import Hand from '@lucide/svelte/icons/hand';
   import type { OrgRef } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { session } from '../../lib/state/session.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Button from '../../ui/Button.svelte';
 
@@ -34,7 +37,11 @@
     x.onfinish = () => { removeOverlay(overlay.id); ondone?.(); };
   }
   $effect(() => { if (overlay.closing) leave(); });
+  // no KBTU row yet: Microsoft is the way in (an office's own skip the student ID: server account.ms_apply); signing in
+  // makes them a student, and App's loadMine fills Studio and the registry then
+  const guest = $derived(!session.me?.student);
   function go() { haptic.tap(); close(overlay.id); }
+  function signIn() { haptic.tap(); close(overlay.id); sheets.login(); }
 </script>
 
 <div class="scrim" bind:this={scrim} role="presentation"></div>
@@ -42,9 +49,16 @@
   <div class="page">
     <span class="logo up"><OrgLogo {org} size={112} /></span>
     <h1 class="fs-title hi up">{t('say.hi.team', { org: org.abbr ?? org.name })}</h1>
-    <p class="line up">{t('say.hi.teamLine')}</p>
+    <p class="line up">{t(guest ? 'say.hi.teamSign' : 'say.hi.teamLine')}</p>
   </div>
-  <div class="foot up"><Button kind="primary" size="l" full onclick={go}>{t('say.hi.teamGo')}</Button></div>
+  <div class="foot up">
+    {#if guest}
+      <Button kind="primary" size="l" full onclick={signIn}>{t('login.ms')}</Button>
+      <div class="later"><Button kind="plain" size="s" onclick={go}>{t('say.hi.teamLater')}</Button></div>
+    {:else}
+      <Button kind="primary" size="l" full onclick={go}>{t('say.hi.teamGo')}</Button>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -58,4 +72,5 @@
   .hi { text-wrap: balance; }
   .line { max-width: 300px; font: 450 var(--fs-card)/1.4 var(--font-text); color: var(--text-2); text-wrap: balance; }
   .foot { width: 100%; max-width: 420px; align-self: center; }
+  .later { display: flex; justify-content: center; margin-top: 6px; --plain-ink: var(--text-3); }
 </style>

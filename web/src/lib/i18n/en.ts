@@ -1006,6 +1006,8 @@ const en: Dict = {
   'say.hi.team': "Hi, {org}!",
   'say.hi.teamLine': "Glad to have you on the team.",
   'say.hi.teamGo': "Get started",
+  'say.hi.teamSign': "Sign in with Microsoft to open the office's panel.",
+  'say.hi.teamLater': "Later",
   'say.welcome': "Hi, {name}! You're in|{name}, welcome aboard!|Welcome, {name}!",
   'say.shared': "Sent! Let them come|Off it goes|More fun together",
   'say.theme.dark': "Dark — easier on the eyes|Night mode on",

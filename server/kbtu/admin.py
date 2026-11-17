@@ -112,7 +112,7 @@ import time
 from . import config, db, texts
 from pathlib import Path
 
-from .logic.account import _DEL_GONE
+from .logic.account import _DEL_GONE, staff_row
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
@@ -361,11 +361,10 @@ def main(args: list[str]) -> None:
             n = con.execute("UPDATE students SET manual = 0, verified_at = ? WHERE user_id = ? AND manual = 1", (now(), u["id"])).rowcount
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
     elif cmd == "staff" and len(args) in (4, 5):  # SPEC §1: the student ID can't be a real one, so a KBTU sign-in is refused
-        u, t = _user(con, args[1]), now()
+        u = _user(con, args[1])
         if one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
             sys.exit(f"@{u['tg_username'] or u['tg_id']}: already signed in with KBTU or staff")
-        con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, school, consent_version, consent_at,
-            verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)""", (u["id"], f"staff{u['id']}", args[2], args[3], args[4] if len(args) == 5 else None, t, t, t))
+        staff_row(con, u["id"], args[2], args[3], args[4] if len(args) == 5 else None)
         print(f"@{u['tg_username'] or u['tg_id']}: staff, acts as a student")
     elif cmd == "staff" and len(args) == 2:
         u = _user(con, args[1])

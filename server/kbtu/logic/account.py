@@ -384,9 +384,30 @@ def ms_claim(con, v: Viewer, secret: str) -> bool:
     raise ApiError("forbidden", "ms")
 
 
+def staff_row(con, uid: int, first: str, last: str, school: str | None = None) -> None:
+    """A KBTU staff member acts as a student (SPEC §1): no student ID of theirs exists, so a placeholder no real one can
+    match; 'staff' skips the policy gate, the card number and the counts (kbtu.admin staff; an office's own at Microsoft)."""
+    t = core.now()
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, school, consent_version, consent_at,
+        verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)""", (uid, f"staff{uid}", first, last, school, t, t, t))
+
+
+def office_hand(con, uid: int) -> bool:
+    """A member of an active office (DMP) whose role there was given by hand: the latest role line for that office
+    is the creator's CLI or Admin's. Every other way into an org (a link, a roster, a chat, a casting, a join request)
+    needs a KBTU row first; this rules out a membership left over after `kbtu.admin unlink`, which keeps org_members."""
+    return one(con, """SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.kind = 'office' AND o.status = 'active'
+        WHERE m.user_id = ?1 AND (SELECT json_extract(a.data, '$.by') FROM audit_log a WHERE a.target = 'user:' || ?1
+          AND a.action = 'role_change' AND json_extract(a.data, '$.org') = m.org_id ORDER BY a.id DESC LIMIT 1) IN ('cli', 'app')""", uid) is not None
+
+
 def ms_apply(con, uid: int, who: dict) -> bool:
-    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
+    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form. An
+    office's own people (DMP: staff, no student ID) skip the form: the staff row, with the directory's names."""
     mine = ms_check(con, uid, who)
+    if not mine and office_hand(con, uid):
+        staff_row(con, uid, who["first"], who["last"])
+        mine = True
     if mine:
         ms_link(con, uid, who)
         return True
