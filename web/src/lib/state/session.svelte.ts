@@ -39,6 +39,9 @@ export function setLoginHook(fn: (after: () => void, lock?: boolean) => void): v
 // Microsoft's return link opens the app anew, and the action's closure is gone by then: `again` is the action as a start
 // param (rc_<club>, newclub), kept on the phone and replayed after that sign-in
 const AGAIN = 'kb-again';
+/** The bar's corner is KRI (Nav): the assistant open to me (BOARD) and I'm a student; else it is the map (a guest, BOARD
+ *  off), and Afisha's header drops its own map button. */
+export const kriCorner = (): boolean => session.board && !!session.me?.student;
 // lock: the sheet fills the screen and can't be pulled or backed away until signed in (a check-in scan, owner Oct 29)
 export function asStudent(action: () => void, again?: string, lock = false): void {
   if (session.me?.student) return action();

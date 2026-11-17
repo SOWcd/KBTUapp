@@ -3,8 +3,8 @@ knowing their school, course, timetable, the campus and what's on). One question
 the server hands the model a short brief of facts and takes back JSON: the words and up to three buttons (a room on
 the map, an event, a club, my classes, a Settings page, the Gallery, the news, a tab and the app's other screens, my
 club's Studio), each checked against the brief so nothing made up opens; a button only opens a screen. Sent to the
-model: the school, the course, this and the next day's classes (subject, time, room), the clubs I run in Studio, the
-coming public events and the campus places; never
+model: the school, the course, this and the next day's classes (subject, time, room), the coming public events and the
+campus places (the clubs I run never: Studio's button gets my club here, after the model); never
 the name, student ID, mail or phone. Only the EU host the privacy policy names. Kept: a count per day (30), not the
 questions. The campus facts are a table the admin and moderators keep current (below the assistant)."""
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sqlite3
 import time
 
 from ..db import tx
-from .core import PERSON, ApiError, Viewer, _qs, academic_year, can, club_rights, need_student, now, one, person_ref, rows
+from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, need_student, now, one, person_ref, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -54,9 +54,9 @@ their school, year of study or notifications in Settings (to change them there);
 events; {{"type": "news"}} the clubs' news; {{"type": "map"}} the campus map as a whole; {{"type": "afisha"}}, {{"type": "clubs"}},
 {{"type": "profile"}} the app's tabs; {{"type": "tickets"}} my tickets (on Afisha); {{"type": "friends"}};
 {{"type": "awards"}}; {{"type": "forum"}} and {{"type": "post"}} (writing a forum post) only if the facts say the forum
-is on; {{"type": "subjects"}} only if the facts say the subjects are on; {{"type": "studio", "id": N}} and
-{{"type": "new_event", "id": N}} only for a club the facts list as the student's in Studio (new_event: where they may
-create events); {{"type": "ask"}} only with known false, when you truly can't answer: it lets the student send the
+is on; {{"type": "subjects"}} only if the facts say the subjects are on; {{"type": "studio"}} a club's Studio and
+{{"type": "new_event"}} creating a club's event, with no id: the app opens the student's own club, or shows no button
+if they run none (offer them for questions about running a club or its events); {{"type": "ask"}} only with known false, when you truly can't answer: it lets the student send the
 question to a real person. Never a link or any other button. A button only opens a screen: the student signs up,
 pays, posts or changes anything there themselves.
 "How do I ...?" about the app: 2-3 short steps, with the button to the first screen. Where things are: Afisha tab
@@ -85,7 +85,7 @@ SETTINGS = ("school", "course", "notify")
 # buttons with no parameter, each a screen any student opens (the forum's and the subjects' only where they're on: OPT)
 BARE = ("timetable", "gallery", "news", "afisha", "clubs", "profile", "tickets", "friends", "awards")
 OPT = ("forum", "post", "subjects")
-CLUB_SCREENS = ("studio", "new_event")  # a club of mine in Studio (opensStudio on the web), where I create events
+CLUB_SCREENS = ("studio", "new_event")  # my club's Studio, its new event: the club is filled in here (studio()), never told to the model
 
 
 def _name(r, lang: str) -> str:
@@ -132,16 +132,16 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], se
     return "\n".join(lines), rooms, {e["id"] for e in evs}, {e["oid"] for e in evs if e["ost"] == "active"}
 
 
-def studio(con, v: Viewer) -> tuple[str, set[int], set[int]]:
-    """The student's clubs in Studio (web perms.opensStudio: a role above member, or a right past the door) and those
-    where they create events; the same active clubs /api/me lists."""
-    mine = [(m, club_rights(m["role"], m["rights"], m)) for m in rows(con, """SELECT o.id, o.name, o.official, o.top_at, m.role, t.rights
+def studio(con, v: Viewer) -> dict[str, int | None]:
+    """The club Studio's and new event's buttons open (the model is never told which, or whether there is one): of the
+    active clubs /api/me lists, the highest role first as the Clubs tab's Mine row (web byRank); Studio where it opens
+    (web perms.opensStudio: a role above member, or a right past the door), a new event where I have the events right."""
+    mine = [(m, club_rights(m["role"], m["rights"], m)) for m in rows(con, """SELECT o.id, o.official, o.top_at, m.role, t.rights
         FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id
-        WHERE m.user_id = ? AND o.status = 'active' ORDER BY o.id""", v.id)] if v.student else []
-    mine = [(m, r) for m, r in mine if m["role"] != "member" or r - {"door"}]
-    line = "The student's clubs in Studio: " + ("; ".join(f"[club {m['id']}] {m['name']}" + (" (may create events)" if "events" in r else "")
-                                                         for m, r in mine) or "none (no Studio, no event creation)")
-    return line, {m["id"] for m, _ in mine}, {m["id"] for m, r in mine if "events" in r}
+        WHERE m.user_id = ? AND o.status = 'active'""", v.id)] if v.student else []
+    mine.sort(key=lambda x: (-RANK[x[0]["role"]], x[0]["id"]))
+    first = lambda ok: next((m["id"] for m, r in mine if ok(m, r)), None)  # noqa: E731
+    return {"studio": first(lambda m, r: m["role"] != "member" or bool(r - {"door"})), "new_event": first(lambda m, r: "events" in r)}
 
 
 def _when(t: int | None) -> str:
@@ -213,8 +213,7 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
     on = card(con, body.get("context"))  # before the allowance: a bad context costs nothing
     _spend(con, v)
     facts, rooms, events, clubs = brief(con, v, lang)
-    line, studios, creates = studio(con, v)
-    facts = f"{facts[:FACTS_MAX]}\n{line}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
+    facts = f"{facts[:FACTS_MAX]}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
     if on:
         facts, events, clubs = f"{facts}\n{on[0]}", events | ({on[1]} if on[1] else set()), clubs | on[2]
     quoted = re.sub(r"</?facts", "facts", facts, flags=re.I)
@@ -226,7 +225,7 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
     msgs.append({"role": "user", "content": q})
     from .appeals import ask_on
     return msgs, {"map": rooms, "event": events, "club": clubs, "ask": ask_on(con, ask, v),  # ask: the help desk open to me (ASK)
-                  "studio": studios, "new_event": creates, "opt": {*(("forum", "post") if forum else ()), *(("subjects",) if subjects else ())}}
+                  **studio(con, v), "opt": {*(("forum", "post") if forum else ()), *(("subjects",) if subjects else ())}}
 
 
 # ------------------------------------------------------------ the university's documents (DOCS, kbtu/docs.py)
@@ -331,8 +330,10 @@ def answer(text: str, ok: dict) -> dict:
             b = {"type": "map"}
         elif k == "map" and str(a.get("room", "")).lower() in ok.get("map", ()):
             b = {"type": "map", "room": str(a["room"]).lower()}
-        elif k in ("event", "club", *CLUB_SCREENS) and type(a.get("id")) is int and a["id"] in ok.get(k, ()):  # not True (== 1)
+        elif k in ("event", "club") and type(a.get("id")) is int and a["id"] in ok.get(k, ()):  # not True (== 1)
             b = {"type": k, "id": a["id"]}
+        elif k in CLUB_SCREENS and ok.get(k):  # my club, filled in here (the model's id, if any, ignored)
+            b = {"type": k, "id": ok[k]}
         elif k == "settings" and isinstance(a.get("kind"), str) and a["kind"] in SETTINGS:
             b = {"type": k, "kind": a["kind"]}
         elif k == "ask" and ok.get("ask") and x.get("known") is False:

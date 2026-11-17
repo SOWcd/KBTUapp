@@ -14,7 +14,7 @@
   import { onMount } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ui } from '../../lib/state/ui.svelte';
   import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
@@ -196,9 +196,9 @@
   <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   <header class="hd">
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
-    <!-- the assistant (with the forum's switch), the Feed full screen, the Gallery, the clubs' news -->
+    <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
     <span class="tools">
-      {#if session.board}<IconButton icon={Sparkles} label={t('as.ask')} onclick={() => sheets.assistant()} />{/if}
+      {#if kriCorner()}<IconButton icon={MapIcon} label={t('map.open')} onclick={() => sheets.map()} />{/if}
       {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={() => sheets.feed()} />{/if}
       <IconButton icon={Images} label={t('gallery.title')} onclick={() => sheets.gallery()} />
       <IconButton icon={Newspaper} label={t('page.news')} onclick={() => sheets.news()} />

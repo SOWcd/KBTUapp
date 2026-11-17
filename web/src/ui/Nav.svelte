@@ -3,11 +3,11 @@
   // each icon only repeated it); the active one in the accent on a raised lighter pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
   // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The corner: its own round glass
-  // button beside it, KRI (owner, Nov 17: the assistant leads anywhere, the map is its first row); the map where the
-  // assistant is off (BOARD).
+  // button beside it, KRI (owner, Nov 17: the assistant leads anywhere, the map is its first row); the map for a guest
+  // and where the assistant is off (BOARD).
   import MapIcon from '@lucide/svelte/icons/map';
   import Sparkles from '@lucide/svelte/icons/sparkles';
-  import { session } from '../lib/state/session.svelte';
+  import { kriCorner } from '../lib/state/session.svelte';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
@@ -54,7 +54,7 @@
     sheets.map();
   }
   // the chunk on the press, not the click: by the release it has been loading for the whole press
-  const kri = $derived(session.board);
+  const kri = $derived(kriCorner());
   const warm = () => { void (kri ? import('../screens/assistant/Assistant.svelte') : import('../screens/map/CampusMap.svelte')).catch(() => {}); };
   function corner(e: MouseEvent) {
     if (!kri) return openMap(e);

@@ -209,7 +209,6 @@ const en: Dict = {
   'mf.where': "Floor {floor}",
   'mf.fixed': "Fixed",
   'as.title': "Assistant",
-  'as.ask': "Ask",
   'as.hello': "Hi{name}!",
   'as.s1': "Where's my dean's office?",
   'as.s2': "Where's my next class?",
