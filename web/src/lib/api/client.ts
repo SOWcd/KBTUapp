@@ -327,7 +327,7 @@ export const server = {
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
   teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
-  teamsRemind: (id: Id, user: Id): Promise<{ queued: boolean; consent: boolean }> => call('POST', `/events/${id}/teams/people/${user}/remind`), // the bot's "agree to teams", once a day
+  teamsRemind: (id: Id, user: Id): Promise<{ queued: boolean; consent: boolean; off?: boolean }> => call('POST', `/events/${id}/teams/people/${user}/remind`), // the bot's "agree to teams", once a day
   /** the host club's member asks its President or a Vice to come as a guest, or takes it back; they list and answer */
   teamAsk: (id: Id): Promise<EventCard> => call('POST', `/events/${id}/team-ask`),
   teamUnask: (id: Id): Promise<EventCard> => call('DELETE', `/events/${id}/team-ask`),

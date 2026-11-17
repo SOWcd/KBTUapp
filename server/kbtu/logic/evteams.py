@@ -56,6 +56,7 @@ SIZE = (2, 10)    # the editor's bounds for a team's min and max
 CAP = (2, 500)    # and for the number of teams
 NAME_MAX = 40
 CONSENT = "tm1"   # the privacy policy's teams clause, agreed to before the first team
+OFF = "off"       # its row after a withdrawal: the no is remembered, so nobody asks again (a new yes overwrites it)
 
 
 # ------------------------------------------------------------ the feature's own consent
@@ -84,7 +85,7 @@ def withdraw(con, v: Viewer) -> dict:
     places me again until a new yes. A started event's roster loses me as it would with my account: the law gives no
     reason to keep showing me there after I said no (the legal review, Nov 12)."""
     with tx(con):
-        con.execute("DELETE FROM team_consents WHERE user_id = ?", (v.id,))
+        con.execute("INSERT OR REPLACE INTO team_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, OFF, core.now()))
         con.execute("DELETE FROM event_team_members WHERE user_id = ?", (v.id,))
     return summary(con, v)
 
@@ -216,14 +217,14 @@ def teams_list(con, v: Viewer, eid: int) -> dict:
     # paid players whose latest receipt nobody checked yet (maybe a fake): the organizer sees them; never the members
     unchecked = [r[0] for r in rows(con, f"""SELECT r.user_id FROM registrations r WHERE r.event_id = ? AND r.status = 'going' AND NOT ({_CHECKED})""", eid)] \
         if e["price"] else []
-    solo = rows(con, f"""SELECT {PERSON_COLS}, c.user_id IS NOT NULL AS consent FROM registrations r JOIN users u ON u.id = r.user_id
-        LEFT JOIN students s ON s.user_id = u.id LEFT JOIN team_consents c ON c.user_id = u.id AND c.version = '{CONSENT}'
+    solo = rows(con, f"""SELECT {PERSON_COLS}, c.version IS '{CONSENT}' AS consent, c.version IS '{OFF}' AS off FROM registrations r JOIN users u ON u.id = r.user_id
+        LEFT JOIN students s ON s.user_id = u.id LEFT JOIN team_consents c ON c.user_id = u.id
         WHERE r.event_id = ? AND r.status = 'going' AND NOT EXISTS (SELECT 1 FROM event_team_members m WHERE m.event_id = r.event_id AND m.user_id = r.user_id)
         ORDER BY r.created_at, r.id""", eid)
     return {"min": e["team_min"], "max": e["team_max"], "cap": e["team_cap"], "locked": e["starts_at"] <= core.now(),
             "regShut": bool(e["reg_until"] and e["reg_until"] <= core.now()),  # Form teams fills every short team now
             "paid": bool(e["price"]),
-            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"])} for p in solo], "unchecked": unchecked}
+            "teams": [_shape(t, rosters.get(t["id"], [])) for t in teams], "solo": [{**person_ref(p), "consent": bool(p["consent"]), "off": bool(p["off"])} for p in solo], "unchecked": unchecked}
 
 
 # a paid registration the organizer checked: a free seat, or its latest receipt reviewed and accepted (r: registrations)
@@ -329,17 +330,21 @@ def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers
     lock with the registration: a full event (the waitlist) or a full team leaves no sign-up behind. Already signed up:
     the team part alone.
     consent: the version (CONSENT) the app sends when its sign-up button showed the line on what signing up to a team
-    event means (the owner, Nov 18: signing up is the consent). Written with a sign-up this tap made, never inferred: an
-    old app without the marker, or a tap on an existing sign-up, writes nothing."""
+    event means (the owner, Nov 18: signing up is the consent). Written with a ticket or a hold this tap made, never
+    inferred: an old app without the marker, a tap on an existing sign-up, or one that lands on the waitlist writes
+    nothing."""
     if team is not None and not (isinstance(team, dict) and (isinstance(team.get("create"), str) or isinstance(team.get("join"), str))):
         raise ApiError("bad_input", "team")
     if consent is not None and consent != CONSENT:
         raise ApiError("bad_input", "consent")  # a version this server doesn't know: the line it showed isn't ours
     name = clean_name(team["create"]) if team and "create" in team else None
+    sweep_holds(con)  # an expired hold isn't a sign-up: this tap makes a new one
     with tx(con):
         had = one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, v.id)
         out = register(con, v, eid, ref, phone, answers, wish)
-        if consent and not had and one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):
+        # a ticket or a hold only: the waitlist isn't a sign-up yet (promoted later, they're "hasn't agreed" and asked)
+        if consent and not had and one(con, """SELECT 1 FROM registrations r JOIN events e ON e.id = r.event_id AND e.team_max IS NOT NULL
+                WHERE r.event_id = ? AND r.user_id = ? AND r.status IN ('going', 'hold')""", eid, v.id):
             con.execute("INSERT OR REPLACE INTO team_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT, core.now()))
         if team:
             e = _team_event(con, v, eid)
@@ -347,7 +352,7 @@ def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers
                 _create(con, v, e, name)
             else:
                 _join(con, v, e, team["join"])
-    return out
+    return {**out, "teamsConsent": consented(con, v.id)}  # the server's word: the app's /me follows it
 
 
 def create(con, v: Viewer, eid: int, name: object) -> dict:
@@ -525,16 +530,15 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
 
 def consent_ask(con, dry: bool = False) -> int:
     """`python -m kbtu.admin team-consent-ask [--dry]`: everyone signed up to a coming team event without the teams
-    consent (signed up before the sign-up became the consent, Nov 18) gets the bot's template once per event, a button
-    to the event with the consent sheet open (tc_<event>). Never a consent written for them. By hand, never on deploy;
-    a second run queues nobody already asked."""
-    to = rows(con, """SELECT r.user_id, r.event_id FROM registrations r JOIN events e ON e.id = r.event_id
+    consent (signed up before the sign-up became the consent, Nov 18) gets the bot's template once, for their soonest
+    such event (the consent is one for all events), a button to it with the consent sheet open (tc_<event>). Never a
+    consent written for them; nobody who withdrew it (OFF), nobody ever asked before. By hand, never on deploy."""
+    to = rows(con, """SELECT r.user_id, r.event_id, MIN(e.starts_at) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE e.team_max IS NOT NULL AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ?
           AND r.status IN ('going', 'hold', 'waitlist')
-          AND NOT EXISTS (SELECT 1 FROM team_consents c WHERE c.user_id = r.user_id AND c.version = ?)
-          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = r.user_id AND b.kind = 'team_consent'
-                          AND (b.ref = 'tc:' || r.event_id OR b.ref LIKE 'tc:' || r.event_id || ':%'))
-        ORDER BY r.event_id, r.user_id""", core.now(), CONSENT)
+          AND NOT EXISTS (SELECT 1 FROM team_consents c WHERE c.user_id = r.user_id)
+          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = r.user_id AND b.kind = 'team_consent')
+        GROUP BY r.user_id ORDER BY r.user_id""", core.now())  # SQLite: the bare event_id is MIN's row
     if not dry:
         with tx(con):
             for r in to:
@@ -543,22 +547,23 @@ def consent_ask(con, dry: bool = False) -> int:
 
 
 def remind(con, v: Viewer, eid: int, uid: int) -> dict:
-    """The organizer's "Remind about consent" on someone signed up without it: the same template, at most once a day
-    per person and event, whoever queued the last one. queued: false when asked within the day or agreed meanwhile."""
+    """The organizer's "Remind about consent" on someone with a ticket and no team consent: the same template, at most
+    once a day per person (the consent is one for all events), whoever queued the last one. queued: false when asked
+    within the day, agreed meanwhile (consent) or withdrew it (off: never asked again until they say yes)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
         if e["team_max"] is None:
             raise ApiError("not_found")
         _open_now(e)
-        if not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, uid):
-            raise ApiError("not_found")
-        if consented(con, uid):
-            return {"queued": False, "consent": True}
-        if one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'team_consent' AND (ref = ? OR ref LIKE ?)
-                AND send_after > ?""", uid, f"tc:{eid}", f"tc:{eid}:%", core.now() - 86400):  # consent_ask's tc:<event> too
-            return {"queued": False, "consent": False}
+        if not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", eid, uid):
+            raise ApiError("not_found")  # as the board: only a ticket waits for a team
+        c = one(con, "SELECT version FROM team_consents WHERE user_id = ?", uid)
+        if c:
+            return {"queued": False, "consent": c[0] == CONSENT, "off": c[0] == OFF}
+        if one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'team_consent' AND send_after > ?", uid, core.now() - 86400):
+            return {"queued": False, "consent": False, "off": False}
         notify(con, uid, "team_consent", f"tc:{eid}:{core.now()}")
-    return {"queued": True, "consent": False}
+    return {"queued": True, "consent": False, "off": False}
 
 
 def left(con, eid: int, uid: int) -> None:
@@ -578,4 +583,4 @@ def cancelled(con, eid: int) -> None:
 # the other domains', imported last: they import this one too
 from . import core, fchannel  # noqa: E402
 from .organizing import _staff_event  # noqa: E402
-from .seats import _event, notify, register  # noqa: E402
+from .seats import _event, notify, register, sweep_holds  # noqa: E402

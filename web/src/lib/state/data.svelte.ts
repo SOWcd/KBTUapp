@@ -469,7 +469,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish, agrees ? TEAM_CONSENT : undefined);
       if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
-      if (agrees && session.me?.teams) session.me.teams.consent = true; // written with the sign-up
+      if (after.teamsConsent !== undefined && session.me?.teams) session.me.teams.consent = after.teamsConsent; // the server's word
       put(after);
       const st = after.my?.status;
       if (leaving) { haptic.warn(); burst(true); say(phrase('say.cancel'), 'crying_face_3d'); }
@@ -482,7 +482,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
     } finally { goingBusy.delete(id); flying.delete(id); taps++; }
-  }, 'go_' + id);
+  }, 'go_' + id + (consent ? '_c' : '')); // _c: the line was on screen at the tap (App's msBack passes it on)
 }
 
 /** The bot can't write to someone who never opened it: Telegram's own "allow messages", asked when it pays off (just

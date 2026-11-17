@@ -380,7 +380,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, **ev(e)), f"ev_{e['id']}")
     if kind == "team_consent":  # tc:<event>[:<when>], evteams.consent_ask / remind; quiet once agreed, out of the event, or it started
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND starts_at > ? AND team_max IS NOT NULL", int(ref[1]), logic.now())
-        if not e or logic.evteams.consented(con, m["user_id"]) or not one(
+        if not e or one(con, "SELECT 1 FROM team_consents WHERE user_id = ?", m["user_id"]) or not one(  # agreed, or withdrew it: never asked
                 con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", e["id"], m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, **ev(e)), f"tc_{e['id']}")

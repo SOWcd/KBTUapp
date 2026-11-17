@@ -51,7 +51,7 @@
     haptic.tap();
     try {
       const r = await api.teamsRemind(id, p.id);
-      if (r.consent) { b = await api.teams(id); return; } // agreed meanwhile: the row is placeable now
+      if (r.consent || r.off) { b = await api.teams(id); return; } // agreed or withdrew meanwhile: the board says which
       haptic.ok(); say(t(r.queued ? 'tm.reminded' : 'tm.remindedToday'), 'speech_balloon_3d');
     } catch (e) { fail(e); }
   }
@@ -97,7 +97,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={!p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }] : !b.teams.length ? undefined : menuOf(p, null)}>
+              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || p.off ? undefined : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }] : !b.teams.length ? undefined : menuOf(p, null)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}

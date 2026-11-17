@@ -375,6 +375,7 @@ export interface EventReport {
 export type ReportPatch = Partial<Pick<EventReport, 'dept' | 'guests' | 'note'>>;
 
 export interface EventCard {
+  teamsConsent?: boolean; // a team event's sign-up only: my teams consent after it (server evteams.signup)
   /** the other languages (ai.py), applied by api/client.ts; `orig`: the text as typed */
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; description?: string }>>; orig?: Record<string, string>;
   id: Id;
@@ -436,7 +437,7 @@ export interface EventTeam { id: Id; name: string; open: boolean; captain: Id | 
 export interface EventTeams { min: number; max: number; cap: number | null; locked: boolean; team: EventTeam | null; count?: number; want?: string | null; missed?: boolean }
 /** The organizer's teams screen: every team, then those with none yet (sign-up order); placed/left: after Form teams */
 /** unchecked: paid players whose receipt nobody checked yet (Form teams waits for them) */
-export interface TeamsBoard { min: number; max: number; cap: number | null; unchecked: Id[]; locked: boolean; teams: EventTeam[]; solo: (PersonRef & { consent: boolean })[]; placed?: number; left?: number; noConsent?: number; regShut?: boolean; paid?: boolean } // regShut: sign-up closed, Form teams fills every short team
+export interface TeamsBoard { min: number; max: number; cap: number | null; unchecked: Id[]; locked: boolean; teams: EventTeam[]; solo: (PersonRef & { consent: boolean; off?: boolean /* withdrew it: never reminded */ })[]; placed?: number; left?: number; noConsent?: number; regShut?: boolean; paid?: boolean } // regShut: sign-up closed, Form teams fills every short team
 /** What an invite link opens to: the team's name, its captain and how many it has, never the other members */
 export interface TeamInvite { event: Id; title: string; team: { name: string; captain: PersonRef | null; count: number }; min: number; max: number; room: boolean; mine: boolean; locked: boolean; paid: boolean }
 /** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */

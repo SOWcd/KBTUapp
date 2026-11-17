@@ -168,7 +168,7 @@
   // read a plain no; the ask flow (server seats.team_ask) stays for when it comes back
   const askable = false as boolean;
   // a team event's sign-up says what it means, and the tap is the teams consent (server evteams.signup)
-  const teamLine = $derived(!!e?.teamMax && !cancelled && !over && !shut && !regShut && !teamOnly && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist');
+  const teamLine = $derived(!!e?.teamMax && !cancelled && !over && !shut && !regShut && !full && !teamOnly && !e.externalUrl && e.visibility !== 'leaders' && !e.meeting && st !== 'going' && st !== 'hold' && st !== 'waitlist'); // not the waitlist's Notify: not a sign-up yet
   const noGuest = $derived(teamOnly && !cancelled && !over && !e?.externalUrl);
   function setAsk(a: EventCard['teamAsk']) { const card = eventById(id); if (card) card.teamAsk = a; if (detail) detail = { ...detail, teamAsk: a }; }
   async function teamAsk() {
@@ -676,7 +676,7 @@
         {:else if regShut}
           <Button kind="neutral" size="l" full disabled>{t('event.regClosed')}</Button>
         {:else if full}
-          <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, undefined, undefined, teamLine)}>{t('event.notify')}</Button>
+          <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id)}>{t('event.notify')}</Button>
         {:else}
           <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id), undefined, teamLine)}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
         {/if}
