@@ -187,6 +187,6 @@ def test_santa_news(env, capsys, monkeypatch):
     assert capsys.readouterr().out.strip() == "queued 1"
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
     text, button, start = bot._render(con, m)
-    assert start == "st_1" and "IT Club" in text and button
+    assert start == "sn_1" and "IT Club" in text and button
     logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
     assert bot._render(con, m) is None  # no longer its President: quiet
