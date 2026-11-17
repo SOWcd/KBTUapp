@@ -10,7 +10,7 @@
   // decision first says who. Nothing waiting: one quiet line. Below, "Done": who did what lately, the Undo there too.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
-  import { api, ApiErr, type ChannelModPost, type DoneRow, type InboxItem, type ReportItem, type TgcRule } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type AutoEvent, type ChannelModPost, type DoneRow, type InboxItem, type ReportItem, type TgcRule } from '../../lib/api';
   import { data, loadAfisha, loadInbox } from '../../lib/state/data.svelte';
   import { refreshAdminOrgs } from '../../lib/state/adminOrgs.svelte';
   import { loadChannel } from '../../lib/state/channel.svelte';
@@ -19,7 +19,7 @@
   import { say } from '../../lib/state/ui.svelte';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
-  import { ago } from '../../lib/time';
+  import { ago, relDay, time } from '../../lib/time';
   import { withNick, roleName } from '../../lib/perms';
   import { nameOf, schoolShort } from '../../lib/short';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -144,11 +144,15 @@
 
   // what a decided card was about, after its verdict on the slim line
   const what = (it: InboxItem): string => it.kind === 'report' ? it.data.text : it.kind === 'capp' ? it.data.name : it.kind === 'opath' ? it.data.org.name : it.kind === 'chat' ? it.data.title
-    : it.kind === 'claim' ? it.data.name : it.data.body;
+    : it.kind === 'claim' ? it.data.name : it.kind === 'autoev' ? it.data.title : it.data.body;
   const tagOf = (it: InboxItem): string =>
     it.kind === 'report' ? t(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? t('adm.cappTag') : it.kind === 'opath' ? t('adm.k.opath') : it.kind === 'fpost' ? t('adm.rep.fpost')
-      : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : t('adm.k.claim');
+      : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : it.kind === 'autoev' ? t('adm.k.autoev') : t('adm.k.claim');
+  // an event found in a club's channel (server autoev.py): its draft opens as any event from Admin (api staffEvents);
+  // Dismiss is Admin's event delete, hidden at once with Done's Undo for a day
+  function openDraft(e: AutoEvent) { haptic.tap(); staffEvents.add(e.id); sheets.editor(e.org.id, e.id); }
   function more(it: InboxItem): MenuItem[] {
+    if (it.kind === 'autoev') { const u = it.data.url; return [{ label: t('adm.autoevPost'), onselect: () => openLink(u) }]; }
     if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: t('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
     if (it.kind === 'fpost' && owner && it.data.anon) { const id = it.data.id; return [{ label: t('fc.reveal'), onselect: () => reveal(id) }]; }
     if (it.kind === 'freply' && owner && it.data.anon) { const id = it.data.post; return [{ label: t('fc.reveal'), onselect: () => reveal(id) }]; }
@@ -302,6 +306,17 @@
                 <i>{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
             {@render two(t('ro.confirm'), () => decide(it, t('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
               t('ro.decline'), () => decide(it, t('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
+          </div>
+        {:else if it.kind === 'autoev'}
+          {@const e = it.data}
+          <div class="card" out:fold>
+            {@render head(it, more(it))}
+            <button class="who" onclick={() => openDraft(e)}>
+              <OrgLogo org={e.org} size={44} />
+              <span class="tx"><b>{e.title}</b><i>{nameOf(e.org)} · {relDay(e.startsAt)}, {time(e.startsAt)}{e.place ? ' · ' + e.place : ''}</i></span>
+            </button>
+            {@render two(t('adm.autoevOpen'), () => openDraft(e), t('adm.autoevDismiss'),
+              () => decide(it, t('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
           </div>
         {/if}
       {/each}

@@ -1844,9 +1844,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     (179, """CREATE TABLE IF NOT EXISTS round_wide (  -- IF NOT EXISTS: tests rewind user_version
       slot_id INTEGER PRIMARY KEY REFERENCES round_slots(id) ON DELETE CASCADE,
       minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 840)) STRICT;"""),
+    # (Nov 17) events found in a club's channel (logic/autoev.py): each mirrored post looked at once, the draft it made
+    (180, """CREATE TABLE IF NOT EXISTS auto_events (  -- IF NOT EXISTS: tests rewind user_version
+      post_id  INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+      org_id   INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- NULL: no event in it, or its draft deleted (never proposed again)
+      at       INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS auto_events_org ON auto_events(org_id, at);
+    CREATE INDEX IF NOT EXISTS auto_events_event ON auto_events(event_id);"""),
     # (Nov 17) Secret Santa on an event (logic/santa.py): the editor's switch and when it was drawn; who plays, their
     # wishlist (kept here, not in registrations.answers: the organizers read those) and, after the draw, whom they give
-    # to. gives_to has no row of its own on purpose: a pair is read through its giver alone. 180 is another branch's
+    # to. gives_to has no row of its own on purpose: a pair is read through its giver alone.
     (181, """CREATE TABLE IF NOT EXISTS santa_events (  -- IF NOT EXISTS: tests rewind user_version
       event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
       drawn_at INTEGER) STRICT;

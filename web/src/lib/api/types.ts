@@ -420,6 +420,7 @@ export interface EventCard {
   needsVolunteers?: number | null;  // how many volunteers it asks for; null: none
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
+  fromPost?: string;            // Studio, the club's Head+: a draft found in the club's channel (server autoev.py), its post's link
   teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
   teamMax?: number;
   teamCap?: number | null;      // at most this many teams; null: no cap
@@ -716,7 +717,9 @@ export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: s
  *  a person waits for the verdict. `flaws`: the map's open flaws, a count for Admin's quiet bottom row (the admin's). */
 type InboxOf<K extends string, D> = { kind: K; key: string; at: Ts; hidden: boolean; data: D };
 export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'opath', OfficialRequest & { org: OrgRef; members: number }> | InboxOf<'fpost', ChannelModPost>
-  | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest>;
+  | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest> | InboxOf<'autoev', AutoEvent>;
+/** An event found in a club's channel (server autoev.py): its draft, the post it came from. */
+export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; place: string; at: Ts; url: string }
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
 export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }
