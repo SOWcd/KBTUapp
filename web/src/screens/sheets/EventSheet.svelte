@@ -1,15 +1,13 @@
 <script lang="ts">
-  // Event sheet, tinted by the poster colour. The bottom bar holds the one primary action
-  // (Going / price / ticket / waitlist) plus save and share. Cancelling lives on the ticket.
-  // The organizing team also gets its tools here: scanner (Member+), attendees, edit, cancel (Head+).
+  // Event sheet, tinted by the poster colour, in a student's order: what, when and how much (type alone), where,
+  // which friends go, then the one action in the bottom bar, alone (Going / price / ticket / waitlist); save and share
+  // sit on the picture. Cancelling a sign-up lives on the ticket. Everything secondary follows as plain rows.
+  // The organizing team's tools are one group under its own heading: the door (Member+), attendees, edit, cancel (Head+).
   // `preview`: the editor's unsaved form, shown exactly as students will see it (no team tools, buttons inert).
   import Linked from '../../ui/Linked.svelte';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import Share from '@lucide/svelte/icons/share';
   import Lock from '@lucide/svelte/icons/lock';
-  import CalendarClock from '@lucide/svelte/icons/calendar-clock';
-  import Clock from '@lucide/svelte/icons/clock';
-  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MapPin from '@lucide/svelte/icons/map-pin';
@@ -39,7 +37,9 @@
   import { fly } from '../../ui/fly';
   import { onMount } from 'svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
-  import AskAi from '../../ui/AskAi.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Plus from '@lucide/svelte/icons/plus';
   import Sheet from '../../ui/Sheet.svelte';
   import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
   import Button from '../../ui/Button.svelte';
@@ -116,10 +116,14 @@
   const wv = $derived(e && 'wideVideo' in e ? (e as EventFull).wideVideo : null);
   const wide = $derived(wv?.url && !cancelled && !document.documentElement.classList.contains('lowfx')
     && !(navigator as { connection?: { saveData?: boolean } }).connection?.saveData ? wv.url : null);
+  // what it costs, said once under the title (a club's own meeting or a partner's event names no price)
+  const cost = $derived(!e ? '' : e.price ? money(e.price) : e.guestHost || inner(e) || e.meeting ? '' : t('event.free'));
   const pct = $derived(e && e.seats ? Math.min(100, Math.round((e.taken / e.seats) * 100)) : 0);
   const started = $derived(!!e && e.startsAt <= nowTs());
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
+  // still open and I'm not in: said right over the button (closed: the button itself says so)
+  const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
@@ -346,16 +350,29 @@
       {:else}
         <Poster item={e} big play radius={22} dim={cancelled} />
       {/if}
+      <!-- over the picture, the floating layer: whose it is, and the two quiet actions (save, share) in glass; the bar
+           below keeps the one main action alone -->
       <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
       {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
-      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
-      {#if e.school}<span class="tag"><Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag></span>{/if}</div>
+      <span class="acts" class:on={e.saved} inert={!!preview}>
+        <IconButton icon={Bookmark} kind="glass" size="s" on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)} />
+        <IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} /></span></div>
+      <div class="tags">
+      {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
+      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}</div>
     </div>
 
+    <!-- what, when, how much: type alone, read in one look -->
     <div class="head">
-      <h2 class="fs-sec" class:strike={cancelled}>{e.title}</h2>
+      <h2 class="ttl" class:strike={cancelled}>{e.title.replace(/(\p{L})-(\p{L})/gu, '$1\u2011$2')}</h2><!-- "stand-up" stays on one line -->
       {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
-      {#if e.guestHost}<p class="fs-sub dim">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
+      <p class="when">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}, {time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}</p>
+      {#if e.guestHost}<p class="meta"><span>{t('event.with', { host: e.guestHost })}</span><i>·</i><span>{t('event.notKbtu')}</span></p>{/if}
+      {#if !cancelled && !over && (cost || e.seats)}
+        <p class="meta">{#if cost}<b>{cost}</b>{/if}{#if e.seats}{#if cost}<i>·</i>{/if}<span class:red={full}>{e.taken >= e.seats ? t('event.full') : tn('event.seatsLeft', e.seats - e.taken)}</span>{/if}</p>
+        {#if e.price && e.freeFirst && !started}<p class="meta">{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>{/if}
+        {#if e.seats}<div class="bar"><span style="transform:scaleX({pct / 100})" class:full={pct >= 100}></span></div>{/if}
+      {/if}
     </div>
 
     <!-- the rest of the first screen and the bar a frame later: in the tap's frame the sheet is still below the screen
@@ -432,63 +449,108 @@
       </Group>
     {/if}
 
-    {#if ups.length || (head && crew)}
-      <!-- the organizer's updates: the newest under the title in the accent, the rest one tap away -->
+    {#if ups.length}
+      <!-- the organizer's updates: the newest under the facts' head in the accent, the rest one tap away -->
       <div class="ups">
         {#each allUps ? ups : ups.slice(0, 1) as u, i (u.id)}
           <Notice tone={i > 0 ? 'neutral' : 'accent'} icon={Megaphone} title="{t('upd.title')} · {ago(u.at)}"
             action={u.canDelete ? { label: t('upd.delete'), onclick: () => removeUpdate(u) } : undefined}><p class="fs-body up-b">{u.body}</p></Notice>
         {/each}
         {#if ups.length > 1 && !allUps}<span class="lnk"><Button kind="plain" size="s" onclick={() => (allUps = true)}>{t('upd.more', { n: ups.length - 1 })}</Button></span>{/if}
-        {#if head && crew}
-          {#if writing}
-            <Field label={t('upd.write')} bind:value={draft} multiline rows={2} maxlength={300} placeholder={t('upd.placeholder')} />
-            <div class="up-acts"><span class="fs-sub faint">{t('upd.note')}</span>
-              <Button kind="primary" size="s" loading={sending} disabled={draft.trim().length < 2} onclick={sendUpdate}>{t('upd.send')}</Button></div>
-          {:else}
-            <span class="lnk"><Button kind="tinted" size="s" onclick={() => (writing = true)}>{#snippet icon()}<Megaphone size={16} />{/snippet}{t('upd.write')}</Button></span>
-          {/if}
-        {/if}
       </div>
     {/if}
 
+    <!-- where: a row that ends honestly (a chevron opens the map, an arrow leaves for 2GIS) -->
+    {#if gis || !e.santa || e.place}
     <Group>
-      <Row icon={CalendarClock} title={multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)} subtitle="{time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}" />
       {#if gis}
         <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
              2GIS for it (owner, Nov 15: a street address stayed plain text) -->
         <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(gis)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
       {:else if floorOf(e.place) != null}
-        <Row icon={MapIcon} title={e.place} subtitle={floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
-      {:else}
-        {#if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place)} subtitle={e.price ? money(e.price) : e.guestHost ? undefined : t('event.free')} />{/if}<!-- a Santa game started from Studio has no room yet: no "place to be confirmed · free" -->
-      {/if}
-      {#if e.regUntil && !cancelled && !started}
-        <Row icon={Clock} title={e.regUntil <= nowTs() ? t('event.regClosed') : t('event.regUntil', { when: relDay(e.regUntil) + ', ' + time(e.regUntil) })} />
-      {/if}
-      {#if e.price && e.freeFirst && !cancelled && !started}
-        <Row icon={GraduationCap} title={e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')} />
+        <Row icon={MapIcon} title={e.place} whole value={floorOf(e.place) ? t('route.floor', { n: floorOf(e.place)! }) : t('route.basement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
+      {:else if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place)} /><!-- a Santa game started from Studio has no room yet: no "place to be confirmed" -->
       {/if}
     </Group>
+    {/if}
 
     {#if (e.meeting || e.visibility === 'leaders') && st === 'cancelled' && e.my?.cancelReason === 'self' && !started}
       <p class="fs-sub dim note">{e.my.note ? t('meet.yourNo', { why: e.my.note }) : t('meet.yourNoBare')}</p>{/if}
     {#if e.my?.status === 'cancelled' && (e.my.cancelReason === 'receipt_rejected' || e.my.cancelReason === 'hold_expired') && !over}
       <Notice tone="warning" text={t(e.my.cancelReason === 'receipt_rejected' ? 'pay.rejected' : 'pay.holdGone')} />
     {/if}
-    {#if e.seats && !cancelled && !over}
-      <div class="seats">
-        <div class="bar"><span style="width:{pct}%" class:full={pct >= 100}></span></div>
-        <div class="fs-sub dim sr"><span>{tn('event.going', e.taken)}</span><span class:red={full}>{full ? t('event.full') : tn('event.seatsLeft', Math.max(0, e.seats - e.taken))}</span></div>
-        {#if head && crew && !started && e.taken >= e.seats}
-          <div class="addseats"><span class="fs-sub dim">{t('seats.add')}</span>{#each [5, 10, 20] as n (n)}<Button kind="tinted" size="s" disabled={adding2} onclick={() => addSeats(n)}>+{n}</Button>{/each}</div>
+
+    <!-- who of mine goes, and calling the rest: the last thing before the bar's one action -->
+    {#if !cancelled && (e.friends.length || canInvite)}
+      <Group>
+        {#if e.friends.length}
+          <Row dense title={friendsLine(e.friends.map((f) => f.name), over)}>
+            {#snippet lead()}<span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>{/snippet}
+          </Row>
         {/if}
-      </div>
+        {#if canInvite}<Row icon={UserPlus} tone="action" title={t('inv.title')} onclick={() => sheets.invite(id, e.title)} />{/if}
+      </Group>
     {/if}
 
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
     {#if detail?.teams && !preview && !cancelled}<EventTeam {detail} {going} onchange={(d) => (detail = d)} />{/if}
+
+    <!-- the event's own people: everything they do with it in one group of plain rows, under its own heading -->
+    {#if tooled || (head && crew)}
+      <Group caption={t('event.tools')}>
+        {#if crew}
+          {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
+            {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
+          <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
+          {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />
+            {#if head && detail && !over && !e.guestHost}<Row icon={UserCheck} title={t('mk.audience')} value={t(AUD[detail.audience ?? 'both'])}
+              menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === (detail?.audience ?? 'both'), onselect: () => void setAud(a) }))} />{/if}
+          {/if}
+          {#if head}
+            {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+            {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
+            <!-- full before it starts: more seats right here, the waitlist moves in (§4.2) -->
+            {#if e.seats && !cancelled && !started && e.taken >= e.seats}<Row icon={Plus} title={t('seats.addRow')} disabled={adding2}
+              menu={[5, 10, 20].map((n) => ({ label: `+${n}`, onselect: () => void addSeats(n) }))} />{/if}
+            <Row icon={Megaphone} title={t('upd.write')} accessory="disclosure" open={writing} onclick={() => (writing = !writing)} />
+            <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
+          {/if}
+        {/if}
+        {#if coCrew}
+          <Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(true)} />
+          <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {#if !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+        {/if}
+        <!-- a door helper: the same Mark screen as the club's own (QR, scanner; a «door» helper the lists too) -->
+        {#if helper}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id, false, true))} />{/if}
+        {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}
+        {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
+        {#if coLead}<Row tone="destructive" title={t('co.leave')} onclick={leaveCohost} />{/if}
+      </Group>
+      {#if head && crew && writing}
+        <div class="ups">
+          <Field label={t('upd.write')} bind:value={draft} multiline rows={2} maxlength={300} placeholder={t('upd.placeholder')} />
+          <div class="up-acts"><span class="fs-sub faint">{t('upd.note')}</span>
+            <Button kind="primary" size="s" loading={sending} disabled={draft.trim().length < 2} onclick={sendUpdate}>{t('upd.send')}</Button></div>
+        </div>
+      {/if}
+    {/if}
+
+    {#if day && !cancelled && !over}
+      <Notice tone={day.clash.length ? 'warning' : 'neutral'} icon={BookOpen} title={t('day.title')}>
+        {#if day.before}<p class="fs-body">{t('day.before', { subject: subjectOf(day.before.c), end: day.before.c.ends, gap: duration(e.startsAt - day.before.en) })}</p>{/if}
+        {#each day.clash as x (x.c.begins + x.c.subject)}<p class="fs-body warn">{t('day.clash', { subject: subjectOf(x.c), from: x.c.begins, to: x.c.ends })}</p>{/each}
+        {#if day.after}<p class="fs-body">{e.endsAt ? t('day.after', { subject: subjectOf(day.after.c), from: day.after.c.begins, gap: duration(day.after.b - e.endsAt) }) : t('day.afterOpen', { subject: subjectOf(day.after.c), from: day.after.c.begins })}</p>{/if}
+      </Notice>
+    {/if}
+
+    {#if about}
+      <Section title={t('event.about')}>
+        <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form (an organizer, Nov 17) -->
+        {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
+      </Section>
+    {/if}
 
     <!-- volunteers: a student applies with a short "why", the organizers answer; the team sees the count -->
     {#if detail?.volunteers && !preview && !cancelled && !started}
@@ -516,47 +578,6 @@
       {/if}
     {/if}
 
-    {#if detail?.chat && !preview && !cancelled && !over}
-      <Button kind="secondary" size="m" full onclick={() => openLink(detail!.chat!)}>{#snippet icon()}<MessagesSquare size={18} />{/snippet}{t('chat.open')}</Button>
-    {/if}
-
-    {#if day && !cancelled && !over}
-      <Notice tone={day.clash.length ? 'warning' : 'neutral'} icon={BookOpen} title={t('day.title')}>
-        {#if day.before}<p class="fs-body">{t('day.before', { subject: subjectOf(day.before.c), end: day.before.c.ends, gap: duration(e.startsAt - day.before.en) })}</p>{/if}
-        {#each day.clash as x (x.c.begins + x.c.subject)}<p class="fs-body warn">{t('day.clash', { subject: subjectOf(x.c), from: x.c.begins, to: x.c.ends })}</p>{/each}
-        {#if day.after}<p class="fs-body">{e.endsAt ? t('day.after', { subject: subjectOf(day.after.c), from: day.after.c.begins, gap: duration(day.after.b - e.endsAt) }) : t('day.afterOpen', { subject: subjectOf(day.after.c), from: day.after.c.begins })}</p>{/if}
-      </Notice>
-    {/if}
-
-    {#if tooled}
-      <Group>
-        {#if crew}
-          {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
-            {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
-          <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
-          {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />
-            {#if head && detail && !over && !e.guestHost}<Row icon={UserCheck} title={t('mk.audience')} value={t(AUD[detail.audience ?? 'both'])}
-              menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === (detail?.audience ?? 'both'), onselect: () => void setAud(a) }))} />{/if}
-          {/if}
-          {#if head}
-            {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-            {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
-            <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
-          {/if}
-        {/if}
-        {#if coCrew}
-          <Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(true)} />
-          <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {#if !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
-        {/if}
-        <!-- a door helper: the same Mark screen as the club's own (QR, scanner; a «door» helper the lists too) -->
-        {#if helper}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id, false, true))} />{/if}
-        {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}
-        {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
-        {#if coLead}<Row tone="destructive" title={t('co.leave')} onclick={leaveCohost} />{/if}
-      </Group>
-    {/if}
-
     {#if e.meeting && head && crew && meet}
       <Section title="{over ? t('meet.after') : t('meet.answers')} · {meet.filter((a) => (over ? a.came : a.answer === 'yes')).length} / {meet.length}">
         {#each meetGroups as [title, list] (title)}
@@ -569,37 +590,25 @@
       </Section>
     {/if}
 
-    {#if !cancelled && (e.friends.length || canInvite)}
-      <Group>
-        <Row dense icon={e.friends.length ? undefined : UsersRound} title={e.friends.length ? friendsLine(e.friends.map((f) => f.name), over) : t('inv.nudge')}>
-          {#snippet lead()}<span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>{/snippet}
-          {#snippet trailing()}{#if canInvite}<Button kind="tinted" size="s" onclick={() => sheets.invite(id, e.title)}>{#snippet icon()}<UserPlus size={16} strokeWidth={2.3} />{/snippet}{t('inv.button')}</Button>{/if}{/snippet}
-        </Row>
-      </Group>
-    {/if}
-
-    {#if about}
-      <Section title={t('event.about')}>
-        <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form (an organizer, Nov 17) -->
-        {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
-      </Section>
-    {/if}
-    <!-- the server reads only a public, published event's facts: no row where it would know nothing -->
-    {#if !preview && e.status !== 'draft' && (e.visibility ?? 'public') === 'public'}<AskAi ctx={{ kind: 'event', id, title: e.title }} hint={t('as.askEvent')} />{/if}
+    <!-- questions and talk, each a row that says where it goes: KRI (the server reads only a public, published event's
+         facts: no row where it would know nothing), the event's chat, the talk under the channel post (Telegram's
+         replies and reactions); what was asked here before the Telegram talk stays readable -->
+    {@const askKri = session.board && !preview && e.status !== 'draft' && (e.visibility ?? 'public') === 'public'}
+    {@const chat = !preview && !cancelled && !over ? detail?.chat : null}
     {@const talkTg = !!detail?.discuss && !preview && !cancelled}
-    <!-- what was asked here before the Telegram talk stays readable -->
     {@const talkOld = !!detail && !preview && !cancelled && ((detail.commentsOn && !detail.discuss) || !!detail.comments)}
-    {#if talkTg || talkOld}
+    {#if askKri || chat || talkTg || talkOld}
       <Group>
-        <!-- the talk lives under the channel post, with Telegram's replies and reactions -->
-        {#if talkTg}<Row icon={MessageCircle} title={t('cm.titleEvent')} subtitle={t('cm.inTelegram')} accessory="external" onclick={() => openLink(detail!.discuss!)} />{/if}
+        {#if askKri}<Row icon={Sparkles} title={t('as.askAi')} accessory="chevron" onclick={() => { haptic.tap(); sheets.assistant({ kind: 'event', id, title: e.title }); }} />{/if}
+        {#if chat}<Row icon={MessagesSquare} title={t('chat.open')} accessory="external" onclick={() => openLink(chat)} />{/if}
+        {#if talkTg}<Row icon={MessageCircle} title={t('cm.titleEvent')} accessory="external" onclick={() => openLink(detail!.discuss!)} />{/if}
         {#if talkOld}
-          <Row icon={MessageCircle} title={t('cm.titleEvent')} subtitle={detail?.comments ? tn('cm.count', detail.comments) : t('cm.askNudge')} accessory="chevron"
+          <Row icon={MessageCircle} title={t('cm.titleEvent')} value={detail?.comments ? String(detail.comments) : undefined} accessory="chevron"
             onclick={() => (session.me?.student ? sheets.comments('event', id, e.title, (n) => { if (detail) detail = { ...detail, comments: n }; }) : sheets.login())} />
         {/if}
       </Group>
     {/if}
-    {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
+    {#if crew && head && !started}<Group><Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} /></Group>{/if}
     <!-- the one report sheet: anyone but the event's own crew -->
     {#if !may(mem, 'door') && !coMem && !preview && session.me?.student}<div class="rep"><Button kind="plain" size="s" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</Button></div>{/if}
     {/if}
@@ -613,12 +622,10 @@
 
   {#snippet footer()}
     {#if e && soon}
-      {#if noGuest}<p class="tnote">{t('ta.cant')}</p>{/if}
+      {#if noGuest}<p class="tnote">{t('ta.cant')}</p>
+      {:else if regNote}<p class="tnote">{t('event.regUntil', { when: relDay(e.regUntil!) + ', ' + time(e.regUntil!) })}</p>{/if}<!-- the deadline where the decision is made -->
       {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
       <div class="actions btns" inert={!!preview}>
-        <span class="sv" class:on={e.saved}><Button kind="gray" size="l" round on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)}>
-          {#snippet icon()}<Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />{/snippet}</Button></span>
-        <Button kind="gray" size="l" round label={t('event.share')} onclick={share}>{#snippet icon()}<Share size={20} />{/snippet}</Button>
         {#if cancelled}
           <Button kind="neutral" size="l" full disabled>{t('event.cancelledLong')}</Button>
         {:else if e.visibility === 'leaders' && !crew && !going && !started}
@@ -678,21 +685,33 @@
 <style>
   /* the stack under the header: one gap between blocks, Groups like Settings */
   .page { display: flex; flex-direction: column; gap: var(--s-5); }
-  .head { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-5); padding: 0 var(--s-1); }
-  .strike { text-decoration: line-through; color: var(--text-2); }
-  .cancel { font: 600 var(--fs-body)/1.35 var(--font-text); color: var(--danger-text); }
   .pv { display: flex; justify-content: center; margin: 0 0 10px; }
   .note { padding: 0 var(--s-4); }
   .lnk { align-self: flex-start; }
   .trn { margin: -6px 0 0 -8px; --plain-ink: var(--text-3); }
   .warn { color: var(--warning-text); font-weight: 600; }
   .desc { color: var(--text); white-space: pre-line; padding: 0 var(--s-1); }
-  .kill { margin-top: var(--s-1); }
   .rep { display: flex; justify-content: center; --plain-ink: var(--text-3); }
   .gis { width: 24px; display: grid; place-items: center; }
 
+  /* the head: the title is the largest thing on the page, the time right under it in the text's own colour, then one
+     grey line (price, who goes, what is left) over a hairline bar */
+  .head { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--s-5); padding: 0 var(--s-1); }
+  .ttl { font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.028em; text-wrap: balance; overflow-wrap: break-word; }
+  .strike { text-decoration: line-through; color: var(--text-2); }
+  .cancel { font: 600 var(--fs-body)/1.35 var(--font-text); color: var(--danger-text); }
+  .when { margin-top: 2px; font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; color: var(--text); }
+  .when::first-letter { text-transform: uppercase; }
+  .meta { display: flex; flex-wrap: wrap; column-gap: 6px; font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; color: var(--text-2); }
+  .meta b { font-weight: 600; color: var(--text); }
+  .meta i { font-style: normal; color: var(--text-3); }
+  .red { color: var(--danger-text); }
+  .bar { height: 4px; margin-top: 6px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: var(--r-full); background: var(--accent); transform-origin: 0 50%; transition: transform var(--t-slow) var(--ease); }
+  .bar span.full { background: var(--danger); }
+
   /* the header: art (the poster, the photos swiped sideways, the clip) */
-  .hero { position: relative; height: 210px; margin: 4px 0 16px; border-radius: var(--r-l); overflow: hidden; }
+  .hero { position: relative; height: 210px; margin: 4px 0 var(--s-4); border-radius: var(--r-l); overflow: hidden; }
   .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
   .strip::-webkit-scrollbar { display: none; }
@@ -701,11 +720,15 @@
   .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
   .dots i.on { background: var(--on-accent); transform: scale(1.25); }
-  .top { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; } /* a long name yields to the tag, never under it */
+  .top { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; } /* a long name yields to the buttons, never under them */
+  .top > * { pointer-events: auto; }
   .org { flex: 0 1 auto; min-width: 0; display: flex; }
   .org :global(.tag) { max-width: 100%; min-width: 0; }
   .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: var(--fs-cap); gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-  .tag { flex: none; }
+  .acts { flex: none; display: flex; gap: 8px; }
+  .acts.on :global(.ib:first-child svg) { fill: currentColor; color: var(--warning); }
+  /* whom it is for, in the picture's lower corner (the photos' dots stay in the middle, the clip's sound on the right) */
+  .tags { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 72px); display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
 
   /* the guests' album: the first photo big, two beside it, three under (whole blocks only) */
   .album { display: flex; flex-direction: column; gap: 10px; }
@@ -728,16 +751,6 @@
   .ph.wait { background: var(--surface-2); animation: ph-wait 1.1s ease-in-out infinite; }
   @keyframes ph-wait { 50% { opacity: 0.5; } }
 
-  /* seats: a thin bar, how many are going and how many are left */
-  .seats { display: flex; flex-direction: column; gap: 7px; padding: 0 var(--s-1); }
-  .bar { height: 6px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
-  .bar span { display: block; height: 100%; border-radius: var(--r-full); background: var(--accent); transition: width var(--t-slow) var(--ease); }
-  .bar span.full { background: var(--danger); }
-  .sr { display: flex; justify-content: space-between; }
-  .red { color: var(--danger-text); }
-  .addseats { display: flex; align-items: center; gap: 6px; margin-top: var(--s-1); }
-  .addseats .fs-sub { margin-right: auto; }
-
   .ups { display: flex; flex-direction: column; gap: var(--s-2); }
   .up-b { white-space: pre-line; overflow-wrap: anywhere; }
   .up-acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-left: var(--s-4); }
@@ -746,10 +759,9 @@
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  /* the footer: save and share, then the one primary action */
+  /* the footer: the one primary action, alone */
   .actions { display: flex; gap: 8px; align-items: center; }
   .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
-  .sv.on :global(.btn) { color: var(--warning); }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
   @media (max-width: 350px) { .yes :global(svg) { display: none; } } /* the words stay on one line */
