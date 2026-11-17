@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Studio: one Create menu, permission-aware tools, then the upcoming event and event tabs.
-  import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  // Studio (owner, Nov 17: "too many buttons, useless panels"; the Admin sheet's way): the name with one + (the Create
+  // menu); the event of the day with the door, the screen's one main button; what waits for me; the club's places as
+  // plain rows (the Ascent's ladder and the club's profile among them, a tap deeper); then the events by tabs.
   import Plus from '@lucide/svelte/icons/plus';
   import Gift from '@lucide/svelte/icons/gift';
   import ScanLine from '@lucide/svelte/icons/scan-line';
@@ -11,18 +12,19 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import PenLine from '@lucide/svelte/icons/pen-line';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import MountainSnow from '@lucide/svelte/icons/mountain-snow';
+  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import X from '@lucide/svelte/icons/x';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
-  import Ascent from './Ascent.svelte';
-  import { api, type CohostInvite, type EventCard, type Id, type OfficialPath, type Round } from '../../lib/api';
+  import AscentPane from './AscentPane.svelte';
+  import { api, type CohostInvite, type EventCard, type OfficialPath, type Round } from '../../lib/api';
   import { loadMe, session } from '../../lib/state/session.svelte';
-  import { ui, say } from '../../lib/state/ui.svelte';
+  import { ui, say, open } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
-  import MapPin from '@lucide/svelte/icons/map-pin';
   import { data, loadStudio, studioChanged } from '../../lib/state/data.svelte';
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { sheets, registration } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayNo, dayMonth, duration, parts, at as tsAt } from '../../lib/time';
@@ -41,11 +43,8 @@
   import { menu, type MenuItem } from '../../ui/menu';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
-  import Section from '../../ui/Section.svelte';
   import Segmented from '../../ui/Segmented.svelte';
-  import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import Notice from '../../ui/Notice.svelte';
   import Crown from '@lucide/svelte/icons/crown';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import BookUser from '@lucide/svelte/icons/book-user';
@@ -129,14 +128,9 @@
   // the volunteers ledger's club (server logic/vol.py): the list for its President and whom she grants, my own hours for each volunteer
   const vol = $derived(session.me?.vol && session.me.vol.org === m?.org.id ? session.me.vol : null);
   const volLine = (x: { minutes: number; misses: number; unmarked: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + tn('ledg.misses', x.misses) : '') + (x.unmarked ? ' · ' + t('ledg.unmarkedN', { n: x.unmarked }) : '');
-  async function askOfficial() {
-    if (!m || !path) return;
-    const was = path, org = m.org.id;
-    haptic.tap();
-    path = { ...path, request: { id: 0, status: 'pending', reason: null, createdAt: nowTs(), decidedAt: null, againAt: null } }; // at once
-    try { const x = await api.askOfficial(org); if (m?.org.id === org) path = x; haptic.ok(); say(t('op.sent'), 'party_popper_3d'); }
-    catch (e) { path = was; haptic.error(); say(e instanceof ApiErr && e.message === 'president_elsewhere' ? t('op.presElsewhere') : t('common.error'), 'warning_3d'); }
-  }
+  // its ladder and the ask for the ✓ on a page of their own; a row here says the level
+  const level = $derived(path ? (['profile', 'round', 'channel', 'collab', 'top'] as const).filter((k) => path!.steps[k]).length : 0);
+  const openAscent = () => { if (m && path) { haptic.tap(); open(AscentPane, { org: m.org.id, path, presVice }); } };
   const coNo = (ev: MouseEvent, x: CohostInvite) => menu(ev.currentTarget as Element, [
     { label: t('co.no'), onselect: () => void coAnswer(x, false) },
     { label: t('co.mute'), destructive: true, onselect: () => void coAnswer(x, false, true) },
@@ -157,20 +151,11 @@
   const past = $derived(events.filter((e) => e.status !== 'draft' && over(e)).reverse());
   const next = $derived(upcoming.find((e) => e.status === 'published'));
   const today = $derived(!!next && dayNo(next.startsAt) === dayNo(nowTs()));
-  // "Change room" on the day (rooms change on the spot): a KBTU room in one tap; who's coming hears it by the rules
-  let moving = $state(false);
-  let room = $state('');
-  let roomForm = $state<HTMLFormElement>();
-  async function startMove() { room = ''; moving = true; await tick(); roomForm?.querySelector('input')?.focus(); }
-  async function move() {
-    if (!next || !room.trim()) return;
-    try { await api.changePlace(next.id, room.trim()); moving = false; haptic.ok(); say(t('studio.moved'), 'sparkles_3d'); refresh(); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
-
   let seg = $state(0);
   let picking = $state(false);
-  const segs = $derived(staff ? [[t('studio.upcoming'), upcoming], [t('studio.drafts'), drafts], [t('studio.past'), past]] as const : [[t('studio.upcoming'), upcoming], [t('studio.past'), past]] as const);
+  // the event of the day is on top with its door: not twice
+  const soon = $derived(today ? upcoming.filter((e) => e !== next) : upcoming);
+  const segs = $derived(staff ? [[t('studio.upcoming'), soon], [t('studio.drafts'), drafts], [t('studio.past'), past]] as const : [[t('studio.upcoming'), soon], [t('studio.past'), past]] as const);
   const at = $derived(Math.min(seg, segs.length - 1));
   const list = $derived(segs[at][1]);
 
@@ -202,8 +187,14 @@
   const PRES = 'kbtu.presOk';
   let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
+  // one row: invite them (the ask says how the club is handed over after) or "I am the President"
+  const presMenu = (ev: MouseEvent) => { const org = m!.org; menu(ev.currentTarget as Element, [
+    { label: t('studio.invitePres'), onselect: async () => { if (await sheets.ask({ title: t('studio.invitePres'), text: t('studio.todoPresHint'), ok: t('studio.invitePresGo'), cancel: t('common.cancel') })) shareInvite(org); } },
+    { label: t('studio.todoPresMe'), onselect: () => iAmPres(org.id) },
+  ], 'end'); };
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
-  const todo = $derived(coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0);
+  const noUser = $derived(m?.role === 'president' && !!session.me && !session.me.tg.username);
+  const todo = $derived(noUser || coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0);
   // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -262,7 +253,8 @@
 <div class="page stagger" class:scroll={!onTitle} class:inpane={!!onTitle}>
   {#if m}
     <header class="hd">
-      <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right (not inside the list) -->
+      <!-- the club's name switches clubs (A3; no chips row); top right the one way to make something (owner, Nov 17:
+           no full-width Create, the event of the day's QR is the screen's one main button) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
@@ -276,7 +268,7 @@
         {#if multi}
           <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>{@render who()}</button>
         {:else}<div class="title">{@render who()}</div>{/if}
-        {#if may(m, 'profile')}<IconButton icon={Pencil} label={t('ce.title')} onclick={() => sheets.clubEdit(m.org.id)} />{/if}
+        {#if creates.length}<IconButton icon={Plus} kind="tinted" label={t('studio.create')} onclick={(ev) => { haptic.tap(); menu(ev.currentTarget as Element, creates); }} />{/if}
       </div>
       {#if picking}
         <div class="pick" transition:fold>
@@ -291,23 +283,27 @@
       {/if}
     </header>
 
-    {#if creates.length}<Button full size="l" onclick={(ev) => menu(ev.currentTarget as Element, creates)}>{#snippet icon()}<Plus size={20} />{/snippet}{t('studio.create')}</Button>{/if}
-
-    {#if m.role === 'president' && session.me && !session.me.tg.username}
-      <!-- "Message the club" is a DM to the President: without a @username nobody can write (lib/clubdm) -->
-      <Notice tone="warning" title={t('studio.noUserT')} text={t('studio.noUser')} />
+    <!-- the event of the day: its row (a tap: its organizer's screen) and the one main button, the door -->
+    {#if today && next}
+      <div class="day">
+        <Group>
+          <Row dense whole title={next.title} subtitle="{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}" value="{next.taken}{next.seats ? ' / ' + next.seats : ''}" accessory="chevron" onclick={() => openRow(next)}>
+            {#snippet lead()}<Poster item={next} size={44} radius={12} />{/snippet}
+          </Row>
+          <!-- one we co-host: its people from our side (its row opens it as a student sees it) -->
+          {#if staff && !ours(next)}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(next.id)} />{/if}
+        </Group>
+        <!-- one we co-host: its door is our event team's alone (cohosts.py), our plain members don't work it -->
+        <!-- the door screen: one QR for guests and the team alike (the server sorts, checkin._team; the scanner a switch inside it) -->
+        {#if qrDay}<Button kind="primary" size="l" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : registration(next, true, session.me?.vol?.org))}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('mk.title')}</Button>
+        {:else if !next.guestHost && (ours(next) || staff)}<Button kind="primary" size="l" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={19} />{/snippet}{t('studio.scanner')}</Button>{/if}
+      </div>
     {/if}
-
-    {#if vol && (vol.ledger || vol.mine)}
-      <Group>
-        {#if vol.ledger}<Row icon={HandHeart} title={t('ledg.title')} value={data.vol ? tn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
-        {#if vol.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
-      </Group>
-    {/if}
-
 
     {#if todo}
       <Group caption={t('studio.todo')}>
+        {#if noUser}<!-- "Message the club" is a DM to the President: without a @username nobody can write (lib/clubdm) -->
+          <Row icon={TriangleAlert} title={t('studio.noUserT')} subtitle={t('studio.noUserHow')} />{/if}
         {#each coAsks as x (x.event.id)}
           <Row title={x.event.title} subtitle={t('co.ask', { club: nameOf(x.host) })}>
             {#snippet lead()}{#if x.event.cover}<img class="cov" src={x.event.cover.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}{/snippet}
@@ -316,10 +312,7 @@
           </Row>
         {/each}
         {#if claims}<Row icon={UsersRound} title={t('ro.reqTitle')} count={claims} accessory="chevron" onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)} />{/if}
-        {#if alone}
-          <Row icon={Crown} title={t('studio.todoPres')} subtitle={t('studio.todoPresHint')} accessory="chevron" onclick={() => shareInvite(m.org)} />
-          <Row tone="action" title={t('studio.todoPresMe')} onclick={() => iAmPres(m.org.id)} />
-        {/if}
+        {#if alone}<Row icon={Crown} title={t('studio.todoPres')} accessory="chevron" onclick={presMenu} />{/if}
         {#if fresh}<Row icon={UserPlus} title={t('studio.todoApps')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
         {#if memoDue}<Row icon={Mail} title={t('studio.todoMemo')} subtitle={t('studio.todoMemoBy', { n: nextWeek })} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
         {#if askRecruit}<Row icon={UserPlus} title={t('studio.todoRecruit')} subtitle={t('studio.todoRecruitHint')} accessory="chevron" onclick={openRecruit} />{/if}
@@ -341,8 +334,6 @@
       </Group>
     {/if}
 
-    {#if path}<Ascent {path} {presVice} onask={askOfficial} />{/if}
-
     {#if dmp}
       <Group caption={t('tab.dmp')}>
         <Row icon={BookUser} title={t('reg.title')} subtitle={t('reg.studioSub')} count={data.registry?.length ?? 0} accessory="chevron" onclick={() => sheets.registry()} />
@@ -352,65 +343,40 @@
       </Group>
     {/if}
 
+    <!-- the club's places, the ones used most first; each a plain row one tap from its page (the Admin sheet's way) -->
     <div class="tools"><Group>
-      {#if staff}<Row icon={Gift} title={t('santa.title')} value={santa ? tn('santa.playing', santa.taken) : undefined} accessory="chevron" onclick={startSanta} />{/if}
-      {#if staff}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
       <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>
         <!-- the faces fill what the row leaves: whole ones only (the line wraps the rest out of sight) -->
         {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
           <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
       </Row>
-      {#if may(m, 'profile')}<Row icon={MessagesSquare} title={t('studio.chats')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
-      {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
+      {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} value={fresh ? undefined : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
       {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
+      {#if staff}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
+      {#if staff}<Row icon={Gift} title={t('santa.title')} value={santa ? tn('santa.playing', santa.taken) : undefined} accessory="chevron" onclick={startSanta} />{/if}
+      {#if path}<Row icon={MountainSnow} title={t('op.title')} value={path.steps.top ? t('op.atTop') : t('op.level', { n: level })} accessory="chevron" onclick={openAscent} />{/if}
+      {#if may(m, 'profile')}<Row icon={Pencil} title={t('ce.title')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id)} />{/if}
+      {#if vol?.ledger}<Row icon={HandHeart} title={t('ledg.title')} value={data.vol ? tn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
+      {#if vol?.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
     </Group></div>
 
-    <Section title={t('studio.next')}>
-      {#if next}
-        <article class="hero">
-          <button class="ev" onclick={() => openRow(next)}>
-            <Poster item={next} size={60} radius={16} />
-            <span class="txt">
-              <span class="t-foot when" class:now={today}>{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}</span>
-              <b class="t-title clamp-2">{next.title}</b>
-            </span>
-          </button>
-          <!-- how full it is -->
-          <div class="seats"><span class="t-foot"><b class="num">{tn('event.going', next.taken)}</b>{next.seats ? ' / ' + next.seats : ''}</span>
-            {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
-          <div class="acts btns">
-            <!-- one we co-host: its door is our event team's alone (cohosts.py), our plain members don't work it -->
-            <!-- the event's day, its organizers: the door screen (one QR for guests and the team alike: the server sorts, checkin._team; the scanner a switch inside it) -->
-            {#if qrDay}<Button kind="primary" size="m" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : registration(next, true, session.me?.vol?.org))}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('mk.title')}</Button>
-            {:else if !next.guestHost && (ours(next) || staff)}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
-            {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
-          </div>
-          {#if staff && ours(next) && today && !next.placeUrl}
-            {#if !moving}
-              <Button kind="plain" size="s" full onclick={startMove}>{#snippet icon()}<MapPin size={16} />{/snippet}{t('studio.move')}</Button>
-            {:else}
-              <form class="moving" bind:this={roomForm} onsubmit={(e) => { e.preventDefault(); void move(); }}>
-                <span class="fl"><Field label={t('studio.newRoom')} bind:value={room} maxlength={80} placeholder={next.place || '305'} enterkeyhint="done" /></span>
-                <Button kind="primary" size="l" type="submit" disabled={!room.trim()}>{t('common.save')}</Button>
-              </form>
-            {/if}
-          {/if}
-        </article>
-      {:else}
-        <Group><EmptyState inline text={t('studio.none')} /></Group>
-      {/if}
-    </Section>
-
-    <div class="events">
-      <Segmented label={t('studio.upcoming')} items={segs.map(([label, l], i) => ({ value: i, label: label + (l.length ? ' · ' + l.length : '') }))} value={at} onchange={(v) => (seg = v)} />
-      <div class="list">
-        {#each list as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={() => openRow(e)} />
-        {:else}<EmptyState inline text={t('studio.empty')} />{/each}
+    {#if events.length}
+      <div class="events">
+        <Segmented label={t('studio.upcoming')} items={segs.map(([label, l], i) => ({ value: i, label: label + (l.length ? ' · ' + l.length : '') }))} value={at} onchange={(v) => (seg = v)} />
+        <div class="list">
+          {#each list as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={() => openRow(e)} />
+          {:else}<EmptyState inline text={t('studio.empty')} />{/each}
+        </div>
       </div>
-    </div>
+    {:else if staff}<!-- a club with no event yet: its first one is the screen's one main button -->
+      <Button kind="primary" size="l" full onclick={() => sheets.editor(m.org.id)}>{#snippet icon()}<Plus size={20} />{/snippet}{t('ed.new')}</Button>
+    {:else}
+      <EmptyState inline text={t('studio.none')} />
+    {/if}
 
-    {#if ownClub}
-      <Group><Row tone="destructive" icon={Trash2} title={t('studio.del')} subtitle={emptyClub ? undefined : t('studio.delWhyNot')} disabled={!emptyClub} onclick={deleteClub} /></Group>
+    <!-- a club made by mistake: shown only while it can go (nobody else in it, no event out; the server checks too) -->
+    {#if ownClub && emptyClub}
+      <Group><Row tone="destructive" icon={Trash2} title={t('studio.del')} onclick={deleteClub} /></Group>
     {/if}
   {/if}
   <div class="tail"></div>
@@ -445,23 +411,9 @@
   .faces :global(.av + .av) { margin-left: -8px; }
   @media (max-width: 359px) { .faces { display: none; } } /* no room for a whole face beside the title */
   .n { margin-left: var(--s-1); color: var(--text-3); font-weight: 450; }
-  .hero { display: flex; flex-direction: column; gap: var(--s-3); padding: 14px; border-radius: var(--r-group); background: var(--surface); }
-  .ev { display: flex; gap: var(--s-3); align-items: center; text-align: left; width: 100%; }
-  .ev:active { opacity: 0.7; transform: none; }
-  .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .when { font-weight: 600; }
-  .when.now { color: var(--success-text); }
-  .seats { display: flex; flex-direction: column; gap: 6px; }
-  .seats b { color: var(--text); font-weight: 600; }
-  .bar { height: 6px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
-  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-  .acts { display: flex; gap: var(--s-2); }
+  .day { display: flex; flex-direction: column; gap: var(--s-3); }
   .yn { display: flex; align-items: center; gap: var(--s-2); }
   .cov { width: 30px; height: 30px; border-radius: var(--r-xs); object-fit: cover; }
-  /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */
-  @media (max-width: 359px) { .acts :global(.btn.full) { flex-basis: auto; padding-inline: var(--s-3); gap: 6px; } }
-  .moving { display: flex; align-items: flex-end; gap: var(--s-2); }
-  .fl { flex: 1; min-width: 0; }
   .events { display: flex; flex-direction: column; gap: var(--s-3); }
   .list { display: flex; flex-direction: column; gap: var(--s-2); }
   .tail { height: calc(var(--bottom) + 24px); }
