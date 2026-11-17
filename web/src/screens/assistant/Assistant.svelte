@@ -10,6 +10,8 @@
   // help desk's composer with the question in it, sent only on the student's tap.
   import { untrack } from 'svelte';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import Navigation from '@lucide/svelte/icons/navigation';
+  import { addressGis } from '../../lib/map';
   import MapIcon from '@lucide/svelte/icons/map';
   import Ticket from '@lucide/svelte/icons/ticket';
   import UserRound from '@lucide/svelte/icons/user-round';
@@ -86,19 +88,23 @@
   const PLAIN = { timetable: 'list.classes', gallery: 'gallery.title', ask: 'ask.button', news: 'page.news', afisha: 'tab.afisha', forum: 'tab.forum',
     clubs: 'page.clubs', profile: 'tab.profile', tickets: 'as.tickets', friends: 'page.friends', awards: 'page.awards', subjects: 'sj.title', post: 'as.post' } as const;
   const label = (a: AssistAction) => a.type === 'map' ? (a.room ? t('as.onMap', { room: a.room }) : t('as.map'))
-    : a.type === 'event' ? eventById(a.id)?.title ?? t('as.event')
+    : a.type === 'event' ? eventById(a.id)?.title ?? t('as.event') : a.type === 'route' ? t('event.route')
     : a.type === 'club' ? [...data.orgs, ...data.small].find((o) => o.id === a.id)?.name ?? t('as.club')
     : a.type === 'studio' ? t('as.studio', { name: mine(a.id) }) : a.type === 'new_event' ? t('as.newEvent', { name: mine(a.id) })
     : a.type === 'settings' ? t(SET[a.kind]) : t(PLAIN[a.type]);
   const ICON = { map: MapPin, event: CalendarDays, club: Users, timetable: CalendarClock, settings: Settings, gallery: Images, news: Newspaper, ask: MessageCircleQuestion,
     afisha: TAB_ICON.afisha, forum: TAB_ICON.forum, clubs: TAB_ICON.club, profile: TAB_ICON.profile, tickets: Ticket, friends: UserRound, awards: Trophy,
-    subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus };
+    subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus, route: Navigation };
+  // an off-campus event's way there: its 2GIS link, or 2GIS's search for its typed address (the event page's own rule)
+  const gisOf = (id: number) => { const e = eventById(id); return e ? e.placeUrl || addressGis(e.place) : null; };
+  const shown = (a: AssistAction) => a.type !== 'route' || !!gisOf(a.id); // no way there: no button
   const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
   /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
    *  are the app's own openers) */
   function tab(k: Tab) { for (const o of overlays) close(o.id, false); goTab(k); }
   function go(a: AssistAction, q?: string) {
-    if (a.type === 'map') sheets.map(a.room);
+    if (a.type === 'route') { const u = gisOf(a.id); if (u) openLink(u); }
+    else if (a.type === 'map') sheets.map(a.room);
     else if (a.type === 'event') sheets.event(a.id);
     else if (a.type === 'club') sheets.club(a.id);
     else if (a.type === 'settings') sheets.settings(a.kind);
@@ -162,7 +168,7 @@
         <div class="b {m.role}">
           <p class="selectable">{m.text}</p>
           {#if m.actions?.length}
-            <div class="acts">{#each m.actions as a, k (k)}
+            <div class="acts">{#each m.actions.filter(shown) as a, k (k)}
               <Button kind="tinted" size="s" onclick={() => go(a, m.q)}>
                 {#snippet icon()}{@const Icon = iconOf(a)}<Icon size={15} />{/snippet}
                 {label(a)}

@@ -31,7 +31,7 @@ def test_card_context(env, monkeypatch):
 
     async def fake(cfg_, http, msgs, **kw):
         seen.append("\n".join(m["content"] for m in msgs))
-        return json.dumps({"text": "Bring a laptop.", "actions": [{"type": "event", "id": 7}]}), "x"
+        return json.dumps({"text": "Bring a laptop.", "actions": [{"type": "event", "id": 7}, {"type": "route", "id": 7}, {"type": "route", "id": 999}]}), "x"
     monkeypatch.setattr(llm, "chat", fake)
     ask = lambda ctx: c.post("/api/assistant", headers=tma(1), json={"q": "what to bring?", "context": ctx})  # noqa: E731
 
@@ -39,7 +39,7 @@ def test_card_context(env, monkeypatch):
     page = seen[-1].split("The student opened you from", 1)[1]
     assert "Hackathon" in page and "Bring a laptop" in page and "IT Club" in page and "500 tenge" in page
     assert "Dana" not in seen[-1] and "+7700" not in seen[-1]               # the payee's name and phone never go
-    assert r["actions"] == [{"type": "event", "id": 7}]
+    assert r["actions"] == [{"type": "event", "id": 7}, {"type": "route", "id": 7}]  # a route only to an event of the brief
     ask({"kind": "club", "id": 1})
     assert "We build robots." in seen[-1] and "tiktok.com/@itclub" in seen[-1] and "join requests" in seen[-1]
 

@@ -48,7 +48,9 @@ Reply with JSON only, no other text:
 {{"text": "...", "actions": [{{"type": "map", "room": "180"}}, {{"type": "event", "id": 12}}], "known": true, "topic": "dean office SITE", "care": false}}
 actions: at most 3 buttons that open a screen of the app, only when they help with this question; [] if none. Only
 these: {{"type": "map", "room": R}} a room in the facts; {{"type": "event", "id": N}} an event id in the facts (also
-for "sign me up": it opens the event, the student signs up there); {{"type": "club", "id": N}} a club id in the facts;
+for "sign me up": it opens the event, the student signs up there); {{"type": "route", "id": N}} the way to an event
+held off campus (a street address, not a room): it opens the route in 2GIS, so offer it for "how do I get there"
+instead of telling the student to open a maps app themselves; {{"type": "club", "id": N}} a club id in the facts;
 {{"type": "timetable"}} the student's week of classes; {{"type": "settings", "kind": "school" | "course" | "notify"}}
 their school, year of study or notifications in Settings (to change them there); {{"type": "gallery"}} photos from
 events; {{"type": "news"}} the clubs' news; {{"type": "map"}} the campus map as a whole; {{"type": "afisha"}}, {{"type": "clubs"}},
@@ -331,6 +333,8 @@ def answer(text: str, ok: dict) -> dict:
         elif k == "map" and str(a.get("room", "")).lower() in ok.get("map", ()):
             b = {"type": "map", "room": str(a["room"]).lower()}
         elif k in ("event", "club") and type(a.get("id")) is int and a["id"] in ok.get(k, ()):  # not True (== 1)
+            b = {"type": k, "id": a["id"]}
+        elif k == "route" and type(a.get("id")) is int and a["id"] in ok.get("event", ()):  # the app shows it only where the event has a way there
             b = {"type": k, "id": a["id"]}
         elif k in CLUB_SCREENS and ok.get(k):  # my club, filled in here (the model's id, if any, ignored)
             b = {"type": k, "id": ok[k]}
