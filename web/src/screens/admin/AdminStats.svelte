@@ -15,7 +15,7 @@
 <button class="card" onclick={() => { haptic.tap(); open(StatsPane, {}); }} aria-label={t('adm.stats')}>
   {#if st}
     <span class="n"><b class="num">{st.students}</b><i>{t('st.students')}</i></span>
-    <span class="n"><b class="num" class:new={st.studentsToday > 0}>+{st.studentsToday}</b><i>{t('st.newToday')}</i></span>
+    <span class="n"><b class={["num", { new: st.studentsToday > 0 }]}>+{st.studentsToday}</b><i>{t('st.newToday')}</i></span>
     <span class="n"><b class="num">{st.users}</b><i>{t('st.users')}</i></span>
     <ChevronRight size={18} />
   {:else}
@@ -27,7 +27,7 @@
   .card { display: flex; align-items: center; gap: var(--s-3); width: 100%; padding: var(--s-4); border-radius: var(--r-group); text-align: left; color: var(--text-3);
     background: var(--surface); box-shadow: var(--shadow-card); transition: transform 450ms var(--ease-bounce); }
   .card:active { transform: scale(0.98); transition-duration: 80ms; }
-  .n { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .n { flex: 1; align-self: flex-start; display: flex; flex-direction: column; gap: 4px; min-width: 0; } /* the numbers on one line, however their labels wrap */
   .n b { font: 750 var(--fs-t1)/1 var(--font-display); letter-spacing: -0.03em; color: var(--text); }
   .n b.new { color: var(--success-text); }
   .n i { font: 500 var(--fs-sub)/1.2 var(--font-text); font-style: normal; color: var(--text-3); }

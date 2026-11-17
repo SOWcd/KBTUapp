@@ -1,12 +1,11 @@
 <script lang="ts">
-  // The Admin sheet (owner + review Nov 3, .claude/reports/admin-home-review.md §A): one page, no segments. A search on
-  // top (iOS Settings: while typed, the page steps aside for People, Clubs and Awards); "To decide" first whenever
-  // something waits (where it stands is fixed for this opening, so a decided last card doesn't jump the page); the
-  // admins' numbers card; then the places, one group of rows. A moderator gets the queue and his two places only.
-  // Events in the same search (owner, Nov 7): a tap runs one as its organizers do in Studio (EventManage, staff).
-  // "An event for a club" (owner, Nov 11: clubs ask the creator to post theirs): pick the club, the usual editor as staff.
-  // "A club's Studio", the creator's alone (owner, Nov 15): pick the club, its whole Studio as its President.
-  // The map's flaws: a quiet row at the very bottom (owner, Nov 7: the card on top pulled from moderation).
+  // The Admin sheet (owner, Nov 17: "too many tabs and buttons, several doing the same; the search line is the best
+  // thing there: I type an organization and go"). Everything starts from the search on top: organizations first, then
+  // people, events (a tap runs one as its organizers do in Studio: EventManage, staff) and awards. Before a letter is
+  // typed: what waits (the queue as one row with its count), the organizations opened last, the
+  // admins' numbers, then the few places that are lists of their own. "An event for a club" and "A club's Studio" are
+  // no longer places: they are on the organization's page (AdminOrg), where the search leads.
+  // A moderator has no search: his sheet is the queue itself and his two places.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Building from '@lucide/svelte/icons/building-2';
   import MedalIcon from '@lucide/svelte/icons/medal';
@@ -16,14 +15,14 @@
   import Users from '@lucide/svelte/icons/users';
   import Bell from '@lucide/svelte/icons/bell';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
-  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
-  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+  import Inbox from '@lucide/svelte/icons/inbox';
   import { untrack, type Component } from 'svelte';
-  import { api, staffEvents, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
+  import { api, staffEvents, type AdminOrg, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
   import { hit } from '../../lib/clubs';
   import { hit as match } from '../../lib/search';
   import { CATALOG, manualMedal, manualTitle } from '../../lib/awards';
-  import { data, eventById } from '../../lib/state/data.svelte';
+  import { adminOrgs, byRecent, loadAdminOrgs, orgLine } from '../../lib/state/adminOrgs.svelte';
+  import { data, eventById, loadInbox } from '../../lib/state/data.svelte';
   import { relDay } from '../../lib/time';
   import Poster from '../../ui/Poster.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -40,21 +39,21 @@
   import Medal from '../../ui/Medal.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import AdminInbox from './AdminInbox.svelte';
+  import AdminQueue from './AdminQueue.svelte';
   import AdminStats from './AdminStats.svelte';
   import AdminAwards from './AdminAwards.svelte';
   import AdminPeople from './AdminPeople.svelte';
   import AdminNotify from './AdminNotify.svelte';
-  import AdminEventFor from './AdminEventFor.svelte';
+  import AdminOrgPane from './AdminOrg.svelte';
   import AwardPane from './AwardPane.svelte';
   import PersonPane from './PersonPane.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
-  // where the queue stands, once per opening: on top when something waits (moderators: always)
-  const queueFirst = untrack(() => !admin || !!data.inbox?.items.length);
+  untrack(() => { if (admin) { loadAdminOrgs(); void loadInbox(true); } }); // fresh on every opening; what the app holds shows meanwhile
 
-  // ---- the search: clubs and awards on the first key (held already), people a beat after the last one (the server)
+  // ---- the search: organizations and awards on the first key (held already), people and events a beat after the last
   let q = $state('');
   const s = $derived(q.trim().toLowerCase().replace(/^@/, ''));
   let people = $state<StaffRow[] | null>(null);
@@ -76,16 +75,25 @@
     sheets.manage(e.id, true);
   }
   const status = (e: EventCard) => (e.status === 'draft' ? t('studio.draft') : e.status === 'cancelled' ? t('event.cancelled') : '');
-  // clubs: the ones held at once, then the server's (hidden ones too, every language's name)
   const events = $derived(found?.events);
-  const clubs = $derived(found ? found.clubs.slice(0, 8) : s ? data.orgs.filter((o) => hit(o, s)).slice(0, 8) : []);
+  // organizations: the admin's own list (hidden ones and offices too), the ones opened last first; until it is read,
+  // the clubs the app holds
+  const all = $derived<OrgRef[]>(adminOrgs.list ?? data.orgs);
+  const clubs = $derived(s ? all.filter((o) => hit(o, s) || o.slug.includes(s)).sort(byRecent).slice(0, 8) : []);
+  const recent = $derived(adminOrgs.recent.map((id) => all.find((o) => o.id === id)).filter((o) => !!o).slice(0, 3));
   const awards = $derived(s ? CATALOG.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
+  const line = (o: OrgRef) => ('team' in o ? [(o as AdminOrg).hidden ? t('adm.hiddenTag') : '', o.kind === 'school' ? t('adm.kindSchool') : '', orgLine(o as AdminOrg)].filter(Boolean).join(' · ') : undefined);
   const go = (f: () => unknown) => { haptic.tap(); f(); };
 </script>
 
 <!-- a place: the editor's look (EventEditor's rows: a plain grey line icon, no tile) -->
-{#snippet place(Icon: Component<any>, title: string, to: () => unknown)}
-  <Row {title} accessory="chevron" onclick={() => go(to)}>{#snippet lead()}<span class="gi"><Icon size={22} strokeWidth={1.9} /></span>{/snippet}</Row>
+{#snippet place(Icon: Component<any>, title: string, to: () => unknown, count = 0, value?: string)}
+  <Row {title} {count} {value} accessory="chevron" onclick={() => go(to)}>{#snippet lead()}<span class="gi"><Icon size={22} strokeWidth={1.9} /></span>{/snippet}</Row>
+{/snippet}
+{#snippet orgRow(o: OrgRef)}
+  <Row dense title={o.name} subtitle={line(o)} accessory="chevron" onclick={() => go(() => open(AdminOrgPane, { org: o }))}>
+    {#snippet lead()}<OrgLogo org={o} size={36} />{/snippet}
+  </Row>
 {/snippet}
 
 <!-- the title is the capsule's, with the shield (not twice) -->
@@ -95,13 +103,7 @@
   {#if s}
     <div class="page">
       {#if clubs.length}
-        <Group caption={t('adm.clubs')}>
-          {#each clubs as o (o.id)}
-            <Row dense title={o.name} accessory="chevron" onclick={() => go(() => sheets.adminClubs(o.id))}>
-              {#snippet lead()}<OrgLogo org={o} size={36} />{/snippet}
-            </Row>
-          {/each}
-        </Group>
+        <Group caption={t('adm.clubs')}>{#each clubs as o (o.id)}{@render orgRow(o)}{/each}</Group>
       {/if}
       {#if people?.length}
         <Group caption={t('adm.people')}>
@@ -135,34 +137,36 @@
     </div>
   {/if}
 
-  <!-- hidden, not gone, while a search is typed: the queue keeps its decided lines and their Undo -->
+  <!-- hidden, not gone, while a search is typed: a moderator's queue keeps its decided lines and their Undo -->
   <div class="page stagger" hidden={!!s}>
-    {#if queueFirst}<AdminInbox />{/if}
-    {#if admin}<AdminStats />{/if}
-    {#if !queueFirst}<AdminInbox />{/if}
+    {#if admin}
+      <Group>{@render place(Inbox, t('adm.queue'), () => open(AdminQueue, {}), data.inbox?.items.length ?? 0)}</Group>
+      {#if recent.length}
+        <Group caption={t('adm.recent')}>{#each recent as o (o.id)}{@render orgRow(o)}{/each}</Group>
+      {/if}
+      <AdminStats />
+    {:else}
+      <AdminInbox />
+    {/if}
     <Group>
       {#if admin}
-        {@render place(MedalIcon, t('adm.awards'), () => open(AdminAwards, {}))}
         {@render place(Building, t('adm.clubs'), () => sheets.adminClubs())}
-        {@render place(CalendarPlus, t('adm.eventFor'), () => open(AdminEventFor, {}))}
-        {#if owner}{@render place(LayoutDashboard, t('adm.studioFor'), () => open(AdminEventFor, { studio: true }))}{/if}
+        {@render place(MedalIcon, t('adm.awards'), () => open(AdminAwards, {}))}
       {/if}
       {@render place(TelegramMark, t('adm.chats'), () => sheets.adminChats())}
       {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
       {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
+      <!-- the map's flaws: quiet and last (owner, Nov 7: a card on top pulled from moderation) -->
+      {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>
-    {#if data.inbox?.flaws}
-      <Group><Row title={t('mf.title')} value={String(data.inbox.flaws)} accessory="chevron" onclick={() => go(() => sheets.mapFlaws())}>
-        {#snippet lead()}<span class="gi"><MapPinned size={22} strokeWidth={1.9} /></span>{/snippet}</Row></Group>
-    {/if}
   </div>
 </Sheet>
 
 <style>
   .find { margin-bottom: var(--s-5); }
-  .page { display: flex; flex-direction: column; gap: var(--s-7); }
+  .page { display: flex; flex-direction: column; gap: var(--s-6); }
   .page[hidden] { display: none; }
   .gi { display: inline-flex; width: 26px; justify-content: center; color: var(--text-2); }
 </style>
