@@ -2267,6 +2267,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.set_reg_until(con, v, eid, body.get("until"))
 
     # Secret Santa (logic/santa.py): the one draw. No route reads pairs: each giver's own is on the event's page
+    @app.post("/api/orgs/{oid}/santa")  # Studio's one button: the club's game, made and published (or the running one)
+    def santa_start(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.santa.start(con, v, oid, body)
+
     @app.post("/api/events/{eid}/santa/draw")
     def santa_draw(eid: int, con: Con, v: Me):
         return logic.santa.draw(con, v, eid)

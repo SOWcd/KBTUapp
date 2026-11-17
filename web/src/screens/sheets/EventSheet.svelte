@@ -460,7 +460,7 @@
       {:else if floorOf(e.place) != null}
         <Row icon={MapIcon} title={e.place} subtitle={floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
       {:else}
-        <Row icon={MapPin} title={placeOf(e.place)} subtitle={e.price ? money(e.price) : e.guestHost ? undefined : t('event.free')} />
+        {#if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place)} subtitle={e.price ? money(e.price) : e.guestHost ? undefined : t('event.free')} />{/if}<!-- a Santa game started from Studio has no room yet: no "place to be confirmed · free" -->
       {/if}
       {#if e.regUntil && !cancelled && !started}
         <Row icon={Clock} title={e.regUntil <= nowTs() ? t('event.regClosed') : t('event.regUntil', { when: relDay(e.regUntil) + ', ' + time(e.regUntil) })} />
@@ -651,8 +651,8 @@
         {:else if going && inner(e)}
           <!-- a club's own event: no ticket, just the answer, changeable until it starts -->
           <div class="ans btns">
-            {#if !started}<Button kind="secondary" size="l" full onclick={() => (e.meeting ? cantCome() : e.visibility === 'leaders' ? declineInvite(id) : toggleGoing(id))}>{t('lead.no')}</Button>{/if}
-            <span class="yes"><Check size={18} strokeWidth={2.6} />{t('event.youGo')}</span>
+            {#if !started}<Button kind="secondary" size="l" full onclick={() => (e.meeting ? cantCome() : e.visibility === 'leaders' ? declineInvite(id) : toggleGoing(id))}>{t(e.santa ? 'santa.out' : 'lead.no')}</Button>{/if}
+            <span class="yes"><Check size={18} strokeWidth={2.6} />{t(e.santa ? 'santa.in' : 'event.youGo')}</span>
           </div>
         {:else if going}
           <Button kind="primary" size="l" full onclick={() => sheets.ticket(id)}>{#snippet icon()}<Ticket size={18} />{/snippet}{t('event.ticket')}</Button>
@@ -667,7 +667,7 @@
         {:else if full}
           <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id)}>{t('event.notify')}</Button>
         {:else}
-          <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button>
+          <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
         {/if}
       </div>
     {/if}

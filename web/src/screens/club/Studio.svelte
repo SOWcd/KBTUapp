@@ -25,7 +25,7 @@
   import { tick, untrack } from 'svelte';
   import { sheets, registration } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayNo, dayMonth, duration } from '../../lib/time';
+  import { relDay, time, nowTs, dayNo, dayMonth, duration, parts, at as tsAt } from '../../lib/time';
   import Clock from '@lucide/svelte/icons/clock';
   import { may, byRank, roleName, roleLabel, titleOf } from '../../lib/perms';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -225,9 +225,21 @@
   // Waiting applications (or no casting right) open the inbox; otherwise straight to the round's board or its form (owner, Nov 14).
   const recruitTile = $derived(casting || vice);
   const openRecruit = () => (vice && (waiting || !casting) ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
+  // Secret Santa (server santa.py): one row. No game: a confirm, then the club's game is made and published at once (no
+  // event form; the gifts day is a default the editor changes); a game running: how many play, and its management
+  const santa = $derived(events.find((e) => e.santa && e.status === 'published' && (e.endsAt ?? e.startsAt) > nowTs()));
+  async function startSanta() {
+    if (!m) return;
+    haptic.tap();
+    if (santa) { sheets.manage(santa.id); return; }
+    const day = tsAt(parts(nowTs()).y, 11, 25, 18, 0) /* Dec 25: months from 0 */;
+    const when = day - nowTs() > 3 * 86400 ? day : nowTs() + 14 * 86400; // too close to Dec 25 or past it: two weeks from now
+    if (!(await sheets.ask({ title: t('santa.startAsk'), text: t('santa.startText', { day: dayMonth(when) }), ok: t('santa.startGo'), cancel: t('common.cancel') }))) return;
+    try { const e = await api.santaStart(m.org.id, t('santa.title'), when); refresh(); haptic.ok(); say(t('santa.started'), 'party_popper_3d'); sheets.manage(e.id); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   const creates = $derived<MenuItem[]>([
     ...(staff ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []),
-    ...(staff ? [{ label: t('santa.title'), icon: Gift, onselect: () => sheets.editor(m!.org.id, undefined, undefined, 'santa') }] : []),
     ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),
     ...(may(m, 'posts') ? [{ label: t('casting.mark'), icon: Megaphone, onselect: () => sheets.composer(m!.org.id, undefined, true) }] : []),
   ]);
@@ -341,6 +353,7 @@
     {/if}
 
     <div class="tools"><Group>
+      {#if staff}<Row icon={Gift} title={t('santa.title')} value={santa ? tn('santa.playing', santa.taken) : undefined} accessory="chevron" onclick={startSanta} />{/if}
       {#if staff}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
       <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>
         <!-- the faces fill what the row leaves: whole ones only (the line wraps the rest out of sight) -->

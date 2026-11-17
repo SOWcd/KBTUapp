@@ -465,6 +465,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
+    if kind == "santa_news":  # sn:<org>, to its President or Vice (kbtu.admin santa-news): quiet once they aren't
+        o = one(con, """SELECT o.name FROM orgs o JOIN org_members mm ON mm.org_id = o.id AND mm.user_id = ? AND mm.role IN ('president', 'vice')
+            WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=o["name"]), f"st_{ref[1]}") if o else None
     if kind == "crew_added":  # cw:<event>, to the helper (logic/crew.py): quiet once the right is gone or the event over
         e = one(con, """SELECT e.*, o.name AS org FROM event_crew c JOIN events e ON e.id = c.event_id JOIN orgs o ON o.id = c.org_id
             WHERE c.event_id = ? AND c.user_id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public'

@@ -11,13 +11,43 @@ import sqlite3
 
 from ..db import tx
 
-from .core import PERSON, ApiError, Viewer, full, now, one, person_ref, rows
+from .core import PERSON, ApiError, Viewer, _may, full, now, one, person_ref, rows
 
 WISH_MAX = 300
 MIN = 3
 
 _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
     AND r.status = 'going' WHERE p.event_id = ?"""
+
+
+def start(con, v: Viewer, oid: int, body: dict) -> dict:
+    """Studio's one button (owner, Nov 17: "a person presses it and the game is there, no event form"): a published
+    team-only Santa event. title: "Secret Santa" in the starter's language; startsAt: the gifts day the app proposed
+    (a published event needs a start; the editor changes it later). One game at a time: a running one is returned."""
+    _may(con, v, oid, "events")
+    with tx(con):
+        e = one(con, """SELECT e.* FROM events e JOIN santa_events s ON s.event_id = e.id WHERE e.org_id = ? AND e.status = 'published'
+            AND COALESCE(e.ends_at, e.starts_at) > ? ORDER BY e.id LIMIT 1""", oid, now())
+        if e:
+            return full(con, v, e)
+        made = create_event(con, v, oid, {"title": body.get("title"), "place": "", "startsAt": body.get("startsAt"), "emoji": "sparkles_3d",
+                                          "color": "#D7263D", "visibility": "members", "santa": True})
+        return publish_event(con, v, made["id"])
+
+
+def news(con, dry: bool = False) -> int:
+    """`python -m kbtu.admin santa-news`: the tool's announcement, a template with a button into their Studio, queued
+    once per person to every President and Vice of an active organization the bot can write to (their first one's
+    Studio). Run by hand, never by a deploy; a second run queues only who became one since."""
+    to = rows(con, """SELECT m.user_id, MIN(m.org_id) AS org FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.status = 'active'
+        JOIN users u ON u.id = m.user_id AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+        WHERE m.role IN ('president', 'vice') AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = m.user_id AND b.kind = 'santa_news')
+        GROUP BY m.user_id ORDER BY m.user_id""")
+    if not dry:
+        with tx(con):
+            for r in to:
+                notify(con, r["user_id"], "santa_news", f"sn:{r['org']}")
+    return len(to)
 
 
 def parts(con, ids: list[int]) -> dict[int, dict]:
@@ -109,5 +139,5 @@ def gone(con, uid: int) -> None:
         WHERE gives_to = ?""", (uid, uid))
 
 
-from .organizing import _staff_event  # noqa: E402  (they import core, core imports this)
+from .organizing import _staff_event, create_event, publish_event  # noqa: E402  (they import core, core imports this)
 from .seats import notify  # noqa: E402

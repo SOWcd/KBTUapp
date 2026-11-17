@@ -180,7 +180,8 @@ def tba_day(con) -> None:
     day = local // 86400
     if local % 86400 < 10 * 3600 or not _once(con, "tba_day", str(day)):
         return
-    for e in rows(con, "SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND created_by IS NOT NULL AND starts_at > ?", core.now()):
+    for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND created_by IS NOT NULL AND starts_at > ?
+            AND id NOT IN (SELECT event_id FROM santa_events)""", core.now()):  # a Santa game (santa.start) has no room to confirm
         if (e["starts_at"] + 5 * 3600) // 86400 - day in (7, 3, 1, 0):
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
 

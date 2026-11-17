@@ -4,7 +4,9 @@ alone (not the organizer, the app's admin from Admin, another participant); who 
 passed over, so nobody still in is left without a Santa."""
 from __future__ import annotations
 
-from kbtu import bot
+import time
+
+from kbtu import admin, bot, logic
 from test_core import delete_now, env, login, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _uid
 
@@ -132,3 +134,51 @@ def test_nobody_lands_in_a_drawn_game(env):
     assert r.status_code == 409 and r.json()["message"] == "santa_signed"
     c.delete(f"/api/events/{plain}/registration", headers=tma(10))
     assert c.patch(f"/api/events/{plain}", headers=tma(20), json={**body, "santa": True}).json()["santa"] == {"drawn": False}
+
+
+def _start(c, tg, org=1, **body):
+    return c.post(f"/api/orgs/{org}/santa", headers=tma(tg), json={"title": "Secret Santa", "startsAt": int(time.time()) + 20 * 86400, **body})
+
+
+def test_one_button_starts_the_game(env):
+    """Studio's button (santa.start): a published team-only Santa event at once; a second tap returns the running one."""
+    c, cfg = env
+    con = _club(c, cfg)
+    assert _start(c, 10).status_code == 403  # not of the club
+    logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
+    assert _start(c, 10).status_code == 403  # a member has no events right
+    assert _start(c, 20, startsAt=1).status_code == 409  # a day in the past: nothing published, no draft left behind
+    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
+    e = _start(c, 20).json()
+    assert (e["status"], e["visibility"], e["santa"], e["title"]) == ("published", "members", {"drawn": False}, "Secret Santa")
+    assert _start(c, 20).json()["id"] == e["id"]
+    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+    assert _go(c, e["id"], 10, "tea").json()["my"]["status"] == "going"  # the team joins; a stranger doesn't see it
+    assert _page(c, e["id"], 11).get("error") == "not_found"
+    logic.daily.tba_day(con)  # no room to confirm: its maker isn't nagged
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'place_tba'").fetchone() is None
+
+
+def test_santa_news(env, capsys, monkeypatch):
+    """`kbtu.admin santa-news`: once to each President and Vice of an active org the bot can write to; --dry only counts."""
+    c, cfg = env
+    con = _club(c, cfg)
+    for tg in (10, 11, 12, 20):
+        logic.set_role(con, None, _uid(con, tg), 1, {10: "vice", 11: "member", 12: "vice", 20: "president"}[tg], "test")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Chess', 'CH', 'laptop_3d', 0)")
+    logic.set_role(con, None, _uid(con, 20), 2, "president", "test")  # two clubs: one message
+    con.execute("UPDATE users SET can_dm = 1")
+    con.execute("UPDATE users SET can_dm = 0 WHERE tg_id = 12")  # never opened the bot
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    sent = lambda: sorted(r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news'"))  # noqa: E731
+    admin.main(["santa-news", "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 2" and sent() == []
+    admin.main(["santa-news"])
+    assert capsys.readouterr().out.strip() == "queued 2" and sent() == [10, 20]
+    admin.main(["santa-news"])
+    assert capsys.readouterr().out.strip() == "queued 0" and sent() == [10, 20]  # again: nothing new
+    m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
+    text, button, start = bot._render(con, m)
+    assert start == "st_1" and "IT Club" in text and button
+    logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
+    assert bot._render(con, m) is None  # no longer its President: quiet

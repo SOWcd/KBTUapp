@@ -3259,6 +3259,13 @@ const en: Dict = {
   'santa.few': "At least 3 participants needed",
   'santa.locked': "Secret Santa can be turned on only before anyone signs up",
   'santa.holds': "Someone is still paying for a seat. Wait for the payments",
+  'santa.playing': { one: "{n} playing", other: "{n} playing" },
+  'santa.startAsk': "Start Secret Santa?",
+  'santa.startText': "The club's team will see the game and can join by writing a wishlist. You run the draw. Gifts day: {day}, it can be changed.",
+  'santa.startGo': "Start",
+  'santa.started': "The game is on",
+  'santa.in': "You're in",
+  'santa.out': "Leave",
   'santa.done': "The draw is done",
 };
 
