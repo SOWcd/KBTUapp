@@ -201,20 +201,19 @@
    *  6.5 px tall, still under the plate), so a number is never seen twice. A value of both the zoom and a label's own
    *  data MapLibre reads at whole zooms only (between them it blends): Uni-Q's hand-over is by zoom alone */
   const ZS = [-1, 0, 1, 2, 3, 4].map((n) => Z0 + n);
-  // owner, Nov 17: numbers that grew, shrank and dimmed with every pinch "look bad". A label now keeps to a reading size
-  // on screen (halls and named places a step bigger), as a city map's do: the plan's own size only between the two bounds
-  const px = (z: number) => ['max', ['case', ['<=', ['get', 'rank'], 1], 12.5, 10.5], ['min', ['case', ['<=', ['get', 'rank'], 1], 17, 14.5], ['*', ['get', 's'], widthAt(fr, z) / 1000]]];
+  // owner, Nov 17: a number never leaves its room's walls and never swells into a giant: the plan's own size (fitted to
+  // the room, lib/mapgl.ts) up to a reading size and no further; one too small to read yet waits for the pinch
+  const px = (z: number) => ['min', ['case', ['<=', ['get', 'rank'], 1], 17, 14], ['*', ['get', 's'], widthAt(fr, z) / 1000]];
   // the size by two stops round every zoom the map goes to: MapLibre sizes a label between the stops round its tile's
   // zoom and holds it past them, so stops a zoom apart froze labels of a tile kept from another zoom at a wrong size
   function wordSize() { return ['interpolate', ['exponential', 2], ['zoom'], ZS[0], px(ZS[0]), ZS[5], px(ZS[5])]; }
   function wordFade(): { 'text-opacity': unknown; 'icon-opacity': unknown } {
-    if (ver === 'main') {
-      const by = (top: number) => ['interpolate', ['linear'], ['zoom'], zoomFor(FRAMES.main, 720), top, zoomFor(FRAMES.main, 920), 0];
-      return { 'text-opacity': by(1), 'icon-opacity': by(0.92) };
-    }
-    // gone under 6 px, whole from 9 px (blended between whole zooms)
-    const seen = (z: number) => ['*', ['get', 'alpha'], ['max', 0, ['min', 1, ['/', ['-', px(z), 6], 3]]]];
-    return { 'text-opacity': ['interpolate', ['linear'], ['zoom'], ...ZS.flatMap((z) => [z, seen(z)])], 'icon-opacity': 0 };
+    // gone under 6 px, whole from 8 px (blended between the stops); Uni-Q's also hand over to the printed digits
+    const seen = (z: number) => ['*', ['get', 'alpha'], ['max', 0, ['min', 1, ['/', ['-', px(z), 6], 2]]]];
+    if (ver !== 'main') return { 'text-opacity': ['interpolate', ['linear'], ['zoom'], ...ZS.flatMap((z) => [z, seen(z)])], 'icon-opacity': 0 };
+    const a = zoomFor(FRAMES.main, 720), b = zoomFor(FRAMES.main, 920), zs = [...ZS.filter((z) => z < a), a, b, ...ZS.filter((z) => z > b)];
+    const by = (top: number) => ['interpolate', ['linear'], ['zoom'], ...zs.flatMap((z) => [z, z >= b ? 0 : ['*', top, seen(z)]])];
+    return { 'text-opacity': by(1), 'icon-opacity': by(0.92) };
   }
   function wordLayers(): LayerSpecification[] {
     const f = FRAMES.old;
