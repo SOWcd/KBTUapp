@@ -3161,6 +3161,8 @@ const en: Dict = {
   'tm.of': "{n} of {max}",
   'tm.board': "Teams",
   'tm.solo': "No team",
+  'tm.toTeam': "Move to {team} · {n}/{max}",
+  'tm.toSolo': "Remove from the team",
   'tm.looking': "looking",
   'tm.form': "Form teams",
   'tm.formAsk': "Form teams?",

@@ -46,8 +46,8 @@
     try { b = await api.teamsMove(id, p.id, to); haptic.ok(); } catch (e) { b = was; fail(e); }
   }
   const menuOf = (p: PersonRef, from: Id | null): MenuItem[] => !b || b.locked ? [] : [
-    ...b.teams.filter((tm) => tm.id !== from).map((tm) => ({ label: `${tm.name} · ${tm.members.length}/${b!.max}`, disabled: tm.members.length >= b!.max, onselect: () => move(p, tm.id, tm.name) })),
-    ...(from !== null ? [{ label: t('tm.solo'), onselect: () => move(p, null, '') }] : []),
+    ...b.teams.filter((tm) => tm.id !== from).map((tm) => ({ label: t('tm.toTeam', { team: tm.name, n: tm.members.length, max: b!.max }), disabled: tm.members.length >= b!.max, onselect: () => move(p, tm.id, tm.name) })),
+    ...(from !== null ? [{ label: t('tm.toSolo'), onselect: () => move(p, null, '') }] : []),
   ];
 
   let forming = $state(false);

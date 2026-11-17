@@ -3,6 +3,7 @@
   // (Going / price / ticket / waitlist) plus save and share. Cancelling lives on the ticket.
   // The organizing team also gets its tools here: scanner (Member+), attendees, edit, cancel (Head+).
   // `preview`: the editor's unsaved form, shown exactly as students will see it (no team tools, buttons inert).
+  import Linked from '../../ui/Linked.svelte';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import Share from '@lucide/svelte/icons/share';
   import Lock from '@lucide/svelte/icons/lock';
@@ -579,7 +580,7 @@
 
     {#if about}
       <Section title={t('event.about')}>
-        <p class="fs-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
+        <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form (an organizer, Nov 17) -->
         {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
       </Section>
     {/if}
