@@ -1004,6 +1004,8 @@ const en: Dict = {
   'say.hi.friday': "Friday{name}!|Weekend is near{name}|Friday{name}. Where to?|Week done{name}",
   'say.hi.weekend': "Have a great weekend{name}|Day off{name}!|Resting{name}?|Time for clubs{name}",
   'say.hi.team': "Hi, {org}!",
+  'say.hi.teamLine': "Glad to have you on the team.",
+  'say.hi.teamGo': "Get started",
   'say.welcome': "Hi, {name}! You're in|{name}, welcome aboard!|Welcome, {name}!",
   'say.shared': "Sent! Let them come|Off it goes|More fun together",
   'say.theme.dark': "Dark — easier on the eyes|Night mode on",
