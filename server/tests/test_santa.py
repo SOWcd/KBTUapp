@@ -183,6 +183,8 @@ def test_santa_news(env, capsys, monkeypatch):
     assert capsys.readouterr().out.strip() == "queued 1" and sent() == [10, 20]
     admin.main(["santa-news"])
     assert capsys.readouterr().out.strip() == "queued 0" and sent() == [10, 20]  # again: nothing new
+    admin.main(["santa-news", "20"])  # reworded: the one-person send reads it again
+    assert capsys.readouterr().out.strip() == "queued 1"
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
     text, button, start = bot._render(con, m)
     assert start == "st_1" and "IT Club" in text and button
