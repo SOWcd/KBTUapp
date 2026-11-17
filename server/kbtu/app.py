@@ -557,6 +557,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_hide_org(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.admin_hide_org(con, v, oid, bool(body.get("hidden")))
 
+    @app.put("/api/admin/orgs/{oid}/award")
+    def admin_set_award(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.admin_set_award(con, v, oid, body)  # KBTU Awards: {year, title, on}
+
     @app.put("/api/admin/orgs/{oid}/role")
     def admin_set_role(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.admin_set_role(con, v, oid, body)

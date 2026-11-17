@@ -43,7 +43,7 @@ from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _ch
     mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, SECTIONS, chat_links, known_chat,
     set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (DMP_COLS, QUIET_FOR, STAFF_ROLES, _STAFF, _admin, _admin_org, _dmp_person, _mod, _month,
-    _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_org_events, admin_orgs,
+    _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_set_award, admin_org_events, admin_orgs,
     admin_set_role, audit, ban_info, find_people, find_user, registry, registry_export, registry_memos,
     registry_roster, registry_search, set_ban, set_official, set_role, set_staff, set_staff_mute, staff, staff_mutes)  # noqa: F401
 from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN_KEEP, _about, _moderates, _thread,

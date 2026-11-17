@@ -1875,6 +1875,13 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
       DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
     END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
+    # (Nov 18) KBTU Awards: the nominations a club won at the university's yearly ceremony, on its card (clubs.awards)
+    (182, """CREATE TABLE IF NOT EXISTS org_awards (  -- IF NOT EXISTS: tests rewind user_version
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      year INTEGER NOT NULL,
+      title TEXT NOT NULL,  -- the nomination's English name as the ceremony gives it
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, year, title)) STRICT;"""),
 ]
 
 

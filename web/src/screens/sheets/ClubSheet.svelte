@@ -10,6 +10,7 @@
   import Camera from '@lucide/svelte/icons/camera';
   import Users from '@lucide/svelte/icons/users';
   import Lock from '@lucide/svelte/icons/lock';
+  import Award from '@lucide/svelte/icons/award';
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -110,6 +111,15 @@
             {#if translated(o, 'description')}<span class="trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}{/if}
           {#if shut && !o.members}<p class="t-foot closed">{t('join.noTeam')}</p>{/if}
         </div>
+      {/if}
+
+      {#if o.awards?.length}
+        <!-- KBTU Awards it won: a calm plaque, type and one line icon (owner: never drawn medals); it opens nothing -->
+        <Group>
+          {#each o.awards as a (a.year + a.title)}
+            <div class="aw"><span class="awi"><Award size={22} strokeWidth={1.75} /></span><span class="awt"><span class="t-foot">{t('club.award', { year: a.year })}</span><b>{a.title}</b></span></div>
+          {/each}
+        </Group>
       {/if}
 
       {#if o.links.length || rowWrite}
@@ -243,4 +253,9 @@
   .list { display: flex; flex-direction: column; gap: var(--s-2); }
   .ph { width: 40px; height: 40px; border-radius: var(--r-xs); object-fit: cover; }
   .lock { display: inline-flex; color: var(--text-3); }
+  .aw { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: 12px var(--s-4); }
+  .aw + .aw::before { content: ''; position: absolute; top: 0; left: calc(var(--s-4) + 22px + var(--s-3)); right: 0; height: 0.5px; background: var(--separator); }
+  .awi { display: inline-flex; color: var(--gold); }
+  .awt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .awt b { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; color: var(--text); text-wrap: balance; }
 </style>

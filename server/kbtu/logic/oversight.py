@@ -347,7 +347,8 @@ def _admin_org(con, o: sqlite3.Row) -> dict:
     return {**org_ref(con, o), "hidden": o["status"] == "hidden", "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
             "team": sorted(({"id": m["id"], "role": m["role"], "username": m["tg_username"], "name": f"{m['tg_first_name']} {m['tg_last_name']}".strip(),
                              "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"])),
-            "shortLinks": [r[0] for r in rows(con, "SELECT slug FROM short_links WHERE org_id = ? ORDER BY slug", o["id"])]}
+            "shortLinks": [r[0] for r in rows(con, "SELECT slug FROM short_links WHERE org_id = ? ORDER BY slug", o["id"])],
+            "awards": clubs.awards(con, [o["id"]]).get(o["id"], [])}
 
 
 def admin_orgs(con, v: Viewer) -> list[dict]:
@@ -365,6 +366,13 @@ def admin_hide_org(con, v: Viewer, oid: int, hidden: bool) -> dict:
     with tx(con):
         con.execute("UPDATE orgs SET status = ? WHERE id = ?", ("hidden" if hidden else "active", oid))
         log_action(con, v.id, "org_hide", f"org:{oid}", json.dumps({"hidden": hidden}))
+    return _admin_org(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid))
+
+
+def admin_set_award(con, v: Viewer, oid: int, body: dict) -> dict:
+    """A club's KBTU Awards nomination added or removed from Admin's club page (clubs.set_award)."""
+    _admin(v)
+    clubs.set_award(con, v.id, oid, body.get("year"), body.get("title"), bool(body.get("on")))
     return _admin_org(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid))
 
 
@@ -415,7 +423,7 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, search  # noqa: E402
+from . import clubs, core, search  # noqa: E402
 from .clubs import UNDO_WAIT, _official, create_org, no_emoji  # noqa: E402
 from .seats import joined, notify  # noqa: E402
 from .teams import team  # noqa: E402
