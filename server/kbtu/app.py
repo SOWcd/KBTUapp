@@ -577,6 +577,21 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         first, last = (mine or typed for mine, typed in names)
         if not logic.account.on_policy(consent, policy):
             raise ApiError("bad_input", "consent")  # an app opened before the policy changed: it says to reopen
+        if ms and logic.account.staff_ok(con, v.id, ms):  # the creator's staff (kbtu.admin staff-ok): no student ID, the policy accepted
+            if not all(mine or NAME.fullmatch(typed) for mine, typed in names):
+                raise ApiError("bad_input")
+            with db.tx(con):
+                if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):
+                    raise ApiError("conflict", "verified")
+                ms = logic.ms_pending(con, v.id)
+                if not ms or not logic.account.staff_ok(con, v.id, ms):
+                    raise ApiError("forbidden", "ms_first")
+                if logic.one(con, "SELECT 1 FROM students WHERE ms_oid = ?", ms["oid"]):
+                    raise ApiError("conflict", "linked")
+                logic.account.staff_row(con, v.id, first, last, consent=consent)
+                logic.ms_link(con, v.id, ms)
+                logic.log_action(con, v.id, "staff_sign_in", f"user:{v.id}")
+            return logic.me(con, Viewer(v.id, v.role, True))
         if not (all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
             raise ApiError("bad_input")

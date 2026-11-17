@@ -64,6 +64,8 @@ const put = (k: string, v: number) => { try { localStorage.setItem(k, String(v))
 
 /** True the first time it's asked about this key on this phone (a greeting said once). */
 export function once(k: string): boolean { if (get(k)) return false; put(k, 1); return true; }
+/** Whether `once` has had this key on this phone (asked without marking it). */
+export const seen = (k: string): boolean => !!get(k);
 
 let prevOpen: number | null | undefined; // the launch before this one, read once per launch
 

@@ -14,13 +14,14 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, org, ondone }: { overlay: Overlay; org: OrgRef; ondone?: () => void } = $props();
+  let { overlay, org, ondone, shown }: { overlay: Overlay; org: OrgRef; ondone?: () => void; shown?: () => void } = $props();
   $effect(() => { overlay.title = org.name; overlay.icon = Hand; }); // the capsule names the office in full, the page says hi
 
   let scrim: HTMLDivElement;
   let wrap: HTMLDivElement;
   let gone = false;
   onMount(() => {
+    shown?.(); // seen once it's on screen, never before (a chunk that failed shows it again next launch)
     haptic.soft();
     scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: 'ease-out' });
     for (const [i, el] of [...wrap.querySelectorAll('.up')].entries())
@@ -37,9 +38,9 @@
     x.onfinish = () => { removeOverlay(overlay.id); ondone?.(); };
   }
   $effect(() => { if (overlay.closing) leave(); });
-  // no KBTU row yet: Microsoft is the way in (an office's own skip the student ID: server account.ms_apply); signing in
-  // makes them a student, and App's loadMine fills Studio and the registry then
-  const guest = $derived(!session.me?.student);
+  // the creator's staff with no KBTU row yet (me.msOnly): Microsoft is their way in, no student ID; signing in makes them
+  // a student, and App's loadMine fills Studio and the registry then. Anyone else: the plain welcome
+  const guest = $derived(!!session.me?.msOnly);
   function go() { haptic.tap(); close(overlay.id); }
   function signIn() { haptic.tap(); close(overlay.id); sheets.login(); }
 </script>

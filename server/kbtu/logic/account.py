@@ -384,30 +384,27 @@ def ms_claim(con, v: Viewer, secret: str) -> bool:
     raise ApiError("forbidden", "ms")
 
 
-def staff_row(con, uid: int, first: str, last: str, school: str | None = None) -> None:
+def staff_row(con, uid: int, first: str, last: str, school: str | None = None, consent: str = "staff") -> None:
     """A KBTU staff member acts as a student (SPEC §1): no student ID of theirs exists, so a placeholder no real one can
-    match; 'staff' skips the policy gate, the card number and the counts (kbtu.admin staff; an office's own at Microsoft)."""
+    match (`staff<id>`). consent 'staff': typed in by the creator (kbtu.admin staff), no policy gate; else the version
+    the person accepted at the sign-in (staff_ok's way)."""
     t = core.now()
     con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, school, consent_version, consent_at,
-        verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)""", (uid, f"staff{uid}", first, last, school, t, t, t))
+        verified_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (uid, f"staff{uid}", first, last, school, consent, t, t, t))
 
 
-def office_hand(con, uid: int) -> bool:
-    """A member of an active office (DMP) whose role there was given by hand: the latest role line for that office
-    is the creator's CLI or Admin's. Every other way into an org (a link, a roster, a chat, a casting, a join request)
-    needs a KBTU row first; this rules out a membership left over after `kbtu.admin unlink`, which keeps org_members."""
-    return one(con, """SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.kind = 'office' AND o.status = 'active'
-        WHERE m.user_id = ?1 AND (SELECT json_extract(a.data, '$.by') FROM audit_log a WHERE a.target = 'user:' || ?1
-          AND a.action = 'role_change' AND json_extract(a.data, '$.org') = m.org_id ORDER BY a.id DESC LIMIT 1) IN ('cli', 'app')""", uid) is not None
+def staff_ok(con, uid: int, who: dict | None) -> bool:
+    """The creator said this account is KBTU staff (kbtu.admin staff-ok), and Microsoft doesn't call it a student: its
+    sign-in asks no student ID. Office membership, roles, audit lines: never a reason (Codex review, Nov 17)."""
+    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid):
+        return False
+    # ponytail: KBTU's directory field read as is; "student" anywhere in it wins (exact values unmeasured)
+    return "student" not in str(((who or {}).get("profile") or {}).get("companyName") or "").lower()
 
 
 def ms_apply(con, uid: int, who: dict) -> bool:
-    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form. An
-    office's own people (DMP: staff, no student ID) skip the form: the staff row, with the directory's names."""
+    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
     mine = ms_check(con, uid, who)
-    if not mine and office_hand(con, uid):
-        staff_row(con, uid, who["first"], who["last"])
-        mine = True
     if mine:
         ms_link(con, uid, who)
         return True
@@ -500,7 +497,7 @@ def me(con, v: Viewer) -> dict:
     # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
     # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
-    if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
+    if s and s["consent_version"] != "staff" and not s["student_id"].startswith("staff") and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         if u["card_no"] is None and not u["is_founder"]:
@@ -527,6 +524,8 @@ def me(con, v: Viewer) -> dict:
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
                      if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
+        # the creator's staff (staff_ok): Microsoft and the policy, no student ID (the welcome's sign-in, the form without it)
+        **({"msOnly": True} if not s and not relink and staff_ok(con, v.id, ms_pending(con, v.id)) else {}),
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
@@ -1138,7 +1137,7 @@ def deletion_hash(home: Path, tg_id: int) -> str:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
-    ("students", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
+    ("students", "user_id"), ("staff_ok", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
     ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),

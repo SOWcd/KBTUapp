@@ -1091,6 +1091,7 @@ const en: Dict = {
   'login.msAway': "Sign in in the browser, then come back here",
   'login.msOk': "KBTU account confirmed",
   'login.msOkText': "now your student ID",
+  'login.msOkStaff': "now accept the rules",
   'login.msDone': "KBTU account confirmed",
   'ci.old': "This QR is old: scan the screen again",
   'ci.closed': "Check-in is closed",

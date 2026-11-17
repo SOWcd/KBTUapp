@@ -21,6 +21,10 @@
   .venv/bin/python -m kbtu.admin staff <@username | telegram id>
                                 one already signed in as a student turns staff: its card number is retired (a gap; until Oct 22
                                 the later cards moved down, but that would hand out a deleted account's burnt number)
+  .venv/bin/python -m kbtu.admin staff-ok <@username | telegram id>       KBTU staff without a student ID (DMP): their own
+                                Microsoft sign-in, then the policy, makes the staff row with the directory's names (no ID asked;
+                                not if Microsoft calls them a student). staff-ok list | staff-ok revoke <@username | telegram id>
+                                (revoke also takes back a row it made; `unlink` and deleting the account clear it too)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
                                 student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
@@ -354,7 +358,33 @@ def main(args: list[str]) -> None:
         with db.tx(con):
             n = con.execute("DELETE FROM students WHERE user_id = ?", (u["id"],)).rowcount
             con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (u["id"],))
+            if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount:  # a fresh start: staff again only by staff-ok
+                log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"by": "unlink"}))
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("unlinked, signing in with KBTU links again" if n else "wasn't linked"))
+    elif cmd == "staff-ok" and args[1:] == ["list"]:
+        for r in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, k.granted_at, s.student_id FROM staff_ok k JOIN users u ON u.id = k.user_id
+                LEFT JOIN students s ON s.user_id = u.id ORDER BY k.granted_at"""):
+            print(f"@{r['tg_username'] or r['tg_id']} ({r['tg_first_name']}) since {time.strftime('%Y-%m-%d', time.gmtime(r['granted_at']))}: "
+                  + ("signed in" if r["student_id"] else "not signed in yet"))
+    elif cmd == "staff-ok" and len(args) in (2, 3) and (len(args) == 2 or args[1] == "revoke"):
+        u = _user(con, args[-1])
+        who = f"@{u['tg_username'] or u['tg_id']}"
+        if len(args) == 2:
+            s = one(con, "SELECT student_id FROM students WHERE user_id = ?", u["id"])
+            if s and not s["student_id"].startswith("staff"):
+                sys.exit(f"{who}: signed in as a student already (unlink first, or `staff {who}`)")
+            with db.tx(con):
+                if con.execute("INSERT OR IGNORE INTO staff_ok (user_id, granted_at) VALUES (?, ?)", (u["id"], now())).rowcount:
+                    log_action(con, None, "staff_ok", f"user:{u['id']}")
+            print(f"{who}: staff, signs in with Microsoft alone")
+        else:
+            with db.tx(con):
+                n = con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount
+                # the row its sign-in made (a policy version, not 'staff': `staff` typed by hand stays): the next sign-in is a student's
+                gone = con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (u["id"], f"staff{u['id']}")).rowcount
+                if n or gone:
+                    log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"row": bool(gone)}))
+            print(f"{who}: " + ("revoked" + (", its sign-in undone" if gone else "") if n or gone else "had no staff-ok"))
     elif cmd == "confirm" and len(args) == 2:
         u = _user(con, args[1])
         with db.tx(con):

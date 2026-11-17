@@ -1833,6 +1833,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     -- not allowed): their high-water marks from here on
     INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:asks', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM asks;
     INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:contacts', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM contacts;"""),
+    # (Nov 17) the creator's word that this Telegram account is KBTU staff (an office's own: DMP), never a student
+    # (kbtu.admin staff-ok): its Microsoft sign-in asks no student ID (account.staff_ok); nothing in the app grants it
+    (178, """CREATE TABLE IF NOT EXISTS staff_ok (  -- IF NOT EXISTS: tests rewind user_version to rerun older ones
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      granted_at INTEGER NOT NULL) STRICT;"""),
 ]
 
 
