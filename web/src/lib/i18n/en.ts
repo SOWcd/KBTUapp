@@ -235,6 +235,7 @@ const en: Dict = {
   'as.askAi': "Ask KRI",
   'as.askEvent': "What to bring, how to get there",
   'as.askClub': "How to join and what they do",
+  'as.what': "How can I help?",
   'as.about': "About “{title}”",
   'as.e1': "What should I bring?",
   'as.e2': "How do I get there?",
