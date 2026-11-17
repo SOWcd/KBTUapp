@@ -899,8 +899,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
-        if body.get("team") is not None:  # a team event's sign-up: create a team or join one by its link (evteams.py)
-            return logic.evteams.signup(con, v, eid, body["team"], body.get("ref"), body.get("phone"), body.get("answers"), body.get("wish"))
+        if body.get("team") is not None or body.get("teamConsent") is not None:  # a team event's sign-up: a team made or joined, the consent line seen (evteams.py)
+            return logic.evteams.signup(con, v, eid, body.get("team"), body.get("ref"), body.get("phone"), body.get("answers"), body.get("wish"), body.get("teamConsent"))
         return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"), body.get("wish"))
 
     # team events (logic/evteams.py): my team (create, join by link, leave; the captain's rename, "find us teammates",
@@ -952,6 +952,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/events/{eid}/teams/people/{uid}")
     def teams_move(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.evteams.move(con, v, eid, uid, body.get("team"))
+
+    @app.post("/api/events/{eid}/teams/people/{uid}/remind")
+    def teams_remind(eid: int, uid: int, con: Con, v: Me):
+        return logic.evteams.remind(con, v, eid, uid)
 
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con: Con, v: Me):

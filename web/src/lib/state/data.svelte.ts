@@ -3,8 +3,8 @@
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
-import { teamConsentOk } from '../teamConsent';
-import { t, tn, type Key, subjectOf } from '../i18n/index.svelte';
+import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
+import { t, tn, type Key, subjectOf, i18n } from '../i18n/index.svelte';
 import { shrink } from '../photo';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
@@ -431,6 +431,12 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
     if (!leaving && onTeam(before, session.me?.memberships)) { haptic.tap(); say(t('event.team'), 'raising_hands_3d_default'); return; }
+    // a team event's sign-up is its teams consent (owner, Nov 18): one who hasn't agreed (or took it back) is asked
+    // first, every way in; a no signs nobody up. The waitlist isn't a sign-up yet: asked when it is a ticket.
+    const fullNow = before.seats != null && before.taken >= before.seats;
+    const agrees = !leaving && !!before.teamMax && !fullNow && !session.me?.teams?.consent;
+    if (agrees && !(await sheets.ask({ title: t('tm.consentT'), text: t('tm.signupText'), ok: t('tm.signupOk'), cancel: t('common.cancel'),
+      link: { label: t('tm.consentLink'), url: `${location.origin}/privacy?lang=${i18n.lang}` } }))) return;
     // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
@@ -446,9 +452,9 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     if (wish === null) return;
     // a team event (server evteams.py): make a team, or "I have no team"; a link's join came with the tap. A paid one
     // asks nothing: the captain pays first and makes the team after the receipt (the sheet's "Create team")
-    const pick = !leaving && before.teamMax ? team ?? (before.price ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
+    const pick = !leaving && before.teamMax ? team ?? (before.price || fullNow ? undefined : await sheets.teamPick(before.title, before.teamMin ?? 2, before.teamMax)) : undefined;
     if (pick === null) return;
-    if (pick && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
+    if (pick && !agrees && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
     if (flying.has(id)) return; // a second tap while the first is on its way
     flying.add(id);
@@ -463,9 +469,10 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     } else goingBusy.add(id);
     taps++;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish, agrees ? TEAM_CONSENT : undefined);
       if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
+      if (after.teamsConsent !== undefined && session.me?.teams) session.me.teams.consent = after.teamsConsent; // the server's word
       put(after);
       const st = after.my?.status;
       if (leaving) { haptic.warn(); burst(true); say(phrase('say.cancel'), 'crying_face_3d'); }

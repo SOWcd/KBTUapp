@@ -145,7 +145,7 @@ export const server = {
   decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
   leadersAnswers: (id: Id): Promise<LeadersAnswer[]> => call('GET', `/events/${id}/leaders`), // DMP: the answers per club
   meetingAnswers: (id: Id): Promise<MeetingAnswer[]> => call('GET', `/events/${id}/meeting`), // a club meeting's Head+: everyone expected (§2b)
-  register: (id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick, wish?: string): Promise<EventCard> => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}), ...(team ? { team } : {}), ...(wish ? { wish } : {}) }), // wish: Secret Santa's wishlist // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
+  register: (id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick, wish?: string, teamConsent?: string): Promise<EventCard> => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}), ...(team ? { team } : {}), ...(wish ? { wish } : {}), ...(teamConsent ? { teamConsent } : {}) }), // teamConsent: the version of the line the sign-up button showed (signing up is the teams consent) // wish: Secret Santa's wishlist // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   unregister: (id: Id): Promise<EventCard> => call('DELETE', `/events/${id}/registration`),
   setSaved: (id: Id, on: boolean): Promise<void> => call(on ? 'PUT' : 'DELETE', `/events/${id}/saved`),
 
@@ -328,6 +328,7 @@ export const server = {
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
   teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
+  teamsRemind: (id: Id, user: Id): Promise<{ queued: boolean; consent: boolean; off?: boolean }> => call('POST', `/events/${id}/teams/people/${user}/remind`), // the bot's "agree to teams", once a day
   /** the host club's member asks its President or a Vice to come as a guest, or takes it back; they list and answer */
   teamAsk: (id: Id): Promise<EventCard> => call('POST', `/events/${id}/team-ask`),
   teamUnask: (id: Id): Promise<EventCard> => call('DELETE', `/events/${id}/team-ask`),

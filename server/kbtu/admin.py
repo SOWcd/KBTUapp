@@ -47,6 +47,9 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
+                                sheet) to everyone signed up to a coming team event without the teams consent, once per
+                                person and event; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
                                 ago (edited by hand in campus_places)
@@ -260,6 +263,10 @@ def main(args: list[str]) -> None:
     elif cmd == "santa-news" and args[1:] in ([], ["--dry"]):  # Secret Santa's announcement to Presidents and Vices, queued once each
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
+        print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent (Nov 18)
+        from .logic import evteams
+        n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
