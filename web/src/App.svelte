@@ -161,7 +161,10 @@
   // keyboard down to read it. The stand-in goes as it loses the focus, or soon after a failed load.
   const assistant = () => import('./screens/assistant/Assistant.svelte');
   sheets.assistant = (ctx) => asStudent(() => {
-    const opener = document.activeElement as HTMLElement | null, focus = fresh(ctx);
+    // the keyboard stays down on opening (owner's recordings, Nov 17: the sheet settled in three jumps as the keyboard
+    // squeezed it, twice); the greeting and the ready questions show whole, a tap on the field raises it. `fresh(ctx) &&`
+    // brings the old way back
+    const opener = document.activeElement as HTMLElement | null, focus = false && fresh(ctx);
     const keyboard = focus && onIos ? standIn() : null;
     void lazy(assistant, { ctx, focus, keyboard, opener }, 'sheet.assistant').then(() => setTimeout(() => keyboard?.remove(), 600));
   });
