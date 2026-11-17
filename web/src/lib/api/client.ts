@@ -178,7 +178,8 @@ export const server = {
   decideRemoval: (id: Id, approve: boolean): Promise<void> => call('POST', `/removals/${id}`, { approve }),
   unban: (org: Id, user: Id): Promise<void> => call('DELETE', `/orgs/${org}/bans/${user}`),
   adminCreateOrg: (i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg> => call('POST', '/admin/orgs', i),
-  adminSetRole: (org: Id, who: string, role: OrgRole | 'none'): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/role`, { who, role }),
+  // who: an @username or Telegram ID typed by hand; { userId }: a row of the club's team (the app's id never moves to someone else)
+  adminSetRole: (org: Id, who: string | { userId: Id }, role: OrgRole | 'none'): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/role`, typeof who === 'string' ? { who, role } : { ...who, role }),
   adminHideOrg: (org: Id, hidden: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/hidden`, { hidden }), // hide, never delete
   adminPresLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/admin/orgs/${org}/president-link`), // the President's one-time link, shown as a QR
   org: (id: Id): Promise<Org> => call('GET', `/orgs/${id}`),

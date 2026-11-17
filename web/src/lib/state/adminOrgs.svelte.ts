@@ -6,16 +6,42 @@ import { t, tn } from '../i18n/index.svelte';
 const KEY = 'adm.recentOrgs';
 function read(): Id[] { try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); } catch { return []; } }
 
-export const adminOrgs = $state<{ list: AdminOrg[] | null; recent: Id[] }>({ list: null, recent: read() });
+export const adminOrgs = $state<{ list: AdminOrg[] | null; failed: boolean; recent: Id[] }>({ list: null, failed: false, recent: read() });
 
-export function loadAdminOrgs(): void {
-  api.adminOrgs().then((l) => (adminOrgs.list = l)).catch(() => (adminOrgs.list ??= []));
+let rev = 0; // every change made here: a list asked for before it is older than what the store holds
+let loading: Promise<void> | null = null;
+
+/** Read again in the background (Admin opening, its list, an organization's page, a decision that changes clubs): one
+ *  request at a time; an answer older than a change made meanwhile is dropped and asked for again. A failure with
+ *  nothing to show is `failed` (a retry), never an empty list. */
+export function loadAdminOrgs(): Promise<void> {
+  return (loading ??= (async () => {
+    const at = rev;
+    let again = false;
+    try {
+      const l = await api.adminOrgs();
+      if (at === rev) { adminOrgs.list = l; adminOrgs.failed = false; } else again = true;
+    } catch { if (at === rev) adminOrgs.failed = !adminOrgs.list; }
+    loading = null;
+    if (again) await loadAdminOrgs();
+  })());
 }
 
 /** One of them as the server has it now (a role given, hidden, a new club). */
 export function putOrg(o: AdminOrg): void {
+  rev++;
   const l = adminOrgs.list ?? [];
   adminOrgs.list = l.some((x) => x.id === o.id) ? l.map((x) => (x.id === o.id ? o : x)) : [o, ...l];
+}
+/** One fact of one of them, into the organization as the store holds it now (never a copy taken before the request). */
+export function patchOrg(id: Id, change: (o: AdminOrg) => Partial<AdminOrg>): void {
+  rev++;
+  adminOrgs.list = adminOrgs.list?.map((x) => (x.id === id ? { ...x, ...change(x) } : x)) ?? null;
+}
+/** The admin's role is gone: nothing of the list stays. */
+export function clearAdminOrgs(): void {
+  rev++;
+  adminOrgs.list = null; adminOrgs.failed = false;
 }
 
 /** The ones opened last come first (owner, Nov 16: running an event with one club, he searched it every time); this device only. */

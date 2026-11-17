@@ -3,6 +3,7 @@
   // small menu at its row (the owner gives admin, an admin gives moderator), their awards as chips, the ban last and
   // alone in red with the reason they will read. Nobody touches the owner, himself or (unless the owner) another admin.
   //   row  the person as the list had them;  onchange  the team as it is after a change (the Team page's list)
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api, type Staff, type StaffRow, type PlatformRole } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -20,6 +21,7 @@
   import PersonAwards from './PersonAwards.svelte';
 
   let { overlay, row, onchange }: { overlay: Overlay; row: StaffRow; onchange?: (s: Staff) => void } = $props();
+  staffOnly(() => overlay);
   // svelte-ignore state_referenced_locally
   let p = $state(row); // as it is now, after my changes here
   const iOwn = $derived(!!session.me?.founder);

@@ -1,5 +1,6 @@
 <script lang="ts">
   // Admin → the audit log: the owner reads everything done with power, the last 200: who, what, to whom.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import ScrollText from '@lucide/svelte/icons/scroll-text';
   import { api, type AuditRow } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -9,6 +10,7 @@
   import Avatar from '../../ui/Avatar.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay);
   let log = $state<AuditRow[] | null>(null);
   $effect(() => { api.audit().then((l) => (log = l)).catch(() => { log = []; say(t('common.error'), 'warning_3d'); }); });
 

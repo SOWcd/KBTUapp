@@ -4,6 +4,7 @@
   // one whose message someone deleted in Telegram by hand), and this week's
   // take-downs with Bring back (published anew); the owner alone reveals an anonymous author, each look audited.
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import { api, type ChannelMod, type ChannelModPost, type ChannelModReply } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
@@ -21,6 +22,7 @@
   import ForumPics from './ForumPics.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay, 'staff');
   const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
   let mod = $state<ChannelMod | null>(null);
   const load = () => api.channelMod().then((m) => (mod = m)).catch(() => {});

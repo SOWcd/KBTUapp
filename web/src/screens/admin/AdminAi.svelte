@@ -2,6 +2,7 @@
   // Admin → AI: the translator of event and club texts (PLAN 9, ai.py):
   // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
   // get three more tries); and the AI chain (llm.py), each link's answers and failures today; the assistant's feedback (30 days, none of it tied to a person).
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminAi } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -13,6 +14,7 @@
   import Button from '../../ui/Button.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay);
   let ai = $state<AdminAi | null>(null), busy = $state(false);
   const load = () => api.adminAi().then((x) => (ai = x)).catch(() => say(t('common.error'), 'warning_3d'));
   $effect(() => { void load(); });

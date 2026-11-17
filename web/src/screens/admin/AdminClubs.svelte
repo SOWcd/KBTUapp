@@ -3,6 +3,7 @@
   // card dropped a pile of pills). A to Z, hidden ones last; a row opens the organization's page (AdminOrg). Finding
   // one is the Admin search's job, so no second search here. A new club on top (schools come from KBTU's site);
   // DMP's registry is the third tab.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api, ApiErr, type AdminOrg } from '../../lib/api';
   import { adminOrgs, loadAdminOrgs, orgLine, putOrg } from '../../lib/state/adminOrgs.svelte';
   import { loadAfisha } from '../../lib/state/data.svelte';
@@ -27,7 +28,8 @@
   import AdminOrgPane from './AdminOrg.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
-  if (!adminOrgs.list) loadAdminOrgs(); // opened straight from a link; Admin's own opening has read them already
+  staffOnly(() => overlay);
+  void loadAdminOrgs(); // again on every opening (another admin's change, a club just approved); the last list shows meanwhile
 
   // clubs and schools on their own tabs (the admin comes for clubs; the schools are seeded and rarely touched)
   let kind = $state<'club' | 'school' | 'registry'>('club');
@@ -66,7 +68,7 @@
     {#if kind === 'registry'}
       <Registry inSheet />
     {:else if !orgs}
-      <Skeleton n={6} />
+      {#if adminOrgs.failed}<EmptyState inline text={t('common.error')} onretry={loadAdminOrgs} />{:else}<Skeleton n={6} />{/if}
     {:else}
       {#if kind === 'club'}
         <Group><Row tone="add" title={t('adm.newClub')} onclick={() => { haptic.select(); adding = !adding; }} /></Group>

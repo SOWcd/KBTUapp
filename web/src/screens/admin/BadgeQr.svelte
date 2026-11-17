@@ -4,6 +4,7 @@
   // the server's, a new one every 20 s (a photo of it goes stale within a minute, logic/profiles.py claim_qr); the
   // screen closing closes it on the server too, and its polls hold a 15 s lease (a killed screen's code stops by
   // itself). Under it: how many got it here.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { onMount } from 'svelte';
   import { api, ApiErr, type BadgeQr, type GrantItem } from '../../lib/api';
   import { manualMedal, manualName, QR_TONE, type Manual } from '../../lib/awards';
@@ -18,6 +19,7 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
 
   let { overlay, award, code }: { overlay: Overlay; award: Manual; code: GrantItem['code'] } = $props();
+  staffOnly(() => overlay);
   $effect(() => { overlay.title = manualName(code); overlay.icon = QrCode; overlay.theme = 'dark'; });
   const art = $derived(award.variants?.find((v) => v.code === code)?.emoji ?? award.emoji);
 

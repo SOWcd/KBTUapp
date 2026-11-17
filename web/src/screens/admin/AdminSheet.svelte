@@ -6,6 +6,7 @@
   // admins' numbers, then the few places that are lists of their own. "An event for a club" and "A club's Studio" are
   // no longer places: they are on the organization's page (AdminOrg), where the search leads.
   // A moderator has no search: his sheet is the queue itself and his two places.
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Building from '@lucide/svelte/icons/building-2';
   import MedalIcon from '@lucide/svelte/icons/medal';
@@ -49,9 +50,10 @@
   import PersonPane from './PersonPane.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
+  staffOnly(() => overlay, 'staff');
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
-  untrack(() => { if (admin) { loadAdminOrgs(); void loadInbox(true); } }); // fresh on every opening; what the app holds shows meanwhile
+  untrack(() => { if (admin) { void loadAdminOrgs(); void loadInbox(true); } }); // fresh on every opening; what the app holds shows meanwhile
 
   // ---- the search: organizations and awards on the first key (held already), people and events a beat after the last
   let q = $state('');
@@ -79,7 +81,12 @@
   // organizations: the admin's own list (hidden ones and offices too), the ones opened last first; until it is read,
   // the clubs the app holds
   const all = $derived<OrgRef[]>(adminOrgs.list ?? data.orgs);
-  const clubs = $derived(s ? all.filter((o) => hit(o, s) || o.slug.includes(s)).sort(byRecent).slice(0, 8) : []);
+  // what the server found too (a club approved a moment ago, a name the list doesn't hold): after the ones held
+  const clubs = $derived.by(() => {
+    if (!s) return [];
+    const held = all.filter((o) => hit(o, s) || o.slug.includes(s)).sort(byRecent);
+    return [...held, ...(found?.clubs ?? []).filter((o) => !held.some((h) => h.id === o.id))].slice(0, 8);
+  });
   const recent = $derived(adminOrgs.recent.map((id) => all.find((o) => o.id === id)).filter((o) => !!o).slice(0, 3));
   const awards = $derived(s ? CATALOG.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
   const line = (o: OrgRef) => ('team' in o ? [(o as AdminOrg).hidden ? t('adm.hiddenTag') : '', o.kind === 'school' ? t('adm.kindSchool') : '', orgLine(o as AdminOrg)].filter(Boolean).join(' · ') : undefined);

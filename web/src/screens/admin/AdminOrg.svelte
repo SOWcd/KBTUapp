@@ -5,15 +5,16 @@
   // deletable here only), the ✓, the leaders with their roles (a row's menu changes one), the President's one-time link
   // (sent as our bot's card, or shown as a QR face to face), its short links. Hiding is last and alone: never a delete.
   //   org  as the list had it (the hero shows at once); the admin's copy (team, links) comes from the shared store
+  import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api, ApiErr, type AdminEvent, type AdminMember, type AdminOrg, type OrgRef, type OrgRole } from '../../lib/api';
-  import { adminOrgs, putOrg, seen } from '../../lib/state/adminOrgs.svelte';
+  import { onDestroy } from 'svelte';
+  import { adminOrgs, loadAdminOrgs, patchOrg, putOrg, seen } from '../../lib/state/adminOrgs.svelte';
   import { openAsCreator } from '../../lib/state/creator.svelte';
   import { loadAfisha, loadInbox, phrase } from '../../lib/state/data.svelte';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { ROLE_NAME } from '../../lib/perms';
   import { QR_TONE } from '../../lib/awards';
   import { dayMonthShort } from '../../lib/time';
   import { shareCard, haptic, openLink } from '../../lib/tg';
@@ -27,15 +28,18 @@
   import Field from '../../ui/Field.svelte';
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import Qr from '../../ui/Qr.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
   let { overlay, org }: { overlay: Overlay; org: OrgRef } = $props();
+  staffOnly(() => overlay);
   const o = $derived<AdminOrg | undefined>(adminOrgs.list?.find((x) => x.id === org.id));
   const club = $derived(org.kind === 'club');
   const owner = $derived(!!session.me?.founder);
   // svelte-ignore state_referenced_locally
   seen(org.id);
+  void loadAdminOrgs(); // as the server has it now, behind what the store shows meanwhile
 
   let busy = $state(false);
   const oops = (e: unknown) => {
@@ -55,32 +59,36 @@
     try {
       if (!(await sheets.ask({ ...ask, cancel: t('common.cancel'), danger: !on }))) return;
       const now = (await api.setOfficial(x.id, on)).official;
-      putOrg({ ...x, official: now });
+      patchOrg(x.id, () => ({ official: now })); // into the club as it is now: a role given meanwhile stays
       void loadAfisha(); // Clubs shows the ✓ at once
       haptic.ok(); say(phrase(now ? 'reg.officialOn' : 'reg.officialOff'), now ? 'party_popper_3d' : 'waving_hand_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { official = null; }
   }
 
-  // ---- roles: a leader's row changes theirs; someone new by @username or Telegram ID (they opened the app once) ----
+  // ---- roles: a leader's row changes theirs, by the app's own id (an @username may be someone else's by now);
+  // anyone else by an @username or Telegram ID typed by hand (they opened the app once): a role, or out of the club ----
   const ROLES: OrgRole[] = ['president', 'vice', 'head', 'member'];
-  let adding = $state(false), who = $state(''), role = $state<OrgRole>('president');
-  async function assign(x: AdminOrg, whom: string, r: OrgRole | 'none') {
+  const roleName = (r: OrgRole | 'none') => (r === 'none' ? t('adm.remove') : t(`role.${r}`));
+  let adding = $state(false), who = $state(''), role = $state<OrgRole | 'none'>('president');
+  async function assign(x: AdminOrg, whom: string | { userId: number }, name: string, r: OrgRole | 'none') {
+    if (r === 'none' && !(await sheets.ask({ title: t('adm.removeAsk', { name, club: x.name }), ok: t('adm.remove'), cancel: t('common.cancel'), danger: true }))) return;
     busy = true;
     try {
       putOrg(await api.adminSetRole(x.id, whom, r));
-      haptic.ok(); say(t('adm.done', { who: whom, role: r === 'none' ? t('adm.remove') : ROLE_NAME[r] }), 'raising_hands_3d_default');
+      haptic.ok(); say(t('adm.done', { who: name, role: roleName(r) }), 'raising_hands_3d_default');
       who = ''; adding = false;
       void loadMe(); // in case it was me
     } catch (e) { oops(e); } finally { busy = false; }
   }
-  const memberMenu = (x: AdminOrg, m: AdminMember): MenuItem[] | undefined => (m.username ? [
-    ...ROLES.map((r) => ({ label: ROLE_NAME[r], checked: m.role === r, onselect: () => { if (m.role !== r) void assign(x, '@' + m.username, r); } })),
-    { label: t('adm.cappWrite'), onselect: () => openLink(`https://t.me/${m.username}`) },
-    { label: t('adm.remove'), destructive: true, onselect: async () => {
-      if (await sheets.ask({ title: t('adm.removeAsk', { name: m.name || '@' + m.username, club: x.name }), ok: t('adm.remove'), cancel: t('common.cancel'), danger: true })) void assign(x, '@' + m.username, 'none');
-    } },
-  ] : undefined);
+  const memberMenu = (x: AdminOrg, m: AdminMember): MenuItem[] => {
+    const name = m.name || '@' + m.username;
+    return [
+      ...ROLES.map((r) => ({ label: roleName(r), checked: m.role === r, onselect: () => { if (m.role !== r) void assign(x, { userId: m.id }, name, r); } })),
+      ...(m.username ? [{ label: t('adm.cappWrite'), onselect: () => openLink(`https://t.me/${m.username}`) }] : []),
+      { label: t('adm.remove'), destructive: true, onselect: () => void assign(x, { userId: m.id }, name, 'none') },
+    ];
+  };
 
   // ---- the President's one-time link (§2): our bot's card, one person, once, 7 days; or the same as a QR, to show face
   // to face (he goes round the schools' presidents). Each card and each QR is a fresh link
@@ -91,30 +99,40 @@
       .then((sent) => { if (sent) say(t('adm.presSent'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
+  let qrGen = 0; // which asking is the current one: Hide, another Show or leaving makes a late answer nobody's
   async function showQr() {
     haptic.tap(); qr = '';
-    try { qr = (await api.adminPresLink(org.id)).token; } catch (e) { qr = null; oops(e); }
+    const g = ++qrGen;
+    try { const r = await api.adminPresLink(org.id); if (g === qrGen) qr = r.token; }
+    catch (e) { if (g === qrGen) { qr = null; oops(e); } }
   }
+  const hideQr = () => { qrGen++; qr = null; };
+  onDestroy(() => { qrGen++; });
   const linkMenu = $derived<MenuItem[]>([
     { label: t('adm.presSend'), onselect: sendLink },
-    qr == null ? { label: t('adm.presShow'), onselect: () => void showQr() } : { label: t('adm.presHide'), onselect: () => (qr = null) },
+    qr == null ? { label: t('adm.presShow'), onselect: () => void showQr() } : { label: t('adm.presHide'), onselect: hideQr },
   ]);
   // a club's own short link: the admin takes any down (one leading somewhere it shouldn't)
   async function revoke(x: AdminOrg, slug: string) {
     if (!(await sheets.ask({ title: t('adm.linkAsk', { link: `${location.host}/${slug}` }), ok: t('adm.linkGo'), cancel: t('tk.keep'), danger: true }))) return;
     try {
       await api.dropShortLink(slug);
-      putOrg({ ...x, shortLinks: x.shortLinks.filter((s) => s !== slug) });
+      patchOrg(x.id, (now) => ({ shortLinks: now.shortLinks.filter((s) => s !== slug) }));
       haptic.warn();
     } catch (e) { oops(e); }
   }
 
   // ---- its events, any of them deletable by the admin only (owner, Oct 13: a club asks him to remove a test, test
   // payments included). The confirm names what goes; hidden at once, gone in a day: Undo in the queue's Done ----
-  let evOpen = $state(false), evs = $state<AdminEvent[] | null>(null);
+  let evOpen = $state(false), evs = $state<AdminEvent[] | null>(null), evFailed = $state(false);
+  // read again on every opening (one made a moment ago, another admin's delete); the last list shows meanwhile
+  function loadEvents() {
+    evFailed = false;
+    api.adminOrgEvents(org.id).then((l) => (evs = l)).catch(() => (evFailed = true));
+  }
   function events() {
     haptic.select(); evOpen = !evOpen;
-    if (evOpen && !evs) api.adminOrgEvents(org.id).then((l) => (evs = l)).catch(() => (evs = []));
+    if (evOpen) loadEvents();
   }
   // its day, what it is if not live, and its numbers once it has any
   const evLine = (x: AdminEvent) => [x.startsAt ? dayMonthShort(x.startsAt) : '', x.status === 'draft' ? t('studio.draft') : x.status === 'cancelled' ? t('event.cancelled') : '',
@@ -173,17 +191,19 @@
             {#snippet trailing()}<Button kind="gray" size="s" destructive onclick={() => dropEvent(x)}>{t('adm.delGo')}</Button>{/snippet}
           </Row>
         {:else}
-          <Row dense title={evs ? t('adm.noEvents') : '…'} disabled />
+          {#if !evFailed}<Row dense title={evs ? t('adm.noEvents') : '…'} disabled />{/if}
         {/each}
+        {#if evFailed}<Row dense tone="action" title={t('common.retry')} onclick={loadEvents} />{/if}
       {/if}
       {#if club && o}<Row title={t('reg.official')} accessory="switch" checked={official ?? o.official} disabled={official != null} onchange={(on) => setOfficial(o, on)} />{/if}
     </Group>
 
+    {#if !o && adminOrgs.failed}<EmptyState inline text={t('common.error')} onretry={loadAdminOrgs} />{/if}
     {#if o}
       <Group caption={t('adm.team')}>
         {#each o.team as m (m.id)}
           <Row dense title={m.name || '@' + m.username} subtitle={[m.username ? '@' + m.username : '', m.student ? '' : t('adm.notSigned')].filter(Boolean).join(' · ') || undefined}
-            value={ROLE_NAME[m.role]} whole disabled={busy} menu={memberMenu(o, m)} />
+            value={roleName(m.role)} whole disabled={busy} menu={memberMenu(o, m)} />
         {/each}
         <Row tone="add" title={t('adm.assign')} onclick={() => { haptic.select(); adding = !adding; who = ''; role = o.team.some((m) => m.role === 'president') ? 'member' : 'president'; }} />
       </Group>
@@ -191,8 +211,9 @@
         <!-- not a <form>: the role row is a button, and a button in a form submits it -->
         <div class="form" transition:fold>
           <Field label={t('adm.who')} bind:value={who} autocomplete="off" enterkeyhint="done" />
-          <Group><Row title={t('staff.role')} value={ROLE_NAME[role]} menu={ROLES.map((r) => ({ label: ROLE_NAME[r], checked: role === r, onselect: () => (role = r) }))} /></Group>
-          <Button kind="filled" full loading={busy} disabled={!who.trim()} onclick={() => assign(o, who.trim(), role)}>{t('adm.set')}</Button>
+          <Group><Row title={t('staff.role')} value={roleName(role)} menu={[...ROLES.map((r) => ({ label: roleName(r), checked: role === r, onselect: () => (role = r) })),
+            { label: roleName('none'), destructive: true, onselect: () => (role = 'none') }]} /></Group>
+          <Button kind="filled" full destructive={role === 'none'} loading={busy} disabled={!who.trim()} onclick={() => assign(o, who.trim(), who.trim(), role)}>{role === 'none' ? t('adm.remove') : t('adm.set')}</Button>
         </div>
       {/if}
 
