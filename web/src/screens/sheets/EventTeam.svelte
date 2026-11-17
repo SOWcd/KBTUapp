@@ -14,6 +14,7 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Copy from '@lucide/svelte/icons/copy';
   import Search from '@lucide/svelte/icons/search';
+  import Link from '@lucide/svelte/icons/link';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Wallet from '@lucide/svelte/icons/wallet';
   import Shuffle from '@lucide/svelte/icons/shuffle';
@@ -95,10 +96,11 @@
     <Row dense icon={Shuffle} title={t('tm.how3')} />
   </Group>
 {/if}
-{#snippet edit()}<Button kind="gray" size="s" onclick={rename}>{t('tm.rename')}</Button>{/snippet}
 {#if team}
   <Group caption={t('tm.yours')} footnote={captain && !tm.locked && team.members.length < tm.max ? t('tm.openHint') : undefined}>
-    <Row title={team.name} subtitle={tm.locked ? t('tm.locked') : t('tm.of', { n: team.members.length, max: tm.max })} trailing={captain && !tm.locked ? edit : undefined} />
+    <!-- the captain's tap on the name renames it -->
+    <Row title={team.name} subtitle={tm.locked ? t('tm.locked') : t('tm.of', { n: team.members.length, max: tm.max })}
+      accessory={captain && !tm.locked ? 'chevron' : 'none'} onclick={captain && !tm.locked ? rename : undefined} />
     {#each team.members as p (p.id)}
       {#snippet drop()}<Button kind="gray" size="s" onclick={() => remove(p)}>{t('tm.remove')}</Button>{/snippet}
       <Row dense title={p.id === me ? `${p.name} · ${t('tm.you')}` : p.name} subtitle={p.id === team.captain ? t('tm.captain') : undefined}
@@ -108,10 +110,11 @@
     {/each}
     {#if captain && !tm.locked && link && team.members.length < tm.max}<!-- a full team has nobody to invite -->
       <Row icon={UserPlus} tone="action" title={t('tm.invite')} onclick={share} />
-      <Row icon={Copy} title={t('tm.copy')} onclick={copy} />
       <Row icon={Search} title={t('tm.open')} accessory="switch" checked={team.open} onchange={setOpen} />
     {/if}
-    {#if captain && !tm.locked && link}<Row icon={RefreshCw} title={t('tm.newLink')} onclick={newLink} />{/if}
+    <!-- the link's rare jobs one tap deeper (a full team has nobody to invite: no copy) -->
+    {#if captain && !tm.locked && link}<Row icon={Link} title={t('tm.link')}
+      menu={[...(team.members.length < tm.max ? [{ label: t('tm.copy'), icon: Copy, onselect: () => void copy() }] : []), { label: t('tm.newLink'), icon: RefreshCw, onselect: () => void newLink() }]} />{/if}
   </Group>
   {#if !tm.locked}<span class="out"><Button kind="plain" size="s" onclick={leave}>{t('tm.leave')}</Button></span>{/if}
 {:else if going && !tm.locked}
