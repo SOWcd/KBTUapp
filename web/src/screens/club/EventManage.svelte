@@ -38,6 +38,9 @@
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
   import Gift from '@lucide/svelte/icons/gift';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import Field from '../../ui/Field.svelte';
+  import { tick as frame } from 'svelte';
 
   // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money;
   // the creator runs it as its President would (server app.viewer), all but the club's money and reports (`plain`: the rest)
@@ -184,6 +187,16 @@
     try { await api.teamDecide(id, x.person.id, yes); haptic.ok(); say(t(yes ? 'ta.saidYes' : 'ta.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); studioChanged(); }
     catch { asks = [x, ...asks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // "Change room" on the day (rooms change on the spot; moved here from Studio's home, Nov 17): a KBTU room in one tap,
+  // who's coming hears it by the rules (server change_place)
+  const roomDay = $derived(head && !plain && live && !e?.placeUrl && !!e && dayNo(e.startsAt) === dayNo(tick) && ends > tick);
+  let moving = $state(false), room = $state(''), roomForm = $state<HTMLFormElement>();
+  async function startMove() { haptic.tap(); room = ''; moving = true; await frame(); roomForm?.querySelector('input')?.focus(); }
+  async function move() {
+    if (!room.trim()) return;
+    try { await api.changePlace(id, room.trim()); moving = false; haptic.ok(); say(t('studio.moved'), 'sparkles_3d'); studioChanged(); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
@@ -209,6 +222,16 @@
           <Button kind="primary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('mk.title')}</Button>
           {#if !doorOpen}<p class="t-foot">{t('door.openAt', { time: time(doorAt) })}</p>{/if}
         </div>
+      {/if}
+
+      {#if roomDay}
+        {#if !moving}<Group><Row icon={MapPin} title={t('studio.move')} accessory="chevron" onclick={startMove} /></Group>
+        {:else}
+          <form class="moving" bind:this={roomForm} onsubmit={(ev) => { ev.preventDefault(); void move(); }}>
+            <span class="fl"><Field label={t('studio.newRoom')} bind:value={room} maxlength={80} placeholder={e.place || '305'} enterkeyhint="done" /></span>
+            <Button kind="primary" size="l" type="submit" disabled={!room.trim()}>{t('common.save')}</Button>
+          </form>
+        {/if}
       {/if}
 
       {#if audienced}
@@ -304,4 +327,6 @@
   .yn { display: flex; align-items: center; gap: var(--s-2); }
   .door { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
   .door .t-foot { color: var(--text-3); }
+  .moving { display: flex; align-items: flex-end; gap: var(--s-2); }
+  .fl { flex: 1; min-width: 0; }
 </style>
