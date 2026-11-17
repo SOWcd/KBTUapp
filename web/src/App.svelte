@@ -4,6 +4,7 @@
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
+  import { may } from './lib/perms';
   import { fresh } from './lib/state/assistant.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
   import { CONSENT_VOL } from './lib/legal';
@@ -236,6 +237,7 @@
   }
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
+  sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
   sheets.teamSetup = (org, onchange) => lazy(() => import('./screens/club/TeamSetupSheet.svelte'), { org, onchange });
@@ -571,7 +573,7 @@
     if (ref) keepRef(Number(ref[1]), ref[2]);
     const qr = p.match(/^u_(\d+_[A-Z2-7]{10})$/); // someone's profile QR (the invite sheet shows it too): noted for them as an invite
     if (qr) void api.refer(qr[1]).catch(() => {});
-    const m = p.match(/^(ev|tk|cl|jr|u|tm|st|mg)_(\d+)(?:_[A-Z2-7]{10})?$/);
+    const m = p.match(/^(ev|tk|cl|jr|u|tm|st|sn|mg)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
     // (the Team once the Studio pane is open: two chunk loads at once, lazy() opens only the later one, and Team reads
     // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
@@ -584,9 +586,16 @@
       if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
       ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }, 'sheet.studio');
     };
+    // sn_<club>: the bot's Secret Santa announcement: that club's Studio and over it the game's welcome; no longer one
+    // who may start it (a stale link): the Studio alone, or the club's page (as st_)
+    const santaHi = (org: number) => {
+      const mm = session.me?.memberships.find((x) => x.org.id === org);
+      if (!may(mm, 'events')) { studio(org); return; }
+      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }, 'sheet.studio').then(() => sheets.santaHi(org));
+    };
     // mg_<event>: the bot's "a member asks to come as a guest": the event's organizer screen, its asks on top
     const manage = (ev: number) => asStudent(() => { void eventDetails(ev).then(() => sheets.manage(ev), () => sheets.event(ev)); });
-    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team, st: studio, mg: manage })[m[1] as 'ev'](Number(m[2]));
+    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team, st: studio, sn: santaHi, mg: manage })[m[1] as 'ev'](Number(m[2]));
     // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
     else if (p) say(t('link.unknown'), 'thinking_face_3d');
   }
