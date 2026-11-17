@@ -7,6 +7,7 @@ import { boot, hapticTaps, tg } from './lib/tg';
 import { i18n, loadLang } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
+import './lib/state/keyboard.svelte'; // the app's box at its height without a keyboard, before the first paint
 
 document.documentElement.lang = i18n.lang;
 // theme before the first paint: no white flash in dark mode

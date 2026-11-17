@@ -84,7 +84,7 @@
 </div>
 
 <style>
-  .pane { position: fixed; inset: 0; z-index: var(--z-sheet); padding: var(--page-top) var(--gutter) 0; background: var(--bg);
+  .pane { position: fixed; inset: 0; bottom: auto; height: var(--app-h, 100%); z-index: var(--z-sheet); padding: var(--page-top) var(--gutter) 0; background: var(--bg);
     box-shadow: -18px 0 40px -16px rgba(0, 0, 0, 0.45); touch-action: pan-y; }
   /* the scroll edge: content fades out under the capsule instead of running into it. A strip of the page's own colour
      held at the top (no net height), not a mask on the pane: a masked pane was clear up there, and the page under it
