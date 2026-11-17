@@ -2,6 +2,7 @@
   // Studio: one Create menu, permission-aware tools, then the upcoming event and event tabs.
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import Plus from '@lucide/svelte/icons/plus';
+  import Gift from '@lucide/svelte/icons/gift';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -226,6 +227,7 @@
   const openRecruit = () => (vice && (waiting || !casting) ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
   const creates = $derived<MenuItem[]>([
     ...(staff ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []),
+    ...(staff ? [{ label: t('santa.title'), icon: Gift, onselect: () => sheets.editor(m!.org.id, undefined, undefined, 'santa') }] : []),
     ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),
     ...(may(m, 'posts') ? [{ label: t('casting.mark'), icon: Megaphone, onselect: () => sheets.composer(m!.org.id, undefined, true) }] : []),
   ]);

@@ -78,7 +78,7 @@
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
   // its money, its videos or its memo, which stay the club's own. The creator (lent) has its President's editor
-  let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
+  let { overlay, org, id, staff = false, preset }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean; preset?: 'santa' } = $props();
   // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent (but to the creator)
   const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
   // his covers and videos go as the club's too (X-Staff-Org)
@@ -120,6 +120,9 @@
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, late: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
+  // Studio's "Secret Santa" (owner, Nov 17: nobody found the switch): the game ready to publish, only the day to pick
+  // svelte-ignore state_referenced_locally
+  if (preset === 'santa') Object.assign(blank, { title: t('santa.title'), santa: true, teamOnly: true, emoji: 'sparkles_3d' });
   let f = $state({ ...blank });
   // a new event named like a casting, by someone who may open the club's recruitment: say that's the better tool
   // ponytail: a word list; the AI event check can tell it from the description once it runs on every event

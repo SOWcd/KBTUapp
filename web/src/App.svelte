@@ -136,7 +136,7 @@
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
-  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff });
+  sheets.editor = (org, id, staff, preset) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff, preset });
   sheets.deepLink = (p) => deepLink(p);
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone });
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }); // a scan-only helper: the Mark screen, no lists
