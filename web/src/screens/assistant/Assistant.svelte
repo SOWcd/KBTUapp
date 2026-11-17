@@ -35,7 +35,7 @@
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
   import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
-  import { sheets, openMapFrom } from '../../lib/state/sheets';
+  import { sheets, openMapFrom, takeIris } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
   import { session, asStudent } from '../../lib/state/session.svelte';
@@ -132,6 +132,10 @@
     else compose();
   }
   const openMap = openMapFrom;
+  // opening with the keyboard: the plain rise. The iris holds the sheet in place while the keyboard resizes it under
+  // the circle, and the whole opening stutters on a phone (owner's recording, Nov 17); dropped here before Sheet takes it
+  // svelte-ignore state_referenced_locally
+  if (focus) takeIris();
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
