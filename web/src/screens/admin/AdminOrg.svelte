@@ -168,6 +168,22 @@
     } catch (e) { evs = before; oops(e); if (evOpen) loadEvents(); }
   }
 
+  // ---- KBTU Awards on its card: a nomination added (its English name as the ceremony gives it) or removed ----
+  let awAdding = $state(false), awYear = $state(String(new Date().getFullYear())), awTitle = $state('');
+  async function setAward(x: AdminOrg, year: number, title: string, on: boolean) {
+    if (!on && !(await sheets.ask({ title: t('adm.awardDelAsk', { title }), ok: t('adm.delGo'), cancel: t('tk.keep'), danger: true }))) return;
+    busy = true;
+    try {
+      const still = staffStill();
+      const fresh = await api.adminSetAward(x.id, year, title, on);
+      if (!still()) return;
+      putOrg(fresh);
+      haptic.ok();
+      if (on) { awTitle = ''; awAdding = false; }
+      void loadAfisha(); // the card shows it
+    } catch (e) { oops(e); } finally { busy = false; }
+  }
+
   // hide, never delete (a lost phone must not wipe the clubs); back with one tap
   async function hide(x: AdminOrg) {
     if (!x.hidden && !(await sheets.ask({ title: t('adm.hideAsk', { club: x.name }), text: t('adm.hideText'), ok: t('adm.hide'), cancel: t('tk.keep'), danger: true }))) return;
@@ -243,6 +259,22 @@
         <div class="pq" transition:fold {@attach (el) => { setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 260); }}>
           <span class="plate">{#if qr}<Qr text={`https://t.me/KBTUappBot?startapp=pres_${org.id}_${qr}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr>{:else}<span class="wait"></span>{/if}</span>
           <p class="note">{t('adm.presQrNote')}</p>
+        </div>
+      {/if}
+
+      <Group caption={t('adm.kbtuAwards')}>
+        {#each o.awards as a (a.year + a.title)}
+          <Row dense title={a.title} subtitle={String(a.year)}>
+            {#snippet trailing()}<Button kind="gray" size="s" destructive disabled={busy} onclick={() => setAward(o, a.year, a.title, false)}>{t('adm.delGo')}</Button>{/snippet}
+          </Row>
+        {/each}
+        <Row tone="add" title={t('adm.awardAdd')} onclick={() => { haptic.select(); awAdding = !awAdding; }} />
+      </Group>
+      {#if awAdding}
+        <div class="form" transition:fold>
+          <Field label={t('adm.awardYear')} bind:value={awYear} inputmode="numeric" maxlength={4} autocomplete="off" />
+          <Field label={t('adm.awardTitle')} bind:value={awTitle} maxlength={80} autocomplete="off" enterkeyhint="done" />
+          <Button kind="filled" full loading={busy} disabled={!awTitle.trim() || !/^\d{4}$/.test(awYear)} onclick={() => setAward(o, +awYear, awTitle.trim(), true)}>{t('adm.awardAdd')}</Button>
         </div>
       {/if}
 

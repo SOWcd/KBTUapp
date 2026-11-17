@@ -182,6 +182,7 @@ export const server = {
   adminCreateOrg: (i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg> => call('POST', '/admin/orgs', i),
   // who: an @username or Telegram ID typed by hand; { userId }: a row of the club's team (the app's id never moves to someone else)
   adminSetRole: (org: Id, who: string | { userId: Id }, role: OrgRole | 'none'): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/role`, typeof who === 'string' ? { who, role } : { ...who, role }),
+  adminSetAward: (org: Id, year: number, title: string, on: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/award`, { year, title, on }),
   adminHideOrg: (org: Id, hidden: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/hidden`, { hidden }), // hide, never delete
   adminPresLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/admin/orgs/${org}/president-link`), // the President's one-time link, shown as a QR
   org: (id: Id): Promise<Org> => call('GET', `/orgs/${id}`),

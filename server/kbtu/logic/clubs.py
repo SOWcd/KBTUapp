@@ -84,6 +84,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     posts = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM posts WHERE org_id IN ({q}) AND hidden_at IS NULL AND audience = 'public'
         AND created_at > ? GROUP BY org_id""", *ids, cut))
     rounds = {r[0] for r in rows(con, f"SELECT DISTINCT org_id FROM rounds WHERE org_id IN ({q}) AND closes_at > ?", *ids, cut)}  # open now or closed inside it
+    won = awards(con, ids)
     return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": shown_links(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
@@ -94,11 +95,35 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "joinQuestions": _join_qs(o),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
         "top": bool(o["top_at"]) and not o["official"],  # the Ascent's top: its own block in the clubs list
-        "category": o["category"],
+        "category": o["category"], "awards": won.get(o["id"], []),
         "quiet": o["kind"] == "club" and not o["official"] and o["created_at"] <= cut
         and not (events.get(o["id"]) or posts.get(o["id"]) or o["id"] in rounds),
         "rank": members.get(o["id"], 0) + 5 * events.get(o["id"], 0) + 2 * posts.get(o["id"], 0),  # Popular's order
     } for o in found}
+
+
+def awards(con, ids: list[int]) -> dict[int, list[dict]]:
+    """KBTU Awards a club won (types.ts Org.awards), newest year first; one query for all the clubs."""
+    won: dict[int, list[dict]] = {}
+    for r in rows(con, f"SELECT org_id, year, title FROM org_awards WHERE org_id IN ({_qs(ids)}) ORDER BY year DESC, created_at, title", *ids):
+        won.setdefault(r["org_id"], []).append({"year": r["year"], "title": r["title"]})
+    return won
+
+
+def set_award(con, actor: int | None, oid: int, year: object, title: object, on: bool) -> bool:
+    """Add (on) or remove a club's KBTU Awards nomination (the admin CLI, Admin's club page); False: nothing changed."""
+    title = title.strip() if isinstance(title, str) else ""
+    if not (isinstance(year, int) and 2000 <= year <= 2100 and 0 < len(title) <= 80 and title.isprintable()):
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM orgs WHERE id = ?", oid):
+            raise ApiError("not_found")
+        n = con.execute("INSERT OR IGNORE INTO org_awards (org_id, year, title, created_at) VALUES (?, ?, ?, ?)", (oid, year, title, core.now())).rowcount if on \
+            else con.execute("DELETE FROM org_awards WHERE org_id = ? AND year = ? AND title = ?", (oid, year, title)).rowcount
+        if n:
+            log_action(con, actor, "org_award" if on else "org_award_del", f"org:{oid}", json.dumps({"year": year, "title": title}))
+    core._SHARED.clear()  # the lists' cached part holds the awards
+    return bool(n)
 
 
 def hidden_day(con) -> None:

@@ -4,6 +4,8 @@
   .venv/bin/python -m kbtu.admin orgs                                   clubs and their teams
   .venv/bin/python -m kbtu.admin rename <slug> "<name>"                 an org's name as is (its slug and lanyard stay)
   .venv/bin/python -m kbtu.admin org <slug> "<name>" <short> <emoji> [--official] [--school]   a school is official, never closes
+  .venv/bin/python -m kbtu.admin org-award <id | slug | "exact name"> <year> "<title>"   a KBTU Awards nomination it won,
+                                on its card (the ceremony's English name); org-award-del with the same words removes it
   .venv/bin/python -m kbtu.admin org-role <role id> "<ru>" ["<kk>"]     a club role's title corrected: those languages count as typed
                                 by hand, so the AI translator never overwrites them; English, level and rights stay; not Vice or Head
   .venv/bin/python -m kbtu.admin role <@username | telegram id> <slug> <member | head | vice | president | none>
@@ -294,6 +296,19 @@ def main(args: list[str]) -> None:
         o = one(con, "SELECT id, name FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such club")
         con.execute("UPDATE orgs SET name = ? WHERE id = ?", (args[2].strip(), o["id"]))
         print(f"{args[1]}: {o['name']} -> {args[2].strip()}")
+    elif cmd in ("org-award", "org-award-del") and len(args) == 4 and args[2].isdigit():
+        from .logic.clubs import set_award
+        key = args[1].strip()
+        o = one(con, "SELECT id, name FROM orgs WHERE id = ?", int(key)) if key.isdigit() else \
+            one(con, "SELECT id, name FROM orgs WHERE slug = ? OR name = ? ORDER BY slug = ? DESC LIMIT 1", key, key, key)
+        if not o:
+            sys.exit(f"{key}: no such organization (see `orgs`)")
+        on = cmd == "org-award"
+        try:
+            done = set_award(con, None, o["id"], int(args[2]), args[3], on)
+        except ApiError:
+            sys.exit("year: 2000-2100; title: 1-80 characters, one line")
+        print(f"{o['name']}: {'added' if on else 'removed'} {args[2]} {args[3].strip()!r}" if done else f"{o['name']}: {'already has' if on else 'has no'} {args[2]} {args[3].strip()!r}")
     elif cmd == "org-role" and len(args) in (3, 4) and args[1].isdigit():
         from .logic.teams import SLOT, _also, normalize_role, role_tr
         try:

@@ -185,7 +185,9 @@ export interface OrgRef { id: Id; slug: string; name: string; short: string; emo
 /** A club as the admin sees it (pilot): its leaders by Telegram name, and how many members it has. `student`: signed in
  *  with KBTU — a role counts only then. */
 export interface AdminMember { id: Id; role: OrgRole; username: string | null; name: string; student: boolean }
-export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean; shortLinks: string[] }
+export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean; shortLinks: string[]; awards: OrgAward[] }
+/** a KBTU Awards nomination a club won (the ceremony's English name), newest year first */
+export interface OrgAward { year: number; title: string }
 /** a club's own kbtu.sow.kz/<slug>: only ever into the app (the club, one of its events, its round) */
 export interface ShortLink { slug: string; kind: 'club' | 'event' | 'round'; eventId: Id | null; eventTitle: string | null; createdAt: Ts }
 // a club's event in Admin's delete list, with what deleting it takes along
@@ -218,6 +220,7 @@ export interface Org extends OrgRef {
   canBroadcast: boolean;
   canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
   top?: boolean;                // a student initiative at the Ascent's top: an official club's tools, no ✓ (server clubs.py)
+  awards?: OrgAward[];          // KBTU Awards it won, newest first (its card's plaque)
   category: OrgCategory | null; // its interest (the Clubs tab's tiles), set by its President or Vice
   quiet: boolean;               // 30 days without an event, post or round (official clubs never): folded at the end of Initiatives
   rank: number;                 // Popular's order, the server's (members and recent activity)
