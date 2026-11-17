@@ -286,9 +286,14 @@
   // "free now" by the timetable (lib/rooms): fetched as the map opens, nothing of it shows until it comes or if the
   // server has no timetable (404); the rooms the main map numbers, tinted where their number is printed
   let week = $state<Record<string, RoomWeek> | null>(null), freeOn = $state(false), clock = $state(nowTs());
+  // These rooms stay on the map but must not be advertised as free.
+  const noFreeHighlight = new Set(['310', '311', '312', '313', '314', '315', '316', '317', '318']);
   api.mapRooms().then((r) => (week = r.rooms), () => {});
-  const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) =>
-    week![r] ? ps.map(([u, v]) => ({ r, u, v, free: roomNow(week![r], clock).free })) : []));
+  const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : Object.entries(ROOMS[cur] ?? {}).flatMap(([r, ps]) => {
+    if (!week![r]) return [];
+    const free = roomNow(week![r], clock).free;
+    return free && noFreeHighlight.has(r) ? [] : ps.map(([u, v]) => ({ r, u, v, free }));
+  }));
   const roomLine = $derived.by(() => {
     const w = room && week?.[room];
     if (!w) return '';
