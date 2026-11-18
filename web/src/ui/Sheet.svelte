@@ -15,7 +15,7 @@
   // The drag writes transform directly (no reactive state per frame); exit runs, then the overlay
   // is removed from the stack.
   import type { Component, Snippet } from 'svelte';
-  import { takeIris, irisOpen } from '../lib/state/sheets';
+  import { takeIris, irisOpen, irisShut } from '../lib/state/sheets';
   import { onMount, untrack } from 'svelte';
   import { keyboard, KB_MS, kbEase, riseMs } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
@@ -33,12 +33,14 @@
   // Without one, text typed here and not sent asks before a hand closes it (a pull lost a club's application).
   // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above
   // (my lanyard while I dress it)
+  // shut: opened out of a round button (the iris), it closes back into that place, the same circle the other way; a
+  // pull closes as a pull does, down from under the finger
   // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
-  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
+  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; shut?: boolean;
     children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, opener, hold, onhold }: Props = $props();
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, shut = false, children, footer, opener, hold, onhold }: Props = $props();
   const iris = takeIris(); // opened out of a round button (lib/state/sheets irisFrom) instead of the rise
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
   // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
@@ -142,6 +144,13 @@
     if (gone) return;
     gone = true;
     lift?.cancel();
+    if (shut && iris && !fromY && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      chrome(); chrome = () => {}; // the bar comes back now, its button under the closing circle
+      const c = irisShut(panel, iris), ms = c.effect!.getComputedTiming().duration as number;
+      scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-in-out', fill: 'forwards' });
+      c.onfinish = () => removeOverlay(overlay.id);
+      return;
+    }
     const h = panel.getBoundingClientRect().height;
     const a = panel.animate([{ transform: `translate3d(0,${fromY}px,0)` }, { transform: `translate3d(0,${h + 40}px,0)` }],
       { duration: 260, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
@@ -149,6 +158,7 @@
     a.onfinish = () => removeOverlay(overlay.id);
   }
 
+  let chrome = () => {}; // gives the app's bars back (hideChrome)
   const guard = unsent(() => overlay);
 
   $effect(() => {
@@ -221,7 +231,7 @@
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
     panel.addEventListener('focusin', guard.focusin);
-    const chrome = hideChrome();
+    chrome = hideChrome();
     return () => { ro.disconnect(); cancelAnimationFrame(kbRaf); chrome(); back(); };
   });
 </script>
