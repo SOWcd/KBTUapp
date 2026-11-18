@@ -58,6 +58,8 @@
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
+                                one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
   .venv/bin/python -m kbtu.admin round-nudge <round id> [--dry]   a recruitment round's "pick an interview time" nudge (due
                                 48 hours after the invite) goes now to the invited without a time; --dry: the count only
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
@@ -301,6 +303,9 @@ def main(args: list[str]) -> None:
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
+        from .logic import seats
+        print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
     elif cmd == "round-nudge" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--dry"]):
         from . import casting
         n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))

@@ -870,6 +870,31 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
                 promote(con, e)
 
 
+def seat_by_hand(con, uid: int, eid: int) -> str:
+    """`kbtu.admin seat`: the creator seats a student on an event himself, a paid one too, with no receipt (their bank
+    would not share the file; the organizer vouches for the money). Whatever the seat was (a hold, the waitlist, a
+    cancelled one, none), it is a ticket now, past the cap; the team its invite link was for, the reminder and the audit
+    log as after a receipt. Nothing about money is recorded: the attendee list shows the seat without a receipt."""
+    with tx(con):
+        e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published'", eid)
+        if not e or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
+            return "no such published event, or not a student"
+        r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+        if r and r["status"] == "going":
+            return "already going"
+        if r:
+            con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL,
+                updated_at = ? WHERE id = ?""", (core.now(), r["id"]))
+            rid = r["id"]
+        else:
+            rid = con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, ?, ?)",
+                              (eid, uid, _ticket_code(con, eid), core.now(), core.now())).lastrowid
+        evteams.paid(con, rid)
+        _remind(con, uid, e)
+        core.log_action(con, None, "seat_by_hand", f"registration:{rid}", json.dumps({"event": eid, "was": r["status"] if r else None}))
+    return f"seated (was: {r['status'] if r else 'no seat'})"
+
+
 def _remind(con, uid: int, e: sqlite3.Row) -> None:
     """The 2-hour reminder (§7), unless the person turned it off; ref carries the start, so a moved event re-arms it."""
     if one(con, "SELECT n_remind FROM users WHERE id = ?", uid)[0] and e["starts_at"] - 7200 > core.now():
