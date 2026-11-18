@@ -1551,6 +1551,7 @@ const en: Dict = {
   'rc.flag.too_early': "The receipt is older than the event",
   'rc.flag.unreadable': "Couldn't read it: doesn't look like a Kaspi receipt",
   'rc.flag.spot': "Spot check",
+  'rc.flag.partial': "Could not be read fully",
   'rc.amount': "Sum",
   'rc.sender': "Sender",
   'rc.paidAt': "Paid",

@@ -40,7 +40,7 @@
 <Sheet {overlay} icon={Receipt} tall title={t('rc.title')}>
   <h2 class="t-h2 hd">{name}</h2>
   <p class="t-foot ttl">{t('rc.title')} · {ago(receipt.at)}{#if receipt.reviewed} · {t(receipt.auto ? 'rc.auto' : 'rc.passed')}{/if}</p>
-  {#if flagged}{#each receipt.flags as f (f)}<Notice tone={f === 'spot' ? 'neutral' : 'warning'} text={f === 'recipient_mismatch'
+  {#if flagged}{#each receipt.flags as f (f)}<Notice tone={f === 'spot' || f === 'partial' ? 'neutral' : 'warning'} text={f === 'recipient_mismatch'
     ? t('rc.flag.recipient_mismatch', { name: receipt.recipient ?? '' }) : t(`rc.flag.${f}` as 'rc.flag.duplicate')} />{/each}{/if}
   {#if receipt.amount || receipt.sender || receipt.paidAt}
     <Group>

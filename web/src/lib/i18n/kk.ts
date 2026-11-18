@@ -1551,6 +1551,7 @@ const kk: Dict = {
   'rc.flag.too_early': "Чек іс-шараның өзінен ескі",
   'rc.flag.unreadable': "Оқылмады: бұл Kaspi чегі емес сияқты",
   'rc.flag.spot': "Іріктеп тексеру",
+  'rc.flag.partial': "Толық оқылмады",
   'rc.amount': "Сома",
   'rc.sender': "Жіберуші",
   'rc.paidAt': "Төленді",

@@ -154,7 +154,7 @@
       if (!a.by) continue;
       const x = by.get(a.by.id) ?? by.set(a.by.id, { person: a.by, signed: 0, paid: 0, came: 0 }).get(a.by.id)!;
       x.signed++;
-      if (a.status === 'going' && a.receipt && (a.receipt.reviewed || !a.receipt.flags.some((f) => f !== 'spot'))) x.paid++; // a flagged receipt nobody checked isn't paid yet
+      if (a.status === 'going' && a.receipt && (a.receipt.reviewed || !a.receipt.flags.some((f) => f !== 'spot' && f !== 'partial'))) x.paid++; // a flagged receipt nobody checked isn't paid yet
       if (a.byCame) x.came++;
     }
     return [...by.values()].sort((a, b) => b.came - a.came || b.paid - a.paid || b.signed - a.signed);

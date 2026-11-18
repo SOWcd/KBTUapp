@@ -166,16 +166,19 @@ def _letters(s: str) -> str:
     return "".join(c for c in s.lower() if c.isalpha())
 
 
-def same_person(printed: str, expected: str) -> bool:
+def same_person(printed: str, expected: str, strict: bool = False) -> bool:
     """Whether the name read off the receipt is the one the organizer set ("Name S." as Kaspi prints it): the
     initial must match, the name may differ by a letter or two (OCR). Typed without the initial (a first name alone;
-    the owner's own event), the first names are compared."""
+    the owner's own event), the first names are compared. `strict` (the app's own check, seats._receipt_clean): the
+    same letters exactly, through the alphabets ("Arlan A." is a mismatch there, only not worth a warning)."""
     lone = len(expected.split()) == 1
     if lone:
         printed = (printed.split() or [""])[0]
     lat = lambda s: "".join(_LAT.get(c, c) for c in s.lower())  # noqa: E731
     pairs = [(printed, expected), (printed, expected.translate(_LOOK)), (printed, lat(expected).translate(_LOOK)), (lat(printed), lat(expected))]
     for a, b in ((_letters(a), _letters(b)) for a, b in pairs):
-        if a and b and (lone or a[-1] == b[-1]) and difflib.SequenceMatcher(None, *((a, b) if lone else (a[:-1], b[:-1]))).ratio() >= 0.75:
+        if strict and a and a == b:
+            return True
+        if not strict and a and b and (lone or a[-1] == b[-1]) and difflib.SequenceMatcher(None, *((a, b) if lone else (a[:-1], b[:-1]))).ratio() >= 0.75:
             return True
     return False

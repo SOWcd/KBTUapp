@@ -1572,6 +1572,7 @@ const ru = {
   'rc.flag.too_early': "Чек старше самого события",
   'rc.flag.unreadable': "Не удалось прочитать: похоже, это не чек Kaspi",
   'rc.flag.spot': "Выборочная проверка",
+  'rc.flag.partial': "Не удалось прочитать полностью",
   'rc.amount': "Сумма",
   'rc.sender': "Отправитель",
   'rc.paidAt': "Оплачено",
