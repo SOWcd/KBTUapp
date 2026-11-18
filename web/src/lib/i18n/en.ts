@@ -3322,6 +3322,8 @@ const en: Dict = {
   'santa.upTo': "up to {sum}",
   'santa.until': "Wishlists until",
   'santa.budgetTo': "Gift up to",
+  'santa.sumPh': "Amount",
+  'santa.needBudget': "Set the gift amount",
   'santa.untilPast': "The deadline has passed",
   'santa.untilLate': "At least an hour before the gifts day",
   'santa.dayPast': "The gifts day has passed",
