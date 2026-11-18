@@ -175,10 +175,38 @@ def wish(con, eid: int, uid: int, raw: object) -> None:
         return
     if s["drawn_at"]:
         raise ApiError("closed", "deadline")
+    con.execute("INSERT OR REPLACE INTO santa_people (event_id, user_id, wish) VALUES (?, ?, ?)", (eid, uid, _clean(raw)))
+
+
+def _clean(raw: object) -> str:
+    """A wishlist as kept: one line of words, 2 to WISH_MAX characters (at sign-up and when changed)."""
     w = " ".join(raw.split()) if isinstance(raw, str) else ""
     if not 2 <= len(w) <= WISH_MAX:
         raise ApiError("bad_input", "wish")
-    con.execute("INSERT OR REPLACE INTO santa_people (event_id, user_id, wish) VALUES (?, ?, ?)", (eid, uid, w))
+    return w
+
+
+def rewish(con, v: Viewer, eid: int, raw: object) -> dict:
+    """My own wishlist changed, while I'm going in a published game, before and after the draw until the gifts day
+    starts: my Santa simply reads the newest. After the draw they hear it (a template, no words of mine) at most once a
+    day per game; their row is found through mine, and the answer says nothing of who they are."""
+    w = _clean(raw)
+    with tx(con):
+        e = one(con, """SELECT e.starts_at, s.drawn_at FROM events e JOIN santa_events s ON s.event_id = e.id
+            WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
+        if not e:
+            raise ApiError("not_found")
+        if e["starts_at"] <= now():
+            raise ApiError("closed")
+        me = one(con, _GOING + " AND p.user_id = ?", eid, v.id)
+        if not me:
+            raise ApiError("forbidden")
+        if con.execute("UPDATE santa_people SET wish = ? WHERE event_id = ? AND user_id = ? AND wish != ?", (w, eid, v.id, w)).rowcount and e["drawn_at"]:
+            g = one(con, "SELECT user_id FROM santa_people WHERE event_id = ? AND gives_to = ? AND user_id != ?", eid, v.id, v.id)
+            if g and not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'santa_wish' AND ref LIKE ? AND send_after > ?",
+                             g[0], f"event:{eid}:%", now() - DAY):
+                notify(con, g[0], "santa_wish", f"event:{eid}:{now()}")
+    return {"wish": w}
 
 
 def draw(con, v: Viewer, eid: int) -> dict:

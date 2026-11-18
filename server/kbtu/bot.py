@@ -514,7 +514,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok', 'door_open') else 'ev'}_{e['id']}"
 
 
-SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_two", "santa_alone", "santa_eve",
+SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_wish", "santa_two", "santa_alone", "santa_eve",
                          "santa_few", "santa_wait", "santa_late"})
 
 
@@ -546,7 +546,7 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
     ring = one(con, "SELECT COUNT(*) FROM santa_people WHERE event_id = ?", e["id"])[0]
     if kind == "santa_two" and ring != 2 or kind == "santa_alone" and ring != 1:
         return None  # the ring changed again since: a newer message says how it stands
-    if kind in ("santa_changed", "santa_eve") and not one(con, "SELECT 1 FROM santa_people WHERE event_id = ? AND user_id = ? AND gives_to != user_id", e["id"], uid):
+    if kind in ("santa_changed", "santa_eve", "santa_wish") and not one(con, "SELECT 1 FROM santa_people WHERE event_id = ? AND user_id = ? AND gives_to != user_id", e["id"], uid):
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message

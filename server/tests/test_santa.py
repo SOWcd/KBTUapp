@@ -655,3 +655,47 @@ def test_migration_on_the_live_shape(env, tmp_path):
     logic.santa.tick(con)
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 1
     assert con.execute("SELECT COUNT(*) FROM santa_events WHERE drawn_at IS NOT NULL").fetchone()[0] == 0
+
+
+def _rewish(c, eid, tg, wish):
+    return c.put(f"/api/events/{eid}/santa/wish", headers=tma(tg), json={"wish": wish})
+
+
+def test_change_my_wishlist(env):
+    """My own wishlist, changed while I'm in: before the draw nobody hears; after it my Santa reads the newest and hears
+    it at most once a day, never with my words; nobody else may, and not after the gifts day began."""
+    from kbtu.logic.core import Viewer
+    c, cfg = env
+    con, eid = _game(c, cfg, 4)
+    for bad in (None, " ", "x" * 301):
+        assert _rewish(c, eid, 10, bad).json()["message"] == "wish"  # the same limits as at sign-up
+    assert _rewish(c, eid, 10, "  tea   and\n socks ").json() == {"wish": "tea and socks"}  # and the same cleaning
+    assert _page(c, eid, 10)["mySanta"]["wish"] == "tea and socks" and not _out(con, "santa_wish")
+    assert _rewish(c, eid, 15, "late").status_code == 403  # not in the game
+    assert _draw(c, eid).status_code == 200
+    gives = _gives(c, con, eid, PLAYERS[:4])
+    santa = {v: k for k, v in gives.items()}[10]
+    r = _rewish(c, eid, 10, "a red scarf")
+    assert r.json() == {"wish": "a red scarf"} and "gives" not in r.text and str(_uid(con, santa)) not in r.text
+    assert _page(c, eid, santa)["mySanta"]["to"]["wish"] == "a red scarf"  # the Santa reads the newest
+    sent = _out(con, "santa_wish")
+    assert [m["user_id"] for m in sent] == [_uid(con, santa)] and "scarf" not in str(tuple(sent[0]))
+    text, _, start = bot._render(con, sent[0])
+    assert start == f"ev_{eid}" and "scarf" not in text
+    _rewish(c, eid, 10, "a blue scarf")
+    assert len(_out(con, "santa_wish")) == 1  # once a day per game
+    con.execute("UPDATE bot_outbox SET send_after = send_after - 86401, ref = ref || '0' WHERE kind = 'santa_wish'")
+    _rewish(c, eid, 10, "a green scarf")
+    assert len(_out(con, "santa_wish")) == 2  # a day on: again
+    # the ring moved on (10 left): the queued news for their old Santa goes
+    c.delete(f"/api/events/{eid}/registration", headers=tma(10))
+    assert not [m for m in _out(con, "santa_wish") if m["sent_at"] is None]
+    assert _rewish(c, eid, 10, "back").status_code == 403  # not going any more
+    other = next(tg for tg in PLAYERS[:4] if tg not in (10, santa))
+    con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 20")
+    logic.set_ban(con, Viewer(_uid(con, 20), "admin", True), _uid(con, other), True, "spam and abuse")
+    assert _rewish(c, eid, other, "x y").status_code == 403  # banned
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 5, eid))
+    assert _rewish(c, eid, santa, "too late").status_code == 409  # the gifts day began
+    con.execute("UPDATE events SET starts_at = ?, status = 'cancelled' WHERE id = ?", (int(time.time()) + DAY, eid))
+    assert _rewish(c, eid, santa, "cancelled").status_code == 404

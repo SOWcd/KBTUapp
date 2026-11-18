@@ -156,6 +156,7 @@ export const server = {
   setRegUntil: (id: Id, until: Ts | 'now' | null): Promise<EventFull> => call('PUT', `/events/${id}/reg-until`, { until }), // registration closes now / then / at the start
   santaStart: (org: Id, title: string, startsAt: Ts, budget: number | null, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget / until)
   santaSettings: (id: Id, s: { budget?: number | null; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
+  santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)
   santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)

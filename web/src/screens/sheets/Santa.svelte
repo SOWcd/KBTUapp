@@ -3,7 +3,11 @@
   // many play. After it a sealed card, and the tap that opens it is the game's moment (SantaReveal, once per person
   // I give to, kept on this phone); then, calmly, whom I give to and their wishlist. My own wishlist under it.
   import { onDestroy } from 'svelte';
-  import type { EventCard, EventFull, Id } from '../../lib/api';
+  import PenLine from '@lucide/svelte/icons/pen-line';
+  import { api, type EventCard, type EventFull, type Id } from '../../lib/api';
+  import { sheets } from '../../lib/state/sheets';
+  import { say } from '../../lib/state/ui.svelte';
+  import { haptic } from '../../lib/tg';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { open } from '../../lib/state/ui.svelte';
   import { dayMonthShort, time, nowTs } from '../../lib/time';
@@ -32,6 +36,22 @@
   // ponytail: the server says only whom I give to; "two are left" is read off the players' count (the bot says the same
   // from the ring itself). A flag on mySanta if the two ever disagree.
   const two = $derived(!!mine.to && e.taken === 2);
+  // my own wishlist, changed while I'm in (server santa.rewish): shown at once, put back if the save fails; after the
+  // draw my Santa reads the newest (the bot tells them, a day apart at most)
+  let edited = $state<string | null>(null);
+  const myWish = $derived(edited ?? mine.wish);
+  async function editWish() {
+    haptic.tap();
+    const v = await sheets.askText({ title: t('santa.mine'), text: t(mine.to ? 'santa.editText' : 'santa.askText'), ok: t('common.save'), cancel: t('common.cancel'),
+      placeholder: t('santa.wishPh'), max: 300, value: myWish });
+    const w = v?.split(/\s+/).filter(Boolean).join(' ') ?? '';
+    if (!w || w === myWish) return;
+    if (w.length < 2) { haptic.error(); say(t('santa.wishShort'), 'warning_3d'); return; }
+    const was = edited;
+    edited = w;
+    try { edited = (await api.santaWish(id, w)).wish; haptic.ok(); say(t('santa.wishSaved'), 'party_popper_3d'); }
+    catch { edited = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   const drawAt = $derived(e.regUntil && e.regUntil > nowTs() ? `${dayMonthShort(e.regUntil)}, ${time(e.regUntil)}` : '');
 </script>
 
@@ -61,10 +81,11 @@
   </section>
 {/if}
 {#if mine.to !== null}
-  <section class="santa card mine">
+  <button class="santa card mine" onclick={editWish} aria-label="{t('santa.mine')}: {t('santa.edit')}">
     <div class="cap"><span class="t-foot">{t('santa.mine')}</span><span class="t-foot hint">{t('santa.mineHint')}</span></div>
-    <p class="wish t-body">{mine.wish}</p>
-  </section>
+    <p class="wish t-body">{myWish}</p>
+    <span class="edit t-foot"><PenLine size={14} />{t('santa.edit')}</span>
+  </button>
 {/if}
 
 <style>
@@ -85,6 +106,9 @@
   .wish { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .cap { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s-3); white-space: nowrap; } /* 320: the hint goes under, whole */
   .hint { color: var(--text-3); }
+  button.mine { width: 100%; border: 0; cursor: pointer; transition: transform 450ms var(--ease-bounce); }
+  button.mine:active { transform: scale(0.98); transition-duration: 80ms; }
+  .edit { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); }
   @keyframes float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
   @media (prefers-reduced-motion: reduce) { .mini { animation: none; } }
   :global(html.lowfx) .mini { animation: none; }

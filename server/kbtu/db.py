@@ -1920,11 +1920,14 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE e.reg_until <= CAST(strftime('%s', 'now') AS INTEGER));"""
      # a seat lost after the draw (before the relink, santa_left_*, moves the ring): with three or more left, its Santa
      # hears once that their person changed; with two left, both hear they give to each other (each knows it anyway);
-     # with one left, they hear the game is over for them. Refs carry the event and a random tag, never the leaver
+     # with one left, they hear the game is over for them; a "wishlist updated" still queued for that Santa goes (it was
+     # someone else's). Refs carry the event and a random tag, never the leaver
      + "".join(f"""
     CREATE TRIGGER IF NOT EXISTS santa_moved_{name} BEFORE {op} ON registrations WHEN OLD.status = 'going'{when}
         AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL)
         AND EXISTS (SELECT 1 FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id) BEGIN
+      DELETE FROM bot_outbox WHERE kind = 'santa_wish' AND sent_at IS NULL AND ref LIKE 'event:' || OLD.event_id || ':%'
+        AND user_id IN (SELECT user_id FROM santa_people WHERE event_id = OLD.event_id AND gives_to = OLD.user_id);  -- "their wishlist changed": not theirs any more
       INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
         SELECT g.user_id, 'santa_changed', 'event:' || OLD.event_id || ':' || lower(hex(randomblob(6))), '{{}}', 0
         FROM santa_people g WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND g.user_id != OLD.user_id
