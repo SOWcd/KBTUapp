@@ -52,6 +52,7 @@
   let foot = $state<HTMLDivElement>();
   let room: HTMLDivElement;
   let gone = false;
+  const born = performance.now();
   let scrolled = $state(false);
   // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
   let rising = $state(tg.platform === 'android');
@@ -139,6 +140,7 @@
   function leave(fromY = 0) {
     if (gone) return;
     gone = true;
+    panel.style.pointerEvents = scrim.style.pointerEvents = 'none'; // a tap on the leaving sheet is a tap on what is under it
     lift?.cancel();
     if (shut && iris && !fromY && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       chrome(); chrome = () => {}; // the bar comes back now, its button under the closing circle
@@ -232,7 +234,8 @@
   });
 </script>
 
-<div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
+<!-- (the second tap of a double tap on what opened it lands on the new scrim: not a close) -->
+<div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
 <div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
