@@ -810,9 +810,11 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     paid = can(con, v, e["org_id"], "events")
     order = {"going": 0, "hold": 1, "waitlist": 2}
     found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
-            c.id AS rid, c.flags, c.reviewed_at, c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
+            c.id AS rid, c.flags, c.reviewed_at, c.reviewed_by, ac.receipt_id IS NOT NULL AS auto,
+            c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
+        LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
         WHERE r.event_id = ? AND r.status != 'cancelled'""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business (review, Oct 30)
@@ -822,6 +824,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
+                        "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
             if p["rid"] and paid and not v.staff_org else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
     if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
@@ -951,8 +954,9 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 
 
 def flagged(con, rid: int) -> bool:
-    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first."""
-    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", rid) is not None
+    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
+    A spot check or a receipt read in part ('spot', 'partial') isn't a warning: nothing wrong was found, the student walks in."""
+    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags NOT IN ('', 'spot', 'partial') AND reviewed_at IS NULL", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long

@@ -2684,7 +2684,7 @@ def test_paid_events(env):
 
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     rid = att[0]["receipt"]["id"]
-    assert att[0]["receipt"]["flags"] == [] and att[1]["receipt"] is None
+    assert att[0]["receipt"]["flags"] == ["partial"] and att[1]["receipt"] is None  # nothing read: a person looks, no warning
     img = c.get(f"/api/receipts/{rid}/image", headers=tma(21))
     assert img.headers["content-type"] == "image/webp" and "no-store" in img.headers["cache-control"]
     assert c.get(f"/api/receipts/{rid}/image", headers=tma(10)).status_code == 200                     # the sender

@@ -1,7 +1,8 @@
 <script lang="ts">
   // One receipt of a paid event (SPEC §4.3), for the club's Head+: what the student sent and what was read off it, to
   // compare with the club's Kaspi history. "Reject": the ticket stops working, the seat goes to the waitlist and the bot
-  // asks the student to talk to the club (money goes back outside the app). A flagged one can be passed.
+  // asks the student to talk to the club (money goes back outside the app). One the app didn't check can be passed;
+  // one it did (`auto`) can still be rejected.
   import { onDestroy } from 'svelte';
   import { api, type AttendeeReceipt } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -18,10 +19,8 @@
 
   let { overlay, receipt, name, ondone }: { overlay: Overlay; receipt: AttendeeReceipt; name: string; ondone?: () => void } = $props();
 
-  let src = $state('');
-  let failed = $state(false);
-  $effect(() => { api.receiptImage(receipt.id).then((u) => (src = u)).catch(() => (failed = true)); });
-  onDestroy(() => { if (src.startsWith('blob:')) URL.revokeObjectURL(src); });
+  const image = $derived(api.receiptImage(receipt.id));
+  onDestroy(() => { void image.then((src) => URL.revokeObjectURL(src)).catch(() => {}); });
   const flagged = $derived(receipt.flags.length > 0 && !receipt.reviewed);
 
   let busy = $state('');
@@ -40,12 +39,13 @@
 
 <Sheet {overlay} icon={Receipt} tall title={t('rc.title')}>
   <h2 class="t-h2 hd">{name}</h2>
-  <p class="t-foot ttl">{t('rc.title')} · {ago(receipt.at)}</p>
-  {#if flagged}{#each receipt.flags as f (f)}<Notice tone="warning" text={f === 'recipient_mismatch'
+  <p class="t-foot ttl">{t('rc.title')} · {ago(receipt.at)}{#if receipt.reviewed} · {t(receipt.auto ? 'rc.auto' : 'rc.passed')}{/if}</p>
+  {#if flagged}{#each receipt.flags as f (f)}<Notice tone={f === 'spot' || f === 'partial' ? 'neutral' : 'warning'} text={f === 'recipient_mismatch'
     ? t('rc.flag.recipient_mismatch', { name: receipt.recipient ?? '' }) : t(`rc.flag.${f}` as 'rc.flag.duplicate')} />{/each}{/if}
-  {#if receipt.amount || receipt.sender || receipt.paidAt}
+  {#if receipt.amount || receipt.recipient || receipt.sender || receipt.paidAt}
     <Group>
       {#if receipt.amount}<Row title={t('rc.amount')} value={money(receipt.amount)} />{/if}
+      {#if receipt.recipient}<Row title={t('rc.recipient')} value={receipt.recipient} />{/if}<!-- a namesake payee shows without the picture -->
       {#if receipt.sender}<Row title={t('rc.sender')} value={receipt.sender} />{/if}
       {#if receipt.paidAt}<Row title={t('rc.paidAt')} value={whenLine(receipt.paidAt)} />{/if}
       {#if receipt.no}<Row title={t('rc.no')}>{#snippet detail()}<span class="no num selectable">{receipt.no}</span>{/snippet}</Row>{/if}
@@ -53,12 +53,12 @@
   {/if}
   <p class="t-foot hint">{t('rc.compare')}</p>
   <div class="img surface">
-    {#if src}<img {src} alt={t('rc.title')} />{:else if failed}<p class="t-foot">{t('common.error')}</p>{:else}<span class="wait"></span>{/if}
+    {#await image}<span class="wait"></span>{:then src}<img {src} alt={t('rc.title')} />{:catch}<p class="t-foot">{t('common.error')}</p>{/await}
   </div>
 
   {#snippet footer()}
     <div class="acts btns">
-      {#if flagged}<Button kind="secondary" size="l" full loading={busy === 'ok'} onclick={() => review(false)}>{t('rc.ok')}</Button>{/if}
+      {#if !receipt.reviewed}<Button kind="secondary" size="l" full loading={busy === 'ok'} onclick={() => review(false)}>{t('rc.ok')}</Button>{/if}
       <Button kind="destructive" size="l" full loading={busy === 'no'} onclick={() => review(true)}>{t('rc.reject')}</Button>
     </div>
   {/snippet}

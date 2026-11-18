@@ -532,7 +532,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
         if reg:
             my = {"status": reg["status"], "cancelReason": reg["cancel_reason"], "ticketCode": reg["ticket_code"].partition("-")[2] if reg["status"] == "going" else None,
                   "holdUntil": reg["hold_until"], "checkedInAt": reg["checked_in_at"], "receipt": c["status"] if (c := receipts.get(reg["id"])) else "none",
-                  "receiptFlags": [x for x in c["flags"].split(",") if x] if c and c["status"] == "accepted" and c["reviewed_at"] is None else [],
+                  "receiptFlags": [x for x in c["flags"].split(",") if x and x not in ("spot", "partial")] if c and c["status"] == "accepted" and c["reviewed_at"] is None else [],
                   "free": bool(reg["free"]),
                   "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" and not e["school"] else None,
                   "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}

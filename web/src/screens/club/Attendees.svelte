@@ -49,7 +49,9 @@
   const host = $derived(staff || !ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
-  const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
+  // a spot check or a receipt read in part (nothing wrong found, a person looks anyway) isn't a warning: the receipt
+  // icon, tinted while nobody has looked at it
+  const flagged = (a: Attendee) => !!a.receipt?.flags.some((f) => f !== 'spot' && f !== 'partial') && !a.receipt.reviewed;
   const doorOpen = $derived(!plain && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
@@ -105,7 +107,7 @@
             {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts && host} />{/snippet}
           </Row>
           {#snippet end()}
-            {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : 'gray'} label={t('rc.title')}
+            {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : a.receipt.reviewed ? 'gray' : 'tinted'} label={t('rc.title')}
               onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
             {#if a.checkedInAt}
               {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}
