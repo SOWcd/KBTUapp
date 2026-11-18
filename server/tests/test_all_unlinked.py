@@ -1,4 +1,4 @@
-"""/all in a chat no club holds (owner, Nov 14): its Telegram admin calls whom the bot saw there."""
+"""/all in a chat no club holds (owner, Nov 14): whom the bot saw there (anyone calls since Nov 18)."""
 from kbtu import db
 from kbtu.logic import chatlist
 from test_core import env  # noqa: F401  (env: the fixture)
@@ -10,10 +10,10 @@ def test_unlinked_chat_remembers_and_admin_calls(env):  # noqa: F811
     chatlist._unheld.clear()
     for tg in (101, 102, 103):
         chatlist.seen(con, -500, {"id": tg})
-    assert chatlist.tag_all(con, -500, 101) == []                       # not an admin: nobody
-    assert set(chatlist.tag_all(con, -500, 101, admin=True)) == {102, 103}  # never the caller
+    assert set(chatlist.tag_all(con, -500, 101)) == {102, 103}          # never the caller
     chatlist.unseen(con, -500, 102)
-    assert chatlist.tag_all(con, -500, 101, admin=True) == [103]
+    assert chatlist.tag_all(con, -500, 101) == [103]
+    assert chatlist.tag_all(con, -500, 101, [104, 103, 101]) == [103, 104]  # Telegram's list after, each once
 
 
 def test_premium_wraps_once():

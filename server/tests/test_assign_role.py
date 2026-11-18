@@ -51,7 +51,7 @@ def test_assign_role_no_own_rights_raised(env):
 
 
 def test_tag_all_any_role(env):
-    """/all: anyone holding a role in the club may call it (a role of the club's own at member level too), a plain member not."""
+    """/all: anyone in the chat calls (owner, Nov 18), a plain member too; the club's people, never the caller."""
     from kbtu import logic
     c, cfg = env
     pres, a, b = login(c, 20, "pres"), login(c, 22, "aaa"), login(c, 23, "bbb")
@@ -62,6 +62,5 @@ def test_tag_all_any_role(env):
     con.execute("INSERT INTO chat_sync (chat_id, org_id, kind, created_at) VALUES (-100, 1, 'main', 0)")
     con.commit()
     assert sorted(logic.chatlist.tag_all(con, -100, 22)) == [20, 23]
-    assert logic.chatlist.tag_all(con, -100, 23) is None
-    assert sorted(logic.chatlist.tag_all(con, -100, 23, admin=True)) == [20, 22]   # the group's Telegram admin
-    assert logic.chatlist.tag_all(con, -200, 23, admin=True) == []   # a chat no club holds
+    assert sorted(logic.chatlist.tag_all(con, -100, 23)) == [20, 22]           # a plain member
+    assert logic.chatlist.tag_all(con, -200, 23) == []                         # a chat no club holds, nobody seen

@@ -635,27 +635,23 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
     return None
 
 
-def chat_held(con, tg_chat: int) -> bool:
-    """Some club holds this chat: a sync link, a card, an event (/all's answer to an admin of one nobody holds)."""
-    return bool(one(con, "SELECT 1 FROM chat_sync WHERE chat_id = ?", tg_chat)
-                or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL", tg_chat)
-                or one(con, "SELECT 1 FROM events WHERE chat_id = ? AND org_id IS NOT NULL", tg_chat))
+def banned(con, tg: int) -> bool:
+    """Banned in the app: may not /all."""
+    return bool(one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg))
 
 
-def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] | None:
-    """/all in a group (bot._tag_all): whom to mention, when the sender holds a role in the club that holds the chat (President,
-    Vice, Head, or any role of the club's own, a Vice Head too; an event's chat: the event's club), or is the group's own
-    Telegram admin (`admin`: the bot asked Telegram). None: a club's chat, not theirs to call. Empty: a chat
-    no club holds, or nobody to call. Who, as far as the app knows: a synced department chat its department, a club chat the club's members,
-    an event's chat its going people; never the caller. The bot asks Telegram whether each is in the chat before tagging."""
+def tag_all(con, tg_chat: int, tg_from: int, live: list[int] | tuple = ()) -> list[int]:
+    """/all in a group (bot._tag_all; anyone in the chat calls, owner Nov 18): whom to mention, each once, in this order:
+    as far as the app knows (a club's chat: a synced department chat its department, a club chat the club's members, an
+    event's chat its going people), then whom the bot saw there (chat_seen; a chat no club holds: chat_seen_free), then
+    `live`: the chat's participants Telegram just listed (mtbot.members). Never the caller, Telegram's service accounts or
+    anyone banned in the app. The bot asks Telegram whether each one not in `live` is in the chat before tagging."""
     link, card, oid = _holder(con, tg_chat)
-    if not oid:  # a chat no club holds: its Telegram admin calls whom the bot saw there
-        return [r[0] for r in rows(con, """SELECT tg_id FROM chat_seen_free WHERE chat_id = ? AND tg_id != ?
-            AND tg_id NOT IN (SELECT tg_id FROM users WHERE banned_at IS NOT NULL) ORDER BY seen_at DESC, tg_id""", tg_chat, tg_from)] if admin else []
-    if not admin and not one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? AND u.tg_id = ?
-            AND u.tg_id > 0 AND u.banned_at IS NULL AND (m.role != 'member' OR m.role_id IS NOT NULL)""", oid, tg_from):
-        return None
-    who = "SELECT user_id FROM member_tags WHERE tag_id = ?" if link and link["tag_id"] else \
+    if not oid:  # a chat no club holds: whom the bot saw there
+        app, seen = [], [r[0] for r in rows(con, """SELECT tg_id FROM chat_seen_free WHERE chat_id = ? AND tg_id != ?
+            AND tg_id NOT IN (SELECT tg_id FROM users WHERE banned_at IS NOT NULL) ORDER BY seen_at DESC, tg_id""", tg_chat, tg_from)]
+        return _with_live(con, app + seen, tg_from, live)
+    who ="SELECT user_id FROM member_tags WHERE tag_id = ?" if link and link["tag_id"] else \
         "SELECT user_id FROM org_members WHERE org_id = ?" if link or card else \
         "SELECT r.user_id FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.chat_id = ? AND e.org_id = ? AND r.status = 'going'"
     args = (link["tag_id"],) if link and link["tag_id"] else (oid,) if link or card else (tg_chat, oid)
@@ -664,7 +660,16 @@ def tag_all(con, tg_chat: int, tg_from: int, admin: bool = False) -> list[int] |
     # and whom the bot saw in the chat while this club held it (chat_seen), an app account or not, the latest first
     seen = [r[0] for r in rows(con, """SELECT tg_id FROM chat_seen WHERE chat_id = ? AND org_id = ? AND tg_id != ?
         AND tg_id NOT IN (SELECT tg_id FROM users WHERE banned_at IS NOT NULL) ORDER BY seen_at DESC, tg_id""", tg_chat, oid, tg_from)]
-    return list(dict.fromkeys(app + seen))
+    return _with_live(con, app + seen, tg_from, live)
+
+
+def _with_live(con, known: list[int], tg_from: int, live) -> list[int]:
+    """The app's and the seen ones, then Telegram's list without the caller, service accounts and the app's banned."""
+    out = [t for t in live if t > 0 and t != tg_from and t not in TG_SERVICE]
+    if out:
+        bad = {r[0] for r in rows(con, f"SELECT tg_id FROM users WHERE banned_at IS NOT NULL AND tg_id IN ({_qs(out)})", *out)}
+        out = [t for t in out if t not in bad]
+    return list(dict.fromkeys(known + out))
 
 
 def _holder(con, tg_chat: int) -> tuple:

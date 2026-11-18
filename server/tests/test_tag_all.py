@@ -1,4 +1,5 @@
-"""/all in a club's group: only its President, Vice and Heads; five mentions a message under the caller's; silence otherwise."""
+"""/all in a group: anyone in the chat calls (owner, Nov 18); five mentions a message under the caller's: the app's list, the
+seen ones, then the members Telegram lists to our bot over MTProto (mtbot.members, faked here: no Telethon)."""
 from __future__ import annotations
 
 import asyncio
@@ -19,10 +20,11 @@ class _Resp:
 class _Http:
     """Telegram: everyone is in the chat but `gone`; the first `busy` sendMessages answer 429."""
     def __init__(self, gone=(), busy=0, admins=()):
-        self.gone, self.busy, self.sent, self.admins = set(gone), busy, [], set(admins)
+        self.gone, self.busy, self.sent, self.admins, self.asked = set(gone), busy, [], set(admins), []
 
     async def post(self, url, json=None, **_):
         if url.endswith("/getChatMember"):
+            self.asked.append(json["user_id"])
             return _Resp({"ok": True, "result": {"status": "left" if json["user_id"] in self.gone else "administrator" if json["user_id"] in self.admins else "member", "user": {"id": json["user_id"]}}})
         if self.busy:
             self.busy -= 1
@@ -40,6 +42,9 @@ def _setup(c, cfg, monkeypatch):
     monkeypatch.setattr(bot, "ALL_AGAIN", 0)
     monkeypatch.setattr(bot, "_tagged", {})
     monkeypatch.setattr(bot, "_denied", {})
+    monkeypatch.setattr(bot, "_tagging", set())
+    monkeypatch.setattr(bot, "_moved", {})
+    _live(monkeypatch, None)  # no member list (not configured): the app's and the seen ones, as before
     for tg in (20, 21, 31, 32, 33, 34, 35, 36, 37, 99):
         login(c, tg, f"u{tg}")
     con = db.connect(cfg.db_path)
@@ -83,7 +88,10 @@ def test_head_tags_in_fives(env, monkeypatch):
     # the caller's own words over each five (a push then says why), as plain text
     assert all(x["text"].startswith("meeting at 6\n\n") for x in sent) and any(m in sent[0]["text"] for m in bot.TAG_MARKS)
     sent = _run_fresh(cfg, con, _Http(gone={37}), _msg(20, text="/all <b>x</b> & co"), monkeypatch)
-    assert sent[0]["text"].startswith("&lt;b&gt;x&lt;/b&gt; &amp; co\n\n")                    # escaped, never markup
+    assert sent[0]["text"].startswith("&lt;b&gt;x&lt;/\u2060b&gt; &amp; co\n\n")              # escaped, never markup
+    sent = _run_fresh(cfg, con, _Http(gone={37}), _msg(20, text="/all ask @durov or t.me/kbtu #news /start"), monkeypatch)
+    head = sent[0]["text"].split("\n\n")[0]                                             # their words: never a mention, link, tag, command
+    assert head == "ask @\u2060durov or t.\u2060me/\u2060kbtu #\u2060news /\u2060start" and sent[0]["link_preview_options"] == {"is_disabled": True}
     assert not bot._tagging
     assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     for t in ("\u041a\u0430\u043b\u043b", "\u043a\u043e\u043b\u043b \u0432 6", "Call!"):                             # the words people type instead of a command
@@ -97,16 +105,169 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert {s["reply_parameters"]["message_id"] for s in sent} == {3}
 
 
+def _live(monkeypatch, ids, seen_cap=None, hidden=False, skip=()):
+    """The chat's members as Telegram would list them to our bot (None: no list)."""
+    async def members(cfg, chat, cap):
+        if seen_cap is not None:
+            seen_cap.append(cap)
+        return None if ids is None else bot.mtbot.Roster(ids[:cap], hidden, set(skip))
+    monkeypatch.setattr(bot.mtbot, "members", members)
+
+
 def test_silence_for_others(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
     http = _Http()
-    _run(cfg, con, http, _msg(31), _msg(99), _msg(20, chat=-555),                   # a member, a stranger, an unlinked chat
-         _msg(20, text="/all@SomeOtherBot"),
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 99")
+    _run(cfg, con, http, _msg(20, text="/all@SomeOtherBot"),
          _msg(20, sender_chat={"id": -100}), {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}},  # anonymous admin
-         _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5))
-    # nobody is tagged; the member and the stranger in the club's chat are told it isn't theirs, the rest is silence
-    assert not any("tg://" in x.get("text", "") for x in http.sent) and sum("text" in x for x in http.sent) == 2
+         _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5),
+         _msg(99))                                                                      # banned in the app
+    assert http.sent == [] and not bot._tagging
+
+
+def test_discussion_group_never_calls(env, monkeypatch):
+    """A channel's discussion group: a commenter needn't join, so nobody calls there; an ordinary group is unaffected."""
+    from dataclasses import replace
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _live(monkeypatch, [500, 501])
+    forum = replace(cfg, tgc_chat=-555)
+    http = _Http()
+    _run(forum, con, http, _msg(31, chat=-555),                                      # the forum's group
+         _msg(31, reply_to_message={"message_id": 3, "is_automatic_forward": True}))   # a comment under a channel post
+    assert http.sent == [] and not bot._tagging and not bot._tagged
+    assert _tagged(_run(forum, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37, 500, 501]   # an ordinary group: as before
+
+
+def test_anyone_in_the_chat_calls(env, monkeypatch):
+    """A plain member and someone the app doesn't hold in the club: their own message in the chat proves they're in it."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    assert _tagged(_run(cfg, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
+    bot._tagged.clear()
+    assert _tagged(_run(cfg, con, _Http(), _msg(800))) == [20, 21, 31, 32, 33, 34, 35, 36, 37]   # not even in the app
+
+
+def test_live_list_union_order_and_cap(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "TAG_MAX", 50)
+    _run(cfg, con, _Http(), _msg(500, text="hi"))                                  # seen
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 36")
+    caps = []
+    _live(monkeypatch, [33, 600, 500, 601, 36, 20, 777000, 600], caps, skip={32})  # Telegram's list: the app's, seen, new, banned, the caller; 32 deleted
+    http = _Http()
+    sent = _run(cfg, con, http, _msg(20))
+    ids = [int(p.split('">')[0]) for s in sent for p in s["text"].split("tg://user?id=")[1:]]
+    assert ids == [21, 31, 33, 34, 35, 37, 500, 600, 601] and caps == [50]          # the app's, the seen, then the rest; each once
+    assert sorted(http.asked) == [20, 21, 31, 34, 35, 37]                            # the caller once; whom Telegram just listed isn't asked
+    bot._tagged.clear()
+    monkeypatch.setattr(bot, "TAG_MAX", 8)
+    assert [s["text"].count("tg://") for s in _run(cfg, con, _Http(), _msg(20))] == [5, 3]   # the cap, the app's first
+
+
+def test_caller_not_in_the_chat_and_hidden_members(env, monkeypatch):
+    """Telegram says the caller isn't in the chat (a guest in comments): silence. Members hidden: Telegram's list only
+    when an admin calls; a member gets the app's and the seen ones."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    http = _Http(gone={31})
+    _run(cfg, con, http, _msg(31))
+    assert http.sent == [] and not bot._tagged and not bot._tagging
+    _live(monkeypatch, [600, 601], hidden=True)
+    assert 600 not in _tagged(_run(cfg, con, _Http(), _msg(31)))
+    bot._tagged.clear()
+    assert {600, 601} <= set(_tagged(_run(cfg, con, _Http(admins={31}), _msg(31))))
+
+
+def test_nobody_to_call_answers_once(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "ALL_NO_TTL", 0.5)
+    monkeypatch.setattr(bot, "ALL_AGAIN", 300)
+    reads = []
+    _live(monkeypatch, [20], reads)                                                # alone there
+    http = _Http()
+
+    async def go():
+        for m in (_msg(20, chat=-555), _msg(20, chat=-555, text="@all")):
+            await bot._group(cfg, http, con, m)
+            await tgc._last["all:-555"]  # the run, not the answer's deletion (ALL_NO_TTL on)
+        await asyncio.gather(*list(tgc._tasks))
+    asyncio.run(go())
+    assert http.sent == [{"chat_id": -555, "text": bot.texts.bot_message("ru", "all_none")[0], "parse_mode": "HTML",
+                          "reply_parameters": {"message_id": 7, "allow_sending_without_reply": True}}, {"chat_id": -555, "message_id": 7}]
+    assert time.time() - bot._tagged[-555] >= 239 and not bot._tagging and len(reads) == 1   # a short wait: no rescan each message
+
+
+class _Client:
+    """Telethon's client as mtbot uses it."""
+    made = 0
+
+    def __init__(self):
+        _Client.made += 1
+        self.authed = self.connected = False
+
+    async def connect(self):
+        self.connected = True
+
+    async def is_user_authorized(self):
+        return self.authed
+
+    async def sign_in(self, bot_token):
+        self.authed = True
+
+    async def disconnect(self):
+        self.connected = False
+
+
+def test_mtbot_session(env, monkeypatch):
+    """No api pair: no list, no error. Signed in once, in memory (no meta row), disconnected between reads, reused; an
+    auth error drops it (a fresh sign-in after RETRY); a hung read is given up after TIMEOUT."""
+    from dataclasses import replace
+    from telethon.errors import AuthKeyUnregisteredError
+    from kbtu import mtbot
+    c, cfg = env
+    for k, v in (("_memo", {}), ("_client", None), ("_loop", None), ("_down_until", 0.0)):
+        monkeypatch.setattr(mtbot, k, v)
+    assert asyncio.run(mtbot.members(cfg, -100, 5)) is None
+    cfg = replace(cfg, tg_api_id="1", tg_api_hash="x")
+    monkeypatch.setattr(mtbot, "_new_client", lambda cfg: _Client())
+    _Client.made = 0
+    fail = []
+
+    async def read(client, chat, cap):
+        assert client.connected and client.authed
+        if fail:
+            raise fail.pop()
+        return mtbot.Roster([chat], False, set())
+    monkeypatch.setattr(mtbot, "_read", read)
+
+    async def go(*chats):
+        return [await mtbot.members(cfg, ch, 5) for ch in chats]
+    got = asyncio.run(go(-100, -200, -100))
+    assert [g.ids for g in got] == [[-100], [-200], [-100]] and _Client.made == 1 and not mtbot._client.connected
+    con = db.connect(cfg.db_path)
+    assert con.execute("SELECT COUNT(*) FROM meta WHERE key LIKE 'mtbot%'").fetchone()[0] == 0   # never persisted
+
+    async def again():
+        mtbot._memo.clear()
+        fail.append(AuthKeyUnregisteredError(request=None))
+        first = await mtbot.members(cfg, -100, 5)
+        gone = mtbot._client is None
+        mtbot._down_until = 0
+        mtbot._memo.clear()
+        return first, gone, await mtbot.members(cfg, -100, 5)
+    first, gone, second = asyncio.run(again())
+    assert first is None and gone and second.ids == [-100] and _Client.made == 3   # 2: a new loop, 3: after the drop
+
+    async def hang(client, chat, cap):
+        await asyncio.sleep(60)
+    monkeypatch.setattr(mtbot, "_read", hang)
+    monkeypatch.setattr(mtbot, "TIMEOUT", 0.05)
+    monkeypatch.setattr(mtbot, "_memo", {})
+    assert asyncio.run(mtbot.members(cfg, -300, 5)) is None
 
 
 def test_one_run_at_a_time_and_429(env, monkeypatch):
@@ -119,16 +280,6 @@ def test_one_run_at_a_time_and_429(env, monkeypatch):
     assert len(soon) == 1 and soon[0]["reply_parameters"]["message_id"] == 7
     sent = _run(cfg, con, _Http(busy=9), _msg(20))                                  # still too fast: gives up, the chat free again
     assert sent == [] and not bot._tagging
-
-
-def test_group_admin_tags(env, monkeypatch):
-    """A plain member who is the group's own Telegram admin may call too; a plain member not."""
-    c, cfg = env
-    con = _setup(c, cfg, monkeypatch)
-    http = _Http()
-    _run(cfg, con, http, _msg(31))   # no rights: told so, then the command and the answer are deleted
-    assert len(http.sent) == 2 and "tg://" not in http.sent[0]["text"] and http.sent[1] == {"chat_id": -100, "message_id": 7}
-    assert len(_run(cfg, con, _Http(admins={31}), _msg(31))) == 2
 
 
 # ---------------------------------------------------------------- chat_seen: whom the bot saw in a club's chat
