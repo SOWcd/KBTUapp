@@ -42,6 +42,14 @@ export function irisOpen(el: HTMLElement, i: Iris): Animation {
   const far = Math.hypot(Math.max(x, b.width - x), Math.max(y, b.height - y));
   return el.animate({ clipPath: [`circle(${i.r}px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] }, { duration: 520, easing: 'cubic-bezier(.32, .8, .3, 1)' });
 }
+/** ...and closing back into the place it opened from (Sheet `shut`): the same circle the other way, eased out at its end
+ *  as the map's (an ease-in close "hit like a hammer"), gone in its last third */
+export function irisShut(el: HTMLElement, i: Iris): Animation {
+  const b = el.getBoundingClientRect(), x = i.x - b.left, y = i.y - b.top;
+  const far = Math.hypot(Math.max(x, b.width - x), Math.max(y, b.height - y));
+  return el.animate({ clipPath: [`circle(${far}px at ${x}px ${y}px)`, `circle(${i.r}px at ${x}px ${y}px)`], opacity: [1, 1, 0] },
+    { duration: 440, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'forwards' });
+}
 /** open the map out of the control that was pressed (the iris), wherever that control lives */
 export function openMapFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
