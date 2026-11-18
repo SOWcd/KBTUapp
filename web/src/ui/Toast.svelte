@@ -8,6 +8,7 @@
   import { holdToast, toast } from '../lib/state/ui.svelte';
   import { power } from '../lib/state/power.svelte';
   import Emoji from './Emoji.svelte';
+  import Founder from './Founder.svelte';
   import { glass } from './glass';
   import { untrack } from 'svelte';
   import { t } from '../lib/i18n/index.svelte';
@@ -34,6 +35,10 @@
   const atTop = () => { const d = document.documentElement.dataset; return ('sheet' in d || 'map' in d) && !toast.low; };
   const calm = () => power.lite || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fade = (ms: number) => ({ duration: ms, css: (k: number) => `opacity:${k}` });
+
+  // a seal's toast (Hero: the Creator's coin tapped): the coin itself where the emoji stands ('seal:founder' / 'seal:idea'),
+  // and a second, quieter line after a line break
+  const line = $derived(toast.text.split('\n')[0]), sub = $derived(toast.text.split('\n')[1] ?? '');
 
   let pill = $state<HTMLElement>();
   let from = [0, 0];
@@ -173,8 +178,8 @@
   <div class="toast glass glass-pill" class:top role="status" style={vars} use:glass bind:this={pill} in:grow out:shrink
     onpointerdown={down}>
     {#key toast.id}
-      <span class="em" in:come|global={{ at: fresh ? T.bounceAt : T.swapAt }} out:leave><span class:bounce={fresh}><Emoji name={toast.emoji} size={26} /></span></span>
-      <span class="tx" in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave>{toast.text}</span>
+      <span class="em" in:come|global={{ at: fresh ? T.bounceAt : T.swapAt }} out:leave><span class:bounce={fresh}>{#if toast.emoji.startsWith('seal:')}<Founder size={28} idea={toast.emoji === 'seal:idea'} />{:else}<Emoji name={toast.emoji} size={26} />{/if}</span></span>
+      <span class="tx" class:two={!!sub} in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave>{line}{#if sub}<small class="t-foot">{sub}</small>{/if}</span>
       {#if toast.toggle != null}<span class="sw" class:on={toast.toggle} in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave></span>{/if}
       {#if toast.undo}{@const undo = toast.undo}<button class="undo" in:come|global={{ at: fresh ? T.lineAt : T.swapAt }} out:leave onclick={() => { toast.text = ''; undo(); }}>{t('fc.undo')}</button>{/if}
     {/key}
@@ -202,6 +207,8 @@
   .undo { flex: none; align-self: stretch; margin: -9px -8px -9px 2px; padding: 0 var(--s-2); color: var(--accent); font: inherit; font-weight: 700; }
   /* a long line wraps between words, two lines at most (a name never cut in the middle; a third line ends in …) */
   .tx { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .tx.two { display: block; }
+  .tx small { display: block; letter-spacing: 0; }
   /* a toggle toast's switch (power saving), Settings' switch made small: it flips once the line is in, from where it was */
   .sw { flex: none; position: relative; width: 34px; height: 20px; margin-right: -4px; border-radius: var(--r-full); background: var(--line-2);
     animation: sw-off var(--t-flip) var(--ease) var(--at-flip) backwards; }
