@@ -3322,6 +3322,8 @@ const kk: Dict = {
   'santa.upTo': "{sum} дейін",
   'santa.until': "Тілек тізімдері",
   'santa.budgetTo': "Сыйлық шегі",
+  'santa.sumPh': "Сома",
+  'santa.needBudget': "Сыйлық сомасын көрсет",
   'santa.untilPast': "Мерзім өтіп кетті",
   'santa.untilLate': "Сыйлық күнінен бір сағат бұрын",
   'santa.dayPast': "Сыйлық күні өтіп кетті",

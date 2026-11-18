@@ -88,6 +88,9 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     for t in ("\u041a\u0430\u043b\u043b", "\u043a\u043e\u043b\u043b \u0432 6", "Call!"):                             # the words people type instead of a command
         assert len(_run(cfg, con, _Http(gone={37}), _msg(20, text=t))) == 2, t
+    sent = _run(cfg, con, _Http(gone={37}), _msg(20, text="meeting at 6, \u043a\u0430\u043b\u043b"))                 # the word last, after their own words
+    assert len(sent) == 2 and sent[0]["text"].startswith("meeting at 6\n\n")
+    assert _run(cfg, con, _Http(), _msg(20, text="\u044d\u0442\u043e\u0442 \u043a\u0430\u043b\u043b \u0431\u044b\u043b \u0434\u043e\u043b\u0433\u0438\u043c")) == [] and _run(cfg, con, _Http(), _msg(20, text="give me a call")) == []
     assert _run(cfg, con, _Http(), _msg(20, text="call me later")) == [] and _run(cfg, con, _Http(), _msg(20, text="\u043a\u0430\u043b")) == []
     # as a reply: under the message replied to
     sent = _run(cfg, con, _Http(), _msg(21, reply_to_message={"message_id": 3}))

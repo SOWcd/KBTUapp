@@ -3344,6 +3344,8 @@ const ru = {
   'santa.upTo': "до {sum}",
   'santa.until': "Вишлисты до",
   'santa.budgetTo': "Подарок до",
+  'santa.sumPh': "Сумма",
+  'santa.needBudget': "Укажи сумму подарка",
   'santa.untilPast': "Срок уже прошёл",
   'santa.untilLate': "Не позже чем за час до дня подарков",
   'santa.dayPast': "День подарков уже прошёл",

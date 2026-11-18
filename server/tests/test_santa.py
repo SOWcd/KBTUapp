@@ -137,7 +137,7 @@ def test_nobody_lands_in_a_drawn_game(env):
 
 
 def _start(c, tg, org=1, **body):
-    return c.post(f"/api/orgs/{org}/santa", headers=tma(tg), json={"title": "Secret Santa", "startsAt": int(time.time()) + 20 * 86400, **body})
+    return c.post(f"/api/orgs/{org}/santa", headers=tma(tg), json={"title": "Secret Santa", "startsAt": int(time.time()) + 20 * 86400, "budget": 3000, **body})
 
 
 def test_one_button_starts_the_game(env):
@@ -151,7 +151,7 @@ def test_one_button_starts_the_game(env):
     assert _start(c, 20, startsAt=1).status_code == 409  # a day in the past: nothing published, no draft left behind
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
     e = _start(c, 20).json()
-    assert (e["status"], e["visibility"], e["santa"], e["title"]) == ("published", "members", {"drawn": False}, "Secret Santa")
+    assert (e["status"], e["visibility"], e["santa"], e["title"]) == ("published", "members", {"drawn": False, "budget": 3000}, "Secret Santa")
     assert _start(c, 20).json()["id"] == e["id"]
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
     # the team hears once (a team-only event tells nobody by itself), the starter doesn't
@@ -226,13 +226,14 @@ def test_budget_and_deadline(env):
     c, cfg = env
     starts = int(time.time()) + 20 * DAY
     con = _club(c, cfg)
-    for bad in ({"budget": 50}, {"budget": True}, {"budget": "5000"}, {"budget": 2_000_000},
+    for bad in ({"budget": None}, {"budget": 0}, {"budget": 50}, {"budget": True}, {"budget": "5000"}, {"budget": 2_000_000},
                 {"regUntil": int(time.time()) - 60}, {"regUntil": starts + 60}):
         r = _start(c, 20, startsAt=starts, **bad)
         assert r.status_code == 400, (bad, r.text)
+        assert ("budget" not in bad) or r.json()["message"] == "budget"  # no sum is refused by name: the gift's limit is required
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0  # nothing left behind
-    e = _start(c, 20, startsAt=starts).json()  # no budget, the default deadline: a week before the gifts day
-    assert e["santa"] == {"drawn": False} and e["regUntil"] == starts - 7 * DAY
+    e = _start(c, 20, startsAt=starts).json()  # the default deadline: a week before the gifts day
+    assert e["santa"] == {"drawn": False, "budget": 3000} and e["regUntil"] == starts - 7 * DAY
     eid = e["id"]
     put = lambda tg, **b: c.put(f"/api/events/{eid}/santa", headers=tma(tg), json=b)  # noqa: E731
     assert put(10, budget=5000).status_code == 403  # not who runs it
@@ -240,7 +241,11 @@ def test_budget_and_deadline(env):
     x = put(20, budget=5000, regUntil=until).json()
     assert x["santa"] == {"drawn": False, "budget": 5000} and x["regUntil"] == until
     assert put(20, regUntil=starts + 1).status_code == 400
-    assert put(20, budget=None).json()["santa"] == {"drawn": False}  # cleared
+    assert put(20, budget=None).json()["message"] == "budget"  # never cleared
+    assert put(20, budget=7000).json()["santa"]["budget"] == 7000
+    # a game from before the sum was required: it shows none, its deadline alone still changes
+    con.execute("UPDATE santa_games SET budget = NULL WHERE event_id = ?", (eid,))
+    assert put(20, regUntil=until + 60).json()["santa"] == {"drawn": False}
     put(20, budget=7000)
     # the invite, as the bot renders it: the budget a number, the date the server's
     logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
@@ -259,7 +264,7 @@ def test_deadline_draws_by_itself(env):
         _go(c, eid, tg, f"wish of {tg}")
     _past(con, eid)
     logic.santa.tick(con)  # two: no draw; the President hears it once
-    assert _page(c, eid, 20)["santa"] == {"drawn": False}
+    assert _page(c, eid, 20)["santa"]["drawn"] is False
     assert _to(con, "santa_few") == [20]
     text, _, start = bot._render(con, _out(con, "santa_few")[0])
     assert start == f"mg_{eid}" and " 2" in text
@@ -272,10 +277,10 @@ def test_deadline_draws_by_itself(env):
                 (eid, _uid(con, 13)))  # someone paying for a seat (as on a paid game)
     _past(con, eid, int(time.time()) - 100)  # another deadline than the one acted on
     logic.santa.tick(con)  # a seat being paid for: no draw yet, no message, the next round tries again
-    assert _page(c, eid, 20)["santa"] == {"drawn": False} and len(_out(con, "santa_few")) == 1
+    assert _page(c, eid, 20)["santa"]["drawn"] is False and len(_out(con, "santa_few")) == 1
     con.execute("UPDATE registrations SET status = 'cancelled' WHERE user_id = ?", (_uid(con, 13),))  # the hold ran out
     logic.santa.tick(con)
-    assert _page(c, eid, 20)["santa"] == {"drawn": True}
+    assert _page(c, eid, 20)["santa"]["drawn"] is True
     assert _to(con, "santa_drawn") == [10, 11, 12]
     assert bot._render(con, _out(con, "santa_few")[0]) is None  # drawn since: the old message is quiet
     logic.santa.tick(con)

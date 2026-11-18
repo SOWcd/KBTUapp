@@ -65,9 +65,8 @@ def check_event(con, eid: int, f: dict) -> None:
         raise ApiError("bad_input", "santa_until")
 
 
-def _budget(raw: object) -> int | None:
-    if raw is None:
-        return None
+def _budget(raw: object) -> int:
+    # required (owner, Nov 18: "at least a rough sum"); games started before that keep their empty one
     if not isinstance(raw, int) or isinstance(raw, bool) or not BUDGET[0] <= raw <= BUDGET[1]:
         raise ApiError("bad_input", "budget")
     return raw
@@ -132,7 +131,7 @@ def parts(con, ids: list[int]) -> dict[int, dict]:
 
 
 def settings(con, v: Viewer, eid: int, body: dict) -> dict:
-    """The game's budget and deadline, by who runs the event, until the draw; a key left out is kept."""
+    """The game's budget and deadline, by who runs the event, until the draw; a key left out is kept (a budget sent is a sum)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
         s = one(con, "SELECT drawn_at FROM santa_events WHERE event_id = ?", eid)

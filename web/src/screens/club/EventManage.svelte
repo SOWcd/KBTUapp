@@ -94,9 +94,9 @@
   async function saveTerms() {
     if (!e || !terms) return;
     const r = readTerms(terms);
-    if (r.bad) return;
+    if (r.bad || r.budget === null) return;
     const c = eventById(id), was = c ? { santa: c.santa, regUntil: c.regUntil } : null;
-    if (c) { c.santa = { drawn: false, ...(r.budget ? { budget: r.budget } : {}) }; c.regUntil = r.until; } // optimistic: the rows show it at once
+    if (c) { c.santa = { drawn: false, budget: r.budget }; c.regUntil = r.until; } // optimistic: the rows show it at once
     terms = null; haptic.ok();
     try { await api.santaSettings(id, { budget: r.budget, regUntil: r.until }); studioChanged(); say(t('santa.saved'), 'party_popper_3d'); }
     catch (err) { if (c && was) { c.santa = was.santa; c.regUntil = was.regUntil; } haptic.error(); say(t(err instanceof ApiErr && err.message === 'until' ? 'santa.badUntil' : 'common.error'), 'warning_3d'); }

@@ -27,7 +27,7 @@
   const dec25 = tsAt(parts(nowTs()).y, 11, 25, 18, 0);
   const when = dec25 - nowTs() > 3 * 86400 ? dec25 : nowTs() + 14 * 86400;
   const LINES = [[PenLine, 'santa.hi1'], [Shuffle, 'santa.hi2'], [EyeOff, 'santa.hi3']] as const;
-  // the settings (server santa.start): no budget, wishlists until a week before the gifts day, the day itself
+  // the settings (server santa.start): the gift's sum to pick, wishlists until a week before the gifts day, the day itself
   let terms = $state(termsFrom(null, defaultUntil(when), when));
   const r = $derived(readTerms(terms));
 
@@ -35,7 +35,7 @@
   async function go() {
     if (running) { close(overlay.id); sheets.manage(running.id); return; }
     if (busy) return;
-    if (r.bad) return;
+    if (r.bad || r.budget === null) return;
     busy = true;
     try {
       const e = await api.santaStart(org, t('santa.title'), r.starts, r.budget, r.until);
