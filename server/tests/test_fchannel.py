@@ -547,7 +547,7 @@ def test_post_off_and_gate(env, monkeypatch):
     c, cfg, said, _ = setup(env, monkeypatch)
     me = TestClient(server.create(dataclasses.replace(cfg0, forum_channel=CH))).get("/api/me", headers=tma(1)).json()
     assert me["consentNow"] == logic.CONSENT
-    assert "@KBTUappForum" in c0.get("/privacy").text                      # described whether the switch is on or not
+    assert "\u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u0444\u043e\u0440\u0443\u043c" in c0.get("/privacy").text  # "Public forum": the channel                      # described whether the switch is on or not
     con = db.connect(cfg.db_path)
     con.execute("UPDATE students SET manual = 1 WHERE user_id = (SELECT id FROM users WHERE tg_id = 2)")
     assert c.post("/api/forum-posts", headers=tma(2), json={"body": "hello all"}).json()["error"] == "need_student"
