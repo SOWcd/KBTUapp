@@ -30,6 +30,8 @@
   import IconButton from '../../ui/IconButton.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import Poster from '../../ui/Poster.svelte';
+  import Eye from '@lucide/svelte/icons/eye';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
@@ -151,6 +153,8 @@
   // an event found in a club's channel (server autoev.py): its draft opens as any event from Admin (api staffEvents);
   // Dismiss is Admin's event delete, hidden at once with Done's Undo for a day
   function openDraft(e: AutoEvent) { haptic.tap(); staffEvents.add(e.id); sheets.editor(e.org.id, e.id); }
+  // the eye: the draft as students will see it once published (the editor's preview), read as the admin from Admin
+  function previewDraft(e: AutoEvent) { haptic.tap(); staffEvents.add(e.id); sheets.draftPreview(e.id); }
   function more(it: InboxItem): MenuItem[] {
     if (it.kind === 'autoev') { const u = it.data.url; return [{ label: t('adm.autoevPost'), onselect: () => openLink(u) }]; }
     if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: t('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
@@ -311,10 +315,13 @@
           {@const e = it.data}
           <div class="card" out:fold>
             {@render head(it, more(it))}
-            <button class="who" onclick={() => openDraft(e)}>
-              <OrgLogo org={e.org} size={44} />
-              <span class="tx"><b>{e.title}</b><i>{nameOf(e.org)} · {relDay(e.startsAt)}, {time(e.startsAt)}{e.place ? ' · ' + e.place : ''}</i></span>
-            </button>
+            <div class="evr">
+              <button class="who" onclick={() => openDraft(e)}>
+                <Poster item={e} size={56} radius={14} />
+                <span class="tx"><b>{e.title}</b><i>{nameOf(e.org)} · {relDay(e.startsAt)}, {time(e.startsAt)}{e.place ? ' · ' + e.place : ''}</i></span>
+              </button>
+              <IconButton icon={Eye} kind="gray" size="s" label={t('ed.preview')} onclick={() => previewDraft(e)} />
+            </div>
             {@render two(t('adm.autoevOpen'), () => openDraft(e), t('adm.autoevDismiss'),
               () => decide(it, t('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
           </div>
@@ -369,6 +376,8 @@
   .btns > :global(.btn) { flex: none; }
   .btns > :global(.btn.full) { flex: 1; width: auto; min-width: 0; } /* the main one takes what the other leaves */
   .who { display: flex; align-items: center; gap: var(--s-3); text-align: left; }
+  .evr { display: flex; align-items: center; gap: var(--s-2); }
+  .evr > .who { flex: 1; min-width: 0; }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .tx b { font: 600 var(--fs-body)/1.3 var(--font-text); overflow-wrap: anywhere; }
   .tx i { font: 450 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-3); overflow-wrap: anywhere; }

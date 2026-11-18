@@ -273,9 +273,10 @@ def wipe_post(con, pid: int) -> list[str]:
     """A taken-down post erased: its text, translations and photo (the file too when nothing else shows it) and the
     comments under it. The row stays (reactions, the audit). Inside the caller's tx; returns files to remove from disk."""
     fid = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)[0]
+    gone = uncover(con, pid) if fid else []  # a channel post's untouched draft wearing its picture (autoev.py)
     con.execute("UPDATE posts SET title = '', body = '', i18n = NULL, lang = NULL, tr_by = NULL, photo_file_id = NULL WHERE id = ?", (pid,))
     con.execute("DELETE FROM comments WHERE post_id = ?", (pid,))
-    return _drop_unused(con, fid)
+    return gone + _drop_unused(con, fid)
 
 
 def read_posts(con, v: Viewer, ids: list) -> None:
@@ -327,6 +328,7 @@ def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
 # when a function runs
 from . import clubs, core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
+from .autoev import uncover  # noqa: E402
 from .clubs import orgs, stories_open  # noqa: E402
 from .moderation import _thread, comments  # noqa: E402
 from .oversight import _admin  # noqa: E402

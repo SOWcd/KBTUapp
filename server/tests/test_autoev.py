@@ -182,3 +182,149 @@ def test_day_cap(env, monkeypatch):
     calls = _model(monkeypatch, ['{"event": false}'])
     assert _look(con, cfg, _post(con, 1, TEXT), TEXT) is None
     assert _look(con, cfg, _post(con, 2, "2 " + TEXT), "2 " + TEXT) is None and len(calls) == 1
+
+
+# ---------------------------------------------------------------- the post's picture as the draft's cover
+
+def _pic(cfg, w=400, h=500, rgb=(200, 40, 40)):
+    """A real picture through the real media code, where the app keeps its photos."""
+    import io
+    from pathlib import Path
+    from PIL import Image
+    from kbtu import media
+    out = io.BytesIO()
+    Image.new("RGB", (w, h), rgb).save(out, "PNG")
+    root = Path(cfg.db_path).resolve().parent / "media"
+    root.mkdir(exist_ok=True)
+    return media.save(out.getvalue(), root), root
+
+
+def _cov(con, eid):
+    return con.execute("SELECT e.cover_file_id, e.cover_focus, f.kind, f.owner_id, f.path FROM events e LEFT JOIN files f ON f.id = e.cover_file_id WHERE e.id = ?", (eid,)).fetchone()
+
+
+def _save(c, con, eid, **extra):
+    """The editor's save of the draft by its President."""
+    e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    body = {"title": e["title"], "place": e["place"], "startsAt": e["starts_at"], "emoji": e["emoji"], "color": e["color"], **extra}
+    r = c.patch(f"/api/events/{eid}", headers=tma(20), json=body)
+    assert r.status_code == 200, r.text
+    con.execute("UPDATE events SET updated_at = updated_at + 5 WHERE id = ?", (eid,))  # saved a moment after it was made
+
+
+def _on_disk(root, path):
+    return (root / f"{path}.webp").exists()
+
+
+def test_cover_from_the_posts_picture(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form(), _form(title="Chess night")])
+    pic, root = _pic(cfg)
+    pid = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, photo=pic))
+    eid = _look(con, cfg, pid, TEXT)
+    cv = _cov(con, eid)
+    # its own event_cover row (no owner) over the post's stored picture; a tall poster's focus up high
+    assert (cv["kind"], cv["owner_id"], cv["path"], cv["cover_focus"]) == ("event_cover", None, pic["path"], autoev.TALL_FOCUS)
+    assert cv["cover_file_id"] != con.execute("SELECT photo_file_id FROM posts WHERE id = ?", (pid,)).fetchone()[0]
+    # Admin's card and the Studio row show it
+    card = next(x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev")["data"]
+    assert card["cover"]["url"] == f"media/{pic['path']}.webp" and card["cover"]["focus"] == [0.5, 0.2] and card["emoji"] == "microphone_3d"
+    assert [x["cover"]["id"] for x in c.get("/api/orgs/1/events", headers=tma(20)).json()] == [cv["cover_file_id"]]
+    # a post without a picture: no cover
+    t2 = "2 " + TEXT.replace("Open mic", "Chess")
+    e2 = _look(con, cfg, _post(con, 2, t2), t2)
+    assert e2 and _cov(con, e2)["cover_file_id"] is None
+
+
+def test_cover_when_the_photo_comes_later(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form(), _form(title="Chess night")])
+    pic, _ = _pic(cfg, 800, 400)
+    eid = _look(con, cfg, mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, grouped=9)), TEXT)
+    assert _cov(con, eid)["cover_file_id"] is None
+    mirror.take(con, 500, mirror.Msg(id=2, date=logic.now(), grouped=9, photo=pic))  # the album's photo after its caption
+    cv = _cov(con, eid)
+    assert (cv["path"], cv["cover_focus"]) == (pic["path"], None)  # wide: the middle
+    # a person's choice stays: a draft saved without a cover gets none later
+    t2 = "2 " + TEXT
+    e2 = _look(con, cfg, mirror.take(con, 500, mirror.Msg(id=3, date=logic.now(), text=t2, grouped=10)), t2)
+    _save(c, con, e2, place="306")
+    mirror.take(con, 500, mirror.Msg(id=4, date=logic.now(), grouped=10, photo=pic))
+    assert _cov(con, e2)["cover_file_id"] is None
+
+
+def test_a_persons_cover_is_never_replaced(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form()])
+    pic, root = _pic(cfg)
+    eid = _look(con, cfg, mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, grouped=9)), TEXT)
+    import io
+    from PIL import Image
+    png = io.BytesIO()
+    Image.new("RGB", (300, 200), (1, 2, 3)).save(png, "PNG")
+    own = c.post("/api/photos", headers=tma(20), content=png.getvalue()).json()["id"]
+    _save(c, con, eid, coverId=own)
+    mirror.take(con, 500, mirror.Msg(id=2, date=logic.now(), grouped=9, photo=pic))
+    assert _cov(con, eid)["cover_file_id"] == own
+
+
+def test_dismiss_keeps_the_posts_picture(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form()])
+    pic, root = _pic(cfg)
+    pid = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, photo=pic))
+    eid = _look(con, cfg, pid, TEXT)
+    assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
+    con.execute("UPDATE meta SET value = json_set(value, '$.due', 0) WHERE key = ?", (f"evdel:{eid}",))
+    _, photos = logic.events_gone(con)
+    from kbtu import media
+    media.drop(root, photos)
+    post = con.execute("SELECT photo_file_id FROM posts WHERE id = ?", (pid,)).fetchone()[0]
+    assert post and con.execute("SELECT path FROM files WHERE id = ?", (post,)).fetchone()[0] == pic["path"] and _on_disk(root, pic["path"])
+    assert not con.execute("SELECT 1 FROM files WHERE kind = 'event_cover'").fetchone()  # the event's own row went with it
+
+
+def test_post_taken_down_after(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form(), _form(title="Chess night")])
+    pic, root = _pic(cfg)
+    pic2, _ = _pic(cfg, rgb=(10, 200, 10))
+    pid = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, photo=pic))
+    eid = _look(con, cfg, pid, TEXT)
+    assert c.post(f"/api/events/{eid}/publish", headers=tma(20)).json()["status"] == "published"
+    t2 = "2 " + TEXT
+    pid2 = mirror.take(con, 500, mirror.Msg(id=2, date=logic.now(), text=t2, photo=pic2))
+    e2 = _look(con, cfg, pid2, t2)
+    mirror.gone(con, 500, [1, 2], root)  # both deleted in the channel
+    # the published event keeps its cover, the picture on disk; the untouched draft's goes with its post
+    assert _cov(con, eid)["path"] == pic["path"] and _on_disk(root, pic["path"])
+    assert con.execute("SELECT photo_file_id FROM posts WHERE id = ?", (pid,)).fetchone()[0] is None
+    assert _cov(con, e2)["cover_file_id"] is None and not _on_disk(root, pic2["path"])
+    assert not con.execute("SELECT 1 FROM files WHERE path = ?", (pic2["path"],)).fetchone()
+    # the published event deleted later: now the picture leaves the disk
+    assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
+    con.execute("UPDATE meta SET value = json_set(value, '$.due', 0) WHERE key = ?", (f"evdel:{eid}",))
+    from kbtu import media
+    media.drop(root, logic.events_gone(con)[1])
+    assert not _on_disk(root, pic["path"])
+
+
+def test_backfill_once(env, monkeypatch):
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form(), _form(title="Chess night"), _form(title="Quiz")])
+    pic, _ = _pic(cfg)
+    made = []
+    for n in (1, 2, 3):
+        t = f"{n} " + TEXT
+        pid = mirror.take(con, 500, mirror.Msg(id=n, date=logic.now(), text=t, photo=pic))
+        made.append(_look(con, cfg, pid, t))
+    # as on production before: drafts without a cover; the third one a person saved already
+    con.execute("UPDATE events SET cover_file_id = NULL, cover_focus = NULL")
+    con.execute("DELETE FROM files WHERE kind = 'event_cover'")
+    con.execute("UPDATE events SET updated_at = updated_at + 60 WHERE id = ?", (made[2],))
+    for _ in range(2):
+        con.executescript(dict(db.MIGRATIONS)[186])
+    covers = [_cov(con, e) for e in made]
+    assert [x["path"] for x in covers] == [pic["path"], pic["path"], None]
+    assert covers[0]["cover_focus"] == autoev.TALL_FOCUS and covers[0]["kind"] == "event_cover" and covers[0]["owner_id"] is None
+    assert con.execute("SELECT COUNT(*) FROM files WHERE kind = 'event_cover'").fetchone()[0] == 1  # once, shared

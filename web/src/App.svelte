@@ -63,6 +63,7 @@
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
   sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album }, 'sheet.event');
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
+  sheets.draftPreview = (id) => void api.event(id).then((e) => sheets.preview({ ...e, status: 'published' }), () => say(t('common.error'), 'warning_3d'));
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
   sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
   sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));

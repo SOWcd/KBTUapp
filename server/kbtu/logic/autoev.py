@@ -17,7 +17,7 @@ import httpx
 
 from .. import ai, llm
 from ..db import tx
-from .core import now, one, org_ref, rows
+from .core import _event_cover, now, one, org_ref, rows
 
 log = logging.getLogger("kbtu.autoev")
 
@@ -107,9 +107,11 @@ def made(con, pid: int, answer: str) -> int | None:
         if "tr" in f:
             e.update(organizing._own_tr({"tr": f["tr"]}, e))
         e["tint"] = organizing.shade(e["color"])
+        at = now()  # one time for both: an untouched draft is one whose updated_at is its created_at (cover)
         eid = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(e)}, created_at, updated_at)
-            VALUES (?, 'draft', {', '.join('?' * len(e))}, ?, ?)""", (a["org_id"], *e.values(), now(), now())).lastrowid  # keys from above
+            VALUES (?, 'draft', {', '.join('?' * len(e))}, ?, ?)""", (a["org_id"], *e.values(), at, at)).lastrowid  # keys from above
         con.execute("UPDATE auto_events SET event_id = ? WHERE post_id = ?", (eid, pid))
+        cover(con, pid)
         for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", a["org_id"]):
             notify(con, uid, "auto_event", f"ae:{eid}")
     return eid
@@ -130,6 +132,44 @@ async def propose(con, cfg, http: httpx.AsyncClient, pid: int, text: str, posted
     return made(con, pid, answer)
 
 
+TALL_FOCUS = "0.500,0.200"  # a poster taller than wide (4:5, 3:4): its title sits high, the wide frames keep it in view
+# an untouched draft: nobody saved it yet (the editor's save sets updated_at); +1: rows made before `at` above
+UNTOUCHED = "e.status = 'draft' AND e.updated_at <= e.created_at + 1"
+
+
+def cover(con, pid: int) -> None:
+    """The post's picture as its draft's cover (owner, Nov 18: the draft is the finished post), whenever it reaches the
+    post (an album's photo after its caption: mirror.take calls this too), only while the draft is untouched and has none:
+    a cover a person set, or took off, stays. The event gets its own file row (event_cover, no owner) over the same
+    stored picture (files are named by their content, media.store): the draft's delete drops that row, the post's
+    take-down the post's (uncover), and the picture leaves the disk with the last row (account._drop_photo)."""
+    with tx(con):
+        r = one(con, f"""SELECT e.id AS eid, f.* FROM auto_events a
+            JOIN events e ON e.id = a.event_id AND {UNTOUCHED} AND e.hidden_at IS NULL AND e.cover_file_id IS NULL
+            JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL JOIN files f ON f.id = p.photo_file_id WHERE a.post_id = ?""", pid)
+        if not r:
+            return
+        own = one(con, "SELECT id FROM files WHERE path = ? AND kind = 'event_cover' AND owner_id IS NULL ORDER BY id LIMIT 1", r["path"])
+        fid = own["id"] if own else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
+            VALUES (?, 'event_cover', ?, ?, ?, ?, ?, NULL, ?, ?)""", (r["sha256"], r["mime"], r["bytes"], r["width"], r["height"],
+                                                                   r["path"], now(), r["color"])).lastrowid
+        con.execute("UPDATE events SET cover_file_id = ?, cover_focus = ? WHERE id = ?",
+                    (fid, TALL_FOCUS if (r["height"] or 0) > (r["width"] or 0) else None, r["eid"]))
+
+
+def uncover(con, pid: int) -> list[str]:
+    """A post taken down (newsfeed.wipe_post): its picture leaves its draft too while that is still the untouched draft
+    wearing it; a published event, or a cover a person chose, keeps its own. Inside the caller's tx, before the post's
+    photo goes; the files to remove from disk (none: the post's row still has the picture)."""
+    r = one(con, f"""SELECT e.id, e.cover_file_id FROM auto_events a JOIN events e ON e.id = a.event_id AND {UNTOUCHED}
+        JOIN files c ON c.id = e.cover_file_id AND c.kind = 'event_cover' AND c.owner_id IS NULL
+        JOIN posts p ON p.id = a.post_id JOIN files f ON f.id = p.photo_file_id AND f.path = c.path WHERE a.post_id = ?""", pid)
+    if not r:
+        return []
+    con.execute("UPDATE events SET cover_file_id = NULL, cover_focus = NULL WHERE id = ?", (r["id"],))
+    return _drop_unused(con, r["cover_file_id"])
+
+
 def from_posts(con, eids: list[int]) -> dict[int, str]:
     """Which of these drafts came from a channel post: event id -> the post's link."""
     if not eids:
@@ -140,11 +180,12 @@ def from_posts(con, eids: list[int]) -> dict[int, str]:
 
 def queue(con) -> list[dict]:
     """Admin's queue: the drafts found in channels, still drafts, not dismissed (an admin's delete hides it at once)."""
-    found = rows(con, """SELECT o.*, e.id AS ev, e.title AS ev_title, e.starts_at AS ev_at, e.place AS ev_place, a.at AS found_at, p.tg_url AS ev_url
+    found = rows(con, """SELECT o.*, e.id AS ev, e.title AS ev_title, e.starts_at AS ev_at, e.place AS ev_place, a.at AS found_at, p.tg_url AS ev_url,
+            e.cover_file_id, e.cover_focus, e.emoji AS ev_emoji, e.color AS ev_color, e.tint AS ev_tint
         FROM auto_events a JOIN events e ON e.id = a.event_id AND e.status = 'draft' AND e.hidden_at IS NULL
         JOIN posts p ON p.id = a.post_id JOIN orgs o ON o.id = e.org_id AND o.status = 'active' ORDER BY a.at""")
     return [{"id": r["ev"], "title": r["ev_title"], "startsAt": r["ev_at"], "place": r["ev_place"], "at": r["found_at"], "url": r["ev_url"],
-             "org": org_ref(con, r)} for r in found]
+             "org": org_ref(con, r), "cover": _event_cover(con, r), "emoji": r["ev_emoji"], "color": r["ev_color"], "tint": r["ev_tint"]} for r in found]
 
 
 def waiting(con) -> int:
@@ -153,5 +194,5 @@ def waiting(con) -> int:
 
 
 from . import assistant, organizing  # noqa: E402  (they import the other domains last too)
-from .account import ai_on  # noqa: E402
+from .account import _drop_unused, ai_on  # noqa: E402
 from .seats import notify  # noqa: E402

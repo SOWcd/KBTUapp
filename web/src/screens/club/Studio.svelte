@@ -10,6 +10,7 @@
   import Users from '@lucide/svelte/icons/users';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Pencil from '@lucide/svelte/icons/pencil';
+  import Eye from '@lucide/svelte/icons/eye';
   import PenLine from '@lucide/svelte/icons/pen-line';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MountainSnow from '@lucide/svelte/icons/mountain-snow';
@@ -37,7 +38,6 @@
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Mail from '@lucide/svelte/icons/mail';
-  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import { menu, type MenuItem } from '../../ui/menu';
@@ -321,7 +321,12 @@
           <Row icon={HandHeart} title={e.title} subtitle={t('studio.todoVol')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(e.id, e.needsVolunteers ?? 0)} />
         {/each}
         {#each found as e (e.id)}
-          <Row icon={CalendarPlus} title={e.title} subtitle={t('studio.fromPost')} accessory="chevron" onclick={() => openRow(e)} />
+          <!-- the post's picture on it; the eye: as students will see it, the pencil: the editor (EventManage's two doors) -->
+          <Row title={e.title} subtitle={t('studio.fromPost')}>
+            {#snippet lead()}<Poster item={e} size={44} radius={12} />{/snippet}
+            {#snippet trailing()}<span class="yn"><IconButton icon={Eye} size="s" label={t('ed.preview')} onclick={() => { haptic.tap(); sheets.draftPreview(e.id); }} />
+              <IconButton icon={Pencil} size="s" label={t('studio.edit')} onclick={() => openRow(e)} /></span>{/snippet}
+          </Row>
         {/each}
         {#each guesting as e (e.id)}
           <Row icon={UsersRound} title={e.title} subtitle={t('ta.caption')} count={e.teamAsks} accessory="chevron" onclick={() => sheets.manage(e.id)} />
