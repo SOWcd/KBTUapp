@@ -1890,34 +1890,52 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL) STRICT;"""),
     # (Nov 18) Secret Santa, round 2 (logic/santa.py): the game's settings beside its row (the gift budget; the wishlists'
     # deadline is the event's own reg_until) and the bot round's marks, so each timed step runs once: `checked` the
-    # deadline already acted on (a moved one re-arms itself), `soon` the eve-of-deadline reminder, `eve` the gifts day's,
-    # `nudged_at` the organizer's last "remind those not in yet". No user column: nothing here names a person.
+    # deadline already acted on (a moved one re-arms itself), `soon` the eve-of-deadline reminder, `eve` and `late` the
+    # gifts day each was sent for (a moved day re-arms them), `nudged_at` the organizer's last "remind those not in yet".
+    # No user column: nothing here names a person.
     (184, """CREATE TABLE IF NOT EXISTS santa_games (  -- IF NOT EXISTS: tests rewind user_version
       event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
       budget INTEGER CHECK (budget IS NULL OR budget > 0),
       checked INTEGER,
       soon INTEGER,
       eve INTEGER,
+      late INTEGER,
       nudged_at INTEGER) STRICT;
-    INSERT OR IGNORE INTO santa_games (event_id) SELECT event_id FROM santa_events;  -- the games already running"""
-     # a seat lost after the draw: its Santa hears once that their person changed (bot santa_changed), before the
-     # relink (santa_left_*) moves the ring. The ref carries a random tag, never the leaver: the outbox names no pair
+    INSERT OR IGNORE INTO santa_games (event_id) SELECT event_id FROM santa_events;  -- the games already running
+    -- a running game from before deadlines (none set): santa.default_until's, a week before the gifts day (halfway when
+    -- closer, an hour before it at the latest), so it draws by itself; due within a day: no "closes tomorrow" burst
+    UPDATE events SET reg_until = MIN(starts_at - 3600, CASE WHEN starts_at - 604800 > CAST(strftime('%s', 'now') AS INTEGER) THEN starts_at - 604800
+        ELSE CAST(strftime('%s', 'now') AS INTEGER) + (starts_at - CAST(strftime('%s', 'now') AS INTEGER)) / 2 END)
+      WHERE reg_until IS NULL AND late_signup = 0 AND status = 'published' AND starts_at > CAST(strftime('%s', 'now') AS INTEGER) + 3600
+        AND id IN (SELECT event_id FROM santa_events WHERE drawn_at IS NULL);
+    UPDATE santa_games SET soon = CAST(strftime('%s', 'now') AS INTEGER) WHERE event_id IN (SELECT id FROM events WHERE reg_until < CAST(strftime('%s', 'now') AS INTEGER) + 86400);
+    -- a running game whose deadline already passed undrawn (closed by hand before this round): no draw out of the blue;
+    -- its President hears once that it waits for them (santa_wait), and a new deadline re-arms it
+    INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+      SELECT m.user_id, 'santa_wait', 'event:' || e.id, '{}', CAST(strftime('%s', 'now') AS INTEGER) FROM events e JOIN santa_events s ON s.event_id = e.id AND s.drawn_at IS NULL
+        JOIN org_members m ON m.org_id = e.org_id AND m.role = 'president'
+        WHERE e.status = 'published' AND e.reg_until <= CAST(strftime('%s', 'now') AS INTEGER) AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER);
+    UPDATE santa_games SET checked = (SELECT reg_until FROM events WHERE id = santa_games.event_id)
+      WHERE event_id IN (SELECT e.id FROM events e JOIN santa_events s ON s.event_id = e.id AND s.drawn_at IS NULL
+        WHERE e.reg_until <= CAST(strftime('%s', 'now') AS INTEGER));"""
+     # a seat lost after the draw (before the relink, santa_left_*, moves the ring): with three or more left, its Santa
+     # hears once that their person changed; with two left, both hear they give to each other (each knows it anyway);
+     # with one left, they hear the game is over for them. Refs carry the event and a random tag, never the leaver
      + "".join(f"""
     CREATE TRIGGER IF NOT EXISTS santa_moved_{name} BEFORE {op} ON registrations WHEN OLD.status = 'going'{when}
-        AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL) BEGIN
+        AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL)
+        AND EXISTS (SELECT 1 FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id) BEGIN
       INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
         SELECT g.user_id, 'santa_changed', 'event:' || OLD.event_id || ':' || lower(hex(randomblob(6))), '{{}}', 0
-        FROM santa_people g JOIN santa_people l ON l.event_id = g.event_id AND l.user_id = OLD.user_id
-        WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND l.gives_to != g.user_id;
-    END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))
-     # out of the club (left, removed, the account deleted): out of its upcoming team-only game too, since its page no
-     # longer opens for them (seats._visible); the seat's triggers above relink the ring and tell their Santa
-     + """
-    CREATE TRIGGER IF NOT EXISTS santa_left_club AFTER DELETE ON org_members BEGIN
-      UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', updated_at = CAST(strftime('%s', 'now') AS INTEGER)
-        WHERE user_id = OLD.user_id AND status = 'going' AND event_id IN (SELECT e.id FROM events e JOIN santa_events s ON s.event_id = e.id
-          WHERE e.org_id = OLD.org_id AND e.visibility = 'members' AND e.status = 'published' AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER));
-    END;"""),
+        FROM santa_people g WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND g.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) >= 3;
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT p.user_id, CASE (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id)
+          WHEN 2 THEN 'santa_two' ELSE 'santa_alone' END, 'event:' || OLD.event_id, '{{}}', 0
+        FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
+        ORDER BY p.user_id;
+    END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
 ]
 
 

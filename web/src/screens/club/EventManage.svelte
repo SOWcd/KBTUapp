@@ -101,8 +101,10 @@
     if (c) { c.santa = { drawn: false, ...(r.budget ? { budget: r.budget } : {}) }; c.regUntil = r.until; } // optimistic: the rows show it at once
     terms = null; haptic.ok();
     try { await api.santaSettings(id, { budget: r.budget, regUntil: r.until }); studioChanged(); say(t('santa.saved'), 'party_popper_3d'); }
-    catch { if (c && was) { c.santa = was.santa; c.regUntil = was.regUntil; } haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (err) { if (c && was) { c.santa = was.santa; c.regUntil = was.regUntil; } haptic.error(); say(t(err instanceof ApiErr && err.message === 'until' ? 'santa.badUntil' : 'common.error'), 'warning_3d'); }
   }
+  // the reminder's day passed with the page open: its count read again, the button back
+  $effect(() => { if (santaTeam?.remindAt && tick >= santaTeam.remindAt) api.event(id).then((x) => (santaTeam = x.santaTeam ?? null)).catch(() => {}); });
   async function remindSanta() {
     haptic.tap();
     const team = santaTeam;
@@ -178,8 +180,16 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function closeReg() {
+    if (e?.santa) { await closeSanta(); return; }
     if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t('mg.closeRegText'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
     void setReg('now', t('mg.regClosed'), e?.regUntil);
+  }
+  // a Santa game's sign-up closed is its deadline come: the bot's round draws within seconds, for good (no Undo)
+  async function closeSanta() {
+    const few = santaN < 3;
+    if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t(few ? 'santa.closeFew' : 'santa.closeDraws'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
+    try { regOn((await api.setRegUntil(id, 'now')).regUntil); studioChanged(); haptic.ok(); say(t(few ? 'mg.regClosed' : 'santa.closeSoon'), 'locked_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // the door (owner, Nov 7): shut until T-30, or until the club's President or a Vice opens it, from 4 h before (server
   // organizing.open_door; the app's admin never). An hour or more ahead asks twice, the second "Open" after 2 s.

@@ -3314,6 +3314,11 @@ const en: Dict = {
   'santa.remindAgain': "Again {when}",
   'santa.share': "Share to the club chat",
   'santa.saved': "Saved",
+  'santa.toldNot': "The team already got the invite today, so it wasn't sent again",
+  'santa.closeDraws': "The draw will run at once, in a few seconds, and cannot be undone.",
+  'santa.closeFew': "Fewer than three are in: there will be no draw. Extend the wishlists' deadline later for it to run.",
+  'santa.closeSoon': "Sign-up closed, the draw runs in a moment",
+  'santa.audience': "Secret Santa is for the whole team: no “For whom”",
 };
 
 export default en;

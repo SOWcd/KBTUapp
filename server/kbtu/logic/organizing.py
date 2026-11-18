@@ -416,6 +416,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
         _slides(con, v, body, e, f["cover_file_id"])
         if "santa" in body:
             santa.set_on(con, e["id"], body["santa"])
+        santa.check_event(con, e["id"], f)
     return full(con, v, e)
 
 
@@ -498,6 +499,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         _slides(con, v, body, e, f["cover_file_id"])
         if "santa" in body:  # Secret Santa's switch (santa.py); left out: kept
             santa.set_on(con, eid, body["santa"])
+        santa.check_event(con, eid, f)
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):
             f["memo_sent_at"] = f["memo_sent_by"] = None  # changed requests go to DMP again
         if (f["title"], f["description"]) != (e["title"], e["description"]):
@@ -748,6 +750,8 @@ def set_reg_until(con, v: Viewer, eid: int, until: object) -> dict:
         at = core.now() if until == "now" else until
         if not (at is None or isinstance(at, int) and not isinstance(at, bool) and 0 < at <= e["starts_at"]):
             raise ApiError("bad_input")
+        if until != "now":  # a Santa game's deadline: an hour before its gifts day at the latest
+            santa.check_event(con, eid, {"reg_until": at, "starts_at": e["starts_at"]})
         con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (at, core.now(), eid))
     return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
 

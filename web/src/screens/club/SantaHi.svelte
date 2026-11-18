@@ -41,7 +41,7 @@
     try {
       const e = await api.santaStart(org, t('santa.title'), when, r.budget, r.until);
       void loadStudio(org); haptic.ok();
-      close(overlay.id); say(t('santa.told'), 'party_popper_3d'); sheets.manage(e.id);
+      close(overlay.id); say(t(e.santaTold === 0 ? 'santa.toldNot' : 'santa.told'), 'party_popper_3d'); sheets.manage(e.id);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }

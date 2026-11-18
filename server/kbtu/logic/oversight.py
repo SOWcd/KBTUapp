@@ -271,6 +271,7 @@ def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
             raise ApiError("forbidden")  # an admin's ban is lifted by the owner alone, as it was given
         if on:
             con.execute("UPDATE users SET banned_at = ?, ban_reason = ?, role = 'user' WHERE id = ?", (core.now(), why, u["id"]))
+            santa.drop(con, u["id"])  # they can't open their Secret Santa person any more: out of every upcoming game
         else:
             con.execute("UPDATE users SET banned_at = NULL, ban_reason = NULL WHERE id = ?", (u["id"],))
         log_action(con, v.id, "ban" if on else "unban", f"user:{u['id']}", json.dumps({"reason": why, **({"admin": True} if adm else {})} if on else {},
@@ -324,6 +325,7 @@ def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> 
             con.execute("UPDATE org_members SET role = 'vice', role_id = ? WHERE org_id = ? AND role = 'president' AND user_id != ?", (_official(con, oid, "vice"), oid, uid))
         if role == "none":
             con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, uid))
+            santa.drop(con, uid, oid)  # out of the club's Secret Santa too (teams._remove)
         else:
             con.execute("""INSERT INTO org_members (org_id, user_id, role, joined_at, role_id) VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (org_id, user_id) DO UPDATE SET role = excluded.role, role_id = excluded.role_id""", (oid, uid, role, core.now(), _official(con, oid, role)))
@@ -423,7 +425,7 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import clubs, core, search  # noqa: E402
+from . import clubs, core, santa, search  # noqa: E402
 from .clubs import UNDO_WAIT, _official, create_org, no_emoji  # noqa: E402
 from .seats import joined, notify  # noqa: E402
 from .teams import team  # noqa: E402

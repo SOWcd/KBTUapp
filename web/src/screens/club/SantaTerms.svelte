@@ -1,16 +1,18 @@
 <script lang="ts" module>
   import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
 
+  /** Wishlists close an hour before the gifts day at the latest (server santa.LEAD): the draw needs that moment. */
+  export const LEAD = 3600;
   /** Wishlists until: a week before the gifts day; a game closer than that, halfway there (server santa.default_until). */
   export function defaultUntil(starts: number): number {
-    return starts - 7 * 86400 > nowTs() ? starts - 7 * 86400 : nowTs() + Math.floor((starts - nowTs()) / 2);
+    return Math.min(starts - LEAD, starts - 7 * 86400 > nowTs() ? starts - 7 * 86400 : nowTs() + Math.floor((starts - nowTs()) / 2));
   }
   export const termsFrom = (budget: number | null | undefined, until: number) => ({ budget: budget ? String(budget) : '', day: dateInput(until), hm: time(until) });
-  /** The fields read: the values to send, or what is wrong (bounds as the server's: 100 to 1 000 000 ₸, now < until ≤ the gifts day). */
+  /** The fields read: the values to send, or what is wrong (bounds as the server's: 100 to 1 000 000 ₸, now < until ≤ the gifts day − an hour). */
   export function readTerms(f: { budget: string; day: string; hm: string }, starts: number) {
     const raw = f.budget.replace(/\s/g, ''), budget = raw ? Number(raw) : null, until = fromInputs(f.day, f.hm);
     return { budget, until, badBudget: budget !== null && !(Number.isInteger(budget) && budget >= 100 && budget <= 1_000_000),
-             badUntil: !Number.isFinite(until) || until <= nowTs() || until > starts };
+             badUntil: !Number.isFinite(until) || until <= nowTs() || until > starts - LEAD };
   }
 </script>
 

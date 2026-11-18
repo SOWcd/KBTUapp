@@ -514,34 +514,42 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok', 'door_open') else 'ev'}_{e['id']}"
 
 
-SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_eve", "santa_few"})
+SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_two", "santa_alone", "santa_eve",
+                         "santa_few", "santa_wait", "santa_late"})
 
 
 def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
-    """Secret Santa's templates (logic/santa.py), <kind>:<event>[:...]: each read when it goes, quiet once it no longer
-    holds (joined since, left the club or the game, drawn, the deadline moved). Never a name, a wishlist or a pair."""
+    """Secret Santa's templates (logic/santa.py): each read when it goes, quiet once it no longer holds (joined since,
+    left the club or the game, drawn, the deadline or the ring moved). Never a name, a wishlist or a pair. Refs:
+    so:/sr:<org>:<event> (the invite, the organizer's reminder), else <prefix>:<event>[:...]."""
     kind, ref, uid, t = m["kind"], m["ref"].split(":"), m["user_id"], logic.now()
+    eid = int(ref[2]) if ref[0] in ("so", "sr") else int(ref[1])
     e = one(con, """SELECT e.*, o.name AS org, s.drawn_at, g.budget FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
         JOIN santa_events s ON s.event_id = e.id LEFT JOIN santa_games g ON g.event_id = e.id
-        WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ?""", int(ref[1]), t)
-    if not e:
+        WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
+    if not e or (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
         return None
     playing = one(con, logic.santa._GOING + " AND p.user_id = ?", e["id"], uid)
     title, go = logic.title_in(e, lang), f"ev_{e['id']}"
-    if kind in ("santa_open", "santa_soon", "santa_nudge"):  # to the club's people not in yet, while wishlists are taken
-        if e["drawn_at"] or playing or (e["reg_until"] or t + 1) <= t or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
+    if kind in ("santa_open", "santa_soon", "santa_nudge"):  # to the club's people the game is for, not in yet, while wishlists are taken
+        if e["drawn_at"] or playing or (e["reg_until"] or t + 1) <= t or not logic.santa._for(con, e, uid):
             return None
         soon = kind == "santa_soon"
         return (*texts.bot_message(lang, kind, org=e["org"], until=texts.when(e["reg_until"], lang) if e["reg_until"] else "",
                                    terms=texts.santa_terms(lang, e["budget"], None if soon else e["reg_until"])), go)
-    if kind == "santa_few":  # sk:<event>:<deadline>, to its President and Vices: the deadline came with too few in
-        if e["drawn_at"] or e["reg_until"] != int(ref[2]) or uid not in logic.santa._heads(con, e):
+    if kind in ("santa_few", "santa_wait", "santa_late"):  # to its President and Vices: the game waits for them
+        if e["drawn_at"] or uid not in logic.santa._heads(con, e) or kind == "santa_few" and e["reg_until"] != int(ref[2]):
             return None
         return (*texts.bot_message(lang, kind, title=title, n=len(rows(con, logic.santa._IN, e["id"]))), f"mg_{e['id']}")
     if not e["drawn_at"] or not playing:  # the rest go to those playing a drawn game
         return None
-    if kind == "santa_changed" and not one(con, "SELECT 1 FROM santa_people WHERE event_id = ? AND user_id = ? AND gives_to != user_id", e["id"], uid):
-        return None  # everyone else left: no person to give to (the page says so)
+    ring = one(con, "SELECT COUNT(*) FROM santa_people WHERE event_id = ?", e["id"])[0]
+    if kind == "santa_two" and ring != 2 or kind == "santa_alone" and ring != 1:
+        return None  # the ring changed again since: a newer message says how it stands
+    if kind in ("santa_changed", "santa_eve") and not one(con, "SELECT 1 FROM santa_people WHERE event_id = ? AND user_id = ? AND gives_to != user_id", e["id"], uid):
+        return None  # everyone else left: no person to give to (santa_alone says so)
+    if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
+        return None  # the gifts day moved since: the new eve has its own message
     where = f"\n📍 {e['place']}" if e["place"] else ""
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 

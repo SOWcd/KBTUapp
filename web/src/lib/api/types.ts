@@ -461,6 +461,7 @@ export interface EventFull extends EventCard {
   /** Secret Santa before the draw, the organizers: who is in, who of the club not yet (names only, never a wishlist);
    *  remind: how many "Remind those not in yet" would reach now; remindAt: when the button works again (null: now) */
   santaTeam?: { in: PersonRef[]; out: PersonRef[]; remind: number; remindAt: Ts | null };
+  santaTold?: number;           // santa.start's answer: how many of the team the invite went to (0: they had it within a day, not repeated)
   /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left) */
   mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null };
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team

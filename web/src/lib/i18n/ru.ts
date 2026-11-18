@@ -3336,6 +3336,11 @@ const ru = {
   'santa.remindAgain': "Снова — {when}",
   'santa.share': "Поделиться в чат клуба",
   'santa.saved': "Сохранено",
+  'santa.toldNot': "Команда уже получила приглашение сегодня, повторно не шлём",
+  'santa.closeDraws': "Жеребьёвка пройдёт сразу, через несколько секунд. Отменить её будет нельзя.",
+  'santa.closeFew': "В игре меньше трёх: жеребьёвки не будет. Чтобы она прошла, позже продли срок вишлистов.",
+  'santa.closeSoon': "Запись закрыта, жеребьёвка вот-вот пройдёт",
+  'santa.audience': "Тайный Санта — для всей команды: без «Для кого»",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };

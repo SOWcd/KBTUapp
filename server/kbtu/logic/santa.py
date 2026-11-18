@@ -20,6 +20,7 @@ WISH_MAX = 300
 MIN = 3
 BUDGET = (100, 1_000_000)  # tenge: a gift's sane bounds
 DAY = 86400
+LEAD = 3600  # the wishlists close an hour before the gifts day at the latest: the round needs the moment to draw
 
 _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
     AND r.status = 'going' WHERE p.event_id = ?"""
@@ -28,15 +29,40 @@ _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event
 _IN = _GOING + """ AND p.user_id IN (SELECT u.id FROM users u WHERE u.banned_at IS NULL)
     AND ((SELECT visibility FROM events WHERE id = p.event_id) = 'public' OR p.user_id IN (SELECT m.user_id FROM org_members m
       WHERE m.org_id = (SELECT org_id FROM events WHERE id = p.event_id)))"""
-# the club's people not in yet (the reminders' and the organizer's list), the bot able to write to them for `reach`
+# the club's people not in yet (the reminders' and the organizer's list); _not_in() keeps whom the game is for
 _NOT_IN = """SELECT m.user_id FROM org_members m JOIN users u ON u.id = m.user_id AND u.banned_at IS NULL
     WHERE m.org_id = ? AND m.user_id NOT IN (""" + _IN + ")"
 _REACH = " AND u.can_dm = 1 AND u.tg_id > 0"
 
 
 def default_until(starts: int) -> int:
-    """Wishlists until: a week before the gifts day; a game closer than that, halfway there."""
-    return starts - 7 * DAY if starts - 7 * DAY > now() else now() + (starts - now()) // 2
+    """Wishlists until: a week before the gifts day; a game closer than that, halfway there; an hour before it at the latest."""
+    return min(starts - LEAD, starts - 7 * DAY if starts - 7 * DAY > now() else now() + (starts - now()) // 2)
+
+
+def _for(con, e: sqlite3.Row, uid: int) -> bool:
+    """The game is for this member: seats.for_me's "For whom" (the editor refuses the board or a tag on a Santa game,
+    check_event; this keeps the reminders and the list right whatever audience rule comes next)."""
+    m = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid)
+    return bool(m) and for_me(con, Viewer(uid, "user", True), e, m["role"])
+
+
+def _not_in(con, e: sqlite3.Row, reach: bool = False) -> list[int]:
+    """The club's people the game is for who are not in yet (`reach`: the bot can write to them)."""
+    ids = [r[0] for r in rows(con, _NOT_IN + (_REACH if reach else "") + " ORDER BY m.user_id", e["org_id"], e["id"])]
+    return ids if not e["meeting_tag"] and not e["for_board"] else [u for u in ids if _for(con, e, u)]
+
+
+def check_event(con, eid: int, f: dict) -> None:
+    """The editor's save on a Santa game, inside its transaction: it is for the whole team (no board, tag or meeting:
+    the reminders and the list go to the club), and its wishlists close an hour before the gifts day at the latest."""
+    s = one(con, "SELECT drawn_at FROM santa_events WHERE event_id = ?", eid)
+    if not s:
+        return
+    if f.get("for_board") or f.get("meeting_tag") or f.get("meeting"):
+        raise ApiError("bad_input", "santa_audience")
+    if not s["drawn_at"] and f.get("reg_until") is not None and f["reg_until"] > f["starts_at"] - LEAD:
+        raise ApiError("bad_input", "santa_until")
 
 
 def _budget(raw: object) -> int | None:
@@ -48,7 +74,7 @@ def _budget(raw: object) -> int | None:
 
 
 def _until(raw: object, starts: int) -> int:
-    if not isinstance(raw, int) or isinstance(raw, bool) or not now() < raw <= starts:
+    if not isinstance(raw, int) or isinstance(raw, bool) or not now() < raw <= starts - LEAD:
         raise ApiError("bad_input", "until")
     return raw
 
@@ -67,16 +93,20 @@ def start(con, v: Viewer, oid: int, body: dict) -> dict:
         if not isinstance(starts, int) or isinstance(starts, bool):
             raise ApiError("bad_input")
         budget = _budget(body.get("budget"))
-        until = _until(body["regUntil"], starts) if body.get("regUntil") is not None else default_until(starts) if starts > now() else None
+        until = _until(body["regUntil"], starts) if body.get("regUntil") is not None else default_until(starts) if starts > now() + LEAD else None
         made = create_event(con, v, oid, {"title": body.get("title"), "place": "", "startsAt": starts, "regUntil": until, "emoji": "sparkles_3d",
                                           "color": "#D7263D", "visibility": "members", "santa": True})
-        con.execute("UPDATE santa_games SET budget = ? WHERE event_id = ?", (budget, made["id"]))
+        # a deadline within a day: the invite is the reminder (no "closes tomorrow" seconds after it)
+        con.execute("UPDATE santa_games SET budget = ?, soon = ? WHERE event_id = ?", (budget, now() if until and until - DAY <= now() else None, made["id"]))
         out = publish_event(con, v, made["id"])
-        # a team-only event tells nobody by itself (owner, Nov 17: "how do I learn my club started it?"): the team hears once
-        for r in rows(con, """SELECT m.user_id FROM org_members m JOIN users u ON u.id = m.user_id AND u.can_dm = 1 AND u.banned_at IS NULL
-                WHERE m.org_id = ? AND m.user_id != ?""", oid, v.id):
-            notify(con, r[0], "santa_open", f"event:{made['id']}")
-        return out
+        # a team-only event tells nobody by itself (owner, Nov 17: "how do I learn my club started it?"): the team hears
+        # once, and once a day per club at most, whatever game it is (one stopped and started again is no new news)
+        e = one(con, "SELECT * FROM events WHERE id = ?", made["id"])
+        told = [u for u in _not_in(con, e, reach=True) if u != v.id and not one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'santa_open'
+            AND ref LIKE ? AND send_after > ?""", u, f"so:{oid}:%", now() - DAY)]
+        for uid in told:
+            notify(con, uid, "santa_open", f"so:{oid}:{made['id']}")
+        return {**out, "santaTold": len(told)}
 
 
 def news(con, dry: bool = False, only: int | None = None) -> int:
@@ -114,7 +144,10 @@ def settings(con, v: Viewer, eid: int, body: dict) -> dict:
             con.execute("INSERT INTO santa_games (event_id, budget) VALUES (?, ?) ON CONFLICT (event_id) DO UPDATE SET budget = excluded.budget",
                         (eid, _budget(body["budget"])))
         if "regUntil" in body:
-            con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (_until(body["regUntil"], e["starts_at"]), now(), eid))
+            until = _until(body["regUntil"], e["starts_at"])
+            con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (until, now(), eid))
+            if until - DAY <= now():  # within a day: no "closes tomorrow" on top of whatever the club just heard
+                con.execute("UPDATE santa_games SET soon = COALESCE(soon, ?) WHERE event_id = ?", (now(), eid))
         con.execute("UPDATE events SET updated_at = ? WHERE id = ?", (now(), eid))  # lists' cached cards see the budget
     return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
 
@@ -193,17 +226,17 @@ def _heads(con, e: sqlite3.Row) -> list[int]:
 
 def remind(con, v: Viewer, eid: int) -> dict:
     """The organizer's "Remind those not in yet": a template to each of the club's people the bot can write to and who
-    hasn't joined, once per person per game (the ref), the button once a day per game."""
+    hasn't joined, once per person per game (the ref), the button once a day per club (a game started again included)."""
     with tx(con):
         e = _staff_event(con, v, eid, "events")
-        s = one(con, "SELECT s.drawn_at, g.nudged_at FROM santa_events s LEFT JOIN santa_games g ON g.event_id = s.event_id WHERE s.event_id = ?", eid)
+        s = one(con, "SELECT drawn_at FROM santa_events WHERE event_id = ?", eid)
         if not s or e["status"] != "published" or s["drawn_at"] or e["reg_until"] and e["reg_until"] <= now():
             raise ApiError("closed")
-        if s["nudged_at"] and s["nudged_at"] + DAY > now():
+        if _remind_at(con, e):
             raise ApiError("conflict", "soon")
         to = _nudgeable(con, e, v.id)
         for uid in to:
-            notify(con, uid, "santa_nudge", f"sr:{eid}")
+            notify(con, uid, "santa_nudge", f"sr:{e['org_id']}:{eid}")
         if to:
             con.execute("INSERT INTO santa_games (event_id, nudged_at) VALUES (?, ?) ON CONFLICT (event_id) DO UPDATE SET nudged_at = excluded.nudged_at",
                         (eid, now()))
@@ -211,31 +244,46 @@ def remind(con, v: Viewer, eid: int) -> dict:
 
 
 def _nudgeable(con, e: sqlite3.Row, me: int) -> list[int]:
-    """Whom the reminder would reach: not in, the bot can write to them, not reminded before; never who presses it."""
-    return [r[0] for r in rows(con, _NOT_IN + _REACH + f" AND m.user_id != {int(me)}" + """ AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = m.user_id
-        AND b.kind = 'santa_nudge' AND b.ref = ?) ORDER BY m.user_id""", e["org_id"], e["id"], f"sr:{e['id']}")]
+    """Whom the reminder would reach: not in, the bot can write to them, not reminded in this game; never who presses it."""
+    return [u for u in _not_in(con, e, reach=True) if u != me and not one(
+        con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'santa_nudge' AND ref = ?", u, f"sr:{e['org_id']}:{e['id']}")]
+
+
+def _remind_at(con, e: sqlite3.Row) -> int | None:
+    """When the club's reminder button works again (None: now): a day after its last use in any of the club's games."""
+    last = one(con, "SELECT MAX(g.nudged_at) FROM santa_games g JOIN events x ON x.id = g.event_id WHERE x.org_id = ?", e["org_id"])[0]
+    return last + DAY if last and last + DAY > now() else None
 
 
 def tick(con) -> None:
     """The postman's round (bot._chores), the game's clock: one read of the running games whose next step is due (a
-    handful of rows; a step done is marked in santa_games, so a game is read again only when its next step comes).
-    At the deadline: the draw; too few: the President and Vices hear it once per deadline (a moved deadline re-arms
-    it); a seat being paid for: the next round tries again (a hold lasts 30 minutes). A day before the deadline: those
-    not in yet; a day before the gifts day: those playing."""
+    handful of rows; a step done is marked in santa_games, so a game is read again only when its next step comes, and
+    a round with nothing due writes nothing). At the deadline: the draw; too few: the President and Vices hear it once
+    per deadline (a moved deadline re-arms it); a seat being paid for: the next round looks again, read-only (a hold
+    lasts 30 minutes). A day before the deadline: those not in yet; a day before the gifts day: those playing (again if
+    the day moves); the gifts day come undrawn (no deadline, late sign-up): the President and Vices, once."""
     t = now()
-    for g in rows(con, """SELECT e.*, s.drawn_at, g.checked, g.soon, g.eve FROM santa_events s JOIN santa_games g ON g.event_id = s.event_id
-            JOIN events e ON e.id = s.event_id WHERE e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ?
-            AND (s.drawn_at IS NULL AND e.reg_until IS NOT NULL AND (e.reg_until <= ? AND COALESCE(g.checked, 0) != e.reg_until
-                                                                     OR e.reg_until - ? <= ? AND g.soon IS NULL)
-                 OR s.drawn_at IS NOT NULL AND g.eve IS NULL AND e.starts_at - ? <= ?)""", t, t, DAY, t, DAY, t):
+    for g in rows(con, """SELECT e.*, s.drawn_at FROM santa_events s JOIN santa_games g ON g.event_id = s.event_id
+            JOIN events e ON e.id = s.event_id WHERE e.status = 'published' AND e.hidden_at IS NULL
+            AND (s.drawn_at IS NULL AND e.starts_at > ? AND e.reg_until <= ? AND COALESCE(g.checked, 0) != e.reg_until
+              OR s.drawn_at IS NULL AND e.reg_until > ? AND e.reg_until - ? <= ? AND g.soon IS NULL
+              OR s.drawn_at IS NOT NULL AND e.starts_at > ? AND e.starts_at - ? <= ? AND COALESCE(g.eve, 0) != e.starts_at
+              OR s.drawn_at IS NULL AND e.starts_at <= ? AND e.starts_at > ? AND COALESCE(g.late, 0) != e.starts_at)""",
+            t, t, t, DAY, t, t, DAY, t, t, t - DAY):
         if g["drawn_at"]:
             _eve(con, g)
+        elif g["starts_at"] <= t:
+            with tx(con):
+                for uid in _heads(con, g):
+                    notify(con, uid, "santa_late", f"sl:{g['id']}:{g['starts_at']}")
+                con.execute("UPDATE santa_games SET late = ? WHERE event_id = ?", (g["starts_at"], g["id"]))
         elif g["reg_until"] <= t:
             _deadline(con, g["id"])
         else:
-            with tx(con):
-                for (uid,) in rows(con, _NOT_IN + _REACH + " ORDER BY m.user_id", g["org_id"], g["id"]):
-                    notify(con, uid, "santa_soon", f"sw:{g['id']}")
+            with tx(con):  # never to who started the game: they set that deadline
+                for uid in _not_in(con, g, reach=True):
+                    if uid != g["created_by"]:
+                        notify(con, uid, "santa_soon", f"sw:{g['id']}")
                 con.execute("UPDATE santa_games SET soon = ? WHERE event_id = ?", (t, g["id"]))
 
 
@@ -259,12 +307,13 @@ def _deadline(con, eid: int) -> str | None:
 
 
 def _eve(con, g: sqlite3.Row) -> None:
-    """A day before the gifts day, each one playing hears it once; a game drawn on its eve already heard of the draw."""
+    """A day before the gifts day, each one playing with a person to give to hears it, once per gifts day (a moved day
+    is a new eve); a game drawn on its eve already heard of the draw."""
     with tx(con):
         if g["drawn_at"] < g["starts_at"] - DAY:
-            for (uid,) in rows(con, _GOING + " ORDER BY p.user_id", g["id"]):  # by user id, never the ring's order
-                notify(con, uid, "santa_eve", f"se:{g['id']}")
-        con.execute("UPDATE santa_games SET eve = ? WHERE event_id = ?", (now(), g["id"]))
+            for (uid,) in rows(con, _GOING + " AND p.gives_to != p.user_id ORDER BY p.user_id", g["id"]):  # by user id, never the ring's order
+                notify(con, uid, "santa_eve", f"se:{g['id']}:{g['starts_at']}")
+        con.execute("UPDATE santa_games SET eve = ? WHERE event_id = ?", (g["starts_at"], g["id"]))
 
 
 def _to(con, eid: int, uid: int) -> dict | None:
@@ -285,11 +334,10 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
         out["santaN"] = len(rows(con, _GOING, e["id"]))
     elif head:  # the organizer's list before the draw: who is in, who of the club not yet; names only, never a wishlist
         ins = [r[0] for r in rows(con, _IN, e["id"])]
-        outs = [r[0] for r in rows(con, _NOT_IN, e["org_id"], e["id"])]
+        outs = _not_in(con, e)
         people = {p["id"]: person_ref(p) for p in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(ins + outs))})", *ins, *outs)} if ins + outs else {}
         names = lambda ids: sorted((people[i] for i in ids if i in people), key=lambda p: p["name"].lower())  # noqa: E731
-        g = one(con, "SELECT nudged_at FROM santa_games WHERE event_id = ?", e["id"])
-        at = g["nudged_at"] + DAY if g and g["nudged_at"] and g["nudged_at"] + DAY > now() else None
+        at = _remind_at(con, e)
         out |= {"santaN": len(ins), "santaTeam": {"in": names(ins), "out": names(outs), "remind": len(_nudgeable(con, e, v.id)), "remindAt": at}}
     me = one(con, """SELECT p.wish FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
         AND r.status = 'going' WHERE p.event_id = ? AND p.user_id = ?""", e["id"], v.id)
@@ -299,15 +347,27 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
 
 
 def gone(con, uid: int) -> None:
-    """An account being deleted (account.delete_me, before its rows go): their Santa gives to their person instead
-    (a seat already lost did this through the triggers; this covers whatever row is left). That Santa hears their
-    person changed, as after a cancelled seat (migration 184's trigger)."""
-    for r in rows(con, """SELECT g.event_id, g.user_id FROM santa_people g JOIN santa_people l ON l.event_id = g.event_id AND l.user_id = g.gives_to
-            JOIN santa_events s ON s.event_id = g.event_id AND s.drawn_at IS NOT NULL WHERE g.gives_to = ? AND l.gives_to != g.user_id""", uid):
-        notify(con, r["user_id"], "santa_changed", f"event:{r['event_id']}:{secrets.token_hex(6)}")
+    """An account being deleted (account.delete_me, before its rows go): out of every drawn game as a lost seat is
+    (migration 184's triggers relink the ring and tell who is affected); whatever row is left is relinked here."""
+    con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', updated_at = ? WHERE user_id = ? AND status = 'going'
+        AND event_id IN (SELECT event_id FROM santa_events WHERE drawn_at IS NOT NULL)""", (now(), uid))
     con.execute("""UPDATE santa_people SET gives_to = (SELECT x.gives_to FROM santa_people x WHERE x.event_id = santa_people.event_id AND x.user_id = ?)
         WHERE gives_to = ?""", (uid, uid))
 
 
+def drop(con, uid: int, oid: int | None = None) -> None:
+    """Out of the club `oid` (left, removed) or banned (None), inside the caller's transaction: their seat in that club's
+    upcoming team-only Santa games (all upcoming ones when banned: they can't open their person any more) goes the way
+    seats.joined takes a seat, the waitlist moving into it; the triggers relink a drawn ring and tell their Santa.
+    Lifting a ban gives nothing back."""
+    for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id JOIN santa_events s ON s.event_id = e.id
+            WHERE r.user_id = ? AND r.status IN ('going', 'waitlist') AND e.status = 'published' AND e.starts_at > ?
+            AND (? IS NULL OR e.org_id = ? AND e.visibility = 'members')""", uid, now(), oid, oid):
+        con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
+            WHERE event_id = ? AND user_id = ?""", (now(), e["id"], uid))
+        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (uid, f"event:{e['id']}:%"))
+        promote(con, e)
+
+
 from .organizing import _staff_event, create_event, publish_event  # noqa: E402  (they import core, core imports this)
-from .seats import notify  # noqa: E402
+from .seats import for_me, notify, promote  # noqa: E402
