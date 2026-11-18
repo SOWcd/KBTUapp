@@ -85,6 +85,8 @@ export const sheets = {
   event: (_id: Id, _from?: Element | null, _album?: boolean) => {},
   /** the event sheet for an unsaved editor form: what students will see */
   preview: (_e: EventFull) => {},
+  /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
+  draftPreview: (_id: Id) => {},
   ticket: (_id: Id) => {},
   pay: (_id: Id) => {},                 // a held seat of a paid event: the Kaspi details and the receipt (§4.3)
   receipt: (_r: AttendeeReceipt, _name: string, _ondone?: () => void) => {},  // the organizer's look at one receipt

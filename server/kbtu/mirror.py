@@ -20,6 +20,7 @@ import httpx
 
 from . import ai, media
 from .logic import ApiError, now, one, photo_free, rows, tx, wipe_post
+from .logic import autoev
 from .logic.clubs import stories_open
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
@@ -172,6 +173,7 @@ def take(con, channel: int, m: Msg) -> int | None:
             _set_tr(con, into, lang, _split(m.text, title))
             if m.photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
                 con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (_photo(con, m.photo), into))
+                autoev.cover(con, into)  # the photo after the text: the draft found in it gets it too
             _counted(con, channel, into, m)
             return into
         if album and lang and not one(con, "SELECT 1 FROM posts WHERE id = ? AND body != ''", pid) and _untitled(con, pid, title) \
@@ -182,6 +184,7 @@ def take(con, channel: int, m: Msg) -> int | None:
             gone_photo = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)["photo_file_id"]
             if gone_photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
                 con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (gone_photo, into))
+                autoev.cover(con, into)
             con.execute("DELETE FROM posts WHERE id = ?", (pid,))  # made a moment ago, nobody saw it yet
             _set_tr(con, into, lang, _split(m.text, title))
             _counted(con, channel, into, m)
@@ -210,6 +213,8 @@ def take(con, channel: int, m: Msg) -> int | None:
                 sets["tg_media"] = m.media
             if sets:
                 con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), pid))  # keys from above
+                if "photo_file_id" in sets:
+                    autoev.cover(con, pid)
         if not had:
             con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped) VALUES (?, ?, ?, ?)", (channel, m.id, pid, m.grouped))
         _counted(con, channel, pid, m)

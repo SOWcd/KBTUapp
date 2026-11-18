@@ -745,7 +745,8 @@ type InboxOf<K extends string, D> = { kind: K; key: string; at: Ts; hidden: bool
 export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'opath', OfficialRequest & { org: OrgRef; members: number }> | InboxOf<'fpost', ChannelModPost>
   | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest> | InboxOf<'autoev', AutoEvent>;
 /** An event found in a club's channel (server autoev.py): its draft, the post it came from. */
-export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; place: string; at: Ts; url: string }
+export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; place: string; at: Ts; url: string;
+  cover: EventCard['cover']; emoji: string; color: string; tint?: string } // cover: the post's picture (server autoev.cover)
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
 export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }

@@ -1959,6 +1959,20 @@ MIGRATIONS: list[tuple[int, str]] = [
       version TEXT NOT NULL,  -- the consent text it answered
       at INTEGER NOT NULL) STRICT;
     CREATE INDEX IF NOT EXISTS credit_consents_user ON credit_consents (user_id, id);"""),
+    # (Nov 18) the drafts found in channels so far take their post's picture as their cover, as new ones do (autoev.cover:
+    # the same rules, its own event_cover row over the same stored picture; rows only, the files on disk are shared).
+    # Run again it finds nothing left to do
+    (186, """INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
+    SELECT f.sha256, 'event_cover', f.mime, f.bytes, f.width, f.height, f.path, NULL, CAST(strftime('%s', 'now') AS INTEGER), f.color
+    FROM files f WHERE f.id IN (SELECT p.photo_file_id FROM auto_events a
+        JOIN events e ON e.id = a.event_id AND e.status = 'draft' AND e.updated_at <= e.created_at + 1 AND e.hidden_at IS NULL AND e.cover_file_id IS NULL
+        JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL)
+      AND NOT EXISTS (SELECT 1 FROM files x WHERE x.path = f.path AND x.kind = 'event_cover' AND x.owner_id IS NULL);
+    UPDATE events SET (cover_file_id, cover_focus) = (SELECT x.id, CASE WHEN x.height > x.width THEN '0.500,0.200' END
+        FROM auto_events a JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL JOIN files f ON f.id = p.photo_file_id
+        JOIN files x ON x.path = f.path AND x.kind = 'event_cover' AND x.owner_id IS NULL WHERE a.event_id = events.id ORDER BY x.id LIMIT 1)
+    WHERE status = 'draft' AND updated_at <= created_at + 1 AND hidden_at IS NULL AND cover_file_id IS NULL
+      AND id IN (SELECT a.event_id FROM auto_events a JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL WHERE p.photo_file_id IS NOT NULL);"""),
 ]
 
 
