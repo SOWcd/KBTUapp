@@ -125,7 +125,7 @@
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   // still open and I'm not in: said right over the button (closed: the button itself says so)
-  const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist');
+  const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist' && !e.santa); // a Santa game: its own row names the deadline
   const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
@@ -382,12 +382,14 @@
     {#if soon}
     <div class="page">
 
-    {#if going && detail?.mySanta && !cancelled}<Santa {id} mine={detail.mySanta} />{/if}
-    <!-- Secret Santa's terms (server santa.py), the same for the whole team: the gift's budget; the wishlists' deadline until the draw -->
-    {#if e.santa && !cancelled && !over && (e.santa.budget || (!e.santa.drawn && e.regUntil))}
+    {#if going && detail?.mySanta && !cancelled}<Santa {id} {e} mine={detail.mySanta} />{/if}
+    <!-- Secret Santa's terms (server santa.py), the same for the whole team: the gift's budget; the wishlists' deadline
+         for one not in yet (one who is in reads the draw's time on their card); the gifts day by its name -->
+    {#if e.santa && !cancelled && !over}
       <Group>
         {#if e.santa.budget}<Row icon={Gift} title={t('santa.budget')} value={t('santa.upTo', { sum: money(e.santa.budget) })} />{/if}
-        {#if !e.santa.drawn && e.regUntil}<Row icon={Hourglass} title="{t('santa.until')} {dayMonthShort(e.regUntil)}, {time(e.regUntil)}" />{/if}
+        {#if !e.santa.drawn && e.regUntil && !going}<Row icon={Hourglass} title={t('santa.until')} value="{dayMonthShort(e.regUntil)}, {time(e.regUntil)}" whole />{/if}
+        <Row icon={CalendarHeart} title={t('santa.day')} value="{dayMonthShort(e.startsAt)}, {time(e.startsAt)}" whole />
       </Group>
     {/if}
 
