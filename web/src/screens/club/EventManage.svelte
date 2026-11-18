@@ -162,8 +162,11 @@
 
   async function removeEvent() {
     if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
-    try { await api.deleteEvent(id); studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); }
+    const gone = () => { studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); };
+    try { await api.deleteEvent(id); gone(); }
     catch (x) {
+      // the app's admin deletes softly (hidden now, gone in a day): a second tap on one still listed is the same "deleted"
+      if (x instanceof ApiErr && x.message === 'decided') { gone(); return; }
       haptic.error();
       if (!(x instanceof ApiErr && x.message === 'paid')) { say(t('common.error'), 'warning_3d'); return; }
       // receipts are the only record of money that changed hands: only the creator deletes such an event (owner,
