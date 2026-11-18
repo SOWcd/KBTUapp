@@ -1,4 +1,5 @@
-"""/all in a club's group: only its President, Vice and Heads; five mentions a message under the caller's; silence otherwise."""
+"""/all in a group: anyone in the chat calls (owner, Nov 18); five mentions a message under the caller's: the app's list, the
+seen ones, then the members Telegram lists to our bot over MTProto (mtbot.members, faked here: no Telethon)."""
 from __future__ import annotations
 
 import asyncio
@@ -19,10 +20,11 @@ class _Resp:
 class _Http:
     """Telegram: everyone is in the chat but `gone`; the first `busy` sendMessages answer 429."""
     def __init__(self, gone=(), busy=0, admins=()):
-        self.gone, self.busy, self.sent, self.admins = set(gone), busy, [], set(admins)
+        self.gone, self.busy, self.sent, self.admins, self.asked = set(gone), busy, [], set(admins), []
 
     async def post(self, url, json=None, **_):
         if url.endswith("/getChatMember"):
+            self.asked.append(json["user_id"])
             return _Resp({"ok": True, "result": {"status": "left" if json["user_id"] in self.gone else "administrator" if json["user_id"] in self.admins else "member", "user": {"id": json["user_id"]}}})
         if self.busy:
             self.busy -= 1
@@ -40,6 +42,8 @@ def _setup(c, cfg, monkeypatch):
     monkeypatch.setattr(bot, "ALL_AGAIN", 0)
     monkeypatch.setattr(bot, "_tagged", {})
     monkeypatch.setattr(bot, "_denied", {})
+    monkeypatch.setattr(bot, "_tagging", set())
+    _live(monkeypatch, None)  # no member list (not configured): the app's and the seen ones, as before
     for tg in (20, 21, 31, 32, 33, 34, 35, 36, 37, 99):
         login(c, tg, f"u{tg}")
     con = db.connect(cfg.db_path)
@@ -97,16 +101,89 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert {s["reply_parameters"]["message_id"] for s in sent} == {3}
 
 
+def _live(monkeypatch, ids, seen_cap=None):
+    """The chat's members as Telegram would list them to our bot (None: no list)."""
+    async def members(cfg, chat, cap):
+        if seen_cap is not None:
+            seen_cap.append(cap)
+        return None if ids is None else ids[:cap]
+    monkeypatch.setattr(bot.mtbot, "members", members)
+
+
 def test_silence_for_others(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
     http = _Http()
-    _run(cfg, con, http, _msg(31), _msg(99), _msg(20, chat=-555),                   # a member, a stranger, an unlinked chat
-         _msg(20, text="/all@SomeOtherBot"),
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 99")
+    _run(cfg, con, http, _msg(20, text="/all@SomeOtherBot"),
          _msg(20, sender_chat={"id": -100}), {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}},  # anonymous admin
-         _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5))
-    # nobody is tagged; the member and the stranger in the club's chat are told it isn't theirs, the rest is silence
-    assert not any("tg://" in x.get("text", "") for x in http.sent) and sum("text" in x for x in http.sent) == 2
+         _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5),
+         _msg(99))                                                                      # banned in the app
+    assert http.sent == [] and not bot._tagging
+
+
+def test_anyone_in_the_chat_calls(env, monkeypatch):
+    """A plain member and someone the app doesn't hold in the club: their own message in the chat proves they're in it."""
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    assert _tagged(_run(cfg, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
+    bot._tagged.clear()
+    assert _tagged(_run(cfg, con, _Http(), _msg(800))) == [20, 21, 31, 32, 33, 34, 35, 36, 37]   # not even in the app
+
+
+def test_live_list_union_order_and_cap(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "TAG_MAX", 50)
+    _run(cfg, con, _Http(), _msg(500, text="hi"))                                  # seen
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 36")
+    caps = []
+    _live(monkeypatch, [33, 600, 500, 601, 36, 20, 777000, 600], caps)             # Telegram's list: the app's, seen, new, banned, the caller
+    http = _Http()
+    sent = _run(cfg, con, http, _msg(20))
+    ids = [int(p.split('">')[0]) for s in sent for p in s["text"].split("tg://user?id=")[1:]]
+    assert ids == [21, 31, 32, 33, 34, 35, 37, 500, 600, 601] and caps == [50]      # the app's, the seen, then the rest; each once
+    assert sorted(http.asked) == [21, 31, 32, 34, 35, 37]                            # whom Telegram just listed isn't asked again
+    bot._tagged.clear()
+    monkeypatch.setattr(bot, "TAG_MAX", 8)
+    assert [s["text"].count("tg://") for s in _run(cfg, con, _Http(), _msg(20))] == [5, 3]   # the cap, the app's first
+
+
+def test_nobody_to_call_answers_once(env, monkeypatch):
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "ALL_NO_TTL", 0.5)
+    _live(monkeypatch, [20])                                                       # alone there
+    http = _Http()
+
+    async def go():
+        for m in (_msg(20, chat=-555), _msg(20, chat=-555, text="@all")):
+            await bot._group(cfg, http, con, m)
+            await tgc._last["all:-555"]  # the run, not the answer's deletion (ALL_NO_TTL on)
+        await asyncio.gather(*list(tgc._tasks))
+    asyncio.run(go())
+    assert http.sent == [{"chat_id": -555, "text": bot.texts.bot_message("ru", "all_none")[0], "parse_mode": "HTML",
+                          "reply_parameters": {"message_id": 7, "allow_sending_without_reply": True}}, {"chat_id": -555, "message_id": 7}]
+    assert -555 not in bot._tagged and not bot._tagging                             # no wait: someone may write, then call
+
+
+def test_mtbot_off_and_bounded(env, monkeypatch):
+    """No api pair: no list, no error. A hung MTProto read: given up after TIMEOUT, no list."""
+    from kbtu import mtbot
+    c, cfg = env
+    monkeypatch.setattr(mtbot, "_memo", {})
+    assert asyncio.run(mtbot.members(cfg, -100, 5)) is None
+
+    async def connect(cfg):
+        return object()
+
+    async def hang(client, chat, cap):
+        await asyncio.sleep(60)
+    monkeypatch.setattr(mtbot, "_connect", connect)
+    monkeypatch.setattr(mtbot, "_read", hang)
+    monkeypatch.setattr(mtbot, "TIMEOUT", 0.05)
+    monkeypatch.setattr(mtbot, "_memo", {})
+    assert asyncio.run(mtbot.members(cfg, -100, 5)) is None
 
 
 def test_one_run_at_a_time_and_429(env, monkeypatch):
@@ -119,16 +196,6 @@ def test_one_run_at_a_time_and_429(env, monkeypatch):
     assert len(soon) == 1 and soon[0]["reply_parameters"]["message_id"] == 7
     sent = _run(cfg, con, _Http(busy=9), _msg(20))                                  # still too fast: gives up, the chat free again
     assert sent == [] and not bot._tagging
-
-
-def test_group_admin_tags(env, monkeypatch):
-    """A plain member who is the group's own Telegram admin may call too; a plain member not."""
-    c, cfg = env
-    con = _setup(c, cfg, monkeypatch)
-    http = _Http()
-    _run(cfg, con, http, _msg(31))   # no rights: told so, then the command and the answer are deleted
-    assert len(http.sent) == 2 and "tg://" not in http.sent[0]["text"] and http.sent[1] == {"chat_id": -100, "message_id": 7}
-    assert len(_run(cfg, con, _Http(admins={31}), _msg(31))) == 2
 
 
 # ---------------------------------------------------------------- chat_seen: whom the bot saw in a club's chat

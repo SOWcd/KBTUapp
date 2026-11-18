@@ -106,7 +106,6 @@ def _setup(c, cfg, monkeypatch, on=True):
     monkeypatch.setattr(bot, "WARN_FOR", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
     bot._swore.clear()
-    bot._unlinked.clear()
     logic.chatmod.stale()
     for tg in (20, 21, 22, 31, 41):
         login(c, tg, f"u{tg}")
@@ -356,17 +355,29 @@ def test_cleanup_and_account_deletion(env, monkeypatch):
 
 
 def test_all_in_a_chat_no_club_holds(env, monkeypatch):
+    """Anyone calls there too; nobody known and no member list: "nobody to call" once under the command, then both go."""
     c, cfg = env
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
+    monkeypatch.setattr(bot, "_denied", {})
+    monkeypatch.setattr(bot, "_tagged", {})
+    monkeypatch.setattr(bot, "ALL_NO_TTL", 0.5)
+    monkeypatch.setattr(bot.mtbot, "members", _no_list)
     http = _Http(admins={41})
 
     async def go(*msgs):
         for m in msgs:
             await bot._group(cfg, http, con, m)
+            await tgc._last["all:-555"]  # the run, not the answer's deletion (ALL_NO_TTL on)
         await _drain()
     asyncio.run(go(_msg(31, "/all", chat=-555), _msg(41, "/all", chat=-555), _msg(41, "@all", chat=-555)))
     sent = http.said("sendMessage")
-    assert len(sent) == 1 and sent[0]["chat_id"] == -555 and "\U0001f440" in sent[0]["text"]   # the admin, once a minute; a member: silence
+    assert len(sent) == 1 and sent[0]["chat_id"] == -555 and sent[0]["text"] == texts.bot_message("ru", "all_none")[0]
+    assert sent[0]["reply_parameters"]["message_id"] == 7 and {"chat_id": -555, "message_id": 7} in http.said("deleteMessage")
+    assert not bot._tagged                                                            # nobody called: no wait after
+
+
+async def _no_list(cfg, chat, cap):
+    return None
 
 
 def test_review_holes(env, monkeypatch):
