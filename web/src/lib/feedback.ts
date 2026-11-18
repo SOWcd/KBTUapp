@@ -4,6 +4,8 @@ import { t } from './i18n/index.svelte';
 import { openLink } from './tg';
 
 export const OWNER = 'Sowers';
+/** the app's open code (Profile's GitHub row, the end of People of the app) */
+export const CODE = 'https://github.com/SOWcd/KBTUapp';
 
 export function writeOwner(): void {
   writeSupport(t('fb.draft'));

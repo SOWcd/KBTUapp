@@ -929,6 +929,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def team_withdraw(con: Con, v: Me):
         return logic.evteams.withdraw(con, v)
 
+    @app.get("/api/credits")
+    def credits_list(con: Con, v: Me):
+        return logic.credits.listing(con, v)
+
+    @app.put("/api/credits/consent")
+    def credits_answer(con: Con, v: Me, body: dict = Body(...)):
+        return logic.credits.answer(con, v, body)
+
     @app.post("/api/events/{eid}/team/link")
     def team_new_link(eid: int, con: Con, v: Me):
         return logic.evteams.new_link(con, v, eid)

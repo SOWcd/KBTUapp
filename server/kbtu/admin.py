@@ -47,6 +47,10 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin credit add <telegram id> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
+                                (logic/credits.py): a line in OUR words about what they gave (an account isn't needed);
+                                credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
+                                credit ask [--dry]: the bot's "shall we name you?" once per person with a shipped line and no answer
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -264,6 +268,28 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
+        from .logic import credits
+        try:
+            if args[1] == "add" and len(args) == 7:
+                print(f"credit {credits.add(con, int(args[2]), *args[3:])} (suggested; `credit ship` lists it)")
+            elif args[1] == "ship" and len(args) in (3, 4):
+                print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
+            elif args[1] == "del" and len(args) == 3:
+                credits.delete(con, int(args[2]))
+                print(f"credit {int(args[2])} deleted")
+            elif args[1] == "ask" and args[2:] in ([], ["--dry"]):
+                print(f"{'would queue' if args[2:] else 'queued'} {credits.ask(con, dry=bool(args[2:]))}")
+            elif args[1] == "list" and len(args) == 2:
+                for r in rows(con, f"""SELECT c.*, u.id AS uid, {credits._SAID} AS said FROM credits c
+                        LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 ORDER BY c.id"""):
+                    who = "deleted account" if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    said = {credits.CONSENT: "yes", credits.OFF: "no"}.get(r["said"], "no answer")
+                    print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
+            else:
+                sys.exit(__doc__)
+        except ValueError as exc:
+            sys.exit(str(exc))
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent (Nov 18)
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
@@ -382,6 +408,7 @@ def main(args: list[str]) -> None:
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
             con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            con.execute("UPDATE credits SET tg_id = ? WHERE tg_id = ?", (rb[0], ra[0]))  # and his lines in People of the app
             con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{a['id']}", f"ms:{b['id']}"))
             log_action(con, None, "account_move", f"user:{a['id']}", json.dumps({"other": b["id"]}))
         print(f"moved: the account is on @{b['tg_username'] or b['tg_id']} now (run move again the other way to undo)")

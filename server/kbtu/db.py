@@ -1888,6 +1888,25 @@ MIGRATIONS: list[tuple[int, str]] = [
       title TEXT,
       pages TEXT NOT NULL,
       created_at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 18) the people of the app (logic/credits.py): whose idea, find or code shipped, one line each in our words.
+    # tg_id: no account needed; NULL once the account is deleted (the line stays, nameless). credit_consents: the
+    # feature's own consent, every answer a row (who, when, which text; 'off': a no), the latest counts
+    (185, """CREATE TABLE IF NOT EXISTS credits (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER,
+      kind TEXT NOT NULL CHECK (kind IN ('idea', 'find', 'code')),
+      ru TEXT NOT NULL,
+      kk TEXT NOT NULL,
+      en TEXT NOT NULL,
+      shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS credits_tg ON credits (tg_id);
+    CREATE TABLE IF NOT EXISTS credit_consents (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS credit_consents_user ON credit_consents (user_id, id);"""),
 ]
 
 

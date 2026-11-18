@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -26,6 +26,7 @@ export const data = $state({
   opened: [] as EventCard[],
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
+  credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   galleryAlbums: [] as GalleryAlbum[], // the events' albums on its shelf, the newest first (with the first page)
@@ -334,6 +335,11 @@ export function loadStaffMutes(): void {
   const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+}
+
+/** The people of the app: read once with the app, again after my answer. */
+export function loadCredits(): Promise<void> {
+  return api.credits().then((c) => { data.credits = c; }, () => {});
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again

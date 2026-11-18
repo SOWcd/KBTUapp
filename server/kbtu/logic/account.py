@@ -1157,6 +1157,7 @@ _DEL_GONE = {
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
+    ("credit_consents", "user_id"),  # my answers to "shall we name you?" (credits.py); my lines stay nameless (credits.gone)
     ("fchan_photos", "user_id"),  # my photos picked for a post and never posted (posted ones go with their post)
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"), ("vol_hands", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it, a session's door handed to me
@@ -1297,7 +1298,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""INSERT OR IGNORE INTO tgc_undel (chat_id, msg_id, at) SELECT chat_id, msg_id, ? FROM tgc_comments
             WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
-        con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))  # those from before the app knew me
+        con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))
+        credits.gone(con, tg)  # what the app got from me stays in "People of the app", signed "Student": no id left on it  # those from before the app knew me
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")
@@ -1479,7 +1481,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, fchannel, inbox, profiles, santa  # noqa: E402
+from . import chatlist, core, credits, fchannel, inbox, profiles, santa  # noqa: E402
 from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
