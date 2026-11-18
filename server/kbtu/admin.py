@@ -14,7 +14,7 @@
   .venv/bin/python -m kbtu.admin mark <@username | telegram id> <idea | none>  the idea author's blue seal (one person)
   .venv/bin/python -m kbtu.admin unlink <@username | telegram id>           the KBTU account off this Telegram (a changed student ID,
                                                                          someone else's sign-in): the next sign-in links afresh
-  .venv/bin/python -m kbtu.admin move <@from | telegram id> <@to | telegram id>   a student signed in from a wrong Telegram:
+  .venv/bin/python -m kbtu.admin move <@from | telegram id> <@to | telegram id> [--merge-credits]   a student signed in from a wrong Telegram:
                                 the whole account (card, friends, clubs, tickets) moves to their real one, which must have
                                 opened the app and hold nothing yet; check with the student that both are theirs first
   .venv/bin/python -m kbtu.admin staff <@username | telegram id> <first> <last> [<unit>]
@@ -47,6 +47,14 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin credit add <telegram id> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
+                                (logic/credits.py): a line in OUR words about what they gave (an account isn't needed);
+                                gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
+                                credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
+                                `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
+                                moving back does not undo it (re-add the lines by hand);
+                                credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
+                                shipped line and no answer; prints how many were queued; a no is never asked again
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -126,6 +134,7 @@ from . import config, db, texts
 from pathlib import Path
 
 from .logic.account import _DEL_GONE, staff_row
+from .logic import credits
 from .logic.core import is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
@@ -266,6 +275,28 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
+        try:
+            if args[1] == "add" and len(args) == 7:
+                print(f"credit {credits.add(con, int(args[2]), *args[3:])} (suggested; `credit ship` lists it)")
+                print(f"check before shipping: {credits.REMIND}")
+            elif args[1] == "ship" and len(args) in (3, 4):
+                print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
+            elif args[1] == "del" and len(args) == 3:
+                credits.delete(con, int(args[2]))
+                print(f"credit {int(args[2])} deleted")
+            elif args[1] == "ask" and args[2:] in ([], ["--dry"]):
+                print(f"{'would queue' if args[2:] else 'queued'} {credits.ask(con, dry=bool(args[2:]))}")
+            elif args[1] == "list" and len(args) == 2:
+                for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
+                        LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
+                    who = "deleted account" if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
+                    print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
+            else:
+                sys.exit(__doc__)
+        except ValueError as exc:
+            sys.exit(str(exc))
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent (Nov 18)
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
@@ -372,7 +403,7 @@ def main(args: list[str]) -> None:
                 con.execute("UPDATE users SET mark = NULL WHERE mark = ?", (args[2],))  # one person each
             con.execute("UPDATE users SET mark = ? WHERE id = ?", (None if args[2] == "none" else args[2], u["id"]))
         print(f"@{u['tg_username'] or u['tg_id']}: mark {args[2]}")
-    elif cmd == "move" and len(args) == 3:  # the owner checked both Telegrams with the student: no in-app proof to phish
+    elif cmd == "move" and (len(args) == 3 or args[3:] == ["--merge-credits"]):  # the owner checked both Telegrams with the student: no in-app proof to phish
         a, b = _user(con, args[1]), _user(con, args[2])
         why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
                else "the target is banned" if b["banned_at"] else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
@@ -388,6 +419,10 @@ def main(args: list[str]) -> None:
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
             con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            try:  # his lines in People of the app go too, his yes there ends; the target's own lines: refused unless --merge-credits
+                credits.moved(con, a["id"], ra[0], rb[0], merge=len(args) == 4)
+            except ValueError as exc:
+                sys.exit(f"refused: {exc}")  # the transaction rolls back: nothing moved
             con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{a['id']}", f"ms:{b['id']}"))
             log_action(con, None, "account_move", f"user:{a['id']}", json.dumps({"other": b["id"]}))
         print(f"moved: the account is on @{b['tg_username'] or b['tg_id']} now (run move again the other way to undo)")

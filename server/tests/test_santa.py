@@ -646,7 +646,7 @@ def test_migration_on_the_live_shape(env, tmp_path):
     con.close()
     db.init(path)
     con = db.connect(path)
-    assert con.execute("PRAGMA user_version").fetchone()[0] == 184
+    assert con.execute("PRAGMA user_version").fetchone()[0] >= 184  # and whatever came after it
     assert con.execute("SELECT reg_until FROM events WHERE id = 1").fetchone()[0] == t + 30 * DAY
     assert con.execute("SELECT soon, checked FROM santa_games WHERE event_id = 1").fetchone()[:] == (None, None)
     waits = con.execute("SELECT user_id, kind, ref FROM bot_outbox").fetchall()

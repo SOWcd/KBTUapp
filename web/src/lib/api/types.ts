@@ -239,6 +239,20 @@ export interface OrgPatch { category?: OrgCategory | null; name?: string; short?
 export interface Member { person: PersonRef; role: OrgRole; title: string | null; titleKk?: string | null; titleEn?: string | null }
 
 export interface PersonRef { id: Id; name: string; nick?: string | null; realName?: string /* with a nick: the short name, the lanyard shows it first */; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
+/** The people of the app (server logic/credits.py). A line is the team's words about what shipped; `person: null`:
+ *  no yes from them (or no account, banned, deleted): the app signs the line "Student", each such line a row of its
+ *  own (nothing says two of them are one person's), nothing else comes */
+export type CreditKind = 'idea' | 'find' | 'code';
+export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
+export interface CreditPerson { person: PersonRef | null; items: CreditItem[] }
+export interface Credits {
+  founder: PersonRef | null;
+  idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
+  people: CreditPerson[];          // newest shipped first, a named person's lines together
+  /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
+  mine: { consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; items: CreditItem[] } | null;
+  version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
+}
 /** at the door (Member+): the real short name beside a nick */
 export type DoorRef = PersonRef & { realName: string };
 

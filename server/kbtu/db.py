@@ -1939,6 +1939,26 @@ MIGRATIONS: list[tuple[int, str]] = [
           AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
         ORDER BY p.user_id;
     END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
+    # (Nov 18) the people of the app (logic/credits.py): whose idea, find or code shipped, one line each in our words.
+    # tg_id: no account needed; NULL once the account is deleted (the line stays, nameless). credit_consents: the
+    # feature's own consent, every answer a row (who, when, yes or no, to which text), the latest counts
+    (185, """CREATE TABLE IF NOT EXISTS credits (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER,
+      kind TEXT NOT NULL CHECK (kind IN ('idea', 'find', 'code')),
+      ru TEXT NOT NULL,
+      kk TEXT NOT NULL,
+      en TEXT NOT NULL,
+      shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
+      created_at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS credits_tg ON credits (tg_id);
+    CREATE TABLE IF NOT EXISTS credit_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),  -- 0: a no, a withdrawal, or a grant ended by an account move
+      version TEXT NOT NULL,  -- the consent text it answered
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS credit_consents_user ON credit_consents (user_id, id);"""),
 ]
 
 

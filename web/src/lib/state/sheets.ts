@@ -148,6 +148,9 @@ export const sheets = {
   roundApply: (_org: Id, _source?: string) => {},
   roundSetup: (_org: Id, _round?: Round | null, _onsaved?: () => void) => {},
   roundBoard: (_org: Id) => {},
+  /** People of the app: the screen; my own "name me?" sheet */
+  credits: () => {},
+  creditAsk: () => {},
   /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
   santaHi: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch

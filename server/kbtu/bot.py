@@ -473,6 +473,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
     if kind in SANTA_KINDS:
         return _santa(con, m, lang)
+    if kind == "credit_ask":  # cra, kbtu.admin credit ask: "shall we name you?", once; quiet once answered or nothing shipped is theirs
+        return (*texts.bot_message(lang, kind), "people") if logic.credits.asking(con, m["user_id"]) else None  # (send_due reads where to again)
     if kind == "santa_news":  # sn:<org>, to its President or Vice (kbtu.admin santa-news), opens the Santa welcome over Studio: quiet once they aren't
         o = one(con, """SELECT o.name FROM orgs o JOIN org_members mm ON mm.org_id = o.id AND mm.user_id = ? AND mm.role IN ('president', 'vice')
             WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))
@@ -936,7 +938,13 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             if msg is None:
                 continue
             text, button, start = msg
-            body = {"chat_id": m["tg_id"], "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
+            to = m["tg_id"]
+            if m["kind"] == "credit_ask":  # the account may have moved since the queue was read: to its Telegram of now, or not at all
+                to = logic.credits.asking(con, m["user_id"])
+                if to is None:
+                    _mark(con, m, False, "gone")
+                    continue
+            body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
             if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
                 body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
                                                              if "start" in b else b for b in row] for row in start]}

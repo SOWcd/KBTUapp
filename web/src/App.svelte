@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, seen } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -133,7 +133,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
@@ -238,6 +238,9 @@
   }
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
+  const peoplePage = () => import('./screens/profile/People.svelte');
+  sheets.credits = () => lazy(peoplePage, {});
+  sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
   sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
@@ -562,6 +565,11 @@
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
+    if (p === 'people') { // the bot's "shall we name you?": People of the app, and my answer's sheet over it while something there is mine
+      ui.tab = 'profile';
+      void Promise.all([loadCredits(), lazy(peoplePage, {})]).then(() => { if (data.credits?.mine) sheets.creditAsk(); });
+      return;
+    }
     if (p === 'clubs') { ui.tab = 'club'; return; } // the bot's "other clubs recruit now"
     if (p === 'chats') { // the bot's "your suggested chat is in the app": the chats directory
       ui.tab = 'club';
@@ -706,7 +714,7 @@
     let leftAt = 0;
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
-      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); }
+      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits(); }
       leftAt = 0;
     };
     const seen = () => (document.hidden ? left() : back());
@@ -814,6 +822,7 @@
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
+      void loadCredits(); // People of the app: Profile's row and its screen, ahead of any tap
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
       for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       for (const k of TABS) loadPage(k).catch(() => {});

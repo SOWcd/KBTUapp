@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -26,6 +26,7 @@ export const data = $state({
   opened: [] as EventCard[],
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
+  credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   galleryAlbums: [] as GalleryAlbum[], // the events' albums on its shelf, the newest first (with the first page)
@@ -334,6 +335,28 @@ export function loadStaffMutes(): void {
   const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+}
+
+/** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
+ *  named changes with a person's own answer, so it is read again when the screen opens and when the app comes back
+ *  (`fresh`: a copy this young will do). A reply that something newer has overtaken (a later read, my own answer) is
+ *  dropped, and so is every reply while my answer is on its way: it may show me as I was. */
+let creditsSeq = 0, creditsAt = 0, creditsPuts = 0, creditsFlight: Promise<void> | null = null;
+export function loadCredits(fresh = 0): Promise<void> {
+  if (creditsFlight) return creditsFlight;
+  if (fresh && data.credits && Date.now() - creditsAt < fresh) return Promise.resolve();
+  const n = ++creditsSeq;
+  const flight = api.credits().then((c) => { if (n === creditsSeq && !creditsPuts) { data.credits = c; creditsAt = Date.now(); } }, () => {})
+    .finally(() => { if (creditsFlight === flight) creditsFlight = null; });
+  return (creditsFlight = flight);
+}
+/** Around my own answer (lib/credits.ts): `sending` as it leaves and again when it has settled. Each cuts off every
+ *  read already on its way (older than my answer, or as old); once nothing of mine is pending the list is read anew,
+ *  the only thing painted: the answer's own reply never is (a read may be newer than it). */
+export function creditsAnswer(sending: boolean): Promise<void> {
+  creditsSeq++; creditsFlight = null; creditsAt = 0;
+  creditsPuts += sending ? 1 : -1;
+  return sending || creditsPuts ? Promise.resolve() : loadCredits();
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again
