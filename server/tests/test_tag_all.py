@@ -122,6 +122,20 @@ def test_silence_for_others(env, monkeypatch):
     assert http.sent == [] and not bot._tagging
 
 
+def test_discussion_group_never_calls(env, monkeypatch):
+    """A channel's discussion group: a commenter needn't join, so nobody calls there; an ordinary group is unaffected."""
+    from dataclasses import replace
+    c, cfg = env
+    con = _setup(c, cfg, monkeypatch)
+    _live(monkeypatch, [500, 501])
+    forum = replace(cfg, tgc_chat=-555)
+    http = _Http()
+    _run(forum, con, http, _msg(31, chat=-555),                                      # the forum's group
+         _msg(31, reply_to_message={"message_id": 3, "is_automatic_forward": True}))   # a comment under a channel post
+    assert http.sent == [] and not bot._tagging and not bot._tagged
+    assert _tagged(_run(forum, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37, 500, 501]   # an ordinary group: as before
+
+
 def test_anyone_in_the_chat_calls(env, monkeypatch):
     """A plain member and someone the app doesn't hold in the club: their own message in the chat proves they're in it."""
     c, cfg = env

@@ -1334,6 +1334,10 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
                 or msg.get("is_automatic_forward") or time.time() - int(msg.get("date") or 0) > FRESH:
             return
+        # a channel's discussion group: anyone may comment there without joining, so a message proves nothing: no /all
+        # at all. Known by the forum's group (FORUM_GROUP) or a comment under a channel post (a reply to its automatic forward)
+        if chat["id"] == cfg.tgc_chat or (msg.get("reply_to_message") or {}).get("is_automatic_forward"):
+            return
         who = int(sender.get("id") or 0)
         # anyone in the chat calls (owner, Nov 18: clubs asked), not only role holders and admins. This very message
         # proves its sender is in the chat (Telegram delivers a group's messages from its members; a forward, a channel
