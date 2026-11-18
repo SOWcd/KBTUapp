@@ -1324,8 +1324,10 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     words = str(msg.get("text") or "").split()
     # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
     # "\u043a\u043e\u043b\u043b" first in a message, "call" only as the whole message (it starts ordinary English sentences)
-    if words and (re.fullmatch(rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all|\u043a[\u0430\u043e]\u043b\u043b[!.]*", words[0], re.I)
-                  or len(words) == 1 and re.fullmatch(r"call[!.]*", words[0], re.I)):
+    cmd = rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all|\u043a[\u0430\u043e]\u043b\u043b[!.]*"
+    # ... or last, after their own words (a club, Nov 18: "meeting at 6, \u043a\u0430\u043b\u043b"); never in the middle of a sentence
+    last = len(words) > 1 and not re.fullmatch(cmd, words[0], re.I) and bool(re.fullmatch(cmd, words[-1], re.I))
+    if words and (re.fullmatch(cmd, words[0], re.I) or last or len(words) == 1 and re.fullmatch(r"call[!.]*", words[0], re.I)):
         sender = msg.get("from") or {}
         # the sender of this very message, a person: never a forward, an anonymous admin or a channel (sender_chat), an old one
         if sender.get("is_bot") or msg.get("sender_chat") or msg.get("forward_origin") or msg.get("forward_date") \
@@ -1352,7 +1354,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
             r = msg.get("reply_to_message")  # under the message they answered (a topic's own start isn't one), else their command
             to = r["message_id"] if r and not r.get("forum_topic_created") else msg["message_id"]
             _tagging.add(chat["id"])
-            say = " ".join(words[1:])[:TAG_SAY]  # their own words after the command, in this very chat
+            say = " ".join(words[:-1] if last else words[1:]).rstrip(",")[:TAG_SAY]  # their own words beside the command, in this very chat
             tgc.spawn(_tag_all(cfg, http, chat["id"], to, people, say), f"all:{chat['id']}")
         return
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
