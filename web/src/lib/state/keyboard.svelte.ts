@@ -8,17 +8,45 @@
 // The covered part is read from window.visualViewport, which shrinks first on iOS (the keyboard over the webview) and
 // together with the window on Android; one formula holds through both phases: the box's height minus the visible
 // bottom. A hardware keyboard covers nothing: 0.
+// iOS reports late: Telegram's frame change lands ~0.4 s after the keyboard started, when it is fully up, and the
+// content then jumped into place under a keyboard that had slid over it. So on iOS a tap into a field starts the ride
+// at once, towards the height the keyboard had last time (remembered per screen width); the real report then corrects
+// it with a short glide, and no report within 0.8 s (a hardware keyboard) takes it back down. Android's webview
+// resizes in step with its keyboard: no guess there.
 import { onIos } from '../tg';
 
 export const keyboard = $state({ h: 0 });
 
-const EDIT = 'textarea, [contenteditable=""], [contenteditable="true"], input:not([type=checkbox], [type=radio], [type=range], [type=button], [type=submit], [type=file], [type=color])';
+// what opens a keyboard (iOS's date and time fields open a popover, a readonly one nothing)
+const EDIT = 'textarea:not([readonly], :disabled, [inputmode=none]), [contenteditable=""], [contenteditable="true"], input:not([type=checkbox], [type=radio], [type=range], [type=button], [type=submit], [type=reset], [type=image], [type=file], [type=color], [type=date], [type=time], [type=datetime-local], [type=month], [type=week], [readonly], :disabled, [inputmode=none])';
 export const editing = () => !!(document.activeElement as Element | null)?.matches?.(EDIT);
-/** the keyboard's own motion: iOS ~0.25-0.35 s on its spring, approximated; Android's inset animation is shorter */
-export const KB_MS = onIos ? 300 : 220;
+/** the keyboard's own motion: iOS announces 0.25 s (UIKeyboardAnimationDurationUserInfoKey) on its private spring-like
+ *  curve 7, here an ease-out a touch ahead of it (the field never under its edge); Android's inset animation */
+export const KB_MS = onIos ? 250 : 220;
 export const kbEase = (x: number) => (x >= 1 ? 1 : x <= 0 ? 0 : 1 - Math.pow(1 - x, 3.2));
 
 let full = 0, wide = 0, settle = 0, still = 0, focusAt = 0;
+// the guess: its height while no real report came yet; firm: the real reports stopped changing; tapAt: a keyboard comes
+// only for a field focused by a tap (iOS); noKb: the last guess saw no keyboard (a hardware one): no more guessing
+let guess = 0, guessT = 0, firm = 0, tapAt = -1e9, noKb = false;
+const KEY = 'kb-h';
+let learnt: Record<string, number> = {};
+try { learnt = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { /* blocked */ }
+// first run: iPhone's keyboard with its suggestions bar, 336 pt on the 375-393 pt phones, 346 on the wide ones; a
+// landscape phone or an iPad waits for one real report
+const guessFor = () => learnt[innerWidth] ?? (innerWidth < 400 ? 336 : innerWidth < 500 ? 346 : 0);
+function learn(h: number) {
+  if (!onIos || h < 60 || learnt[innerWidth] === h) return;
+  learnt[innerWidth] = h;
+  try { localStorage.setItem(KEY, JSON.stringify(learnt)); } catch { /* blocked */ }
+}
+function predict() {
+  const g = onIos && !noKb && performance.now() - tapAt < 1000 && editing() ? guessFor() : 0;
+  if (!g) return;
+  guess = g;
+  clearTimeout(guessT);
+  guessT = window.setTimeout(() => { if (guess) { guess = 0; noKb = true; apply(); } }, 800);
+}
 /** how long a rise may take to land with the keyboard: what is left of its motion since the field took the focus (a
  *  late report, Telegram iOS's resize 0.4 s on, finds it up already: a short glide, not a slow one) */
 export const riseMs = () => Math.max(120, KB_MS - (performance.now() - focusAt));
@@ -33,11 +61,16 @@ function apply() {
   // below 60 px it's no keyboard (a bar, a rounding); while no field has the focus it's none either (it is going down)
   let h = Math.max(0, Math.round(full - bottom));
   if (h < 60 || !editing()) h = 0;
+  if (h) { noKb = false; clearTimeout(guessT); }
+  if (!editing()) guess = 0;
+  // the real one rising in parts never pulls the guess back down; once its reports stand, it alone
+  else if (guess && h) { clearTimeout(firm); firm = window.setTimeout(() => { guess = 0; apply(); learn(keyboard.h); }, Math.max(150, focusAt + KB_MS + 150 - performance.now())); }
+  h = Math.max(h, guess);
   if (h !== keyboard.h) {
     keyboard.h = h;
     pad(h);
     clearTimeout(still);
-    if (h) still = window.setTimeout(reveal, KB_MS + 60); // once it stands
+    if (h) still = window.setTimeout(() => { reveal(); if (!guess) learn(keyboard.h); }, KB_MS + 60); // once it stands
   }
 }
 
@@ -58,7 +91,12 @@ if (root && typeof window !== 'undefined') {
   window.visualViewport?.addEventListener('resize', measure);
   window.visualViewport?.addEventListener('scroll', apply);
   // focus moving from field to field is one focusout then one focusin in the same task: look after both
-  addEventListener('focusin', () => { if (!keyboard.h) focusAt = performance.now(); queueMicrotask(apply); if (keyboard.h) setTimeout(reveal, 60); }); // up already: the next field
+  addEventListener('pointerdown', () => (tapAt = performance.now()), true);
+  addEventListener('focusin', () => {
+    if (!keyboard.h) { focusAt = performance.now(); predict(); }
+    queueMicrotask(apply);
+    if (keyboard.h) setTimeout(reveal, 60); // up already: the next field
+  });
   addEventListener('focusout', () => queueMicrotask(apply));
 }
 
@@ -87,7 +125,8 @@ export function reveal() {
   const limit = foot && !foot.contains(el) ? foot.getBoundingClientRect().top : Infinity;
   const sc = scrollerOf(el);
   if (!sc) return;
-  const vv = window.visualViewport, bottom = Math.min(limit, vv ? vv.offsetTop + vv.height : innerHeight) - 16;
+  // the keyboard as we hold it (the guess included: the webview may not know of it yet)
+  const bottom = Math.min(limit, full - keyboard.h) - 16;
   const r = el.getBoundingClientRect(), top = sc.getBoundingClientRect().top + 8;
   const by = r.bottom > bottom ? Math.min(r.bottom - bottom, r.top - top) : r.top < top ? r.top - top : 0;
   if (by) sc.scrollBy({ top: by, behavior: 'smooth' });
