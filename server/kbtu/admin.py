@@ -51,6 +51,8 @@
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed);
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
+                                `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
+                                moving back does not undo it (re-add the lines by hand);
                                 credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
                                 shipped line and no answer; prints how many were queued; a no is never asked again
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent

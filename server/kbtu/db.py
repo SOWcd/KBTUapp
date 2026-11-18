@@ -1953,7 +1953,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL) STRICT;
     CREATE INDEX IF NOT EXISTS credits_tg ON credits (tg_id);
     CREATE TABLE IF NOT EXISTS credit_consents (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       show INTEGER NOT NULL CHECK (show IN (0, 1)),  -- 0: a no, a withdrawal, or a grant ended by an account move
       version TEXT NOT NULL,  -- the consent text it answered

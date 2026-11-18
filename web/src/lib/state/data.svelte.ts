@@ -339,20 +339,24 @@ export function loadStaffMutes(): void {
 
 /** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
  *  named changes with a person's own answer, so it is read again when the screen opens and when the app comes back
- *  (`fresh`: a copy this young will do). A reply that something newer has overtaken (a later read, my own answer) is dropped. */
-let creditsSeq = 0, creditsAt = 0, creditsFlight: Promise<void> | null = null;
+ *  (`fresh`: a copy this young will do). A reply that something newer has overtaken (a later read, my own answer) is
+ *  dropped, and so is every reply while my answer is on its way: it may show me as I was. */
+let creditsSeq = 0, creditsAt = 0, creditsPuts = 0, creditsFlight: Promise<void> | null = null;
 export function loadCredits(fresh = 0): Promise<void> {
   if (creditsFlight) return creditsFlight;
   if (fresh && data.credits && Date.now() - creditsAt < fresh) return Promise.resolve();
   const n = ++creditsSeq;
-  const flight = api.credits().then((c) => { if (n === creditsSeq) { data.credits = c; creditsAt = Date.now(); } }, () => {})
+  const flight = api.credits().then((c) => { if (n === creditsSeq && !creditsPuts) { data.credits = c; creditsAt = Date.now(); } }, () => {})
     .finally(() => { if (creditsFlight === flight) creditsFlight = null; });
   return (creditsFlight = flight);
 }
-/** my own answer's reply, or the moment I send it (no list): any read still on its way is older and is dropped */
-export function setCredits(c?: Credits): void {
-  creditsSeq++; creditsFlight = null;
-  if (c) { data.credits = c; creditsAt = Date.now(); }
+/** Around my own answer (lib/credits.ts): `sending` as it leaves and again when it has settled. Each cuts off every
+ *  read already on its way (older than my answer, or as old); once nothing of mine is pending the list is read anew,
+ *  the only thing painted: the answer's own reply never is (a read may be newer than it). */
+export function creditsAnswer(sending: boolean): Promise<void> {
+  creditsSeq++; creditsFlight = null; creditsAt = 0;
+  creditsPuts += sending ? 1 : -1;
+  return sending || creditsPuts ? Promise.resolve() : loadCredits();
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again

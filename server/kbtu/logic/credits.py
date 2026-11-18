@@ -72,6 +72,12 @@ def _tie(cid: int) -> str:
 def listing(con, v: Viewer) -> dict:
     """GET /api/credits: the whole screen in three reads. Nobody's Telegram id, row id or answer leaves here; a line
     without its person's yes is a row of its own with `person: null`."""
+    if not con.in_transaction:  # one snapshot for all three reads: an answer landing between them can't pair an old
+        con.execute("BEGIN")    # yes with a newer line
+        try:
+            return listing(con, v)
+        finally:
+            con.execute("COMMIT")
     top = rows(con, f"""SELECT {_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE (u.is_founder = 1 OR u.mark = 'idea') AND u.tg_id > 0""")
     founder = next((p for p in top if p["is_founder"]), None)
@@ -154,9 +160,11 @@ def ask(con, dry: bool = False) -> int:
                                (r["id"], ref, core.now())).rowcount for r in to)
 
 
-def asking(con, uid: int) -> bool:
-    """The bot, as it takes the message to send: still theirs to answer (not banned, unlinked or answered meanwhile)."""
-    return one(con, f"SELECT 1 FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ? AND {_ASKABLE}", uid) is not None
+def asking(con, uid: int) -> int | None:
+    """The bot, as it takes the message to send: the Telegram id to write to, read now (the account may have moved),
+    while it is still theirs to answer (not banned, unlinked or answered meanwhile); else None."""
+    r = one(con, f"SELECT u.tg_id FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ? AND {_ASKABLE}", uid)
+    return r[0] if r else None
 
 
 def gone(con, tg_id: int) -> None:
@@ -166,13 +174,14 @@ def gone(con, tg_id: int) -> None:
 
 def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
     """`kbtu.admin move`, inside its transaction: the account's lines follow it to its new Telegram, and its yes ends
-    (another name and face may stand there now: asked afresh). Lines already written for the new Telegram id would
+    (another name and face may stand there now: asked afresh; a merged move is not undone by moving back). Lines already written for the new Telegram id would
     come under this account too: refused unless the team says they are the same person's (`--merge-credits`)."""
     if not merge and one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg):
         raise ValueError("the target Telegram has its own lines in People of the app: --merge-credits if they are this person's too")
     con.execute("UPDATE credits SET tg_id = ? WHERE tg_id = ?", (new_tg, old_tg))
-    last = one(con, "SELECT show FROM credit_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", uid)
-    if last and last["show"]:
+    # always a new "no" row where there is anything to answer about: a yes still on its way from the old Telegram names
+    # an older answer (or none) and is refused, whatever the last answer was
+    if one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg) or one(con, "SELECT 1 FROM credit_consents WHERE user_id = ?", uid):
         con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, 0, ?, ?)", (uid, CONSENT, core.now()))
 
 
@@ -182,7 +191,7 @@ def add(con, tg_id: int, kind: str, ru: str, kk: str, en: str) -> int:
     lines = [" ".join(x.split()) for x in (ru, kk, en)]
     if tg_id <= 0 or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
-    if any(re.search(r"@\w|https?://|t\.me/|\d{5,}", x) for x in lines):
+    if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
         return con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?)", (tg_id, kind, *lines, core.now())).lastrowid

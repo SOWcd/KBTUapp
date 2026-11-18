@@ -333,6 +333,74 @@ def test_account_move(env, capsys, monkeypatch):
     assert _names(_get(c, 7001103)) == set()  # merged, and the yes ended again
 
 
+def test_move_makes_every_pending_yes_stale(env, monkeypatch):
+    """Review 2: a yes sent from the old Telegram and landing after the move is refused whatever the last answer was
+    (none here, then a no): the move always writes a row, so the rev it names is no longer the latest."""
+    c, cfg = env
+    con = _con(cfg)
+    a = login(c, 7001201, "ann")
+    c.get("/api/me", headers=tma(7001202, "Fresh"))
+    c.get("/api/me", headers=tma(7001203, "Fresh"))
+    _line(con, 7001201)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    pending = {"show": True, "consent": credits.CONSENT, "rev": _get(c, 7001201)["mine"]["rev"]}  # null: never answered
+    admin.main(["move", "7001201", "7001202"])
+    v = logic.Viewer(a["id"], "user", True)  # the request let in before the move, committing after it
+    with pytest.raises(logic.ApiError) as e:
+        credits.answer(con, v, pending)
+    assert (e.value.code, e.value.message) == ("conflict", "stale") and _names(_get(c, 7001202)) == set()
+    pending["rev"] = _get(c, 7001202)["mine"]["rev"]  # the last answer is a no now: the same again
+    admin.main(["move", "7001202", "7001203"])
+    with pytest.raises(logic.ApiError) as e:
+        credits.answer(con, v, pending)
+    assert e.value.message == "stale"
+    assert credits.asking(con, a["id"]) is None  # that no is on record: the bot doesn't ask
+
+
+def test_listing_is_one_snapshot(env, monkeypatch):
+    """Review 2: the idea's author's consent and the lines are read in one transaction, so an answer between the reads
+    can't pair an old yes with a newer line."""
+    c, cfg = env
+    con = _con(cfg)
+    me = login(c, 7001301, "ann")
+    seen = []
+    real = credits.rows
+    monkeypatch.setattr(credits, "rows", lambda con_, *a: (seen.append(con_.in_transaction), real(con_, *a))[1])
+    credits.listing(con, logic.Viewer(me["id"], "user", True))
+    assert seen == [True, True] and not con.in_transaction
+
+
+def test_rev_is_never_reused(env):
+    """Review 2: consent row ids are never handed out again after an account deletion took the newest ones, so an old
+    yes can't match a later answer's rev."""
+    c, cfg = env
+    con = _con(cfg)
+    login(c, 7001401, "one"), login(c, 7001402, "two")
+    _line(con, 7001401), _line(con, 7001402)
+    assert _no(c, 7001401).status_code == 200 and _no(c, 7001402).status_code == 200
+    top = con.execute("SELECT MAX(id) FROM credit_consents").fetchone()[0]
+    delete_now(c, cfg, tma(7001402))  # the newest row goes with its account
+    assert _no(c, 7001401).json()["mine"]["rev"] > top
+
+
+def test_bot_asks_the_account_where_it_is_now(env, monkeypatch):
+    """Review 2: an unanswered contributor moved after the outbox was read: the ask goes to the new Telegram id."""
+    c, cfg = env
+    con = _con(cfg)
+    a = login(c, 7001501, "ann")
+    c.get("/api/me", headers=tma(7001502, "Fresh"))
+    con.execute("UPDATE users SET can_dm = 1")
+    con.commit()
+    _line(con, 7001501)
+    assert credits.ask(con) == 1 and credits.asking(con, a["id"]) == 7001501
+    con.execute("DELETE FROM credit_consents")
+    con.execute("UPDATE users SET tg_id = -5 WHERE tg_id = 7001502")
+    con.execute("UPDATE users SET tg_id = 7001502 WHERE id = ?", (a["id"],))
+    con.execute("UPDATE credits SET tg_id = 7001502")
+    con.commit()
+    assert credits.asking(con, a["id"]) == 7001502
+
+
 def test_cli(env, capsys, monkeypatch):
     c, cfg = env
     con = _con(cfg)
@@ -349,7 +417,8 @@ def test_cli(env, capsys, monkeypatch):
     for bad in (["credit", "ship", "1", "tomorrow"], ["credit", "ship", "9"], ["credit", "add", "7000601", "joke", "a", "b", "c"],
                 ["credit", "add", "7000601", "idea", "a", "", "c"], ["credit", "add", "7000601", "idea", "x" * 91, "b", "c"], ["credit", "del", "9"],
                 ["credit", "add", "7000601", "idea", "by @someone", "b", "c"], ["credit", "add", "7000601", "idea", "a", "b", "see https://x.y"],
-                ["credit", "add", "7000601", "idea", "a", "id 7000601", "c"]):
+                ["credit", "add", "7000601", "idea", "a", "id 7000601", "c"], ["credit", "add", "7000601", "idea", "a", "b", "HTTPS://T.ME/someone"],
+                ["credit", "add", "7000601", "idea", "see T.me/someone", "b", "c"]):
         with pytest.raises(SystemExit):
             admin.main(bad)
     admin.main(["credit", "del", "1"])
