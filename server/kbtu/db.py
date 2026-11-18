@@ -1888,6 +1888,36 @@ MIGRATIONS: list[tuple[int, str]] = [
       title TEXT,
       pages TEXT NOT NULL,
       created_at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 18) Secret Santa, round 2 (logic/santa.py): the game's settings beside its row (the gift budget; the wishlists'
+    # deadline is the event's own reg_until) and the bot round's marks, so each timed step runs once: `checked` the
+    # deadline already acted on (a moved one re-arms itself), `soon` the eve-of-deadline reminder, `eve` the gifts day's,
+    # `nudged_at` the organizer's last "remind those not in yet". No user column: nothing here names a person.
+    (184, """CREATE TABLE IF NOT EXISTS santa_games (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      budget INTEGER CHECK (budget IS NULL OR budget > 0),
+      checked INTEGER,
+      soon INTEGER,
+      eve INTEGER,
+      nudged_at INTEGER) STRICT;
+    INSERT OR IGNORE INTO santa_games (event_id) SELECT event_id FROM santa_events;  -- the games already running"""
+     # a seat lost after the draw: its Santa hears once that their person changed (bot santa_changed), before the
+     # relink (santa_left_*) moves the ring. The ref carries a random tag, never the leaver: the outbox names no pair
+     + "".join(f"""
+    CREATE TRIGGER IF NOT EXISTS santa_moved_{name} BEFORE {op} ON registrations WHEN OLD.status = 'going'{when}
+        AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL) BEGIN
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT g.user_id, 'santa_changed', 'event:' || OLD.event_id || ':' || lower(hex(randomblob(6))), '{{}}', 0
+        FROM santa_people g JOIN santa_people l ON l.event_id = g.event_id AND l.user_id = OLD.user_id
+        WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND l.gives_to != g.user_id;
+    END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))
+     # out of the club (left, removed, the account deleted): out of its upcoming team-only game too, since its page no
+     # longer opens for them (seats._visible); the seat's triggers above relink the ring and tell their Santa
+     + """
+    CREATE TRIGGER IF NOT EXISTS santa_left_club AFTER DELETE ON org_members BEGIN
+      UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+        WHERE user_id = OLD.user_id AND status = 'going' AND event_id IN (SELECT e.id FROM events e JOIN santa_events s ON s.event_id = e.id
+          WHERE e.org_id = OLD.org_id AND e.visibility = 'members' AND e.status = 'published' AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER));
+    END;"""),
 ]
 
 

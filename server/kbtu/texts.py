@@ -174,6 +174,18 @@ def when(ts: int, lang: str) -> str:
     return f"{day}, {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
+# Secret Santa's terms under an invite (bot._santa): the budget a number, the date the server's; each only when set
+SANTA_TERMS = {"ru": ("подарок до {budget}\u00a0₸", "вишлисты до {until}"), "kk": ("сыйлық {budget}\u00a0₸ дейін", "тілек тізімдері {until} дейін"),
+               "en": ("gift up to {budget}\u00a0₸", "wishlists until {until}")}
+
+
+def santa_terms(lang: str, budget: int | None, until: int | None) -> str:
+    """"\n📌 gift up to 5 000 ₸ · wishlists until December 11, 18:00", or a part of it, or nothing."""
+    gift, by = pick(SANTA_TERMS, lang)
+    parts = [*([gift.format(budget=f"{budget:,}".replace(",", "\u00a0"))] if budget else []), *([by.format(until=when(until, lang))] if until else [])]
+    return "\n📌 " + " · ".join(parts) if parts else ""
+
+
 def share_event(lang: str, title: str, starts_at: int, place: str, org: str = "", price: int | None = None, going: int = 0) -> tuple[str, str]:
     """(HTML caption, button text) for an event card: only the event's own public fields, each line only when its data exists."""
     ask, button, free, n_going, tba = SHARE_EVENT[lang]
@@ -241,7 +253,12 @@ BOT = {
         "team_ask_yes": ("✅ Разрешили — можно записаться на <b>{title}</b>\n🗓 {when} · {place}", "Записаться"),
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
         "santa_drawn": ("🎅 Жеребьёвка прошла: <b>{title}</b>\n🎁 Узнай, кому даришь", "🎁 Узнать"),
-        "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре", "🎄 Играть"),
+        "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре{terms}", "🎄 Играть"),
+        "santa_soon": ("⏳ Тайный Санта <b>{org}</b>: вишлисты до {until}\n🎁 Напиши свой, и ты в игре{terms}", "🎄 Играть"),
+        "santa_nudge": ("🎅 <b>{org}</b> ждёт твой вишлист для Тайного Санты\n🎁 Напиши его, и ты в игре{terms}", "🎄 Играть"),
+        "santa_few": ("🎅 Вишлисты на <b>{title}</b> закрылись, а в игре только {n}\n⏳ Нужно хотя бы трое: продли срок, и жеребьёвка пройдёт сама", "Открыть"),
+        "santa_eve": ("🎄 Завтра дарим подарки: <b>{title}</b>\n🗓 {when}{where}", "🎁 Кому я дарю"),
+        "santa_changed": ("🎅 <b>{title}</b>: тот, кому ты даришь, сменился\n🎁 Узнай, кому даришь теперь", "🎁 Узнать"),
         "team_ask_no": ("💙 На <b>{title}</b> тебя пока не отпустили гостем — ты в команде.", "Открыть событие"),
         "friend_request": ("🙋 <b>{name}</b> хочет добавить тебя в друзья в KBTU App", "Ответить"),
         "crew_added": ("🎫 <b>{org}</b> зовёт тебя помочь на входе: <b>{title}</b>\n🗓 {when} · {place}\nСканер — в карточке события.", "Открыть"),
@@ -429,7 +446,12 @@ BOT = {
         "team_ask_yes": ("✅ Рұқсат берілді — <b>{title}</b> іс-шарасына жазылуға болады\n🗓 {when} · {place}", "Жазылу"),
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
         "santa_drawn": ("🎅 Жеребе тартылды: <b>{title}</b>\n🎁 Кімге сыйлайтыныңды біл", "🎁 Білу"),
-        "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойнайды\n🎁 Тілек тізіміңді жаз, сонда ойындасың", "🎄 Ойнау"),
+        "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойнайды\n🎁 Тілек тізіміңді жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
+        "santa_soon": ("⏳ <b>{org}</b> Құпия Сантасы: тілек тізімдері {until} дейін\n🎁 Өзіңдікін жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
+        "santa_nudge": ("🎅 <b>{org}</b> Құпия Сантаға тілек тізіміңді күтіп тұр\n🎁 Жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
+        "santa_few": ("🎅 <b>{title}</b> тілек тізімдері жабылды, ойында тек {n}\n⏳ Кемінде үшеу керек: мерзімді ұзарт, жеребе өзі тартылады", "Ашу"),
+        "santa_eve": ("🎄 Ертең сыйлық береміз: <b>{title}</b>\n🗓 {when}{where}", "🎁 Кімге сыйлаймын"),
+        "santa_changed": ("🎅 <b>{title}</b>: сен сыйлайтын адам ауысты\n🎁 Енді кімге сыйлайтыныңды біл", "🎁 Білу"),
         "team_ask_no": ("💙 <b>{title}</b> іс-шарасына қонақ ретінде әзірге рұқсат жоқ — сен командадасың.", "Іс-шараны ашу"),
         "friend_request": ("🙋 <b>{name}</b> сені KBTU App-та досқа қосқысы келеді", "Жауап беру"),
         "crew_added": ("🎫 <b>{org}</b> сені кіреберісте көмектесуге шақырады: <b>{title}</b>\n🗓 {when} · {place}\nСканер — іс-шара карточкасында.", "Ашу"),
@@ -611,7 +633,12 @@ BOT = {
         "team_ask_yes": ("✅ You're allowed — you can sign up for <b>{title}</b>\n🗓 {when} · {place}", "Sign up"),
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
         "santa_drawn": ("🎅 The draw is done: <b>{title}</b>\n🎁 See who you give to", "🎁 See"),
-        "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in", "🎄 Play"),
+        "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in{terms}", "🎄 Play"),
+        "santa_soon": ("⏳ <b>{org}</b>'s Secret Santa: wishlists until {until}\n🎁 Write yours and you are in{terms}", "🎄 Play"),
+        "santa_nudge": ("🎅 <b>{org}</b> is waiting for your Secret Santa wishlist\n🎁 Write it and you are in{terms}", "🎄 Play"),
+        "santa_few": ("🎅 Wishlists for <b>{title}</b> are closed, and only {n} are in\n⏳ It takes at least three: extend the deadline and the draw runs by itself", "Open"),
+        "santa_eve": ("🎄 Gifts day is tomorrow: <b>{title}</b>\n🗓 {when}{where}", "🎁 Who I give to"),
+        "santa_changed": ("🎅 <b>{title}</b>: the person you give to has changed\n🎁 See who you give to now", "🎁 See"),
         "team_ask_no": ("💙 Not as a guest at <b>{title}</b> this time — you're on the team.", "Open the event"),
         "friend_request": ("🙋 <b>{name}</b> wants to be friends on KBTU App", "Reply"),
         "crew_added": ("🎫 <b>{org}</b> asks you to help at the door: <b>{title}</b>\n🗓 {when} · {place}\nThe scanner is on the event's card.", "Open"),

@@ -10,7 +10,8 @@
   import Avatar from '../../ui/Avatar.svelte';
 
   let { id, mine }: { id: Id; mine: NonNullable<EventFull['mySanta']> } = $props();
-  const key = $derived(`kb-santa-${id}`);
+  // per person: a person changed (theirs stepped out, server santa_changed) wraps up again for its own reveal
+  const key = $derived(`kb-santa-${id}-${mine.to?.person.id ?? ''}`);
   const seen = () => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
   let open = $state(seen());
   let fresh = $state(false); // opened by this tap: the reveal plays

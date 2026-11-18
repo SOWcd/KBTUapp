@@ -154,7 +154,9 @@ export const server = {
   adminOrgs: (): Promise<AdminOrg[]> => call('GET', '/admin/orgs'),
   adminOrgEvents: (org: Id): Promise<AdminEvent[]> => call('GET', `/admin/orgs/${org}/events`),
   setRegUntil: (id: Id, until: Ts | 'now' | null): Promise<EventFull> => call('PUT', `/events/${id}/reg-until`, { until }), // registration closes now / then / at the start
-  santaStart: (org: Id, title: string, startsAt: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt }), // Studio's one button: the club's game made and published, or the running one
+  santaStart: (org: Id, title: string, startsAt: Ts, budget: number | null, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget / until)
+  santaSettings: (id: Id, s: { budget?: number | null; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
+  santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)
   // the club's own team (SPEC §2, the rank rule): Vice+ manage people below them, the President hands the club over
