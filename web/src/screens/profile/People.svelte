@@ -2,7 +2,7 @@
   // "People of the app" (owner, Nov 18): the creator, the idea's author, then everyone whose idea, find or code shipped,
   // newest first by the day it shipped: never by amount. A little like film credits (a centred top, air), scrolled by
   // hand. A name and a face only after that person's own yes (server credits.py); without it the app signs the lines
-  // "Student": a plain row, nothing to tap. The list comes with the app (data.credits): the page never waits.
+  // "Student", each line a row of its own: a plain row, nothing to tap. The list comes with the app (data.credits): the page never waits.
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserRound from '@lucide/svelte/icons/user-round';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -25,7 +25,9 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   const c = $derived(data.credits);
-  if (!data.credits) void loadCredits(); // a cold link before the app's own read came back
+  // the app's copy in the same frame, then the server's word: someone may have taken their name back since (a read
+  // this session made seconds ago, the bot's link, is that word)
+  void loadCredits(5000);
   const open = (p: PersonRef) => { haptic.tap(); sheets.person(p.id); };
   // his Telegram with the app's draft: the creator's row on Profile opened it before it became the way here
   const tgOf = $derived(session.support.find((x) => x.founder)?.username);

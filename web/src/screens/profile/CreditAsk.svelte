@@ -1,7 +1,6 @@
 <script lang="ts">
   // "Name me in People of the app?": the feature's own consent (server credits.CONSENT), from the bot's one message and
   // from Settings' switch. It shows exactly what everyone would see (my face, my name, the lines) and takes a yes or a no.
-  import { onDestroy } from 'svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { data } from '../../lib/state/data.svelte';
@@ -13,7 +12,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import CreditLines from '../../ui/CreditLines.svelte';
 
-  let { overlay, done }: { overlay: Overlay; done?: () => void } = $props();
+  let { overlay }: { overlay: Overlay } = $props();
   const me = $derived(session.me);
   const mine = $derived(data.credits?.mine);
   let busy = $state<boolean | null>(null);
@@ -22,9 +21,8 @@
     busy = show;
     const kept = await answerCredits(show);
     busy = null;
-    if (kept) close(overlay.id);
+    if (kept) close(overlay.id); // not kept: the list was read again, the sheet shows what is true now
   }
-  onDestroy(() => done?.()); // Settings' switch redraws to what was kept
 </script>
 
 <Sheet {overlay} icon={UsersRound} title={t('cr.title')}>

@@ -240,7 +240,7 @@
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
   const peoplePage = () => import('./screens/profile/People.svelte');
   sheets.credits = () => lazy(peoplePage, {});
-  sheets.creditAsk = (done) => lazy(() => import('./screens/profile/CreditAsk.svelte'), { done });
+  sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
   sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
@@ -714,7 +714,7 @@
     let leftAt = 0;
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
-      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); }
+      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits(); }
       leftAt = 0;
     };
     const seen = () => (document.hidden ? left() : back());

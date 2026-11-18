@@ -1,32 +1,57 @@
 """The people of the app: the creator, the idea's author, and everyone whose idea, find (a bug) or code is in it.
 
 A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet),
-a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message. It is listed once shipped,
-newest first by the day it shipped: no order by amount, nothing to argue about.
+a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
+no name, handle, link or identifying detail (it is shown under "Student"). It is listed once shipped, newest first by
+the day it shipped: no order by amount, nothing to argue about.
 
 The feature's own consent (CONSENT, as evteams'): a name and a face stand next to the lines ONLY after that person's
-yes. No answer, a no, a withdrawal, a ban, no account, a deleted account: the lines stay, signed "Student" by the app,
-with no name, face, id or link. The creator alone is named without it (public as the creator already); the idea's
-author follows the rule. Every answer is a row of `credit_consents` (who, when, which text version), never replaced:
-the latest one counts. Asked by the bot's template once per person (`ask`), answered in the app, changed in Settings.
+yes to the text in force, and only while they could give it now (`_CAN`: a signed-in student, not banned). Otherwise
+(no answer, a no, a withdrawal, a ban, no account, a deleted or unlinked account) every line stays, each as its own
+"Student" row: no name, face, id or link, and nothing that says two nameless lines are one person's. A yes covers the
+lines shown and those added later (the sheet says so). Every answer is a row of `credit_consents` (who, when, yes or
+no, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
+refused if a newer answer exists: a late or repeated yes never undoes a withdrawal. Asked by the bot's template once
+per person and text version (`ask`), answered in the app, changed in Settings.
+
+The creator alone is named without a consent row: on purpose, he is public as the creator everywhere already
+(`person.founder`, /api/me's support), and nothing else of his is shown here. The idea's author follows the rule.
 
 Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id (`gone`): what the app got stays
-in the list as a nameless "Student", and nothing left behind points at the person.
+in the list as nameless "Student" rows, and nothing left behind points at the person. An account moved to another
+Telegram (`kbtu.admin move`) takes its lines along and its yes ends (`moved`): the new profile is previewed afresh.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 import time
 
 from . import core
 from ..db import tx
-from .core import PERSON_COLS, ApiError, Viewer, need_student, one, person_ref, rows
+from .core import PERSON_COLS, ApiError, Viewer, one, person_ref, rows
 
 KINDS = ("idea", "find", "code")
 LINE_MAX = 90     # a line is a few words; the CLI refuses more
 CONSENT = "cr1"   # the consent sheet's text (web: cr.ask*); a reworded sheet is a new version, and old yeses ask again
-OFF = "off"       # a no or a withdrawal: remembered, so the bot never asks again (a later yes is a new row)
+REMIND = "lines are OUR words: gender-neutral, no name, handle, link or identifying detail (shown under \"Student\")"
 
-_SAID = "(SELECT x.version FROM credit_consents x WHERE x.user_id = u.id ORDER BY x.id DESC LIMIT 1)"
+# the one rule of who may be named, answer and be asked: a signed-in student (not a typed-in row), not banned.
+# Over `users u LEFT JOIN students s`
+_CAN = "(u.tg_id > 0 AND u.banned_at IS NULL AND s.user_id IS NOT NULL AND s.manual = 0)"
+# the latest answer, joined as k
+_LAST = "LEFT JOIN credit_consents k ON k.id = (SELECT x.id FROM credit_consents x WHERE x.user_id = u.id ORDER BY x.id DESC LIMIT 1)"
+_HAS = "(u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))"
+_COLS = f"{PERSON_COLS}, u.tg_id, u.banned_at, {_CAN} AS can, k.id AS rev, k.show, k.version"
+
+
+def _said(r) -> bool | None:
+    """Their answer as it stands: a yes to this text, a no (to any text: never asked again), or none (an old yes too)."""
+    return None if r["rev"] is None or (r["show"] and r["version"] != CONSENT) else bool(r["show"])
+
+
+def _state(con, uid: int):
+    return one(con, f"SELECT {_COLS}, {_HAS} AS has FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ?", uid)
 
 
 # ------------------------------------------------------------ the list
@@ -36,43 +61,50 @@ def _item(r) -> dict:
 
 
 def _named(r) -> bool:
-    """Shown with a name and a face: an account of a student, not banned, whose latest answer is this text's yes."""
-    return r["id"] is not None and r["said"] == CONSENT and r["banned_at"] is None and r["first_name"] is not None
+    return bool(r) and r["id"] is not None and bool(r["can"]) and _said(r) is True
+
+
+def _tie(cid: int) -> str:
+    """Same-day lines in an order that says nothing of when they were entered or whose they are."""
+    return hashlib.sha256(f"credit:{cid}".encode()).hexdigest()
 
 
 def listing(con, v: Viewer) -> dict:
-    """GET /api/credits: the whole screen in two reads. Nobody's Telegram id, row id or consent leaves here, and a
-    person without a yes is `person: null` (their lines stay)."""
-    top = rows(con, f"""SELECT {PERSON_COLS}, u.banned_at, u.tg_id, {_SAID} AS said FROM users u LEFT JOIN students s ON s.user_id = u.id
+    """GET /api/credits: the whole screen in three reads. Nobody's Telegram id, row id or answer leaves here; a line
+    without its person's yes is a row of its own with `person: null`."""
+    top = rows(con, f"""SELECT {_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE (u.is_founder = 1 OR u.mark = 'idea') AND u.tg_id > 0""")
     founder = next((p for p in top if p["is_founder"]), None)
     idea = next((p for p in top if p["mark"] == "idea" and not p["is_founder"]), None)
-    mine_tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
-    # shipped lines, the newest first; each person stands where their newest line does, their lines together
-    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.kind, c.ru, c.kk, c.en, c.shipped_on, {PERSON_COLS}, u.banned_at, {_SAID} AS said
-        FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id
+    me = _state(con, v.id)
+    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.kind, c.ru, c.kk, c.en, c.shipped_on, {_COLS}
+        FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE c.shipped_on IS NOT NULL ORDER BY c.shipped_on DESC, c.id DESC""")
     people: dict[object, dict] = {}
     idea_items, my_items = [], []
     for r in got:
-        if r["whose"] is not None and r["whose"] == mine_tg:
+        if r["whose"] is not None and r["whose"] == me["tg_id"]:
             my_items.append(_item(r))
         if founder and r["whose"] == founder["tg_id"]:
             continue  # the creator's own work is the app itself
-        if idea and r["whose"] == idea["tg_id"]:
+        if _named(idea) and r["whose"] == idea["tg_id"]:
             idea_items.append(_item(r))
             continue
-        key = r["whose"] if r["whose"] is not None else ("gone", r["cid"])  # a deleted account's lines: each alone
-        people.setdefault(key, {"person": person_ref(r) if _named(r) else None, "items": []})["items"].append(_item(r))
+        named = _named(r)
+        # a named person's lines together, where their newest stands; a nameless line alone, whoever's it is
+        row = people.setdefault(r["whose"] if named else ("line", r["cid"]),
+                                {"person": person_ref(r) if named else None, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
+        row["items"].append(_item(r))
     is_idea = bool(idea and idea["id"] == v.id)
-    said = one(con, f"SELECT {_SAID} FROM users u WHERE u.id = ?", v.id)[0]
+    said = _said(me)
     return {
         "founder": person_ref(founder) if founder and founder["banned_at"] is None else None,
         "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items} if idea else None,
-        "people": list(people.values()),
-        # what is mine here, for the consent sheet and Settings' switch; nothing of mine: null, and neither is offered
-        "mine": {"consent": None if said not in (CONSENT, OFF) else said == CONSENT, "idea": is_idea, "items": my_items}
-        if v.student and (my_items or is_idea) else None,
+        "people": [{"person": p["person"], "items": p["items"]} for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
+        # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
+        # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
+        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items}
+        if me["can"] and (my_items or is_idea or said) else None,
         "version": CONSENT,
     }
 
@@ -80,48 +112,68 @@ def listing(con, v: Viewer) -> dict:
 # ------------------------------------------------------------ the consent
 
 def answer(con, v: Viewer, body: dict) -> dict:
-    """PUT /api/credits/consent {show, consent}: my yes (with the version of the text the app showed) or my no; said
-    again any time. Kept as a new row each time: who, when, which text."""
-    need_student(v)
-    if not isinstance(body, dict) or type(body.get("show")) is not bool or (body["show"] and body.get("consent") != CONSENT):
+    """PUT /api/credits/consent {show, consent, rev}: my yes or my no, said again any time; each a new row.
+    A yes: to the text in force (`consent`), with something of mine to name me for, by one who may be named, and on
+    top of the latest answer the app saw (`rev`, null: none): a yes from an older sheet, or sent twice, is `conflict`
+    and changes nothing. A no is never refused for being late: it only ever hides."""
+    if not isinstance(body, dict) or type(body.get("show")) is not bool:
         raise ApiError("bad_input")
+    show, version, rev = body["show"], body.get("consent"), body.get("rev")
+    if show and (version != CONSENT or not (rev is None or type(rev) is int)):
+        raise ApiError("bad_input")
+    if not show and not (isinstance(version, str) and re.fullmatch(r"cr\d{1,4}", version)):
+        version = CONSENT  # an old app's no: recorded against the text in force
     with tx(con):
-        if body["show"] and not _has(con, v.id):
-            raise ApiError("conflict")  # a yes is to lines the sheet showed: nothing of mine there, nothing to agree to
-        con.execute("INSERT INTO credit_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, CONSENT if body["show"] else OFF, core.now()))
+        me = _state(con, v.id)  # read again under the write lock: banned, unlinked or moved since the request began
+        if not me["can"]:
+            raise ApiError("need_student")
+        if show and not me["has"]:
+            raise ApiError("conflict", "nothing")  # a yes is to lines the sheet showed
+        if show and me["rev"] != rev:
+            raise ApiError("conflict", "stale")
+        con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, ?, ?, ?)", (v.id, int(show), version, core.now()))
     return listing(con, v)
 
 
+_ASKABLE = f"""{_CAN} AND u.is_founder = 0 AND {_HAS} AND (k.id IS NULL OR (k.show = 1 AND k.version != '{CONSENT}'))"""
+
+
 def ask(con, dry: bool = False) -> int:
-    """`kbtu.admin credit ask`: the bot's "shall we name you?" once per person who has a shipped line (or is the
-    idea's author), can answer (a student the bot can write to, not banned) and never has. The count."""
-    from .seats import notify
-    to = rows(con, f"""SELECT u.id FROM users u JOIN students s ON s.user_id = u.id
-        WHERE u.tg_id > 0 AND u.banned_at IS NULL AND u.can_dm = 1 AND u.is_founder = 0 AND {_SAID} IS NULL
-          AND (u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))
-          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'credit_ask')
-        ORDER BY u.id""")
-    if not dry:
-        with tx(con):
-            for r in to:
-                notify(con, r["id"], "credit_ask", "cra")
-    return len(to)
-
-
-def _has(con, uid: int) -> bool:
-    """Something to name them for: a shipped line, or the idea itself."""
-    return one(con, """SELECT 1 FROM users u WHERE u.id = ?
-        AND (u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))""", uid) is not None
+    """`kbtu.admin credit ask`: the bot's "shall we name you?" once per person and text version: those with a shipped
+    line (or the idea's author) who can answer (`_CAN`, and the bot can write to them) and have not: never answered,
+    or said yes to an older text. An explicit no is never asked again. The number of messages actually queued."""
+    ref = f"cra:{CONSENT}"
+    to = rows(con, f"""SELECT u.id FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
+        WHERE {_ASKABLE} AND u.can_dm = 1
+          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'credit_ask' AND b.ref = ?)
+        ORDER BY u.id""", ref)
+    if dry:
+        return len(to)
+    with tx(con):
+        return sum(con.execute("INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after) VALUES (?, 'credit_ask', ?, '{}', ?)",
+                               (r["id"], ref, core.now())).rowcount for r in to)
 
 
 def asking(con, uid: int) -> bool:
-    """The bot, before it sends: still unanswered, still something to name them for."""
-    return _has(con, uid) and one(con, f"SELECT {_SAID} FROM users u WHERE u.id = ?", uid)[0] is None
+    """The bot, as it takes the message to send: still theirs to answer (not banned, unlinked or answered meanwhile)."""
+    return one(con, f"SELECT 1 FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ? AND {_ASKABLE}", uid) is not None
 
 
 def gone(con, tg_id: int) -> None:
     """A deleted account: its lines stay, nameless for good (no Telegram id left on them)."""
     con.execute("UPDATE credits SET tg_id = NULL WHERE tg_id = ?", (tg_id,))
+
+
+def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
+    """`kbtu.admin move`, inside its transaction: the account's lines follow it to its new Telegram, and its yes ends
+    (another name and face may stand there now: asked afresh). Lines already written for the new Telegram id would
+    come under this account too: refused unless the team says they are the same person's (`--merge-credits`)."""
+    if not merge and one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg):
+        raise ValueError("the target Telegram has its own lines in People of the app: --merge-credits if they are this person's too")
+    con.execute("UPDATE credits SET tg_id = ? WHERE tg_id = ?", (new_tg, old_tg))
+    last = one(con, "SELECT show FROM credit_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", uid)
+    if last and last["show"]:
+        con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, 0, ?, ?)", (uid, CONSENT, core.now()))
 
 
 # ------------------------------------------------------------ the team's CLI (kbtu.admin credit ...)
@@ -130,6 +182,8 @@ def add(con, tg_id: int, kind: str, ru: str, kk: str, en: str) -> int:
     lines = [" ".join(x.split()) for x in (ru, kk, en)]
     if tg_id <= 0 or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
+    if any(re.search(r"@\w|https?://|t\.me/|\d{5,}", x) for x in lines):
+        raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
         return con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?)", (tg_id, kind, *lines, core.now())).lastrowid
 

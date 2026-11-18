@@ -2045,7 +2045,7 @@ const en: Dict = {
   'cr.code': "The code is open",
   'cr.two': "{a} and {b}",
   'cr.askT': "Show you?",
-  'cr.askText': "Your work is in the app. This is how everyone will see you: your name, photo and these lines.",
+  'cr.askText': "Your work is in the app. Everyone will see your name, photo and your work: these lines and those added later.",
   'cr.askNote': "You can change it in Settings → Privacy.",
   'cr.show': "Show me",
   'cr.hide': "Don't show",

@@ -292,10 +292,11 @@
         <Row title={t('set.showGoing')} accessory="switch" checked={me.settings.showGoing} onchange={(on) => set('showGoing', on, true)} />
         <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
-        <!-- People of the app, my own consent (lib/credits.ts): only while something there is mine. On: its sheet shows
-             what everyone would see and takes the yes or the no; off: at once. Redrawn to what was kept either way -->
+        <!-- People of the app, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
+             The switch shows what is SAVED: a tap on goes back at once and opens the sheet (what everyone would see, the
+             yes or the no), and it turns on only when the server kept the yes; off: at once, my name gone from the list -->
         {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent === true}
-          onchange={(on) => { if (on) sheets.creditAsk(() => undo++); else void answerCredits(false).then(() => undo++); }} />{/key}{/if}
+          onchange={(on) => { undo++; if (on) sheets.creditAsk(); else void answerCredits(false); }} />{/key}{/if}
         <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
         {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
           onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}{/if}

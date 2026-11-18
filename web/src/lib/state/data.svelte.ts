@@ -337,9 +337,22 @@ export function loadStaffMutes(): void {
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
 }
 
-/** The people of the app: read once with the app, again after my answer. */
-export function loadCredits(): Promise<void> {
-  return api.credits().then((c) => { data.credits = c; }, () => {});
+/** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
+ *  named changes with a person's own answer, so it is read again when the screen opens and when the app comes back
+ *  (`fresh`: a copy this young will do). A reply that something newer has overtaken (a later read, my own answer) is dropped. */
+let creditsSeq = 0, creditsAt = 0, creditsFlight: Promise<void> | null = null;
+export function loadCredits(fresh = 0): Promise<void> {
+  if (creditsFlight) return creditsFlight;
+  if (fresh && data.credits && Date.now() - creditsAt < fresh) return Promise.resolve();
+  const n = ++creditsSeq;
+  const flight = api.credits().then((c) => { if (n === creditsSeq) { data.credits = c; creditsAt = Date.now(); } }, () => {})
+    .finally(() => { if (creditsFlight === flight) creditsFlight = null; });
+  return (creditsFlight = flight);
+}
+/** my own answer's reply, or the moment I send it (no list): any read still on its way is older and is dropped */
+export function setCredits(c?: Credits): void {
+  creditsSeq++; creditsFlight = null;
+  if (c) { data.credits = c; creditsAt = Date.now(); }
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again

@@ -494,9 +494,9 @@ export const server = {
   adminDay: (day: number): Promise<AdminDay> => call('GET', `/admin/stats/${day}`),
   adminAi: (): Promise<AdminAi> => call('GET', '/admin/ai'),
   aiRetry: (): Promise<void> => call('POST', '/admin/ai/retry'),
-  /** the people of the app: the whole screen in one read; my answer to "name me?" (a yes carries the text's version) */
+  /** the people of the app: the whole screen in one read; my answer to "name me?" (the text's version, and the latest answer the app saw: a yes on top of anything newer is refused) */
   credits: (): Promise<Credits> => call('GET', '/credits'),
-  creditsConsent: (show: boolean, version: string): Promise<Credits> => call('PUT', '/credits/consent', show ? { show, consent: version } : { show }),
+  creditsConsent: (show: boolean, version: string, rev: number | null): Promise<Credits> => call('PUT', '/credits/consent', { show, consent: version, rev }),
   chats: (): Promise<Chats> => call('GET', '/chats'), // the chats directory (§4.11)
   /** any chat suggested from the app: @name, a t.me link or an invite link */
   suggestChat: (link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'org' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }> => call('POST', '/chats/suggest', { link }),
