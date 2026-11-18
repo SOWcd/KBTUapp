@@ -11,8 +11,10 @@
 // iOS reports late: Telegram's frame change lands ~0.4 s after the keyboard started, when it is fully up, and the
 // content then jumped into place under a keyboard that had slid over it. So on iOS a tap into a field starts the ride
 // at once, towards the height the keyboard had last time (remembered per screen width); the real report then corrects
-// it with a short glide, and no report within 0.8 s (a hardware keyboard) takes it back down. Android's webview
-// resizes in step with its keyboard: no guess there.
+// it with a short glide. No report at all (seen Nov 18: a field in a sheet stayed under the keyboard on one iPhone):
+// the guess holds while the field has the focus, a field too high beats a field nobody can see.
+// ponytail: an iPhone with a hardware keyboard gets a sheet lifted for nothing; tell them apart if someone meets it.
+// Android's webview resizes in step with its keyboard: no guess there.
 import { onIos } from '../tg';
 
 export const keyboard = $state({ h: 0 });
@@ -27,8 +29,8 @@ export const kbEase = (x: number) => (x >= 1 ? 1 : x <= 0 ? 0 : 1 - Math.pow(1 -
 
 let full = 0, wide = 0, settle = 0, still = 0, focusAt = 0;
 // the guess: its height while no real report came yet; firm: the real reports stopped changing; tapAt: a keyboard comes
-// only for a field focused by a tap (iOS); noKb: the last guess saw no keyboard (a hardware one): no more guessing
-let guess = 0, guessT = 0, firm = 0, tapAt = -1e9, noKb = false;
+// only for a field focused by a tap (iOS)
+let guess = 0, firm = 0, tapAt = -1e9;
 const KEY = 'kb-h';
 let learnt: Record<string, number> = {};
 try { learnt = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { /* blocked */ }
@@ -41,11 +43,8 @@ function learn(h: number) {
   try { localStorage.setItem(KEY, JSON.stringify(learnt)); } catch { /* blocked */ }
 }
 function predict() {
-  const g = onIos && !noKb && performance.now() - tapAt < 1000 && editing() ? guessFor() : 0;
-  if (!g) return;
-  guess = g;
-  clearTimeout(guessT);
-  guessT = window.setTimeout(() => { if (guess) { guess = 0; noKb = true; apply(); } }, 800);
+  const g = onIos && performance.now() - tapAt < 1000 && editing() ? guessFor() : 0;
+  if (g) guess = g;
 }
 /** how long a rise may take to land with the keyboard: what is left of its motion since the field took the focus (a
  *  late report, Telegram iOS's resize 0.4 s on, finds it up already: a short glide, not a slow one) */
@@ -61,7 +60,6 @@ function apply() {
   // below 60 px it's no keyboard (a bar, a rounding); while no field has the focus it's none either (it is going down)
   let h = Math.max(0, Math.round(full - bottom));
   if (h < 60 || !editing()) h = 0;
-  if (h) { noKb = false; clearTimeout(guessT); }
   if (!editing()) guess = 0;
   // the real one rising in parts never pulls the guess back down; once its reports stand, it alone
   else if (guess && h) { clearTimeout(firm); firm = window.setTimeout(() => { guess = 0; apply(); learn(keyboard.h); }, Math.max(150, focusAt + KB_MS + 150 - performance.now())); }
