@@ -1571,6 +1571,7 @@ const ru = {
   'rc.flag.recipient_mismatch': "На чеке другой получатель: {name}",
   'rc.flag.too_early': "Чек старше самого события",
   'rc.flag.unreadable': "Не удалось прочитать: похоже, это не чек Kaspi",
+  'rc.flag.spot': "Выборочная проверка",
   'rc.amount': "Сумма",
   'rc.sender': "Отправитель",
   'rc.paidAt': "Оплачено",

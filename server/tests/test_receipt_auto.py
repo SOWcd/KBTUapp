@@ -276,20 +276,29 @@ def test_account_deletion_cascades_app_marker(paid, monkeypatch):
 
 
 def test_spot_check_sends_one_clean_receipt_in_five_to_the_organizer(paid, monkeypatch):
-    # (b) the 1 in 5 is seats._audit: the picked one waits as any unchecked receipt does (seat held, no new state)
+    # (b) the 1 in 5 is seats._audit: the picked one waits flagged 'spot' (the organizer's "Check receipts"); the
+    # student sees a receipt awaiting a check, no warning, and the door lets them in
     c, con, eid, (a, b, _), now = paid
     draws = iter([True, False])
     monkeypatch.setattr(seats, "_audit", lambda: next(draws))
     _go(c, eid, a)
     _go(c, eid, b)
-    picked = _send(paid, monkeypatch, a, _fields(now))
-    assert picked["flags"] == ""
+    monkeypatch.setattr(receipt, "read", lambda im: _fields(now))
+    my = c.post(f"/api/events/{eid}/receipt", headers=tma(a), content=_shot()).json()["my"]
+    assert my["status"] == "going" and my["receiptFlags"] == []
+    picked = con.execute("SELECT * FROM receipts WHERE id = ?", (_rid(con, eid, a),)).fetchone()
+    assert picked["flags"] == "spot"
     _unchecked(paid, a, picked)
+    assert _attendee(paid, a)["flags"] == ["spot"]
+    assert logic.organizing.flagged(con, picked["registration_id"]) is False  # not held at the door
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
     passed = _send(paid, monkeypatch, b, _fields(now, "223456789012345678"), 241)
-    assert passed["reviewed_at"] == now and _attendee(paid, b)["auto"] is True
+    assert passed["reviewed_at"] == now and passed["flags"] == "" and _attendee(paid, b)["auto"] is True
+    # Studio's "receipts to check" (EventManage's row counts the same: flags, not reviewed) has the spot one alone
+    assert {x["id"]: x["toCheck"] for x in c.get("/api/orgs/1/events", headers=tma(20)).json()}[eid] == 1
     assert c.post(f"/api/receipts/{picked['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
-    assert _attendee(paid, a)["reviewed"] is True and _attendee(paid, a)["auto"] is False
+    assert _attendee(paid, a)["reviewed"] is True and _attendee(paid, a)["auto"] is False  # a person's check, not the app's total
+    assert {x["id"]: x["toCheck"] for x in c.get("/api/orgs/1/events", headers=tma(20)).json()}[eid] == 0
 
 
 def test_audit_draws_one_in_five(monkeypatch):

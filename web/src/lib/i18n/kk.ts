@@ -1550,6 +1550,7 @@ const kk: Dict = {
   'rc.flag.recipient_mismatch': "Чекте басқа алушы: {name}",
   'rc.flag.too_early': "Чек іс-шараның өзінен ескі",
   'rc.flag.unreadable': "Оқылмады: бұл Kaspi чегі емес сияқты",
+  'rc.flag.spot': "Іріктеп тексеру",
   'rc.amount': "Сома",
   'rc.sender': "Жіберуші",
   'rc.paidAt': "Төленді",

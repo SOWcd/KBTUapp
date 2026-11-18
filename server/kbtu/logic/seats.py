@@ -798,8 +798,12 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
             con.execute("DELETE FROM files WHERE id = ? AND NOT EXISTS (SELECT 1 FROM receipts WHERE file_id = ?)", (old["file_id"], old["file_id"]))
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
-        # a clean one is checked by the app, but 1 in AUDIT still waits for the organizer, so a forgery that beats OCR gets seen
-        reviewed_at = core.now() if _receipt_clean(con, e, saved["sha256"], read, flags) and not _audit() else None
+        # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
+        # so a forgery that beats OCR gets seen; the student isn't told (my.receiptFlags) and the door doesn't stop them
+        clean = _receipt_clean(con, e, saved["sha256"], read, flags)
+        if clean and _audit():
+            flags, clean = SPOT, False
+        reviewed_at = core.now() if clean else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
         cid = con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, reviewed_at, reviewed_by, created_at)
@@ -842,6 +846,7 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 
 
 AUDIT = 5
+SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
 
 
 def _audit() -> bool:

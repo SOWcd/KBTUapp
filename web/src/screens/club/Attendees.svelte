@@ -49,7 +49,8 @@
   const host = $derived(staff || !ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
-  const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
+  // a spot check (the app found nothing wrong, a person looks anyway) isn't a warning: the plain receipt icon
+  const flagged = (a: Attendee) => !!a.receipt?.flags.some((f) => f !== 'spot') && !a.receipt.reviewed;
   const doorOpen = $derived(!plain && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;

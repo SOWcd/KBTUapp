@@ -954,8 +954,9 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 
 
 def flagged(con, rid: int) -> bool:
-    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first."""
-    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", rid) is not None
+    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
+    A spot check ('spot') isn't a warning: nothing wrong was found, the student walks in."""
+    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags NOT IN ('', 'spot') AND reviewed_at IS NULL", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
