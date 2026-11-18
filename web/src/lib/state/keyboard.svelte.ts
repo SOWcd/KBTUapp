@@ -51,6 +51,17 @@ function predict() {
 export const riseMs = () => Math.max(120, KB_MS - (performance.now() - focusAt));
 const root = typeof document !== 'undefined' ? document.documentElement : null;
 
+/** how far a bottom-anchored box (a sheet) may rise: up to its max-height, read as the height it takes stretched for one
+ *  layout. Its computed max-height keeps the percentage ("calc(100% - 58px)"): parsed, that was NaN, a short sheet never
+ *  rose and its footer went up alone, clipped out of the panel (Ask's team name under the keyboard, Nov 18) */
+export function roomAbove(el: HTMLElement) {
+  const h = el.offsetHeight, was = el.style.height;
+  el.style.height = '100000px';
+  const max = el.offsetHeight;
+  el.style.height = was;
+  return Math.max(0, max - h);
+}
+
 function apply() {
   const vv = window.visualViewport;
   // iOS pans the visual viewport to show a field the keyboard covers (the whole app slid up, then down): we place the

@@ -17,7 +17,7 @@
   import type { Component, Snippet } from 'svelte';
   import { takeIris, irisOpen, irisShut } from '../lib/state/sheets';
   import { onMount, untrack } from 'svelte';
-  import { keyboard, KB_MS, kbEase, riseMs } from '../lib/state/keyboard.svelte';
+  import { keyboard, KB_MS, kbEase, riseMs, roomAbove } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
   import { haptic, inTelegram, onAndroid, tg } from '../lib/tg';
@@ -93,11 +93,7 @@
   // layout. A body whose end sat on its bottom edge (a chat, the assistant's greeting) keeps it there, above the footer.
   let kbNow = 0, kbFrom = 0, kbTo = 0, kbT0 = 0, kbEnd = 0, kbRaf = 0, free = 0, pinFrom = -1, pinMax = Infinity, natMax = 0, inFrom = 0, roomPx = 0;
   const innerOf = (k: number) => Math.max(0, k - free);
-  function freeAbove() {
-    if (full) return 0;
-    const max = parseFloat(getComputedStyle(panel).maxHeight), parent = (panel.offsetParent as HTMLElement | null)?.clientHeight ?? 0;
-    return Number.isFinite(max) && parent ? Math.max(0, panel.offsetTop - (parent - max)) : 0;
-  }
+  const freeAbove = () => (full ? 0 : roomAbove(panel));
   function setRoom(px: number) { if (px !== roomPx) { roomPx = px; body.style.setProperty('--kb-room', `${px}px`); } }
   function place(k: number) {
     const lift = Math.min(k, free), inner = k - lift;

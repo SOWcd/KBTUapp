@@ -15,7 +15,7 @@ vi.stubGlobal('window', { visualViewport: vv, setTimeout, addEventListener: list
 for (const [k, v] of Object.entries({ innerHeight: 812, innerWidth: 375, scrollY: 0, addEventListener: listen, scrollTo: () => {}, getComputedStyle: () => ({ overflowY: 'visible' }) }))
   vi.stubGlobal(k, v);
 vi.mock('../tg', () => ({ onIos: true }));
-const { keyboard } = await import('./keyboard.svelte');
+const { keyboard, roomAbove } = await import('./keyboard.svelte');
 
 async function tap() { fire('pointerdown'); doc.activeElement = field; fire('focusin'); await Promise.resolve(); }
 async function blur() { doc.activeElement = null; fire('focusout'); await Promise.resolve(); vv.height = 812; fire('vv:resize'); }
@@ -41,4 +41,15 @@ it('no report ever comes: the guess holds while the field has the focus', async 
   expect(keyboard.h).toBe(301); // a field too high beats a field under the keyboard
   await blur();
   expect(keyboard.h).toBe(0);
+});
+
+it("a short sheet's room to rise is its max-height less its height, whatever the computed style says", () => {
+  // a panel 200 tall whose max-height (calc(100% - 58px) in a box of 812) lets it grow to 754
+  const style = { height: '' };
+  const panel = { style, get offsetHeight() { return style.height ? Math.min(parseFloat(style.height), 754) : 200; } } as unknown as HTMLElement;
+  expect(roomAbove(panel)).toBe(554);
+  expect(style.height).toBe(''); // left as it was
+  style.height = '754px'; // a tall one: no room
+  expect(roomAbove(panel)).toBe(0);
+  expect(style.height).toBe('754px');
 });
