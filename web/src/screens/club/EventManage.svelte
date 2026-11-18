@@ -44,7 +44,7 @@
   import Share from '@lucide/svelte/icons/share';
   import BellRing from '@lucide/svelte/icons/bell-ring';
   import { shareCard } from '../../lib/tg';
-  import SantaTerms, { readTerms, termsFrom } from './SantaTerms.svelte';
+  import SantaTerms, { readTerms, termsFrom, type Terms } from './SantaTerms.svelte';
 
   // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money;
   // the creator runs it as its President would (server app.viewer), all but the club's money and reports (`plain`: the rest)
@@ -85,18 +85,16 @@
   // editable here, the reminder to those not in yet (once a day) and the game's card for the club's chat
   let santaTeam = $state<NonNullable<EventFull['santaTeam']> | null>(null);
   const until = (ts: number) => `${dayMonthShort(ts)}, ${time(ts)}`;
-  let terms = $state<{ budget: string; day: string; hm: string } | null>(null);
-  let termsTried = $state(false);
+  let terms = $state<Terms | null>(null);
   function editTerms() {
     if (!e) return;
     haptic.tap();
-    termsTried = false;
-    terms = terms ? null : termsFrom(e.santa?.budget, e.regUntil ?? e.startsAt);
+    terms = terms ? null : termsFrom(e.santa?.budget, e.regUntil ?? e.startsAt, e.startsAt);
   }
   async function saveTerms() {
     if (!e || !terms) return;
-    const r = readTerms(terms, e.startsAt);
-    if (r.badBudget || r.badUntil) { termsTried = true; haptic.error(); return; }
+    const r = readTerms(terms);
+    if (r.bad) return;
     const c = eventById(id), was = c ? { santa: c.santa, regUntil: c.regUntil } : null;
     if (c) { c.santa = { drawn: false, ...(r.budget ? { budget: r.budget } : {}) }; c.regUntil = r.until; } // optimistic: the rows show it at once
     terms = null; haptic.ok();
@@ -322,8 +320,8 @@
         </Group>
         {#if terms}
           <form class="terms" onsubmit={(ev) => { ev.preventDefault(); void saveTerms(); }}>
-            <SantaTerms bind:f={terms} starts={e.startsAt} tried={termsTried} />
-            <Button kind="primary" size="l" full type="submit">{t('common.save')}</Button>
+            <SantaTerms bind:f={terms} fixed />
+            <Button kind="primary" size="l" full type="submit" disabled={readTerms(terms).bad}>{t('common.save')}</Button>
           </form>
         {/if}
         {#if !e.santa.drawn && live && santaTeam}
