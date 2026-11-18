@@ -60,6 +60,8 @@ _swore: dict[tuple[int, int], list[float]] = {}  # (chat, person; 0: the chat) -
 _tagging: set[int] = set()  # ponytail: chats with an /all running, per worker (the bot runs in one: its lock); a table if that changes
 _tagged: dict[int, float] = {}  # a chat's last /all finished then (ALL_AGAIN); per worker as _tagging, a few bytes a group
 ALL_AGAIN = 300             # a chat's next /all no sooner than this after the last ended: no calling everyone in a loop
+EMPTY_WAIT = 60             # after an /all that called nobody: no rescan of the chat's roster on every message
+_moved: dict[int, int] = {}  # a group turned supergroup: old id -> new (a run that spans it records its wait under the new)
 TAG_MAX = 300               # people one /all calls at most: 60 messages, about 3 minutes at TAG_GAP
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
@@ -1321,6 +1323,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         logic.chatmod.stale()  # its swear filter goes on under the new id at once
         if chat["id"] in _tagged:  # /all's wait goes on under the new id too
             _tagged[new] = _tagged[chat["id"]]
+        _moved[chat["id"]] = new  # a few bytes, once in a group's life
         return
     words = str(msg.get("text") or "").split()
     # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
@@ -1339,9 +1342,9 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         if chat["id"] == cfg.tgc_chat or (msg.get("reply_to_message") or {}).get("is_automatic_forward"):
             return
         who = int(sender.get("id") or 0)
-        # anyone in the chat calls (owner, Nov 18: clubs asked), not only role holders and admins. This very message
-        # proves its sender is in the chat (Telegram delivers a group's messages from its members; a forward, a channel
-        # or an anonymous admin was refused above): no getChatMember. The app's banned never call (silence).
+        # anyone in the chat calls (owner, Nov 18: clubs asked), not only role holders and admins: Telegram is asked
+        # once the run starts (_tag_all; a message alone proves nothing where guests may write). The app's banned
+        # never call (silence).
         if logic.chatlist.banned(con, who):
             return
         if chat["id"] in _tagging or time.time() - _tagged.get(chat["id"], 0) < ALL_AGAIN:  # one run, then ALL_AGAIN: say so, then both go
@@ -1392,8 +1395,9 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 
 
 def _refuse(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None, key: str) -> None:
-    """/all answered without calling (all_soon, all_none): one such answer a chat each ALL_NO_TTL."""
-    if time.time() - _denied.get(chat, 0) > ALL_NO_TTL:
+    """/all answered without calling (all_soon, all_none): one such answer a chat each ALL_NO_TTL, one pending."""
+    pending = tgc._last.get(f"allno:{chat}")
+    if time.time() - _denied.get(chat, 0) > ALL_NO_TTL and not (pending and not pending.done()):  # one waiting a chat at most
         _denied[chat] = time.time()
         tgc.spawn(_all_no(cfg, http, chat, mid, lang, key), f"allno:{chat}")
 
@@ -1502,6 +1506,11 @@ async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> N
     await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
 
 
+def _inert(say: str) -> str:
+    """The caller's words, repeated: never a mention, a link, a command, a hashtag (a word joiner after the sign)."""
+    return re.sub(r"([@#$/.:])", "\\1\u2060", say)
+
+
 async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who: int, say: str = "", mid: int = 0, lang: str | None = None) -> None:
     """/all by `who`: everyone in the chat, five a message (Telegram notifies only the first five mentions), each an emoji
     linked by id (no username needed), as replies under `to`; stops at the first refusal. Whom: the app's list, the seen
@@ -1515,8 +1524,10 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
     gone: list[int] = []
     called = sent_n = 0
     failed = False
-    head = f"{html.escape(say)}\n\n" if say else ""
-    body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True}}
+    head = f"{html.escape(_inert(say))}\n\n" if say else ""
+    body = {"chat_id": chat, "parse_mode": "HTML", "reply_parameters": {"message_id": to, "allow_sending_without_reply": True},
+            "link_preview_options": {"is_disabled": True}}
+    quiet = False
 
     async def send(batch: list[int]) -> bool:
         nonlocal called, sent_n, failed
@@ -1533,10 +1544,19 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
         return True
 
     try:
-        live = await mtbot.members(cfg, chat, TAG_MAX) or []  # read no further than the cap: a 10 000 group costs 300 ids
+        # the caller is in the chat now, by Telegram (one call per run; a guest in a channel's comments isn't)
+        me = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": who}, 0)
+        st = (me or {}).get("result") or {} if me and me.get("ok") else {}
+        status = st.get("status")
+        if not (status in ("creator", "administrator", "member") or status == "restricted" and st.get("is_member")):
+            quiet = True
+            return
+        roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
+        # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
+        live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
         con = db.connect(cfg.db_path)
         try:
-            people = logic.tag_all(con, chat, who, live)
+            people = [t for t in logic.tag_all(con, chat, who, live) if not roster or t not in roster.skip]  # deleted, bots
         finally:
             con.close()
         sure = set(live)
@@ -1562,10 +1582,15 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
             await send(batch[:TAG_MAX - called])
     finally:
         _tagging.discard(chat)
-        if called or failed:
-            _tagged[chat] = time.time()
-        elif mid:  # never silence for a call on purpose; the bot unable to send stays silent (it can't speak)
-            _refuse(cfg, http, chat, mid, lang, "all_none")
+        now_id = _moved.get(chat, chat)  # turned supergroup meanwhile: the wait goes on under its new id
+        if quiet:
+            pass
+        elif called or failed:
+            _tagged[now_id] = time.time()
+        else:  # nobody called: a short wait only; never silence for a call on purpose (the bot unable to send stays silent)
+            _tagged[now_id] = time.time() - max(0, ALL_AGAIN - EMPTY_WAIT)
+            if mid:
+                _refuse(cfg, http, chat, mid, lang, "all_none")
         if gone:
             con = db.connect(cfg.db_path)
             try:
@@ -2073,17 +2098,20 @@ async def run(cfg: Config) -> None:
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         if cfg.chat_sync:  # before the first poll: a join in that window would never come again
             _sync_live = logic.chatsync.live(db.connect(cfg.db_path))
-        async with httpx.AsyncClient(timeout=15) as http:
-            await load_pack(cfg, http)
-            await _commands(cfg, http)
-            # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
-            # poller outlives leadership (gather left them running after the lock was let go)
-            while True:
-                try:
-                    async with asyncio.TaskGroup() as tg:
-                        for job in (_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
-                                    *([_chat_sync(cfg, http)] if cfg.chat_sync else [])):
-                            tg.create_task(job)
-                except Exception:  # noqa: BLE001 - restarted under the same lock; a cancel (shutdown) goes through
-                    log.exception("bot children")
-                    await asyncio.sleep(5)
+        try:
+            async with httpx.AsyncClient(timeout=15) as http:
+                await load_pack(cfg, http)
+                await _commands(cfg, http)
+                # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
+                # poller outlives leadership (gather left them running after the lock was let go)
+                while True:
+                    try:
+                        async with asyncio.TaskGroup() as tg:
+                            for job in (_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
+                                        *([_chat_sync(cfg, http)] if cfg.chat_sync else [])):
+                                tg.create_task(job)
+                    except Exception:  # noqa: BLE001 - restarted under the same lock; a cancel (shutdown) goes through
+                        log.exception("bot children")
+                        await asyncio.sleep(5)
+        finally:
+            await mtbot.close()  # the bot's MTProto session goes before the lock does

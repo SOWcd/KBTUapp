@@ -106,6 +106,7 @@ def _setup(c, cfg, monkeypatch, on=True):
     monkeypatch.setattr(bot, "WARN_FOR", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
     bot._swore.clear()
+    monkeypatch.setattr(bot, "_moved", {})
     logic.chatmod.stale()
     for tg in (20, 21, 22, 31, 41):
         login(c, tg, f"u{tg}")
@@ -373,7 +374,7 @@ def test_all_in_a_chat_no_club_holds(env, monkeypatch):
     sent = http.said("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == -555 and sent[0]["text"] == texts.bot_message("ru", "all_none")[0]
     assert sent[0]["reply_parameters"]["message_id"] == 7 and {"chat_id": -555, "message_id": 7} in http.said("deleteMessage")
-    assert not bot._tagged                                                            # nobody called: no wait after
+    assert time.time() - bot._tagged[-555] >= bot.ALL_AGAIN - bot.EMPTY_WAIT - 1       # nobody called: only a short wait
 
 
 async def _no_list(cfg, chat, cap):
