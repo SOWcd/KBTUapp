@@ -50,6 +50,8 @@
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin round-nudge <round id> [--dry]   a recruitment round's "pick an interview time" nudge (due
+                                48 hours after the invite) goes now to the invited without a time; --dry: the count only
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
                                 ago (edited by hand in campus_places)
@@ -268,6 +270,10 @@ def main(args: list[str]) -> None:
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "round-nudge" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--dry"]):
+        from . import casting
+        n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))
+        print(f"{'would send now' if args[2:] else 'sending now'} {n}")
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"

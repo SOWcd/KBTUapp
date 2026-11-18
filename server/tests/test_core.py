@@ -3437,6 +3437,8 @@ def test_casting(env):
     took = c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": w["id"]})                   # an open window is booked like any time
     assert took.status_code == 200 and [x["id"] for x in took.json() if x.get("mine")] == [w["id"]]
     c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": None})
+    assert casting.nudge_now(con, rid, dry=True) == 1 and casting.nudge_now(con, rid) == 1 and casting.nudge_now(con, rid) == 0   # admin round-nudge: now, once
+    assert con.execute("SELECT send_after <= ? FROM bot_outbox WHERE kind = 'round_iv_nudge'", (logic.now(),)).fetchone()[0] == 1
     assert len(c.delete(f"/api/round-slots/{w['id']}", headers=tma(21)).json()) == 3
     mine = c.post(f"/api/rounds/{rid}/book", headers=tma(10), json={"slotId": got[1]["id"]}).json()
     assert [x["id"] for x in mine if x.get("mine")] == [got[1]["id"]]

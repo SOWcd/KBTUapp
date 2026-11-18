@@ -465,6 +465,17 @@ def invite(con, v: Viewer, rid: int) -> dict:
     return {"invited": n}
 
 
+def nudge_now(con, rid: int, dry: bool = False) -> int:
+    """By hand (admin round-nudge): the 48-hour "pick a time" nudge of a round goes now to the invited who haven't
+    picked one, e.g. when the first time is sooner than the nudge. Once each: it is the same outbox row."""
+    q = """FROM bot_outbox WHERE kind = 'round_iv_nudge' AND sent_at IS NULL AND error IS NULL AND send_after > ?
+        AND CAST(substr(ref, 5) AS INTEGER) IN (SELECT id FROM round_apps WHERE round_id = ? AND stage = 'next' AND slot_id IS NULL)"""
+    if dry:
+        return one(con, "SELECT COUNT(*) " + q, now(), rid)[0]
+    with tx(con):
+        return con.execute("UPDATE bot_outbox SET send_after = ? WHERE id IN (SELECT id " + q + ")", (now(), now(), rid)).rowcount
+
+
 def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     """An invited applicant takes a time (or gives it up: null) while it has room and hasn't started. The bot reminds
     them the evening before (19:00) and an hour before."""
