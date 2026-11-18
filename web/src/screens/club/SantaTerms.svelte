@@ -7,42 +7,90 @@
   export function defaultUntil(starts: number): number {
     return Math.min(starts - LEAD, starts - 7 * 86400 > nowTs() ? starts - 7 * 86400 : nowTs() + Math.floor((starts - nowTs()) / 2));
   }
-  export const termsFrom = (budget: number | null | undefined, until: number) => ({ budget: budget ? String(budget) : '', day: dateInput(until), hm: time(until) });
+  /** budget: digits as typed; day, hm: the wishlists' deadline; gDay, gHm: the gifts day; touched: the deadline was set by hand */
+  export type Terms = { budget: string; day: string; hm: string; gDay: string; gHm: string; touched: boolean };
+  const group = (digits: string) => digits.replace(/\B(?=(\d{3})+$)/g, ' ');
+  export const termsFrom = (budget: number | null | undefined, until: number, starts: number): Terms =>
+    ({ budget: budget ? group(String(budget)) : '', day: dateInput(until), hm: time(until), gDay: dateInput(starts), gHm: time(starts), touched: false });
   /** The fields read: the values to send, or what is wrong (bounds as the server's: 100 to 1 000 000 ₸, now < until ≤ the gifts day − an hour). */
-  export function readTerms(f: { budget: string; day: string; hm: string }, starts: number) {
-    const raw = f.budget.replace(/\s/g, ''), budget = raw ? Number(raw) : null, until = fromInputs(f.day, f.hm);
-    return { budget, until, badBudget: budget !== null && !(Number.isInteger(budget) && budget >= 100 && budget <= 1_000_000),
-             badUntil: !Number.isFinite(until) || until <= nowTs() || until > starts - LEAD };
+  export function readTerms(f: Terms) {
+    const raw = f.budget.replace(/\s/g, ''), budget = raw ? Number(raw) : null, until = fromInputs(f.day, f.hm), starts = fromInputs(f.gDay, f.gHm);
+    const badStarts = !(starts > nowTs());
+    // why the deadline is wrong, in the order a person fixes it
+    const untilErr = !Number.isFinite(until) || until <= nowTs() ? 'santa.untilPast' as const : until > starts - LEAD ? 'santa.untilLate' as const : null;
+    const badBudget = budget !== null && !(Number.isInteger(budget) && budget >= 100 && budget <= 1_000_000);
+    return { budget, until, starts, badBudget, badStarts, untilErr, badUntil: !!untilErr, bad: badBudget || badStarts || !!untilErr };
   }
 </script>
 
 <script lang="ts">
-  // Secret Santa's two settings (server santa.py): the gift's budget and the wishlists' deadline, at the start
-  // (SantaHi) and until the draw (EventManage). Field's look; the date and time native (Field has no such type).
-  import Field from '../../ui/Field.svelte';
+  // Secret Santa's settings (server santa.py) as one Settings-like card: the gift's limit, the wishlists' deadline and
+  // the gifts day; at the start (SantaHi: all three) and until the draw (EventManage: `fixed`, the gifts day is the
+  // event's own start, changed in the editor). Dates as the event editor's: the app's own words in a pill, the
+  // phone's picker under it. The deadline follows the gifts day until a hand sets it.
   import { t } from '../../lib/i18n/index.svelte';
+  import { dayMonthShort } from '../../lib/time';
 
-  let { f = $bindable(), starts, tried = false }: { f: { budget: string; day: string; hm: string }; starts: number; tried?: boolean } = $props();
-  const r = $derived(readTerms(f, starts));
+  let { f = $bindable(), fixed = false }: { f: Terms; fixed?: boolean } = $props();
+  const r = $derived(readTerms(f));
+  let typing = $state(false); // a sum half typed is not an error yet
+  const why = $derived(r.badBudget && !typing ? t('santa.badBudget') : r.badStarts ? t('santa.dayPast') : r.untilErr ? t(r.untilErr) : '');
+  const day = (ts: number) => (Number.isFinite(ts) ? dayMonthShort(ts) : '—');
+
+  function follow() {
+    if (f.touched || !(r.starts > nowTs() + LEAD)) return;
+    const u = defaultUntil(r.starts);
+    f.day = dateInput(u); f.hm = time(u);
+  }
 </script>
 
 <div class="terms">
-  <Field label="{t('santa.budget')}, ₸" bind:value={f.budget} inputmode="numeric" maxlength={9} placeholder={t('santa.budgetPh')} enterkeyhint="done"
-    error={tried && r.badBudget ? t('santa.badBudget') : undefined} />
-  <div class="two">
-    <label class="fl" class:bad={tried && r.badUntil}><span>{t('santa.until')}</span><input type="date" bind:value={f.day} /></label>
-    <label class="fl" class:bad={tried && r.badUntil}><span>{t('santa.untilTime')}</span><input type="time" bind:value={f.hm} /></label>
+  <div class="card">
+    <label class="row" class:bad={r.badBudget && !typing}>
+      <b>{t('santa.budgetTo')}</b>
+      <input class="sum" bind:value={() => f.budget, (v) => (f.budget = group(v.replace(/\D/g, '').slice(0, 7)))} inputmode="numeric" maxlength={9}
+        placeholder={t('santa.budgetPh')} enterkeyhint="done" onfocus={() => (typing = true)} onblur={() => (typing = false)} />
+      {#if f.budget}<span class="cur">₸</span>{/if}
+    </label>
+    <div class="row" class:bad={r.badUntil && !r.badStarts} onchange={() => (f.touched = true)}>
+      <b>{t('santa.until')}</b>
+      <label class="tv">{day(r.until)}<input type="date" bind:value={f.day} min={dateInput(nowTs())} max={fixed ? f.gDay : undefined} aria-label={t('santa.until')} /></label>
+      <label class="tv">{f.hm || '—'}<input type="time" bind:value={f.hm} aria-label={t('ed.time')} /></label>
+    </div>
+    <div class="row" class:bad={r.badStarts} onchange={follow}>
+      <b>{t('santa.day')}</b>
+      {#if fixed}<span class="val">{day(r.starts)}, {f.gHm}</span>
+      {:else}
+        <label class="tv">{day(r.starts)}<input type="date" bind:value={f.gDay} min={dateInput(nowTs())} aria-label={t('santa.day')} /></label>
+        <label class="tv">{f.gHm || '—'}<input type="time" bind:value={f.gHm} aria-label={t('ed.time')} /></label>
+      {/if}
+    </div>
   </div>
-  {#if tried && r.badUntil}<p class="err t-foot">{t('santa.badUntil')}</p>{/if}
+  <!-- the line's room is always there: the sheet stays still when it speaks -->
+  <p class="why" role="status">{why}</p>
 </div>
 
 <style>
-  .terms { display: flex; flex-direction: column; gap: var(--s-3); width: 100%; text-align: left; }
-  .two { display: grid; grid-template-columns: 3fr 2fr; gap: var(--s-2); }
-  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
-    font: 450 var(--fs-row)/1.35 var(--font-text); }
-  .fl.bad > input { box-shadow: inset 0 0 0 1.5px var(--danger); }
-  .err { margin: 0; padding: 0 var(--s-4); color: var(--danger-text); }
+  .terms { width: 100%; text-align: left; }
+  .card { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--group-bg, var(--surface)); box-shadow: var(--card-rim, none); }
+  .row { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: var(--row-h); padding: 0 var(--s-3) 0 var(--s-4); }
+  .row + .row::before { content: ''; position: absolute; left: var(--s-4); right: 0; top: 0; height: 0.5px; background: var(--separator); }
+  .row b { flex: 1 1 auto; min-width: 0; font: var(--fw-row) var(--fs-row)/1.25 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
+  /* the sum: typed at the row's end, 17 px (16 or more keeps iOS from zooming in) */
+  .sum { flex: 1 1 0; width: 0; min-width: 6ch; align-self: stretch; padding: 0; background: none; text-align: right; color: var(--text);
+    font: 600 var(--fs-row)/1.25 var(--font-text); font-variant-numeric: tabular-nums; }
+  .sum::placeholder { color: var(--text-3); font-weight: 450; }
+  label.row b { flex: 0 0 auto; }
+  .cur, .sum:placeholder-shown { padding-right: var(--s-1); }
+  .cur { flex: none; color: var(--text-2); font: 600 var(--fs-row)/1.25 var(--font-text); }
+  .val { flex: none; padding-right: var(--s-1); color: var(--text-2); font: 450 var(--fs-row)/1.25 var(--font-text); white-space: nowrap; }
+  /* EventEditor's .tv: the value in the app's language, the phone's own picker lying over it */
+  .tv { position: relative; flex: none; padding: 8px var(--s-2); border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text);
+    font-variant-numeric: tabular-nums; white-space: nowrap; transition: background-color var(--t-fast); }
+  .tv:active { background: var(--surface-3); }
+  .tv input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+  .bad .tv, .bad .sum, .bad .cur { color: var(--danger-text); }
+  /* 320 px: "the gifts day" and both pills on one line */
+  @media (max-width: 340px) { .row { gap: 6px; padding-right: var(--s-2); } .tv { padding-inline: 6px; } }
+  .why { min-height: 1.4em; margin: var(--s-2) var(--s-4) 0; font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--danger-text); }
 </style>
