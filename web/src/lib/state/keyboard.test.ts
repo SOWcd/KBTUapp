@@ -1,4 +1,4 @@
-// iOS's keyboard is guessed at the tap (its report comes late): the guess, the real height taking over, no keyboard at all.
+// iOS's keyboard is guessed at the tap (its report comes late): the guess, the real height taking over, no report at all.
 import { beforeEach, expect, it, vi } from 'vitest';
 
 vi.useFakeTimers();
@@ -35,12 +35,10 @@ it('rises at the tap, then the real height takes over', async () => {
   expect(keyboard.h).toBe(301); // remembered
 });
 
-it('no keyboard comes: back down, and no more guessing', async () => {
+it('no report ever comes: the guess holds while the field has the focus', async () => {
   await tap();
-  expect(keyboard.h).toBeGreaterThan(0);
-  vi.advanceTimersByTime(900);
-  expect(keyboard.h).toBe(0);
+  vi.advanceTimersByTime(5000);
+  expect(keyboard.h).toBe(301); // a field too high beats a field under the keyboard
   await blur();
-  await tap();
   expect(keyboard.h).toBe(0);
 });
