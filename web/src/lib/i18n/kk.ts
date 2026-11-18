@@ -733,6 +733,8 @@ const kk: Dict = {
   'list.toClubs': "Клубтарға",
   'list.dorm': "Жатақхана",
   'list.bldg2': "К2",
+  'list.itkie': "ИТКиЭ",
+  'list.ihn': "ИХН",
   'list.freeDay': 'Бос күн',
   'list.past': 'Өткендер',
 

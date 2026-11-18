@@ -2,7 +2,7 @@
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
 import ru from './i18n/ru';
-import { addressGis, atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
+import { addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -65,6 +65,19 @@ it('the second building', () => {
   expect(atBldg2('\u041a\u043e\u0440\u043f\u0443\u0441 \u211612')).toBe(false); // building 12 is another
   expect(atBldg2('312')).toBe(false);
   expect(roomOf('312')).toBe('312');
+});
+
+// the two institutes off campus: their room numbers are not the main building's
+it('the institutes off campus', () => {
+  const a = awayOf('\u0418\u0422\u041a\u0438\u042d \u043a\u0430\u0431 \u21161(\u0443\u043b\u0438\u0446\u0430 \u041a\u0443\u043d\u0430\u0435\u0432\u0430 142)'); // "ITKiE kab No1(Kunaeva st. 142)"
+  expect(a?.k).toBe('itkie');
+  expect(a?.room).toBe('1'); // not the street's 142
+  const b = '\u0418\u0425\u041d\u2116314'; // "IHN No314"
+  expect(awayOf(b)).toMatchObject({ k: 'ihn', room: '314' });
+  expect(roomOf(b)).toBe(null);
+  expect(floorOf(b)).toBe(null);
+  expect(addressGis('\u0418\u0422\u041a\u0438\u042d \u043a\u0430\u0431 \u21161(\u0443\u043b\u0438\u0446\u0430 \u041a\u0443\u043d\u0430\u0435\u0432\u0430 142)')).toBe(null);
+  expect(awayOf('314')).toBe(null);
 });
 
 it('a typed street address becomes a 2GIS search; rooms and campus places never do', () => {

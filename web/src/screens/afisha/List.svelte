@@ -22,7 +22,7 @@
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
-  import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
+  import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
   import { openLink, haptic } from '../../lib/tg';
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
@@ -167,6 +167,7 @@
                     {#if floorOf(it.c.room) != null}<span class="cl-r on"><Button kind="tinted" size="s" onclick={() => sheets.map(it.c.room!)}>{#snippet icon()}<MapIcon size={14} />{/snippet}{it.c.room}</Button></span>
                     {:else if atBldg2(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(BLDG2_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</Button></span>
                     {:else if atDorm(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(DORM_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{t('list.dorm')}</Button></span>
+                    {:else if awayOf(it.c.room)}{@const aw = awayOf(it.c.room)!}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(aw.url)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{[t(`list.${aw.k}`), aw.room].filter(Boolean).join(' ')}</Button></span>
                     {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
                   </div>
 {/snippet}

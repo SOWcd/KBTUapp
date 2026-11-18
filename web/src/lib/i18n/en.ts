@@ -733,6 +733,8 @@ const en: Dict = {
   'list.toClubs': "To clubs",
   'list.dorm': "Dorm",
   'list.bldg2': "B2",
+  'list.itkie': "ITKiE",
+  'list.ihn': "IHN",
   'list.freeDay': 'Free day',
   'list.past': 'Past',
 

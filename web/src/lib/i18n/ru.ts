@@ -733,6 +733,8 @@ const ru = {
   'list.toClubs': "К клубам",
   'list.dorm': "Общага",
   'list.bldg2': "К2",
+  'list.itkie': "ИТКиЭ",
+  'list.ihn': "ИХН",
   'list.freeDay': 'Свободный день',
   'list.past': 'Прошедшие',
 

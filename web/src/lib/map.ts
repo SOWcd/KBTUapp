@@ -60,7 +60,7 @@ export const adminZone = (room: string | null | undefined): boolean => !!room &&
  *  short number in an address ("12 mkr") never counts; a leading zero is dropped ("045" → "45"). */
 const BASEMENT = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)\.?\s*\u2116?\s*)?0?([1-9]\d?[a-g\u0430-\u0433]?)$/i;
 export function roomOf(place: string | null | undefined): string | null {
-  if (atBldg2(place)) return null; // "312" there is not the main building's 312
+  if (atBldg2(place) || awayOf(place)) return null; // "312" there is not the main building's 312
   const p = place?.trim() ?? '', m = p.match(ROOM), b = p.match(BASEMENT);
   if (m) return normRoom(m[1] + (m[2] ?? ''));
   if (b) return normRoom(b[1]);
@@ -82,7 +82,7 @@ export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
  *  second building: a word of three letters or more and a house number. */
 export function addressGis(place: string): string | null {
   const p = place.trim();
-  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || !/\p{L}{3,}/u.test(p) || !/(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p)) return null;
+  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || awayOf(p) || !/\p{L}{3,}/u.test(p) || !/(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p)) return null;
   return `https://2gis.kz/almaty/search/${encodeURIComponent(p)}`;
 }
 export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
@@ -97,6 +97,18 @@ export const atBldg2 = (place: string | null | undefined): boolean => !!place &&
  *  "Korpus No. 2, 312", "2 korpus, 312" → "312"), never the building's own 2 or a street's number */
 const BLDG2_LEAD = new RegExp(`^(?:${BLDG2.source})[\\s,.:-]*`, 'i');
 export const bldg2Room = (place: string): string | null => place.trim().replace(BLDG2_LEAD, '').match(/^\d+[^\s(,]*/)?.[0] ?? null;
+
+/** Two institutes off campus where labs are held (Yaroslav, a student, Nov 18: they stood as plain text): the portal
+ *  writes "ITKiE kab No1 (Kunaeva 142)" and "IHN No25". No map here: the schedule shows "IHN 25" that opens the
+ *  institute in 2GIS (his links, without the invite marks). The escapes are the two abbreviations in Russian. */
+const AWAY = [
+  { k: 'itkie', re: /\u0438\u0442\u043a\u0438\u044d/i, url: 'https://2gis.kz/almaty/geo/9429940000795839' },
+  { k: 'ihn', re: /\u0438\u0445\u043d/i, url: 'https://2gis.kz/almaty/geo/9429940000795852/76.953742,43.247277' },
+] as const;
+export function awayOf(place: string | null | undefined): { k: 'itkie' | 'ihn'; url: string; room: string | null } | null {
+  const a = place && AWAY.find((x) => x.re.test(place));
+  return a ? { k: a.k, url: a.url, room: place.match(/\u2116\s*(\d+[a-z\u0430-\u044f]?)/i)?.[1] ?? null } : null;
+}
 
 /** The map ahead of its first opening (owner, Nov 15: the first tap opens it at once): its chunk with MapLibre, the
  *  workers, the first floor's overview and tiles (screens/map/CampusMap.svelte warm). Called in an idle moment after the
