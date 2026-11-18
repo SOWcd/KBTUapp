@@ -2213,6 +2213,8 @@ const en: Dict = {
   'mg.expected': "Should come in",
   'mg.byReceipts': "By receipts",
   'mg.unread': "not read: {n}",
+  'mg.auto': "Checked by the app: {n}",
+  'mg.autoHint': "Compare this sum with Kaspi",
   'mg.check': "Check receipts",
   'mg.going': "Going",
   'mg.came': "Came",

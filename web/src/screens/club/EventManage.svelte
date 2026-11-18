@@ -75,6 +75,9 @@
   const paying = $derived(going.filter((a) => !a.free).length);
   const byReceipts = $derived(going.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
   const unread = $derived(going.filter((a) => a.receipt && a.receipt.amount == null).length);
+  // receipts the app checked by itself (no person looked): one total to find in Kaspi instead of every receipt
+  const auto = $derived(going.filter((a) => a.receipt?.auto));
+  const autoSum = $derived(auto.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
   // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
@@ -362,6 +365,7 @@
           <Row title={t('mg.byReceipts')} subtitle={unread ? t('mg.unread', { n: unread }) : undefined}>
             {#snippet detail()}<span class="sum num" class:short={byReceipts < paying * price}>{money(byReceipts)}</span>{/snippet}
           </Row>
+          {#if auto.length}<Row title={t('mg.auto', { n: auto.length })} subtitle={t('mg.autoHint')} value={money(autoSum)} />{/if}
         </Group>
       {/if}
 

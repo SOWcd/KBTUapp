@@ -106,7 +106,7 @@ def _ocr_pass(g: Image.Image) -> dict | None:
 
 
 # "4 680 <tenge sign>", often read as "4680" and a Latin T or a Cyrillic capital te (U+0422) or small te (U+0442)
-AMOUNT = re.compile(r"[-+]?\s*(\d{1,3}(?:[ \u00a0\u202f]?\d{3})*)(?:[.,]\d{2})?\s*[\u20b8T\u0422\u0442]")
+AMOUNT = re.compile(r"([-+\u2212\u2013]?)\s*(\d{1,3}(?:[ \u00a0\u202f]?\d{3})*)(?:[.,]\d{2})?\s*[\u20b8T\u0422\u0442]")
 WHEN = re.compile(r"(\d{2})[.,](\d{2})[.,](\d{4})\D{0,3}(\d{1,2})[:.](\d{2})")
 NAME = re.compile(r"[^\W\d_]{2,}(?:-[^\W\d_]+)?\s+[^\W\d_]\.\s?(?:[^\W\d_]\.)?$")       # "Surname I.O." at a line's end
 TO = re.compile(r"[^\W\d_]{2,}(?:-[^\W\d_]+)?\s+[^\W\d_]\.?")                          # the recipient's line: "Name S."
@@ -118,8 +118,10 @@ def parse(text: str) -> dict:
     wraps the 18 digits) the receipt number, dd.mm.yyyy hh:mm the time, "Surname I.O." ending a line the sender."""
     lines = [x.strip() for x in text.splitlines() if x.strip()]
     out: dict = {}
-    if m := next((m for x in lines if (m := AMOUNT.fullmatch(x)) and int(re.sub(r"\D", "", m[1])) > 0), None):
-        out["amount"] = int(re.sub(r"\D", "", m[1]))
+    if m := next((m for x in lines if (m := AMOUNT.fullmatch(x)) and int(re.sub(r"\D", "", m[2])) > 0), None):
+        out["amount"] = int(re.sub(r"\D", "", m[2]))
+        if m[1]:
+            out["signed"] = True  # a payment's receipt prints the sum bare; "+"/"-" is a history line or money coming back
     rec = next((i for i, x in enumerate(lines) if TO.fullmatch(x)), -1)
     if rec >= 0:
         out["recipient"] = lines[rec]

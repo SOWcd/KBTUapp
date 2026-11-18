@@ -798,7 +798,8 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
             con.execute("DELETE FROM files WHERE id = ? AND NOT EXISTS (SELECT 1 FROM receipts WHERE file_id = ?)", (old["file_id"], old["file_id"]))
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
-        reviewed_at = core.now() if _receipt_clean(con, e, saved["sha256"], read, flags) else None
+        # a clean one is checked by the app, but 1 in AUDIT still waits for the organizer, so a forgery that beats OCR gets seen
+        reviewed_at = core.now() if _receipt_clean(con, e, saved["sha256"], read, flags) and not _audit() else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
         cid = con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, reviewed_at, reviewed_by, created_at)
@@ -840,11 +841,18 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     return ",".join(out)
 
 
+AUDIT = 5
+
+
+def _audit() -> bool:
+    return secrets.randbelow(AUDIT) == 0  # tests patch it
+
+
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:
     """Auto-review requires every essential field, not just no flags. Sender isn't essential (others may pay).
     The flags already check the payee and duplicates; this seat's replaced files and numbers also aren't new.
     A payee typed as a first name alone matches any namesake (receipt.same_person skips the initial): a person looks."""
-    return bool(read and flags == "" and e["price"] and read.get("amount") == e["price"]
+    return bool(read and flags == "" and e["price"] and read.get("amount") == e["price"] and not read.get("signed")
                 and read.get("recipient") and e["pay_to_name"] and len(e["pay_to_name"].split()) > 1
                 and read.get("no") and read.get("paid_at")
                 and e["created_at"] <= read["paid_at"] <= core.now()

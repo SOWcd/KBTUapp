@@ -258,7 +258,7 @@ def test_migration_does_not_backfill_old_receipts(paid, monkeypatch):
     # A legacy human review whose reviewer was deleted is indistinguishable in the old columns.
     con.execute("UPDATE receipts SET reviewed_at = ? WHERE id = ?", (now, row["id"]))
     con.execute("DROP TABLE receipt_auto_checks")
-    con.execute("PRAGMA user_version = 183")
+    con.execute("PRAGMA user_version = 186")
     path = con.execute("PRAGMA database_list").fetchone()[2]
     db.init(path)
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
@@ -273,3 +273,52 @@ def test_account_deletion_cascades_app_marker(paid, monkeypatch):
     logic.delete_me(con, logic.Viewer(_uid(con, tg), "user", True))
     assert con.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
+
+
+def test_spot_check_sends_one_clean_receipt_in_five_to_the_organizer(paid, monkeypatch):
+    # (b) the 1 in 5 is seats._audit: the picked one waits as any unchecked receipt does (seat held, no new state)
+    c, con, eid, (a, b, _), now = paid
+    draws = iter([True, False])
+    monkeypatch.setattr(seats, "_audit", lambda: next(draws))
+    _go(c, eid, a)
+    _go(c, eid, b)
+    picked = _send(paid, monkeypatch, a, _fields(now))
+    assert picked["flags"] == ""
+    _unchecked(paid, a, picked)
+    assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
+    passed = _send(paid, monkeypatch, b, _fields(now, "223456789012345678"), 241)
+    assert passed["reviewed_at"] == now and _attendee(paid, b)["auto"] is True
+    assert c.post(f"/api/receipts/{picked['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
+    assert _attendee(paid, a)["reviewed"] is True and _attendee(paid, a)["auto"] is False
+
+
+def test_audit_draws_one_in_five(monkeypatch):
+    monkeypatch.undo()  # the real draw, not conftest's
+    picks = [seats._audit() for _ in range(5000)]
+    assert 800 < sum(picks) < 1200
+
+
+def test_organizer_sees_the_apps_count_and_sum(paid, monkeypatch):
+    # (a) EventManage's line sums the receipts with auto: true; a person's check or a spot-checked one isn't in it
+    c, _, eid, (a, b, d), now = paid
+    draws = iter([False, False, True])
+    monkeypatch.setattr(seats, "_audit", lambda: next(draws))
+    for i, tg in enumerate((a, b, d)):
+        _go(c, eid, tg)
+        _send(paid, monkeypatch, tg, _fields(now, str(123456789012345678 + i)), 240 + i)
+    att = [x["receipt"] for x in c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json() if x["receipt"]]
+    auto = [x["amount"] for x in att if x["auto"]]
+    assert (len(auto), sum(auto)) == (2, 4000)
+
+
+@pytest.mark.parametrize("sign", ["-", "+", "−", "–"])
+def test_signed_amount_is_never_clean(paid, monkeypatch, sign):
+    # (c) a receipt prints its sum bare; a signed one is a history line or money coming back (a refund)
+    c, _, eid, (tg, _, _), now = paid
+    got = receipt.parse(f"Transfer\n{sign} 2 000 ₸\nArman A.\nNo 123456789012345678\n05.10.2026 14:56")
+    assert got["amount"] == 2000 and got["signed"] is True
+    assert "signed" not in receipt.parse("Transfer\n2 000 ₸\nArman A.")
+    _go(c, eid, tg)
+    row = _send(paid, monkeypatch, tg, {**_fields(now), "signed": True})
+    assert row["flags"] == ""
+    _unchecked(paid, tg, row)

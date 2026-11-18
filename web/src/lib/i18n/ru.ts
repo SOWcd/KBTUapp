@@ -2235,6 +2235,8 @@ const ru = {
   'mg.expected': "Должно прийти",
   'mg.byReceipts': "По чекам",
   'mg.unread': "не прочитано: {n}",
+  'mg.auto': "Проверило приложение: {n}",
+  'mg.autoHint': "Сверь эту сумму с Kaspi",
   'mg.check': "Проверить чеки",
   'mg.going': "Идут",
   'mg.came': "Пришли",

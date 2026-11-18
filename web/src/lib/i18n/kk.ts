@@ -2213,6 +2213,8 @@ const kk: Dict = {
   'mg.expected': "Келуі керек",
   'mg.byReceipts': "Чектер бойынша",
   'mg.unread': "оқылмады: {n}",
+  'mg.auto': "Қолданба тексерді: {n}",
+  'mg.autoHint': "Бұл соманы Kaspi-мен салыстыр",
   'mg.check': "Чектерді тексеру",
   'mg.going': "Барады",
   'mg.came': "Келді",
