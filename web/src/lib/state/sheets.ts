@@ -29,9 +29,12 @@ export function irisFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   irisAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2, t: performance.now() };
 }
+/** the mark, left for whoever takes it (the assistant's light flies out of the same place the Sheet's circle opens from) */
+export const peekIris = (): Iris | null =>
+  irisAt && performance.now() - irisAt.t < 1500 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? irisAt : null;
 export function takeIris(): Iris | null {
-  const i = irisAt; irisAt = null;
-  return i && performance.now() - i.t < 1500 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? i : null;
+  const i = peekIris(); irisAt = null;
+  return i;
 }
 /** the circle opening over `el`, already in its place; clip-path only, the screen under it is painted once */
 export function irisOpen(el: HTMLElement, i: Iris): Animation {

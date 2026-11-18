@@ -35,9 +35,11 @@
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
   import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
-  import { sheets, openMapFrom, takeIris } from '../../lib/state/sheets';
+  import { sheets, openMapFrom, takeIris, peekIris } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
-  import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import { chat, fresh, LOOK, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import { power } from '../../lib/state/power.svelte';
+  import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import { session, asStudent } from '../../lib/state/session.svelte';
   import type { AssistAction } from '../../lib/api/types';
   import { t } from '../../lib/i18n/index.svelte';
@@ -60,6 +62,47 @@
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
   // focus (a fresh one): the keyboard comes up with it, App's stand-in held it from the tap; a conversation to read: down
   untrack(() => { if (fresh(ctx)) { chat.turns = []; chat.ctx = ctx ?? null; } });
+  // ---- the two looks on trial (assistant.svelte LOOK): a, quiet and native; b, KRI as a light of its own ----
+  const look = LOOK;
+  let born = $state(untrack(() => chat.turns.length)); // what was said before this opening stands still; only the new comes in
+  // an answer as the server now writes it: the answer first, a fact a line (some led by one emoji), the source last in
+  // brackets. Drawn as that: the first line stronger, the emoji in a gutter so a wrapped line hangs, the source a caption
+  let EMOJI: RegExp | null = null;
+  try { EMOJI = new RegExp('^((?:\\p{Extended_Pictographic}|\\p{Regional_Indicator})[\\uFE0F\\u200D\\p{Extended_Pictographic}\\p{Regional_Indicator}]*)\\s*(.+)$', 'u'); } catch { /* an old engine: no gutter */ }
+  function parts(text: string) {
+    const rows = text.split('\n').map((r) => r.trim()).filter(Boolean);
+    const last = rows.length > 1 ? rows[rows.length - 1] : '';
+    const source = last.startsWith('(') && last.endsWith(')') ? rows.pop()!.slice(1, -1) : '';
+    return { source, lines: rows.map((r) => { const m = EMOJI?.exec(r); return m ? { e: m[1], t: m[2] } : { e: '', t: r }; }) };
+  }
+  function retry(i: number) {
+    const q = chat.turns[i].q;
+    if (!q || busy) return;
+    chat.turns.splice(i - 1, 2); born = Math.min(born, i - 1);
+    void ask(q);
+  }
+  // b: the light leaves the button that was pressed and takes its place over the greeting while the Sheet's circle
+  // opens from that same button. It flies in the footer (the body clips at the footer's edge) and hands over on landing
+  // svelte-ignore state_referenced_locally
+  const from = look === 'b' && !focus && !power.lite && !chat.turns.length ? peekIris() : null;
+  let orb = $state<HTMLElement>(), fly = $state<HTMLElement>(), flying = $state(!!from);
+  $effect(() => {
+    const o = orb, f = fly;
+    if (!from || !o || !f) return;
+    // after the layout, before the paint: no layout forced inside the tap
+    const ro = new ResizeObserver(() => {
+      ro.disconnect();
+      const b = o.getBoundingClientRect(), p = (f.offsetParent as HTMLElement).getBoundingClientRect();
+      f.style.cssText = `left:${b.left - p.left}px;top:${b.top - p.top}px;width:${b.width}px;height:${b.height}px;visibility:visible`;
+      const dx = from.x - b.left - b.width / 2, dy = from.y - b.top - b.height / 2;
+      // across and up on two curves: an arc, not a ruler's line
+      f.animate({ translate: [`${dx}px 0`, '0 0'] }, { duration: 520, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+      f.animate({ transform: [`translateY(${dy}px) scale(${(from.r * 2) / b.width})`, 'none'] }, { duration: 520, easing: 'cubic-bezier(.2, .8, .25, 1)' })
+        .finished.catch(() => {}).finally(() => (flying = false));
+    });
+    ro.observe(o);
+    return () => ro.disconnect();
+  });
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
   let draft = $state(untrack(() => keyboard?.value ?? '')), busy = $state(false);
   let list = $state<HTMLDivElement>();
@@ -82,7 +125,8 @@
       haptic.soft();
     } catch (e) {
       const why = e instanceof ApiErr ? e.code : '';
-      chat.turns.push({ role: 'assistant', text: t(why === 'rate_limited' ? 'as.limit' : why === 'unavailable' ? 'as.busy' : why === 'forbidden' ? 'as.consent' : 'common.error') });
+      chat.turns.push({ role: 'assistant', text: t(why === 'rate_limited' ? 'as.limit' : why === 'unavailable' ? 'as.busy' : why === 'forbidden' ? 'as.consent' : 'common.error'),
+        q, err: why !== 'rate_limited' && why !== 'forbidden' });
       haptic.error();
       if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
     } finally { busy = false; }
@@ -140,7 +184,7 @@
   // opening with the keyboard: the plain rise. The iris holds the sheet in place while the keyboard resizes it under
   // the circle, and the whole opening stutters on a phone (owner's recording, Nov 17); dropped here before Sheet takes it
   // svelte-ignore state_referenced_locally
-  if (focus) takeIris();
+  if (focus || look === 'a') takeIris(); // a: the sheet's own rise, what's in it settling a step behind
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
@@ -158,10 +202,11 @@
 </script>
 
 <Sheet {overlay} {opener} icon={Sparkles} tall title={t('as.title')}>
-  <div class="list" bind:this={list}>
+  <div class={['list', look && 'k', look && 'k' + look]} bind:this={list}>
     {#if !chat.turns.length}
       <!-- as in the AI apps: the greeting and the starters sit over the field, where the thumb is; the space above stays calm -->
       <div class="hello">
+        {#if look === 'b'}<i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"></i>{/if}
         <h2 class="greeting">{t('as.hello', { name: first ? ', ' + first : '' })}</h2>
         <p class="what clamp-2">{chat.ctx ? t('as.about', { title: chat.ctx.title }) : t('as.what')}</p>
       </div>
@@ -173,8 +218,38 @@
       <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
     {/if}
     {#each chat.turns as m, i (i)}
-      {#if m.text}
-        <div class="b {m.role}">
+      {#if look && m.role === 'assistant' && !m.care}
+        {@const p = parts(m.text)}
+        <div class="ans" class:new={i >= born} class:err={!m.mark}>
+          {#if look === 'b'}<i class="orb" aria-hidden="true"></i>{/if}
+          <div class="say selectable" class:one={p.lines.length === 1}>
+            {#each p.lines as l, k (k)}<p style:--i={k}>{#if l.e}<span class="em">{l.e}</span>{/if}<span>{l.t}</span></p>{/each}
+          </div>
+          {#if m.mark || p.source}
+            <!-- the source and the answer's rating on one line, right under the words they are about -->
+            <div class="meta" style:--i={p.lines.length}>
+              <p class="src selectable">{p.source}</p>
+              {#if m.mark}
+                <IconButton kind="plain" size="s" icon={ThumbsUp} label={t('as.good')} on={m.vote === 'up'} disabled={!!m.vote} onclick={() => vote(m, 'up')} />
+                <IconButton kind="plain" size="s" icon={ThumbsDown} label={t('as.bad')} on={m.vote === 'down'} disabled={!!m.vote} onclick={() => vote(m, 'down')} />
+              {/if}
+            </div>
+          {/if}
+          {#if m.vote === 'down'}
+            <div class="offer">{#if m.sent}<p>{t('as.sent')}</p>{:else}
+              <Button kind="plain" size="s" onclick={() => send(m)}>{t('as.sendQ')}</Button><p>{t('as.sendNote')}</p>{/if}</div>
+          {/if}
+          {#if m.actions?.length || m.err}
+            <div class="acts" style:--i={p.lines.length + 1}><Group>
+              {#each (m.actions ?? []).filter(shown) as a, k (k)}
+                <Row dense icon={iconOf(a)} title={label(a)} accessory={a.type === 'route' ? 'external' : 'chevron'} onclick={() => go(a, m.q)} />
+              {/each}
+              {#if m.err}<Row dense icon={RotateCw} title={t('common.retry')} tone="action" onclick={() => retry(i)} />{/if}
+            </Group></div>
+          {/if}
+        </div>
+      {:else if m.text}
+        <div class="b {m.role}" class:new={i >= born}>
           <p class="selectable">{m.text}</p>
           {#if m.actions?.length}
             <!-- the answer's buttons as plain rows: › opens a screen here, ↗ leaves the app (2GIS) -->
@@ -184,7 +259,7 @@
           {/if}
         </div>
       {/if}
-      {#if m.mark && !m.care}
+      {#if m.mark && !m.care && !look}
         <div class="rate">
           <IconButton kind="plain" size="s" icon={ThumbsUp} label={t('as.good')} on={m.vote === 'up'} disabled={!!m.vote} onclick={() => vote(m, 'up')} />
           <IconButton kind="plain" size="s" icon={ThumbsDown} label={t('as.bad')} on={m.vote === 'down'} disabled={!!m.vote} onclick={() => vote(m, 'down')} />
@@ -207,10 +282,13 @@
         </div>
       {/if}
     {/each}
-    {#if busy}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
+    {#if !busy}<!-- nothing on its way -->{:else if look === 'a'}<div class="wait" role="status" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>
+    {:else if look === 'b'}<div class="think" role="status"><i class="orb live" aria-hidden="true"></i><span>{t('as.thinking')}</span></div>
+    {:else}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
   </div>
 
   {#snippet footer()}
+    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"></i>{/if}
     <div class="bar">
       <!-- the map, one tap away as when it had the bar's corner: beside the field, there with or without a conversation -->
       <button class="mapb" aria-label={t('as.map')} onclick={openMap}><MapIcon size={20} /></button>
@@ -255,5 +333,74 @@
   .mapb { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-full); background: var(--fill); color: var(--text-2);
     transition: transform var(--t-fast); }
   .mapb:active { transform: scale(0.92); }
+  /* ================= the two looks on trial (LOOK): both ================= */
+  .k { gap: var(--s-3); }
+  .k .hello, .k .sugg, .k .b { animation: none; }
+  .k .b.user { margin-top: var(--s-2); padding: 9px 14px; border-radius: 20px; transform-origin: 100% 100%; }
+  .k .b.user:first-child { margin-top: 0; }
+  .k .b.user.new { animation: sent 340ms var(--ease-spring) backwards; }
+  @keyframes sent { from { opacity: 0; transform: translateY(18px) scale(0.94); } }
+  .ans { display: flex; flex-direction: column; padding: 0 var(--s-1); }
+  .say { display: flex; flex-direction: column; gap: 7px; }
+  .say p { display: flex; gap: 8px; font: 450 var(--fs-body)/1.42 var(--font-text); letter-spacing: -0.008em; overflow-wrap: anywhere; }
+  .say p > span:last-child { flex: 1; min-width: 0; }
+  /* the answer itself: the first line, a step up from the facts under it */
+  .say p:first-child { font: 600 var(--fs-row)/1.3 var(--font-text); letter-spacing: -0.014em; }
+  .say.one p { font-weight: 450; line-height: 1.38; }
+  .say p + p:nth-child(2) { margin-top: 3px; }
+  .em { flex: none; width: 20px; text-align: center; }
+  .err .say p { color: var(--text-2); }
+  .meta { display: flex; align-items: center; min-height: 36px; margin: 2px -6px 0 0; --plain-ink: var(--text-3); }
+  .meta :global(.btn[aria-pressed='true']) { color: var(--accent-text); opacity: 1; }
+  .src { flex: 1; min-width: 0; padding-right: var(--s-2); font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); overflow-wrap: anywhere; }
+  .k .acts { margin: var(--s-2) calc(-1 * var(--s-1)) 0; }
+  .k .offer { max-width: none; margin: 0 0 var(--s-1) -6px; }
+  .k .offer p { padding: 0 6px; }
+
+  /* ---- a: quiet. The sheet's own rise; the greeting and the questions settle a step behind it, each a
+     little later; an answer's lines come up one after another where the grey lines waited ---- */
+  .ka .greeting { animation: settle 560ms var(--ease-spring) 40ms backwards; }
+  .ka .what { animation: settle 560ms var(--ease-spring) 80ms backwards; }
+  .ka .sugg { animation: settle 560ms var(--ease-spring) 120ms backwards; }
+  @keyframes settle { from { opacity: 0; transform: translateY(44px); } }
+  .ka .new p, .ka .new .meta, .ka .new .acts { animation: up 420ms var(--ease) calc(var(--i) * 55ms) backwards; }
+  @keyframes up { from { opacity: 0; transform: translateY(10px); } }
+  .wait { display: flex; flex-direction: column; gap: 10px; padding: 5px var(--s-1); animation: up 300ms var(--ease) backwards; }
+  .wait i { height: 12px; border-radius: 6px; background: var(--fill); animation: pulse 1.1s ease-in-out infinite alternate; }
+  .wait i:nth-child(1) { width: 58%; height: 15px; } .wait i:nth-child(2) { width: 86%; animation-delay: 160ms; } .wait i:nth-child(3) { width: 44%; animation-delay: 320ms; }
+  @keyframes pulse { from { opacity: 0.4; } }
+
+  /* ---- b: KRI is a light. It flies out of the pressed button into its place over the greeting as the circle opens,
+     waits beside "thinking", and stands, still, over every answer; the lines come down from under it ---- */
+  .orb { position: relative; flex: none; display: block; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
+  .orb::before { content: ''; position: absolute; inset: -20%; border-radius: 50%;
+    background: conic-gradient(from 200deg, #3B6BFF, #62D0FF, #7C4DFF, #C59BFF, #3B6BFF); }
+  .orb::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 52%), radial-gradient(circle, rgba(8, 10, 40, 0) 52%, rgba(8, 10, 40, 0.3)); }
+  .orb.live::before { animation: turn 7s linear infinite; }
+  @keyframes turn { to { transform: rotate(360deg); } }
+  .orb.big { width: 56px; height: 56px; margin-bottom: var(--s-4); }
+  .orb.big, .orb.fly { box-shadow: 0 10px 28px -8px rgba(98, 104, 255, 0.6); }
+  .orb.land { animation: land 520ms var(--ease) backwards; } /* no button to fly from: it comes up in its place */
+  .orb.hid { visibility: hidden; }
+  .orb.fly { position: absolute; z-index: 1; visibility: hidden; pointer-events: none; }
+  @keyframes land { from { opacity: 0; transform: scale(0.6); } }
+  .kb .greeting { animation: down 480ms var(--ease) 300ms backwards; }
+  .kb .what { animation: down 480ms var(--ease) 350ms backwards; }
+  .kb .sugg { animation: down 480ms var(--ease) 400ms backwards; }
+  @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
+  .kb .b.user { background: var(--accent-soft); }
+  .kb .ans > .orb { margin: 2px 0 var(--s-2); }
+  .kb .new > .orb { animation: land 420ms var(--ease-bounce) backwards; }
+  .kb .new p, .kb .new .meta, .kb .new .acts { animation: down 460ms var(--ease) calc(80ms + var(--i) * 70ms) backwards; }
+  .think { display: flex; align-items: center; gap: 10px; padding: 2px var(--s-1); font: 450 var(--fs-body)/1 var(--font-text); color: var(--text-3); animation: up 300ms var(--ease) backwards; }
+  .think .orb { animation: breathe 1.5s ease-in-out infinite alternate; }
+  @keyframes breathe { from { transform: scale(0.82); } to { transform: scale(1.08); } }
+
+  /* power saving: nothing moves without end; less motion asked: nothing moves at all */
+  :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb, :global(html.lowfx) .wait i { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .k *, .orb, .orb::before { animation: none !important; }
+  }
   .note { margin: var(--s-2) 4px 0; text-align: center; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
 </style>
