@@ -418,3 +418,17 @@ def test_edited_number_is_a_duplicate(paid, monkeypatch):
     row = _send(paid, monkeypatch, b, {**_fields(now, "123456789012345678"), "no": "123456789012345679"}, 241)
     assert row["flags"] == "duplicate"
     _unchecked(paid, b, row)
+
+
+@pytest.mark.parametrize("second,flag", [("Petrov P.P.", "partial"), ("Ivanov I.I.", "duplicate")])
+def test_friends_paying_in_one_minute(paid, monkeypatch, second, flag):
+    # review P2-4: the same minute, sum and payee from another sender is two friends paying together: a person looks
+    # ('partial': no warning, not held at the door); from the same sender (or one unread) a number edited: 'duplicate'
+    c, con, eid, (a, b, _), now = paid
+    for tg in (a, b):
+        _go(c, eid, tg)
+    _send(paid, monkeypatch, a, {**_fields(now, "123456789012345678"), "sender": "Ivanov I.I."})
+    row = _send(paid, monkeypatch, b, {**_fields(now, "123456789012345678"), "no": "523456789012345678", "sender": second}, 241)
+    assert row["flags"] == flag
+    _unchecked(paid, b, row)
+    assert logic.organizing.flagged(con, row["registration_id"]) is (flag == "duplicate")

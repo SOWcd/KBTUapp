@@ -837,9 +837,9 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
             one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)) or \
-            got.get("paid_at") and got.get("amount") and got.get("recipient") and \
-            one(con, "SELECT 1 FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"]):
-        # the same minute, sum and payee under another number: a used receipt with its number edited
+            any(not (got.get("sender") and x["sender_name"] and got["sender"] != x["sender_name"]) for x in _same_minute(con, got)):
+        # the same minute, sum and payee under another number: a used receipt with its number edited; from another
+        # sender (two friends paying together) it's no warning, only not the app's to pass (_receipt_clean: 'partial')
         out.append("duplicate")
     if read is not None and not (got.get("no") and got.get("amount")):
         out.append("unreadable")  # no number or sum: the duplicate check couldn't run, the organizer looks
@@ -863,6 +863,13 @@ def _audit() -> bool:
     return secrets.randbelow(AUDIT) == 0  # tests patch it
 
 
+def _same_minute(con, got: dict) -> list[sqlite3.Row]:
+    """Receipts with this one's minute, sum and payee (Kaspi prints the minute)."""
+    if not (got.get("paid_at") and got.get("amount") and got.get("recipient")):
+        return []
+    return rows(con, "SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"])
+
+
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:
     """Auto-review requires every essential field, not just no flags. Sender isn't essential (others may pay).
     The flags already check the payee and duplicates; this seat's replaced files and numbers also aren't new.
@@ -872,7 +879,8 @@ def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str)
                 and receipt.same_person(read["recipient"], e["pay_to_name"], strict=True)
                 and read.get("no") and read.get("paid_at")
                 and e["created_at"] <= read["paid_at"] <= core.now()
-                and not one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? OR sha256 = ?", read["no"], sha))
+                and not one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? OR sha256 = ?", read["no"], sha)
+                and not _same_minute(con, read))
 
 
 def receipt_path(con, v: Viewer, rid: int) -> str:

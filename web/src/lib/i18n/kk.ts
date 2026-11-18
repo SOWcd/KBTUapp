@@ -1554,6 +1554,7 @@ const kk: Dict = {
   'rc.flag.partial': "Толық оқылмады",
   'rc.amount': "Сома",
   'rc.sender': "Жіберуші",
+  'rc.recipient': "Алушы",
   'rc.paidAt': "Төленді",
   'rc.no': "Түбіртек №",
   'scan.flagged': "Чекті тексер: бұл файл бұрын жіберілген",

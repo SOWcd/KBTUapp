@@ -42,9 +42,10 @@
   <p class="t-foot ttl">{t('rc.title')} · {ago(receipt.at)}{#if receipt.reviewed} · {t(receipt.auto ? 'rc.auto' : 'rc.passed')}{/if}</p>
   {#if flagged}{#each receipt.flags as f (f)}<Notice tone={f === 'spot' || f === 'partial' ? 'neutral' : 'warning'} text={f === 'recipient_mismatch'
     ? t('rc.flag.recipient_mismatch', { name: receipt.recipient ?? '' }) : t(`rc.flag.${f}` as 'rc.flag.duplicate')} />{/each}{/if}
-  {#if receipt.amount || receipt.sender || receipt.paidAt}
+  {#if receipt.amount || receipt.recipient || receipt.sender || receipt.paidAt}
     <Group>
       {#if receipt.amount}<Row title={t('rc.amount')} value={money(receipt.amount)} />{/if}
+      {#if receipt.recipient}<Row title={t('rc.recipient')} value={receipt.recipient} />{/if}<!-- a namesake payee shows without the picture -->
       {#if receipt.sender}<Row title={t('rc.sender')} value={receipt.sender} />{/if}
       {#if receipt.paidAt}<Row title={t('rc.paidAt')} value={whenLine(receipt.paidAt)} />{/if}
       {#if receipt.no}<Row title={t('rc.no')}>{#snippet detail()}<span class="no num selectable">{receipt.no}</span>{/snippet}</Row>{/if}

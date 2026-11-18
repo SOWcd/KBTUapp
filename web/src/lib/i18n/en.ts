@@ -1554,6 +1554,7 @@ const en: Dict = {
   'rc.flag.partial': "Could not be read fully",
   'rc.amount': "Sum",
   'rc.sender': "Sender",
+  'rc.recipient': "Recipient",
   'rc.paidAt': "Paid",
   'rc.no': "Receipt No.",
   'scan.flagged': "Check the receipt: this file was sent before",
