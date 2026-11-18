@@ -8,6 +8,7 @@
   // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
   // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
   // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
+  import { keyboard } from '../../lib/state/keyboard.svelte';
   import { teamSize } from '../../lib/teams';
   import { onMount, untrack } from 'svelte';
   import { fmtPhone } from '../../lib/phone';
@@ -800,7 +801,7 @@
   <!-- the focused panel: one thing at a time; Telegram's Back, the scrim or Done closes it -->
   {#if pick}
     <button class="scrim" onclick={() => (pick = '')} aria-label={t('common.close')}></button>
-    <div class="pk glass glass-sheet">
+    <div class="pk glass glass-sheet" style:--kbh="{keyboard.h}px">
       <header class="pkh"><b>{t(PANEL[pick] as 'ed.cover')}</b>
         {#if pick !== 'check'}<Button kind="tinted" size="s" onclick={() => (pick = '')}>{t('ex.done')}</Button>{/if}</header>
       <div class="pkb scroll">
@@ -1087,7 +1088,9 @@
   /* the panel */
   .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
   @keyframes fade { from { opacity: 0; } }
-  .pk { position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px); display: flex; flex-direction: column;
+  /* over the keyboard (lib/state/keyboard: the app's box stays full height): it rides up on the keyboard's own timing */
+  .pk { --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); translate: 0 calc(-1 * var(--up)); transition: translate 300ms cubic-bezier(.2, .8, .2, 1);
+    position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px - var(--up)); display: flex; flex-direction: column;
     border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards;
     background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy (owner, Nov 3); Sheet's .ground the same */
   @keyframes rise { from { transform: translate3d(0, 100%, 0); } }

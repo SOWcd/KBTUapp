@@ -33,6 +33,9 @@ img { max-width: 100%; }
 /* The app box is fixed to the window: on iPhone position:fixed is measured from a layout viewport
    that can be shorter than the screen. Children position inside it. */
 #app { position: fixed; inset: 0; overflow: hidden; }
+/* ...at the height it has without a keyboard (lib/state/keyboard.svelte.ts): the webview shrinking for the keyboard
+   relays out nothing; what sits at the bottom rides up over it instead */
+#app { bottom: auto; height: var(--app-h, 100%); overflow: clip; } /* clip: the browser's own reveal of a field can't scroll it */
 /* a computer's wide window (or a tablet): the phone layout stays a phone-wide column in the middle instead of stretching
    (Oct 11); the transform makes the column the frame of everything fixed inside the app (bars, sheets, toasts) */
 @media (min-width: 600px) { #app { left: 50%; right: auto; width: 480px; transform: translateX(-50%); } }

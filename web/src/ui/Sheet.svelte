@@ -16,7 +16,8 @@
   // is removed from the stack.
   import type { Component, Snippet } from 'svelte';
   import { takeIris, irisOpen } from '../lib/state/sheets';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { keyboard, KB_MS, kbEase, riseMs } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
   import { haptic, inTelegram, onAndroid, tg } from '../lib/tg';
@@ -46,6 +47,8 @@
   let panel: HTMLDivElement;
   let scrim: HTMLDivElement;
   let body: HTMLDivElement;
+  let foot = $state<HTMLDivElement>();
+  let room: HTMLDivElement;
   let gone = false;
   let scrolled = $state(false);
   // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
@@ -76,9 +79,62 @@
       return;
     }
     height = h;
+    if (kbTo) { free = freeAbove(); place(kbNow); } // taller or shorter with the keyboard up: its share of it again
     if (Math.abs(dh) < 2 || gone || dragging || currentY) return;
     panel.animate([{ translate: `0 ${dh}px` }, { translate: '0 0' }], { ...motion(), composite: 'add' });
   }
+
+  // ---- the keyboard (lib/state/keyboard): the box never follows it, what sits low rides up over it ----
+  // A short sheet rises whole, as far as its top may go (iOS's own sheets); the rest of the keyboard (all of it for a
+  // tall or full one) raises the footer over the body, which is clipped there and gets as much more room to scroll.
+  // One tween on the keyboard's timing, retargeted as the steps come; inline styles on three boxes per frame, no
+  // layout. A body whose end sat on its bottom edge (a chat, the assistant's greeting) keeps it there, above the footer.
+  let kbNow = 0, kbFrom = 0, kbTo = 0, kbT0 = 0, kbEnd = 0, kbRaf = 0, free = 0, pinFrom = -1, pinMax = Infinity, natMax = 0, inFrom = 0, roomPx = 0;
+  const innerOf = (k: number) => Math.max(0, k - free);
+  function freeAbove() {
+    if (full) return 0;
+    const max = parseFloat(getComputedStyle(panel).maxHeight), parent = (panel.offsetParent as HTMLElement | null)?.clientHeight ?? 0;
+    return Number.isFinite(max) && parent ? Math.max(0, panel.offsetTop - (parent - max)) : 0;
+  }
+  function setRoom(px: number) { if (px !== roomPx) { roomPx = px; body.style.setProperty('--kb-room', `${px}px`); } }
+  function place(k: number) {
+    const lift = Math.min(k, free), inner = k - lift;
+    panel.style.translate = lift ? `0 ${-lift}px` : '';
+    if (foot) { foot.style.translate = inner ? `0 ${-inner}px` : ''; body.style.clipPath = inner ? `inset(0 0 ${inner}px)` : ''; }
+    // pinned: rides along; else never past what the room will allow (going down, the scroll eases back instead of
+    // jumping when the room goes at the end)
+    const cap = natMax + inner;
+    if (pinFrom >= 0) body.scrollTop = Math.min(pinMax, cap, pinFrom + inner - inFrom);
+    else if (body.scrollTop > cap) body.scrollTop = cap;
+  }
+  function ride(k: number) {
+    if (!panel || gone || k === kbTo) return;
+    if (!kbTo && !kbNow) free = freeAbove(); // measured as it starts to rise, with the sheet at rest
+    // a step while it moves (iOS and Android may report the keyboard in parts) finishes the same motion, not a new one
+    const now = performance.now(), ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : k > kbNow ? riseMs() : KB_MS;
+    kbEnd = kbNow !== kbTo && kbEnd > now ? Math.max(kbEnd, now + 120) : now + ms;
+    kbFrom = kbNow; kbTo = k; kbT0 = now; inFrom = innerOf(kbNow);
+    // pinned: the body's end (the room's top) right on its visible bottom, the raised footer's top
+    const end = room.getBoundingClientRect().top, edge = body.getBoundingClientRect().bottom - parseFloat(getComputedStyle(body).paddingBottom) - inFrom;
+    pinFrom = Math.abs(end - edge) < 10 ? body.scrollTop : -1;
+    // ...but where its start is in view (the greeting over the starters), the start stays in view: what doesn't fit
+    // goes under the footer, as it did when the box shrank
+    const lead = body.querySelector(':scope > :first-child > :first-child') ?? body.firstElementChild, top = body.getBoundingClientRect().top + parseFloat(getComputedStyle(body).paddingTop);
+    const at = lead ? lead.getBoundingClientRect().top - top : -1;
+    pinMax = at >= 0 ? body.scrollTop + at : Infinity;
+    natMax = Math.max(0, body.scrollHeight - body.clientHeight - roomPx);
+    setRoom(Math.max(inFrom, innerOf(k))); // the larger room while it moves, so the pinned scroll never meets the end
+    cancelAnimationFrame(kbRaf);
+    const step = (now: number) => {
+      const x = Math.min(1, Math.max(0, (now - kbT0) / (kbEnd - kbT0))); // a frame's time can be from before the call
+      place((kbNow = kbFrom + (kbTo - kbFrom) * kbEase(x)));
+      if (x < 1) kbRaf = requestAnimationFrame(step);
+      else { setRoom(innerOf(kbTo)); pinFrom = -1; }
+    };
+    kbRaf = requestAnimationFrame(step);
+  }
+  // a sheet under another one gives the keyboard back (the top one rides)
+  $effect(() => { const k = under ? 0 : keyboard.h; untrack(() => ride(k)); });
 
   function leave(fromY = 0) {
     if (gone) return;
@@ -161,7 +217,7 @@
     panel.addEventListener('touchcancel', onEnd);
     panel.addEventListener('focusin', guard.focusin);
     const chrome = hideChrome();
-    return () => { ro.disconnect(); chrome(); back(); };
+    return () => { ro.disconnect(); cancelAnimationFrame(kbRaf); chrome(); back(); };
   });
 </script>
 
@@ -171,11 +227,13 @@
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
-  <div class="body scroll" class:scrolled bind:this={body} onscroll={() => { if (scrolled !== body.scrollTop > 2) scrolled = !scrolled; }}>
+  <!-- (past the keyboard's room: the assistant's greeting lifted over the keyboard is not "scrolled under the top") -->
+  <div class="body scroll" data-kb-own class:scrolled bind:this={body} onscroll={() => { if (scrolled !== body.scrollTop > 2 + roomPx) scrolled = !scrolled; }}>
     {#if heading != null}<header class="hd"><h2 class="hdt">{heading}</h2>{#if actions}<span class="hda">{@render actions()}</span>{/if}</header>{/if}
     {@render children()}
+    <div class="kbroom" bind:this={room} aria-hidden="true"></div>
   </div>
-  {#if footer}<div class="foot">{@render footer()}</div>{/if}
+  {#if footer}<div class="foot" bind:this={foot}>{@render footer()}</div>{/if}
 </div>
 
 <style>
@@ -184,7 +242,7 @@
   .sheet {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-sheet);
     max-width: 560px; margin: 0 auto; max-height: calc(100% - max(var(--top), 48px) - 10px);
-    display: flex; flex-direction: column; overflow: hidden;
+    display: flex; flex-direction: column; overflow: hidden; overflow: clip; /* clip: the browser's reveal of a focused field must not scroll the panel */
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     will-change: transform;
   }
@@ -211,14 +269,18 @@
   /* the tinted page's own colour (its tint under the ground's veil), so the sheet reads as part of it */
   .ground { background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--ground); --surface-solid: transparent; }
   .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 8px auto 4px; }
-  .body { position: relative; flex: 1; padding: 6px var(--gutter) calc(var(--s-6) + var(--safe-bottom)); }
+  .body { position: relative; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: var(--kb-room, 0px); }
+  /* (scroll-padding: a scrollIntoView to the end, the newest message, stops above the raised footer) */
+  /* the keyboard's room to scroll: no height in the flow (a short sheet keeps its size), its box reaching that much past
+     the end, the padding included, so the scroll goes exactly --kb-room further */
+  .kbroom { height: calc(var(--kb-room, 0px) + var(--pb)); margin-bottom: calc(-1 * (var(--kb-room, 0px) + var(--pb))); pointer-events: none; }
   .foot {
     position: relative; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
     border-top: 1px solid var(--line);
   }
   /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom (owner, Nov 3) */
   .foot:not(:has(*)) { display: none; }
-  .hasfoot .body { padding-bottom: var(--s-4); }
+  .hasfoot .body { --pb: var(--s-4); }
   .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
   .full .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
     mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
