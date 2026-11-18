@@ -109,9 +109,11 @@
   }
   function ride(k: number) {
     if (!panel || gone || k === kbTo) return;
-    if (!kbTo && !kbNow) free = freeAbove(); // measured as it starts to rise, with the sheet at rest
-    // a step while it moves (iOS and Android may report the keyboard in parts) finishes the same motion, not a new one
-    const now = performance.now(), ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : k > kbNow ? riseMs() : KB_MS;
+    const rest = !kbTo && !kbNow;
+    if (rest) free = freeAbove(); // measured as it starts to rise, with the sheet at rest
+    // a step while it moves (iOS and Android may report the keyboard in parts) finishes the same motion, not a new one.
+    // A rise from rest counts from a frame back: the keyboard's first frame shows with ours, ours must not show nothing
+    const now = performance.now() - (rest ? 16 : 0), ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : k > kbNow ? riseMs() : KB_MS;
     kbEnd = kbNow !== kbTo && kbEnd > now ? Math.max(kbEnd, now + 120) : now + ms;
     kbFrom = kbNow; kbTo = k; kbT0 = now; inFrom = innerOf(kbNow);
     // pinned: the body's end (the room's top) right on its visible bottom, the raised footer's top
@@ -167,7 +169,7 @@
   function onStart(e: TouchEvent) {
     if (full || e.touches.length !== 1) return;
     const inBody = body.contains(e.target as Node);
-    if (inBody && body.scrollTop > 0) return; // the list scrolls first
+    if (inBody && body.scrollTop > innerOf(kbNow)) return; // the list scrolls first (what the keyboard's room added is no scroll)
     if ((e.target as Element).closest?.('textarea, [role=slider]')) return; // a long text scrolls itself (dragging it closed the memo); a slider drags its own way
     startX = e.touches[0].clientX; startY = lastY = e.touches[0].clientY; lastT = performance.now(); v = 0;
     dragging = true; decided = false; currentY = 0;
@@ -183,6 +185,9 @@
       if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
       decided = true;
       if (dy < 0 || Math.abs(dx) > Math.abs(dy)) { stop(); return; } // upward: let the content scroll; sideways: a swipe of its own (a comment's reply)
+      // a pull with the keyboard up drops it first, as native sheets do: the footer and the content go down with it
+      // (the same ride as any blur) while the panel, all of it, follows the finger
+      if (kbTo && panel.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
     if (e.cancelable) e.preventDefault();
     const now = performance.now();

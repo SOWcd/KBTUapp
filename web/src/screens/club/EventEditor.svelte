@@ -1089,7 +1089,7 @@
   .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
   @keyframes fade { from { opacity: 0; } }
   /* over the keyboard (lib/state/keyboard: the app's box stays full height): it rides up on the keyboard's own timing */
-  .pk { --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); translate: 0 calc(-1 * var(--up)); transition: translate 300ms cubic-bezier(.2, .8, .2, 1);
+  .pk { --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); translate: 0 calc(-1 * var(--up)); transition: translate 250ms cubic-bezier(.2, .8, .2, 1);
     position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px - var(--up)); display: flex; flex-direction: column;
     border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards;
     background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy (owner, Nov 3); Sheet's .ground the same */
