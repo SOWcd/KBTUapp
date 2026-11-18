@@ -17,6 +17,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Emoji from '../../ui/Emoji.svelte';
+  import SantaTerms, { defaultUntil, readTerms, termsFrom } from './SantaTerms.svelte';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
 
@@ -26,16 +27,21 @@
   const dec25 = tsAt(parts(nowTs()).y, 11, 25, 18, 0);
   const when = dec25 - nowTs() > 3 * 86400 ? dec25 : nowTs() + 14 * 86400;
   const LINES = [[PenLine, 'santa.hi1'], [Shuffle, 'santa.hi2'], [EyeOff, 'santa.hi3']] as const;
+  // the two settings (server santa.start): no budget, wishlists until a week before the gifts day
+  let terms = $state(termsFrom(null, defaultUntil(when)));
+  let tried = $state(false);
 
   let busy = $state(false);
   async function go() {
     if (running) { close(overlay.id); sheets.manage(running.id); return; }
     if (busy) return;
+    const r = readTerms(terms, when);
+    if (r.badBudget || r.badUntil) { tried = true; haptic.error(); return; }
     busy = true;
     try {
-      const e = await api.santaStart(org, t('santa.title'), when);
+      const e = await api.santaStart(org, t('santa.title'), when, r.budget, r.until);
       void loadStudio(org); haptic.ok();
-      close(overlay.id); say(t('santa.told'), 'party_popper_3d'); sheets.manage(e.id);
+      close(overlay.id); say(t(e.santaTold === 0 ? 'santa.toldNot' : 'santa.told'), 'party_popper_3d'); sheets.manage(e.id);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
@@ -54,6 +60,7 @@
         {/each}
       </ul>
       <p class="t-foot dim day">{t('santa.hiDay', { day: dayMonth(when) })}</p>
+      <SantaTerms bind:f={terms} starts={when} {tried} />
     {/if}
   </div>
 
@@ -74,7 +81,7 @@
   li { display: flex; align-items: center; gap: var(--s-3); animation: rise 420ms var(--ease) both; animation-delay: calc(140ms + var(--i) * 80ms); }
   li :global(svg) { flex: none; color: var(--accent); }
   li span { text-wrap: pretty; }
-  .day { margin-top: var(--s-5); }
+  .day { margin: var(--s-5) 0 var(--s-4); }
   .acts { display: flex; flex-direction: column; gap: var(--s-1); }
   @keyframes arrive { from { opacity: 0; transform: translateY(12px) scale(0.86); } }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }

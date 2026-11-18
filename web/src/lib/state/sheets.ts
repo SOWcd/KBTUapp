@@ -29,15 +29,26 @@ export function irisFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   irisAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2, t: performance.now() };
 }
+/** the mark, left for whoever takes it (the assistant's light flies out of the same place the Sheet's circle opens from) */
+export const peekIris = (): Iris | null =>
+  irisAt && performance.now() - irisAt.t < 1500 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? irisAt : null;
 export function takeIris(): Iris | null {
-  const i = irisAt; irisAt = null;
-  return i && performance.now() - i.t < 1500 && !matchMedia('(prefers-reduced-motion: reduce)').matches ? i : null;
+  const i = peekIris(); irisAt = null;
+  return i;
 }
 /** the circle opening over `el`, already in its place; clip-path only, the screen under it is painted once */
 export function irisOpen(el: HTMLElement, i: Iris): Animation {
   const b = el.getBoundingClientRect(), x = i.x - b.left, y = i.y - b.top;
   const far = Math.hypot(Math.max(x, b.width - x), Math.max(y, b.height - y));
   return el.animate({ clipPath: [`circle(${i.r}px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] }, { duration: 520, easing: 'cubic-bezier(.32, .8, .3, 1)' });
+}
+/** ...and closing back into the place it opened from (Sheet `shut`): the same circle the other way, eased out at its end
+ *  as the map's (an ease-in close "hit like a hammer"), gone in its last third */
+export function irisShut(el: HTMLElement, i: Iris): Animation {
+  const b = el.getBoundingClientRect(), x = i.x - b.left, y = i.y - b.top;
+  const far = Math.hypot(Math.max(x, b.width - x), Math.max(y, b.height - y));
+  return el.animate({ clipPath: [`circle(${far}px at ${x}px ${y}px)`, `circle(${i.r}px at ${x}px ${y}px)`], opacity: [1, 1, 0] },
+    { duration: 440, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'forwards' });
 }
 /** open the map out of the control that was pressed (the iris), wherever that control lives */
 export function openMapFrom(e: MouseEvent) {

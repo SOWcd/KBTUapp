@@ -93,6 +93,7 @@ def _remove(con, actor: int | None, oid: int, uid: int, ban: bool, by: str, extr
     """Someone is out of the club: their tags and open removal requests there go too; banned, they can't come
     back by an application or the link until a Vice+ lifts it (§2b)."""
     con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, uid))
+    santa.drop(con, uid, oid)  # out of the club's Secret Santa too: its page no longer opens for them
     con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ?)", (uid, oid))
     con.execute("UPDATE removal_requests SET status = 'done', decided_by = ?, decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'",
                 (actor, core.now(), oid, uid))
@@ -684,4 +685,5 @@ from .clubs import _official, org_shape  # noqa: E402
 from .forum import asks  # noqa: E402
 from .oversight import QUIET_FOR, _admin  # noqa: E402
 from .queues import AI_TRIES  # noqa: E402
+from . import santa  # noqa: E402
 from .seats import joined, notify  # noqa: E402

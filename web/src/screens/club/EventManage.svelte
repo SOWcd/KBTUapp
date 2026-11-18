@@ -15,13 +15,13 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-  import { api, ApiErr, staffEvents, type DoorAudience, type TeamList, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type EventFull, type DoorAudience, type TeamList, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayNo } from '../../lib/time';
+  import { relDay, time, nowTs, dayNo, dayMonthShort } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Notice from '../../ui/Notice.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -41,6 +41,10 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Field from '../../ui/Field.svelte';
   import { tick as frame } from 'svelte';
+  import Share from '@lucide/svelte/icons/share';
+  import BellRing from '@lucide/svelte/icons/bell-ring';
+  import { shareCard } from '../../lib/tg';
+  import SantaTerms, { readTerms, termsFrom } from './SantaTerms.svelte';
 
   // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money;
   // the creator runs it as its President would (server app.viewer), all but the club's money and reports (`plain`: the rest)
@@ -74,9 +78,52 @@
   // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
-  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; santaN = x.santaN ?? 0; }).catch(() => {}); });
+  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; santaN = x.santaN ?? 0; santaTeam = x.santaTeam ?? null; }).catch(() => {}); });
   // Secret Santa (server santa.py): how many play and the one draw; who gives to whom no organizer ever sees
   let santaN = $state(0);
+  // before the draw (server santa.view): who is in, who of the club not yet, names only; the budget and the deadline
+  // editable here, the reminder to those not in yet (once a day) and the game's card for the club's chat
+  let santaTeam = $state<NonNullable<EventFull['santaTeam']> | null>(null);
+  const until = (ts: number) => `${dayMonthShort(ts)}, ${time(ts)}`;
+  let terms = $state<{ budget: string; day: string; hm: string } | null>(null);
+  let termsTried = $state(false);
+  function editTerms() {
+    if (!e) return;
+    haptic.tap();
+    termsTried = false;
+    terms = terms ? null : termsFrom(e.santa?.budget, e.regUntil ?? e.startsAt);
+  }
+  async function saveTerms() {
+    if (!e || !terms) return;
+    const r = readTerms(terms, e.startsAt);
+    if (r.badBudget || r.badUntil) { termsTried = true; haptic.error(); return; }
+    const c = eventById(id), was = c ? { santa: c.santa, regUntil: c.regUntil } : null;
+    if (c) { c.santa = { drawn: false, ...(r.budget ? { budget: r.budget } : {}) }; c.regUntil = r.until; } // optimistic: the rows show it at once
+    terms = null; haptic.ok();
+    try { await api.santaSettings(id, { budget: r.budget, regUntil: r.until }); studioChanged(); say(t('santa.saved'), 'party_popper_3d'); }
+    catch (err) { if (c && was) { c.santa = was.santa; c.regUntil = was.regUntil; } haptic.error(); say(t(err instanceof ApiErr && err.message === 'until' ? 'santa.badUntil' : 'common.error'), 'warning_3d'); }
+  }
+  // the reminder's day passed with the page open: its count read again, the button back
+  $effect(() => { if (santaTeam?.remindAt && tick >= santaTeam.remindAt) api.event(id).then((x) => (santaTeam = x.santaTeam ?? null)).catch(() => {}); });
+  async function remindSanta() {
+    haptic.tap();
+    const team = santaTeam;
+    if (!team || team.remindAt) return;
+    if (!team.remind) { say(t('santa.remindNone'), 'pleading_face_3d'); return; }
+    if (!(await sheets.ask({ title: t('santa.remindAsk'), text: t('santa.remindText', { n: team.remind }), ok: t('santa.remindGo'), cancel: t('common.cancel') }))) return;
+    const was = { ...team };
+    santaTeam = { ...team, remind: 0, remindAt: nowTs() + 86400 }; // optimistic
+    try { const x = await api.santaRemind(id); santaTeam = { ...team, remind: 0, remindAt: x.nudgeAt }; haptic.ok(); say(t('santa.reminded'), 'party_popper_3d'); }
+    catch { santaTeam = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  function shareSanta() {
+    if (!e) return;
+    haptic.tap();
+    // the event's own card (server /api/share kind ev): a member opens the game; anyone else sees what a team-only event shows them
+    shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, e.title)
+      .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
+  }
   async function drawSanta() {
     haptic.tap();
     if (santaN < 3) { say(t('santa.few'), 'pleading_face_3d'); return; }
@@ -133,8 +180,16 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function closeReg() {
+    if (e?.santa) { await closeSanta(); return; }
     if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t('mg.closeRegText'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
     void setReg('now', t('mg.regClosed'), e?.regUntil);
+  }
+  // a Santa game's sign-up closed is its deadline come: the bot's round draws within seconds, for good (no Undo)
+  async function closeSanta() {
+    const few = santaN < 3;
+    if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t(few ? 'santa.closeFew' : 'santa.closeDraws'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
+    try { regOn((await api.setRegUntil(id, 'now')).regUntil); studioChanged(); haptic.ok(); say(t(few ? 'mg.regClosed' : 'santa.closeSoon'), 'locked_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // the door (owner, Nov 7): shut until T-30, or until the club's President or a Vice opens it, from 4 h before (server
   // organizing.open_door; the app's admin never). An hour or more ahead asks twice, the second "Open" after 2 s.
@@ -253,9 +308,39 @@
 
       {#if head && e.santa}
         <Group>
-          <Row icon={Gift} title={t(e.santa.drawn ? 'santa.done' : 'santa.title')} value={String(santaN)} />
+          {#if e.santa.drawn || !santaTeam}<Row icon={Gift} title={t(e.santa.drawn ? 'santa.done' : 'santa.title')} value={String(santaN)} />
+          {:else}<Row icon={Gift} title={t('santa.inOf', { n: santaTeam.in.length, m: santaTeam.in.length + santaTeam.out.length })} />{/if}
+          {#if !e.santa.drawn && live}
+            <Row title={t('santa.budget')} value={e.santa.budget ? t('santa.upTo', { sum: money(e.santa.budget) }) : t('santa.budgetPh')} accessory="disclosure" open={!!terms} onclick={editTerms} />
+            <Row title={e.regUntil ? `${t('santa.until')} ${until(e.regUntil)}` : t('santa.until')} accessory="disclosure" open={!!terms} onclick={editTerms} />
+          {/if}
+          {#if e.santa.drawn && e.santa.budget}<Row title={t('santa.budget')} value={t('santa.upTo', { sum: money(e.santa.budget) })} />{/if}
           {#if !e.santa.drawn && live}<Row tone="action" title={t('santa.draw')} onclick={drawSanta} />{/if}
         </Group>
+        {#if terms}
+          <form class="terms" onsubmit={(ev) => { ev.preventDefault(); void saveTerms(); }}>
+            <SantaTerms bind:f={terms} starts={e.startsAt} tried={termsTried} />
+            <Button kind="primary" size="l" full type="submit">{t('common.save')}</Button>
+          </form>
+        {/if}
+        {#if !e.santa.drawn && live && santaTeam}
+          <Group>
+            <Row icon={BellRing} tone={santaTeam.remindAt ? undefined : 'action'} title={t('santa.remind')}
+              subtitle={santaTeam.remindAt ? t('santa.remindAgain', { when: `${relDay(santaTeam.remindAt).toLowerCase()}, ${time(santaTeam.remindAt)}` }) : undefined}
+              value={santaTeam.remindAt ? undefined : String(santaTeam.remind)} onclick={remindSanta} />
+            <Row icon={Share} tone="action" title={t('santa.share')} onclick={shareSanta} />
+          </Group>
+          {#if santaTeam.in.length}
+            <Group caption="{t('santa.inList')} · {santaTeam.in.length}">
+              {#each santaTeam.in as p (p.id)}<Row dense title={p.name}>{#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}</Row>{/each}
+            </Group>
+          {/if}
+          {#if santaTeam.out.length}
+            <Group caption="{t('santa.notYet')} · {santaTeam.out.length}">
+              {#each santaTeam.out as p (p.id)}<Row dense title={p.name}>{#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}</Row>{/each}
+            </Group>
+          {/if}
+        {/if}
       {/if}
 
       {#if asks.length}
@@ -327,6 +412,7 @@
   .yn { display: flex; align-items: center; gap: var(--s-2); }
   .door { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
   .door .t-foot { color: var(--text-3); }
+  .terms { display: flex; flex-direction: column; gap: var(--s-3); }
   .moving { display: flex; align-items: flex-end; gap: var(--s-2); }
   .fl { flex: 1; min-width: 0; }
 </style>

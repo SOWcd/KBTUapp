@@ -21,6 +21,7 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Hourglass from '@lucide/svelte/icons/hourglass';
+  import Gift from '@lucide/svelte/icons/gift';
   import Pencil from '@lucide/svelte/icons/pencil';
   import BookOpen from '@lucide/svelte/icons/book-open';
   import Eye from '@lucide/svelte/icons/eye';
@@ -59,7 +60,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
+  import { relDay, time, nowTs, dayMonth, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -124,7 +125,7 @@
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   // still open and I'm not in: said right over the button (closed: the button itself says so)
-  const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist');
+  const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist' && !e.santa); // a Santa game: its own row names the deadline
   const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
@@ -381,7 +382,16 @@
     {#if soon}
     <div class="page">
 
-    {#if going && detail?.mySanta && !cancelled}<Santa {id} mine={detail.mySanta} />{/if}
+    {#if going && detail?.mySanta && !cancelled}<Santa {id} {e} mine={detail.mySanta} />{/if}
+    <!-- Secret Santa's terms (server santa.py), the same for the whole team: the gift's budget; the wishlists' deadline
+         for one not in yet (one who is in reads the draw's time on their card); the gifts day by its name -->
+    {#if e.santa && !cancelled && !over}
+      <Group>
+        {#if e.santa.budget}<Row icon={Gift} title={t('santa.budget')} value={t('santa.upTo', { sum: money(e.santa.budget) })} />{/if}
+        {#if !e.santa.drawn && e.regUntil && !going}<Row icon={Hourglass} title={t('santa.until')} value="{dayMonthShort(e.regUntil)}, {time(e.regUntil)}" whole />{/if}
+        <Row icon={CalendarHeart} title={t('santa.day')} value="{dayMonthShort(e.startsAt)}, {time(e.startsAt)}" whole />
+      </Group>
+    {/if}
 
     {#if detail && !e.meeting && (photos.length || detail.canAddPhotos)}
       <!-- the guests' album first, right under the header (after the event it's what the sheet is about) -->
