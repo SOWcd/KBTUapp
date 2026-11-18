@@ -190,7 +190,7 @@
     form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? t('ed.formBad') : '',
     teams: !f.teams || !teamsOk || (Number.isInteger(+f.teamMin) && Number.isInteger(+f.teamMax) && +f.teamMin >= 2 && +f.teamMax <= 10 && +f.teamMin <= +f.teamMax) ? '' : t('ed.teamsBad'),
     teamCap: !f.teams || !teamsOk || f.teamCap === '' || (Number.isInteger(+f.teamCap) && +f.teamCap >= 2 && +f.teamCap <= 500) ? '' : t('ed.teamCapBad'),
-    reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
+    reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
   // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
@@ -441,7 +441,7 @@
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
         : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
-        : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.message === 'santa_signed' ? t('santa.locked') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
+        : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.message === 'santa_signed' ? t('santa.locked') : x instanceof ApiErr && x.message === 'santa_until' ? t('santa.badUntil') : x instanceof ApiErr && x.message === 'santa_audience' ? t('santa.audience') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
 

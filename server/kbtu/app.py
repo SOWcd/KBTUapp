@@ -2310,6 +2310,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def santa_draw(eid: int, con: Con, v: Me):
         return logic.santa.draw(con, v, eid)
 
+    @app.put("/api/events/{eid}/santa")  # the game's budget and deadline, until the draw
+    def santa_settings(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.santa.settings(con, v, eid, body)
+
+    @app.put("/api/events/{eid}/santa/wish")  # my own wishlist, changed while I'm in (before and after the draw)
+    def santa_wish(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.santa.rewish(con, v, eid, body.get("wish"))
+
+    @app.post("/api/events/{eid}/santa/remind")  # "Remind those not in yet", once a day
+    def santa_remind(eid: int, con: Con, v: Me):
+        return logic.santa.remind(con, v, eid)
+
     @app.post("/api/events/{eid}/door-open")
     def open_door(eid: int, con: Con, v: Me):
         return logic.open_door(con, v, eid)

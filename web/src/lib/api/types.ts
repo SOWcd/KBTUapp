@@ -406,7 +406,7 @@ export interface EventCard {
   school?: string;              // a school's own event: its slug; only that school's students see it (server seats.school_ok)
   needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
   form?: Question[] | null;     // the event's own questions at sign-up, answered in the same tap
-  santa?: { drawn: boolean };   // Secret Santa is on (server santa.py): sign-up asks a wishlist; drawn: sign-up is closed
+  santa?: { drawn: boolean; budget?: number }; // Secret Santa is on (server santa.py): sign-up asks a wishlist; drawn: sign-up is closed; budget: the gift's, tenge (the deadline is regUntil)
   externalUrl: string | null;
   guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
   price: number | null;
@@ -458,6 +458,10 @@ export interface EventFull extends EventCard {
   volunteers?: { need: number; senior: boolean; taken: number; mine: 'asked' | 'yes' | 'no' | null; asked?: number } | null;
   teams?: EventTeams | null;    // a team event (server evteams.py)
   santaN?: number;              // Secret Santa, the organizers: how many play (never who gives to whom)
+  /** Secret Santa before the draw, the organizers: who is in, who of the club not yet (names only, never a wishlist);
+   *  remind: how many "Remind those not in yet" would reach now; remindAt: when the button works again (null: now) */
+  santaTeam?: { in: PersonRef[]; out: PersonRef[]; remind: number; remindAt: Ts | null };
+  santaTold?: number;           // santa.start's answer: how many of the team the invite went to (0: they had it within a day, not repeated)
   /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left) */
   mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null };
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
