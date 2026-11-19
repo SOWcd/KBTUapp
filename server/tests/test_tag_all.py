@@ -3,7 +3,10 @@ seen ones, then the members Telegram lists to our bot over MTProto (mtbot.member
 from __future__ import annotations
 
 import asyncio
+import os
+import stat
 import time
+import types
 
 from kbtu import bot, db, logic, tgc
 from test_core import env, login  # noqa: F401  (env: the fixture)
@@ -208,6 +211,7 @@ class _Client:
     def __init__(self):
         _Client.made += 1
         self.authed = self.connected = False
+        self.session = types.SimpleNamespace(save=lambda: "")  # nothing to keep: no file written
 
     async def connect(self):
         self.connected = True
@@ -456,3 +460,73 @@ def test_seen_who_is_never_kept(env, monkeypatch):
     other = logic.create_org(con, None, "Go", "GO", "crown_3d", False)
     con.execute("INSERT INTO chat_seen VALUES (-100, 514, ?, 1)", (other,))
     assert 514 not in logic.tag_all(con, -100, 21) and 510 in logic.tag_all(con, -100, 21)
+
+
+class _Telethon:
+    """telethon.TelegramClient as mtbot builds it, over the real session class: sign_in gives it a DC and an auth key."""
+    signed = 0
+
+    def __init__(self, session, api_id, api_hash, **kw):
+        self.session, self.connected = session, False
+        assert kw["receive_updates"] is False and kw["catch_up"] is False
+
+    async def connect(self):
+        self.connected = True
+
+    async def is_user_authorized(self):
+        return self.session.auth_key is not None
+
+    async def sign_in(self, bot_token):
+        from telethon.crypto import AuthKey
+        _Telethon.signed += 1
+        self.session.set_dc(2, "149.154.167.51", 443)
+        self.session.auth_key = AuthKey(os.urandom(256))
+
+    async def disconnect(self):
+        self.connected = False
+
+
+def test_mtbot_session_survives_a_restart(env, monkeypatch):
+    """The auth goes to mtbot.session beside the database (0600, the string alone, no names); the next process start
+    loads it and doesn't sign in; a dead key deletes it; the bot's own shutdown keeps it."""
+    from dataclasses import replace
+    import telethon
+    from telethon.errors import AuthKeyDuplicatedError
+    from telethon.sessions import StringSession
+    from kbtu import mtbot
+    c, cfg = env
+    cfg = replace(cfg, tg_api_id="1", tg_api_hash="x")
+    for k, v in (("_memo", {}), ("_client", None), ("_loop", None), ("_down_until", 0.0)):
+        monkeypatch.setattr(mtbot, k, v)
+    monkeypatch.setattr(telethon, "TelegramClient", _Telethon)
+    _Telethon.signed = 0
+    fail = []
+
+    async def read(client, chat, cap):
+        client.session.process_entities(object())  # what Telethon calls with every user it sees: kept nowhere
+        if fail:
+            raise fail.pop()
+        return mtbot.Roster([chat], False, set())
+    monkeypatch.setattr(mtbot, "_read", read)
+    path = mtbot._path(cfg)
+    assert path.parent == __import__("pathlib").Path(cfg.db_path).resolve().parent and not path.exists()
+
+    def start(chat):  # a new event loop: a new process as far as mtbot knows (its client is made afresh)
+        mtbot._memo.clear()
+        mtbot._down_until = 0
+        return asyncio.run(mtbot.members(cfg, chat, 5))
+    assert start(-100).ids == [-100] and _Telethon.signed == 1
+    saved = path.read_text()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600 and not path.with_name(path.name + ".tmp").exists()
+    s = StringSession(saved)                                   # nothing but the auth: it parses whole as a session string
+    assert (s.dc_id, s.server_address, s.port) == (2, "149.154.167.51", 443) and s.auth_key and saved == s.save()
+    assert start(-200).ids == [-200] and _Telethon.signed == 1 and path.read_text() == saved   # loaded, no sign-in
+    asyncio.run(mtbot.close())                                 # the bot's shutdown keeps it
+    assert path.exists()
+
+    fail.append(AuthKeyDuplicatedError(request=None))
+    assert start(-300) is None and not path.exists() and mtbot._client is None   # a dead key: gone, a fresh sign-in next
+    assert start(-300).ids == [-300] and _Telethon.signed == 2 and path.read_text() != saved
+
+    path.write_text("not a session")                           # a broken file: a fresh sign-in, not a crash
+    assert start(-400).ids == [-400] and _Telethon.signed == 3 and StringSession(path.read_text()).auth_key

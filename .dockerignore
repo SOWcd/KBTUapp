@@ -2,6 +2,8 @@
 .env
 *.db
 *.db-*
+*.session
+*.session.tmp
 **/__pycache__
 server/.venv
 server/tests

@@ -3,7 +3,9 @@ signed in over MTProto (Telethon, with its own token) may read a group's partici
 a person's account): a separate client, signed in as the bot. It only ever lists the participants of the chat an /all
 was just typed in, at that moment: connected for that read and disconnected right after (no idle connection, so
 Telethon never asks for missed updates), every request without updates, no handlers, no catch-up; it reads no
-messages. Names and usernames Telegram returns are not cached (_NoNames). The list is used for that run and kept
+messages. Names and usernames Telegram returns are not cached (_NoNames). The sign-in (dc, address, port, auth key:
+nothing else) is kept in mtbot.session beside the database, 0600, so a deploy doesn't sign in again; never in the
+database, its backups (backups/ and R2 copy the database file, receipts, deletions.log and media alone) or a log. The list is used for that run and kept
 nowhere (a two-minute memory per chat so a lone caller can't make it read Telegram on every message); only Telegram
 ids, the deleted ones and whether members are hidden leave this module.
 TG_API_ID and TG_API_HASH unset, Telethon missing, the sign-in refused or a long FloodWait: no list, one log line,
@@ -12,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
+from pathlib import Path
 from typing import NamedTuple
 
 from .config import Config
@@ -32,8 +36,9 @@ class Roster(NamedTuple):
     skip: set[int]      # bots and deleted accounts Telegram listed: never called this run, whatever else knows them
 
 
-# ponytail: signed in once per process start, the session in memory only (never in the database or its backups);
-# a session file outside the backups if deploys grow too many for Telegram's limit on bot sign-ins
+# Only the process holding the bot's lock (bot.run's flock: /all is heard by its poller alone) reads, writes or uses
+# the file, so one auth key is never written by two processes or connected from two at once.
+SESSION = "mtbot.session"
 _client = None
 _loop = None
 _lock: asyncio.Lock | None = None
@@ -48,14 +53,44 @@ def _off(why: str) -> None:
         log.warning("mtbot: off (%s)", why)
 
 
+def _path(cfg: Config) -> Path | None:
+    return None if cfg.db_path == ":memory:" else Path(cfg.db_path).resolve().parent / SESSION
+
+
+def _save(cfg: Config, auth: str) -> None:
+    """Atomic (a temp file, then a rename) and 0600 from its first byte. A failed write: signed in for this process only."""
+    if not (p := _path(cfg)) or not auth:
+        return
+    tmp = p.with_name(p.name + ".tmp")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)  # a leftover temp file keeps its old mode through O_CREAT
+        with os.fdopen(fd, "w") as f:
+            f.write(auth)
+        os.replace(tmp, p)
+    except OSError as exc:
+        log.warning("mtbot: session not saved (%s)", type(exc).__name__)
+
+
+def _forget(cfg: Config) -> None:
+    if p := _path(cfg):
+        p.unlink(missing_ok=True)
+
+
 def _new_client(cfg: Config):
     from telethon import TelegramClient
-    from telethon.sessions import MemorySession
+    from telethon.sessions import StringSession
 
-    class _NoNames(MemorySession):
+    class _NoNames(StringSession):  # its string holds the auth alone (dc, address, port, key)
         def process_entities(self, tlo) -> None:  # Telethon would keep every name and username it saw: nothing
             pass
-    return TelegramClient(_NoNames(), int(cfg.tg_api_id), cfg.tg_api_hash, receive_updates=False, catch_up=False,
+    try:
+        session = _NoNames((p.read_text().strip() or None) if (p := _path(cfg)) and p.exists() else None)
+    except Exception as exc:  # noqa: BLE001 - unreadable or not a session: a fresh sign-in
+        log.warning("mtbot: saved session unusable (%s)", type(exc).__name__)
+        _forget(cfg)
+        session = _NoNames()
+    return TelegramClient(session, int(cfg.tg_api_id), cfg.tg_api_hash, receive_updates=False, catch_up=False,
                           flood_sleep_threshold=FLOOD_SLEEP)
 
 
@@ -92,6 +127,7 @@ async def members(cfg: Config, chat: int, cap: int) -> Roster | None:
         except (UnauthorizedError, AuthKeyError) as exc:  # refused, revoked, duplicated: a fresh sign-in after RETRY
             _down_until = time.monotonic() + RETRY
             log.warning("mtbot: session dropped (%s)", type(exc).__name__)  # never the token
+            _forget(cfg)  # the next try signs in afresh, not with the dead key
             await close()
         except Exception as exc:  # noqa: BLE001 - hidden members, kicked meanwhile, a timeout, the network: no list
             log.warning("mtbot: members: %s", type(exc).__name__)
@@ -110,6 +146,7 @@ async def _session(cfg: Config, chat: int, cap: int) -> Roster:
     await _client.connect()
     if not await _client.is_user_authorized():
         await _client.sign_in(bot_token=cfg.bot_token)
+        _save(cfg, _client.session.save())
         log.warning("mtbot: signed in as the bot")
     return await _read(_client, chat, cap)
 
@@ -131,7 +168,7 @@ async def _read(client, chat: int, cap: int) -> Roster:
 
 
 async def _hang_up() -> None:
-    """Disconnected between reads (the session stays signed in, in memory)."""
+    """Disconnected between reads (the session stays signed in, in memory and in its file)."""
     if _client is not None:
         try:
             await _client.disconnect()
@@ -140,7 +177,7 @@ async def _hang_up() -> None:
 
 
 async def close() -> None:
-    """The bot's shutdown, or a dead session: disconnected and forgotten."""
+    """The bot's shutdown, or a dead session: disconnected and forgotten here (the file stays: members() drops it on a dead one)."""
     global _client
     await _hang_up()
     _client = None

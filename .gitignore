@@ -2,6 +2,8 @@
 __pycache__/
 *.db
 *.db-*
+*.session
+*.session.tmp
 tmp-serve/
 
 # server virtualenv
