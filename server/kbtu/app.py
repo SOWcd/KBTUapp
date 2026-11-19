@@ -983,6 +983,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def teams_remind(eid: int, uid: int, con: Con, v: Me):
         return logic.evteams.remind(con, v, eid, uid)
 
+    @app.get("/api/events/{eid}/people/{uid}/contact")
+    def attendee_contact(eid: int, uid: int, con: Con, v: Me):
+        return logic.attendee_contact(con, v, eid, uid)  # one person's @username at a time, audited, capped
+
+    @app.post("/api/events/{eid}/people/{uid}/ask")
+    def attendee_ask(eid: int, uid: int, con: Con, v: Me):
+        return logic.attendee_ask(con, v, eid, uid)  # no username: the bot asks them to write to the organizer
+
     @app.delete("/api/events/{eid}/people/{uid}", status_code=204)
     def remove_person(eid: int, uid: int, con: Con, v: Me):
         logic.remove_seats(con, v, eid, uid=uid)
@@ -1766,7 +1774,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/receipts/{rid}/review", status_code=204)
     def review_receipt(rid: int, con: Con, v: Me, body: dict = Body(...)):
-        logic.review_receipt(con, v, rid, body.get("reject"))
+        logic.review_receipt(con, v, rid, body.get("reject"), body.get("why"))
 
     # comments under posts and events, reports (§4.10)
     @app.get("/api/{kind}s/{tid}/comments")

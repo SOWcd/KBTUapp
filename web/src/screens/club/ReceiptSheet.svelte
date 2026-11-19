@@ -1,10 +1,11 @@
 <script lang="ts">
   // One receipt of a paid event (SPEC §4.3), for the club's Head+: what the student sent and what was read off it, to
-  // compare with the club's Kaspi history. "Reject": the ticket stops working, the seat goes to the waitlist and the bot
-  // asks the student to talk to the club (money goes back outside the app). One the app didn't check can be passed;
-  // one it did (`auto`) can still be rejected.
+  // compare with the club's Kaspi history. "Reject": the organizer picks why (a fixed list), the ticket stops working,
+  // the seat goes to the waitlist and the bot names the reason to the student (money goes back outside the app). One
+  // the app didn't check can be passed; one it did (`auto`) can still be rejected.
   import { onDestroy } from 'svelte';
-  import { api, type AttendeeReceipt } from '../../lib/api';
+  import { api, type AttendeeReceipt, type RejectWhy } from '../../lib/api';
+  import { menu } from '../../ui/menu';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
@@ -24,11 +25,12 @@
   const flagged = $derived(receipt.flags.length > 0 && !receipt.reviewed);
 
   let busy = $state('');
-  async function review(reject: boolean) {
+  const WHY: RejectWhy[] = ['short', 'other_event', 'used', 'unclear'];
+  async function review(reject: boolean, why?: RejectWhy) {
     if (reject && !(await sheets.ask({ title: t('rc.rejectAsk', { name }), text: t('rc.rejectText'), ok: t('rc.reject'), cancel: t('common.cancel'), danger: true }))) return;
     busy = reject ? 'no' : 'ok';
     try {
-      await api.reviewReceipt(receipt.id, reject);
+      await api.reviewReceipt(receipt.id, reject, why);
       haptic.ok(); say(reject ? t('rc.rejected') : t('rc.passed'), reject ? 'waving_hand_3d_default' : 'raising_hands_3d_default');
       ondone?.();
       close(overlay.id);
@@ -59,7 +61,7 @@
   {#snippet footer()}
     <div class="acts btns">
       {#if !receipt.reviewed}<Button kind="secondary" size="l" full loading={busy === 'ok'} onclick={() => review(false)}>{t('rc.ok')}</Button>{/if}
-      <Button kind="destructive" size="l" full loading={busy === 'no'} onclick={() => review(true)}>{t('rc.reject')}</Button>
+      <Button kind="destructive" size="l" full loading={busy === 'no'} onclick={(e) => menu(e.currentTarget as Element, WHY.map((w) => ({ label: t(`rc.why.${w}`), onselect: () => review(true, w) })))}>{t('rc.reject')}</Button>
     </div>
   {/snippet}
 </Sheet>

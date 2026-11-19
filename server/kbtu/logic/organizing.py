@@ -877,6 +877,67 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     return e, found
 
 
+REVEALS_A_DAY, REVEAL_AFTER = 40, 7 * 86400
+_REACH = ("attendee_contact", "attendee_ask")  # the audit log's lines for both, counted together against the cap
+
+
+def _reach(con, v: Viewer, eid: int, uid: int) -> tuple[sqlite3.Row, bool, str, str]:
+    """An organizer reaching one attendee (inside the caller's tx): the host club's own organizer (the receipts' right;
+    not a co-host, not staff from Admin), the person holds a seat on this event (a ticket, or a hold waiting on its
+    receipt), up to a week after the end. (the attendee's users row, blocked either way, the audit target and data)."""
+    if not v.student or v.staff_org:
+        raise ApiError("forbidden")
+    e = _staff_event(con, v, eid, "events")
+    t = core.now()
+    if e["status"] == "draft" or end_of(e) + REVEAL_AFTER < t:
+        raise ApiError("closed")
+    u = one(con, """SELECT u.id, u.tg_username FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.user_id = ?
+        AND (r.status = 'going' OR r.status = 'hold' AND r.hold_until >= ?)""", eid, uid, t)
+    if uid == v.id or not u:
+        raise ApiError("not_found")
+    blocked = bool(one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", uid, v.id, v.id, uid))
+    return u, blocked, f"user:{uid}", json.dumps({"event": eid})
+
+
+def _reached(con, v: Viewer, action: str, target: str, data: str, since: int | None) -> bool:
+    return bool(one(con, "SELECT 1 FROM audit_log WHERE action = ? AND actor_id = ? AND target = ? AND data = ? AND at > ?",
+                    action, v.id, target, data, since if since is not None else -1))
+
+
+def _count(con, v: Viewer, action: str, target: str, data: str) -> None:
+    """One line of the audit log, within the 40 a day (both kinds together)."""
+    if one(con, f"SELECT COUNT(*) FROM audit_log WHERE action IN {_REACH} AND actor_id = ? AND at > ?", v.id, core.now() - 86400)[0] >= REVEALS_A_DAY:
+        raise ApiError("rate_limited")
+    log_action(con, v.id, action, target, data)
+
+
+def attendee_contact(con, v: Viewer, eid: int, uid: int) -> dict:
+    """"Write in Telegram" on an attendee's row: one person's @username, asked for one at a time (never in the list).
+    Each reveal is in the audit log, 40 a day per organizer (the same person and event again that day isn't counted
+    twice). No username, or a block either way: null, unlogged; asked: this organizer already asked them to write."""
+    with tx(con):  # the count and the new line in one write: two taps at once never pass the cap together
+        u, blocked, target, data = _reach(con, v, eid, uid)
+        if not u["tg_username"] or blocked:
+            return {"username": None, "asked": _reached(con, v, "attendee_ask", target, data, None)}
+        if not _reached(con, v, "attendee_contact", target, data, core.now() - 86400):
+            _count(con, v, "attendee_contact", target, data)
+    return {"username": u["tg_username"]}
+
+
+def attendee_ask(con, v: Viewer, eid: int, uid: int) -> dict:
+    """"Ask them to write to me", for someone with no @username: the bot sends them a template naming the event and
+    the club, its button the organizer's own Telegram (he shows himself; nothing of theirs is shown). Once per organizer,
+    person and event (the audit log keeps it; a repeat does nothing), within the same 40 a day. A block: as if sent."""
+    with tx(con):
+        u, blocked, target, data = _reach(con, v, eid, uid)
+        if not one(con, "SELECT tg_username FROM users WHERE id = ?", v.id)[0]:
+            raise ApiError("bad_input", "own_username")  # his button would have nowhere to go
+        if not blocked and not _reached(con, v, "attendee_ask", target, data, None):
+            _count(con, v, "attendee_ask", target, data)
+            notify(con, uid, "org_ask", f"oa:{eid}:{v.id}")
+    return {"asked": True}
+
+
 def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True) -> sqlite3.Row | str:
     """A badge QR at the door: someone who forgot to register, or was just passing by, comes in.
     A ticket they hold is checked in as usual; a free event registers them on the spot (walk_in); a paid one

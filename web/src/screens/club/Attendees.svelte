@@ -4,6 +4,7 @@
   // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
   // Someone the organizers removed (⋯) who had paid waits folded at the end, their receipt there for the refund.
+  // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -11,7 +12,7 @@
   import { menu } from '../../ui/menu';
   import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
   import { eventById, studioChanged } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
@@ -94,6 +95,27 @@
     catch (e) { list = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
   }
 
+  // a seat on this event (a ticket, or a hold waiting on its receipt) until a week after the end: the host's own
+  // organizer only, never a co-host or staff from Admin (server organizing.attendee_contact)
+  const writable = (a: Attendee) => host && !staff && (a.status === 'going' || a.status === 'hold') && !!ev && a.person.id !== session.me?.id
+    && Date.now() / 1000 < (ev.endsAt ?? ev.startsAt + 3 * 3600) + 7 * 86400;
+  async function write(a: Attendee) {
+    try {
+      const { username, asked } = await api.attendeeContact(id, a.person.id);
+      if (username) { openLink(`https://t.me/${encodeURIComponent(username)}`); return; }
+      if (asked) { say(t('att.asked'), 'waving_hand_3d_default'); return; }
+      // no @username: the bot asks them to write to me instead (my own Telegram on its button)
+      if (!(await sheets.ask({ title: t('att.askTitle'), text: t('att.askText'), ok: t('att.askOk'), cancel: t('common.cancel') }))) return;
+      await api.askToWrite(id, a.person.id);
+      haptic.ok(); say(t('att.asked'), 'waving_hand_3d_default');
+    } catch (e) {
+      haptic.error();
+      say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'rate_limited' ? t('att.writeTooMany') : e.message === 'own_username' ? t('att.ownUsername') : t('common.error'), 'warning_3d');
+    }
+  }
+  const more = (a: Attendee) => [...(writable(a) ? [{ label: t('person.write'), onselect: () => void write(a) }] : []),
+    ...(removable(a) ? [{ label: t('att.remove'), destructive: true, onselect: () => remove(a) }] : [])];
+
   let sending = $state(false);
   async function exportList() {
     sending = true;
@@ -108,7 +130,7 @@
 
 {#snippet people(xs: Attendee[])}
   {#each xs as a (a.person.id)}
-    {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen) || removable(a)}
+    {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen) || removable(a) || writable(a)}
     <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
     <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
       {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
@@ -124,8 +146,8 @@
       {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
       {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
       {:else if a.status === 'waitlist'}<Tag>{t('att.waitlist')}</Tag>{/if}
-      {#if removable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
-        onclick={(e) => menu(e.currentTarget as Element, [{ label: t('att.remove'), destructive: true, onselect: () => remove(a) }])} />{/if}
+      {#if removable(a) || writable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
+        onclick={(e) => menu(e.currentTarget as Element, more(a))} />{/if}
     {/snippet}
     <!-- engine: Row needs content under it (the answers to the event's questions) -->
     {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}

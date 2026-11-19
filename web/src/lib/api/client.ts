@@ -1,6 +1,6 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, OwnTr } from './types';
+import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, OwnTr, RejectWhy } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -334,6 +334,10 @@ export const server = {
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
   teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
+  // one attendee's @username, asked on a tap (never in the list): the host's organizer, audited and capped
+  attendeeContact: (id: Id, user: Id): Promise<{ username: string | null; asked?: boolean }> => call('GET', `/events/${id}/people/${user}/contact`),
+  // none: the bot asks them to write to the organizer (a template, his Telegram on its button), once
+  askToWrite: (id: Id, user: Id): Promise<{ asked: boolean }> => call('POST', `/events/${id}/people/${user}/ask`),
   removePerson: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/people/${user}`), // the organizer's, before the start; the bot tells them
   removeTeam: (id: Id, team: Id, people: Id[]): Promise<void> => call('DELETE', `/events/${id}/teams/${team}`, { people }), // the roster the confirm showed: changed since, refused
   teamsRemind: (id: Id, user: Id): Promise<{ queued: boolean; consent: boolean; off?: boolean }> => call('POST', `/events/${id}/teams/people/${user}/remind`), // the bot's "agree to teams", once a day
@@ -373,7 +377,8 @@ export const server = {
     return URL.createObjectURL(await r.blob());
   },
   /** Head+: the receipt is fine, or rejected (the ticket stops working, the seat goes on, the bot tells the student). */
-  reviewReceipt: (id: Id, reject: boolean): Promise<void> => call('POST', `/receipts/${id}/review`, { reject }),
+  // why: a rejection's reason, which the bot names to the student (server seats.REJECT_WHY)
+  reviewReceipt: (id: Id, reject: boolean, why?: RejectWhy): Promise<void> => call('POST', `/receipts/${id}/review`, why ? { reject, why } : { reject }),
   comments: (kind: 'post' | 'event', id: Id): Promise<CommentThread> => call('GET', `/${kind}s/${id}/comments`), // students (§4.10)
   addComment: (kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread> => call('POST', `/${kind}s/${id}/comments`, { body, asOrg: !!asOrg, ...(replyTo ? { replyTo } : {}) }), // 500 chars, 10 a minute
   setComments: (kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread> => call('PATCH', `/${kind}s/${id}/comments`, { on }), // the club's Head+

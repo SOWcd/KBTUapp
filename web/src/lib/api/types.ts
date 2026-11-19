@@ -627,6 +627,8 @@ export interface Attendee { answers?: { q: string; a: string }[] | null; person:
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */
+/** why the organizer rejected a receipt; the bot names it to the student (server seats.REJECT_WHY) */
+export type RejectWhy = 'short' | 'other_event' | 'used' | 'unclear';
 export interface AttendeeReceipt {
   id: Id; flags: string[]; reviewed: boolean; auto: boolean; at: Ts;
   amount?: number | null; no?: string | null; sender?: string | null; recipient?: string | null; paidAt?: Ts | null;

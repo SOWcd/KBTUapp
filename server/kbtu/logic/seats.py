@@ -897,10 +897,14 @@ def receipt_path(con, v: Viewer, rid: int) -> str:
     return c["path"]
 
 
-def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
+REJECT_WHY = ("short", "other_event", "used", "unclear")  # texts.REJECT_WHY: the bot names it to the student
+
+
+def review_receipt(con, v: Viewer, rid: int, reject: object, why: object = None) -> None:
     """The organizer checked a receipt against their Kaspi history (§4.3): fine, or rejected — then the ticket stops
-    working, the seat goes to the waitlist and the bot tells the student to talk to the club. Refunds happen outside."""
-    if not isinstance(reject, bool):
+    working, the seat goes to the waitlist and the bot tells the student to talk to the club. Refunds happen outside.
+    why: a rejection's reason, one of REJECT_WHY (never words); none (an old client): the bot's old text."""
+    if not isinstance(reject, bool) or why is not None and (not reject or why not in REJECT_WHY):
         raise ApiError("bad_input")
     with tx(con):
         c = one(con, "SELECT c.*, r.event_id, r.user_id, r.status AS reg, r.free FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.id = ?", rid)
@@ -912,14 +916,14 @@ def review_receipt(con, v: Viewer, rid: int, reject: object) -> None:
         con.execute("UPDATE receipts SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?", ("rejected" if reject else "accepted", v.id, core.now(), rid))
         con.execute("DELETE FROM receipt_auto_checks WHERE receipt_id = ?", (rid,))
         if reject:
-            log_action(con, v.id, "receipt_reject", f"receipt:{rid}")
+            log_action(con, v.id, "receipt_reject", f"receipt:{rid}", json.dumps({"why": why}) if why else "{}")
             # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a
             # free one (1st-year seat), not one on an event free now, not one paid by a newer receipt
             if c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
                 evteams.left(con, e["id"], c["user_id"])  # the captain hears it
                 con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
                 con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
-                notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}")
+                notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}", json.dumps({"why": why}) if why else "{}")
                 promote(con, e)
 
 

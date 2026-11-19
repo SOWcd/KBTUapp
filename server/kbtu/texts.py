@@ -221,6 +221,8 @@ BOT = {
         "seat_free": ("🎉 Освободилось место — ты идёшь на <b>{title}</b>!\n🗓 {when} · {place}", "🎟 Мой билет"),
         "seat_hold": ("🎉 Освободилось место на <b>{title}</b>!\n🗓 {when} · {place}\nОплати и загрузи чек за 30 минут, иначе место уйдёт следующему.", "💳 Оплатить"),
         "receipt_rejected": ("😔 Организаторы <b>{title}</b> ({org}) отклонили твой чек, билет больше не действует. Если это ошибка, напиши им.", "Открыть событие"),
+        "receipt_rejected_why": ("😔 Организаторы <b>{title}</b> ({org}) отклонили твой чек: {why}. Билет больше не действует. Если запись ещё открыта, можно записаться снова и прикрепить новый чек. Если это ошибка, напиши им.", "Открыть событие"),
+        "org_ask": ("✉️ Организатор <b>{title}</b> ({org}) просит написать ему по твоему билету.", "✍️ Написать организатору"),
         "seat_removed": ("😔 Организаторы <b>{title}</b> ({org}) убрали тебя из списка участников. Если ты платил(а), по возврату напиши им. Пока запись открыта, можно записаться снова.", "Открыть событие"),
         "receipt_ok": ("🎟 Чек принят — ты идёшь на <b>{title}</b>!\nБилет уже в приложении.", "🎟 Открыть билет"),
         "receipt_ok_team": ("🎟 Чек принят — ты идёшь на <b>{title}</b>!\nДальше команда: создай свою, вступи по ссылке друга или жди — приложение подберёт.", "Открыть событие"),
@@ -422,6 +424,8 @@ BOT = {
         "seat_free": ("🎉 Орын босады — сен <b>{title}</b> іс-шарасына барасың!\n🗓 {when} · {place}", "🎟 Менің билетім"),
         "seat_hold": ("🎉 <b>{title}</b> іс-шарасында орын босады!\n🗓 {when} · {place}\n30 минут ішінде төлеп, чекті жүкте, әйтпесе орын келесі адамға өтеді.", "💳 Төлеу"),
         "receipt_rejected": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) чегіңді қабылдамады, билет енді жарамсыз. Қате болса, оларға жаз.", "Іс-шараны ашу"),
+        "receipt_rejected_why": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) чегіңді қабылдамады: {why}. Билет енді жарамсыз. Тіркеу әлі ашық болса, қайта тіркеліп, жаңа чек тіркеуге болады. Қате болса, оларға жаз.", "Іс-шараны ашу"),
+        "org_ask": ("✉️ <b>{title}</b> ұйымдастырушысы ({org}) билетің бойынша өзіне жазуыңды сұрайды.", "✍️ Ұйымдастырушыға жазу"),
         "seat_removed": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) сені қатысушылар тізімінен алып тастады. Төлеген болсаң, ақшаны қайтару үшін оларға жаз. Жазылу ашық тұрғанда қайта жазылуға болады.", "Іс-шараны ашу"),
         "receipt_ok": ("🎟 Чек қабылданды — сен <b>{title}</b> іс-шарасына барасың!\nБилет қосымшада.", "🎟 Билетті ашу"),
         "receipt_ok_team": ("🎟 Чек қабылданды — сен <b>{title}</b> іс-шарасына барасың!\nЕнді команда: өзіңдікін құр, досыңның сілтемесімен қосыл немесе күт — қосымша табады.", "Іс-шараны ашу"),
@@ -617,6 +621,8 @@ BOT = {
         "seat_free": ("🎉 A seat opened up — you're going to <b>{title}</b>!\n🗓 {when} · {place}", "🎟 My ticket"),
         "seat_hold": ("🎉 A seat opened up at <b>{title}</b>!\n🗓 {when} · {place}\nPay and upload the receipt within 30 minutes, or it goes to the next person.", "💳 Pay"),
         "receipt_rejected": ("😔 The organizers of <b>{title}</b> ({org}) rejected your receipt; the ticket no longer works. If it's a mistake, write to them.", "Open the event"),
+        "receipt_rejected_why": ("😔 The organizers of <b>{title}</b> ({org}) rejected your receipt: {why}. The ticket no longer works. If sign-up is still open, you can sign up again and attach a new receipt. If it's a mistake, write to them.", "Open the event"),
+        "org_ask": ("✉️ The organizer of <b>{title}</b> ({org}) asks you to write to them about your ticket.", "✍️ Write to the organizer"),
         "seat_removed": ("😔 The organizers of <b>{title}</b> ({org}) took you off the list. If you paid, write to them about a refund. While sign-up is open, you can sign up again.", "Open the event"),
         "receipt_ok": ("🎟 Receipt accepted — you're going to <b>{title}</b>!\nYour ticket is in the app.", "🎟 Open the ticket"),
         "receipt_ok_team": ("🎟 Receipt accepted — you're going to <b>{title}</b>!\nNext, your team: make one, join by a friend's link, or wait and the app will find you one.", "Open the event"),
@@ -810,6 +816,17 @@ RECEIPT_WHY = {
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
     "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
+}
+
+
+# why the organizer rejected a receipt (seats.REJECT_WHY), in the bot's receipt_rejected_why
+REJECT_WHY = {
+    "ru": {"short": "сумма меньше цены билета", "other_event": "это чек за другую оплату", "used": "этот чек уже использовали",
+           "unclear": "на чеке не видно оплаты"},
+    "kk": {"short": "сома билет бағасынан аз", "other_event": "бұл басқа төлемнің чегі", "used": "бұл чек бұрын қолданылған",
+           "unclear": "чекте төлем көрінбейді"},
+    "en": {"short": "the sum is less than the ticket price", "other_event": "it's for another payment", "used": "this receipt was already used",
+           "unclear": "the payment isn't visible on it"},
 }
 
 
