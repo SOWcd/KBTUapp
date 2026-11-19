@@ -1321,6 +1321,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def round_slot_place(sid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.set_place(con, v, sid, body)
 
+    @app.post("/api/round-slots/{sid}/call")
+    def round_slot_call(sid: int, con: Con, v: Me):
+        return casting.call_slot(con, v, sid)
+
     @app.post("/api/rounds/{rid}/invite")
     def round_invite(rid: int, con: Con, v: Me):
         return casting.invite(con, v, rid)

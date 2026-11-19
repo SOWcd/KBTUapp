@@ -180,11 +180,24 @@
       say(t(code === 'bad_input' ? 'cast.placeBad' : code === 'rate_limited' ? 'cast.placeMany' : 'common.error'), 'pleading_face_3d');
     } finally { saving = false; }
   }
+  // at the venue: everyone shortlisted without a result hears "come over" to this window from the bot, once each.
+  // Optimistic: the button says how many at once and goes dim; a failure puts it back
+  async function callSlot(s: RoundSlot) {
+    const c = s.call;
+    if (!c?.left || !(await sheets.ask({ title: t('cast.callAsk'), text: t('cast.callText', { n: c.left }), ok: t('cast.call'), cancel: t('common.cancel') }))) return;
+    s.call = { ...c, waiting: c.waiting + c.left, tried: c.tried + c.left, left: 0 };
+    try {
+      const res = await api.callSlot(s.id);
+      slots = res.slots; haptic.ok(); say(t('cast.callQueued', { n: res.queued }), 'party_popper_3d');
+      setTimeout(loadSlots, 8000); // "Called" counts what Telegram took: the bot sends within seconds
+    } catch { s.call = c; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function inviteAll() {
     if (!r) return;
     try {
       const res = await api.inviteRound(r.id);
       for (const a of apps) if (a.stage === 'next') a.invited = true;
+      loadSlots(); // the windows' "call" counts take the newly invited
       haptic.ok(); say(t('cast.ivInvited', { n: res.invited }), 'party_popper_3d');
     } catch (x) { haptic.error(); say(x instanceof ApiErr && x.message === 'no_slots' ? t('cast.ivNoSlots') : t('common.error'), 'warning_3d'); }
   }
@@ -193,7 +206,7 @@
       await api.markShowed(appId, came);
       for (const s of slots) for (const p of s.people ?? []) if (p.appId === appId) p.showed = came;
       const a = apps.find((x) => x.id === appId); if (a) a.showed = came;
-      haptic.select();
+      haptic.select(); loadSlots(); // who came is no longer called
     } catch { say(t('common.error'), 'warning_3d'); }
   }
 
@@ -313,6 +326,12 @@
                 {#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}
               </span>{/snippet}
             </Row>
+            {#if s.call && (s.call.left || s.call.tried)}
+              <div class="stack edit">
+                <Button kind="secondary" size="m" full disabled={!s.call.left} onclick={() => callSlot(s)}>
+                  {s.call.left ? t('cast.callGo', { n: s.call.left }) : s.call.waiting ? t('cast.callSending') : t('cast.callDone', { n: s.call.told })}</Button>
+              </div>
+            {/if}
             {#if placing === s.id}
               <div class="stack edit" transition:fold>
                 <Field label={t('memo.where')} bind:value={placeDraft} maxlength={120} />
