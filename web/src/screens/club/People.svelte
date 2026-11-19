@@ -5,7 +5,7 @@
   // its own «12 of 18». The whole row is the tap (owner, Nov 14: not a button on every row): its circle turns into a check
   // at once, the row stays where it is (no jump under the thumb) and moves to «Came» at the next tab switch; an Undo in
   // the toast. A tap on a hand mark offers to take it back (a scan stays: it proves they came). Fixable until the
-  // midnight after the event.
+  // midnight ending the day after the event.
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Circle from '@lucide/svelte/icons/circle';
   import CircleCheck from '@lucide/svelte/icons/circle-check';

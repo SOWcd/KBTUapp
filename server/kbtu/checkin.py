@@ -802,12 +802,13 @@ def prefill(con, email: str | None, ms: dict | None = None) -> dict | None:
 # still waiting for their student (roster_pending, the sheet's dept), and whom an admin added to the team session's
 # expected list (`admin checkin expect`). Each row can be marked by hand, a row with no account too (qr_hand_marks);
 # a hand mark is flagged as one, never proof. Who sees and marks: the event's organizers and a door helper a President
-# or Vice gave the list to (crew kind "door"), until the midnight after the event's end (lists fixed after the door).
+# or Vice gave the list to (crew kind "door"), until the midnight ending the day after the event's end (lists fixed after the door).
 
 def _until(e) -> int:
-    """Almaty's midnight after the event's end: hand marks close then."""
+    """Almaty's midnight at the end of the day after the event's end: hand marks close then (owner, Nov 19: a meeting
+    over, everyone gone home, the Vice marks who came the next day)."""
     end = e["ends_at"] or e["starts_at"] + logic.DOOR_LATE
-    return ((end + 5 * 3600) // 86400 + 1) * 86400 - 5 * 3600
+    return ((end + 5 * 3600) // 86400 + 2) * 86400 - 5 * 3600
 
 
 def _lists(con, v: Viewer, eid: int):
@@ -829,11 +830,21 @@ def _short(name: str) -> str:
     return f"{w[1]} {w[0][:1]}" if len(w) > 1 else name
 
 
+def _marks_at(con, e):
+    """Where the team's marks live: its crew session; at a door that isn't the guests' (a meeting, members-only, a
+    partner's: crew_open makes no crew there) the event's own session, where its members scan. Not the volunteers
+    ledger's (its door counts hours: its own)."""
+    s = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", e["id"])
+    if s or _guests(con, e, None) or e["org_id"] == logic.vol.org_id(con):
+        return s
+    return one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", e["id"])
+
+
 def team(con, v: Viewer, eid: int) -> dict:
     """The team's list: rows {key, name, group, at (came), manual (by hand), app (has an account)}, then who came not on it."""
     e, full = _lists(con, v, eid)
-    s = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ?", eid)
-    sid = s[0] if s else 0
+    s = _marks_at(con, e)
+    sid = s["id"] if s else 0
     hand = {r["who"]: r["at"] for r in rows(con, "SELECT who, at FROM qr_hand_marks WHERE session_id = ?", sid)}
     named = lambda p: " ".join(n for n in (p["last_name"], p["first_name"]) if n) if full and p["first_name"] else logic.short_name(p)  # noqa: E731
     base = f"SELECT {logic.PERSON_COLS}, u.tg_username, s.email, s.student_id, m.done_at, m.marked_by, m.hand"
@@ -878,11 +889,14 @@ def team_mark(con, v: Viewer, eid: int, key: object, on: bool = True) -> dict:
         raise ApiError("bad_input")
     e, _ = _lists(con, v, eid)
     k = m[0]
-    s = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
+    s = _marks_at(con, e)
     runs = v.role == "admin" or can(con, v, e["org_id"], "events")
     if not s and on and runs:
         crew_open(con, v, e)  # its organizer marking before the QR was opened (on the event's day)
-        s = one(con, "SELECT * FROM qr_sessions WHERE crew_event_id = ?", eid)
+        if not _guests(con, e, None) and e["status"] == "published" and not e["guest_host"] and e["org_id"] != logic.vol.org_id(con) \
+                and (now() + 5 * 3600) // 86400 >= (e["starts_at"] + 5 * 3600) // 86400:
+            for_event(con, None, v, eid)  # a meeting's: its own session, as Show QR makes it (crew_open's day)
+        s = _marks_at(con, e)
     if not s or now() >= _until(e):
         raise ApiError("closed", "qr")
     if k not in {r["key"] for r in team(con, v, eid)["rows"]}:
