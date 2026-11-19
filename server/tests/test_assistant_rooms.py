@@ -30,6 +30,6 @@ def test_a_rooms_place_only_from_the_map(env, monkeypatch):
     assert "67: not on the app's map, its floor and place unknown" in seen[-1] and "67: floor" not in seen[-1]
     assert r["actions"] == []                                               # nothing made up opens
     r = ask("\u0430\u0443\u0434 251\u0430")                                 # "aud 251a", the Cyrillic a: the map's 251a
-    assert "251a: floor 2." in seen[-1] and r["actions"] == []              # the fake's Cyrillic room isn't the map's id
+    assert "251a: floor 2, the Tole bi street side." in seen[-1] and r["actions"] == []              # the fake's Cyrillic room isn't the map's id
     ask("\u043f\u0430\u0440\u0430 \u0432 10:30")                            # "class at 10:30": no room at all
     assert "Rooms the question names" not in seen[-1]

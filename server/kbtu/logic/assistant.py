@@ -240,7 +240,10 @@ def rooms_asked(q: str) -> tuple[str, set[str]]:
     if not got:
         return "", set()
     fl = map_floors()
-    said = [f"{r}: floor {fl[r]}{' (the basement)' if fl[r] == 0 else ''}" if r in fl else
+    # the owner's own word (Nov 19): 7xx and 2xx share floor 2; 7xx by Independence hall, 2xx on the Tole bi side
+    side = lambda r: {"7": ", by Independence hall", "2": ", the Tole bi street side"}.get(r[0], "") if len(r.rstrip("abcv")) == 3 else ""
+    said = [f"{r}: floor {fl[r]}{' (the basement)' if fl[r] == 0 else ''}{side(r)}" if r in fl else
+            f"{r}: not on the app's map; 7xx rooms are on floor 2 by Independence hall" if side(r) and r[0] == "7" else
             f"{r}: not on the app's map, its floor and place unknown (don't guess them; offer the map)" for r in got]
     return "Rooms the question names, as the app's map of the main building has them: " + "; ".join(said) + ".", {r for r in got if r in fl}
 
