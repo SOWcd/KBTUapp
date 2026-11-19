@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from kbtu import checkin, db, roster
-from test_checkin_door import _qr, _reg
+from test_checkin_door import _mem, _qr, _reg
 from test_core import delete_now, login, tma, env  # noqa: F401
 from test_one_qr import _crew, _marks, _setup
 from test_review_checkin import _scan
@@ -106,7 +106,7 @@ def test_who_sees_the_names(env):
     con.close()
 
 
-def test_hand_marks_close_at_midnight_after_the_end(env, monkeypatch):
+def test_hand_marks_close_at_midnight_ending_the_day_after_the_end(env, monkeypatch):
     c, cfg = env
     con = db.connect(cfg.db_path)
     oid, ann, eid = _setup(c, con)
@@ -114,8 +114,12 @@ def test_hand_marks_close_at_midnight_after_the_end(env, monkeypatch):
     c.post(f"/api/screens/{_qr(c, 9, eid)[0]}/finish", headers=tma(9))                     # the door closed: lists still fixed
     assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}"}).status_code == 200
     e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    nxt = ((e["ends_at"] + 5 * 3600) // 86400 + 1) * 86400 - 5 * 3600 + 3600                # 01:00 the next day (Almaty)
+    monkeypatch.setattr(checkin, "now", lambda: nxt)
+    assert checkin._until(e) - nxt == 23 * 3600                                            # until that day's end
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False}).status_code == 200
     monkeypatch.setattr(checkin, "now", lambda: checkin._until(e) + 1)
-    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False}).status_code == 409
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}"}).status_code == 409
     con.close()
 
 
@@ -239,4 +243,40 @@ def test_named_helper_shows_the_qr_before_the_door(env):
     assert c.post(f"/api/screens/{s['session']}/start", headers=tma(4)).status_code == 200
     assert c.post(f"/api/screens/{s['session']}/show", headers=tma(4)).json()["param"]
     assert c.post(f"/api/screens/{s['session']}/show", headers=tma(1)).status_code == 409   # a plain member: at the door time, as before
+    con.close()
+
+
+def test_a_meeting_marked_by_hand_and_by_its_qr(env, monkeypatch):
+    """A members-only meeting (Nov 19, prod): no crew session there (crew_open is the guests' door's), so the team's
+    list reads and marks the meeting's own session, where its members scan."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid, ann, eid = _setup(c, con)
+    con.execute("UPDATE events SET visibility = 'members', meeting = 1 WHERE id = ?", (eid,))
+    vice = _mem(c, con, oid, 4, "vic")
+    con.execute("UPDATE org_members SET role = 'vice' WHERE user_id = ?", (vice["id"],))
+    bob = _mem(c, con, oid, 3, "bob")
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(1), json={"key": f"u{bob['id']}"}).status_code == 403  # a plain member can't
+
+    m = c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{bob['id']}"})  # the Vice, before any QR
+    assert m.status_code == 200, m.json()
+    sid = con.execute("SELECT id FROM qr_sessions WHERE event_id = ?", (eid,)).fetchone()[0]
+    assert m.json()["session"] == sid and _crew(con, eid) is None                           # the meeting's own session, no crew
+    assert _row(c, 4, eid, f"u{bob['id']}")["manual"]
+
+    g, q = _qr(c, 9, eid)
+    assert g == sid
+    assert _scan(c, 1, q["param"]).json()["done"]
+    a = _row(c, 4, eid, f"u{ann['id']}")
+    assert a["at"] and not a["manual"]                                                     # the scan shows on the list
+
+    c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{bob['id']}", "on": False})  # undo
+    assert _row(c, 4, eid, f"u{bob['id']}")["at"] is None
+
+    e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    assert checkin._until(e) - e["ends_at"] > 86400                                        # the next day too
+    monkeypatch.setattr(checkin, "now", lambda: checkin._until(e) - 60)
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{bob['id']}"}).status_code == 200
+    monkeypatch.setattr(checkin, "now", lambda: checkin._until(e) + 1)
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{bob['id']}", "on": False}).status_code == 409
     con.close()
