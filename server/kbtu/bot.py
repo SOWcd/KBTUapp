@@ -1532,7 +1532,7 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
     async def send(batch: list[int]) -> bool:
         nonlocal called, sent_n, failed
         marks = random.sample(TAG_MARKS, len(batch))
-        gap = TAG_FAST if sent_n < TAG_BURST else TAG_GAP
+        gap = 0 if not sent_n else TAG_FAST if sent_n < TAG_BURST else TAG_GAP  # the first one at once
         sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, gap)
         if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
             sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, gap)
@@ -1545,13 +1545,17 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
 
     try:
         # the caller is in the chat now, by Telegram (one call per run; a guest in a channel's comments isn't)
+        t0 = time.monotonic()
         me = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": who}, 0)
         st = (me or {}).get("result") or {} if me and me.get("ok") else {}
         status = st.get("status")
         if not (status in ("creator", "administrator", "member") or status == "restricted" and st.get("is_member")):
             quiet = True
             return
+        t1 = time.monotonic()
         roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
+        # where a slow /all spends its time (owner, Nov 19): durations only, no chat and no person
+        log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
         # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
         live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
         con = db.connect(cfg.db_path)
