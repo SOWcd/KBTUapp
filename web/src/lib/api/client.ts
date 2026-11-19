@@ -254,7 +254,7 @@ export const server = {
   addSlots: (id: Id, body: { date: string; from: string; to: string; minutes: number; capacity: number; place: string }): Promise<RoundSlot[]> => call('POST', `/rounds/${id}/slots`, body),
   dropSlot: (id: Id): Promise<RoundSlot[]> => call('DELETE', `/round-slots/${id}`),
   // the venue moved: the shortlisted it concerns hear it once ('limit': the round's three notices today are used up, saved quietly)
-  callSlot: (id: Id): Promise<{ told: number; slots: RoundSlot[] }> => call('POST', `/round-slots/${id}/call`),
+  callSlot: (id: Id): Promise<{ queued: number; slots: RoundSlot[] }> => call('POST', `/round-slots/${id}/call`),
   slotPlace: (id: Id, place: string): Promise<{ slots: RoundSlot[]; notice: 'sent' | 'limit' | 'none' }> => call('PATCH', `/round-slots/${id}`, { place }),
   inviteRound: (id: Id): Promise<{ invited: number }> => call('POST', `/rounds/${id}/invite`),
   bookSlot: (id: Id, slotId: Id | null): Promise<RoundSlot[]> => call('POST', `/rounds/${id}/book`, { slotId }),

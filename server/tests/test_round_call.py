@@ -41,13 +41,13 @@ def _calls(con):
 def test_who_is_called(env, monkeypatch):
     c, con, clock, rid, apps, slot = _more(env, monkeypatch)
     a = next(s for s in c.get(f"/api/rounds/{rid}/slots", headers=tma(PRES)).json() if s["id"] == slot["a"])
-    assert a["call"] == {"told": 0, "left": 4}
+    assert a["call"] == {"told": 0, "waiting": 0, "tried": 0, "left": 4}
     r = _call(c, slot["a"])
-    assert r.status_code == 200 and r.json()["told"] == 4
+    assert r.status_code == 200 and r.json()["queued"] == 4
     # booked on it (Ann), on a later one (Cat), on a past one and never came (Fay), no time (Bob); not who came (Gus),
     # whose result went (Hal), a maybe (Dan), the shortlisted never invited (Eve)
     assert sorted(int(x["ref"].split(":")[1]) for x in _calls(con)) == sorted(apps[t] for t in (ANN, BOB, CAT, FAY))
-    assert next(s for s in r.json()["slots"] if s["id"] == slot["a"])["call"] == {"told": 4, "left": 0}
+    assert next(s for s in r.json()["slots"] if s["id"] == slot["a"])["call"] == {"told": 0, "waiting": 4, "tried": 4, "left": 0}  # queued, none sent yet
     for x in _calls(con):
         text, button, start = bot._render(con, x)
         assert "Room 305" in text and "14:00–16:00" in text and "<b>Chess" in text and start.startswith("iv_")
@@ -56,11 +56,11 @@ def test_who_is_called(env, monkeypatch):
 
 def test_once_per_window(env, monkeypatch):
     c, con, clock, rid, apps, slot = _more(env, monkeypatch)
-    assert _call(c, slot["a"]).json()["told"] == 4
-    assert _call(c, slot["a"]).json()["told"] == 0  # a second tap tells nobody new
+    assert _call(c, slot["a"]).json()["queued"] == 4
+    assert _call(c, slot["a"]).json()["queued"] == 0  # a second tap tells nobody new
     con.execute("UPDATE round_apps SET invited_at = ? WHERE id = ?", (T0, apps[EVE]))
     con.commit()
-    assert _call(c, slot["a"]).json()["told"] == 1  # only who joined since
+    assert _call(c, slot["a"]).json()["queued"] == 1  # only who joined since
     assert len(_calls(con)) == 5
 
 
@@ -101,3 +101,26 @@ def test_a_dropped_slot_takes_its_waiting_calls(env, monkeypatch):
 def test_the_texts_name_the_same_fields():
     fields = [{f for _, f, _, _ in string.Formatter().parse(texts.BOT[lang]["round_call"][0]) if f} for lang in ("ru", "kk", "en")]
     assert fields[0] == fields[1] == fields[2] == {"org", "when", "place"}
+
+
+def test_told_is_what_went(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _more(env, monkeypatch)
+    _call(c, slot["a"])
+    by = {int(x["ref"].split(":")[1]): x["id"] for x in _calls(con)}
+    con.execute("UPDATE bot_outbox SET sent_at = ? WHERE id IN (?, ?)", (T0, by[apps[ANN]], by[apps[BOB]]))
+    con.execute("UPDATE bot_outbox SET error = 'blocked' WHERE id = ?", (by[apps[CAT]],))  # never reached them
+    con.commit()
+    a = next(s for s in c.get(f"/api/rounds/{rid}/slots", headers=tma(PRES)).json() if s["id"] == slot["a"])
+    assert a["call"] == {"told": 2, "waiting": 1, "tried": 4, "left": 0}
+
+
+def test_an_invited_applicant_still_sees_the_round_after_the_intake_closed(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _more(env, monkeypatch)
+    con.execute("UPDATE rounds SET status = 'closed', closes_at = ? WHERE id = ?", (T0 - 1, rid))
+    con.commit()
+    oid = con.execute("SELECT org_id FROM rounds WHERE id = ?", (rid,)).fetchone()[0]
+    you = lambda tg: logic.Viewer(con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0], "user", True)  # noqa: E731
+    seen = casting.view(con, you(BOB), oid)
+    assert seen and not seen["open"] and seen["mine"]["invited"]  # invited, no result: their time and the call, no new applications
+    assert casting.view(con, you(EVE), oid) is None  # shortlisted, never invited
+    assert c.post(f"/api/rounds/{rid}/apply", headers=tma(BOB), json={"departments": [], "answers": {}}).status_code != 200
