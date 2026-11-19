@@ -174,6 +174,12 @@ def when(ts: int, lang: str) -> str:
     return f"{day}, {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
+def when_span(ts: int, end: int, lang: str) -> str:
+    """'4 октября, 14:00–18:00': a walk-in window's start and end, Almaty time."""
+    e = time.gmtime(end + 5 * 3600)
+    return f"{when(ts, lang)}–{e.tm_hour:02d}:{e.tm_min:02d}"
+
+
 # Secret Santa's terms under an invite (bot._santa): the budget a number, the date the server's; each only when set
 SANTA_TERMS = {"ru": ("подарок до {budget}\u00a0₸", "вишлисты до {until}"), "kk": ("сыйлық {budget}\u00a0₸ дейін", "тілек тізімдері {until} дейін"),
                "en": ("gift up to {budget}\u00a0₸", "wishlists until {until}")}
@@ -232,6 +238,7 @@ BOT = {
         "round_interview": ("🎤 Ты прошёл первый этап набора в <b>{org}</b>! Выбери время собеседования.", "🗓 Выбрать время"),
         "round_iv_nudge": ("⏰ <b>{org}</b> ждёт: ты ещё не выбрал время собеседования.", "🗓 Выбрать время"),
         "round_iv_remind": ("🎤 Собеседование в <b>{org}</b>: {when}\n📍 {place}", "Открыть"),
+        "round_place": ("📍 <b>{org}</b>: место собеседования изменилось\n🗓 {when}\n📍 {place}", "Открыть"),
         "round_yes": ("🎉 Тебя приняли в <b>{org}</b>! Добро пожаловать в команду.", "Открыть клуб"),
         "round_yes_dept": ("🎉 Тебя приняли в <b>{org}</b>, твой департамент — <b>{dept}</b>! Добро пожаловать в команду.", "Открыть клуб"),
         "round_yes_group": ("🎉 Тебя приняли в <b>{org}</b>! Добро пожаловать в команду. Ссылка на группу клуба ждёт в приложении.", "Вступить в группу"),
@@ -435,6 +442,7 @@ BOT = {
         "round_interview": ("🎤 Сен <b>{org}</b> қабылдауының бірінші кезеңінен өттің! Сұхбат уақытын таңда.", "🗓 Уақыт таңдау"),
         "round_iv_nudge": ("⏰ <b>{org}</b> күтіп отыр: сен әлі сұхбат уақытын таңдамадың.", "🗓 Уақыт таңдау"),
         "round_iv_remind": ("🎤 <b>{org}</b> сұхбаты: {when}\n📍 {place}", "Ашу"),
+        "round_place": ("📍 <b>{org}</b>: сұхбат өтетін орын өзгерді\n🗓 {when}\n📍 {place}", "Ашу"),
         "round_yes": ("🎉 Сені <b>{org}</b> қабылдады! Командаға қош келдің.", "Клубты ашу"),
         "round_yes_dept": ("🎉 Сені <b>{org}</b> қабылдады, департаментің — <b>{dept}</b>! Командаға қош келдің.", "Клубты ашу"),
         "round_yes_group": ("🎉 Сені <b>{org}</b> қабылдады! Командаға қош келдің. Клуб тобының сілтемесі қосымшада күтіп тұр.", "Топқа қосылу"),
@@ -632,6 +640,7 @@ BOT = {
         "round_interview": ("🎤 You passed the first stage at <b>{org}</b>! Pick a time for the interview.", "🗓 Pick a time"),
         "round_iv_nudge": ("⏰ <b>{org}</b> is waiting: you haven't picked an interview time yet.", "🗓 Pick a time"),
         "round_iv_remind": ("🎤 Interview at <b>{org}</b>: {when}\n📍 {place}", "Open"),
+        "round_place": ("📍 <b>{org}</b>: the interview venue has changed\n🗓 {when}\n📍 {place}", "Open"),
         "round_yes": ("🎉 You're in <b>{org}</b>! Welcome to the team.", "Open the club"),
         "round_yes_dept": ("🎉 You're in <b>{org}</b>, your department is <b>{dept}</b>! Welcome to the team.", "Open the club"),
         "round_yes_group": ("🎉 You're in <b>{org}</b>! Welcome to the team. The club's group link is waiting in the app.", "Join the group"),

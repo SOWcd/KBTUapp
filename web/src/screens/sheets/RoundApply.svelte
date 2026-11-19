@@ -102,6 +102,12 @@
   let slots = $state<RoundSlot[]>([]);
   let picking = $state(false);
   $effect(() => { if (r?.mine?.invited) api.roundSlots(r.id).then((x) => (slots = x)).catch(() => {}); });
+  // a day's times by place, in time order: which place goes with which time
+  const byPlace = (list: RoundSlot[]) => {
+    const by = new Map<string, RoundSlot[]>();
+    for (const s of list) { const k = placeOf(s.place); by.set(k, [...(by.get(k) ?? []), s]); }
+    return [...by.entries()];
+  };
   const days = $derived.by(() => {
     const by = new Map<string, RoundSlot[]>();
     for (const s of slots) { const k = dayMonth(s.startsAt); by.set(k, [...(by.get(k) ?? []), s]); }
@@ -180,8 +186,12 @@
         <Group caption={t('cast.ivTitle')} footnote={days.length ? t('cast.ivPick') : t('cast.ivNone')}>
           {#each days as [day, list] (day)}
             <!-- engine: ui/Row could hold a wrapping row of Chips under its title (a day's free times) -->
+            <!-- each time under its own place: the bot's "the place changed" lands here for one who hasn't picked a time -->
             <div class="kb-row ivday"><span class="dl">{day}</span>
-              <div class="chips">{#each list as s (s.id)}<Chip selected={!!s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
+              {#each byPlace(list) as [at, ss] (at)}
+                <span class="pl">{at}</span>
+                <div class="chips">{#each ss as s (s.id)}<Chip selected={!!s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div>
+              {/each}</div>
           {/each}
           <Row tone="action" title={t('cast.ivNothing')} onclick={nothingFits} />
           {#if r.mine.slot}<Row tone="action" title={t('cast.ivDrop')} onclick={() => take(null)} />{/if}
@@ -245,6 +255,7 @@
   .ivday { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
   .ivday + .ivday::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
   .dl { font: 600 var(--fs-body)/1.3 var(--font-text); }
+  .pl { margin-bottom: calc(-1 * var(--s-2)); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
   .mark { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     box-shadow: inset 0 0 0 2px var(--c); font: 700 var(--fs-body)/1 var(--font-text); color: var(--on-accent); }

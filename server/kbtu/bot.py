@@ -440,6 +440,14 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when(s["starts_at"], lang), place=texts.place_or_tba(s["place"], lang)),
                     f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), f"iv_{a['org_id']}")
+    if kind == "round_place":  # ivp:<application>:<slot>:<n>, casting.set_place: that slot as it is now; quiet once decided, over, booked elsewhere, full or edited back
+        a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
+            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+        s = a and a["stage"] == "next" and a["rstatus"] != "done" and not a["sent_at"] and casting.place_slot(con, a, int(ref[2]))
+        if not s or s["place"] == json.loads(m["payload"] or "{}").get("was"):
+            return None
+        return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when_span(s["starts_at"], s["ends"], lang),
+                                   place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
     if kind in ("round_yes", "round_no"):  # ry: / rn:<application>, the results, to each applicant
         a = one(con, """SELECT a.*, r.org_id, r.decline_text, r.group_link, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
             JOIN orgs o ON o.id = r.org_id LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))
