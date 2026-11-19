@@ -15,6 +15,7 @@
   import { onMount, tick } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
+  import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { ui, toTickets } from '../../lib/state/ui.svelte';
@@ -228,7 +229,7 @@
     {@const mine = e.my?.status === 'going'}
     <!-- the hero: my next event (its ticket and the way there), else the nearest; its cover, or its 3D mark lit on black -->
     <section class="hero" class:pic={heroPic} style="--c:{e.color ?? e.tint}">
-      <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+      <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       {#if heroPic}<Poster item={e} big radius={0} />{:else}<span class="glow"></span><span class="mark"><Emoji name={e.emoji ?? 'sparkles_3d'} size={128} /></span>{/if}
       <div class="shade"></div>
       <div class="hero-tx">
@@ -252,7 +253,7 @@
     <div class="list">
       {#each going.slice(1) as e (e.id)}
         <div class="row mine">
-          <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+          <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
           <Poster item={e} size={48} radius={12} />
           <span class="tx"><b class="ellipsis title">{e.title}</b>
             <span class="meta num ellipsis">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)} · {placeOf(e.place, e.online)}</span></span>
@@ -296,7 +297,7 @@
             {@const e = it.e}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
             <div class="row" class:cancelled={e.status === 'cancelled'}>
-              <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+              <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
               <Poster item={e} size={64} radius={14} dim={e.status === 'cancelled'} />
               <span class="tx">
                 <span class="org">{#if e.coHost}<span class="pair"><OrgLogo org={e.org} size={16} /><OrgLogo org={e.coHost} size={16} /></span><span class="ellipsis">{nameOf(e.org)} × {nameOf(e.coHost)}</span>{:else}<OrgLogo org={e.org} size={16} /><span class="ellipsis">{nameOf(e.org)}</span>{/if}{#if inner(e)}<UsersRound size={13} strokeWidth={2.2} />{/if}{#if e.saved && e.status !== 'cancelled'}<Bookmark class="sv" size={13} strokeWidth={2.4} fill="currentColor" aria-label={t('event.saved')} />{/if}</span>

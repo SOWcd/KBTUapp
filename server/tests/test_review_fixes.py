@@ -324,3 +324,18 @@ def test_parallel_start_requests_write_seen_at_once(env, monkeypatch):
     assert c.get("/api/me", headers=tma(10, "Ali")).status_code == 200
     assert writes() == 1, "a second write of the same row"
     assert con.execute("SELECT count(*) FROM visits v JOIN users u ON u.id = v.user_id WHERE u.tg_id = 10").fetchone()[0] == 1
+
+
+def test_support_cards_found_by_index(env):
+    """/api/me's support cards: was, account.support()'s `lower(u.tg_username) IN (...)` scanned the whole users table on
+    every call (1.8 ms at 30k users); migration 192 indexes lower(tg_username), so it's a lookup whatever the table's size."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    seen: list[str] = []
+    con.set_trace_callback(seen.append)  # the statement as run, its values in place
+    logic.account.support(con)
+    con.set_trace_callback(None)
+    [sql] = [s for s in seen if "tg_username" in s]
+    plan = " | ".join(r[3] for r in con.execute("EXPLAIN QUERY PLAN " + sql))
+    assert "USING INDEX users_handle" in plan or "USING COVERING INDEX users_handle" in plan, plan
+    assert "SCAN u" not in plan, plan

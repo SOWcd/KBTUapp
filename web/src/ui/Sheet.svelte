@@ -137,10 +137,15 @@
   // a sheet under another one gives the keyboard back (the top one rides)
   $effect(() => { const k = under ? 0 : keyboard.h; untrack(() => ride(k)); });
 
+  const swallow = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
   function leave(fromY = 0) {
     if (gone) return;
     gone = true;
-    panel.style.pointerEvents = scrim.style.pointerEvents = 'none'; // a tap on the leaving sheet is a tap on what is under it
+    // a leaving sheet takes no taps: its buttons are swallowed here, and the scrim's close finds it gone. Was: pointer-events
+    // none on the panel and the scrim (a tap went through to what is under), but on iPhone a swipe that starts on a
+    // pointer-events: none layer latches the scroll to the document (WebKit bug 222654): Back, a swipe at once within the
+    // ~260 ms of the leave, and the tab under it (the Forum, from an author's avatar) stayed frozen until a switch of tab
+    panel.addEventListener('click', swallow, true);
     lift?.cancel();
     if (shut && iris && !fromY && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       chrome(); chrome = () => {}; // the bar comes back now, its button under the closing circle

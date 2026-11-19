@@ -1993,6 +1993,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # (Nov 19) a credit by a GitHub login (credits.py): a pull request's author, the line never tied to an account
     # (tg_id NULL); the login is public already, so the line is shown under it
     (191, "ALTER TABLE credits ADD COLUMN gh TEXT;"),
+    # users by lower(tg_username): account.support() on every /api/me and the @handle lookups (oversight, profiles, vol)
+    # take an index instead of a scan; not partial: SQLite can't prove lower(x) = ? implies x IS NOT NULL
+    (192, """CREATE INDEX IF NOT EXISTS users_handle ON users (lower(tg_username));"""),
 ]
 
 
