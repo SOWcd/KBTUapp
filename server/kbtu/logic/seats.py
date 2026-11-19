@@ -303,7 +303,9 @@ def _vevent(e: sqlite3.Row, link: str, lang: str | None = None) -> list[str]:
     says so, and calendars strike it."""
     utc = lambda ts: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))  # noqa: E731
     return ["BEGIN:VEVENT", f"UID:ev{e['id']}@kbtu-app", f"DTSTAMP:{utc(core.now())}", f"DTSTART:{utc(e['starts_at'])}", f"DTEND:{utc(end_of(e))}",
-            "SUMMARY:" + _ics_text(title_in(e, lang)), "LOCATION:" + _ics_text(texts.where(e["place"], e["online"] is not None, lang or "en")),  # never the link: event_ics checks no visibility "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
+            # an online event: the word, never its link (event_ics checks no visibility)
+            "SUMMARY:" + _ics_text(title_in(e, lang)), "LOCATION:" + _ics_text(texts.where(e["place"], e["online"] is not None, lang or "en")),
+            "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
             "URL:" + link, *(["STATUS:CANCELLED"] if e["status"] == "cancelled" else []), "END:VEVENT"]
 
 

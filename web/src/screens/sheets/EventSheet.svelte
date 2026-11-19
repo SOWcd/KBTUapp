@@ -55,6 +55,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf, addressGis } from '../../lib/map';
+  import { meetHost } from '../../lib/meet';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
@@ -85,15 +86,17 @@
   let onlyFor = $state(''), unset = $state(false);
   $effect(() => {
     void session.me?.student?.school;
-    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
+    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { detail = null; if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
   });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
   const gis = $derived(e && !e.online ? e.placeUrl || addressGis(e.place) : null); // online: never a route
   // an online event's link: the row says where it leads, its host always in sight (a typed link may be any https host)
-  const hostOf = (u: string) => { try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.hostname : ''; } catch { return ''; } };
-  const meetHost = $derived(e?.onlineUrl ? hostOf(e.onlineUrl) : '');
+  // the link only from the event just loaded (a card the app holds may carry one since changed or removed); https, a
+  // plain host, never Telegram's own (it would open inside Telegram as a deep link): the server's rule, checked again
+  const meetUrl = $derived(preview ? preview.onlineUrl : detail?.id === id ? detail.onlineUrl : null);
+  const meetAt = $derived(meetHost(meetUrl));
   let pic = $state(0); // which of the header's photos is on screen
   let hero = $state<HTMLDivElement>();
   let land = () => {};
@@ -480,7 +483,7 @@
     <Group>
       {#if e.online}
         <!-- online (owner, Nov 19): the meeting opens outside, the server checked the link (core.online_url) -->
-        {#if e.onlineUrl && meetHost}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetHost} accessory="external" onclick={() => openLink(e.onlineUrl!)} />
+        {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
         {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
       {:else if gis}
         <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches

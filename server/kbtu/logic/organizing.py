@@ -223,8 +223,6 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         board = i.get("forBoard") is True  # "For whom": the board (Head+), a built-in choice beside the tags
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
-        # an online event: no place then, its link typed by the organizer (any https host, core.online_url) or none yet
-        online = None if "online" not in i else (str(i.get("onlineUrl") or "").strip() if i["online"] is True else False)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
@@ -232,21 +230,41 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
           and re.fullmatch(r"#[0-9a-fA-F]{6}", color) and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and visibility in (None, "public", "members", *(("leaders",) if oversee else ()))
           and leaders in (None, "president", "vice", "head") and (not meeting or visibility == "members" and seats is None)
-          and (vol is None or 1 <= vol <= 500 and not meeting) and not (board and tag)
-          and (not online or core.online_url(online, typed=True)))
+          and (vol is None or 1 <= vol <= 500 and not meeting) and not (board and tag))
     if not ok:
         raise ApiError("bad_input")
-    if online is not None:  # left out: kept as it is
-        online = None if online is False else core.online_url(online, typed=True) or ""
-    if online is not None:
-        place, url = "", None
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
-            **({"online": online} if "online" in i else {}),
             "emoji": emoji, "color": color, "seats": seats, "reg_until": None if late else reg_until, "late_signup": int(late), "first_year": int(bool(i.get("firstYear"))),
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
             "meeting": int(meeting), "meeting_tag": tag, "for_board": int(board), "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
+
+
+def online_fields(i: dict, was: str | None) -> dict:
+    """An online event (owner, Nov 19), resolved against the saved one (`was`: events.online; None for a new event):
+    - `online` left out: kept as it is (`onlineUrl` alone is refused: which way it was meant is unclear);
+    - `online: true`: online; `onlineUrl` a link typed by the organizer (any https host, core.online_url), null or ''
+      for none yet, left out to keep the saved link;
+    - `online: false` (or anything but true): not online, the link gone.
+    Online has no place: place and its 2GIS link are cleared whenever the event stays online."""
+    if "online" not in i:
+        if "onlineUrl" in i:
+            raise ApiError("bad_input", "online")
+        online = was
+    elif i["online"] is not True:
+        online = None
+    elif "onlineUrl" not in i:
+        online = was or ""
+    else:
+        raw = i["onlineUrl"]
+        if raw is not None and not isinstance(raw, str):
+            raise ApiError("bad_input", "online")
+        link = core.online_url(raw, typed=True)
+        if (raw or "").strip() and not link:
+            raise ApiError("bad_input", "online")
+        online = link or ""
+    return {"online": online, **({"place": "", "place_url": None} if online is not None else {})}
 
 
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None, vis: str = "public") -> None:
@@ -409,6 +427,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
+    f |= online_fields(body, None)
     if body.get("schoolOnly"):
         f["school"] = _school_only(org, True)
     _partner_ok(f)
@@ -488,7 +507,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] == "cancelled":
             raise ApiError("closed")
-        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body)
+        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body) | online_fields(body, e["online"])
         if "schoolOnly" in body:
             f["school"] = _school_only(org, body["schoolOnly"])
         _partner_ok(f, e)

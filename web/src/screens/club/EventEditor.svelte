@@ -77,6 +77,7 @@
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
   import { marked, merge, missing, type Differs, type Marked } from '../../lib/eventFill';
+  import { linkFill, ONLINE_LINK } from '../../lib/meet';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
@@ -104,7 +105,6 @@
   const BRAND = '#3B6BFF';
   // a 2GIS link anywhere in what was pasted into the place field (2GIS → Share → Copy gives name, address, link)
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
-  const ONLINE_LINK = /^https:\/\/(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]*[a-z0-9](?:[/?#][\x21-\x7e]*)?$/i; // server: core.online_url (any host typed by hand)
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
   // the creator alone gets its President's editor here (server core.can, lent_full): a new event, or any club's he opens
@@ -462,11 +462,11 @@
   // "Add more" (owner, Nov 13): with something in the form, a second message merges into it (lib/eventFill merge);
   // what the new text says otherwise than a filled field waits here for a tap
   const more = $derived(fromAi || !!(f.title.trim() || f.description.trim()));
-  let differs = $state<{ k: Differs; v: string }[]>([]);
-  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price' } as const;
-  function take(d: { k: Differs; v: string }) {
+  let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]); // the meeting link: the editor's own (lib/meet linkFill)
+  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price', onlineUrl: 'ed.onlineLink' } as const;
+  function take(d: { k: Differs | 'onlineUrl'; v: string }) {
     haptic.tap();
-    if (d.k === 'price') { f.paid = true; f.price = d.v; } else f[d.k] = d.v;
+    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; } else f[d.k] = d.v;
     differs = differs.filter((x) => x !== d);
   }
   async function fillFromText() {
@@ -486,15 +486,19 @@
       const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
       const { onlineUrl, ...x } = await api.eventFill(org, text, have);
       if (me !== run || gone) return;
-      if (onlineUrl) { f.online = true; f.onlineUrl = onlineUrl; f.tba = false; } // a meeting link in the text (found in plain code)
+      // a meeting link in the text (found in plain code): it fills an empty form; "Add more" over another link or a
+      // place already set only lists it for a tap, as any filled field said otherwise
+      const link = linkFill(onlineUrl, adding, f);
+      const linkDiff = link === 'ask' ? [{ k: 'onlineUrl' as const, v: onlineUrl! }] : [];
+      if (link === 'fill') { f.online = true; f.onlineUrl = onlineUrl!; f.tba = false; }
       if (adding) {
         const { set, differs: d } = merge(now, x, dflt);
         const { price: p, ...rest } = set;
         Object.assign(f, rest);
         if (rest.place) f.tba = false;
         if (p && canPrice) { f.paid = true; f.price = p; }
-        const got = Object.keys(set).length > 0 || d.length > 0;
-        differs = d.filter((y) => y.k !== 'price' || canPrice);
+        const got = Object.keys(set).length > 0 || d.length > 0 || !!onlineUrl;
+        differs = [...d.filter((y) => y.k !== 'price' || canPrice), ...linkDiff];
         ai = [...new Set([...ai, ...marked({ ...rest, price: p ? +p : undefined }, canPrice)])];
         if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
         say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');

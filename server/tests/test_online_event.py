@@ -3,12 +3,15 @@ trust boundary: https only, a plain host, the known meeting hosts for what the c
 when the organizer types it."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 
 import pytest
 
-from kbtu import db, llm
+from fastapi.testclient import TestClient
+
+from kbtu import app as server, db, llm
 from kbtu.logic import assistant, core
 from test_core import _board_on, _club_runs, env, login, tma  # noqa: F401  (env: the fixture)
 
@@ -95,3 +98,67 @@ def test_editor_save_clear_and_public_card(env):
     put(onlineUrl=MEET)
     old = {k: v for k, v in body.items() if k not in ("online", "onlineUrl")}
     assert c.patch(f"/api/events/{eid}", headers=tma(9), json=old).json()["onlineUrl"] == MEET
+
+
+def test_finder_takes_whole_links_only():
+    # a meeting inside another link (a redirect's query) is not this event's link
+    assert core.meet_link("https://example.org/redirect?url=https://zoom.us/j/1 and more") is None
+    assert core.meet_link("x@meet.google.com/abc or zoom.us alone, https://zoom.us/") is None  # an address, the bare site
+    assert core.meet_link("\u00abhttp://zoom.us/j/9\u00bb, \u043f\u043e\u0442\u043e\u043c") == "https://zoom.us/j/9"  # quotes and the comma left out
+    # Discord: a server's invite only
+    assert core.meet_link("https://discord.gg/abcd") == "https://discord.gg/abcd"
+    assert core.meet_link("discord.com/invite/xyz.") == "https://discord.com/invite/xyz"
+    for bad in ("https://discord.com/channels/123/456", "https://promo.discord.gg/abc", "https://discord.gg/abc/def", "https://discord.com/abc"):
+        assert core.meet_link(bad) is None and core.online_url(bad) is None
+
+
+def test_telegram_links_refused():
+    # Telegram's own hosts open inside Telegram as a deep link (tg.openTelegramLink): never a meeting, typed or found
+    for bad in ("https://t.me/example_bot?start=room", "https://T.ME/x", "https://a.t.me/x", "https://telegram.me/x", "https://telegram.dog/x"):
+        assert core.online_url(bad, typed=True) is None and core.meet_link(bad) is None
+    assert core.online_url("https://" + "a" * 63 + "." + "b" * 63 + "." + "c" * 63 + "." + "d" * 63 + ".com/x", typed=True) is None  # >253
+
+
+def _online_event(c, con):
+    org = _club_runs(c, con, 9, "dana")
+    start = int(time.time()) + 86400
+    body = {"title": "Talk", "place": "305", "placeUrl": None, "startsAt": start, "endsAt": None, "emoji": "laptop_3d", "color": "#3B6BFF",
+            "seats": None, "online": True, "onlineUrl": MEET}
+    eid = c.post(f"/api/orgs/{org}/events", headers=tma(9), json=body).json()["id"]
+    return org, eid, body
+
+
+def test_patch_rules(env):
+    """online: true without onlineUrl keeps the saved link; onlineUrl without online is refused; a body with neither
+    keeps the event online and its place empty."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org, eid, body = _online_event(c, con)
+    patch = lambda b: c.patch(f"/api/events/{eid}", headers=tma(9), json=b).json()  # noqa: E731
+    got = patch({k: v for k, v in body.items() if k != "onlineUrl"})
+    assert got["online"] is True and got["onlineUrl"] == MEET
+    assert patch({**{k: v for k, v in body.items() if k != "online"}, "onlineUrl": "https://zoom.us/j/9"})["error"] == "bad_input"
+    legacy = {**{k: v for k, v in body.items() if k not in ("online", "onlineUrl")}, "place": "305", "placeUrl": "https://2gis.kz/almaty/geo/1"}
+    got = patch(legacy)
+    assert got["online"] is True and got["onlineUrl"] == MEET and got["place"] == "" and got["placeUrl"] is None
+    assert patch({**body, "onlineUrl": None})["onlineUrl"] is None  # cleared on purpose: online, no link yet
+    assert patch({**body, "onlineUrl": 5})["error"] == "bad_input"
+    assert patch({**body, "onlineUrl": "https://t.me/x_bot?start=1"})["error"] == "bad_input"
+
+
+def test_deleted_event_serves_no_link(env):
+    """Under the admin's delete (its Undo still open) the event, its link with it, is gone for the club's team too."""
+    c, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
+    login(c, 60, "boss")
+    con = db.connect(cfg.db_path)
+    org, eid, _ = _online_event(c, con)
+    mem = login(c, 2, "mem")["id"]
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, mem))
+    assert c.post(f"/api/events/{eid}/publish", headers=tma(9)).json()["status"] == "published"
+    assert c.get(f"/api/events/{eid}", headers=tma(2)).json()["onlineUrl"] == MEET
+    assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
+    for uid in (2, 9):  # a member, the Head
+        assert c.get(f"/api/events/{eid}", headers=tma(uid)).status_code == 404
+        r = c.get(f"/api/orgs/{org}/events", headers=tma(uid))
+        assert MEET not in r.text

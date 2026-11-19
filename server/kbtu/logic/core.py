@@ -34,29 +34,43 @@ TWO_GIS = re.compile(r"^https://(?:[a-z]+\.)?2gis\.(?:kz|ru|com)/", re.I)
 # hosts below are the only ones the AI or the finder may fill in; an organizer typing it by hand may use any https host
 # (the page shows the host). ASCII only: an IDN host shows as xn--, never as a look-alike.
 MEET_HOSTS = (r"(?:meet\.google\.com|(?:[a-z0-9-]+\.)*zoom\.us|teams\.microsoft\.com|teams\.live\.com|(?:[a-z0-9-]+\.)*webex\.com"
-              r"|meet\.jit\.si|whereby\.com|telemost\.yandex\.(?:ru|kz)|(?:[a-z0-9-]+\.)?discord\.(?:gg|com))")
+              r"|meet\.jit\.si|whereby\.com|telemost\.yandex\.(?:ru|kz))")
+# Discord: a server's invite only, its bare path (no other page of discord.com, no subdomain)
+_DISCORD = re.compile(r"discord\.gg/[A-Za-z0-9-]{2,32}/?|discord\.com/invite/[A-Za-z0-9-]{2,32}/?")
+# Telegram's own hosts open inside Telegram as deep links (tg.openTelegramLink): never a meeting link
+_TELEGRAM = re.compile(r"(?:[a-z0-9-]+\.)*(?:t\.me|telegram\.me|telegram\.dog)")
 ONLINE_MAX = 500  # a Teams link with its context runs ~300
-_MEET_FIND = re.compile(rf"(?<![\w.@/-])(?:https?://)?({MEET_HOSTS})(/[^\s<>\"'`«»]+)", re.I)
 _HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]")
+_EDGE = "<>\"'`\u00ab\u00bb()[]{}"  # what wraps a link in a sentence (quotes, brackets), never its own
 
 
 def online_url(raw: object, typed: bool = False) -> str | None:
-    """The link if it may be shown: https, a plain host (no user:pass@, no port, no IP), printable ASCII, at most
-    ONLINE_MAX; its host on MEET_HOSTS unless the organizer typed it (`typed`). None: refused (or empty)."""
+    """The link if it may be shown: https, a plain host (no user:pass@, no port, no IP, at most 253 characters, never
+    Telegram's own), printable ASCII, at most ONLINE_MAX; a known meeting (MEET_HOSTS, a Discord invite) unless the
+    organizer typed it (`typed`). None: refused (or empty)."""
     s = raw.strip() if isinstance(raw, str) else ""
     if not s or len(s) > ONLINE_MAX or not re.fullmatch(r"[\x21-\x7e]+", s) or "\\" in s or not s[:8].lower() == "https://":
         return None
     netloc = s[8:].split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
-    host = netloc.lower()
-    if not _HOST.fullmatch(host) or not (typed or re.fullmatch(MEET_HOSTS, host)):
+    host, rest = netloc.lower(), s[8 + len(netloc):]
+    if len(host) > 253 or not _HOST.fullmatch(host) or _TELEGRAM.fullmatch(host):
         return None
-    return "https://" + host + s[8 + len(netloc):]
+    if not (typed or re.fullmatch(MEET_HOSTS, host) or _DISCORD.fullmatch(host + rest)):
+        return None
+    return "https://" + host + rest
 
 
 def meet_link(text: str) -> str | None:
-    """The first meeting link in an announcement (no model, no tokens): a known host's, made https; None: none there."""
-    for m in _MEET_FIND.finditer(text or ""):
-        if url := online_url("https://" + m.group(1) + m.group(2).rstrip(".,;:!?)]}"), typed=False):
+    """The first meeting link in an announcement (no model, no tokens): a whole word of the text that is a known
+    meeting's link, with or without its scheme (http made https); never one inside another link. None: none there."""
+    for word in (text or "").split():
+        w = word.strip(_EDGE).rstrip(".,;:!?").rstrip(_EDGE)
+        low = w.lower()
+        if low.startswith("http://"):
+            w = "https://" + w[7:]
+        elif not low.startswith("https://"):
+            w = "https://" + w
+        if (url := online_url(w, typed=False)) and url.split("/", 3)[3:] not in ([], [""]):  # a meeting, not the bare site
             return url
     return None
 
