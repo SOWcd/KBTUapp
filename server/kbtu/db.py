@@ -1977,6 +1977,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     (187, """CREATE TABLE IF NOT EXISTS receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
       receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
     ) STRICT;"""),
+    # (Nov 19) users by lower(tg_username): was, every /api/me ran account.support()'s `lower(u.tg_username) IN (...)`
+    # over the whole users table (no index fits an expression): 1.8 ms at 30k users, more than the rest of /me; now an
+    # index lookup of the two support handles, 0.008 ms. The same lookup by @handle in oversight, profiles and vol uses it
+    # too. Not a partial index (WHERE tg_username IS NOT NULL): SQLite can't tell lower(x) = ? implies it, and scans
+    (188, """CREATE INDEX IF NOT EXISTS users_handle ON users (lower(tg_username));"""),
 ]
 
 
