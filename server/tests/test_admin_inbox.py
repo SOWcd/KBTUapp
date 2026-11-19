@@ -126,6 +126,25 @@ def test_undo_event_delete(env):
     assert _undo_event(c, con).status_code == 404
 
 
+def test_admin_delete_leaves_studio_too(env):
+    """The admin's soft delete is gone from its club's Studio at once (it hung there as "Cancelled", each new Delete
+    answering "decided"): the list, the event's page and every Studio action, for its President and the admin alike;
+    the Undo brings it all back."""
+    c, con, ids = _setup(env)
+    con.execute("UPDATE events SET status = 'cancelled'")
+    assert [e["id"] for e in c.get("/api/orgs/1/events", headers=tma(62)).json()] == [1]
+    assert c.delete("/api/events/1", headers=tma(60)).status_code == 204          # Studio's Delete, as the admin
+    assert c.get("/api/orgs/1/events", headers=tma(62)).json() == []
+    for who in (62, 60):
+        assert c.get("/api/events/1", headers=tma(who)).status_code == 404
+        assert c.get("/api/events/1/attendees", headers=tma(who)).status_code == 404
+    assert c.get("/api/search?q=Hack", headers=tma(62)).json()["events"] == []
+    assert c.delete("/api/events/1", headers=tma(62)).status_code == 404          # nothing left for the club to tap
+    assert _undo_event(c, con).status_code == 204
+    assert [e["id"] for e in c.get("/api/orgs/1/events", headers=tma(62)).json()] == [1]
+    assert c.get("/api/events/1/attendees", headers=tma(62)).status_code == 200
+
+
 def test_done_undo_takedown_and_people(env):
     c, con, ids = _setup(env)
     cid = _report(c, con)

@@ -3,7 +3,7 @@
   // screen than from the Afisha"; Nov 14: far too many buttons, organizers are students on a phone at a door). The card
   // (its pencil the editor, its eye the usual sheet); on the event's day one «Show QR» (the door screen: QR and scanner);
   // who came; rows only when they ask for something (receipts to check, the team's asks, holds, the waitlist,
-  // volunteers); the money of a paid event; the rest folded under «More».
+  // volunteers); the money of a paid event; the rest folded under «More» (shown plainly when three or fewer).
   // ponytail: no "message the participants" yet (no such API; the questions thread and the bot's changes cover it).
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -163,7 +163,8 @@
 
   async function removeEvent() {
     if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
-    const gone = () => { studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); };
+    // off every Studio list at once (an admin's soft delete too), before their reload says the same
+    const gone = () => { for (const [k, l] of Object.entries(data.studio)) data.studio[+k] = l.filter((x) => x.id !== id); studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); };
     try { await api.deleteEvent(id); gone(); }
     catch (x) {
       // the app's admin deletes softly (hidden now, gone in a day): a second tap on one still listed is the same "deleted"
@@ -225,6 +226,10 @@
     registration(e, co || head, session.me?.vol?.org);
   }
   let more = $state(false);
+  // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (owner: a fold of two is pointless)
+  const folded = $derived(!e ? 0 : [head, head && e.teamMax, head && e.status !== 'cancelled' && !plain, head && e.needsVolunteers,
+    head && e.guestHost && teamMark, head && live && !e.guestHost, reports, head && live && !e.guestHost && !e.santa?.drawn && (!started || e.lateSignup),
+    head && live && !started, head && e.status === 'cancelled'].filter(Boolean).length);
   // whom the door records (server checkin.set_audience): an ordinary public event's, where the team is told apart from
   // guests; the event's organizers set it, the Mark screen counts and lists only that
   const audienced = $derived(head && !plain && !!e && live && !e.guestHost && !inner(e) && ends > tick);
@@ -382,8 +387,8 @@
 
       {#if head || reports}
         <Group>
-          <Row icon={Ellipsis} title={t('common.more')} accessory="disclosure" open={more} onclick={() => { haptic.tap(); more = !more; }} />
-          {#if more}
+          {#if folded > 3}<Row icon={Ellipsis} title={t('common.more')} accessory="disclosure" open={more} onclick={() => { haptic.tap(); more = !more; }} />{/if}
+          {#if more || folded <= 3}
             {#if head}
               <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
               {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->

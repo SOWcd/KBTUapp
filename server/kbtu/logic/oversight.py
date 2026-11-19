@@ -9,7 +9,7 @@ import time
 
 from ..db import tx
 
-from .core import (STAFF_KINDS, ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by_id, _org, _qs, log_action, one, org_ref, overseer, person_ref,
+from .core import (STAFF_KINDS, ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by_id, _org, _qs, evdel, log_action, one, org_ref, overseer, person_ref,
     rows, short_name, shown_name)
 
 
@@ -382,12 +382,12 @@ def admin_org_events(con, v: Viewer, oid: int) -> list[dict]:
     """A club's events for Admin's delete, each with what deleting it takes along (the confirm names it)."""
     _admin(v)
     return [{"id": e["id"], "title": e["title"], "status": e["status"], "startsAt": e["starts_at"], "people": e["people"],
-             "came": e["came"], "paid": e["paid"], "photos": e["photos"]} for e in rows(con, """SELECT e.id, e.title, e.status, e.starts_at,
+             "came": e["came"], "paid": e["paid"], "photos": e["photos"]} for e in rows(con, f"""SELECT e.id, e.title, e.status, e.starts_at,
         (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') AS people,
         (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND checked_in_at IS NOT NULL) AS came,
         (SELECT COUNT(*) FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = e.id) AS paid,
         (SELECT COUNT(*) FROM event_photos WHERE event_id = e.id) AS photos
-        FROM events e WHERE e.org_id = ? AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || e.id)
+        FROM events e WHERE e.org_id = ? AND NOT {evdel()}
         ORDER BY COALESCE(e.starts_at, 0) DESC, e.id DESC""", oid)]
 
 
