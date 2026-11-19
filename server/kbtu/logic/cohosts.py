@@ -12,7 +12,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import FULL_TOOLS, ApiError, Viewer, at_least, can, full, one, org_ref, role_in, rows
+from .core import FULL_TOOLS, ApiError, Viewer, at_least, can, evdel, full, one, org_ref, role_in, rows
 
 
 COHOST_INVITES_A_DAY = 10  # a host club's invites (each one messages the other club's leaders)
@@ -118,9 +118,9 @@ def invites(con, v: Viewer, oid: int) -> list[dict]:
     A host's draft is shown here so far, to decide on: its title, time and place only."""
     if not at_least(role_in(con, v, oid), "vice"):
         raise ApiError("forbidden")
-    found = rows(con, """SELECT e.*, x.created_at AS asked FROM event_cohosts x JOIN events e ON e.id = x.event_id
+    found = rows(con, f"""SELECT e.*, x.created_at AS asked FROM event_cohosts x JOIN events e ON e.id = x.event_id
         JOIN orgs h ON h.id = e.org_id JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
-        WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled'
+        WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled' AND NOT {evdel()}
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND h.status = 'active' ORDER BY e.starts_at""", oid, core.NO_END, core.now())
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in found))
     files = core._by_id(con, "files", [*(e["cover_file_id"] for e in found), *(h["logo_file_id"] for h in hosts.values())])  # the hosts' logos too

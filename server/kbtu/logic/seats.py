@@ -12,7 +12,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
-    STAFF_KINDS, full, log_action, need_student, one, person_ref, role_in, rows, taken)
+    STAFF_KINDS, deleting, full, log_action, need_student, one, person_ref, role_in, rows, taken)
 
 
 # ------------------------------------------------------------ volunteers
@@ -402,7 +402,8 @@ def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None
     if school and e["school"] and not (team or school_ok(con, v, e)):
         return False
     if e["status"] == "draft" or e["hidden_at"]:
-        return team or v.role == "admin"
+        # the admin's delete hides it (hidden_at) from its team and the admin too; read only for hidden rows, so rare
+        return (team or v.role == "admin") and not (e["hidden_at"] and deleting(con, e["id"]))
     if e["visibility"] == "members":
         return team and for_me(con, v, e, roles[e["org_id"]])
     if e["visibility"] == "leaders":
