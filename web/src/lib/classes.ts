@@ -31,3 +31,6 @@ export function classesOn(schedule: ClassItem[], d: number): Slot[] {
 }
 /** What's left of today: the class on now (if any) first, then the rest. */
 export const classesLeft = (schedule: ClassItem[], now: number): Slot[] => classesOn(schedule, dayNo(now)).filter((x) => x.e > now);
+/** A day's one timeline: classes and events by start time; at the same minute the class first (a club's event after
+ *  the pair). `c` marks a class. */
+export const byStart = (a: { at: number; c?: unknown }, b: { at: number; c?: unknown }) => a.at - b.at || +('c' in b) - +('c' in a);
