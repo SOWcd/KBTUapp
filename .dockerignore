@@ -3,7 +3,7 @@
 *.db
 *.db-*
 *.session
-*.session.tmp
+*.session.*.tmp
 **/__pycache__
 server/.venv
 server/tests
