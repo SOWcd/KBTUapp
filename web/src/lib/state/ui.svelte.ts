@@ -1,7 +1,7 @@
 // Navigation and overlays. One stack for every sheet and full-screen view: Telegram's Back button
 // closes the top one (the prototype had a hand-written chain of 15 ifs for this).
 import { untrack, type Component } from 'svelte';
-import { haptic } from '../tg';
+import { haptic, onShareBusy } from '../tg';
 import { t } from '../i18n/index.svelte';
 import { count, type Screen } from '../stats';
 import { queue } from '../moments';
@@ -32,6 +32,7 @@ export const ui = $state({
   gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
   gate: false,             // the new policy's gate is up (App, ConsentGate): the app waits behind it
 });
+onShareBusy((on) => (ui.busy = on ? t('invite.making') : '')); // every share card: the tap is answered while the server makes it
 
 export function persistNav(): void {
   try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, club: ui.club })); } catch { /* blocked */ }

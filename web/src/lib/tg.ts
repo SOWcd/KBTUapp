@@ -192,19 +192,29 @@ export function shareMessage(preparedId: string): Promise<boolean | null> {
  *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
  *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */
 /** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
+/** the capsule's "Making the link…" for every share (ui.svelte.ts sets it: tg.ts can't import the state) */
+let shareBusy: (on: boolean) => void = () => {};
+export function onShareBusy(f: (on: boolean) => void): void { shareBusy = f; }
+
 export async function shareCard(card: Record<string, string | number | boolean | null>, link: string, text: string, ready?: () => void): Promise<boolean> {
+  shareBusy(true);
+  try { return await shareVia(card, link, text, () => { shareBusy(false); ready?.(); }); }
+  finally { shareBusy(false); }
+}
+
+async function shareVia(card: Record<string, string | number | boolean | null>, link: string, text: string, ready: () => void): Promise<boolean> {
   if (inTelegram && can('8.0') && W?.shareMessage) {
     // the server reads initData from the header like every API call; the dev server still reads it from the body
     const r = await fetch('/api/share', { method: 'POST', headers: { Authorization: `tma ${W.initData}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...card, initData: W.initData }) });
     const { id } = await r.json();
     if (!id) throw new Error('share');
-    ready?.();
+    ready();
     const sent = await shareMessage(id); // true once the user picked a chat
     if (sent !== null) return sent;
     // a client without cards (a user on Telegram Desktop, Nov 4): Telegram's own picker with the link instead
   }
-  ready?.();
+  ready();
   openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
   return false; // the link opens Telegram's own picker: we never learn whether it was sent
 }
