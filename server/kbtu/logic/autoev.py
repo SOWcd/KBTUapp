@@ -188,11 +188,6 @@ def queue(con) -> list[dict]:
              "org": org_ref(con, r), "cover": _event_cover(con, r), "emoji": r["ev_emoji"], "color": r["ev_color"], "tint": r["ev_tint"]} for r in found]
 
 
-def waiting(con) -> int:
-    return one(con, """SELECT COUNT(*) FROM auto_events a JOIN events e ON e.id = a.event_id AND e.status = 'draft' AND e.hidden_at IS NULL
-        JOIN orgs o ON o.id = e.org_id AND o.status = 'active'""")[0]
-
-
 from . import assistant, organizing  # noqa: E402  (they import the other domains last too)
 from .account import _drop_unused, ai_on  # noqa: E402
 from .seats import notify  # noqa: E402

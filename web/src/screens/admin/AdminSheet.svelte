@@ -23,7 +23,7 @@
   import { hit as match } from '../../lib/search';
   import { CATALOG, manualMedal, manualTitle } from '../../lib/awards';
   import { adminOrgs, byRecent, loadAdminOrgs, orgLine } from '../../lib/state/adminOrgs.svelte';
-  import { data, eventById, loadInbox } from '../../lib/state/data.svelte';
+  import { data, decisions, eventById, loadInbox } from '../../lib/state/data.svelte';
   import { relDay } from '../../lib/time';
   import Poster from '../../ui/Poster.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -150,7 +150,7 @@
   <!-- hidden, not gone, while a search is typed: a moderator's queue keeps its decided lines and their Undo -->
   <div class="page stagger" hidden={!!s}>
     {#if admin}
-      <Group>{@render place(Inbox, t('adm.queue'), () => open(AdminQueue, {}), data.inbox?.items.length ?? 0)}</Group>
+      <Group>{@render place(Inbox, t('adm.queue'), () => open(AdminQueue, {}), decisions(data.inbox))}</Group>
       {#if recent.length}
         <Group caption={t('adm.recent')}>{#each recent as o (o.id)}{@render orgRow(o)}{/each}</Group>
       {/if}

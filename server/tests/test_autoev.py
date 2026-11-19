@@ -146,7 +146,7 @@ def test_admin_queue_and_dismiss(env, monkeypatch):
     adm = c.get("/api/admin/inbox", headers=tma(60)).json()["items"]
     card = next(x for x in adm if x["kind"] == "autoev")
     assert (card["data"]["id"], card["data"]["org"]["id"], card["data"]["title"], card["data"]["url"]) == (eid, 1, "Open mic night", "https://t.me/mic_news/1")
-    assert c.get("/api/me", headers=tma(60)).json()["counters"]["inbox"] == 1
+    assert c.get("/api/me", headers=tma(60)).json()["counters"]["inbox"] == 0  # optional, the club's own: never the Admin badge
     # a moderator can't open a club's draft: not his card; nobody but the admin dismisses it
     assert not [x for x in c.get("/api/admin/inbox", headers=tma(61)).json()["items"] if x["kind"] == "autoev"]
     for uid in (61, 20, 40):
