@@ -197,7 +197,7 @@ def changed(con, e: sqlite3.Row, after: sqlite3.Row) -> None:
     shows, collab-review R1): our leaders hear it once (a template, no words of the host's), edits within 10 minutes
     in one message, as event_changed (organizing._changed)."""
     x = one(con, ACCEPTED, e["id"])
-    if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title", "place", "place_url", "description", "cover_file_id")):
+    if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title", "place", "place_url", "online", "description", "cover_file_id")):
         return
     for uid in _leaders(con, x["org_id"]):
         if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'cohost_changed' AND ref LIKE ? AND sent_at IS NULL",

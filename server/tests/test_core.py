@@ -1409,6 +1409,11 @@ def test_calendar_file(env):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
     assert "SUMMARY:Hack\\; night" in r.text and "DESCRIPTION:IT Club\\, KBTU\\nhttps://t.me/" in r.text
     assert time.strftime("DTEND:%Y%m%dT%H%M%SZ", time.gmtime(start + 3 * 3600)) in r.text  # no end: three hours
+    assert "LOCATION:305" in r.text
+    # an online event: the word where the place was, the club and the app's link kept, never the meeting's link
+    con.execute("UPDATE events SET place = '', online = 'https://zoom.us/j/123?pwd=secret' WHERE id = 1")
+    r = c.get(link)
+    assert "LOCATION:Online" in r.text and "DESCRIPTION:IT Club\\, KBTU\\nhttps://t.me/" in r.text and "zoom" not in r.text
     assert c.get(link.replace("events/1/", "events/2/")).status_code == 404               # the signature is per event
     assert c.get("/api/events/1/ics").status_code == 404
     assert c.get("/api/events/1/ics?k=%C3%A9").status_code == 404                             # non-ASCII: refused, not a 500

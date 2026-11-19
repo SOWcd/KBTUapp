@@ -11,6 +11,7 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import VideoCall from '@lucide/svelte/icons/video';
   import MapIcon from '@lucide/svelte/icons/map';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import Ticket from '@lucide/svelte/icons/ticket';
@@ -54,6 +55,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf, addressGis } from '../../lib/map';
+  import { meetHost } from '../../lib/meet';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
@@ -84,12 +86,17 @@
   let onlyFor = $state(''), unset = $state(false);
   $effect(() => {
     void session.me?.student?.school;
-    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
+    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { detail = null; if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
   });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
-  const gis = $derived(e ? e.placeUrl || addressGis(e.place) : null);
+  const gis = $derived(e && !e.online ? e.placeUrl || addressGis(e.place) : null); // online: never a route
+  // an online event's link: the row says where it leads, its host always in sight (a typed link may be any https host)
+  // the link only from the event just loaded (a card the app holds may carry one since changed or removed); https, a
+  // plain host, never Telegram's own (it would open inside Telegram as a deep link): the server's rule, checked again
+  const meetUrl = $derived(preview ? preview.onlineUrl : detail?.id === id ? detail.onlineUrl : null);
+  const meetAt = $derived(meetHost(meetUrl));
   let pic = $state(0); // which of the header's photos is on screen
   let hero = $state<HTMLDivElement>();
   let land = () => {};
@@ -313,7 +320,7 @@
   function share() {
     if (!e) return; // the Button gives the tap
     // absolute date: the card is read later, when "tomorrow" is wrong
-    shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place), img: e.cover?.url ?? e.video?.poster?.url ?? '' },
+    shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place, e.online), img: e.cover?.url ?? e.video?.poster?.url ?? '' },
       'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
@@ -472,15 +479,19 @@
     {/if}
 
     <!-- where: a row that ends honestly (a chevron opens the map, an arrow leaves for 2GIS) -->
-    {#if gis || !e.santa || e.place}
+    {#if gis || !e.santa || e.place || e.online}
     <Group>
-      {#if gis}
+      {#if e.online}
+        <!-- online (owner, Nov 19): the meeting opens outside, the server checked the link (core.online_url) -->
+        {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
+        {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
+      {:else if gis}
         <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
              2GIS for it (owner, Nov 15: a street address stayed plain text) -->
         <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(gis)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
       {:else if floorOf(e.place) != null}
         <Row icon={MapIcon} title={e.place} whole value={floorOf(e.place) ? t('route.floor', { n: floorOf(e.place)! }) : t('route.basement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
-      {:else if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place)} /><!-- a Santa game started from Studio has no room yet: no "place to be confirmed" -->
+      {:else if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place, e.online)} /><!-- a Santa game started from Studio has no room yet: no "place to be confirmed" -->
       {/if}
     </Group>
     {/if}

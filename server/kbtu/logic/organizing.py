@@ -241,6 +241,32 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
 
 
+def online_fields(i: dict, was: str | None) -> dict:
+    """An online event (owner, Nov 19), resolved against the saved one (`was`: events.online; None for a new event):
+    - `online` left out: kept as it is (`onlineUrl` alone is refused: which way it was meant is unclear);
+    - `online: true`: online; `onlineUrl` a link typed by the organizer (any https host, core.online_url), null or ''
+      for none yet, left out to keep the saved link;
+    - `online: false` (or anything but true): not online, the link gone.
+    Online has no place: place and its 2GIS link are cleared whenever the event stays online."""
+    if "online" not in i:
+        if "onlineUrl" in i:
+            raise ApiError("bad_input", "online")
+        online = was
+    elif i["online"] is not True:
+        online = None
+    elif "onlineUrl" not in i:
+        online = was or ""
+    else:
+        raw = i["onlineUrl"]
+        if raw is not None and not isinstance(raw, str):
+            raise ApiError("bad_input", "online")
+        link = core.online_url(raw, typed=True)
+        if (raw or "").strip() and not link:
+            raise ApiError("bad_input", "online")
+        online = link or ""
+    return {"online": online, **({"place": "", "place_url": None} if online is not None else {})}
+
+
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None, vis: str = "public") -> None:
     """A meeting has no price. "For whom" (the tag) is one of the club's own, on a team-only event only (a meeting or
     not: a department's get-together today, its required meeting tomorrow). A Head with a department calls only that
@@ -401,6 +427,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
+    f |= online_fields(body, None)
     if body.get("schoolOnly"):
         f["school"] = _school_only(org, True)
     _partner_ok(f)
@@ -480,7 +507,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] == "cancelled":
             raise ApiError("closed")
-        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body)
+        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body) | online_fields(body, e["online"])
         if "schoolOnly" in body:
             f["school"] = _school_only(org, body["schoolOnly"])
         _partner_ok(f, e)
@@ -527,7 +554,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     sends); within 2 hours of the start or during it, at once and only to those not checked in. A new place also gets a
     line in the event's Updates."""
     eid, moved = e["id"], e["starts_at"] != after["starts_at"]
-    placed = (e["place"], e["place_url"]) != (after["place"], after["place_url"])
+    placed = (e["place"], e["place_url"], e["online"]) != (after["place"], after["place_url"], after["online"])
     if e["status"] != "published" or not (moved or placed):
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
@@ -554,7 +581,7 @@ def change_place(con, v: Viewer, eid: int, place: object) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] != "published" or end_of(e) < core.now():
             raise ApiError("closed")
-        con.execute("UPDATE events SET place = ?, place_url = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
+        con.execute("UPDATE events SET place = ?, place_url = NULL, online = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)
         _changed(con, v, e, after)
         cohost_changed(con, e, after)

@@ -21,7 +21,7 @@ from functools import cache
 from pathlib import Path
 
 from ..db import tx
-from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, need_student, now, one, person_ref, rows
+from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, meet_link, need_student, now, one, person_ref, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -138,11 +138,11 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], se
     lines.append(f"Schools' dean's offices: {known}. Other schools' dean's offices: unknown." if known else "Schools' dean's offices: unknown.")
     rooms |= {r["room"] for r in facts if r["room"] and ROOM.match(r["room"])}
     # the afisha's own (seats.on_afisha: an initiative's event only with an official co-host, or if it's mine)
-    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
+    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, e.online, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL
           AND e.starts_at BETWEEN ? AND ? AND {on_afisha()} ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400, *on_afisha_args(v))
     lines.append("Coming events (id, title, when, where, by): " + ("; ".join(
-        f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or 'place to be announced'}, {e['org']}"
+        f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or ('online' if e['online'] is not None else 'place to be announced')}, {e['org']}"
         + (f" (club {e['oid']})" if e["ost"] == "active" else "") for e in evs) or "none this week"))
     return "\n".join(lines), rooms, {e["id"] for e in evs}, {e["oid"] for e in evs if e["ost"] == "active"}
 
@@ -172,7 +172,7 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
     if not isinstance(ctx, dict) or ctx.get("kind") not in ("event", "club") or type(ctx.get("id")) is not int:
         raise ApiError("bad_input")
     if ctx["kind"] == "event":
-        e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.price, e.status,
+        e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.online, e.price, e.status,
               e.first_year, e.external_url, e.reg_until, o.name AS org, o.id AS oid, c.name AS co, c.id AS cid FROM events e JOIN orgs o ON o.id = e.org_id
               LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.status = 'accepted' LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
             WHERE e.id = ? AND e.status IN ('published', 'cancelled') AND e.visibility = 'public' AND e.hidden_at IS NULL
@@ -180,7 +180,7 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
         if not e:
             return None
         bits = [f"[{e['id']}] {e['title']}", f"starts {_when(e['starts_at'])}" + (f", ends {_when(e['ends_at'])}" if e["ends_at"] else ""),
-                f"where: {e['place'] or 'to be announced'}" + (" (off campus, a 2GIS route on its page)" if e["place_url"] else ""),
+                f"where: {e['place'] or ('online' if e['online'] is not None else 'to be announced')}" + (" (off campus, a 2GIS route on its page)" if e["place_url"] else ""),
                 f"organized by {e['org']} (club {e['oid']})" + (f" with {e['co']} (club {e['cid']})" if e["co"] else ""),
                 f"price {e['price']} tenge, paid by Kaspi in the app" if e["price"] else "free",
                 e["external_url"] and "registration on an outside site (its page has the link)",
@@ -681,9 +681,12 @@ def fill_answered(text: str) -> bool:
     return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "end_date", "start", "end", "price"}))
 
 
-def filled(text: str) -> dict:
-    """The model's form, each field kept only in the shape the editor takes (anything else: left for the person)."""
+def filled(text: str, src: object = "") -> dict:
+    """The model's form, each field kept only in the shape the editor takes (anything else: left for the person). `src`:
+    the announcement itself, whose first meeting link (a known host's, found in plain code) makes the event online."""
     x, out = _parse(text) or {}, {}
+    if link := meet_link(str(src or "")):
+        out["onlineUrl"] = link
     for k, most in (("title", 80), ("place", 80), ("description", 2000)):
         if isinstance(x.get(k), str) and x[k].strip():
             out[k] = x[k].strip()[:most]

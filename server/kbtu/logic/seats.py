@@ -218,7 +218,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
         names = [e["org_name"]] + ([e["co_name"]] if e["co_id"] else [])
         if e["co_id"] and e["co_off"] and not e["h_off"]:
             names.reverse()
-        text = texts.channel_post(e["title"], " × ".join(names), e["starts_at"], e["ends_at"], e["place"], e["price"],
+        text = texts.channel_post(e["title"], " × ".join(names), e["starts_at"], e["ends_at"], texts.where(e["place"], e["online"] is not None, "en"), e["price"],
                                   e["status"] == "cancelled", f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "")
         sig = hashlib.sha256(f"{text}|{e['cover']}".encode()).hexdigest()[:16]
         if sig != e["channel_sig"] and len(out) < limit:
@@ -303,7 +303,9 @@ def _vevent(e: sqlite3.Row, link: str, lang: str | None = None) -> list[str]:
     says so, and calendars strike it."""
     utc = lambda ts: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))  # noqa: E731
     return ["BEGIN:VEVENT", f"UID:ev{e['id']}@kbtu-app", f"DTSTAMP:{utc(core.now())}", f"DTSTART:{utc(e['starts_at'])}", f"DTEND:{utc(end_of(e))}",
-            "SUMMARY:" + _ics_text(title_in(e, lang)), "LOCATION:" + _ics_text(e["place"]), "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
+            # an online event: the word, never its link (event_ics checks no visibility)
+            "SUMMARY:" + _ics_text(title_in(e, lang)), "LOCATION:" + _ics_text(texts.where(e["place"], e["online"] is not None, lang or "en")),
+            "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
             "URL:" + link, *(["STATUS:CANCELLED"] if e["status"] == "cancelled" else []), "END:VEVENT"]
 
 

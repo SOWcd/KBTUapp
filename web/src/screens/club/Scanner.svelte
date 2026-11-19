@@ -174,7 +174,7 @@
       {#if mode === 'qr'}<button class="qr" aria-label={t('studio.scanner')} onclick={() => { mode = 'scan'; toMode('scan'); }}><EventQr {overlay} event={id} {sess} embed onlast={recount} /></button>{/if}
     {:else if e}
       <h2 class="t-h3 clamp-2">{e.title}</h2>
-      <p class="t-foot">{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}</p>
+      <p class="t-foot">{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place, e.online)}</p>
       <p class="count">{count ? t('scan.came', count) : tn('event.going', e.taken)}</p>
     {/if}
 

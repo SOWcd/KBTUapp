@@ -43,7 +43,7 @@
     <p class="fs-sub dim sub">{t('inv.toSub')}</p>
     <Group>
       {#each mine as e (e.id)}
-        {@const when = `${relDay(e.startsAt)}, ${time(e.startsAt)} · ${placeOf(e.place)}`}
+        {@const when = `${relDay(e.startsAt)}, ${time(e.startsAt)} · ${placeOf(e.place, e.online)}`}
         {#if sent[e.id]}
           <Row dense title={e.title} subtitle={when} value={sent[e.id] === 'going' ? t('inv.going') : t('inv.invited')}>{#snippet lead()}<Poster item={e} size={44} radius={10} />{/snippet}</Row>
         {:else}
