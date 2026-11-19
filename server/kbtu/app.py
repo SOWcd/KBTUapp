@@ -1773,14 +1773,17 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if a and await screen(f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
             await run_in_threadpool(lambda: logic.hide_ask(con, body["id"], "reports", made=(a["user_id"], a["created_at"])))
 
-    async def eu_ai(con, msgs: list[dict], whole: float = 30, **kw) -> str:
-        """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503."""
+    async def eu_ai(con, msgs: list[dict], whole: float = 30, lead: str | None = None, **kw) -> str:
+        """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503.
+        lead (llm.chat's): asked first, only where the policy in force applies (never on the EU host alone)."""
+        only = _ai_only(assist_only)
+        lead = lead if only == ai.ASSIST_PROVIDERS else None
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
         try:
             async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
                 for last in (False, True):
                     try:
-                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=_ai_only(assist_only), chain=ai.chain(cfg), **kw))[0]
+                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=only, chain=ai.chain(cfg), lead=lead, **kw))[0]
                     except llm.BadAnswers:
                         if last:
                             raise ApiError("unavailable", "assistant") from None
@@ -1900,8 +1903,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod, Nov 16: with
             # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
             # call, and the slow ones were the host's, which the race covers)
+            # Google first, for this answer alone (policy section 5, Nov 19); its failure: the chain as before
             text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
-                               race=True, effort="none")
+                               race=True, effort="none", lead=llm.GOOGLE)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}

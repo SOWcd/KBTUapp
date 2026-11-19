@@ -49,6 +49,7 @@ class Config:
     openrouter_key: str = field(default="", repr=False)
     groq_key: str = field(default="", repr=False)
     apinex_key: str = field(default="", repr=False)  # APINEX_API_KEY: the chain's first link
+    gemini_key: str = field(default="", repr=False)  # GEMINI_API_KEY: Google, the assistant's first try (llm.GOOGLE)
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
     # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
     # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md
@@ -143,6 +144,7 @@ def load() -> Config:
         openrouter_key=env.get("OPENROUTER_API_KEY", "").strip(),
         groq_key=env.get("GROQ_API_KEY", "").strip(),
         apinex_key=env.get("APINEX_API_KEY", "").strip(),
+        gemini_key=env.get("GEMINI_API_KEY", "").strip(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
