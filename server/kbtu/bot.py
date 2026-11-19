@@ -2122,6 +2122,15 @@ async def _commands(cfg: Config, http: httpx.AsyncClient) -> None:
                     "commands": [{"command": c, "description": d} for c, d in cmds]})
             except httpx.HTTPError:
                 log.warning("setMyCommands failed")  # the menu waits for the next start; the bot works without it
+    # "add to group as admin" opens with every right on: a link's admin= can't turn on tags or join requests on iOS
+    rights = {f"can_{r}": True for r in ("manage_chat", "delete_messages", "manage_video_chats", "restrict_members",
+              "promote_members", "change_info", "invite_users", "post_stories", "edit_stories", "delete_stories",
+              "pin_messages", "manage_topics", "manage_tags")}
+    try:
+        await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyDefaultAdministratorRights",
+                        json={"rights": {"is_anonymous": False, **rights}})
+    except httpx.HTTPError:
+        log.warning("setMyDefaultAdministratorRights failed")
 
 
 async def run(cfg: Config) -> None:
