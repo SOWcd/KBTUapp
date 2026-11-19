@@ -543,7 +543,7 @@ export interface RoundSlot { id: Id; startsAt: Ts; minutes: number; capacity: nu
   people?: { appId: Id; person: PersonRef; fullName: string; showed: boolean | null }[];
   /** the team, from two hours before the window until its end: its "come over" went to `tried` (Telegram took `told`,
    *  `waiting` still queued, the rest failed: no DMs, blocked), would reach `left` more */
-  call?: { told: number; waiting: number; tried: number; left: number } }
+  call?: { told: number; waiting: number; tried: number; left: number; opensAt?: number } }
 
 /** What a club asks DMP for in its weekly memo (PLAN "Memo in one tap"; the server writes DMP's template from it).
  *  Every request is optional; dates are the form's 'YYYY-MM-DD', times 'HH:MM'. */

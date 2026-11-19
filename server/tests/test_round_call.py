@@ -68,7 +68,8 @@ def test_the_time_gate_and_the_team_only(env, monkeypatch):
     c, con, clock, rid, apps, slot = _more(env, monkeypatch)
     assert _call(c, slot["a"], who=ANN).status_code == 403
     assert _call(c, slot["b"]).status_code == 409  # starts in five hours
-    assert "call" not in next(s for s in c.get(f"/api/rounds/{rid}/slots", headers=tma(PRES)).json() if s["id"] == slot["b"])
+    b = next(s for s in c.get(f"/api/rounds/{rid}/slots", headers=tma(PRES)).json() if s["id"] == slot["b"])
+    assert b["call"]["opensAt"] == b["startsAt"] - casting.CALL_AHEAD  # shown dim until two hours before
     assert _call(c, 999999).status_code == 404
     clock[0] = T0 + 4 * HOUR  # A (14:00-16:00) is over, B starts in an hour
     assert _call(c, slot["a"]).status_code == 409 and _call(c, slot["b"]).status_code == 200

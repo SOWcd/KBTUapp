@@ -184,7 +184,7 @@
   // Optimistic: the button says how many at once and goes dim; a failure puts it back
   async function callSlot(s: RoundSlot) {
     const c = s.call;
-    if (!c?.left || !(await sheets.ask({ title: t('cast.callAsk'), text: t('cast.callText', { n: c.left }), ok: t('cast.call'), cancel: t('common.cancel') }))) return;
+    if (!c?.left || c.opensAt || !(await sheets.ask({ title: t('cast.callAsk'), text: t('cast.callText', { n: c.left }), ok: t('cast.call'), cancel: t('common.cancel') }))) return;
     s.call = { ...c, waiting: c.waiting + c.left, tried: c.tried + c.left, left: 0 };
     try {
       const res = await api.callSlot(s.id);
@@ -328,8 +328,8 @@
             </Row>
             {#if s.call && (s.call.left || s.call.tried)}
               <div class="stack edit">
-                <Button kind="secondary" size="m" full disabled={!s.call.left} onclick={() => callSlot(s)}>
-                  {s.call.left ? t('cast.callGo', { n: s.call.left }) : s.call.waiting ? t('cast.callSending') : t('cast.callDone', { n: s.call.told })}</Button>
+                <Button kind="secondary" size="m" full disabled={!s.call.left || !!s.call.opensAt} onclick={() => callSlot(s)}>
+                  {s.call.opensAt ? t('cast.callSoon', { time: time(s.call.opensAt) }) : s.call.left ? t('cast.callGo', { n: s.call.left }) : s.call.waiting ? t('cast.callSending') : t('cast.callDone', { n: s.call.told })}</Button>
               </div>
             {/if}
             {#if placing === s.id}
