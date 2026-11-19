@@ -840,7 +840,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
             c.id AS rid, c.flags, c.reviewed_at, c.reviewed_by, ac.receipt_id IS NOT NULL AS auto,
             c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
-        LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
+        LEFT JOIN receipts c ON r.status = 'going' AND c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
         WHERE r.event_id = ? AND r.status != 'cancelled'""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")

@@ -961,14 +961,50 @@ def unregister(con, v: Viewer, eid: int) -> dict:
             raise ApiError("not_found")
         if not signup_open(e):
             raise ApiError("closed")
-        freed = r["status"] in ("going", "hold")
-        evteams.left(con, eid, v.id)  # the captain hears it
-        con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'self', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
-            WHERE id = ?""", (core.now(), r["id"]))
-        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (v.id, f"event:{eid}:%"))
-        if freed:
+        if _seat_out(con, r, "self"):
             promote(con, e)
     return card(con, v, e)
+
+
+def _seat_out(con, r: sqlite3.Row, why: str, captain: bool = True) -> bool:
+    """A seat ends (a self-cancel, the organizer's removal): out of its team (migration 161's trigger; the captain hears
+    it unless the whole team goes), the 2-hour reminder unsent. Receipts stay as they are (refunds happen outside the
+    app, the duplicate check keeps knowing the file). True when a seat was freed: the caller promotes the waitlist."""
+    if captain:
+        evteams.left(con, r["event_id"], r["user_id"])
+    con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = ?, hold_until = NULL, waitlisted_at = NULL, updated_at = ?
+        WHERE id = ?""", (why, core.now(), r["id"]))
+    con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (r["user_id"], f"event:{r['event_id']}:%"))
+    return r["status"] in ("going", "hold")
+
+
+def remove_seats(con, v: Viewer, eid: int, uid: int | None = None, team: int | None = None) -> None:
+    """The organizer (the "events" right, not a co-host) takes one person, or a whole team, off the event before it
+    starts: each seat ends as a self-cancel does (cancel_reason 'removed'), the waitlist moves in, each hears the bot's
+    template, the audit log keeps who removed whom. A paid seat's receipts stay (the refund is the club's, by hand); a
+    removed person may sign up again like anyone, and an old receipt sent again is flagged a duplicate. Someone already
+    checked in is refused: they came, and the door's record stays."""
+    with tx(con):
+        e = _staff_event(con, v, eid, "events")
+        if e["status"] != "published" or e["starts_at"] <= core.now():
+            raise ApiError("closed")
+        if team is not None:
+            uids = [x[0] for x in rows(con, "SELECT user_id FROM event_team_members WHERE team_id = ? AND event_id = ?", team, eid)]
+        else:
+            uids = [uid]
+        regs = [one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, u) for u in uids]
+        if not regs or None in regs:
+            raise ApiError("not_found")
+        if any(r["checked_in_at"] for r in regs):
+            raise ApiError("conflict", "checked_in")
+        freed = False
+        for r in regs:
+            freed = _seat_out(con, r, "removed", captain=team is None) or freed
+            notify(con, r["user_id"], "seat_removed", f"event:{eid}:{core.now()}")
+            log_action(con, v.id, "seat_remove", f"registration:{r['id']}",
+                       json.dumps({"event": eid, "user": r["user_id"], "was": r["status"], "team": team}))
+        if freed:
+            promote(con, e)
 
 
 def set_saved(con, v: Viewer, eid: int, on: bool) -> None:

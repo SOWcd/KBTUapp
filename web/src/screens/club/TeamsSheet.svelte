@@ -3,7 +3,8 @@
   // captain first), then those with no team yet; "Form teams" fills the teams looking for people and makes new ones of
   // the rest; a person's ⌃⌄ moves them to another team or to none, after a confirm. All fixed once the event starts.
   // Someone without the teams' own consent waits alone, marked at the row's end, never placed (server evteams.py);
-  // its menu has one item: the bot reminds them (a template, once a day).
+  // its menu: the bot reminds them (a template, once a day). Every menu ends with taking the person (or their whole
+  // team) off the event, after a confirm.
   // A paid event: a player whose receipt nobody checked yet is marked too, and Form teams waits for them; a refund is
   // recorded by rejecting the receipt in the attendees list, which takes the player out of the team. A short team says
   // how many it lacks; a paid event's top line counts short teams and paid players with none. Form teams completes the
@@ -55,9 +56,30 @@
       haptic.ok(); say(t(r.queued ? 'tm.reminded' : 'tm.remindedToday'), 'speech_balloon_3d');
     } catch (e) { fail(e); }
   }
+  // off the event (server seats.remove_seats): one person, or a whole team at once; the bot tells each, the waitlist
+  // moves in, a paid one's receipt stays (the refund is the club's, by hand)
+  async function out(p: PersonRef | null, tm: { id: Id; name: string; members: PersonRef[] } | null) {
+    if (!b || !(await sheets.ask({ title: tm ? t('tm.removeTeamAsk', { team: tm.name }) : t('att.removeAsk', { name: p!.name }),
+      text: tm ? t('tm.removeTeamText', { n: tm.members.length }) + (b.paid ? ' ' + t('tm.refund') : '') : t(b.paid ? 'att.removePaid' : 'att.removeText'),
+      ok: t(tm ? 'tm.removeTeam' : 'att.remove'), cancel: t('common.cancel'), danger: true }))) return;
+    const was = b, gone = new Set(tm ? tm.members.map((m) => m.id) : [p!.id]);
+    b = { ...b, teams: b.teams.map((x) => ({ ...x, members: x.members.filter((m) => !gone.has(m.id)) })).filter((x) => x.members.length)
+      .map((x) => ({ ...x, captain: x.members[0].id })), solo: b.solo.filter((m) => !gone.has(m.id)) };
+    haptic.tap();
+    try {
+      await (tm ? api.removeTeam(id, tm.id) : api.removePerson(id, p!.id));
+      haptic.ok(); say(t(tm ? 'tm.teamRemoved' : 'att.removed'), 'waving_hand_3d_default');
+      b = await api.teams(id);
+    } catch (e) { b = was; if (e instanceof ApiErr && e.message === 'checked_in') { haptic.error(); say(t('att.removeCame'), 'warning_3d'); } else fail(e); }
+  }
+  const outItems = (p: PersonRef, tm: { id: Id; name: string; members: PersonRef[] } | null): MenuItem[] => [
+    { label: t('att.remove'), destructive: true, onselect: () => out(p, null) },
+    ...(tm ? [{ label: t('tm.removeTeam'), destructive: true, onselect: () => out(null, tm) }] : []),
+  ];
   const menuOf = (p: PersonRef, from: Id | null): MenuItem[] => !b || b.locked ? [] : [
     ...b.teams.filter((tm) => tm.id !== from).map((tm) => ({ label: t('tm.toTeam', { team: tm.name, n: tm.members.length, max: b!.max }), disabled: tm.members.length >= b!.max, onselect: () => move(p, tm.id, tm.name) })),
     ...(from !== null ? [{ label: t('tm.toSolo'), onselect: () => move(p, null, '') }] : []),
+    ...outItems(p, b.teams.find((tm) => tm.id === from) ?? null),
   ];
 
   let forming = $state(false);
@@ -97,7 +119,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || p.off ? undefined : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }] : !b.teams.length ? undefined : menuOf(p, null)}>
+              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : p.off ? outItems(p, null) : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }, ...outItems(p, null)] : menuOf(p, null)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}

@@ -6,6 +6,8 @@
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import { menu } from '../../ui/menu';
   import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
@@ -74,6 +76,17 @@
     catch { say(t('common.error'), 'warning_3d'); }
   }
 
+  // the organizer takes someone off before the start (server seats.remove_seats): not a co-host, not someone who came
+  const removable = (a: Attendee) => host && !!ev && Date.now() / 1000 < ev.startsAt && !a.checkedInAt;
+  async function remove(a: Attendee) {
+    if (!list || !(await sheets.ask({ title: t('att.removeAsk', { name: a.fullName }), text: t(a.receipt ? 'att.removePaid' : 'att.removeText'),
+      ok: t('att.remove'), cancel: t('common.cancel'), danger: true }))) return;
+    const was = list;
+    list = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
+    try { await api.removePerson(id, a.person.id); haptic.ok(); say(t('att.removed'), 'waving_hand_3d_default'); void load(); } // the waitlist moved in
+    catch (e) { list = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
+  }
+
   let sending = $state(false);
   async function exportList() {
     sending = true;
@@ -100,7 +113,7 @@
     {#if shown.length}
       <Group>
         {#each shown as a (a.person.id)}
-          {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
+          {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen) || removable(a)}
           <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
           <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
             {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
@@ -116,6 +129,8 @@
             {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
             {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
             {:else}<Tag>{t('att.waitlist')}</Tag>{/if}
+            {#if removable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
+              onclick={(e) => menu(e.currentTarget as Element, [{ label: t('att.remove'), destructive: true, onselect: () => remove(a) }])} />{/if}
           {/snippet}
           <!-- engine: Row needs content under it (the answers to the event's questions) -->
           {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}

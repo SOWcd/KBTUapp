@@ -968,6 +968,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def teams_remind(eid: int, uid: int, con: Con, v: Me):
         return logic.evteams.remind(con, v, eid, uid)
 
+    @app.delete("/api/events/{eid}/people/{uid}", status_code=204)
+    def remove_person(eid: int, uid: int, con: Con, v: Me):
+        logic.remove_seats(con, v, eid, uid=uid)
+
+    @app.delete("/api/events/{eid}/teams/{tid}", status_code=204)
+    def remove_team(eid: int, tid: int, con: Con, v: Me):
+        logic.remove_seats(con, v, eid, team=tid)
+
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con: Con, v: Me):
         return logic.unregister(con, v, eid)
