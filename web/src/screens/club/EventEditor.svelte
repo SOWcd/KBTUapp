@@ -21,6 +21,7 @@
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import Clapperboard from '@lucide/svelte/icons/clapperboard';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import VideoCall from '@lucide/svelte/icons/video';
   import Eye from '@lucide/svelte/icons/eye';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import AlignLeft from '@lucide/svelte/icons/align-left';
@@ -76,6 +77,7 @@
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
   import { marked, merge, missing, type Differs, type Marked } from '../../lib/eventFill';
+  import { linkFill, ONLINE_LINK } from '../../lib/meet';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
@@ -116,7 +118,7 @@
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
-    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, santa: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamCap: '', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
+    end: '', endDate: '', place: '', placeUrl: '', online: false, onlineUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, santa: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamCap: '', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
@@ -179,7 +181,8 @@
   const err = $derived({
     title: f.title.trim() ? '' : t('ed.need'),
     when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : endTs != null && endTs <= startTs ? t('ed.endEarly') : '',
-    place: f.tba || f.place.trim() ? '' : t('ed.need'),
+    // online: no place; a link, if any, https with a plain host (the server checks it again)
+    place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : t('ed.onlineBad')) : f.tba || f.place.trim() ? '' : t('ed.need'),
     seats: f.seats === '' || (Number.isInteger(+f.seats) && +f.seats > 0) ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
     payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
@@ -197,7 +200,7 @@
 
   // An example instead of "e.g. …": a real place from the events in the app, another one each time
   // the editor opens; built-in ones until the app has events of its own.
-  const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place.length <= 30).map((e) => e.place))];
+  const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place && e.place.length <= 30).map((e) => e.place))];
   const example = { place: realPlaces.length ? any(realPlaces) : phrase('ed.placePh') };
 
   // the place field takes a room or a pasted 2GIS share: the link becomes the route, the text stays the name
@@ -336,7 +339,7 @@
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
-          end: endTime(e.startsAt, e.endsAt), endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
+          end: endTime(e.startsAt, e.endsAt), endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', online: !!e.online, onlineUrl: e.onlineUrl ?? '', description: e.description,
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, santa: !!e.santa, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior,
           teams: !!e.teamMax, teamMin: String(e.teamMin ?? 2), teamMax: String(e.teamMax ?? 5), teamCap: e.teamCap ? String(e.teamCap) : '', teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null, forBoard: !!e.forBoard,
@@ -344,7 +347,7 @@
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
           deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
-          tba: !e.place, memo: e.memo ?? {} };
+          tba: !e.place && !e.online, memo: e.memo ?? {} };
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
@@ -382,9 +385,9 @@
   const input = (): EventInput => ({
     ...(ownTr && ownTr.title === f.title.trim() && ownTr.description === f.description.trim() ? { tr: ownTr.tr } : {}),
     ...(schoolOnly === undefined ? {} : { schoolOnly }),
-    title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
+    title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba || f.online ? '' : f.place.trim(),
     ...(asStaff && !lent ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
-    placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: !isMeeting ? seatsN : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
+    placeUrl: f.online ? null : f.placeUrl.trim() || null, online: f.online, onlineUrl: f.online ? f.onlineUrl.trim() || null : null, emoji: f.emoji, color: f.color, seats: !isMeeting ? seatsN : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, santa: f.santa && !isMeeting && !f.partner, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, ...(f.teams && teamsOk ? { teamMin: +f.teamMin, teamMax: +f.teamMax, teamCap: +f.teamCap > 0 ? +f.teamCap : null } : { teamMin: null, teamMax: null, teamCap: null }), visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
@@ -405,7 +408,7 @@
     const o = session.me?.memberships.find((m) => m.org.id === org)?.org ?? data.orgs.find((x) => x.id === org)!;
     const i = input();
     sheets.preview({
-      ...i, santa: i.santa ? { drawn: false } : undefined, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
+      ...i, santa: i.santa ? { drawn: false } : undefined, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.online ? '' : i.place || '—', online: !!i.online, onlineUrl: i.onlineUrl ?? null,
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
       cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       coHost: saved?.coHost ?? null, my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
@@ -455,15 +458,15 @@
   let ai = $state<Marked[]>([]);
   let fromAi = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
-  const lacks = $derived(fromAi ? missing(f) : []);
+  const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
   // "Add more" (owner, Nov 13): with something in the form, a second message merges into it (lib/eventFill merge);
   // what the new text says otherwise than a filled field waits here for a tap
   const more = $derived(fromAi || !!(f.title.trim() || f.description.trim()));
-  let differs = $state<{ k: Differs; v: string }[]>([]);
-  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price' } as const;
-  function take(d: { k: Differs; v: string }) {
+  let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]); // the meeting link: the editor's own (lib/meet linkFill)
+  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price', onlineUrl: 'ed.onlineLink' } as const;
+  function take(d: { k: Differs | 'onlineUrl'; v: string }) {
     haptic.tap();
-    if (d.k === 'price') { f.paid = true; f.price = d.v; } else f[d.k] = d.v;
+    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; } else f[d.k] = d.v;
     differs = differs.filter((x) => x !== d);
   }
   async function fillFromText() {
@@ -477,20 +480,25 @@
     touch(); filling = true;
     try {
       const adding = !first && more;
-      const now = { title: f.title, date: f.date, endDate: f.endDate, start: f.start, end: f.end, place: f.tba ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
+      const now = { title: f.title, date: f.date, endDate: f.endDate, start: f.start, end: f.end, place: f.tba || f.online ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
       const dflt = { date: blank.date, start: blank.start };
       // the form so far, as data (the server bounds it): a default the organiser never set isn't sent
       const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
-      const x = await api.eventFill(org, text, have);
+      const { onlineUrl, ...x } = await api.eventFill(org, text, have);
       if (me !== run || gone) return;
+      // a meeting link in the text (found in plain code): it fills an empty form; "Add more" over another link or a
+      // place already set only lists it for a tap, as any filled field said otherwise
+      const link = linkFill(onlineUrl, adding, f);
+      const linkDiff = link === 'ask' ? [{ k: 'onlineUrl' as const, v: onlineUrl! }] : [];
+      if (link === 'fill') { f.online = true; f.onlineUrl = onlineUrl!; f.tba = false; }
       if (adding) {
         const { set, differs: d } = merge(now, x, dflt);
         const { price: p, ...rest } = set;
         Object.assign(f, rest);
         if (rest.place) f.tba = false;
         if (p && canPrice) { f.paid = true; f.price = p; }
-        const got = Object.keys(set).length > 0 || d.length > 0;
-        differs = d.filter((y) => y.k !== 'price' || canPrice);
+        const got = Object.keys(set).length > 0 || d.length > 0 || !!onlineUrl;
+        differs = [...d.filter((y) => y.k !== 'price' || canPrice), ...linkDiff];
         ai = [...new Set([...ai, ...marked({ ...rest, price: p ? +p : undefined }, canPrice)])];
         if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
         say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
@@ -602,7 +610,7 @@
   // text aren't this event's to fix; a live event's Save stops only for a contradiction, never for a missing cover
   const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
   const clubNames = $derived.by(() => { const o = data.orgs.find((x) => x.id === org) ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
-  const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba,
+  const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba || f.online,
     place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: +f.seats || null, club: clubNames })
     .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
   const fixable = (x: Finding) => canPrice || !['priceText', 'priceDiff'].includes(x.id);
@@ -730,9 +738,9 @@
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
-    <button class="pill go" class:bad={tried && err.place} class:ai={ai.includes('place')} onclick={() => open('place')}><MapPin size={20} />
-      <span class="gt ellipsis" class:ph={!f.place.trim()}>{f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
-      {#if f.placeUrl && !f.tba}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
+    <button class="pill go" class:bad={tried && err.place} class:ai={ai.includes('place')} onclick={() => open('place')}>{#if f.online}<VideoCall size={20} />{:else}<MapPin size={20} />{/if}
+      <span class="gt ellipsis" class:ph={!f.online && !f.place.trim()}>{f.online ? t('event.online') : f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
+      {#if f.placeUrl && !f.tba && !f.online}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
     <button class="pill go" class:ai={ai.includes('about')} onclick={() => open('about')}><AlignLeft size={20} />
       <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
@@ -832,6 +840,12 @@
           {/if}
 
         {:else if pick === 'place'}
+          <!-- online or a place: one or the other, and "place unknown" only for a place -->
+          <Group><Row title={t('event.online')} accessory="switch" checked={f.online} onchange={(v) => { f.online = v; if (v) f.tba = false; }} /></Group>
+          {#if f.online}
+            <Field label={t('ed.onlineLink')} bind:value={f.onlineUrl} type="url" inputmode="url" maxlength={500} placeholder="https://meet.google.com/…" enterkeyhint="done"
+              error={tried && err.place ? err.place : undefined} />
+          {:else}
           {#if !f.tba}
             <Field label={t('ed.place')} bind:value={f.place} maxlength={400} placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="done"
               error={tried && err.place ? err.place : undefined} />
@@ -852,6 +866,7 @@
           {/if}
           {#if !f.placeUrl}
             <Group footnote={t('ed.tbaHint')}><Row title={t('ed.tba')} accessory="switch" checked={f.tba} onchange={(v) => (f.tba = v)} /></Group>
+          {/if}
           {/if}
 
         {:else if pick === 'about'}

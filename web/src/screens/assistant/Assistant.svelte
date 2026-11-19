@@ -1,3 +1,11 @@
+<script module lang="ts">
+  // the light on its way back to the button after a close: it outlives its sheet, so the next opening can take it over
+  // mid-air (take: where it is now, how much of the colonnade is left in it, and the button's veil to hand on)
+  let back: { take: () => { x: number; y: number; r: number; m: number; veil: Animation } } | null = null;
+  const FLY = 520, ACROSS = 'cubic-bezier(.4, 0, .2, 1)', ALONG = 'cubic-bezier(.2, .8, .25, 1)';
+  const turnOf = (e: Element) => e.getAnimations({ subtree: true }).find((a) => (a.effect as KeyframeEffect | null)?.pseudoElement === '::before');
+</script>
+
 <script lang="ts">
   // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
   // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
@@ -48,16 +56,14 @@
   import { PSYCHOLOGIST } from '../../lib/academic';
   import Sheet from '../../ui/Sheet.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
-  import Landmark from '@lucide/svelte/icons/landmark';
-  import UtensilsCrossed from '@lucide/svelte/icons/utensils-crossed';
-  import Backpack from '@lucide/svelte/icons/backpack';
-  import UserPlus from '@lucide/svelte/icons/user-plus';
-  import Info from '@lucide/svelte/icons/info';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Composer from '../../ui/Composer.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { keyboard as kbd } from '../../lib/state/keyboard.svelte';
+  import { resting, rest, setKriGoogle } from '../../lib/kriGoogle';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
@@ -71,11 +77,19 @@
     void ask(q, false);
   }
   // KRI is a light (owner, Nov 18: the sheet with a hello and a list was "too simple"): it leaves the button that was
-  // pressed and takes its place over the greeting while the Sheet's circle opens from that same button, waits beside
+  // pressed and takes its place in the middle, over the greeting, while the Sheet's circle opens from that same button, waits beside
   // "thinking", and stands over the newest answer only. It flies in the footer (the body clips at the footer's edge) and
   // hands over on landing. Power saving, less motion, a conversation to read: no flight, it is in its place
+  // The round button itself turns into the light: its glyph fades into the colonnade on the way up, the button is not
+  // seen while the light is out of it. On any close from the empty opening the light goes back the same road (owner,
+  // Nov 19), over the leaving sheet, and the next opening tapped meanwhile takes it from where it is
   // svelte-ignore state_referenced_locally
-  const from = !focus && !power.lite && !chat.turns.length ? peekIris() : null;
+  const btn = !focus && !power.lite ? peekIris() : null; // the button it opened from (Nav): where it goes back to
+  const mid = btn && !chat.turns.length ? back?.take() : null;
+  const from = !chat.turns.length ? mid ?? btn : null;
+  let veil = !from ? null : btn?.el?.animate({ opacity: mid ? [0, 0] : [1, 0] }, { duration: 120, fill: 'forwards' }) ?? null;
+  mid?.veil.cancel();
+  $effect(() => () => veil?.cancel()); // gone without a flight back: the button is itself again
   let orb = $state<HTMLElement>(), fly = $state<HTMLElement>(), flying = $state(!!from);
   $effect(() => {
     const o = orb, f = fly;
@@ -83,24 +97,89 @@
     // after the layout, before the paint: no layout forced inside the tap
     const ro = new ResizeObserver(() => {
       ro.disconnect();
-      const b = o.getBoundingClientRect(), p = (f.offsetParent as HTMLElement).getBoundingClientRect();
-      f.style.cssText = `left:${b.left - p.left}px;top:${b.top - p.top}px;width:${b.width}px;height:${b.height}px;visibility:visible`;
-      const dx = from.x - b.left - b.width / 2, dy = from.y - b.top - b.height / 2;
+      // (from the footer's padding edge, inside its top line: counted from the border, the light landed 1 px low)
+      const b = o.getBoundingClientRect(), par = f.offsetParent as HTMLElement, p = par.getBoundingClientRect();
+      f.style.cssText = `left:${b.left - p.left - par.clientLeft}px;top:${b.top - p.top - par.clientTop}px;width:${b.width}px;height:${b.height}px;visibility:visible`;
+      const dx = from.x - b.left - b.width / 2, dy = from.y - b.top - b.height / 2, m = mid?.m ?? 0;
       // across and up on two curves: an arc, not a ruler's line
-      f.animate({ translate: [`${dx}px 0`, '0 0'] }, { duration: 520, easing: 'cubic-bezier(.4, 0, .2, 1)' });
-      f.animate({ transform: [`translateY(${dy}px) scale(${(from.r * 2) / b.width})`, 'none'] }, { duration: 520, easing: 'cubic-bezier(.2, .8, .25, 1)' })
+      f.animate({ translate: [`${dx}px 0`, '0 0'] }, { duration: FLY, easing: ACROSS });
+      f.animate({ transform: [`translateY(${dy}px) scale(${(from.r * 2) / b.width})`, 'none'] }, { duration: FLY, easing: ALONG })
         .finished.catch(() => {}).finally(() => (flying = false));
+      if (!mid) f.animate({ opacity: [0, 1] }, { duration: 90 }); // over the button as that fades: no pop
+      f.querySelector('.mark')!.animate({ opacity: [m, 1] }, { duration: FLY * 0.45 });
+      f.querySelector('.glyph')!.animate({ opacity: [1 - m, 0] }, { duration: FLY * 0.45, fill: 'forwards' });
     });
     ro.observe(o);
     return () => ro.disconnect();
   });
+  // The way back. A copy of the light on the page itself (the sheet clips its own and goes), from where the light is
+  // now (at rest, moved by the keyboard, or still flying in) to the button: transform and opacity only, the colonnade
+  // fading back into the button's glyph, the button showing through at the end. Not from a conversation (its small
+  // light is over an answer, often scrolled away: the sheet's own circle closes into the button as before), not with
+  // less motion or power saving. After Sheet's own look at the close (typed text may ask first): a microtask
+  let gone = false;
+  $effect(() => { if (overlay.closing) queueMicrotask(() => { if (overlay.closing && !gone) { gone = true; goBack(); } }); });
+  function goBack() {
+    const src = flying ? fly : orb;
+    if (!btn?.el || !src || !orb || tight || getComputedStyle(src).visibility === 'hidden' && src === fly || matchMedia('(prefers-reduced-motion: reduce)').matches) { veil?.cancel(); veil = null; return; }
+    const b = src.getBoundingClientRect(), w = orb.offsetWidth, el = orb.cloneNode(true) as HTMLElement;
+    const mark = el.querySelector<HTMLElement>('.mark')!, glyph = el.querySelector<HTMLElement>('.glyph')!;
+    const m = Number(getComputedStyle(src.querySelector('.mark')!).opacity), at = turnOf(src)?.currentTime;
+    el.classList.remove('hid', 'land');
+    el.style.cssText = `position:fixed;left:${b.left + b.width / 2 - w / 2}px;top:${b.top + b.height / 2 - w / 2}px;margin:0;z-index:calc(var(--z-sheet) + 4);pointer-events:none;visibility:visible`;
+    orb.style.visibility = 'hidden'; if (fly) fly.style.visibility = 'hidden'; // one light on the screen
+    document.body.append(el);
+    const spin = turnOf(el); if (spin && at != null) spin.currentTime = at; // its colours where they were, not from the start
+    const dx = btn.x - b.left - b.width / 2, dy = btn.y - b.top - b.height / 2;
+    el.animate({ translate: ['0 0', `${dx}px 0`] }, { duration: FLY, easing: ACROSS, fill: 'forwards' });
+    const a = el.animate({ transform: [`scale(${b.width / w})`, `translateY(${dy}px) scale(${(btn.r * 2) / w})`] }, { duration: FLY, easing: ALONG, fill: 'forwards' });
+    el.animate({ opacity: [1, 1, 0], offset: [0, 0.72, 1] }, { duration: FLY, fill: 'forwards' });
+    mark.animate({ opacity: [m, 0] }, { duration: FLY * 0.45, fill: 'forwards' });
+    glyph.animate({ opacity: [1 - m, 1] }, { duration: FLY * 0.45, fill: 'forwards' });
+    // the button comes through as the light fades over it; this veil takes over from the opening's
+    const show = btn.el.animate({ opacity: [0, 0, 1], offset: [0, 0.72, 1] }, { duration: FLY });
+    veil?.cancel(); veil = null;
+    const me = (back = { take: () => {
+      const r = el.getBoundingClientRect(), left = Number(getComputedStyle(mark).opacity);
+      el.remove(); back = null;
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2, m: left, veil: show };
+    } });
+    void a.finished.catch(() => {}).finally(() => { el.remove(); if (back === me) back = null; });
+  }
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
   let draft = $state(untrack(() => keyboard?.value ?? '')), busy = $state(false);
   let list = $state<HTMLDivElement>();
-  // the starters: plain rows, each with its own icon (a list, not a pile of pills)
-  const SUGGEST = $derived(chat.ctx?.kind === 'event' ? [['as.e1', Backpack], ['as.e2', Navigation], ['as.e3', Users]] as const
-    : chat.ctx?.kind === 'club' ? [['as.c1', UserPlus], ['as.c2', Info]] as const
-    : [['as.s1', Landmark], ['as.s2', CalendarClock], ['as.s3', CalendarDays], ['as.s4', UtensilsCrossed]] as const);
+  // The opening (owner, Nov 19: "the orb is not in the centre and it should be", as Gemini opens): the light in the middle
+  // with the colonnade in it, the greeting, one starter under it that keeps changing, all of them low over the field
+  const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
+    : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
+  let qi = $state(0); // the question on show
+  $effect(() => {
+    // power saving, less motion: the first question stays; a hidden tab: it waits
+    if (chat.turns.length || power.lite || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const n = SUGGEST.length, id = setInterval(() => { if (!document.hidden) qi = (qi + 1) % n; }, 3600);
+    return () => clearInterval(id);
+  });
+  const pick = (k: (typeof SUGGEST)[number]) => { haptic.tap(); void ask(t(k)); };
+  // Gemini's card (lib/kriGoogle.ts): one quiet question on the empty opening of a student who hasn't answered. It
+  // shares the starters' cell over the field (the taller sets its height for this opening), so going moves nothing:
+  // the starters come up where it was. "Turn on": the yes at once; "Not now": rests 30 days on this phone
+  const offer = untrack(() => session.me?.kriGoogle === false && !resting());
+  let later = $state(false);
+  const asking = $derived(offer && session.me?.kriGoogle === false && !later);
+  function gemini(on: boolean) {
+    if (on) void setKriGoogle(true);
+    else { haptic.tap(); rest(); later = true; }
+  }
+  // The keyboard: Sheet raises the footer over the body and the body stays as it is, so the middle moves itself to the
+  // middle of what is left in view (a transform on the keyboard's timing, no layout), smaller; no room for it: it fades.
+  // Not under a light still flying to its place: it lands first, then goes up
+  const kb = $derived(flying ? 0 : kbd.h);
+  // (room for what the middle holds at its smaller size and 8 px over and under it; layout sizes, not the moved box's)
+  const tight = $derived.by(() => {
+    const last = orb?.parentElement?.lastElementChild as HTMLElement | null;
+    return kb > 0 && !!orb && !!last && (list?.clientHeight ?? 0) - kb < 0.8 * (last.offsetTop + last.offsetHeight - orb.offsetTop) + 16;
+  });
   const down = () => setTimeout(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
   $effect(() => { void chat.turns.length; untrack(down); });
 
@@ -140,7 +219,7 @@
     afisha: TAB_ICON.afisha, forum: TAB_ICON.forum, clubs: TAB_ICON.club, profile: TAB_ICON.profile, tickets: Ticket, friends: UserRound, awards: Trophy,
     subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus, route: Navigation };
   // an off-campus event's way there: its 2GIS link, or 2GIS's search for its typed address (the event page's own rule)
-  const gisOf = (id: number) => { const e = eventById(id); return e ? e.placeUrl || addressGis(e.place) : null; };
+  const gisOf = (id: number) => { const e = eventById(id); return e && !e.online ? e.placeUrl || addressGis(e.place) : null; };
   const shown = (a: AssistAction) => a.type !== 'route' || !!gisOf(a.id); // no way there: no button
   const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
   /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
@@ -199,15 +278,14 @@
 <Sheet {overlay} {opener} icon={Sparkles} tall shut title={t('as.title')}>
   <div class="list" class:flown={!!from} bind:this={list}>
     {#if !chat.turns.length}
-      <!-- as in the AI apps: the greeting and the starters sit over the field, where the thumb is; the space above stays calm -->
-      <div class="hello">
-        <i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"></i>
-        <h2 class="greeting">{t('as.hello', { name: first ? ', ' + first : '' })}</h2>
-        <p class="what clamp-2">{chat.ctx ? t('as.about', { title: chat.ctx.title }) : t('as.what')}</p>
+      <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px">
+        <i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"><span class="mark"><KbtuMark /></span><span class="mark glyph"><Sparkles strokeWidth={2} /></span></i>
+        <h2 class="greeting clamp-2">{chat.ctx ? t('as.about', { title: chat.ctx.title }) : t('as.hello', { name: first ? ', ' + first : '' })}</h2>
+        <!-- every question in one cell: the tallest holds the height, a change moves nothing -->
+        <button class="rot" onclick={() => pick(SUGGEST[qi])}>
+          {#each SUGGEST as k, i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}</span>{/each}
+        </button>
       </div>
-      <div class="sugg"><Group>{#each SUGGEST as [k, Icon] (k)}
-        <Row icon={Icon} title={t(k)} onclick={() => { haptic.tap(); void ask(t(k)); }} />
-      {/each}</Group></div>
     {:else if chat.ctx}
       <!-- engine: ui/Tag could truncate a long label with "…" (an event's title); till then this label is local -->
       <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
@@ -266,7 +344,23 @@
   </div>
 
   {#snippet footer()}
-    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"></i>{/if}
+    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"><span class="mark"><KbtuMark /></span><span class="mark glyph"><Sparkles strokeWidth={2} /></span></i>{/if}
+    {#if !chat.turns.length}
+      <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll -->
+      <div class="over">
+        {#if offer}
+          <div class="gem" class:out={!asking} inert={!asking}>
+            <p class="gt">{t('kri.gT')}</p>
+            <p class="gx">{t('kri.gText')}</p>
+            <div class="btns gb">
+              <Button kind="primary" size="s" full onclick={() => gemini(true)}>{t('kri.gOn')}</Button>
+              <Button kind="secondary" size="s" full onclick={() => gemini(false)}>{t('kri.gLater')}</Button>
+            </div>
+          </div>
+        {/if}
+        <div class="eg" class:out={asking} inert={asking}>{#each SUGGEST as k (k)}<button onclick={() => pick(k)}>{t(k)}</button>{/each}</div>
+      </div>
+    {/if}
     <div class="bar">
       <!-- the map, one tap away as when it had the bar's corner: beside the field, there with or without a conversation -->
       <button class="mapb" aria-label={t('as.map')} onclick={openMap}><MapIcon size={20} /></button>
@@ -278,12 +372,22 @@
 
 <style>
   .list { display: flex; flex-direction: column; gap: var(--s-3); min-height: 100%; padding: 6px 0 4px; }
-  /* empty: everything sits low, over the field; the space above is the calm */
-  .hello { position: relative; margin-top: auto; padding: 0 var(--s-1) var(--s-1); }
-  .greeting { font: 700 var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
-  .what { margin-top: 6px; font: 600 var(--fs-t3)/1.25 var(--font-display); letter-spacing: -0.016em; color: var(--text-3); overflow-wrap: anywhere; animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; }
-  .sugg { animation: down 480ms var(--ease) calc(var(--land, 0ms) + 100ms) backwards; }
-  .flown { --land: 300ms; } /* the light is flying in: the words wait for it to land; no flight, no wait */
+  .list:has(> .mid) { padding: 0; }
+  /* empty: the light in the middle of the body with the words under it. The keyboard: Sheet raises the footer over the
+     body, the middle moves itself (a transform, no layout) or, with no room, fades */
+  .mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--s-2) var(--s-1);
+    transition: transform 250ms cubic-bezier(.2, .8, .3, 1), opacity 180ms ease-out; }
+  .mid.up { transform: translateY(calc(var(--kb) / -2)) scale(0.8); }
+  .mid.tight { opacity: 0; pointer-events: none; }
+  .greeting { max-width: 100%; margin-top: var(--s-5); font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
+  .rot { display: grid; max-width: 100%; padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text-3);
+    font: 600 var(--fs-row)/1.25 var(--font-display); letter-spacing: -0.016em; text-wrap: balance;
+    animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; transition: opacity var(--t-fast); }
+  .rot:active { opacity: 0.6; }
+  /* one leaves, then the next comes up: the two are never read through each other */
+  .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(6px); transition: opacity 240ms ease-in, transform 240ms ease-in; }
+  .rot span.on { opacity: 1; transform: none; transition: opacity 420ms var(--ease) 220ms, transform 420ms var(--ease) 220ms; }
+  .flown { --land: 380ms; } /* the light is flying in: the words wait until it is over them, not on them; no flight, no wait */
   @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); }
@@ -296,14 +400,32 @@
     background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 52%), radial-gradient(circle, rgba(8, 10, 40, 0) 52%, rgba(8, 10, 40, 0.3)); }
   .orb.live::before { animation: turn 7s linear infinite; }
   @keyframes turn { to { transform: rotate(360deg); } }
-  /* over the greeting, out of the flow: with the keyboard up the greeting and all the starters fit as they did, and the
-     light goes up under the sheet's edge with the calm space it stood in */
-  .orb.big { position: absolute; left: var(--s-1); bottom: calc(100% + var(--s-4)); width: 56px; height: 56px; }
+  .orb.big { width: 84px; height: 84px; }
   .orb.big, .orb.fly { box-shadow: 0 10px 28px -8px rgba(98, 104, 255, 0.6); }
   .orb.land { animation: land 520ms var(--ease) backwards; } /* no button to fly from: it comes up in its place */
   @keyframes land { from { opacity: 0; transform: scale(0.6); } }
   .orb.hid { visibility: hidden; }
   .orb.fly { position: absolute; z-index: 1; visibility: hidden; pointer-events: none; }
+
+  .mark { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: rgb(255, 255, 255); }
+  .mark :global(svg) { width: 44%; height: auto; }
+  /* the button's own glyph, its size there (24 of 54) when the light is the button's size: seen only in flight */
+  .glyph { opacity: 0; }
+  .glyph :global(svg) { width: 44.4%; }
+  /* Gemini's card and the starters in one cell: one shows, the other keeps its place hidden */
+  .over { display: grid; margin-bottom: var(--s-2); }
+  .over > * { grid-area: 1 / 1; transition: opacity 220ms var(--ease), visibility 0s; }
+  .over > .out { opacity: 0; visibility: hidden; transition: opacity 160ms ease-out, visibility 0s 160ms; }
+  .gem { align-self: end; display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); border-radius: var(--r-m); background: var(--fill); }
+  .gt { font: 600 var(--fs-body)/1.25 var(--font-text); }
+  .gx { font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); text-wrap: pretty; }
+  .gb { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
+  /* the starters over the field, two by two, the words on two lines; an odd last one takes the row */
+  .eg { align-self: end; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+  .eg button { display: flex; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+    font: 600 var(--fs-sub)/1.25 var(--font-text); text-align: left; text-wrap: balance; overflow-wrap: anywhere; transition: transform var(--t-fast); }
+  .eg button:active { transform: scale(0.96); }
+  .eg button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
   .mine { align-self: flex-end; max-width: 86%; margin-top: var(--s-2); padding: 9px 14px; border-radius: var(--r-l); background: var(--accent-soft); transform-origin: 100% 100%; }
   .mine:first-child { margin-top: 0; }
@@ -347,6 +469,7 @@
   :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     .list *, .orb, .orb::before { animation: none !important; }
+    .mid, .rot span, .over > * { transition: none !important; }
   }
 
   .bar { display: flex; align-items: flex-end; gap: var(--s-2); }

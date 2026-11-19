@@ -1,6 +1,6 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, OwnTr } from './types';
+import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, OwnTr, RejectWhy } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -253,6 +253,8 @@ export const server = {
   roundSlots: (id: Id): Promise<RoundSlot[]> => call('GET', `/rounds/${id}/slots`),
   addSlots: (id: Id, body: { date: string; from: string; to: string; minutes: number; capacity: number; place: string }): Promise<RoundSlot[]> => call('POST', `/rounds/${id}/slots`, body),
   dropSlot: (id: Id): Promise<RoundSlot[]> => call('DELETE', `/round-slots/${id}`),
+  // the venue moved: the shortlisted it concerns hear it once ('limit': the round's three notices today are used up, saved quietly)
+  slotPlace: (id: Id, place: string): Promise<{ slots: RoundSlot[]; notice: 'sent' | 'limit' | 'none' }> => call('PATCH', `/round-slots/${id}`, { place }),
   inviteRound: (id: Id): Promise<{ invited: number }> => call('POST', `/rounds/${id}/invite`),
   bookSlot: (id: Id, slotId: Id | null): Promise<RoundSlot[]> => call('POST', `/rounds/${id}/book`, { slotId }),
   markShowed: (app: Id, came: boolean | null): Promise<{ showed: boolean | null }> => call('POST', `/round-apps/${app}/came`, { came }),
@@ -334,6 +336,12 @@ export const server = {
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
   teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
+  // one attendee's @username, asked on a tap (never in the list): the host's organizer, audited and capped
+  attendeeContact: (id: Id, user: Id): Promise<{ username: string | null; asked?: boolean }> => call('GET', `/events/${id}/people/${user}/contact`),
+  // none: the bot asks them to write to the organizer (a template, his Telegram on its button), once
+  askToWrite: (id: Id, user: Id): Promise<{ asked: boolean }> => call('POST', `/events/${id}/people/${user}/ask`),
+  removePerson: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/people/${user}`), // the organizer's, before the start; the bot tells them
+  removeTeam: (id: Id, team: Id, people: Id[]): Promise<void> => call('DELETE', `/events/${id}/teams/${team}`, { people }), // the roster the confirm showed: changed since, refused
   teamsRemind: (id: Id, user: Id): Promise<{ queued: boolean; consent: boolean; off?: boolean }> => call('POST', `/events/${id}/teams/people/${user}/remind`), // the bot's "agree to teams", once a day
   /** the host club's member asks its President or a Vice to come as a guest, or takes it back; they list and answer */
   teamAsk: (id: Id): Promise<EventCard> => call('POST', `/events/${id}/team-ask`),
@@ -371,7 +379,8 @@ export const server = {
     return URL.createObjectURL(await r.blob());
   },
   /** Head+: the receipt is fine, or rejected (the ticket stops working, the seat goes on, the bot tells the student). */
-  reviewReceipt: (id: Id, reject: boolean): Promise<void> => call('POST', `/receipts/${id}/review`, { reject }),
+  // why: a rejection's reason, which the bot names to the student (server seats.REJECT_WHY)
+  reviewReceipt: (id: Id, reject: boolean, why?: RejectWhy): Promise<void> => call('POST', `/receipts/${id}/review`, why ? { reject, why } : { reject }),
   comments: (kind: 'post' | 'event', id: Id): Promise<CommentThread> => call('GET', `/${kind}s/${id}/comments`), // students (§4.10)
   addComment: (kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread> => call('POST', `/${kind}s/${id}/comments`, { body, asOrg: !!asOrg, ...(replyTo ? { replyTo } : {}) }), // 500 chars, 10 a minute
   setComments: (kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread> => call('PATCH', `/${kind}s/${id}/comments`, { on }), // the club's Head+
@@ -427,9 +436,10 @@ export const server = {
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
   assistant: (q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply> => call('POST', '/assistant', { q, history, context }), // the students' assistant; context: the card it was asked from (the server reads its facts)
+  kriGoogle: (on: boolean): Promise<{ yes: boolean }> => (on ? call('POST', '/assistant/google', { consent: 'kri-g1' }) : call('DELETE', '/assistant/google')), // the assistant's own yes to Google (server assistant.GOOGLE_YES: the card's version), given or taken back
   assistantVote: (mark: string, vote: 'up' | 'down'): Promise<void> => call('POST', '/assistant/vote', { mark, vote }), // 👍/👎 on an answer's signed topic
   assistantSend: (mark: string, pair: string, q: string, a: string): Promise<void> => call('POST', '/assistant/send', { mark, pair, q, a }), // on 👎, the student's own tap: this one signed question and answer, no name
-  eventFill: (org: Id, text: string, have?: Partial<{ title: string; description: string; date: string; start: string; end: string; place: string; price: number }>): Promise<{ title?: string; date?: string; endDate?: string; start?: string; end?: string; place?: string; description?: string; price?: number; emoji?: string; color?: string; tr?: OwnTr }> => call('POST', `/orgs/${org}/events/fill`, have ? { text, have } : { text }), // a new event from its announcement (AI); emoji and color: its cover when no photo
+  eventFill: (org: Id, text: string, have?: Partial<{ title: string; description: string; date: string; start: string; end: string; place: string; price: number }>): Promise<{ title?: string; date?: string; endDate?: string; start?: string; end?: string; place?: string; description?: string; price?: number; emoji?: string; color?: string; tr?: OwnTr; onlineUrl?: string }> => call('POST', `/orgs/${org}/events/fill`, have ? { text, have } : { text }), // a new event from its announcement (AI); emoji and color: its cover when no photo
   qrCheckin: (p: string): Promise<{ title: string; done: boolean; left?: boolean; event?: Id | null; again?: boolean; already?: Ts; flagged?: boolean; team?: boolean /* marked on the event's team list, not as a guest */ }> => call('POST', '/checkin', { p }), // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens: (): Promise<import('./types').ScreenSession[]> => call('GET', '/screens'), // the check-in sessions I run (/show)
   bindScreen: (code: string, session?: Id): Promise<import('./types').ScreenSession> => call('POST', '/screens/bind', { code, session }), // a scan of /show's pairing QR (sh_…); conflict/pick: say which session

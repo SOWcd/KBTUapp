@@ -51,7 +51,8 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
-        WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL GROUP BY r.event_id""", oid)) if head else {}
+        WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL AND c.created_at >= r.created_at
+        GROUP BY r.event_id""", oid)) if head else {}
     own = [e["id"] for e in found if e["org_id"] == oid]  # a co-hosted event's counts are its host's
     saved = dict(rows(con, f"SELECT event_id, COUNT(*) FROM saved_events WHERE event_id IN ({_qs(own)}) GROUP BY event_id", *own)) if head and own else {}
     asked = dict(rows(con, """SELECT x.event_id, COUNT(*) FROM volunteers x JOIN events e ON e.id = x.event_id
@@ -241,6 +242,32 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
 
 
+def online_fields(i: dict, was: str | None) -> dict:
+    """An online event (owner, Nov 19), resolved against the saved one (`was`: events.online; None for a new event):
+    - `online` left out: kept as it is (`onlineUrl` alone is refused: which way it was meant is unclear);
+    - `online: true`: online; `onlineUrl` a link typed by the organizer (any https host, core.online_url), null or ''
+      for none yet, left out to keep the saved link;
+    - `online: false` (or anything but true): not online, the link gone.
+    Online has no place: place and its 2GIS link are cleared whenever the event stays online."""
+    if "online" not in i:
+        if "onlineUrl" in i:
+            raise ApiError("bad_input", "online")
+        online = was
+    elif i["online"] is not True:
+        online = None
+    elif "onlineUrl" not in i:
+        online = was or ""
+    else:
+        raw = i["onlineUrl"]
+        if raw is not None and not isinstance(raw, str):
+            raise ApiError("bad_input", "online")
+        link = core.online_url(raw, typed=True)
+        if (raw or "").strip() and not link:
+            raise ApiError("bad_input", "online")
+        online = link or ""
+    return {"online": online, **({"place": "", "place_url": None} if online is not None else {})}
+
+
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None, vis: str = "public") -> None:
     """A meeting has no price. "For whom" (the tag) is one of the club's own, on a team-only event only (a meeting or
     not: a department's get-together today, its required meeting tomorrow). A Head with a department calls only that
@@ -401,6 +428,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
+    f |= online_fields(body, None)
     if body.get("schoolOnly"):
         f["school"] = _school_only(org, True)
     _partner_ok(f)
@@ -480,7 +508,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] == "cancelled":
             raise ApiError("closed")
-        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body)
+        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body) | online_fields(body, e["online"])
         if "schoolOnly" in body:
             f["school"] = _school_only(org, body["schoolOnly"])
         _partner_ok(f, e)
@@ -527,7 +555,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     sends); within 2 hours of the start or during it, at once and only to those not checked in. A new place also gets a
     line in the event's Updates."""
     eid, moved = e["id"], e["starts_at"] != after["starts_at"]
-    placed = (e["place"], e["place_url"]) != (after["place"], after["place_url"])
+    placed = (e["place"], e["place_url"], e["online"]) != (after["place"], after["place_url"], after["online"])
     if e["status"] != "published" or not (moved or placed):
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
@@ -554,7 +582,7 @@ def change_place(con, v: Viewer, eid: int, place: object) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] != "published" or end_of(e) < core.now():
             raise ApiError("closed")
-        con.execute("UPDATE events SET place = ?, place_url = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
+        con.execute("UPDATE events SET place = ?, place_url = NULL, online = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)
         _changed(con, v, e, after)
         cohost_changed(con, e, after)
@@ -805,17 +833,19 @@ def events_gone(con) -> tuple[list[str], list[str]]:
 
 
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3)."""
+    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3). Someone
+    the organizers removed who had paid stays at the end ('cancelled'), their receipt a tap away for the refund, until
+    they sign up again; a receipt counts only for the seat it was sent for (since the seat's created_at)."""
     e = _staff_event(con, v, eid, "events", cohost=True)
     paid = can(con, v, e["org_id"], "events")
-    order = {"going": 0, "hold": 1, "waitlist": 2}
+    order = {"going": 0, "hold": 1, "waitlist": 2, "cancelled": 3}
     found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.reviewed_by, ac.receipt_id IS NOT NULL AS auto,
             c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
-        LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
+        LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
-        WHERE r.event_id = ? AND r.status != 'cancelled'""", eid)
+        WHERE r.event_id = ? AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business (review, Oct 30)
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
@@ -847,6 +877,76 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     return e, found
 
 
+REVEALS_A_DAY, REVEAL_AFTER = 40, 7 * 86400
+ASK_DELAY = 90  # an ask waits this long in the queue: during a deploy an old postman (no org_ask template) is gone by then
+_REACH = ("attendee_contact", "attendee_ask")  # the audit log's lines for both, counted together against the cap
+
+
+def _reach(con, v: Viewer, eid: int, uid: int) -> tuple[sqlite3.Row, bool, str, str]:
+    """An organizer reaching one attendee (inside the caller's tx): the host club's own organizer (the receipts' right;
+    not a co-host, not staff from Admin), the person holds a seat on this event (a ticket, or a hold waiting on its
+    receipt), the event published (not a draft, not cancelled), up to a week after the end. (the attendee's users row,
+    blocked either way, the audit target and data)."""
+    if not v.student or v.staff_org:
+        raise ApiError("forbidden")
+    e = _staff_event(con, v, eid, "events")
+    t = core.now()
+    if e["status"] != "published" or e["hidden_at"] is not None or end_of(e) + REVEAL_AFTER < t:  # hidden by moderation: as the bot's check
+        raise ApiError("closed")
+    u = one(con, """SELECT u.id, u.tg_username FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.user_id = ?
+        AND (r.status = 'going' OR r.status = 'hold' AND r.hold_until >= ?)""", eid, uid, t)
+    if uid == v.id or not u:
+        raise ApiError("not_found")
+    blocked = bool(one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", uid, v.id, v.id, uid))
+    return u, blocked, f"user:{uid}", json.dumps({"event": eid})
+
+
+def _asked(con, target: str, data: str) -> bool:
+    """Any of the event's organizers already asked this person to write (one ask per person and event, whoever asks)."""
+    return bool(one(con, "SELECT 1 FROM audit_log WHERE action = 'attendee_ask' AND target = ? AND data = ?", target, data))
+
+
+def _count(con, v: Viewer, action: str, target: str, data: str) -> None:
+    """One line of the audit log, within the 40 a day (both kinds together)."""
+    if one(con, f"SELECT COUNT(*) FROM audit_log WHERE action IN {_REACH} AND actor_id = ? AND at > ?", v.id, core.now() - 86400)[0] >= REVEALS_A_DAY:
+        raise ApiError("rate_limited")
+    log_action(con, v.id, action, target, data)
+
+
+def attendee_contact(con, v: Viewer, eid: int, uid: int) -> dict:
+    """"Write in Telegram" on an attendee's row: one person's @username, asked for one at a time (never in the list).
+    Each reveal is in the audit log, 40 a day per organizer (the same person and event again that day isn't counted
+    twice). No username, or a block either way (never told apart): null, unlogged; asked: someone of the event's
+    organizers already asked them to write."""
+    with tx(con):  # the count and the new line in one write: two taps at once never pass the cap together
+        u, blocked, target, data = _reach(con, v, eid, uid)
+        if not u["tg_username"] or blocked:
+            return {"username": None, "asked": _asked(con, target, data)}
+        if not one(con, "SELECT 1 FROM audit_log WHERE action = 'attendee_contact' AND actor_id = ? AND target = ? AND data = ? AND at > ?",
+                   v.id, target, data, core.now() - 86400):
+            _count(con, v, "attendee_contact", target, data)
+    return {"username": u["tg_username"]}
+
+
+def attendee_ask(con, v: Viewer, eid: int, uid: int, nick: str | None) -> dict:
+    """"Ask them to write to me", for someone the reveal gave no username: the bot sends them a template naming the
+    event and the club, its button the organizer's own Telegram (he shows himself; nothing of theirs is shown). nick:
+    his username as his signed session says now, kept with the message (the bot drops it if his changes). Once per
+    person and event for the whole club, within the same 40 a day. A block either way goes exactly like a real ask on
+    his side (the cap, the audit line, asked) and only the message stays unsent: a block never shows."""
+    with tx(con):
+        u, blocked, target, data = _reach(con, v, eid, uid)
+        if not nick:
+            raise ApiError("bad_input", "own_username")  # his button would have nowhere to go
+        if u["tg_username"] and not blocked:
+            raise ApiError("bad_input")  # they can be written to: no bot message in their chat for it
+        if not _asked(con, target, data):
+            _count(con, v, "attendee_ask", target, data)
+            if not blocked:
+                notify(con, uid, "org_ask", f"oa:{eid}:{v.id}", json.dumps({"nick": nick}), after=core.now() + ASK_DELAY)
+    return {"asked": True}
+
+
 def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True) -> sqlite3.Row | str:
     """A badge QR at the door: someone who forgot to register, or was just passing by, comes in.
     A ticket they hold is checked in as usual; a free event registers them on the spot (walk_in); a paid one
@@ -862,6 +962,8 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
         return "cancelled" if r else "not_found"
     if e["price"]:
         return "paid"
+    if r and r["cancel_reason"] == "removed" and r["status"] == "cancelled":
+        return "cancelled"  # the organizers took them off: back only by signing up again
     if r:  # waitlisted or cancelled earlier, at the door now
         con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                     (t, r["id"]))
@@ -887,6 +989,8 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
         dmp = e["visibility"] == "leaders" and one(con, "SELECT 1 FROM orgs WHERE id = ? AND slug = 'dmp'", e["org_id"])
         if dmp and not _visible(con, Viewer(uid, "user", True), e):
             return True
+        if r and r["status"] == "cancelled" and r["cancel_reason"] == "removed":
+            return False  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp \
                 or e["visibility"] == "members" and not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
             return False
@@ -956,7 +1060,9 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 def flagged(con, rid: int) -> bool:
     """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
     A spot check or a receipt read in part ('spot', 'partial') isn't a warning: nothing wrong was found, the student walks in."""
-    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags NOT IN ('', 'spot', 'partial') AND reviewed_at IS NULL", rid) is not None
+    # only this seat's receipts: one from before a removal or a cancel (the seat's created_at restarts on a new sign-up) is the old seat's
+    return one(con, """SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.registration_id = ? AND c.status = 'accepted'
+        AND c.flags NOT IN ('', 'spot', 'partial') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long

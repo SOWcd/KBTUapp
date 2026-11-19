@@ -328,7 +328,7 @@ def test_parallel_start_requests_write_seen_at_once(env, monkeypatch):
 
 def test_support_cards_found_by_index(env):
     """/api/me's support cards: was, account.support()'s `lower(u.tg_username) IN (...)` scanned the whole users table on
-    every call (1.8 ms at 30k users); migration 188 indexes lower(tg_username), so it's a lookup whatever the table's size."""
+    every call (1.8 ms at 30k users); migration 192 indexes lower(tg_username), so it's a lookup whatever the table's size."""
     c, cfg = env
     con = db.connect(cfg.db_path)
     seen: list[str] = []

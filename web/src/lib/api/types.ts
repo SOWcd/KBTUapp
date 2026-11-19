@@ -126,7 +126,7 @@ export interface AdminStats { online: number; day: number; week: number; month: 
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
 export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
-export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number]>>;
+export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number, number, number]>>; // [ok, fail, ms, timed]
   accounts?: Record<string, { usage?: unknown; limits?: unknown }>; // Munito's own view per key, as Munito gives it
   events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[];
@@ -244,7 +244,7 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { person: PersonRef | null; items: CreditItem[] }
+export interface CreditPerson { person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
@@ -316,6 +316,7 @@ export interface Me {
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
   subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in
   teams?: { consent: boolean };   // GET /api/me only: my own consent to team events (server evteams.CONSENT)
+  kriGoogle?: boolean; // GET /api/me only: Google may answer my assistant first (key, switch, my policy); my own yes to it (server assistant.GOOGLE_YES); absent: never
   reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
@@ -405,6 +406,8 @@ export interface EventCard {
   publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card
   place: string;
   placeUrl: string | null;      // 2GIS link for off-campus places
+  online: boolean;              // an online event: no place, the word "Online" in the reader's language
+  onlineUrl: string | null;     // its meeting link (server-checked https; any host when typed by hand, so its host is shown)
   cover: Media | null;          // photo or poster; null → emoji + colour
   video?: Video | null;         // a short vertical video the Feed plays (ready ones only; the editor also sees one being compressed)
   slides: Media[];              // photos after the cover, swiped sideways (PLAN 33)
@@ -574,6 +577,8 @@ export interface EventInput {
   endsAt: Ts | null;
   place: string;
   placeUrl: string | null;
+  online?: boolean;            // on: the place is cleared; left out: kept
+  onlineUrl?: string | null;   // its meeting link, https; null: none yet
   emoji: string;
   color: string;
   seats: number | null;
@@ -622,6 +627,8 @@ export interface Attendee { answers?: { q: string; a: string }[] | null; person:
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */
+/** why the organizer rejected a receipt; the bot names it to the student (server seats.REJECT_WHY) */
+export type RejectWhy = 'short' | 'other_event' | 'used' | 'unclear';
 export interface AttendeeReceipt {
   id: Id; flags: string[]; reviewed: boolean; auto: boolean; at: Ts;
   amount?: number | null; no?: string | null; sender?: string | null; recipient?: string | null; paidAt?: Ts | null;

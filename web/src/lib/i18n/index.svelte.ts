@@ -71,7 +71,7 @@ export function fmtNum(n: number): string {
 
 /** Tenge amount: «3 000 ₸». */
 /** An event's place as shown; empty while it's to be confirmed (a room asked of DMP by memo) */
-export const placeOf = (place: string): string => place || t('event.placeTba');
+export const placeOf = (place: string, online?: boolean): string => place || t(online ? 'event.online' : 'event.placeTba');
 /** A class's subject in the app's language when a portal page in it was sent (or the old sign-in brought it), else the last page's */
 export const subjectOf = (c: { subject: string; names?: Partial<Record<Lang, string>> | null }): string => c.names?.[i18n.lang] || c.subject;
 

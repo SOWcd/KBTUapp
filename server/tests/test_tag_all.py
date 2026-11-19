@@ -3,7 +3,10 @@ seen ones, then the members Telegram lists to our bot over MTProto (mtbot.member
 from __future__ import annotations
 
 import asyncio
+import os
+import stat
 import time
+import types
 
 from kbtu import bot, db, logic, tgc
 from test_core import env, login  # noqa: F401  (env: the fixture)
@@ -141,12 +144,17 @@ def test_discussion_group_never_calls(env, monkeypatch):
 
 
 def test_anyone_in_the_chat_calls(env, monkeypatch):
-    """A plain member and someone the app doesn't hold in the club: their own message in the chat proves they're in it."""
+    """A plain member calls; someone with no account in the app, or a guest who only opened it, is told to sign up (owner, Nov 19)."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
     assert _tagged(_run(cfg, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
     bot._tagged.clear()
-    assert _tagged(_run(cfg, con, _Http(), _msg(800))) == [20, 21, 31, 32, 33, 34, 35, 36, 37]   # not even in the app
+    http = _Http()
+    assert _tagged(_run(cfg, con, http, _msg(800))) == []                     # not in the app: nobody is called, told why
+    assert http.sent[0]["text"] == bot.texts.bot_message("ru", "all_app")[0]
+    login(c, 801, "u801")
+    con.execute("DELETE FROM students WHERE user_id = (SELECT id FROM users WHERE tg_id = 801)")  # opened the app, never signed up
+    assert _tagged(_run(cfg, con, _Http(), _msg(801))) == []
 
 
 def test_live_list_union_order_and_cap(env, monkeypatch):
@@ -208,6 +216,7 @@ class _Client:
     def __init__(self):
         _Client.made += 1
         self.authed = self.connected = False
+        self.session = types.SimpleNamespace(save=lambda: "")  # nothing to keep: no file written
 
     async def connect(self):
         self.connected = True
@@ -456,3 +465,153 @@ def test_seen_who_is_never_kept(env, monkeypatch):
     other = logic.create_org(con, None, "Go", "GO", "crown_3d", False)
     con.execute("INSERT INTO chat_seen VALUES (-100, 514, ?, 1)", (other,))
     assert 514 not in logic.tag_all(con, -100, 21) and 510 in logic.tag_all(con, -100, 21)
+
+
+class _Telethon:
+    """telethon.TelegramClient as mtbot builds it, over the real session class: sign_in gives it a DC and an auth key."""
+    signed = 0
+
+    def __init__(self, session, api_id, api_hash, **kw):
+        self.session, self.connected = session, False
+        assert kw["receive_updates"] is False and kw["catch_up"] is False
+
+    async def connect(self):
+        self.connected = True
+
+    async def is_user_authorized(self):
+        return self.session.auth_key is not None
+
+    async def sign_in(self, bot_token):
+        from telethon.crypto import AuthKey
+        _Telethon.signed += 1
+        self.session.set_dc(2, "149.154.167.51", 443)
+        self.session.auth_key = AuthKey(os.urandom(256))
+
+    async def disconnect(self):
+        self.connected = False
+
+
+def test_mtbot_session_survives_a_restart(env, monkeypatch):
+    """The auth goes to mtbot.session beside the database (0600, the string alone, no names); the next process start
+    loads it and doesn't sign in; a dead key deletes it; the bot's own shutdown keeps it."""
+    from dataclasses import replace
+    import telethon
+    from telethon.errors import AuthKeyDuplicatedError
+    from telethon.sessions import StringSession
+    from kbtu import mtbot
+    c, cfg = env
+    cfg = replace(cfg, tg_api_id="1", tg_api_hash="x")
+    for k, v in (("_memo", {}), ("_client", None), ("_loop", None), ("_down_until", 0.0)):
+        monkeypatch.setattr(mtbot, k, v)
+    monkeypatch.setattr(telethon, "TelegramClient", _Telethon)
+    _Telethon.signed = 0
+    fail = []
+
+    async def read(client, chat, cap):
+        client.session.process_entities(object())  # what Telethon calls with every user it sees: kept nowhere
+        if fail:
+            raise fail.pop()
+        return mtbot.Roster([chat], False, set())
+    monkeypatch.setattr(mtbot, "_read", read)
+    path = mtbot._path(cfg)
+    assert str(path) == f"{cfg.db_path}.mtbot-123.session" and not path.exists()   # named as the lock is, and after the bot
+
+    def start(chat):  # a new event loop: a new process as far as mtbot knows (its client is made afresh)
+        mtbot._memo.clear()
+        mtbot._down_until = 0
+        return asyncio.run(mtbot.members(cfg, chat, 5))
+    assert start(-100).ids == [-100] and _Telethon.signed == 1
+    saved = path.read_text()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600 and not list(path.parent.glob("*.tmp"))
+    s = StringSession(saved)                                   # nothing but the auth: it parses whole as a session string
+    assert (s.dc_id, s.server_address, s.port) == (2, "149.154.167.51", 443) and s.auth_key and saved == s.save()
+    assert start(-200).ids == [-200] and _Telethon.signed == 1 and path.read_text() == saved   # loaded, no sign-in
+    asyncio.run(mtbot.close())                                 # the bot's shutdown keeps it
+    assert path.exists()
+
+    fail.append(AuthKeyDuplicatedError(request=None))
+    assert start(-300) is None and not path.exists() and mtbot._client is None   # a dead key: gone, a fresh sign-in next
+    assert start(-300).ids == [-300] and _Telethon.signed == 2 and path.read_text() != saved
+
+    path.write_text("not a session")                           # a broken file: a fresh sign-in, not a crash
+    assert start(-400).ids == [-400] and _Telethon.signed == 3 and StringSession(path.read_text()).auth_key
+
+
+def _mt(env, monkeypatch, fail=None):
+    """mtbot over _Telethon; start(chat) is a fresh process start."""
+    from dataclasses import replace
+    import telethon
+    from kbtu import mtbot
+    cfg = replace(env[1], tg_api_id="1", tg_api_hash="x")
+    for k, v in (("_memo", {}), ("_client", None), ("_loop", None), ("_down_until", 0.0)):
+        monkeypatch.setattr(mtbot, k, v)
+    monkeypatch.setattr(telethon, "TelegramClient", _Telethon)
+    _Telethon.signed = 0
+    fail = [] if fail is None else fail
+
+    async def read(client, chat, cap):
+        if fail:
+            raise fail.pop()
+        return mtbot.Roster([chat], False, set())
+    monkeypatch.setattr(mtbot, "_read", read)
+
+    def start(chat):
+        mtbot._memo.clear()
+        mtbot._down_until = 0
+        return asyncio.run(mtbot.members(cfg, chat, 5))
+    return cfg, mtbot, start, mtbot._path(cfg)
+
+
+def test_mtbot_session_never_follows_a_planted_link(env, monkeypatch, tmp_path):
+    """Review: a link where the file is, or a file others may read, is refused (deleted, a fresh sign-in); the write
+    never goes through a link: a fresh temp name, and the rename replaces a link itself."""
+    cfg, mtbot, start, path = _mt(env, monkeypatch)
+    target = tmp_path / "victim"
+    target.write_text("keep me")
+    path.symlink_to(target)
+    assert start(-100).ids == [-100] and _Telethon.signed == 1
+    assert target.read_text() == "keep me" and not path.is_symlink() and path.is_file()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    planted = path.with_name(path.name + ".tmp")                  # the old fixed temp name: never written now
+    planted.symlink_to(target)
+    path.unlink()
+    assert start(-100).ids == [-100] and target.read_text() == "keep me" and path.is_file() and not path.is_symlink()
+    os.chmod(path, 0o640)                                         # readable by its group: not trusted
+    assert start(-200).ids == [-200] and _Telethon.signed == 3 and stat.S_IMODE(path.stat().st_mode) == 0o600
+    os.unlink(path)
+    os.mkfifo(path, 0o600)                                        # not a regular file: refused at once, never waited on
+    assert start(-300).ids == [-300] and _Telethon.signed == 4 and path.is_file()
+
+
+def test_mtbot_forgets_an_unknown_key(env, monkeypatch):
+    """Review: AuthKeyNotFound (the connection's own error, not an RPCError) forgets the file too; a file that can't be
+    deleted is logged, and the client is dropped all the same."""
+    from pathlib import Path
+    from telethon.errors import AuthKeyNotFound
+    fail = []
+    cfg, mtbot, start, path = _mt(env, monkeypatch, fail)
+    assert start(-100).ids == [-100] and path.exists()
+    fail.append(AuthKeyNotFound())
+    assert start(-100) is None and not path.exists() and mtbot._client is None
+    assert start(-100).ids == [-100] and _Telethon.signed == 2 and path.exists()
+
+    def stuck(self, missing_ok=False):
+        raise PermissionError("read-only")
+    monkeypatch.setattr(Path, "unlink", stuck)
+    fail.append(AuthKeyNotFound())
+
+    async def dead():
+        out = await mtbot.members(cfg, -200, 5)
+        return out, mtbot._client
+    mtbot._memo.clear()
+    assert asyncio.run(dead()) == (None, None) and path.exists()   # no exception out of /all
+
+
+def test_mtbot_session_per_database_and_bot(env, monkeypatch):
+    """Review: two databases in one directory, or another bot's token, never share a file; no id: no file."""
+    from dataclasses import replace
+    from kbtu import mtbot
+    cfg = env[1]
+    paths = {mtbot._path(replace(cfg, db_path=d, bot_token=t)) for d in ("/v/a.db", "/v/b.db") for t in ("11:x", "22:x")}
+    assert len(paths) == 4 and all("x" not in p.name.split("mtbot")[1] for p in paths)    # the id, never the secret
+    assert mtbot._path(replace(cfg, bot_token="secret")) is None and mtbot._path(replace(cfg, db_path=":memory:")) is None

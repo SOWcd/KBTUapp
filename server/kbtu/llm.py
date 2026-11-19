@@ -29,6 +29,8 @@ URLS = {
     # APInex (apinex.bond/llms.txt): an OpenAI-compatible reseller; free/* models spend a daily allowance
     # (20M weighted tokens, V4.1 Flash weighs 3) at 15 req/min per account (api/public/subscriptions, /rate-limits)
     "apinex": "https://api.apinex.bond/v1/chat/completions",
+    # Google's OpenAI-compatible endpoint (aistudio.google.com/docs/openai, Nov 19): the key as a Bearer header, never in the URL
+    "google": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 }
 # the biggest free limits first (Oct 29): APInex (owner's pick), Munito (rate limits only, no daily cap), Groq (~1K
 # req/day per model), Cloudflare (10k neurons/day for all its models; Nov 13: deepseek-v4-pro, kimi-k2.6 and glm-5.3-flash
@@ -42,6 +44,18 @@ REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh
 TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
+# Google, the assistant's first try (chat's lead=; app.py: ASSIST_LEAD not off and the student's own yes,
+# assistant.GOOGLE_YES): series 4 only (owner), the one on the free tier. Free tier: often 503 "high demand" (Nov 19:
+# 2 of 3 calls answered), so one quick retry, then the usual chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
+# ponytail: real answers took 3.1 to 6.5 s (Nov 19, effort low, 700 tokens), so 9 s lets them through; a failing Google
+# costs a student up to 9 s more than before, and leaves the chain 21 s of the assistant's 30 s (eu_ai's whole).
+# Lower it once the admin's AI page shows Google's average (ms / ok)
+GOOGLE = "google:gemini-4-hydrogen"
+LEAD_WAIT = 9.0
+LEAD_BACKOFF = 0.4
+# Gemini 4 can't stop thinking and its thinking counts in max_tokens (aistudio.google.com/docs/thinking, Nov 19): any
+# effort asked becomes its lowest level, "low" ("none" and "minimal" are refused there)
+GOOGLE_EFFORT = "low"
 RACE_MOST = 3   # race: links asked at once, at most (each a request on someone's rate limit)
 
 
@@ -77,7 +91,8 @@ def links(cfg, chain: str | None = None) -> list[Link]:
             "munitoeu": [(f"munitoeu{i + 1 if i else ''}", k) for i, k in enumerate(cfg.munito_keys) if k],
             "openrouter": [("openrouter", cfg.openrouter_key)] if cfg.openrouter_key else [],
             "groq": [("groq", cfg.groq_key)] if cfg.groq_key else [],
-            "apinex": [("apinex", cfg.apinex_key)] if cfg.apinex_key else []}
+            "apinex": [("apinex", cfg.apinex_key)] if cfg.apinex_key else [],
+            "google": [("google", cfg.gemini_key)] if cfg.gemini_key else []}
     out = []
     for item in (chain or cfg.ai_chain or CHAIN).split(","):
         provider, _, model = item.strip().partition(":")
@@ -90,9 +105,10 @@ def available(cfg) -> bool:
     return bool(links(cfg))
 
 
-def _count(path: str | None, link: str, ok: bool) -> None:
-    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>). Its own short connection:
-    a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
+def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
+    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>): [ok, fail, ms, timed], ms the
+    sum of the timed answers' milliseconds (average = ms / timed; rows from before Nov 19 are [ok, fail]). Its own short
+    connection: a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
     if not path:
         return
     from . import db  # here: llm is imported by db's users
@@ -102,10 +118,20 @@ def _count(path: str | None, link: str, ok: bool) -> None:
             key = f"ai_use:{time.strftime('%Y-%m-%d', time.gmtime())}"
             row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
             use = json.loads(row[0]) if row else {}
-            use.setdefault(link, [0, 0])[0 if ok else 1] += 1
+            n = use.setdefault(link, [0, 0])
+            n += [0] * (4 - len(n))  # an old [ok, fail]: its answers were never timed
+            n[0 if ok else 1] += 1
+            if ok:
+                n[2] += ms
+                n[3] += 1
             c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(use)))
     finally:
         c.close()
+
+
+def _rest_until(name: str, until: float) -> None:
+    """A rest only ever grows: a later failure (a lead's retry) never shortens one a Retry-After set."""
+    _rest[name] = max(_rest.get(name, 0), until)
 
 
 def _rest_for(r: httpx.Response) -> float:
@@ -117,7 +143,8 @@ def _rest_for(r: httpx.Response) -> float:
 
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
                check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
-               timeout: float = TIMEOUT, chain: str | None = None, race: bool = False, effort: str | None = None) -> tuple[str, str]:
+               timeout: float = TIMEOUT, chain: str | None = None, race: bool = False, effort: str | None = None,
+               lead: str | None = None, lead_ok: Callable[[], bool] | None = None) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
@@ -126,8 +153,12 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     effort: Munito's `reasoning_effort` ("none": no thinking first). Measured on prod, Nov 16: an event's announcement sent
     both DeepSeek flash models reasoning through all 3500 tokens with no answer (21-37 s each, then the next link); with
     "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one,
-    and a 400 rests its link for hours."""
-    answered = False
+    and a 400 rests its link for hours. lead: links ("provider:model,...", outside only= and chain=) asked first, each
+    within LEAD_WAIT and once more after a busy failure; then everything above as without it. No key: nothing asked.
+    lead_ok: asked (in a thread) right before each send to a lead; False: that lead is skipped, the chain runs (the
+    student's yes withdrawn while the question was on its way)."""
+    answered = busy = False
+    after = None  # the last busy answer's Retry-After, in seconds (inf: one we can't read)
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
     if only:  # stable: each provider's links keep the chain's order
@@ -137,26 +168,36 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             for x in g[turn % len(g):] + g[:turn % len(g)]]
     awake = [x for x in pool if _rest.get(x.name, 0) <= time.time()]
 
-    async def ask(link) -> str | None:
-        nonlocal answered
+    async def ask(link, wait: float = timeout) -> str | None:
+        nonlocal answered, busy, after
         t0 = time.time()
+        busy, after = False, None
+        thought = effort if link.provider in EFFORT_OK else GOOGLE_EFFORT if link.provider == "google" else None
         try:
-            r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=timeout,
+            r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=wait,
                                 json={"model": link.model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature,
-                                      **({"reasoning_effort": effort} if effort and link.provider in EFFORT_OK else {})})
+                                      **({"reasoning_effort": thought} if effort and thought else {})})
         except httpx.HTTPError as exc:
+            busy = True
             log.warning("ai %s: %s", link.name, type(exc).__name__)
-            _rest[link.name] = time.time() + REST
+            _rest_until(link.name, time.time() + REST)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         if r.status_code in (429, 503) or r.status_code >= 500:
-            _rest[link.name] = time.time() + _rest_for(r)
+            busy = True
+            if (hint := r.headers.get("retry-after")) is not None:
+                try:
+                    after = float(hint)
+                except ValueError:
+                    after = float("inf")
+            _rest_until(link.name, time.time() + _rest_for(r))
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
-            _rest[link.name] = time.time() + REST_BROKEN
-            log.warning("ai %s: http %d: %s", link.name, r.status_code, r.text[:160].replace("\n", " "))
+            _rest_until(link.name, time.time() + REST_BROKEN)
+            said = "(withheld: it repeats the key)" if link.token in r.text else r.text[:160].replace("\n", " ")  # never headers
+            log.warning("ai %s: http %d: %s", link.name, r.status_code, said)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         try:
@@ -164,7 +205,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             choice = (body.get("choices") or body.get("result", {}).get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content")
             cut = choice.get("finish_reason") == "length"
-        except (ValueError, AttributeError, TypeError):
+        except (ValueError, AttributeError, TypeError, KeyError, IndexError):  # JSON of another shape ("choices": {...})
             text, cut = None, False
         answered = True
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
@@ -172,8 +213,31 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         log.warning("ai %s answered in %.1f s", link.name, time.time() - t0)  # a warning: the server's log keeps warnings, the timing shows there
-        await asyncio.to_thread(_count, path, link.name, True)  # a write: never on the event loop
+        await asyncio.to_thread(_count, path, link.name, True, round((time.time() - t0) * 1000))  # a write: never on the event loop
         return text
+
+    async def lead_try(link) -> str | None:
+        for again in (False, True):
+            if lead_ok is not None and not await asyncio.to_thread(lead_ok):
+                return None
+            text = await ask(link, LEAD_WAIT)
+            # a retry only after a busy answer that didn't ask for a longer wait than ours
+            if text is not None or again or not busy or (after or 0) > LEAD_BACKOFF:
+                return text
+            await asyncio.sleep(LEAD_BACKOFF)
+
+    for link in links(cfg, lead) if lead else ():
+        if _rest.get(link.name, 0) > time.time():  # failed both tries lately: the chain at once
+            continue
+        try:  # the wall clock for both tries and their counting: the chain starts within LEAD_WAIT whatever happens
+            text = await asyncio.wait_for(lead_try(link), LEAD_WAIT)
+        except Exception as exc:  # noqa: BLE001 - out of time, or anything its answer raised: a failed lead, the chain runs
+            log.warning("ai %s: lead given up (%s)", link.name, type(exc).__name__)
+            _rest_until(link.name, time.time() + REST)
+            continue
+        if text is not None:
+            _rest.pop(link.name, None)  # the retry answered: not resting for the first try's 503
+            return text, link.name
 
     # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
     # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often)
@@ -236,8 +300,8 @@ async def munito_account(cfg, http: httpx.AsyncClient) -> dict:
 
 
 def usage(con, days: int = 7) -> dict[str, dict[str, list[int]]]:
-    """{day: {link: [answers, failures]}} for the last days; and which links rest now (this process's)."""
+    """{day: {link: [answers, failures, ms, timed]}} for the last days (old [ok, fail] rows padded with zeros)."""
     out = {}
     for k, v in con.execute("SELECT key, value FROM meta WHERE key LIKE 'ai_use:%' ORDER BY key DESC LIMIT ?", (days,)).fetchall():
-        out[k.split(":", 1)[1]] = json.loads(v)
+        out[k.split(":", 1)[1]] = {link: n + [0] * (4 - len(n)) for link, n in json.loads(v).items()}
     return out

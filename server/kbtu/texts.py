@@ -174,6 +174,12 @@ def when(ts: int, lang: str) -> str:
     return f"{day}, {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
+def when_span(ts: int, end: int, lang: str) -> str:
+    """'4 октября, 14:00–18:00': a walk-in window's start and end, Almaty time."""
+    e = time.gmtime(end + 5 * 3600)
+    return f"{when(ts, lang)}–{e.tm_hour:02d}:{e.tm_min:02d}"
+
+
 # Secret Santa's terms under an invite (bot._santa): the budget a number, the date the server's; each only when set
 SANTA_TERMS = {"ru": ("подарок до {budget}\u00a0₸", "вишлисты до {until}"), "kk": ("сыйлық {budget}\u00a0₸ дейін", "тілек тізімдері {until} дейін"),
                "en": ("gift up to {budget}\u00a0₸", "wishlists until {until}")}
@@ -207,6 +213,7 @@ BOT = {
         "group_on": ("👋 Я на месте. Этот чат подключён к KBTU App, заявки на вход проверяю сам.", "Открыть KBTU App"),
         "all_none": ("👀 Пока некого звать: я никого здесь не знаю. Запомню тех, кто напишет.", ""),
         "all_soon": ("⏳ Всех только что звали. Попробуй через несколько минут.", ""),
+        "all_app": ("📲 Звать всех могут те, кто зарегистрирован в KBTU App.", ""),
         "group_off": ("👋 Привет! Этот чат пока не подключён. Админ чата делает меня админом, а потом в приложении открывает Студия → Чаты → «Привязать группу».", "Открыть KBTU App"),
         "meet_call": ("⏰ Через час — <b>{title}</b>\n📍 {place}\nЕсли в это время нет занятий, явка обязательна.", "Открыть событие"),
         "door_open": ("🚪 Вход на <b>{title}</b> открыт — приходите\n📍 {place}", "🎟 Открыть билет"),
@@ -220,6 +227,9 @@ BOT = {
         "seat_free": ("🎉 Освободилось место — ты идёшь на <b>{title}</b>!\n🗓 {when} · {place}", "🎟 Мой билет"),
         "seat_hold": ("🎉 Освободилось место на <b>{title}</b>!\n🗓 {when} · {place}\nОплати и загрузи чек за 30 минут, иначе место уйдёт следующему.", "💳 Оплатить"),
         "receipt_rejected": ("😔 Организаторы <b>{title}</b> ({org}) отклонили твой чек, билет больше не действует. Если это ошибка, напиши им.", "Открыть событие"),
+        "receipt_rejected_why": ("😔 Организаторы <b>{title}</b> ({org}) отклонили твой чек: {why}. Билет больше не действует. Если запись ещё открыта, можно записаться снова и прикрепить новый чек. Если это ошибка, напиши им.", "Открыть событие"),
+        "org_ask": ("✉️ Организатор <b>{title}</b> ({org}) просит написать ему по твоему билету.", "✍️ Написать организатору"),
+        "seat_removed": ("😔 Организаторы <b>{title}</b> ({org}) убрали тебя из списка участников. Если ты платил(а), по возврату напиши им. Пока запись открыта, можно записаться снова.", "Открыть событие"),
         "receipt_ok": ("🎟 Чек принят — ты идёшь на <b>{title}</b>!\nБилет уже в приложении.", "🎟 Открыть билет"),
         "receipt_ok_team": ("🎟 Чек принят — ты идёшь на <b>{title}</b>!\nДальше команда: создай свою, вступи по ссылке друга или жди — приложение подберёт.", "Открыть событие"),
         "casting_open": ("📣 <b>{org}</b> проводит кастинг: {when}. Без записи, просто приходи.", "Открыть"),
@@ -228,6 +238,7 @@ BOT = {
         "round_interview": ("🎤 Ты прошёл первый этап набора в <b>{org}</b>! Выбери время собеседования.", "🗓 Выбрать время"),
         "round_iv_nudge": ("⏰ <b>{org}</b> ждёт: ты ещё не выбрал время собеседования.", "🗓 Выбрать время"),
         "round_iv_remind": ("🎤 Собеседование в <b>{org}</b>: {when}\n📍 {place}", "Открыть"),
+        "round_place": ("📍 <b>{org}</b>: место собеседования изменилось\n🗓 {when}\n📍 {place}", "Открыть"),
         "round_yes": ("🎉 Тебя приняли в <b>{org}</b>! Добро пожаловать в команду.", "Открыть клуб"),
         "round_yes_dept": ("🎉 Тебя приняли в <b>{org}</b>, твой департамент — <b>{dept}</b>! Добро пожаловать в команду.", "Открыть клуб"),
         "round_yes_group": ("🎉 Тебя приняли в <b>{org}</b>! Добро пожаловать в команду. Ссылка на группу клуба ждёт в приложении.", "Вступить в группу"),
@@ -406,6 +417,7 @@ BOT = {
         "group_on": ("👋 Мен осындамын. Бұл чат KBTU App-қа қосылған, кіру өтінімдерін өзім тексеремін.", "KBTU App ашу"),
         "all_none": ("👀 Әзірге шақыратын ешкім жоқ: мұнда ешкімді білмеймін. Жазғандарды есте сақтаймын.", ""),
         "all_soon": ("⏳ Бәрін жаңа ғана шақырды. Бірнеше минуттан кейін қайталап көр.", ""),
+        "all_app": ("📲 Бәрін KBTU App-қа тіркелгендер ғана шақыра алады.", ""),
         "group_off": ("👋 Сәлем! Бұл чат әлі қосылмаған. Чат әкімшісі мені әкімші етеді, содан кейін қосымшада Студия → Чаттар → «Топты байланыстыру» ашады.", "KBTU App ашу"),
         "meet_call": ("⏰ Бір сағаттан кейін — <b>{title}</b>\n📍 {place}\nОсы уақытта сабағың болмаса, келу міндетті.", "Іс-шараны ашу"),
         "door_open": ("🚪 <b>{title}</b> — кіру ашық, келіңіздер\n📍 {place}", "🎟 Билетті ашу"),
@@ -419,6 +431,9 @@ BOT = {
         "seat_free": ("🎉 Орын босады — сен <b>{title}</b> іс-шарасына барасың!\n🗓 {when} · {place}", "🎟 Менің билетім"),
         "seat_hold": ("🎉 <b>{title}</b> іс-шарасында орын босады!\n🗓 {when} · {place}\n30 минут ішінде төлеп, чекті жүкте, әйтпесе орын келесі адамға өтеді.", "💳 Төлеу"),
         "receipt_rejected": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) чегіңді қабылдамады, билет енді жарамсыз. Қате болса, оларға жаз.", "Іс-шараны ашу"),
+        "receipt_rejected_why": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) чегіңді қабылдамады: {why}. Билет енді жарамсыз. Тіркеу әлі ашық болса, қайта тіркеліп, жаңа чек тіркеуге болады. Қате болса, оларға жаз.", "Іс-шараны ашу"),
+        "org_ask": ("✉️ <b>{title}</b> ұйымдастырушысы ({org}) билетің бойынша өзіне жазуыңды сұрайды.", "✍️ Ұйымдастырушыға жазу"),
+        "seat_removed": ("😔 <b>{title}</b> ұйымдастырушылары ({org}) сені қатысушылар тізімінен алып тастады. Төлеген болсаң, ақшаны қайтару үшін оларға жаз. Жазылу ашық тұрғанда қайта жазылуға болады.", "Іс-шараны ашу"),
         "receipt_ok": ("🎟 Чек қабылданды — сен <b>{title}</b> іс-шарасына барасың!\nБилет қосымшада.", "🎟 Билетті ашу"),
         "receipt_ok_team": ("🎟 Чек қабылданды — сен <b>{title}</b> іс-шарасына барасың!\nЕнді команда: өзіңдікін құр, досыңның сілтемесімен қосыл немесе күт — қосымша табады.", "Іс-шараны ашу"),
         "casting_open": ("📣 <b>{org}</b> кастинг өткізеді: {when}. Жазылудың қажеті жоқ, жай ғана кел.", "Ашу"),
@@ -427,6 +442,7 @@ BOT = {
         "round_interview": ("🎤 Сен <b>{org}</b> қабылдауының бірінші кезеңінен өттің! Сұхбат уақытын таңда.", "🗓 Уақыт таңдау"),
         "round_iv_nudge": ("⏰ <b>{org}</b> күтіп отыр: сен әлі сұхбат уақытын таңдамадың.", "🗓 Уақыт таңдау"),
         "round_iv_remind": ("🎤 <b>{org}</b> сұхбаты: {when}\n📍 {place}", "Ашу"),
+        "round_place": ("📍 <b>{org}</b>: сұхбат өтетін орын өзгерді\n🗓 {when}\n📍 {place}", "Ашу"),
         "round_yes": ("🎉 Сені <b>{org}</b> қабылдады! Командаға қош келдің.", "Клубты ашу"),
         "round_yes_dept": ("🎉 Сені <b>{org}</b> қабылдады, департаментің — <b>{dept}</b>! Командаға қош келдің.", "Клубты ашу"),
         "round_yes_group": ("🎉 Сені <b>{org}</b> қабылдады! Командаға қош келдің. Клуб тобының сілтемесі қосымшада күтіп тұр.", "Топқа қосылу"),
@@ -599,6 +615,7 @@ BOT = {
         "group_on": ("👋 On duty. This chat is linked to KBTU App, I check join requests myself.", "Open KBTU App"),
         "all_none": ("👀 Nobody to call yet: I don't know anyone here. I'll remember whoever writes.", ""),
         "all_soon": ("⏳ Everyone was just called. Try again in a few minutes.", ""),
+        "all_app": ("📲 Only people signed up in KBTU App can call everyone.", ""),
         "group_off": ("👋 Hi! This chat is not linked yet. A chat admin makes me an admin, then opens Studio → Chats → «Link a group» in the app.", "Open KBTU App"),
         "meet_call": ("⏰ In an hour — <b>{title}</b>\n📍 {place}\nIf you have no class at that time, attendance is required.", "Open the event"),
         "door_open": ("🚪 The door to <b>{title}</b> is open — come in\n📍 {place}", "🎟 Open ticket"),
@@ -612,6 +629,9 @@ BOT = {
         "seat_free": ("🎉 A seat opened up — you're going to <b>{title}</b>!\n🗓 {when} · {place}", "🎟 My ticket"),
         "seat_hold": ("🎉 A seat opened up at <b>{title}</b>!\n🗓 {when} · {place}\nPay and upload the receipt within 30 minutes, or it goes to the next person.", "💳 Pay"),
         "receipt_rejected": ("😔 The organizers of <b>{title}</b> ({org}) rejected your receipt; the ticket no longer works. If it's a mistake, write to them.", "Open the event"),
+        "receipt_rejected_why": ("😔 The organizers of <b>{title}</b> ({org}) rejected your receipt: {why}. The ticket no longer works. If sign-up is still open, you can sign up again and attach a new receipt. If it's a mistake, write to them.", "Open the event"),
+        "org_ask": ("✉️ The organizer of <b>{title}</b> ({org}) asks you to write to them about your ticket.", "✍️ Write to the organizer"),
+        "seat_removed": ("😔 The organizers of <b>{title}</b> ({org}) took you off the list. If you paid, write to them about a refund. While sign-up is open, you can sign up again.", "Open the event"),
         "receipt_ok": ("🎟 Receipt accepted — you're going to <b>{title}</b>!\nYour ticket is in the app.", "🎟 Open the ticket"),
         "receipt_ok_team": ("🎟 Receipt accepted — you're going to <b>{title}</b>!\nNext, your team: make one, join by a friend's link, or wait and the app will find you one.", "Open the event"),
         "casting_open": ("📣 <b>{org}</b> is holding a casting: {when}. No sign-up, just come.", "Open"),
@@ -620,6 +640,7 @@ BOT = {
         "round_interview": ("🎤 You passed the first stage at <b>{org}</b>! Pick a time for the interview.", "🗓 Pick a time"),
         "round_iv_nudge": ("⏰ <b>{org}</b> is waiting: you haven't picked an interview time yet.", "🗓 Pick a time"),
         "round_iv_remind": ("🎤 Interview at <b>{org}</b>: {when}\n📍 {place}", "Open"),
+        "round_place": ("📍 <b>{org}</b>: the interview venue has changed\n🗓 {when}\n📍 {place}", "Open"),
         "round_yes": ("🎉 You're in <b>{org}</b>! Welcome to the team.", "Open the club"),
         "round_yes_dept": ("🎉 You're in <b>{org}</b>, your department is <b>{dept}</b>! Welcome to the team.", "Open the club"),
         "round_yes_group": ("🎉 You're in <b>{org}</b>! Welcome to the team. The club's group link is waiting in the app.", "Join the group"),
@@ -804,6 +825,17 @@ RECEIPT_WHY = {
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
     "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
+}
+
+
+# why the organizer rejected a receipt (seats.REJECT_WHY), in the bot's receipt_rejected_why
+REJECT_WHY = {
+    "ru": {"short": "сумма меньше цены билета", "other_event": "это чек за другую оплату", "used": "этот чек уже использовали",
+           "unclear": "на чеке не видно оплаты"},
+    "kk": {"short": "сома билет бағасынан аз", "other_event": "бұл басқа төлемнің чегі", "used": "бұл чек бұрын қолданылған",
+           "unclear": "чекте төлем көрінбейді"},
+    "en": {"short": "the sum is less than the ticket price", "other_event": "it's for another payment", "used": "this receipt was already used",
+           "unclear": "the payment isn't visible on it"},
 }
 
 
@@ -1319,9 +1351,17 @@ def phone_line(phone: str | None) -> str | None:
     return f"+7 ({d[:3]}) {d[3:6]} {d[6:8]} {d[8:]}" if len(d) == 10 else None
 
 
-def place_or_tba(place: str, lang: str) -> str:
+ONLINE = {"ru": "Онлайн", "kk": "Онлайн", "en": "Online"}
+
+
+def where(place: str, online: bool, lang: str) -> str:
+    """An event's place as people read it: an online event has none, the word in their language (never its link)."""
+    return place or (ONLINE.get(lang, ONLINE["ru"]) if online else "")
+
+
+def place_or_tba(place: str, lang: str, online: bool = False) -> str:
     """An event's place in a bot message; empty while it's to be confirmed (a room asked of DMP by memo)."""
-    return place or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
+    return where(place, online, lang) or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
 
 
 # /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set.

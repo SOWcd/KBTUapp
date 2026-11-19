@@ -1977,11 +1977,25 @@ MIGRATIONS: list[tuple[int, str]] = [
     (187, """CREATE TABLE IF NOT EXISTS receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
       receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
     ) STRICT;"""),
-    # (Nov 19) users by lower(tg_username): was, every /api/me ran account.support()'s `lower(u.tg_username) IN (...)`
-    # over the whole users table (no index fits an expression): 1.8 ms at 30k users, more than the rest of /me; now an
-    # index lookup of the two support handles, 0.008 ms. The same lookup by @handle in oversight, profiles and vol uses it
-    # too. Not a partial index (WHERE tg_username IS NOT NULL): SQLite can't tell lower(x) = ? implies it, and scans
-    (188, """CREATE INDEX IF NOT EXISTS users_handle ON users (lower(tg_username));"""),
+    # an online event (owner, Nov 19): NULL not online; '' online, no link yet; else its meeting link (core.online_url)
+    (188, "ALTER TABLE events ADD COLUMN online TEXT;"),
+    # (Nov 19) the assistant's own yes to Google answering first (assistant.GOOGLE_YES, as team_consents): no row, never
+    # Google; a withdrawal deletes the row
+    (189, """CREATE TABLE IF NOT EXISTS kri_consents (  -- IF NOT EXISTS: tests rewind user_version
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 19, review) the yes goes with the student row, whatever removes it (deleting the account, the operator's
+    # unlink, a staff row taken back): a later sign-in never finds an old yes waiting
+    (190, """CREATE TRIGGER IF NOT EXISTS kri_consents_student_gone AFTER DELETE ON students BEGIN
+      DELETE FROM kri_consents WHERE user_id = OLD.user_id;
+    END;"""),
+    # (Nov 19) a credit by a GitHub login (credits.py): a pull request's author, the line never tied to an account
+    # (tg_id NULL); the login is public already, so the line is shown under it
+    (191, "ALTER TABLE credits ADD COLUMN gh TEXT;"),
+    # users by lower(tg_username): account.support() on every /api/me and the @handle lookups (oversight, profiles, vol)
+    # take an index instead of a scan; not partial: SQLite can't prove lower(x) = ? implies x IS NOT NULL
+    (192, """CREATE INDEX IF NOT EXISTS users_handle ON users (lower(tg_username));"""),
 ]
 
 

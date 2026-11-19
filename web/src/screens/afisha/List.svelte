@@ -2,6 +2,7 @@
   // A day is one card, one timeline: events and the optional timetable's classes by start time (owner, Nov 19).
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import VideoCall from '@lucide/svelte/icons/video';
   import MapIcon from '@lucide/svelte/icons/map';
   import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -234,7 +235,7 @@
       <div class="hero-tx">
         <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
         <b class="clamp-2">{e.title}</b>
-        <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
+        <span class="where ellipsis">{placeOf(e.place, e.online)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
         {#if mine}
           <span class="acts">
             <Button kind="glass" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button>
@@ -255,7 +256,7 @@
           <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
           <Poster item={e} size={48} radius={12} />
           <span class="tx"><b class="ellipsis title">{e.title}</b>
-            <span class="meta num ellipsis">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)} · {placeOf(e.place)}</span></span>
+            <span class="meta num ellipsis">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)} · {placeOf(e.place, e.online)}</span></span>
           <span class="end"><Button kind="secondary" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button></span>
         </div>
       {/each}
@@ -303,7 +304,7 @@
                 <b class="clamp-2 title">{e.title}</b>
                 <span class="meta num">
                   <span><Clock size={14} strokeWidth={1.75} />{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
-                  <span class="ellipsis"><MapPin size={14} strokeWidth={1.75} />{placeOf(e.place)}</span>
+                  <span class="ellipsis">{#if e.online}<VideoCall size={14} strokeWidth={1.75} />{:else}<MapPin size={14} strokeWidth={1.75} />{/if}{placeOf(e.place, e.online)}</span>
                   {#if e.price}<span>{money(e.price)}</span>{/if}
                 </span>
                 <span class="sub">{@render status(e)}</span>

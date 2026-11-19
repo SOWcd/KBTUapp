@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, isCoin, isMedal, layersOf, legendOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
+import { artOf, coinOf, isCoin, isMedal, layersOf, legendOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -42,14 +42,19 @@ it("Recruiter's medal is drawn per level", () => {
   expect(isMedal({ code: 'anthem', levels: lv.slice(0, 1) as never })).toBe(false);
   expect(isMedal({ code: 'bugs', levels: lv.slice(0, 1) as never })).toBe(true); // Admin's row of a manual one
   // the 2026 initiation's coins stay the owner's drawn pictures, among the pins
-  expect([isCoin({ emoji: 'medal_init26p_2' }), isCoin({ emoji: 'medal_first500' }), isMedal({ code: 'init26', levels: lv.slice(0, 1) as never })]).toEqual([true, true, false]);
+  const one = (code: string, emoji: string, level = 1) => ({ code, emoji, level, levels: lv.slice(0, 1) as never });
+  expect([isCoin(one('init26', 'medal_init26p_2')), isCoin(one('first50', 'medal_first500')), isMedal({ code: 'init26', levels: lv.slice(0, 1) as never })]).toEqual([true, true, false]);
+  // whole coins: Early bird one per metal (not earned: bronze), Perfect pitch one; the rest none
+  const fi = (level: number) => coinOf({ code: 'first_in', emoji: 'high_voltage_3d', level, levels: lv.slice(0, 3) as never });
+  expect([0, 1, 2, 3].map(fi)).toEqual(['medal_fi_b', 'medal_fi_b', 'medal_fi_s', 'medal_fi_g']);
+  expect([coinOf(one('anthem', 'headphone_3d', 0)), artOf(one('anthem', 'headphone_3d')), coinOf(one('soul', 'raising_hands_3d_default'))]).toEqual(['medal_anthem', 'medal_anthem', null]);
 });
 
 it('every medal layer and pin glyph is drawn', async () => {
   const fs = await import('node:fs' as string);
   const has = (n: string) => fs.existsSync(new URL(`../../public/medals/${n}.svg`, import.meta.url));
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
-  for (const code of ['regular', 'streak', 'first_in', 'soul', 'team', 'season', 'bugs', 'dmp', 'critic', 'referral'])
+  for (const code of ['regular', 'streak', 'soul', 'team', 'season', 'bugs', 'dmp', 'critic', 'referral'])
     for (const n of [1, 4, 7]) {
       const art = artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }), leg = legendOf(art);
       expect(layersOf(art)!.every(([f]) => has(f)) && (code === 'referral' ? leg === null : has(leg!))).toBe(true);
@@ -58,6 +63,8 @@ it('every medal layer and pin glyph is drawn', async () => {
   for (const art of ['layer_vb_laugh', 'layer_vb_hello']) expect(layersOf(art)!.every(([f]) => has(f))).toBe(true);
   for (const z of Object.values(ZNAKI)) expect(layersOf(`layer_zn_${z.glyph}_${z.metal}`)!.every(([n]) => has(n)) && has('zn-enamel') && has(`zn-frame-${z.metal}`)).toBe(true);
   for (const m of 'bsgl') expect(has(`ribbon-${m}`)).toBe(true);
+  for (const c of ['medal_fi_b', 'medal_fi_s', 'medal_fi_g', 'medal_anthem'])
+    for (const d of ['', 'sm/']) expect(fs.existsSync(new URL(`../../public/emoji/${d}${c}.webp`, import.meta.url))).toBe(true);
 });
 
 it('a badge held in two variants shows both', () => {

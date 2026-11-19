@@ -17,11 +17,12 @@ import re
 import secrets
 import sqlite3
 import time
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 
 from ..db import tx
-from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, need_student, now, one, person_ref, rows
+from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, meet_link, need_student, now, one, person_ref, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -138,11 +139,11 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], se
     lines.append(f"Schools' dean's offices: {known}. Other schools' dean's offices: unknown." if known else "Schools' dean's offices: unknown.")
     rooms |= {r["room"] for r in facts if r["room"] and ROOM.match(r["room"])}
     # the afisha's own (seats.on_afisha: an initiative's event only with an official co-host, or if it's mine)
-    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
+    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, e.online, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL
           AND e.starts_at BETWEEN ? AND ? AND {on_afisha()} ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400, *on_afisha_args(v))
     lines.append("Coming events (id, title, when, where, by): " + ("; ".join(
-        f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or 'place to be announced'}, {e['org']}"
+        f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or ('online' if e['online'] is not None else 'place to be announced')}, {e['org']}"
         + (f" (club {e['oid']})" if e["ost"] == "active" else "") for e in evs) or "none this week"))
     return "\n".join(lines), rooms, {e["id"] for e in evs}, {e["oid"] for e in evs if e["ost"] == "active"}
 
@@ -172,7 +173,7 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
     if not isinstance(ctx, dict) or ctx.get("kind") not in ("event", "club") or type(ctx.get("id")) is not int:
         raise ApiError("bad_input")
     if ctx["kind"] == "event":
-        e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.price, e.status,
+        e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.online, e.price, e.status,
               e.first_year, e.external_url, e.reg_until, o.name AS org, o.id AS oid, c.name AS co, c.id AS cid FROM events e JOIN orgs o ON o.id = e.org_id
               LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.status = 'accepted' LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
             WHERE e.id = ? AND e.status IN ('published', 'cancelled') AND e.visibility = 'public' AND e.hidden_at IS NULL
@@ -180,7 +181,7 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
         if not e:
             return None
         bits = [f"[{e['id']}] {e['title']}", f"starts {_when(e['starts_at'])}" + (f", ends {_when(e['ends_at'])}" if e["ends_at"] else ""),
-                f"where: {e['place'] or 'to be announced'}" + (" (off campus, a 2GIS route on its page)" if e["place_url"] else ""),
+                f"where: {e['place'] or ('online' if e['online'] is not None else 'to be announced')}" + (" (off campus, a 2GIS route on its page)" if e["place_url"] else ""),
                 f"organized by {e['org']} (club {e['oid']})" + (f" with {e['co']} (club {e['cid']})" if e["co"] else ""),
                 f"price {e['price']} tenge, paid by Kaspi in the app" if e["price"] else "free",
                 e["external_url"] and "registration on an outside site (its page has the link)",
@@ -681,9 +682,12 @@ def fill_answered(text: str) -> bool:
     return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "end_date", "start", "end", "price"}))
 
 
-def filled(text: str) -> dict:
-    """The model's form, each field kept only in the shape the editor takes (anything else: left for the person)."""
+def filled(text: str, src: object = "") -> dict:
+    """The model's form, each field kept only in the shape the editor takes (anything else: left for the person). `src`:
+    the announcement itself, whose first meeting link (a known host's, found in plain code) makes the event online."""
     x, out = _parse(text) or {}, {}
+    if link := meet_link(str(src or "")):
+        out["onlineUrl"] = link
     for k, most in (("title", 80), ("place", 80), ("description", 2000)):
         if isinstance(x.get(k), str) and x[k].strip():
             out[k] = x[k].strip()[:most]
@@ -729,3 +733,49 @@ def sweep(con) -> None:
 
 
 from .seats import on_afisha, on_afisha_args  # noqa: E402  (seats imports the other domains last too)
+
+
+# ------------------------------------------------------------ Google's own yes (kri_consents)
+# The policy names Google among the assistant's providers since Nov 19, but students who accepted the same version
+# before never agreed to it, and nobody is asked to accept the policy again (owner). So the assistant asks its own
+# one-tap yes (as appeals.CONSENT): with it, Google answers first; without it, the chain as before. Withdrawn: the row
+# goes, Google is not asked from the next question, nor by a question already on its way (llm.chat's lead_ok reads the
+# row again before each send). The row goes with the student row too (migration 190). A student who later accepts a
+# newer general policy keeps a kri-g1 yes: the card and its words are the same, so the yes still holds (owner's review).
+GOOGLE_YES = "kri-g1"  # the card's text (web: kri.g*); a reworded card is a new version, and old yeses ask again
+
+
+def google_yes(con, uid: int) -> bool:
+    return one(con, "SELECT 1 FROM kri_consents WHERE user_id = ? AND version = ?", uid, GOOGLE_YES) is not None
+
+
+def google_agree(con, v: Viewer, body: dict, policies: tuple[str, ...], open_: Callable[[], bool]) -> dict:
+    """Mine given: the app sends the version it showed. open_ (app.py's kri_google) and the write in one transaction,
+    the write itself only while my student row is there on the policy in force (policies) or a staff row: a request
+    that waited past my account's deletion inserts nothing (review, Nov 19)."""
+    need_student(v)
+    if not isinstance(body, dict) or body.get("consent") != GOOGLE_YES:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not open_() or not con.execute(f"""INSERT OR REPLACE INTO kri_consents (user_id, version, at) SELECT ?, ?, ?
+                WHERE EXISTS (SELECT 1 FROM students WHERE user_id = ? AND consent_version IN ({_qs((*policies, 'staff', 'admin'))}))""",
+                (v.id, GOOGLE_YES, now(), v.id, *policies, "staff", "admin")).rowcount:
+            raise ApiError("not_found")
+    return {"yes": True}
+
+
+def google_yes_now(path: str, uid: int) -> bool:
+    """google_yes on its own short connection, for llm.chat's lead_ok right before each send to Google (a lead given
+    up at its wall clock abandons its thread, which must never hold the request's pooled connection)."""
+    from .. import db  # here, as llm._count
+    c = db.connect(path)
+    try:
+        return c.execute("SELECT 1 FROM kri_consents WHERE user_id = ? AND version = ?", (uid, GOOGLE_YES)).fetchone() is not None
+    finally:
+        c.close()
+
+
+def google_withdraw(con, v: Viewer) -> dict:
+    with tx(con):
+        con.execute("DELETE FROM kri_consents WHERE user_id = ?", (v.id,))
+    return {"yes": False}

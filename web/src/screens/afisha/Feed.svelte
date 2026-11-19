@@ -121,7 +121,7 @@
         {/if}
         <span class="org"><OrgTag org={e.org} co={e.coHost} />{#if e.guestHost}<Tag tone="onphoto">{t('event.partner')}</Tag>{/if}</span>
         <h2 class="title">{e.title}</h2>
-        <p class="meta">{whenLine(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</p>
+        <p class="meta">{whenLine(e.startsAt)} · {placeOf(e.place, e.online)}{e.price ? ' · ' + money(e.price) : ''}</p>
         {#if e.friends.length}
           <p class="fr">
             <span class="stack">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={22} tappable={false} />{/each}</span>

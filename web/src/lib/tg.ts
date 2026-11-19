@@ -156,8 +156,9 @@ export const backButton = {
   onClick: (cb: () => void) => tgTry((w) => w.BackButton.onClick(cb)),
 };
 
-export function openLink(url: string): void {
-  if (inTelegram) { tgTry((w) => (url.startsWith('https://t.me/') ? w.openTelegramLink(url) : w.openLink(url))); return; }
+/** `web`: always the browser, never a Telegram deep link (an online event's meeting) */
+export function openLink(url: string, web = false): void {
+  if (inTelegram) { tgTry((w) => (!web && url.startsWith('https://t.me/') ? w.openTelegramLink(url) : w.openLink(url))); return; }
   window.open(url, '_blank', 'noopener');
 }
 

@@ -146,7 +146,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
-    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
+    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
     def listed(evs):  # a line per event, the first one opened
@@ -203,6 +203,20 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
+    if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
+        # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
+        # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
+        # isn't the one he asked with (a handle he gave up may be someone else's now)
+        e = one(con, """SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id JOIN registrations r ON r.event_id = e.id
+            AND r.user_id = ? AND (r.status = 'going' OR r.status = 'hold' AND r.hold_until >= ?)
+            WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", m["user_id"], logic.now(), int(ref[1]))
+        o, me, nick = int(ref[2]), m["user_id"], json.loads(m["payload"] or "{}").get("nick")
+        if not e or logic.seats.end_of(e) + logic.organizing.REVEAL_AFTER < logic.now() or "events" not in logic.rights_of(con, o, e["org_id"]) \
+                or not one(con, "SELECT 1 FROM users WHERE id = ? AND banned_at IS NULL AND tg_username = ?", o, nick) \
+                or one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", o, me, me, o):
+            return None
+        text, button = texts.bot_message(lang, kind, title=logic.title_in(e, lang), org=e["org_name"])
+        return text, None, [[{"text": button, "url": f"https://t.me/{nick}"}]]
     if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
         tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
         if not tok and (old := one(con, "SELECT id FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token IS NULL", int(ref[1]), m["user_id"])):
@@ -426,6 +440,14 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when(s["starts_at"], lang), place=texts.place_or_tba(s["place"], lang)),
                     f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), f"iv_{a['org_id']}")
+    if kind == "round_place":  # ivp:<application>:<slot>:<n>, casting.set_place: that slot as it is now; quiet once decided, over, booked elsewhere, full or edited back
+        a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
+            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+        s = a and a["stage"] == "next" and a["rstatus"] != "done" and not a["sent_at"] and casting.place_slot(con, a, int(ref[2]))
+        if not s or s["place"] == json.loads(m["payload"] or "{}").get("was"):
+            return None
+        return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when_span(s["starts_at"], s["ends"], lang),
+                                   place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
     if kind in ("round_yes", "round_no"):  # ry: / rn:<application>, the results, to each applicant
         a = one(con, """SELECT a.*, r.org_id, r.decline_text, r.group_link, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
             JOIN orgs o ON o.id = r.org_id LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))
@@ -514,7 +536,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if via and not one(con, """SELECT 1 FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
             WHERE x.event_id = ? AND x.org_id = ? AND x.status = 'accepted' AND o.status = 'active'""", e["id"], via):
         return None
-    text, button = texts.bot_message(lang, kind, org=e["org_name"] + (f" × {co[0]}" if co else ""), **ev(e))
+    # a rejected receipt's reason (seats.review_receipt's code, never words); none (an old client): the old text
+    why = texts.pick(texts.REJECT_WHY, lang).get(json.loads(m["payload"] or "{}").get("why")) if kind == "receipt_rejected" else None
+    if why:
+        kind = "receipt_rejected_why"
+    text, button = texts.bot_message(lang, kind, org=e["org_name"] + (f" × {co[0]}" if co else ""), why=why or "", **ev(e))
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok', 'door_open') else 'ev'}_{e['id']}"
 
 
@@ -554,7 +580,7 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
-    where = f"\n📍 {e['place']}" if e["place"] else ""
+    where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
 
@@ -1347,6 +1373,9 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         # never call (silence).
         if logic.chatlist.banned(con, who):
             return
+        if not logic.chatlist.student(con, who):  # no account in the app: told so, nobody is called (owner, Nov 19)
+            _refuse(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_app")
+            return
         if chat["id"] in _tagging or time.time() - _tagged.get(chat["id"], 0) < ALL_AGAIN:  # one run, then ALL_AGAIN: say so, then both go
             _refuse(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_soon")
             return
@@ -1395,7 +1424,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 
 
 def _refuse(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None, key: str) -> None:
-    """/all answered without calling (all_soon, all_none): one such answer a chat each ALL_NO_TTL, one pending."""
+    """/all answered without calling (all_soon, all_none, all_app): one such answer a chat each ALL_NO_TTL, one pending."""
     pending = tgc._last.get(f"allno:{chat}")
     if time.time() - _denied.get(chat, 0) > ALL_NO_TTL and not (pending and not pending.done()):  # one waiting a chat at most
         _denied[chat] = time.time()
@@ -1532,7 +1561,7 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
     async def send(batch: list[int]) -> bool:
         nonlocal called, sent_n, failed
         marks = random.sample(TAG_MARKS, len(batch))
-        gap = TAG_FAST if sent_n < TAG_BURST else TAG_GAP
+        gap = 0 if not sent_n else TAG_FAST if sent_n < TAG_BURST else TAG_GAP  # the first one at once
         sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, gap)
         if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
             sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, gap)
@@ -1545,13 +1574,17 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
 
     try:
         # the caller is in the chat now, by Telegram (one call per run; a guest in a channel's comments isn't)
+        t0 = time.monotonic()
         me = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": who}, 0)
         st = (me or {}).get("result") or {} if me and me.get("ok") else {}
         status = st.get("status")
         if not (status in ("creator", "administrator", "member") or status == "restricted" and st.get("is_member")):
             quiet = True
             return
+        t1 = time.monotonic()
         roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
+        # where a slow /all spends its time (owner, Nov 19): durations only, no chat and no person
+        log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
         # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
         live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
         con = db.connect(cfg.db_path)
@@ -1718,10 +1751,11 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
            and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]
     for e in evs[:20 if words else INLINE_EVENTS]:
         org = " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])])
-        caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"], org, e["price"], e["taken"])
+        place = texts.where(e["place"], e["online"], lang)
+        caption, button = texts.share_event(lang, e["title"], e["startsAt"], place, org, e["price"], e["taken"])
         poster = f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
         out.append(article(f"ev-{e['id']}", e["title"], caption, button, f"ev_{e['id']}", thumbnail_url=poster,
-                           description=" · ".join([texts.when(e["startsAt"], lang), *([e["place"]] if e["place"] else [])])))
+                           description=" · ".join([texts.when(e["startsAt"], lang), *([place] if place else [])])))
     return body
 
 

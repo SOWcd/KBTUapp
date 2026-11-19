@@ -1166,6 +1166,7 @@ _DEL_GONE = {
     ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my attendance marks in clubs' event reports (evreports.py), my consent to them; who filled one loses the link
     ("event_team_members", "user_id"), ("team_consents", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next), my consent to teams
     ("subject_holds", "user_id"),  # a moderator's take-down of my listing on a subject (logic/subjects.py)
+    ("kri_consents", "user_id"),  # my yes to Google answering the assistant first (assistant.GOOGLE_YES)
     ("swear_hits", "user_id"),  # the bot's swear warnings to me in clubs' groups (chatmod.py; by my Telegram id too, below)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
