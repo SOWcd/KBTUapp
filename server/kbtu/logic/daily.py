@@ -7,7 +7,7 @@ import re
 from .. import receipt, texts
 from ..db import tx
 
-from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, one, rows, shown_name
+from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, evdel, one, rows, shown_name
 
 
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
@@ -65,7 +65,7 @@ def memo(con, v: Viewer, oid: int, later: bool = False) -> dict:
     _may(con, v, oid, "memo")
     o = _org(con, oid)
     monday = _next_week()
-    evs = rows(con, "SELECT * FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo_only = 0 AND starts_at >= ? ORDER BY starts_at", oid, monday)
+    evs = rows(con, f"SELECT * FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo_only = 0 AND NOT {evdel('events')} AND starts_at >= ? ORDER BY starts_at", oid, monday)
     week = [e for e in evs if e["starts_at"] < monday + 7 * 86400]
     todo = [e for e in evs if e["memo"] and not e["memo_sent_at"]]
     asked = [e for e in todo if later or e["starts_at"] < monday + 7 * 86400]

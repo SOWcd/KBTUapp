@@ -14,7 +14,7 @@ from .. import media, pdfpages
 from ..db import tx
 
 from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, door_shut, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
-    _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
+    _may, _org, _qs, at_least, can, card, cards, deleting, evdel, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
     overseer, person_ref, role_in, rows, short_name, taken)
 
 
@@ -25,7 +25,7 @@ def _staff_event(con, v: Viewer, eid: int, right: str, cohost: bool = False, hel
     the attendee list, which the co-host's event team has too (cohosts.py); every other right stays the host's.
     helper: the kinds of the event's temporary door helper let in too (crew.py)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-    if not e:
+    if not e or e["hidden_at"] and deleting(con, eid):  # the admin's delete: gone from Studio at once (Admin has its Undo)
         raise ApiError("not_found")
     if not (cohost and co_runs(con, v, eid)) and not (helper and crew_kind(con, v, e) in helper):
         _may(con, v, e["org_id"], right)
@@ -44,9 +44,9 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for the whole team as our
     # own (cohosts.py; their counters below stay the host's, their door and list our event team's as before)
     # never a taken-down or deleted one, nor a hidden host's: the event's own page refuses those too (review)
-    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR status != 'draft' AND hidden_at IS NULL
+    found = rows(con, f"""SELECT * FROM events WHERE (org_id = ? OR status != 'draft' AND hidden_at IS NULL
         AND org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden') AND id IN (SELECT x.event_id FROM event_cohosts x
-        JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, oid)
+        JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 AND NOT {evdel('events')} ORDER BY starts_at""", oid, oid)
     found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own (review)
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
@@ -773,7 +773,7 @@ def admin_delete_event(con, v: Viewer, eid: int) -> None:
         e = one(con, "SELECT id, title, status, hidden_at, COALESCE(ends_at, starts_at, 0) > ? AS ahead FROM events WHERE id = ?", core.now(), eid)
         if not e:
             raise ApiError("not_found")
-        if one(con, "SELECT 1 FROM meta WHERE key = ?", f"evdel:{eid}"):
+        if deleting(con, eid):
             raise core.decided(con, f"event:{eid}")
         # people hold seats or paid for one still ahead: it's cancelled first (they hear it, seats and receipts stay); then deleted
         if e["status"] == "published" and e["ahead"] and one(con, """SELECT 1 FROM registrations WHERE event_id = ? AND status IN ('going', 'hold', 'waitlist')

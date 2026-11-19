@@ -17,6 +17,8 @@ import re
 import secrets
 import sqlite3
 import time
+from functools import cache
+from pathlib import Path
 
 from ..db import tx
 from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, meet_link, need_student, now, one, person_ref, rows
@@ -42,8 +44,9 @@ University, Almaty, Tole bi 59). Your name is KRI, the same in every language (n
 student informally, in the singular: in Russian "\u0442\u044b", never "\u0432\u044b"; in Kazakh "\u0441\u0435\u043d", never "\u0441\u0456\u0437". Use only the facts
 below. If they don't hold the answer, say plainly you don't know and suggest where to ask (Student services or their
 school's office, as the facts place them); never invent a room, a time, a person or a rule. Small talk, thanks or
-rudeness to you: answer briefly and kindly, without "I don't know". A three-digit room's first digit is its floor
-(7xx: floor 2, Independence hall's wing); a one- or two-digit room is in the basement (floor 0).
+rudeness to you: answer briefly and kindly, without "I don't know". A room's floor or place only as the facts give it
+(the map's rooms the question names, a campus place, a class), never from its number's digits, never a wing or a hall
+the facts don't put it in; a room the facts call unknown: say you don't know where it is and offer the map.
 How an answer looks (students read it on a phone and skip a wall of text): the answer itself first, in one short
 line. Then at most three more short lines, only what this question needs, one fact a line, each on its own line (\n in
 the JSON string); such a line may start with one fitting emoji and a space. At most 3 emoji in an answer, never two in
@@ -212,6 +215,39 @@ def _spend(con, v: Viewer) -> None:
         con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
 
 
+# The map's own room list (Uni-Q's plans, by floor 0-5: what the map searches, web CampusMap ROOMS); the image copies it to
+# the same place (Dockerfile). A room the question names gets its floor from it, or "unknown": the model guessed floors
+# and wings from the digits (Nov 19: "404, floor 4, Independence hall's wing").
+MAP_ROOMS = Path(__file__).parents[3] / "web/src/assets/map/uniq-rooms.json"
+_LATIN = str.maketrans("\u0430\u0431\u0432\u0441", "abvc")  # Cyrillic a, b, v, s as the map writes them (web normRoom)
+# a number of 1-3 digits standing alone, maybe with one letter; never a time, a date, a price or part of a longer number
+ASKED = re.compile(r"(?<![\d:/-])(?<!\d[.,])0?(\d{1,3}[a-z\u0430-\u0433]?)(?![\d:/\w]|[.,]\d)", re.I)
+
+
+@cache
+def map_floors() -> dict[str, int]:
+    try:
+        return {r.lower(): f for f, by in enumerate(json.loads(MAP_ROOMS.read_text())) for r in by}
+    except OSError:  # no web tree next to the server: every room unknown, never guessed
+        return {}
+
+
+def rooms_asked(q: str) -> tuple[str, set[str]]:
+    """The rooms a question names, each with its floor as the map has it or unknown (a fact line), and those that open
+    on the map. ponytail: any lone short number counts ("3rd year" gives room 3's floor); the rule tells the model to
+    use them only for a room's place."""
+    got = list(dict.fromkeys(m.lower().translate(_LATIN) for m in ASKED.findall(q)))[:3]
+    if not got:
+        return "", set()
+    fl = map_floors()
+    # the owner's own word (Nov 19): 7xx and 2xx share floor 2; 7xx by Independence hall, 2xx on the Tole bi side
+    side = lambda r: {"7": ", by Independence hall", "2": ", the Tole bi street side"}.get(r[0], "") if len(r.rstrip("abcv")) == 3 else ""
+    said = [f"{r}: floor {fl[r]}{' (the basement)' if fl[r] == 0 else ''}{side(r)}" if r in fl else
+            f"{r}: not on the app's map; 7xx rooms are on floor 2 by Independence hall" if side(r) and r[0] == "7" else
+            f"{r}: not on the app's map, its floor and place unknown (don't guess them; offer the map)" for r in got]
+    return "Rooms the question names, as the app's map of the main building has them: " + "; ".join(said) + ".", {r for r in got if r in fl}
+
+
 def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = False, subjects: bool = False) -> tuple[list[dict], dict]:
     """The messages for the model, after the day's allowance (counted here, before the model is asked), and what each
     button may open. The rules in the system message; the facts (clubs' and students' words among them) in a bounded
@@ -224,7 +260,9 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
     on = card(con, body.get("context"))  # before the allowance: a bad context costs nothing
     _spend(con, v)
     facts, rooms, events, clubs = brief(con, v, lang)
+    named, found = rooms_asked(docs_query(body))  # a short follow-up ("and 405?") with the turn before it
     facts = f"{facts[:FACTS_MAX]}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
+    facts, rooms = f"{facts}\n{named}" if named else facts, rooms | found
     if on:
         facts, events, clubs = f"{facts}\n{on[0]}", events | ({on[1]} if on[1] else set()), clubs | on[2]
     quoted = re.sub(r"</?facts", "facts", facts, flags=re.I)

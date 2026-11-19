@@ -10,7 +10,7 @@ import json
 import re
 import unicodedata
 
-from .core import Viewer, _by_id, _roles, cards, now, org_ref, rows
+from .core import Viewer, _by_id, _roles, cards, evdel, now, org_ref, rows
 
 
 # Kazakh letters as the Russian ones a Russian keyboard types for them (the owner, Nov 12: a Kazakh name is found
@@ -59,7 +59,7 @@ def events(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     if len(k) < 2:
         return []
     t = now()
-    found = [e for e in rows(con, """SELECT * FROM events e WHERE memo_only = 0 AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || e.id)
+    found = [e for e in rows(con, f"""SELECT * FROM events e WHERE memo_only = 0 AND NOT {evdel()}
         ORDER BY starts_at < ?, CASE WHEN starts_at >= ? THEN starts_at END, starts_at DESC""", t, t) if hit(k, names(e, "title"))]
     if v.role != "admin":
         roles, hidden = _roles(con, v), _hidden_orgs(con)

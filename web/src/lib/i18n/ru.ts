@@ -1597,6 +1597,7 @@ const ru = {
   'adm.k.hidden': "Скрыто",
   'adm.decided': "Уже решено: {name}",
   'adm.decidedAnon': "Уже решено",
+  'adm.drafts': "Из каналов",
   'adm.doneList': "Сделано",
   'adm.undo': "Отменить",
   'adm.undone': "отменено",

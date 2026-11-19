@@ -1576,6 +1576,7 @@ const kk: Dict = {
   'adm.k.hidden': "Жасырылды",
   'adm.decided': "{name} шешіп қойды",
   'adm.decidedAnon': "Шешіліп қойған",
+  'adm.drafts': "Арналардан",
   'adm.doneList': "Жасалды",
   'adm.undo': "Болдырмау",
   'adm.undone': "болдырылмады",
