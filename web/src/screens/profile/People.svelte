@@ -2,7 +2,8 @@
   // "People of the app" (owner, Nov 18): the creator, the idea's author, then everyone whose idea, find or code shipped,
   // newest first by the day it shipped: never by amount. A little like film credits (a centred top, air), scrolled by
   // hand. A name and a face only after that person's own yes (server credits.py); without it the app signs the lines
-  // "Student", each line a row of its own: a plain row, nothing to tap. The list comes with the app (data.credits): the page never waits.
+  // "Student", each line a row of its own: a plain row, nothing to tap; a pull request's lines stand under its GitHub
+  // login, the row opens the profile there. The list comes with the app (data.credits): the page never waits.
   import UsersRound from '@lucide/svelte/icons/users-round';
   import UserRound from '@lucide/svelte/icons/user-round';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -64,10 +65,12 @@
         <div class="list"><Group caption={t('cr.list')}>
           {#each c.people as row, i (i)}
             {@const p = row.person}
-            <svelte:element this={p ? 'button' : 'div'} class="who" class:tap={!!p} onclick={p ? () => open(p) : undefined} role={p ? undefined : 'group'}>
-              <span class="face">{#if p}<Avatar person={p} size={40} tappable={false} />{:else}{@render anon(40)}{/if}</span>
+            {@const gh = !p && row.gh}
+            <svelte:element this={p || gh ? 'button' : 'div'} class="who" class:tap={!!(p || gh)} role={p || gh ? undefined : 'group'}
+              onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
+              <span class="face">{#if p}<Avatar person={p} size={40} tappable={false} />{:else if gh}<span class="anon gh"><GitHubMark size={22} /></span>{:else}{@render anon(40)}{/if}</span>
               <span class="body">
-                <span class="hd"><b class="wn" class:dim={!p}>{p ? p.name : t('cr.student')}</b>{#if p}<span class="mk"><ChevronRight size={18} /></span>{/if}</span>
+                <span class="hd"><b class="wn" class:dim={!p && !gh}>{p ? p.name : gh || t('cr.student')}</b>{#if p}<span class="mk"><ChevronRight size={18} /></span>{:else if gh}<span class="mk"><ArrowUpRight size={18} /></span>{/if}</span>
                 <CreditLines items={row.items} />
               </span>
             </svelte:element>
@@ -91,6 +94,7 @@
   .nm { margin-top: 4px; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; overflow-wrap: anywhere; }
   .nm.big { font: 800 var(--fs-t1)/1.15 var(--font-display); letter-spacing: -0.03em; }
   .more { margin-top: var(--s-2); }
+  .anon.gh { width: 40px; height: 40px; color: var(--text); }
   .anon { flex: none; display: inline-grid; place-items: center; border-radius: 50%; background: var(--fill); color: var(--text-3); }
   .list { align-self: stretch; margin-top: var(--s-10); }
   .who { position: relative; display: flex; align-items: flex-start; gap: var(--s-3); width: 100%; padding-left: var(--s-4); text-align: left; color: var(--text); }

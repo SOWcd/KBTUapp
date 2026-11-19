@@ -1,14 +1,15 @@
 """The people of the app: the creator, the idea's author, and everyone whose idea, find (a bug) or code is in it.
 
-A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet),
-a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
+A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet)
+or a GitHub login (`gh`: code from a pull request, its author's Telegram unknown; `credit bind` adds it later), a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
 no name, handle, link or identifying detail (it is shown under "Student"). It is listed once shipped, newest first by
 the day it shipped: no order by amount, nothing to argue about.
 
 The feature's own consent (CONSENT, as evteams'): a name and a face stand next to the lines ONLY after that person's
 yes to the text in force, and only while they could give it now (`_CAN`: a signed-in student, not banned). Otherwise
 (no answer, a no, a withdrawal, a ban, no account, a deleted or unlinked account) every line stays, each as its own
-"Student" row: no name, face, id or link, and nothing that says two nameless lines are one person's. A yes covers the
+"Student" row: no name, face, id or link, and nothing that says two nameless lines are one person's. The one exception:
+a line with a GitHub login stands under that login, its lines together (the login is public on GitHub already). A yes covers the
 lines shown and those added later (the sheet says so). Every answer is a row of `credit_consents` (who, when, yes or
 no, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
 refused if a newer answer exists: a late or repeated yes never undoes a withdrawal. Asked by the bot's template once
@@ -17,7 +18,7 @@ per person and text version (`ask`), answered in the app, changed in Settings.
 The creator alone is named without a consent row: on purpose, he is public as the creator everywhere already
 (`person.founder`, /api/me's support), and nothing else of his is shown here. The idea's author follows the rule.
 
-Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id (`gone`): what the app got stays
+Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id and the GitHub login (`gone`): what the app got stays
 in the list as nameless "Student" rows, and nothing left behind points at the person. An account moved to another
 Telegram (`kbtu.admin move`) takes its lines along and its yes ends (`moved`): the new profile is previewed afresh.
 """
@@ -83,7 +84,7 @@ def listing(con, v: Viewer) -> dict:
     founder = next((p for p in top if p["is_founder"]), None)
     idea = next((p for p in top if p["mark"] == "idea" and not p["is_founder"]), None)
     me = _state(con, v.id)
-    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.kind, c.ru, c.kk, c.en, c.shipped_on, {_COLS}
+    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, {_COLS}
         FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE c.shipped_on IS NOT NULL ORDER BY c.shipped_on DESC, c.id DESC""")
     people: dict[object, dict] = {}
@@ -97,16 +98,17 @@ def listing(con, v: Viewer) -> dict:
             idea_items.append(_item(r))
             continue
         named = _named(r)
-        # a named person's lines together, where their newest stands; a nameless line alone, whoever's it is
-        row = people.setdefault(r["whose"] if named else ("line", r["cid"]),
-                                {"person": person_ref(r) if named else None, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
+        # a named person's lines together, where their newest stands; a GitHub login's too; a nameless line alone
+        gh = None if named else r["gh"]
+        row = people.setdefault(r["whose"] if named else ("gh", gh) if gh else ("line", r["cid"]),
+                                {"person": person_ref(r) if named else None, "gh": gh, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
         row["items"].append(_item(r))
     is_idea = bool(idea and idea["id"] == v.id)
     said = _said(me)
     return {
         "founder": person_ref(founder) if founder and founder["banned_at"] is None else None,
         "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items} if idea else None,
-        "people": [{"person": p["person"], "items": p["items"]} for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
+        "people": [{"person": p["person"], "items": p["items"]} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
         # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
         # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
         "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items}
@@ -168,8 +170,8 @@ def asking(con, uid: int) -> int | None:
 
 
 def gone(con, tg_id: int) -> None:
-    """A deleted account: its lines stay, nameless for good (no Telegram id left on them)."""
-    con.execute("UPDATE credits SET tg_id = NULL WHERE tg_id = ?", (tg_id,))
+    """A deleted account: its lines stay, nameless for good (no Telegram id or GitHub login left on them)."""
+    con.execute("UPDATE credits SET tg_id = NULL, gh = NULL WHERE tg_id = ?", (tg_id,))
 
 
 def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
@@ -187,14 +189,36 @@ def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
 
 # ------------------------------------------------------------ the team's CLI (kbtu.admin credit ...)
 
-def add(con, tg_id: int, kind: str, ru: str, kk: str, en: str) -> int:
+GH = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}")  # GitHub's own login rule, near enough
+
+
+def add(con, who: int | str, kind: str, ru: str, kk: str, en: str) -> int:
+    """who: a Telegram id, or "gh:<login>" (no Telegram yet)."""
     lines = [" ".join(x.split()) for x in (ru, kk, en)]
-    if tg_id <= 0 or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
+    gh = who[3:] if isinstance(who, str) and who.startswith("gh:") else None
+    if gh is not None and not GH.fullmatch(gh):
+        raise ValueError("gh:<a GitHub login>")
+    tg_id = None if gh is not None else int(who)
+    if (tg_id is not None and tg_id <= 0) or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
     if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
-        return con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?)", (tg_id, kind, *lines, core.now())).lastrowid
+        return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (tg_id, gh, kind, *lines, core.now())).lastrowid
+
+
+def bind(con, gh: str, tg_id: int) -> int:
+    """`credit bind`: a GitHub login's lines are this Telegram's (the team checked it with the person); lines already
+    under another Telegram are refused. The number of lines bound."""
+    if tg_id <= 0 or not GH.fullmatch(gh):
+        raise ValueError("a GitHub login and a Telegram id")
+    with tx(con):
+        if one(con, "SELECT 1 FROM credits WHERE gh = ? COLLATE NOCASE AND tg_id IS NOT NULL AND tg_id != ?", gh, tg_id):
+            raise ValueError(f"{gh}'s lines are bound to another Telegram already")
+        n = con.execute("UPDATE credits SET tg_id = ? WHERE gh = ? COLLATE NOCASE", (tg_id, gh)).rowcount
+    if not n:
+        raise ValueError(f"no lines of {gh}")
+    return n
 
 
 def ship(con, cid: int, day: str | None = None) -> str:
