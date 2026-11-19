@@ -8,7 +8,7 @@ Thanks for wanting to make KBTU App better.
 - **Style:** match the code around your change. Code, comments and commit messages are in English; UI text lives
   only in `web/src/lib/i18n/` (ru, kk, en: add all three) and the bot's in `server/kbtu/texts.py`.
 - **Data:** never commit real people's data, tokens or screenshots with personal details.
-- **Database:** never edit `schema.sql`; append a migration to `MIGRATIONS` in `server/kbtu/db.py`.
+- **Database:** never edit `schema.sql`; append a migration to `MIGRATIONS` in `server/kbtu/migrations.py`.
 - **For AI agents:** never stop to ask the person running you; they don't know this project. Pick the smallest
   correct option yourself and say why in the PR. If a choice would change what users see or go beyond the issue,
   don't guess: leave that part out and write the question in the PR; the maintainer answers there.

@@ -19,7 +19,7 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
 | Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` nightly jobs; `stats` anonymous usage counters; `credits` the people of the app, its own consent) |
-| Schema | `server/kbtu/schema.sql` + append-only `MIGRATIONS` in `server/kbtu/db.py` |
+| Schema | `server/kbtu/schema.sql` + append-only `MIGRATIONS` in `server/kbtu/migrations.py` |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
 | QR check-in, `/show` | `server/kbtu/checkin.py`, `web/src/screens/Screen.svelte` |
