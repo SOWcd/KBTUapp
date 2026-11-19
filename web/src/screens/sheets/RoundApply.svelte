@@ -180,7 +180,9 @@
         <Group caption={t('cast.ivTitle')} footnote={days.length ? t('cast.ivPick') : t('cast.ivNone')}>
           {#each days as [day, list] (day)}
             <!-- engine: ui/Row could hold a wrapping row of Chips under its title (a day's free times) -->
-            <div class="kb-row ivday"><span class="dl">{day}</span>
+            <!-- the day's places: the bot's "the place changed" lands here for one who hasn't picked a time -->
+            {@const at = [...new Set(list.map((s) => placeOf(s.place)))].join(' · ')}
+            <div class="kb-row ivday"><span class="dl">{day}{#if at}<i>{at}</i>{/if}</span>
               <div class="chips">{#each list as s (s.id)}<Chip selected={!!s.mine} onclick={() => take(s)}>{slotTime(s)}{s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
           {/each}
           <Row tone="action" title={t('cast.ivNothing')} onclick={nothingFits} />
@@ -244,7 +246,8 @@
   /* a day's free times: a plain row of the group (kb-row draws the line above the next row) */
   .ivday { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
   .ivday + .ivday::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
-  .dl { font: 600 var(--fs-body)/1.3 var(--font-text); }
+  .dl { display: flex; flex-direction: column; gap: 2px; font: 600 var(--fs-body)/1.3 var(--font-text); }
+  .dl i { font: 450 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
   .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
   .mark { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     box-shadow: inset 0 0 0 2px var(--c); font: 700 var(--fs-body)/1 var(--font-text); color: var(--on-accent); }

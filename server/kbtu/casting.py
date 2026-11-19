@@ -18,7 +18,7 @@ import re
 
 from .db import tx
 from .logic.teams import may_dept
-from .logic import PERSON_COLS, ApiError, Viewer, _may, _once, _qs, banned, can, joined, need_student, notify, now, one, person_ref, role_in, rows
+from .logic import PERSON_COLS, ApiError, Viewer, _may, _once, _qs, banned, can, joined, log_action, need_student, notify, now, one, person_ref, role_in, rows
 
 KINDS = ("short", "long", "one", "many", "link")
 VERDICTS = ("no", "maybe", "next")
@@ -417,6 +417,67 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
         raise ApiError("conflict")
     con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
     return slots(con, v, s["round_id"])
+
+
+NO_LINK = re.compile(r"http|www\.|t\.me|@|://", re.I)  # a slot's new place goes into the bot's message: no link, no ping
+PLACE_NOTICES = 3  # place changes a round may tell the shortlisted about per Almaty day; more still save, quietly
+
+
+def window(con, a):
+    """The interview window a place notice names for an application: its own slot while it hasn't ended; with none,
+    the nearest window that hasn't ended and has room (an invited applicant still picking). None: nothing to tell."""
+    ends = "s.starts_at + COALESCE((SELECT minutes FROM round_wide w WHERE w.slot_id = s.id), s.minutes) * 60"
+    if a["slot_id"]:
+        return one(con, f"SELECT s.*, {ends} AS ends FROM round_slots s WHERE s.id = ? AND {ends} > ?", a["slot_id"], now())
+    if not a["invited_at"]:
+        return None
+    # one with room left, as the app offers them (a full one can't be picked)
+    room = f"""(SELECT COUNT(*) FROM round_apps x WHERE x.slot_id = s.id AND x.stage != 'withdrawn')
+        < CASE WHEN EXISTS (SELECT 1 FROM round_wide w WHERE w.slot_id = s.id) THEN {OPEN_CAP} ELSE s.capacity END"""
+    return one(con, f"SELECT s.*, {ends} AS ends FROM round_slots s WHERE s.round_id = ? AND {ends} > ? AND {room} ORDER BY s.starts_at LIMIT 1",
+               a["round_id"], now())
+
+
+def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
+    """The venue moved (a club lead, Nov 19): a slot's place changes; the shortlisted it concerns hear it once from the
+    bot (those booked on it, the invited with no time yet), a couple of minutes later from what is current then, so a
+    few quick edits are one message. notice: 'sent', 'limit' (the day's notices are used up: saved, nobody told) or 'none'."""
+    s = one(con, """SELECT s.*, r.org_id, r.status AS rstatus, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
+        FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?""", sid)
+    if not s:
+        raise ApiError("not_found")
+    _may(con, v, s["org_id"], "casting")
+    raw = body.get("place")
+    if not isinstance(raw, str) or "\n" in raw or "\r" in raw:
+        raise ApiError("bad_input")
+    place = " ".join(raw.split())
+    if not 0 < len(place) <= 120 or NO_LINK.search(place):
+        raise ApiError("bad_input")
+    if s["rstatus"] == "done" or s["starts_at"] + _mins(s) * 60 <= now():
+        raise ApiError("closed")
+    rid = s["round_id"]
+    if place == s["place"]:
+        return {"slots": slots(con, v, rid), "notice": "none"}
+    with tx(con):
+        con.execute("UPDATE round_slots SET place = ? WHERE id = ?", (place, sid))
+        day = (now() + ASTANA) // DAY * DAY - ASTANA
+        used = one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND action = 'round_place' AND at >= ?
+            AND json_extract(data, '$.told') = 1""", f"round:{rid}", day)[0]
+        told = covered = limited = False
+        for a in rows(con, """SELECT id, user_id FROM round_apps WHERE round_id = ? AND stage = 'next' AND sent_at IS NULL
+                AND (slot_id = ? OR slot_id IS NULL AND invited_at IS NOT NULL)""", rid, sid):
+            # one message waiting per applicant: it renders the current places when it goes, so it carries this edit too
+            if one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ? AND sent_at IS NULL AND error IS NULL", f"ivp:{a['id']}:%"):
+                covered = True
+            elif used >= PLACE_NOTICES:
+                limited = True
+            else:
+                n = one(con, "SELECT COUNT(*) FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ?", f"ivp:{a['id']}:%")[0]
+                notify(con, a["user_id"], "round_place", f"ivp:{a['id']}:{n}", after=now() + 120)
+                told = True
+        notice = "limit" if limited else "sent" if told or covered else "none"
+        log_action(con, v.id, "round_place", f"round:{rid}", json.dumps({"slot": sid, "old": s["place"], "new": place, "told": int(told)}, ensure_ascii=False))
+    return {"slots": slots(con, v, rid), "notice": notice}
 
 
 def slots(con, v: Viewer, rid: int) -> list[dict]:

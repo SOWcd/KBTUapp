@@ -154,6 +154,24 @@
   async function dropSlot(s: RoundSlot) {
     try { slots = await api.dropSlot(s.id); haptic.soft(); } catch { say(t('cast.ivBooked2'), 'pleading_face_3d'); }
   }
+  // the venue moved: an upcoming slot's place, edited in place; the server tells the shortlisted it concerns once
+  let placing = $state<Id | null>(null), placeDraft = $state('');
+  const ahead = (s: RoundSlot) => s.startsAt + s.minutes * 60 > nowTs();
+  function editPlace(s: RoundSlot) {
+    if (placing === s.id) { placing = null; return; }
+    placing = s.id; placeDraft = s.place;
+  }
+  async function savePlace(s: RoundSlot) {
+    const place = placeDraft.trim().replace(/\s+/g, ' '), was = s.place;
+    placing = null;
+    if (!place || place === was) return;
+    s.place = place; // optimistic: the row shows it at once
+    try {
+      const res = await api.slotPlace(s.id, place);
+      slots = res.slots; haptic.ok();
+      say(t(res.notice === 'sent' ? 'cast.placeSent' : res.notice === 'limit' ? 'cast.placeLimit' : 'cast.placeSaved'), 'spiral_calendar_3d');
+    } catch (x) { s.place = was; haptic.error(); say(x instanceof ApiErr && x.code === 'bad_input' ? t('cast.placeBad') : t('common.error'), 'pleading_face_3d'); }
+  }
   async function inviteAll() {
     if (!r) return;
     try {
@@ -281,9 +299,18 @@
         <Group caption={day}>
           {#each list as s (s.id)}
             {@const people = s.people ?? []}
-            <Row title={slotTime(s)} subtitle={placeOf(s.place) + (s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')}>
-              {#snippet trailing()}{#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}{/snippet}
+            <Row title={slotTime(s)} subtitle={placeOf(s.place) + (s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')} whole>
+              {#snippet trailing()}<span class="ends">
+                {#if ahead(s)}<IconButton icon={Pencil} kind="plain" size="s" label={t('cast.placeEdit')} onclick={() => editPlace(s)} />{/if}
+                {#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}
+              </span>{/snippet}
             </Row>
+            {#if placing === s.id}
+              <div class="stack edit" transition:fold>
+                <Field label={t('memo.where')} bind:value={placeDraft} maxlength={120} />
+                <Button kind="secondary" size="m" full onclick={() => savePlace(s)}>{t('common.save')}</Button>
+              </div>
+            {/if}
             {#each people as p (p.appId)}
               <Row dense title={p.fullName} value={p.showed === true ? t('cast.ivCame') : p.showed === false ? t('cast.ivMissed') : ''} invalid={p.showed === false} accessory="chevron"
                 onclick={() => { const a = apps.find((x) => x.id === p.appId); if (a) openApp(a); }}>
@@ -372,5 +399,7 @@
   .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
   .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
     font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .ends { display: flex; }
+  .edit { padding: var(--s-2) var(--s-4) var(--s-3); }
   .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 </style>
