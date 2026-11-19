@@ -1923,7 +1923,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"))
         # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
         text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True, effort="none")  # a person waits: a slow first host races another
-        return logic.assistant.filled(text)
+        return logic.assistant.filled(text, body.get("text"))
 
     # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own
     @app.get("/api/vol")
@@ -2392,7 +2392,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             e = logic.event(con, v, ref)
             if e["status"] != "published":
                 raise ApiError("closed")
-            caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"],
+            caption, button = texts.share_event(lang, e["title"], e["startsAt"], texts.where(e["place"], e["online"], lang),
                                                   " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])]), e["price"], e["taken"])
             # the photo, else the video's poster (a photo of the same name)
             cover = logic.one(con, """SELECT COALESCE(f.path, x.path) AS path FROM events e LEFT JOIN files f ON f.id = e.cover_file_id

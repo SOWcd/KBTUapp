@@ -1319,9 +1319,17 @@ def phone_line(phone: str | None) -> str | None:
     return f"+7 ({d[:3]}) {d[3:6]} {d[6:8]} {d[8:]}" if len(d) == 10 else None
 
 
-def place_or_tba(place: str, lang: str) -> str:
+ONLINE = {"ru": "Онлайн", "kk": "Онлайн", "en": "Online"}
+
+
+def where(place: str, online: bool, lang: str) -> str:
+    """An event's place as people read it: an online event has none, the word in their language (never its link)."""
+    return place or (ONLINE.get(lang, ONLINE["ru"]) if online else "")
+
+
+def place_or_tba(place: str, lang: str, online: bool = False) -> str:
     """An event's place in a bot message; empty while it's to be confirmed (a room asked of DMP by memo)."""
-    return place or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
+    return where(place, online, lang) or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
 
 
 # /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set.

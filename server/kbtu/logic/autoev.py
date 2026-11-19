@@ -78,11 +78,11 @@ def _similar(a: str, b: str) -> bool:
     return a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= 0.6
 
 
-def made(con, pid: int, answer: str) -> int | None:
+def made(con, pid: int, answer: str, text: str = "") -> int | None:
     """The model's answer as the club's draft: the event's id; None when it's no event, has no future day and time, or
     the club has it already (any event that day with a like title)."""
     x = assistant._parse(answer) or {}
-    f = assistant.filled(answer)
+    f = assistant.filled(answer, text)  # the post's meeting link: an online event
     if x.get("event") is False or not {"title", "date", "start"} <= f.keys():
         return None
     starts = _at(f["date"], f["start"])
@@ -103,6 +103,8 @@ def made(con, pid: int, answer: str) -> int | None:
             return None
         e = {"title": f["title"], "description": f.get("description", ""), "starts_at": starts, "ends_at": ends, "place": f.get("place", ""),
              "emoji": f.get("emoji", "party_popper_3d"), "color": f.get("color", "#3B6BFF")}
+        if "onlineUrl" in f:  # a known meeting host's only (core.meet_link): online, no place
+            e.update(place="", online=f["onlineUrl"])
         # ponytail: a stated price stays in the description: a paid event needs the club's own Kaspi details first
         if "tr" in f:
             e.update(organizing._own_tr({"tr": f["tr"]}, e))
@@ -129,7 +131,7 @@ async def propose(con, cfg, http: httpx.AsyncClient, pid: int, text: str, posted
     except (llm.Busy, llm.BadAnswers) as exc:
         log.warning("autoev: post %d: %s", pid, type(exc).__name__)
         return None
-    return made(con, pid, answer)
+    return made(con, pid, answer, text)
 
 
 TALL_FOCUS = "0.500,0.200"  # a poster taller than wide (4:5, 3:4): its title sits high, the wide frames keep it in view

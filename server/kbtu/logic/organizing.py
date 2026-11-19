@@ -223,6 +223,8 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         board = i.get("forBoard") is True  # "For whom": the board (Head+), a built-in choice beside the tags
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
+        # an online event: no place then, its link typed by the organizer (any https host, core.online_url) or none yet
+        online = None if "online" not in i else (str(i.get("onlineUrl") or "").strip() if i["online"] is True else False)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
@@ -230,10 +232,16 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
           and re.fullmatch(r"#[0-9a-fA-F]{6}", color) and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and visibility in (None, "public", "members", *(("leaders",) if oversee else ()))
           and leaders in (None, "president", "vice", "head") and (not meeting or visibility == "members" and seats is None)
-          and (vol is None or 1 <= vol <= 500 and not meeting) and not (board and tag))
+          and (vol is None or 1 <= vol <= 500 and not meeting) and not (board and tag)
+          and (not online or core.online_url(online, typed=True)))
     if not ok:
         raise ApiError("bad_input")
+    if online is not None:  # left out: kept as it is
+        online = None if online is False else core.online_url(online, typed=True) or ""
+    if online is not None:
+        place, url = "", None
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
+            **({"online": online} if "online" in i else {}),
             "emoji": emoji, "color": color, "seats": seats, "reg_until": None if late else reg_until, "late_signup": int(late), "first_year": int(bool(i.get("firstYear"))),
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
@@ -527,7 +535,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     sends); within 2 hours of the start or during it, at once and only to those not checked in. A new place also gets a
     line in the event's Updates."""
     eid, moved = e["id"], e["starts_at"] != after["starts_at"]
-    placed = (e["place"], e["place_url"]) != (after["place"], after["place_url"])
+    placed = (e["place"], e["place_url"], e["online"]) != (after["place"], after["place_url"], after["online"])
     if e["status"] != "published" or not (moved or placed):
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
@@ -554,7 +562,7 @@ def change_place(con, v: Viewer, eid: int, place: object) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] != "published" or end_of(e) < core.now():
             raise ApiError("closed")
-        con.execute("UPDATE events SET place = ?, place_url = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
+        con.execute("UPDATE events SET place = ?, place_url = NULL, online = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)
         _changed(con, v, e, after)
         cohost_changed(con, e, after)

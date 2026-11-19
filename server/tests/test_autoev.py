@@ -328,3 +328,13 @@ def test_backfill_once(env, monkeypatch):
     assert [x["path"] for x in covers] == [pic["path"], pic["path"], None]
     assert covers[0]["cover_focus"] == autoev.TALL_FOCUS and covers[0]["kind"] == "event_cover" and covers[0]["owner_id"] is None
     assert con.execute("SELECT COUNT(*) FROM files WHERE kind = 'event_cover'").fetchone()[0] == 1  # once, shared
+
+
+def test_a_meeting_link_makes_it_online(env, monkeypatch):
+    """The post's first meeting link (plain code, core.meet_link): the draft is online, no place, the link as written."""
+    c, cfg, con, ids = _setup(env)
+    _model(monkeypatch, [_form(place="Online")])
+    text = TEXT.replace("in hall 305", "online at https://meet.google.com/abc-defg-hij")
+    eid = _look(con, cfg, _post(con, 1, text), text)
+    e = con.execute("SELECT place, online FROM events WHERE id = ?", (eid,)).fetchone()
+    assert tuple(e) == ("", "https://meet.google.com/abc-defg-hij")

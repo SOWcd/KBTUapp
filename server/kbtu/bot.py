@@ -146,7 +146,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
-    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
+    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
     def listed(evs):  # a line per event, the first one opened
@@ -554,7 +554,7 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
-    where = f"\n📍 {e['place']}" if e["place"] else ""
+    where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
 
@@ -1718,10 +1718,11 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
            and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]
     for e in evs[:20 if words else INLINE_EVENTS]:
         org = " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])])
-        caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"], org, e["price"], e["taken"])
+        place = texts.where(e["place"], e["online"], lang)
+        caption, button = texts.share_event(lang, e["title"], e["startsAt"], place, org, e["price"], e["taken"])
         poster = f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
         out.append(article(f"ev-{e['id']}", e["title"], caption, button, f"ev_{e['id']}", thumbnail_url=poster,
-                           description=" · ".join([texts.when(e["startsAt"], lang), *([e["place"]] if e["place"] else [])])))
+                           description=" · ".join([texts.when(e["startsAt"], lang), *([place] if place else [])])))
     return body
 
 

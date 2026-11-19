@@ -282,7 +282,7 @@
     {#if today && next}
       <div class="day">
         <Group>
-          <Row dense whole title={next.title} subtitle="{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}" value="{next.taken}{next.seats ? ' / ' + next.seats : ''}" accessory="chevron" onclick={() => openRow(next)}>
+          <Row dense whole title={next.title} subtitle="{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place, next.online)}" value="{next.taken}{next.seats ? ' / ' + next.seats : ''}" accessory="chevron" onclick={() => openRow(next)}>
             {#snippet lead()}<Poster item={next} size={44} radius={12} />{/snippet}
           </Row>
           <!-- one we co-host: its people from our side (its row opens it as a student sees it) -->

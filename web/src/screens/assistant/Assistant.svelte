@@ -140,7 +140,7 @@
     afisha: TAB_ICON.afisha, forum: TAB_ICON.forum, clubs: TAB_ICON.club, profile: TAB_ICON.profile, tickets: Ticket, friends: UserRound, awards: Trophy,
     subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus, route: Navigation };
   // an off-campus event's way there: its 2GIS link, or 2GIS's search for its typed address (the event page's own rule)
-  const gisOf = (id: number) => { const e = eventById(id); return e ? e.placeUrl || addressGis(e.place) : null; };
+  const gisOf = (id: number) => { const e = eventById(id); return e && !e.online ? e.placeUrl || addressGis(e.place) : null; };
   const shown = (a: AssistAction) => a.type !== 'route' || !!gisOf(a.id); // no way there: no button
   const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
   /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
