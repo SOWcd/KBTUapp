@@ -43,15 +43,15 @@
     return () => { clearInterval(tick); clearTimeout(boot); };
   });
 
-  // a title shrinks to fit before it is cut (the award title was cut on a narrow capsule); 11 px is the floor. Too long
-  // at full size, its icon steps aside first (a sheet's "New post" at 320 px: the words matter, the pen doesn't); a
-  // spinner stays (it says work is under way)
+  // a title shrinks to fit before it is cut (the award title was cut on a narrow capsule); 11 px is the floor. Every
+  // view keeps its icon (owner, Nov 20: "People of the app" lost it): the words shrink to the 11 px floor first, and only a title
+  // too long even then lets the icon step aside; a spinner stays (it says work is under way)
   function fit(node: HTMLElement) {
     const run = () => {
       const icon = node.previousElementSibling as SVGElement | null, hide = icon && !node.parentElement!.classList.contains('spin');
       node.style.fontSize = ''; if (icon) icon.style.display = '';
       let k = node.clientWidth / node.scrollWidth;
-      if (k < 1 && hide) { icon.style.display = 'none'; k = node.clientWidth / node.scrollWidth; }
+      if (k < 11 / 14 && hide) { icon.style.display = 'none'; k = node.clientWidth / node.scrollWidth; }
       if (k < 1) node.style.fontSize = `${Math.max(11, Math.floor(14 * k * 2) / 2)}px`;
     };
     const ro = new ResizeObserver(run); // the capsule widens after boot, on a narrow phone it starts smaller
