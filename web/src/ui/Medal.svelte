@@ -3,15 +3,16 @@
   // in layers (lib/awards layersOf): the field, the picture and its near part float with the tilt (base.css .z, the
   // glass's --gx/--gy from above) under the still rim, whose metal is the level; from 96 px it hangs on a ribbon of that
   // metal, from 160 px (the award card, the unlock) its name is engraved round the band, as on the owner's coins, and the
-  // level's numeral sits on the rim. The 2026 initiation's coins stay the owner's drawn pictures (isCoin). Iridescence
-  // lives inside one object, never smeared over text (owner's taste).
+  // level's numeral sits on the rim. The owner's coins and the other whole coins are one picture each (coinOf).
+  // Iridescence lives inside one object, never smeared over text (owner's taste).
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
   import Pin from './Pin.svelte';
-  import { PIN_SHAPE, ZNAKI, artOf, isCoin, isMedal, layersOf, legendOf, metalLetter, tierLabel, yearOf } from '../lib/awards';
+  import { PIN_SHAPE, ZNAKI, artOf, coinOf, isMedal, layersOf, legendOf, metalLetter, tierLabel, yearOf } from '../lib/awards';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();
 
   const hidden = $derived(a.secret && a.level === 0);
+  const coin = $derived(coinOf(a));
   const medal = $derived(isMedal(a));
   const vb = $derived(artOf(a).startsWith('layer_vb_')); // the temporary vector set: round, no shield
   const zn = $derived(vb ? undefined : ZNAKI[a.emoji]);
@@ -40,7 +41,7 @@
   });
 </script>
 
-{#if isCoin(a)}<span class="medal pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${a.emoji}.webp`} srcset={`emoji/sm/${a.emoji}.webp 192w, emoji/${a.emoji}.webp 512w`} sizes="{size}px" alt="" width={size} height={size} decoding="async" draggable="false" /></span>
+{#if coin}<span class="medal pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${coin}.webp`} srcset={`emoji/sm/${coin}.webp 192w, emoji/${coin}.webp 512w`} sizes="{size}px" alt="" width={size} height={size} decoding="async" draggable="false" /></span>
 {:else if !medal && !layers}<Pin color={zn?.field ?? 'rgb(47, 91, 234)'} emoji={a.emoji} metal={zn?.metal} year={a.level ? yearOf(a.at, zn?.year) : undefined} off={a.level === 0} {hidden} {size} />
 {:else if layers && !hidden}<span class="medal lay" class:shield={!!zn && PIN_SHAPE === 'shield'} class:none={a.level === 0} style="width:{size}px;height:{size}px">
   {#if size >= 96 && !vb && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}

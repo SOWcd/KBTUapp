@@ -82,12 +82,14 @@
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
   const ROSE = '226, 152, 124'; // the performer's rose gold
   const STEEL = '120, 156, 204'; // the moderator's shield (ui/Shield)
-  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
+  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3], medal_anthem: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
   // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
+  // (Early bird's coins: the tier medals' ribbon)
   const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246', AMETHYST = '88, 34, 150';
   const RIBBON: Record<string, string[]> = {
     medal_init26p_2: [ROSE, AMETHYST, AMETHYST, WHITE, AMETHYST, AMETHYST, ROSE, AMETHYST, AMETHYST, WHITE, AMETHYST, AMETHYST, ROSE],
     medal_first500: [GOLD, VIOLET, VIOLET, NAVY, NAVY, GOLD, NAVY, NAVY, VIOLET, VIOLET, GOLD],
+    medal_anthem: [GOLD, VIOLET, VIOLET, NAVY, NAVY, GOLD, NAVY, NAVY, VIOLET, VIOLET, GOLD], // its violet enamel, as First 500's
     medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
@@ -163,6 +165,8 @@
   // The 2026 initiation's coins (isCoin) are the ones that reach it: First 500 is a pin, a shield (awards plan, Nov 3)
   const art = $derived(round && a && a.level && artOf(a).startsWith('medal_') ? artOf(a) : '');
   let gl = $state<'' | 'wait' | 'on'>('');
+  // another level's coin tapped in the row (Early bird): the 3D coin is mine, so that one shows flat in its place
+  const peeked = $derived(!!gl && !!va && artOf(va) !== art);
   let landed = $state(true); // the 3D entrance: the light behind fades up as the medal arrives
   let host: HTMLSpanElement, stage: HTMLDivElement;
   const tiltOf = (k: string) => parseFloat(stage?.style.getPropertyValue(k)) || 0; // glass.ts writes --gx/--gy here
@@ -217,7 +221,7 @@
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if lit}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if lit}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} style:--fl={`${FACET.toFixed(2)}px`} style:--ap={`${APO.toFixed(2)}px`} style:--th={`${THICK}px`} bind:this={big}>{#if layered && !gl}{#each EDGE as f (f.i)}<i class="edge" style:--a={`${f.a}deg`} style:--c={f.c} style:--d={f.d}></i>{/each}<span class="back" class:struck={!!drawn} aria-hidden="true">{#if drawn}{#if rim}<img class="rib" src={`medals/ribbon-${rim}.svg`} alt="" draggable="false" />{/if}<canvas bind:this={backCanvas}></canvas><span class="shine"></span>{:else}<Award it={shown} size={SIZE} />{/if}</span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} style:--fl={`${FACET.toFixed(2)}px`} style:--ap={`${APO.toFixed(2)}px`} style:--th={`${THICK}px`} bind:this={big}>{#if layered && !gl}{#each EDGE as f (f.i)}<i class="edge" style:--a={`${f.a}deg`} style:--c={f.c} style:--d={f.d}></i>{/each}<span class="back" class:struck={!!drawn} aria-hidden="true">{#if drawn}{#if rim}<img class="rib" src={`medals/ribbon-${rim}.svg`} alt="" draggable="false" />{/if}<canvas bind:this={backCanvas}></canvas><span class="shine"></span>{:else}<Award it={shown} size={SIZE} />{/if}</span>{/if}<span class="face" class:hid={!!gl && !peeked}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" class:hid={peeked} bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}

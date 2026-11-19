@@ -103,6 +103,8 @@ const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_i
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
 export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
+  const c = coinOf(a);
+  if (c) return c;
   const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length), z = ZNAKI[a.emoji];
   const v = VECTOR[a.emoji];
   if (v) return `layer_vb_${v}`;
@@ -122,16 +124,19 @@ export function layersOf(art: string): [string, number][] | null {
   // a drawn pin, built as Recruiter's (owner, Nov 4): its own field and constellation, Recruiter's light, and the coin's
   // rim of its metal, round or along the shield (PIN_SHAPE)
   const z = /^layer_zn_([a-z0-9]+)_([gs])$/.exec(art);
-  // the anthem's pin: a treble clef in gold relief, a picture (vb-anthem-clef: an image model's, cut out) over its own
-  // field under the same rim (owner, Nov 17: the constellation was ugly). vb-*: tools/medals.mjs leaves these files alone
-  if (z && z[1] === 'anthem' && PIN_SHAPE === 'round') return [['zn-anthem-field', -1], ['vb-anthem-clef', 0.5], [`zn-rim-${z[2]}`, 0]];
   if (z) { const s = PIN_SHAPE === 'shield' ? 's' : ''; return [[`zn-${z[1]}-${s}field`, -1], [`zn-${z[1]}-${s}net`, 0.5], [`rc-core-${z[2]}`, 1], [`zn-${s}rim-${z[2]}`, 0]]; }
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
   return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
 }
 /** the owner's drawn coins, the 2026 initiation's three and First 500 (owner, Nov 3-4: "everyone is used to them";
- *  First 500 as a pin was "childish"): they stay exactly as they were, a round picture (public/emoji/medal_init26*_2) and the 3D coin in the award view, among the pins in Awards */
-export const isCoin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji.startsWith('medal_init26') || a.emoji === 'medal_first500';
+ *  First 500 as a pin was "childish"): they stay exactly as they were, a round picture (public/emoji/medal_init26*_2) and the 3D coin in the award view, among the pins in Awards.
+ *  Early bird (one coin per metal, not earned: bronze) and Perfect pitch are whole coins too (owner, Nov 19: a trial) */
+export function coinOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string | null {
+  if (a.emoji.startsWith('medal_init26') || a.emoji === 'medal_first500') return a.emoji;
+  if (a.code === 'first_in') return `medal_fi_${'bsgg'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))]}`;
+  return a.code === 'anthem' ? 'medal_anthem' : null;
+}
+export const isCoin = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): boolean => coinOf(a) !== null;
 /** the full-size medal's engraved name round its band (ui/Medal from 160 px), for the round medals but Recruiter */
 export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o ? `${o[1]}-legend-${o[2]}` : null; };
 /** a medal's metal letter at its level (its ribbon's): b, s, g, l */
@@ -143,7 +148,7 @@ export const PIN_SHAPE = 'round' as 'shield' | 'round';
 /** a drawn pin (ZNAKI): Recruiter's craft, in PIN_SHAPE */
 export const isDrawnPin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji in ZNAKI;
 /** round: a medal, an owner's coin, or a drawn pin when pins are round; the rest of the pins are shields */
-export const isRound = (a: Pick<Achievement, 'code' | 'levels' | 'emoji'>): boolean => isMedal(a) || isCoin(a) || (PIN_SHAPE === 'round' && isDrawnPin(a)) || artOf({ ...a, level: 1, levels: [] }).startsWith('layer_vb_');
+export const isRound = (a: Pick<Achievement, 'code' | 'levels' | 'emoji'>): boolean => isMedal(a) || isCoin({ ...a, level: 1 }) || (PIN_SHAPE === 'round' && isDrawnPin(a)) || artOf({ ...a, level: 1, levels: [] }).startsWith('layer_vb_');
 /** the drawn pins by their emoji name (an Admin row's variant too): the enamel, the glyph (public/medals/zn-*), the
  *  frame's metal (g gold, s silver, r rose gold), and the year of its moment if it has one */
 export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 's' | 'r'; year?: number }> = {
