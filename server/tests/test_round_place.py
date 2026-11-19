@@ -63,9 +63,9 @@ def test_only_the_team_and_only_plain_places(env, monkeypatch):
     c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
     assert _patch(c, slot["a"], "Hall 1", who=ANN).status_code == 403
     for bad in ("", "   ", "x" * 121, "Hall\n2", "Hall\t2", "https://zoom.us/j/1", "www.kbtu.kz", "t.me/club", "@chessclub", "zoom://room",
-                "HTTP hall", "example.com", "Go to site.kz", "Room \u202e503", "Room\u200b 5", "Hall \u2066A\u2069", "\uff45\uff58.com"):
+                "HTTP hall", "example.com", "Go to site.kz", "a.kz", "Room \u202e503", "Room\u200b 5", "Hall \u2066A\u2069", "\uff45\uff58.com"):
         assert _patch(c, slot["a"], bad).status_code == 400, bad
-    for good in ("\u0430\u0443\u0434. 305", "\u043a\u043e\u0440\u043f.2", "1.5 \u044d\u0442\u0430\u0436", "Room 305, Main building"):
+    for good in ("\u0430\u0443\u0434. 305", "\u043a\u043e\u0440\u043f.2", "1.5 \u044d\u0442\u0430\u0436", "Eng.Lab 305", "Room 305, Main building"):
         assert _patch(c, slot["a"], good).status_code == 200, good
     assert _patch(c, slot["a"], "Room 305, Main building").json()["notice"] == "none"  # unchanged: nothing more to tell
     assert _patch(c, 999999, "Hall 1").status_code == 404
@@ -99,6 +99,16 @@ def test_the_notice_is_about_the_edited_slot(env, monkeypatch):
     bob = con.execute("SELECT user_id FROM round_apps WHERE id = ?", (apps[BOB],)).fetchone()[0]
     casting.book(con, logic.Viewer(bob, "user", True), rid, {"slotId": slot["a"]})  # booked elsewhere before it went
     assert bot._render(con, rows[apps[BOB]]) is None and bot._render(con, rows[apps[CAT]])
+
+
+def test_a_dropped_slot_takes_its_waiting_notices(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
+    new = con.execute("INSERT INTO round_slots (round_id, starts_at, minutes, capacity, place) VALUES (?, ?, 60, 50, 'Room 1')", (rid, clock[0] + 8 * HOUR)).lastrowid
+    con.commit()
+    _patch(c, new, "Room 2")  # Bob (no time yet) is to hear about it
+    assert [_app_of(x) for x in _notices(con)] == [apps[BOB]]
+    assert c.delete(f"/api/round-slots/{new}", headers=tma(PRES)).status_code == 200
+    assert not _notices(con)  # SQLite may give its id to the next slot made: the old notice must not speak for that one
 
 
 def test_a_full_slot_tells_only_its_own(env, monkeypatch):

@@ -416,12 +416,15 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
     _may(con, v, s["org_id"], "casting")
     if one(con, "SELECT 1 FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", sid):
         raise ApiError("conflict")
-    con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
+    with tx(con):  # its waiting place notices go with it: SQLite may hand the id to the next slot made
+        con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
+        con.execute("DELETE FROM bot_outbox WHERE kind = 'round_place' AND sent_at IS NULL AND ref LIKE ?", (f"ivp:%:{sid}:%",))
     return slots(con, v, s["round_id"])
 
 
 NO_LINK = re.compile(r"http|www\.|t\.me|@|://", re.I)  # a slot's new place goes into the bot's message: no link, no ping
-DOMAIN = re.compile(r"\b[a-z]{2,}\.[a-z]{2,}\b", re.I)  # "example.com", "site.kz"; never a room like "aud. 305", "b.2", "1.5 floor"
+# "example.com", "a.kz" by their ending; never a room like "aud. 305", "b.2", "1.5 floor", "Eng.Lab 305"
+DOMAIN = re.compile(r"\b[a-z0-9-]+\.(?:com|kz|ru|org|net|me|io|app|link|gg|ly|cc|co|info|xyz|site|online|su|by|uz|dev|edu)\b", re.I)
 PLACE_NOTICES = 3  # place changes a round may tell the shortlisted about per Almaty day; more still save, quietly
 PLACE_EDITS = 8    # place changes a round may save per Almaty day at all
 
@@ -430,9 +433,8 @@ def _plain_place(raw) -> str:
     """A slot's place as the bot may quote it: one line, no invisible or direction characters, no link, no mention."""
     if not isinstance(raw, str) or any(unicodedata.category(c) in ("Cc", "Cf") for c in raw):
         raise ApiError("bad_input")
-    place = " ".join(raw.split())
-    seen = unicodedata.normalize("NFKC", place)
-    if not 0 < len(place) <= 120 or NO_LINK.search(seen) or DOMAIN.search(seen):
+    place = unicodedata.normalize("NFKC", " ".join(raw.split()))  # kept as checked: fullwidth "305" is the same room
+    if not 0 < len(place) <= 120 or NO_LINK.search(place) or DOMAIN.search(place):
         raise ApiError("bad_input")
     return place
 
