@@ -15,6 +15,7 @@ from __future__ import annotations
 import calendar
 import json
 import re
+import unicodedata
 
 from .db import tx
 from .logic.teams import may_dept
@@ -420,64 +421,80 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
 
 
 NO_LINK = re.compile(r"http|www\.|t\.me|@|://", re.I)  # a slot's new place goes into the bot's message: no link, no ping
+DOMAIN = re.compile(r"\b[a-z]{2,}\.[a-z]{2,}\b", re.I)  # "example.com", "site.kz"; never a room like "aud. 305", "b.2", "1.5 floor"
 PLACE_NOTICES = 3  # place changes a round may tell the shortlisted about per Almaty day; more still save, quietly
+PLACE_EDITS = 8    # place changes a round may save per Almaty day at all
 
 
-def window(con, a):
-    """The interview window a place notice names for an application: its own slot while it hasn't ended; with none,
-    the nearest window that hasn't ended and has room (an invited applicant still picking). None: nothing to tell."""
-    ends = "s.starts_at + COALESCE((SELECT minutes FROM round_wide w WHERE w.slot_id = s.id), s.minutes) * 60"
-    if a["slot_id"]:
-        return one(con, f"SELECT s.*, {ends} AS ends FROM round_slots s WHERE s.id = ? AND {ends} > ?", a["slot_id"], now())
-    if not a["invited_at"]:
+def _plain_place(raw) -> str:
+    """A slot's place as the bot may quote it: one line, no invisible or direction characters, no link, no mention."""
+    if not isinstance(raw, str) or any(unicodedata.category(c) in ("Cc", "Cf") for c in raw):
+        raise ApiError("bad_input")
+    place = " ".join(raw.split())
+    seen = unicodedata.normalize("NFKC", place)
+    if not 0 < len(place) <= 120 or NO_LINK.search(seen) or DOMAIN.search(seen):
+        raise ApiError("bad_input")
+    return place
+
+
+_ENDS = "s.starts_at + COALESCE((SELECT minutes FROM round_wide w WHERE w.slot_id = s.id), s.minutes) * 60"
+
+
+def _full(con, s) -> bool:
+    taken = one(con, "SELECT COUNT(*) FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", s["id"])[0]
+    return taken >= (OPEN_CAP if one(con, "SELECT 1 FROM round_wide WHERE slot_id = ?", s["id"]) else s["capacity"])
+
+
+def place_slot(con, a, sid: int):
+    """The edited slot a place notice names, as it is now, if the notice still holds for this application: the slot
+    hasn't ended, and it is theirs, or they are invited with no time and it has room. None: nothing to tell."""
+    s = one(con, f"SELECT s.*, {_ENDS} AS ends FROM round_slots s WHERE s.id = ? AND s.round_id = ? AND {_ENDS} > ?", sid, a["round_id"], now())
+    if not s or a["slot_id"] and a["slot_id"] != sid or not a["slot_id"] and (not a["invited_at"] or _full(con, s)):
         return None
-    # one with room left, as the app offers them (a full one can't be picked)
-    room = f"""(SELECT COUNT(*) FROM round_apps x WHERE x.slot_id = s.id AND x.stage != 'withdrawn')
-        < CASE WHEN EXISTS (SELECT 1 FROM round_wide w WHERE w.slot_id = s.id) THEN {OPEN_CAP} ELSE s.capacity END"""
-    return one(con, f"SELECT s.*, {ends} AS ends FROM round_slots s WHERE s.round_id = ? AND {ends} > ? AND {room} ORDER BY s.starts_at LIMIT 1",
-               a["round_id"], now())
+    return s
 
 
 def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
-    """The venue moved (a club lead, Nov 19): a slot's place changes; the shortlisted it concerns hear it once from the
-    bot (those booked on it, the invited with no time yet), a couple of minutes later from what is current then, so a
-    few quick edits are one message. notice: 'sent', 'limit' (the day's notices are used up: saved, nobody told) or 'none'."""
-    s = one(con, """SELECT s.*, r.org_id, r.status AS rstatus, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
-        FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?""", sid)
-    if not s:
-        raise ApiError("not_found")
-    _may(con, v, s["org_id"], "casting")
-    raw = body.get("place")
-    if not isinstance(raw, str) or "\n" in raw or "\r" in raw:
-        raise ApiError("bad_input")
-    place = " ".join(raw.split())
-    if not 0 < len(place) <= 120 or NO_LINK.search(place):
-        raise ApiError("bad_input")
-    if s["rstatus"] == "done" or s["starts_at"] + _mins(s) * 60 <= now():
-        raise ApiError("closed")
-    rid = s["round_id"]
-    if place == s["place"]:
-        return {"slots": slots(con, v, rid), "notice": "none"}
+    """The venue moved (a club lead, Nov 19): a slot's place changes; the shortlisted it concerns (booked on it, or
+    invited with no time while it has room) hear it once from the bot, a couple of minutes later from what is current
+    then, so a few quick edits are one message per slot. notice: 'sent', 'limit' (the day's notices are used up: saved,
+    nobody told) or 'none'. Checked and written under the write lock (tx is BEGIN IMMEDIATE): a removed organizer, a
+    round finished or a slot ended meanwhile never slips through."""
+    place = _plain_place(body.get("place"))
     with tx(con):
-        con.execute("UPDATE round_slots SET place = ? WHERE id = ?", (place, sid))
+        s = one(con, """SELECT s.*, r.org_id, r.status AS rstatus, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
+            FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?""", sid)
+        if not s:
+            raise ApiError("not_found")
+        _may(con, v, s["org_id"], "casting")
+        if s["rstatus"] == "done" or s["starts_at"] + _mins(s) * 60 <= now():
+            raise ApiError("closed")
+        rid = s["round_id"]
+        if place == s["place"]:
+            return {"slots": slots(con, v, rid), "notice": "none"}
         day = (now() + ASTANA) // DAY * DAY - ASTANA
-        used = one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND action = 'round_place' AND at >= ?
-            AND json_extract(data, '$.told') = 1""", f"round:{rid}", day)[0]
+        edits, used = one(con, """SELECT COUNT(*), COALESCE(SUM(json_extract(data, '$.told') = 1), 0) FROM audit_log
+            WHERE target = ? AND action = 'round_place' AND at >= ?""", f"round:{rid}", day)
+        if edits >= PLACE_EDITS:
+            raise ApiError("rate_limited")
+        con.execute("UPDATE round_slots SET place = ? WHERE id = ?", (place, sid))
+        room = not _full(con, s)
         told = covered = limited = False
         for a in rows(con, """SELECT id, user_id FROM round_apps WHERE round_id = ? AND stage = 'next' AND sent_at IS NULL
-                AND (slot_id = ? OR slot_id IS NULL AND invited_at IS NOT NULL)""", rid, sid):
-            # one message waiting per applicant: it renders the current places when it goes, so it carries this edit too
-            if one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ? AND sent_at IS NULL AND error IS NULL", f"ivp:{a['id']}:%"):
+                AND (slot_id = ? OR slot_id IS NULL AND invited_at IS NOT NULL AND ?)""", rid, sid, room):
+            mine = f"ivp:{a['id']}:{sid}:%"
+            # one message waiting per applicant and slot: it renders the slot as it is when it goes, so it carries this edit too
+            if one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ? AND sent_at IS NULL AND error IS NULL", mine):
                 covered = True
             elif used >= PLACE_NOTICES:
                 limited = True
             else:
-                n = one(con, "SELECT COUNT(*) FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ?", f"ivp:{a['id']}:%")[0]
-                notify(con, a["user_id"], "round_place", f"ivp:{a['id']}:{n}", after=now() + 120)
+                n = one(con, "SELECT COUNT(*) FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ?", mine)[0]
+                # the place before it: edited back to that before it goes, the row says nothing (bot._render)
+                notify(con, a["user_id"], "round_place", f"ivp:{a['id']}:{sid}:{n}", json.dumps({"was": s["place"]}, ensure_ascii=False), after=now() + 120)
                 told = True
-        notice = "limit" if limited else "sent" if told or covered else "none"
         log_action(con, v.id, "round_place", f"round:{rid}", json.dumps({"slot": sid, "old": s["place"], "new": place, "told": int(told)}, ensure_ascii=False))
-    return {"slots": slots(con, v, rid), "notice": notice}
+        return {"slots": slots(con, v, rid), "notice": "limit" if limited else "sent" if told or covered else "none"}
 
 
 def slots(con, v: Viewer, rid: int) -> list[dict]:

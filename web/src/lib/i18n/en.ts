@@ -606,6 +606,7 @@ const en: Dict = {
   'cast.placeLimit': "Place changed. No message today: the daily limit is reached",
   'cast.placeSaved': "Place changed",
   'cast.placeBad': "Just the place, no links or @",
+  'cast.placeMany': "Too many place changes for today",
   'cast.ivFree': "free",
   'cast.ivEmpty': "No times yet. Add a day, then invite the shortlisted.",
   'cast.ivNoTime': "Invited, hasn't picked a time",

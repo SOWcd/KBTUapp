@@ -154,23 +154,31 @@
   async function dropSlot(s: RoundSlot) {
     try { slots = await api.dropSlot(s.id); haptic.soft(); } catch { say(t('cast.ivBooked2'), 'pleading_face_3d'); }
   }
-  // the venue moved: an upcoming slot's place, edited in place; the server tells the shortlisted it concerns once
-  let placing = $state<Id | null>(null), placeDraft = $state('');
+  // the venue moved: an upcoming slot's place, edited in place; the server tells the shortlisted it concerns once.
+  // One save at a time: a rollback never restores another save's draft, an older answer never lands over a newer one
+  let placing = $state<Id | null>(null), placeDraft = $state(''), saving = $state(false);
   const ahead = (s: RoundSlot) => s.startsAt + s.minutes * 60 > nowTs();
   function editPlace(s: RoundSlot) {
+    if (saving) return;
     if (placing === s.id) { placing = null; return; }
     placing = s.id; placeDraft = s.place;
   }
   async function savePlace(s: RoundSlot) {
     const place = placeDraft.trim().replace(/\s+/g, ' '), was = s.place;
+    if (saving) return;
     placing = null;
     if (!place || place === was) return;
     s.place = place; // optimistic: the row shows it at once
+    saving = true;
     try {
       const res = await api.slotPlace(s.id, place);
       slots = res.slots; haptic.ok();
       say(t(res.notice === 'sent' ? 'cast.placeSent' : res.notice === 'limit' ? 'cast.placeLimit' : 'cast.placeSaved'), 'spiral_calendar_3d');
-    } catch (x) { s.place = was; haptic.error(); say(x instanceof ApiErr && x.code === 'bad_input' ? t('cast.placeBad') : t('common.error'), 'pleading_face_3d'); }
+    } catch (x) {
+      s.place = was; haptic.error();
+      const code = x instanceof ApiErr ? x.code : '';
+      say(t(code === 'bad_input' ? 'cast.placeBad' : code === 'rate_limited' ? 'cast.placeMany' : 'common.error'), 'pleading_face_3d');
+    } finally { saving = false; }
   }
   async function inviteAll() {
     if (!r) return;
@@ -301,14 +309,14 @@
             {@const people = s.people ?? []}
             <Row title={slotTime(s)} subtitle={placeOf(s.place) + (s.capacity > 1 && s.capacity < 500 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')} whole>
               {#snippet trailing()}<span class="ends">
-                {#if ahead(s)}<IconButton icon={Pencil} kind="plain" size="s" label={t('cast.placeEdit')} onclick={() => editPlace(s)} />{/if}
+                {#if ahead(s)}<IconButton icon={Pencil} kind="plain" size="s" label={t('cast.placeEdit')} disabled={saving} onclick={() => editPlace(s)} />{/if}
                 {#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}
               </span>{/snippet}
             </Row>
             {#if placing === s.id}
               <div class="stack edit" transition:fold>
                 <Field label={t('memo.where')} bind:value={placeDraft} maxlength={120} />
-                <Button kind="secondary" size="m" full onclick={() => savePlace(s)}>{t('common.save')}</Button>
+                <Button kind="secondary" size="m" full disabled={saving} onclick={() => savePlace(s)}>{t('common.save')}</Button>
               </div>
             {/if}
             {#each people as p (p.appId)}

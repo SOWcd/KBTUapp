@@ -62,10 +62,12 @@ def _app_of(row):
 def test_only_the_team_and_only_plain_places(env, monkeypatch):
     c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
     assert _patch(c, slot["a"], "Hall 1", who=ANN).status_code == 403
-    for bad in ("", "   ", "x" * 121, "Hall\n2", "https://zoom.us/j/1", "www.kbtu.kz", "t.me/club", "@chessclub", "zoom://room", "HTTP hall"):
+    for bad in ("", "   ", "x" * 121, "Hall\n2", "Hall\t2", "https://zoom.us/j/1", "www.kbtu.kz", "t.me/club", "@chessclub", "zoom://room",
+                "HTTP hall", "example.com", "Go to site.kz", "Room \u202e503", "Room\u200b 5", "Hall \u2066A\u2069", "\uff45\uff58.com"):
         assert _patch(c, slot["a"], bad).status_code == 400, bad
-    assert _patch(c, slot["a"], "Room 305").json()["notice"] == "none"  # unchanged: nothing to tell
-    assert not _notices(con)
+    for good in ("\u0430\u0443\u0434. 305", "\u043a\u043e\u0440\u043f.2", "1.5 \u044d\u0442\u0430\u0436", "Room 305, Main building"):
+        assert _patch(c, slot["a"], good).status_code == 200, good
+    assert _patch(c, slot["a"], "Room 305, Main building").json()["notice"] == "none"  # unchanged: nothing more to tell
     assert _patch(c, 999999, "Hall 1").status_code == 404
 
 
@@ -78,20 +80,46 @@ def test_who_hears_it_once_and_the_last_place_wins(env, monkeypatch):
     assert _patch(c, slot["a"], "Main building, 2nd floor").json()["notice"] == "sent"
     rows = _notices(con)
     assert sorted(_app_of(x) for x in rows) == sorted([apps[ANN], apps[BOB]])  # booked on it, invited with no time; not Cat, Dan, Eve
-    assert all(x["send_after"] == T0 + 120 for x in rows)
+    assert all(x["send_after"] == T0 + 120 and x["ref"].split(":")[2] == str(slot["a"]) for x in rows)
     for x in rows:
         text, button, start = bot._render(con, x)
         assert "Main building, 2nd floor" in text and "Hall 1" not in text and start.startswith("iv_")
-        assert "14:00–16:00" in text  # slot A, Almaty time, start to end
+        assert "14:00\u201316:00" in text  # slot A, Almaty time, start to end
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'round_place'").fetchone()[0] == 2
-    # the nearest window for Bob: slot A gone past, B is next
     clock[0] = T0 + 4 * HOUR + 1
+    assert [bot._render(con, x) for x in _notices(con)] == [None, None]  # slot A ended
+
+
+def test_the_notice_is_about_the_edited_slot(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
+    _patch(c, slot["b"], "Hall 2")  # the later slot: Cat (on it) and Bob (no time yet) hear about B itself
+    rows = {_app_of(x): x for x in _notices(con)}
+    assert set(rows) == {apps[CAT], apps[BOB]}
+    assert "17:00\u201318:00" in bot._render(con, rows[apps[BOB]])[0] and "Hall 2" in bot._render(con, rows[apps[BOB]])[0]
+    bob = con.execute("SELECT user_id FROM round_apps WHERE id = ?", (apps[BOB],)).fetchone()[0]
+    casting.book(con, logic.Viewer(bob, "user", True), rid, {"slotId": slot["a"]})  # booked elsewhere before it went
+    assert bot._render(con, rows[apps[BOB]]) is None and bot._render(con, rows[apps[CAT]])
+
+
+def test_a_full_slot_tells_only_its_own(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
+    con.execute("UPDATE round_slots SET capacity = 1 WHERE id = ?", (slot["b"],))  # Cat fills it
+    _patch(c, slot["b"], "Hall 2")
+    assert [_app_of(x) for x in _notices(con)] == [apps[CAT]]
+    con.execute("UPDATE round_slots SET capacity = 2 WHERE id = ?", (slot["b"],))
+    _patch(c, slot["b"], "Hall 3")
     bob = next(x for x in _notices(con) if _app_of(x) == apps[BOB])
-    assert "17:00–18:00" in bot._render(con, bob)[0]
-    assert bot._render(con, next(x for x in _notices(con) if _app_of(x) == apps[ANN])) is None  # her window ended
-    con.execute("UPDATE round_slots SET capacity = 1 WHERE id = ?", (slot["b"],))
-    con.execute("UPDATE round_apps SET slot_id = ? WHERE id = ?", (slot["b"], apps[CAT]))  # B is full: nothing Bob could pick
+    con.execute("UPDATE round_slots SET capacity = 1 WHERE id = ?", (slot["b"],))  # full again before it went
     assert bot._render(con, bob) is None
+
+
+def test_edited_back_says_nothing(env, monkeypatch):
+    c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
+    _patch(c, slot["a"], "Hall 1")
+    _patch(c, slot["a"], "Room 305")  # back to what it was before the waiting notice
+    assert [bot._render(con, x) for x in _notices(con)] == [None, None]
+    _patch(c, slot["a"], "Hall 7")
+    assert all("Hall 7" in bot._render(con, x)[0] for x in _notices(con))
 
 
 def test_decided_or_withdrawn_hear_nothing(env, monkeypatch):
@@ -122,6 +150,11 @@ def test_three_notices_a_day(env, monkeypatch):
     assert r["notice"] == "limit" and r["slots"][0]["place"] == "Hall 9"
     assert len(_notices(con)) == 6 and all(x["sent_at"] for x in _notices(con))  # two people, three times; nothing new
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'round_place'").fetchone()[0] == 4
+    # a waiting notice carries later edits, but not past eight saved edits a day: the ninth is refused
+    for i in range(4):
+        assert _patch(c, slot["a"], f"Room {i}").status_code == 200
+    r = _patch(c, slot["a"], "Room 99")
+    assert r.status_code == 429 and con.execute("SELECT place FROM round_slots WHERE id = ?", (slot["a"],)).fetchone()[0] == "Room 3"
 
 
 def test_the_texts_name_the_same_fields():
