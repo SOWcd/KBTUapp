@@ -2127,8 +2127,9 @@ async def _commands(cfg: Config, http: httpx.AsyncClient) -> None:
               "promote_members", "change_info", "invite_users", "post_stories", "edit_stories", "delete_stories",
               "pin_messages", "manage_topics", "manage_tags")}
     try:
-        await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyDefaultAdministratorRights",
-                        json={"rights": {"is_anonymous": False, **rights}})
+        res = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyDefaultAdministratorRights",
+                              json={"rights": {"is_anonymous": False, **rights}})
+        log.warning("default admin rights: %s", res.text[:200])
     except httpx.HTTPError:
         log.warning("setMyDefaultAdministratorRights failed")
 
