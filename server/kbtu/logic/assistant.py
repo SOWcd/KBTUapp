@@ -17,6 +17,7 @@ import re
 import secrets
 import sqlite3
 import time
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 
@@ -738,7 +739,9 @@ from .seats import on_afisha, on_afisha_args  # noqa: E402  (seats imports the o
 # The policy names Google among the assistant's providers since Nov 19, but students who accepted the same version
 # before never agreed to it, and nobody is asked to accept the policy again (owner). So the assistant asks its own
 # one-tap yes (as appeals.CONSENT): with it, Google answers first; without it, the chain as before. Withdrawn: the row
-# goes, Google is not asked from the next question.
+# goes, Google is not asked from the next question, nor by a question already on its way (llm.chat's lead_ok reads the
+# row again before each send). The row goes with the student row too (migration 190). A student who later accepts a
+# newer general policy keeps a kri-g1 yes: the card and its words are the same, so the yes still holds (owner's review).
 GOOGLE_YES = "kri-g1"  # the card's text (web: kri.g*); a reworded card is a new version, and old yeses ask again
 
 
@@ -746,14 +749,30 @@ def google_yes(con, uid: int) -> bool:
     return one(con, "SELECT 1 FROM kri_consents WHERE user_id = ? AND version = ?", uid, GOOGLE_YES) is not None
 
 
-def google_agree(con, v: Viewer, body: dict) -> dict:
-    """Mine given: the app sends the version it showed. Only where Google is open to me (app.py checks it first)."""
+def google_agree(con, v: Viewer, body: dict, policies: tuple[str, ...], open_: Callable[[], bool]) -> dict:
+    """Mine given: the app sends the version it showed. open_ (app.py's kri_google) and the write in one transaction,
+    the write itself only while my student row is there on the policy in force (policies) or a staff row: a request
+    that waited past my account's deletion inserts nothing (review, Nov 19)."""
     need_student(v)
     if not isinstance(body, dict) or body.get("consent") != GOOGLE_YES:
         raise ApiError("bad_input")
     with tx(con):
-        con.execute("INSERT OR REPLACE INTO kri_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, GOOGLE_YES, now()))
+        if not open_() or not con.execute(f"""INSERT OR REPLACE INTO kri_consents (user_id, version, at) SELECT ?, ?, ?
+                WHERE EXISTS (SELECT 1 FROM students WHERE user_id = ? AND consent_version IN ({_qs((*policies, 'staff', 'admin'))}))""",
+                (v.id, GOOGLE_YES, now(), v.id, *policies, "staff", "admin")).rowcount:
+            raise ApiError("not_found")
     return {"yes": True}
+
+
+def google_yes_now(path: str, uid: int) -> bool:
+    """google_yes on its own short connection, for llm.chat's lead_ok right before each send to Google (a lead given
+    up at its wall clock abandons its thread, which must never hold the request's pooled connection)."""
+    from .. import db  # here, as llm._count
+    c = db.connect(path)
+    try:
+        return c.execute("SELECT 1 FROM kri_consents WHERE user_id = ? AND version = ?", (uid, GOOGLE_YES)).fetchone() is not None
+    finally:
+        c.close()
 
 
 def google_withdraw(con, v: Viewer) -> dict:

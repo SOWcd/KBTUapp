@@ -123,3 +123,47 @@ def test_answer_times_with_old_rows(env):
     use = llm.usage(con)
     assert use[day] == {"groq:g/m": [3, 2, 1500, 1], llm.GOOGLE: [2, 0, 7000, 2]}  # average: ms / timed
     assert use["2026-01-01"] == {"cf:x": [5, 0, 0, 0]}
+
+
+def test_withdrawn_while_on_its_way_is_not_sent(kri, monkeypatch):
+    """Review: the yes is read again right before each send. Decided with a yes, withdrawn before the send: the chain
+    alone; withdrawn during Google's busy first try: no retry to Google, the chain answers."""
+    x, hosts = kri()
+    monkeypatch.setattr(logic.assistant, "google_yes", lambda con, uid: True)  # the route's decision: yes; no row now
+    assert _ask(x).status_code == 200 and hosts == ["api.groq.com"]
+    monkeypatch.undo()
+    monkeypatch.setattr(llm, "LEAD_BACKOFF", 0)
+    _row(kri)
+    x, hosts = kri()
+
+    def handler(r):
+        hosts.append(r.url.host)
+        if r.url.host == GOOGLE:
+            con = db.connect(kri.db)
+            con.execute("DELETE FROM kri_consents")  # withdrawn while Google was busy
+            con.close()
+            return httpx.Response(503)
+        return httpx.Response(200, json={"choices": [{"message": {"content": ANSWER}, "finish_reason": "stop"}]})
+    x.app.state.http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    assert _ask(x).status_code == 200 and hosts == [GOOGLE, "api.groq.com"]
+
+
+def test_a_late_grant_after_deletion_inserts_nothing(kri):
+    """Review: a POST that passed its checks and waited past the account's deletion writes no yes (the write itself
+    needs the student row); the API says 404."""
+    x, _ = kri()
+    con = db.connect(kri.db)
+    logic.delete_me(con, logic.Viewer(kri.uid, "user", True))
+    with pytest.raises(logic.ApiError):
+        logic.assistant.google_agree(con, logic.Viewer(kri.uid, "user", True), {"consent": "kri-g1"}, ("1",), lambda: True)
+    assert con.execute("SELECT COUNT(*) FROM kri_consents").fetchone()[0] == 0
+    assert x.post("/api/assistant/google", headers=tma(1), json={"consent": "kri-g1"}).status_code == 404
+
+
+def test_the_yes_goes_with_the_student_row(kri):
+    """Review: the operator's unlink (or anything else deleting the student row) takes the yes too (migration 190):
+    linking again finds no yes."""
+    _row(kri)
+    con = db.connect(kri.db)
+    con.execute("DELETE FROM students WHERE user_id = ?", (kri.uid,))
+    assert con.execute("SELECT COUNT(*) FROM kri_consents").fetchone()[0] == 0

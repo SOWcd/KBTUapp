@@ -1981,10 +1981,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     (188, "ALTER TABLE events ADD COLUMN online TEXT;"),
     # (Nov 19) the assistant's own yes to Google answering first (assistant.GOOGLE_YES, as team_consents): no row, never
     # Google; a withdrawal deletes the row
-    (189, """CREATE TABLE kri_consents (
+    (189, """CREATE TABLE IF NOT EXISTS kri_consents (  -- IF NOT EXISTS: tests rewind user_version
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
+    # (Nov 19, review) the yes goes with the student row, whatever removes it (deleting the account, the operator's
+    # unlink, a staff row taken back): a later sign-in never finds an old yes waiting
+    (190, """CREATE TRIGGER IF NOT EXISTS kri_consents_student_gone AFTER DELETE ON students BEGIN
+      DELETE FROM kri_consents WHERE user_id = OLD.user_id;
+    END;"""),
 ]
 
 

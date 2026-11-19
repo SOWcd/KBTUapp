@@ -221,7 +221,7 @@ const en: Dict = {
   'as.thinking': "Thinking",
   'as.note': "KRI can be wrong · We keep no questions, only topics and ratings without names.",
   'kri.gT': "Gemini can answer",
-  'kri.gText': "Google's model is stronger. Google may use questions to improve its models: don't write anything personal.",
+  'kri.gText': "Google's model is stronger. Google gets your chat with the assistant and its context (school, year, classes) and may use them to improve its models: don't write anything personal.",
   'kri.gOn': "Turn on",
   'kri.gLater': "Not now",
   'kri.gRow': "Gemini in the assistant",

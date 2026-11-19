@@ -45,10 +45,11 @@ TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
 # Google, the assistant's first try (chat's lead=; app.py: ASSIST_LEAD not off and the student's own yes,
-# assistant.GOOGLE_YES): series 4 only (owner), the one on the free tier. Free tier: often 503 "high demand" (Nov 19: 2 of 3 calls answered), so one quick retry, then the usual
-# chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
+# assistant.GOOGLE_YES): series 4 only (owner), the one on the free tier. Free tier: often 503 "high demand" (Nov 19:
+# 2 of 3 calls answered), so one quick retry, then the usual chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
 # ponytail: real answers took 3.1 to 6.5 s (Nov 19, effort low, 700 tokens), so 9 s lets them through; a failing Google
-# costs a student up to 9 s more than before. Lower it once the admin's AI page shows Google's average (ms / ok)
+# costs a student up to 9 s more than before, and leaves the chain 21 s of the assistant's 30 s (eu_ai's whole).
+# Lower it once the admin's AI page shows Google's average (ms / ok)
 GOOGLE = "google:gemini-4-hydrogen"
 LEAD_WAIT = 9.0
 LEAD_BACKOFF = 0.4
@@ -143,7 +144,7 @@ def _rest_for(r: httpx.Response) -> float:
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
                check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
                timeout: float = TIMEOUT, chain: str | None = None, race: bool = False, effort: str | None = None,
-               lead: str | None = None) -> tuple[str, str]:
+               lead: str | None = None, lead_ok: Callable[[], bool] | None = None) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
@@ -153,7 +154,9 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     both DeepSeek flash models reasoning through all 3500 tokens with no answer (21-37 s each, then the next link); with
     "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one,
     and a 400 rests its link for hours. lead: links ("provider:model,...", outside only= and chain=) asked first, each
-    within LEAD_WAIT and once more after a busy failure; then everything above as without it. No key: nothing asked."""
+    within LEAD_WAIT and once more after a busy failure; then everything above as without it. No key: nothing asked.
+    lead_ok: asked (in a thread) right before each send to a lead; False: that lead is skipped, the chain runs (the
+    student's yes withdrawn while the question was on its way)."""
     answered = busy = False
     after = None  # the last busy answer's Retry-After, in seconds (inf: one we can't read)
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
@@ -215,6 +218,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
 
     async def lead_try(link) -> str | None:
         for again in (False, True):
+            if lead_ok is not None and not await asyncio.to_thread(lead_ok):
+                return None
             text = await ask(link, LEAD_WAIT)
             # a retry only after a busy answer that didn't ask for a longer wait than ours
             if text is not None or again or not busy or (after or 0) > LEAD_BACKOFF:

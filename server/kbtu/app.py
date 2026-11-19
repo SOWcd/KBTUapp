@@ -1931,7 +1931,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # (assistant.GOOGLE_YES) where kri_google allows it; no yes, or its failure: the chain as before
             yes = await run_in_threadpool(lambda: kri_google(con, v) and logic.assistant.google_yes(con, v.id))
             text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
-                               race=True, effort="none", lead=llm.GOOGLE if yes else None)
+                               race=True, effort="none", lead=llm.GOOGLE if yes else None,
+                               lead_ok=lambda: logic.assistant.google_yes_now(cfg.db_path, v.id))  # withdrawn meanwhile: not sent
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
@@ -1944,7 +1945,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def assistant_google_yes(con: Con, v: Me, body: dict = Body(...)):
         if not kri_google(con, v):
             raise ApiError("not_found")
-        return logic.assistant.google_agree(con, v, body)
+        p = app.state.policy
+        return logic.assistant.google_agree(con, v, body, (p, p + logic.account.CONSENT_VOL), lambda: kri_google(con, v))
 
     @app.delete("/api/assistant/google")
     def assistant_google_no(con: Con, v: Me):

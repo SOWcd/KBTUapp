@@ -20,12 +20,22 @@ export function rest(): void {
   try { localStorage.setItem(key(), String(Date.now())); } catch { /* blocked: this opening only */ }
 }
 
-/** the yes given (on) or taken back: at once, back if the server says no */
+// the calls one at a time (review: an "on" answered after a later "off" left the switch on with no yes kept): the
+// latest tap wins, and once they are all through the switch shows what the server last said
+let saved: boolean | null = null, want = false, line: Promise<void> | null = null;
+
+/** the yes given (on) or taken back: shown at once; true if it is what the server keeps after every tap went through */
 export async function setKriGoogle(on: boolean): Promise<boolean> {
   const me = session.me;
   if (me?.kriGoogle == null) return false;
-  if (me.kriGoogle === on) return true;
-  me.kriGoogle = on;
-  try { me.kriGoogle = (await api.kriGoogle(on)).yes; haptic.ok(); return me.kriGoogle === on; }
-  catch { me.kriGoogle = !on; haptic.error(); say(t('common.error'), 'warning_3d'); return false; }
+  if (!line) saved = me.kriGoogle; // nothing on its way: what shows is what is kept
+  me.kriGoogle = want = on;
+  line ??= (async () => {
+    try { while (want !== saved) saved = (await api.kriGoogle(want)).yes; }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { line = null; me.kriGoogle = saved!; }
+  })();
+  await line;
+  if (me.kriGoogle === on) haptic.ok();
+  return me.kriGoogle === on;
 }
