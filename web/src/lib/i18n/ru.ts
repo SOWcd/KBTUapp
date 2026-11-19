@@ -220,6 +220,11 @@ const ru = {
   'as.event': "Событие",
   'as.thinking': "Думаю",
   'as.note': "KRI может ошибаться · Вопросы не храним, только темы и оценки без имён.",
+  'kri.gT': "Отвечать может Gemini", // the assistant's own yes to Google answering first (lib/kriGoogle.ts)
+  'kri.gText': "Модель Google сильнее. Google может использовать вопросы для улучшения своих моделей: не пиши личное.",
+  'kri.gOn': "Включить",
+  'kri.gLater': "Не сейчас",
+  'kri.gRow': "Gemini в помощнике",
   'as.limit': "На сегодня вопросы закончились — завтра можно снова",
   'as.busy': "KRI сейчас занят, попробуй через минуту",
   'as.consent': "Сначала прими обновлённую политику",
@@ -1106,6 +1111,7 @@ const ru = {
   'ai.showTr': "Показать перевод",
   'ai.noChain': "Ключи ИИ не заданы",
   'ai.chain': "Цепочка ИИ (сильные первыми) · сегодня",
+  'ai.avg': "~{s} с", // a link's average answer time today (ms / timed answers)
   'ai.showOrig': "Показать оригинал",
   'event.about': "О событии",
   'event.free': "Бесплатно",

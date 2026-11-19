@@ -107,13 +107,14 @@ def test_no_key_no_google(monkeypatch):
 
 
 def test_only_the_assistants_answer_leads_with_google(env, monkeypatch):
-    """ASSIST_LEAD=google: the assistant passes lead=llm.GOOGLE; unset (the default): never. A student on an earlier
+    """With the student's own yes, ASSIST_LEAD unset or google: the assistant passes lead=llm.GOOGLE; off: never. A student on an earlier
     policy or BOARD=staff (the EU host alone) never reaches Google; nor staff on an earlier version under BOARD=staff
     with the forum channel on (review, Nov 19)."""
     c, cfg = env
     login(c, 1, "ann")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 1")
+    con.execute("INSERT INTO kri_consents (user_id, version, at) SELECT id, 'kri-g1', 0 FROM users WHERE tg_id = 1")
     con.close()
     seen = []
 
@@ -121,10 +122,10 @@ def test_only_the_assistants_answer_leads_with_google(env, monkeypatch):
         seen.append(kw.get("lead"))
         return json.dumps({"text": "Room 180.", "actions": []}), "x"
     monkeypatch.setattr(llm, "chat", fake)
-    for board, policy, lead, fch, want in (("all", "1", "google", 0, llm.GOOGLE), ("all", "1", "", 0, None),
+    for board, policy, lead, fch, want in (("all", "1", "google", 0, llm.GOOGLE), ("all", "1", "", 0, llm.GOOGLE), ("all", "1", "off", 0, None),
                                            ("staff", "1", "google", 0, None), ("all", "new", "google", 0, None),
                                            ("staff", "1", "google", -100123, llm.GOOGLE), ("staff", "new", "google", -100123, None)):
-        x = TestClient(server.create(dataclasses.replace(cfg, board=board, assist_lead=lead, forum_channel=fch)))
+        x = TestClient(server.create(dataclasses.replace(cfg, board=board, assist_lead=lead, forum_channel=fch, gemini_key=KEY)))
         x.app.state.policy = policy  # "1": the version login() writes; "new": the student is on an earlier one
         seen.clear()
         assert x.post("/api/assistant", headers=tma(1), json={"q": "where is the dean's office?"}).status_code == 200
@@ -134,8 +135,11 @@ def test_only_the_assistants_answer_leads_with_google(env, monkeypatch):
 def test_a_bad_round_never_asks_google_again(env, monkeypatch):
     """Review: the assistant asks once more after unusable answers; that round goes without the lead."""
     c, cfg = env
-    login(c, 1, "ann")
-    x = TestClient(server.create(dataclasses.replace(cfg, board="all", assist_lead="google")))
+    me = login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO kri_consents (user_id, version, at) VALUES (?, 'kri-g1', 0)", (me["id"],))
+    con.close()
+    x = TestClient(server.create(dataclasses.replace(cfg, board="all", assist_lead="google", gemini_key=KEY)))
     x.app.state.policy = "1"
     seen = []
 
@@ -188,7 +192,8 @@ def test_a_refusal_never_logs_the_key(monkeypatch, caplog):
     assert all(KEY not in r.getMessage() for r in caplog.records)
 
 
-def test_assist_lead_is_off_unless_set(monkeypatch, tmp_path):
+def test_assist_lead_reads_the_env(monkeypatch, tmp_path):
+    """The raw switch: unset is "" (on for who said yes, app.kri_google), "google" the same, "off" never."""
     import base64
     monkeypatch.setattr(config, "_dotenv", lambda: {})
     for k, v in (("TOKEN_KEY", base64.b64encode(os.urandom(32)).decode()), ("BOT_TOKEN", BOT), ("DB_PATH", str(tmp_path / "x.db"))):

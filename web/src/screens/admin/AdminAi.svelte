@@ -1,7 +1,7 @@
 <script lang="ts">
   // Admin → AI: the translator of event and club texts (PLAN 9, ai.py):
   // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
-  // get three more tries); and the AI chain (llm.py), each link's answers and failures today; the assistant's feedback (30 days, none of it tied to a person).
+  // get three more tries); and the AI chain (llm.py), each link's answers, failures and average answer time today (Google's lead first); the assistant's feedback (30 days, none of it tied to a person).
   import { staffOnly } from '../../lib/state/staffGate.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminAi } from '../../lib/api';
@@ -39,7 +39,7 @@
     <div class="rows surface">
       {#each ai.chain as l (l)}
         {@const u = ai.usage[new Date().toISOString().slice(0, 10)]?.[l]}
-        <div class="r link"><span class="ellipsis model">{l}</span><i class="num">{u ? `${u[0]} ✓ · ${u[1]} ✕` : '—'}</i></div>
+        <div class="r link"><span class="ellipsis model">{l}</span><i class="num">{u ? `${u[0]} ✓ · ${u[1]} ✕` : '—'}{#if u?.[3]} · {t('ai.avg', { s: (u[2] / u[3] / 1000).toFixed(1) })}{/if}</i></div>
       {:else}<p class="t-foot none">{t('ai.noChain')}</p>{/each}
     </div>
     {#each Object.entries(ai.accounts ?? {}) as [key, acc] (key)}

@@ -38,6 +38,7 @@
   import { photoItems, editNick, setNick } from './mine';
   import { answerCredits } from '../../lib/credits';
   import { setReportConsent } from '../../lib/reports';
+  import { setKriGoogle } from '../../lib/kriGoogle';
   // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
   onMount(() => void loadMe());
 
@@ -300,6 +301,10 @@
         <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
         {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
           onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}{/if}
+        <!-- Gemini in the assistant, my own yes (lib/kriGoogle.ts): only where Google is open to me; on shows the
+             assistant card's words first, off takes it back at once -->
+        {#if me.kriGoogle != null}{#key undo}<Row title={t('kri.gRow')} accessory="switch" checked={me.kriGoogle}
+          onchange={async (on) => { if (!(on ? await sheets.ask({ title: t('kri.gT'), text: t('kri.gText'), ok: t('kri.gOn'), cancel: t('common.cancel') }) && await setKriGoogle(true) : await setKriGoogle(false))) undo++; }} />{/key}{/if}
       </Group></div>
     {/if}
     <div class:gap={me?.student}><Group>

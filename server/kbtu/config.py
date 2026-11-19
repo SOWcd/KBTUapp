@@ -50,7 +50,7 @@ class Config:
     groq_key: str = field(default="", repr=False)
     apinex_key: str = field(default="", repr=False)  # APINEX_API_KEY: the chain's first link
     gemini_key: str = field(default="", repr=False)  # GEMINI_API_KEY: Google (llm.GOOGLE)
-    assist_lead: str = ""       # ASSIST_LEAD=google: the assistant asks Google first; empty: never asked (the owner's call)
+    assist_lead: str = ""       # ASSIST_LEAD: unset or google, Google answers first for who said yes (assistant.GOOGLE_YES); off: never
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
     # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
     # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md

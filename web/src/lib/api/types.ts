@@ -126,7 +126,7 @@ export interface AdminStats { online: number; day: number; week: number; month: 
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
 export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
-export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number]>>;
+export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number, number, number]>>; // [ok, fail, ms, timed]
   accounts?: Record<string, { usage?: unknown; limits?: unknown }>; // Munito's own view per key, as Munito gives it
   events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[];
@@ -316,6 +316,7 @@ export interface Me {
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
   subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in
   teams?: { consent: boolean };   // GET /api/me only: my own consent to team events (server evteams.CONSENT)
+  kriGoogle?: boolean; // GET /api/me only: Google may answer my assistant first (key, switch, my policy); my own yes to it (server assistant.GOOGLE_YES); absent: never
   reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row

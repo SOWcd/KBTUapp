@@ -732,3 +732,31 @@ def sweep(con) -> None:
 
 
 from .seats import on_afisha, on_afisha_args  # noqa: E402  (seats imports the other domains last too)
+
+
+# ------------------------------------------------------------ Google's own yes (kri_consents)
+# The policy names Google among the assistant's providers since Nov 19, but students who accepted the same version
+# before never agreed to it, and nobody is asked to accept the policy again (owner). So the assistant asks its own
+# one-tap yes (as appeals.CONSENT): with it, Google answers first; without it, the chain as before. Withdrawn: the row
+# goes, Google is not asked from the next question.
+GOOGLE_YES = "kri-g1"  # the card's text (web: kri.g*); a reworded card is a new version, and old yeses ask again
+
+
+def google_yes(con, uid: int) -> bool:
+    return one(con, "SELECT 1 FROM kri_consents WHERE user_id = ? AND version = ?", uid, GOOGLE_YES) is not None
+
+
+def google_agree(con, v: Viewer, body: dict) -> dict:
+    """Mine given: the app sends the version it showed. Only where Google is open to me (app.py checks it first)."""
+    need_student(v)
+    if not isinstance(body, dict) or body.get("consent") != GOOGLE_YES:
+        raise ApiError("bad_input")
+    with tx(con):
+        con.execute("INSERT OR REPLACE INTO kri_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, GOOGLE_YES, now()))
+    return {"yes": True}
+
+
+def google_withdraw(con, v: Viewer) -> dict:
+    with tx(con):
+        con.execute("DELETE FROM kri_consents WHERE user_id = ?", (v.id,))
+    return {"yes": False}

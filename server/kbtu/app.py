@@ -326,10 +326,15 @@ def board_writer(request: Request, v: Board, con: Con) -> Viewer:
     """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only). BOARD=staff
     too (review, Nov 19): with the forum channel on, the assistant's providers are the policy's in force, so a staff
     member on an earlier version stays on the EU host as a student would."""
-    s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
-    if s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
+    if earlier_policy(con, request.app.state.policy, v.id):
         _eu_only()
     return v
+
+
+def earlier_policy(con, policy: str, uid: int) -> bool:
+    """This person's student row agreed to an earlier policy than the one in force (staff's own rows never)."""
+    s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", uid)
+    return bool(s) and not logic.account.on_policy(s[0], policy) and s[0] not in ("staff", "admin")
 
 
 BoardWrite = Annotated[Viewer, Depends(board_writer)]
@@ -491,6 +496,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         log.warning("FORUM_CHANNEL is set without FORUM_GROUP: deleted posts' copies in its discussion group stay")
     app.state.policy = policy
 
+    def kri_google(con, v: Viewer) -> bool:
+        """Google may answer this student's assistant first, once they say yes: its key, ASSIST_LEAD unset or google
+        (off: the operator's kill switch), the assistant open to them, the policy that names Google in force (ai_on) and
+        agreed to by them (an earlier version stays on the EU host, board_writer). eu_ai checks the host list again."""
+        return bool(cfg.gemini_key) and cfg.assist_lead in ("", "google") and ai_on and bool(v.student) \
+            and board_on(app.state.cfg, v) and not earlier_policy(con, app.state.policy, v.id)
+
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
@@ -498,6 +510,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **({"reports": logic.evreports.summary(con, v)} if app.state.cfg.reports else {}),  # Studio's event reports (REPORTS): my consent
                                    "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
+                                   # Google may answer my assistant first: absent, it can't; else my own yes (assistant.GOOGLE_YES)
+                                   **({"kriGoogle": logic.assistant.google_yes(con, v.id)} if kri_google(con, v) else {}),
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
                                    **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
@@ -1786,7 +1800,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503.
         lead (llm.chat's): asked first, only where the policy in force applies (never on the EU host alone)."""
         only = _ai_only(assist_only)
-        lead = lead if only == ai.ASSIST_PROVIDERS and cfg.assist_lead == "google" else None
+        lead = lead if only == ai.ASSIST_PROVIDERS and cfg.assist_lead in ("", "google") else None
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
         try:
             async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
@@ -1913,10 +1927,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod, Nov 16: with
             # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
             # call, and the slow ones were the host's, which the race covers)
-            # Google first, for this answer alone (policy section 5, Nov 19), with ASSIST_LEAD=google only (off: the owner
-            # decides on its speed and consent first); its failure: the chain as before
+            # Google first, for this answer alone (policy section 5, Nov 19), only with this student's own yes
+            # (assistant.GOOGLE_YES) where kri_google allows it; no yes, or its failure: the chain as before
+            yes = await run_in_threadpool(lambda: kri_google(con, v) and logic.assistant.google_yes(con, v.id))
             text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
-                               race=True, effort="none", lead=llm.GOOGLE)
+                               race=True, effort="none", lead=llm.GOOGLE if yes else None)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
@@ -1924,6 +1939,17 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return await run_in_threadpool(logic.assistant.reply, con, text, ok, lang, msgs[-1]["content"])
 
     # its feedback (logic/assistant.py): a 👍/👎 on an answer's signed topic; on 👎, the one question and answer if sent
+    # Google's own yes (assistant.GOOGLE_YES): given only where kri_google allows it; withdrawn always
+    @app.post("/api/assistant/google")
+    def assistant_google_yes(con: Con, v: Me, body: dict = Body(...)):
+        if not kri_google(con, v):
+            raise ApiError("not_found")
+        return logic.assistant.google_agree(con, v, body)
+
+    @app.delete("/api/assistant/google")
+    def assistant_google_no(con: Con, v: Me):
+        return logic.assistant.google_withdraw(con, v)
+
     @app.post("/api/assistant/vote", status_code=204)
     def assistant_vote(con: Con, v: BoardWrite, body: dict = Body(...)):
         logic.assistant.vote(con, v, body)
@@ -2252,7 +2278,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/admin/ai")
     async def admin_ai(con: Con, v: Me):
-        out = logic.admin_ai(con, v, [x.name for x in llm.links(cfg)])
+        out = logic.admin_ai(con, v, [x.name for x in llm.links(cfg, llm.GOOGLE) + llm.links(cfg)])  # Google's lead first
         async with httpx.AsyncClient() as http:
             out["accounts"] = await llm.munito_account(cfg, http)  # Munito's usage and limits per key
         return out

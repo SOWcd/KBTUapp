@@ -1979,6 +1979,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;"""),
     # an online event (owner, Nov 19): NULL not online; '' online, no link yet; else its meeting link (core.online_url)
     (188, "ALTER TABLE events ADD COLUMN online TEXT;"),
+    # (Nov 19) the assistant's own yes to Google answering first (assistant.GOOGLE_YES, as team_consents): no row, never
+    # Google; a withdrawal deletes the row
+    (189, """CREATE TABLE kri_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;"""),
 ]
 
 

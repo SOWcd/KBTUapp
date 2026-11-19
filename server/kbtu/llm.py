@@ -44,13 +44,13 @@ REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh
 TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
-# Google, the assistant's first try (chat's lead=, app.py's ASSIST_LEAD=google): series 4 only (owner), the one on the
-# free tier. Free tier: often 503 "high demand" (Nov 19: 2 of 3 calls answered), so one quick retry, then the usual
+# Google, the assistant's first try (chat's lead=; app.py: ASSIST_LEAD not off and the student's own yes,
+# assistant.GOOGLE_YES): series 4 only (owner), the one on the free tier. Free tier: often 503 "high demand" (Nov 19: 2 of 3 calls answered), so one quick retry, then the usual
 # chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
-# ponytail: 6 s cuts some real answers (Nov 19: 6.5, 3.1, 3.2 s at effort low, 700 tokens); the switch stays off until
-# the owner picks the wait
+# ponytail: real answers took 3.1 to 6.5 s (Nov 19, effort low, 700 tokens), so 9 s lets them through; a failing Google
+# costs a student up to 9 s more than before. Lower it once the admin's AI page shows Google's average (ms / ok)
 GOOGLE = "google:gemini-4-hydrogen"
-LEAD_WAIT = 6.0
+LEAD_WAIT = 9.0
 LEAD_BACKOFF = 0.4
 # Gemini 4 can't stop thinking and its thinking counts in max_tokens (aistudio.google.com/docs/thinking, Nov 19): any
 # effort asked becomes its lowest level, "low" ("none" and "minimal" are refused there)
@@ -104,9 +104,10 @@ def available(cfg) -> bool:
     return bool(links(cfg))
 
 
-def _count(path: str | None, link: str, ok: bool) -> None:
-    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>). Its own short connection:
-    a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
+def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
+    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>): [ok, fail, ms, timed], ms the
+    sum of the timed answers' milliseconds (average = ms / timed; rows from before Nov 19 are [ok, fail]). Its own short
+    connection: a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
     if not path:
         return
     from . import db  # here: llm is imported by db's users
@@ -116,7 +117,12 @@ def _count(path: str | None, link: str, ok: bool) -> None:
             key = f"ai_use:{time.strftime('%Y-%m-%d', time.gmtime())}"
             row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
             use = json.loads(row[0]) if row else {}
-            use.setdefault(link, [0, 0])[0 if ok else 1] += 1
+            n = use.setdefault(link, [0, 0])
+            n += [0] * (4 - len(n))  # an old [ok, fail]: its answers were never timed
+            n[0 if ok else 1] += 1
+            if ok:
+                n[2] += ms
+                n[3] += 1
             c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(use)))
     finally:
         c.close()
@@ -204,7 +210,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         log.warning("ai %s answered in %.1f s", link.name, time.time() - t0)  # a warning: the server's log keeps warnings, the timing shows there
-        await asyncio.to_thread(_count, path, link.name, True)  # a write: never on the event loop
+        await asyncio.to_thread(_count, path, link.name, True, round((time.time() - t0) * 1000))  # a write: never on the event loop
         return text
 
     async def lead_try(link) -> str | None:
@@ -289,8 +295,8 @@ async def munito_account(cfg, http: httpx.AsyncClient) -> dict:
 
 
 def usage(con, days: int = 7) -> dict[str, dict[str, list[int]]]:
-    """{day: {link: [answers, failures]}} for the last days; and which links rest now (this process's)."""
+    """{day: {link: [answers, failures, ms, timed]}} for the last days (old [ok, fail] rows padded with zeros)."""
     out = {}
     for k, v in con.execute("SELECT key, value FROM meta WHERE key LIKE 'ai_use:%' ORDER BY key DESC LIMIT ?", (days,)).fetchall():
-        out[k.split(":", 1)[1]] = json.loads(v)
+        out[k.split(":", 1)[1]] = {link: n + [0] * (4 - len(n)) for link, n in json.loads(v).items()}
     return out

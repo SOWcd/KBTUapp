@@ -63,6 +63,7 @@
   import Row from '../../ui/Row.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { keyboard as kbd } from '../../lib/state/keyboard.svelte';
+  import { resting, rest, setKriGoogle } from '../../lib/kriGoogle';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
@@ -160,6 +161,16 @@
     return () => clearInterval(id);
   });
   const pick = (k: (typeof SUGGEST)[number]) => { haptic.tap(); void ask(t(k)); };
+  // Gemini's card (lib/kriGoogle.ts): one quiet question on the empty opening of a student who hasn't answered. It
+  // shares the starters' cell over the field (the taller sets its height for this opening), so going moves nothing:
+  // the starters come up where it was. "Turn on": the yes at once; "Not now": rests 30 days on this phone
+  const offer = untrack(() => session.me?.kriGoogle === false && !resting());
+  let later = $state(false);
+  const asking = $derived(offer && session.me?.kriGoogle === false && !later);
+  function gemini(on: boolean) {
+    if (on) void setKriGoogle(true);
+    else { haptic.tap(); rest(); later = true; }
+  }
   // The keyboard: Sheet raises the footer over the body and the body stays as it is, so the middle moves itself to the
   // middle of what is left in view (a transform on the keyboard's timing, no layout), smaller; no room for it: it fades.
   // Not under a light still flying to its place: it lands first, then goes up
@@ -336,7 +347,19 @@
     {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"><span class="mark"><KbtuMark /></span><span class="mark glyph"><Sparkles strokeWidth={2} /></span></i>{/if}
     {#if !chat.turns.length}
       <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll -->
-      <div class="eg">{#each SUGGEST as k (k)}<button onclick={() => pick(k)}>{t(k)}</button>{/each}</div>
+      <div class="over">
+        {#if offer}
+          <div class="gem" class:out={!asking} inert={!asking}>
+            <p class="gt">{t('kri.gT')}</p>
+            <p class="gx">{t('kri.gText')}</p>
+            <div class="btns gb">
+              <Button kind="primary" size="s" full onclick={() => gemini(true)}>{t('kri.gOn')}</Button>
+              <Button kind="secondary" size="s" full onclick={() => gemini(false)}>{t('kri.gLater')}</Button>
+            </div>
+          </div>
+        {/if}
+        <div class="eg" class:out={asking} inert={asking}>{#each SUGGEST as k (k)}<button onclick={() => pick(k)}>{t(k)}</button>{/each}</div>
+      </div>
     {/if}
     <div class="bar">
       <!-- the map, one tap away as when it had the bar's corner: beside the field, there with or without a conversation -->
@@ -389,8 +412,16 @@
   /* the button's own glyph, its size there (24 of 54) when the light is the button's size: seen only in flight */
   .glyph { opacity: 0; }
   .glyph :global(svg) { width: 44.4%; }
+  /* Gemini's card and the starters in one cell: one shows, the other keeps its place hidden */
+  .over { display: grid; margin-bottom: var(--s-2); }
+  .over > * { grid-area: 1 / 1; transition: opacity 220ms var(--ease), visibility 0s; }
+  .over > .out { opacity: 0; visibility: hidden; transition: opacity 160ms ease-out, visibility 0s 160ms; }
+  .gem { align-self: end; display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); border-radius: var(--r-m); background: var(--fill); }
+  .gt { font: 600 var(--fs-body)/1.25 var(--font-text); }
+  .gx { font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); text-wrap: pretty; }
+  .gb { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
   /* the starters over the field, two by two, the words on two lines; an odd last one takes the row */
-  .eg { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); margin-bottom: var(--s-2); }
+  .eg { align-self: end; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
   .eg button { display: flex; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); background: var(--fill); color: var(--text);
     font: 600 var(--fs-sub)/1.25 var(--font-text); text-align: left; text-wrap: balance; overflow-wrap: anywhere; transition: transform var(--t-fast); }
   .eg button:active { transform: scale(0.96); }
@@ -438,7 +469,7 @@
   :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     .list *, .orb, .orb::before { animation: none !important; }
-    .mid, .rot span { transition: none !important; }
+    .mid, .rot span, .over > * { transition: none !important; }
   }
 
   .bar { display: flex; align-items: flex-end; gap: var(--s-2); }
