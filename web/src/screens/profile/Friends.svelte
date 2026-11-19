@@ -12,6 +12,7 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadFriends, prefetchPerson, forgetPeople, phrase } from '../../lib/state/data.svelte';
+  import { touchAhead } from '../../lib/touch';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { onMount, type Snippet } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -62,11 +63,11 @@
   }
 </script>
 
-<!-- a row's person starts loading as the finger lands (the sheet then opens with them): the rows' order is the list's -->
+<!-- a row's person starts loading as the finger lands, unless it's a scroll (lib/touch.ts; the sheet then opens with them): the rows' order is the list's -->
 {#snippet people(list: FriendRow[], body: Snippet)}
   <!-- engine: Row has no onpointerdown; the group's pointerdown finds the row's place -->
   <div role="presentation" onpointerdown={(e) => { const row = (e.target as Element).closest('.kb-row'); const i = row ? [...row.parentElement!.children].indexOf(row) : -1;
-    if (list[i]) prefetchPerson(list[i].person.id); }}>{@render body()}</div>
+    if (list[i]) touchAhead(e, () => prefetchPerson(list[i].person.id)); }}>{@render body()}</div>
 {/snippet}
 
 <Sheet {overlay} tall title={t('page.friends')} icon={UsersRound}>

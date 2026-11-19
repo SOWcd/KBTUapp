@@ -3,6 +3,7 @@
   import Founder from './Founder.svelte';
   import { sheets } from '../lib/state/sheets';
   import { prefetchPerson } from '../lib/state/data.svelte';
+  import { touchAhead } from '../lib/touch';
   import { haptic } from '../lib/tg';
 
   type P = { id?: number; name: string; avatar?: string | null; founder?: boolean; mark?: 'idea' | null };
@@ -34,7 +35,7 @@
 {/snippet}
 
 {#if can}
-  <button class="av" class:ring style="width:{size}px;height:{size}px" onclick={tap} onpointerdown={() => prefetchPerson(person.id!)} aria-label={person.name}>{@render face()}</button>
+  <button class="av" class:ring style="width:{size}px;height:{size}px" onclick={tap} onpointerdown={(ev) => touchAhead(ev, () => prefetchPerson(person.id!))} aria-label={person.name}>{@render face()}</button>
 {:else}
   <span class="av" class:ring style="width:{size}px;height:{size}px">{@render face()}</span>
 {/if}

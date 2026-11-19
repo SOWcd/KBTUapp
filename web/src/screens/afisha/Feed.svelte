@@ -12,6 +12,7 @@
   import VolumeX from '@lucide/svelte/icons/volume-x';
   import { onMount } from 'svelte';
   import { data, goingBusy, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
+  import { touchAhead } from '../../lib/touch';
   import { focusPos } from '../../lib/photo';
   import { sheets, takeIris, irisOpen } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
@@ -98,7 +99,7 @@
     {@const st = e.my?.status}
     {@const full = e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold'}
     <div class="slide" class:cur={i === cur} data-i={i} style="--tint:{e.tint}" role="button" tabindex="0"
-         onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.side')) sheets.event(e.id); }} onkeydown={(k) => k.key === 'Enter' && sheets.event(e.id)}>
+         onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.side')) sheets.event(e.id); }} onkeydown={(k) => k.key === 'Enter' && sheets.event(e.id)}>
       <div class="bg">
         {#if e.video?.url && Math.abs(i - cur) <= 1}
           <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload={i === cur ? 'auto' : 'metadata'} use:playing={i === cur && shown}></video>

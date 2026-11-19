@@ -6,6 +6,7 @@
   import { time, nowTs, multiDay, daySpan } from '../lib/time';
   import { sheets } from '../lib/state/sheets';
   import { prefetchEvent } from '../lib/state/data.svelte';
+  import { touchAhead } from '../lib/touch';
   import Poster from './Poster.svelte';
   import Tag from './Tag.svelte';
   import Avatar from './Avatar.svelte';
@@ -24,7 +25,7 @@
 </script>
 
 <!-- a club's own event looks like one: an outline instead of a card, the team mark by its time -->
-<button class="row press" class:cancelled class:inner={inner(e)} onpointerdown={() => { if (!onopen) prefetchEvent(e.id); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.querySelector('.poster')))}>
+<button class="row press" class:cancelled class:inner={inner(e)} onpointerdown={(ev) => { if (!onopen) touchAhead(ev, () => prefetchEvent(e.id)); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.querySelector('.poster')))}>
   <Poster item={e} size={68} radius={16} dim={cancelled} />
   {#if e.saved && !cancelled}<span class="saved" title={t('event.saved')}><Bookmark size={14} strokeWidth={2.4} fill="currentColor" /></span>{/if}
   <span class="txt" class:pr={e.saved && !cancelled}>

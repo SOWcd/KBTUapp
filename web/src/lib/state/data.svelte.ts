@@ -379,8 +379,8 @@ function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened
 /** The app's card, or the server's for one it doesn't hold yet (kept: opened) */
 export const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
 
-// An event's details (the text, album, updates), asked for the moment a finger touches its card: the sheet opens a beat
-// later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
+// An event's details (the text, album, updates), asked for as a finger touches its card (lib/touch.ts: not for a flick
+// that only starts on it): the sheet opens a beat later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
 const ahead = new Map<Id, { at: number; p: Promise<EventFull> }>();
 export function prefetchEvent(id: Id): void {
   const a = ahead.get(id);
