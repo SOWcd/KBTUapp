@@ -1,4 +1,4 @@
-"""Admin → Inbox (review Nov 3): everything that waits for the app's staff in one typed list, one request, filtered by
+"""Admin → Inbox: everything that waits for the app's staff in one typed list, one request, filtered by
 role (a moderator never gets club applications or roster claims; the admin also gets the map's open flaws as a count); its count is the Admin shield's
 badge, real decisions only: a channel's draft (autoev) waits in the club's own Studio, so it never lights the badge. And "Done": what the staff decided lately, who and when, with the Undo where there is one."""
 from __future__ import annotations
@@ -43,7 +43,7 @@ def inbox(con, v: Viewer) -> dict:
         for e in autoev.queue(con):  # an event found in a club's channel: open its draft, or dismiss it (the event delete, its Undo)
             items.append(_item("autoev", e["id"], e["at"], False, e))
     items.sort(key=lambda x: (not x["hidden"], not x.pop("harm"), x["at"]))
-    # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide (owner, Nov 7)
+    # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide
     flaws = one(con, "SELECT COUNT(*) FROM map_flaws WHERE done_at IS NULL")[0] if admin else 0
     return {"items": items, "done": done(con, v), "flaws": flaws}
 
@@ -78,7 +78,7 @@ def count(con, v: Viewer) -> int:
         from .. import roster  # it imports kbtu.logic itself
         n += one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0]
         n += one(con, "SELECT COUNT(*) FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0")[0]
-        n += len(roster.requests(con, v))  # the map's flaws and channel drafts aren't counted: quiet rows, nobody's decision (owner)
+        n += len(roster.requests(con, v))  # the map's flaws and channel drafts aren't counted: quiet rows, nobody's decision
     return n
 
 

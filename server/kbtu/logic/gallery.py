@@ -1,6 +1,6 @@
 """The Gallery (Afisha → Gallery): one feed of every photo a student may see, the events' albums and KBTU's own, newest
 first (upload order). A verified student posts under their own name, published at once (GALLERY: unset off, staff the
-admins and moderators, 1 everyone; off, the feed is the albums alone, as before). A photo of an event goes into its
+admins and moderators, 1 everyone; off, the feed is the albums alone). A photo of an event goes into its
 album too, on the album's own rules (_album_room). Reports: moderation.py (gone for the reporter at once, for everyone
 at PHOTO_HIDE people, until a moderator decides in Admin; a take-down is kept 30 days for an undo)."""
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""The volunteers ledger of one club (VOLUNTEERS=<slug>; Zhyly Zhurek first, owner Nov 9-10): its spreadsheet as an app.
+"""The volunteers ledger of one club (VOLUNTEERS=<slug>; Zhyly Zhurek first): its spreadsheet as an app.
 
 A volunteer is a record of the club, apart from any account (people never in the app are on it too); the President
-links one to an account and back. Hours come only from scans (the club's President with the owner, Nov 11: nobody types
+links one to an account and back. Hours come only from scans (nobody types
 hours): real check-in and check-out at the club's sessions (checkin.mark), never a teambuilding's; the shifts once entered
 by hand stay as recorded. A check-in never checked out counts 0 minutes, the attendance stays; after Finish whoever ran
 the door answers for each such shift (resolve: "until the end", or the time they left, between the check-in and Finish),
@@ -43,7 +43,7 @@ SHIFT_CAP = 12 * 3600    # one shift counts this long at most, and a session of 
 RESOLVE_FOR = 7 * 86400  # an unmarked shift is answered for within this long after Finish; later it stays 0
 FROM = "vol_resolve_from"  # meta: when answering for the unmarked began (migration 157); sessions finished before it stay as they were
 HAND_MAX = 14 * 86400    # a hand-over link dies this long after it was made, opened or not (a session never finished)
-MEMBERS, HOURS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"   # the club's sheets (plan, Nov 6), matched loosely below
+MEMBERS, HOURS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"   # the club's sheets, matched loosely below
 
 
 def org_id(con) -> int | None:
@@ -59,7 +59,7 @@ def _org(con) -> int:
 
 
 def _president(con, v: Viewer, org: int) -> bool:
-    """The President or a Vice-president: one and the same for the whole ledger (Nov 11); decided here alone."""
+    """The President or a Vice-president: one and the same for the whole ledger; decided here alone."""
     return v.student and bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", org, v.id))
 
 
@@ -425,7 +425,7 @@ def take(con, v: Viewer, token: object) -> int:
 
 def _minutes(con, org: int, vid: int | None = None) -> dict[int, tuple[int, int]]:
     """{volunteer: (minutes of closed shifts, open shifts)}; an open shift (never checked out) counts 0, and time in two
-    shifts at once counts once (the union). A teambuilding's shifts give no hours (owner, Nov 10: hours are for
+    shifts at once counts once (the union). A teambuilding's shifts give no hours (hours are for
     volunteering at events; a teambuilding only counts for misses)."""
     out: dict[int, list] = {}
     end: dict[int, int] = {}
@@ -575,7 +575,7 @@ def person(con, v: Viewer, vid: int | None) -> dict:
 # ------------------------------------------------------------ the President's and Vice's edits (each with a reason, in vol_edits)
 
 def edit_shift(con, v: Viewer, hid: int, body: dict) -> dict:
-    """A shift taken out (gone) or put back, never its times: hours come from scans alone (Nov 11). The shifts once made
+    """A shift taken out (gone) or put back, never its times: hours come from scans alone. The shifts once made
     or changed by hand stay as recorded; the old values are in vol_edits."""
     org = _need_pres(con, v)
     reason = _reason(body)

@@ -1,4 +1,4 @@
-"""One search for the whole app (owner, Nov 8): a query against every name a thing has (an event's title in each
+"""One search for the whole app: a query against every name a thing has (an event's title in each
 language the AI wrote, a club's name, short and abbreviation in each, a person's Cyrillic and Latin names and nick),
 case-free in any script (SQLite's LOWER/LIKE fold ASCII only), with yo as ye. What comes back is what the searcher may
 already see: the admin everything, everyone else through the same rules as their lists (seats._visible, clubs.listed).
@@ -13,7 +13,7 @@ import unicodedata
 from .core import Viewer, _by_id, _roles, cards, evdel, now, org_ref, rows
 
 
-# Kazakh letters as the Russian ones a Russian keyboard types for them (the owner, Nov 12: a Kazakh name is found
+# Kazakh letters as the Russian ones a Russian keyboard types for them (a Kazakh name is found
 # without a Kazakh layout); both sides fold, so the Kazakh spelling finds it too. web/src/lib/search.ts: the same table
 _KK = str.maketrans("\u0451\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456", "\u0435\u0430\u0433\u043a\u043d\u043e\u0443\u0443\u0445\u0438")
 

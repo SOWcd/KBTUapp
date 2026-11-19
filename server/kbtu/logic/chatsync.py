@@ -1,4 +1,4 @@
-"""A club's members mirrored from its Telegram chats (CHAT_SYNC=1; SITE Senate first, owner Nov 10).
+"""A club's members mirrored from its Telegram chats (CHAT_SYNC=1; SITE Senate first).
 
 The app's creator links a chat (admin chatsync): a club's main chat is its membership, a department's chat that
 department. The bot is an admin there (no rights needed) and hears chat_member updates: someone in the chat who is a

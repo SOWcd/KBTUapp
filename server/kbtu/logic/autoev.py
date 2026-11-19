@@ -1,4 +1,4 @@
-"""Events found in a club's channel (owner, Nov 17: clubs announce in Telegram and rarely add the event to Afisha).
+"""Events found in a club's channel (clubs announce in Telegram and rarely add the event to Afisha).
 A NEW post the mirror takes (mirror.take, from userbot.Mirror.post; never an edit, no sweep) that reads like an
 announcement (`worth`: long enough, a date or a time in it, no model) gets ONE model call: the event form's own fill
 prompt (assistant.FILL, "today" being the post's day), which may also say it's no event. A future date and time: a DRAFT
@@ -140,7 +140,7 @@ UNTOUCHED = "e.status = 'draft' AND e.updated_at <= e.created_at + 1"
 
 
 def cover(con, pid: int) -> None:
-    """The post's picture as its draft's cover (owner, Nov 18: the draft is the finished post), whenever it reaches the
+    """The post's picture as its draft's cover (the draft is the finished post), whenever it reaches the
     post (an album's photo after its caption: mirror.take calls this too), only while the draft is untouched and has none:
     a cover a person set, or took off, stays. The event gets its own file row (event_cover, no owner) over the same
     stored picture (files are named by their content, media.store): the draft's delete drops that row, the post's

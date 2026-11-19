@@ -1,10 +1,10 @@
 """The rules of SPEC §2–§4 over SQLite, answering in the shapes of web/src/lib/api/types.ts (camelCase).
 
-The only copy of the rules (the in-browser mock that repeated them went on Oct 11). Every function takes the connection and the caller (`Viewer`) and either returns
+The only copy of the rules. Every function takes the connection and the caller (`Viewer`) and either returns
 JSON-ready data or raises ApiError. Writes that check and then change (seats, check-in) run in db.tx.
 
 Split by domain into the modules beside this file; everything is re-exported here, so callers
-use kbtu.logic as before. A test that patches the clock or a limit patches the module that holds it (logic.core.now).
+use kbtu.logic. A test that patches the clock or a limit patches the module that holds it (logic.core.now).
 """
 
 from __future__ import annotations
@@ -78,4 +78,4 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
 from . import appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evreports, evteams, fchannel, gallery, inbox, mapflaws, santa, search, stars, subjects, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
-from ..db import tx  # noqa: F401  (callers took these from the old module)
+from ..db import tx  # noqa: F401  (callers take these from kbtu.logic)

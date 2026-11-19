@@ -26,16 +26,16 @@ captain paying for others. The payment-state rule:
 - price: a team event can't turn paid while anyone is signed up (they'd stay in their teams unpaid).
 - Form teams completes teams, it doesn't spread people: the fullest short team first (a team of 4 gets the fifth before
   a team of 1 gets anyone). Before the sign-up deadline it fills only teams marked open; once the deadline passed (or
-  the organizer confirms "fill all"), every short team, open or not, so closed teams of 4 can't strand paid soloists
-  (the Fable review, hole 1). Still only checked receipts, as above.
+  the organizer confirms "fill all"), every short team, open or not, so closed teams of 4 can't strand paid soloists.
+  Still only checked receipts, as above.
 - a paid player leaving a team (a self-cancel, a rejected receipt): its captain hears it from the bot (left()); no
   money rule changes with it.
 
 The feature's own consent (CONSENT, as evreports'): one per person, for every event. Nobody is put into a team without
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
-team event waits with no team until they agree. Signing up is the consent (Nov 18): the app asks one who hasn't agreed
+team event waits with no team until they agree. Signing up is the consent: the app asks one who hasn't agreed
 in an alert on the sign-up tap and sends the version with it (signup's consent); a sign-up without it (an old app)
-writes none and works as before. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
+writes none and still signs up. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
 once a day), never a consent. Withdrawing it takes me out of my teams on events not started yet.
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
@@ -83,7 +83,7 @@ def agree(con, v: Viewer, body: dict) -> dict:
 def withdraw(con, v: Viewer) -> dict:
     """Mine taken back: out of every team I am in, past events' too (captaincy passes on; the sign-ups stay), and nobody
     places me again until a new yes. A started event's roster loses me as it would with my account: the law gives no
-    reason to keep showing me there after I said no (the legal review, Nov 12)."""
+    reason to keep showing me there after I said no."""
     with tx(con):
         con.execute("INSERT OR REPLACE INTO team_consents (user_id, version, at) VALUES (?, ?, ?)", (v.id, OFF, core.now()))
         con.execute("DELETE FROM event_team_members WHERE user_id = ?", (v.id,))
@@ -330,7 +330,7 @@ def signup(con, v: Viewer, eid: int, team: object, ref=None, phone=None, answers
     lock with the registration: a full event (the waitlist) or a full team leaves no sign-up behind. Already signed up:
     the team part alone.
     consent: the version (CONSENT) the app sends when its sign-up tap showed the alert on what signing up to a team
-    event means (the owner, Nov 18: signing up is the consent). Written with a ticket or a hold this tap made, never
+    event means (signing up is the consent). Written with a ticket or a hold this tap made, never
     inferred: an old app without the marker, a tap on an existing sign-up, or one that lands on the waitlist writes
     nothing."""
     if team is not None and not (isinstance(team, dict) and (isinstance(team.get("create"), str) or isinstance(team.get("join"), str))):
@@ -473,7 +473,7 @@ def form(con, v: Viewer, eid: int, fill_all: object = False) -> dict:
         teams = [dict(t) for t in rows(con, """SELECT t.id, t.open, COUNT(m.id) AS n FROM event_teams t JOIN event_team_members m ON m.team_id = t.id
                 WHERE t.event_id = ? GROUP BY t.id ORDER BY n DESC, t.id""", eid)]
         # first every team under min up to min (a closed one only once sign-up closed or on "fill all": it can't play as
-        # it is), then up to max the teams that asked (open), a closed one only on the explicit "fill all" (the review:
+        # it is), then up to max the teams that asked (open), a closed one only on the explicit "fill all" (so
         # three friends' closed team of 3 of 3..5 gets no strangers by the deadline alone)
         for upto, who in ((e["team_min"], lambda t: t["open"] or every), (e["team_max"], lambda t: t["open"] or fill_all is True)):
             for t in sorted(teams, key=lambda t: (-t["n"], t["id"])):
@@ -530,7 +530,7 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
 
 def consent_ask(con, dry: bool = False) -> int:
     """`python -m kbtu.admin team-consent-ask [--dry]`: everyone signed up to a coming team event without the teams
-    consent (signed up before the sign-up became the consent, Nov 18) gets the bot's template once, for their soonest
+    consent (signed up before the sign-up became the consent) gets the bot's template once, for their soonest
     such event (the consent is one for all events), a button to it with the consent sheet open (tc_<event>). Never a
     consent written for them; nobody who withdrew it (OFF), nobody ever asked before. By hand, never on deploy."""
     to = rows(con, """SELECT r.user_id, r.event_id, MIN(e.starts_at) FROM registrations r JOIN events e ON e.id = r.event_id

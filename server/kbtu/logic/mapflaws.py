@@ -1,4 +1,4 @@
-"""The map's flaws, marked in the app (owner, Oct 29: endless small mistakes, and screenshots bloat the work): a long
+"""The map's flaws, marked in the app (endless small mistakes, and screenshots bloat the work): a long
 press on the plan, a line of text, and the spot lands in the admin's list with its floor and plan units. The app's staff
 mark ten a day each; students three, with the forum's switch (its policy section covers it). Fixed ones go 30 days after."""
 from __future__ import annotations

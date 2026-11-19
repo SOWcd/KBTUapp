@@ -1,10 +1,9 @@
-"""Co-hosted events (Nov 3, "Crystal & JCC do an Anime Quiz together"): the host club (the event's org) invites one
+"""Co-hosted events (say, "Crystal & JCC do an Anime Quiz together"): the host club (the event's org) invites one
 other club of the app; its Vice+ accepts or declines. Until accepted nothing shows. Accepted, both clubs show on the
 event, it is on both clubs' pages and both clubs' followers hear of it once; the co-host's people with the "events"
 right work the door (the scanner, by name, /show) and see the attendee list without receipts. Everything else
 (editing, price, seats, receipts, cancelling, deleting) stays the host's; the money goes to the host. Either side ends
-it: the host removes, the co-host's Vice+ leaves. Not a partner's event (guest_host: an outside host, a link out).
-The review: .claude/reports/cohost-review.md."""
+it: the host removes, the co-host's Vice+ leaves. Not a partner's event (guest_host: an outside host, a link out)."""
 from __future__ import annotations
 
 import json
@@ -16,7 +15,7 @@ from .core import FULL_TOOLS, ApiError, Viewer, at_least, can, evdel, full, one,
 
 
 COHOST_INVITES_A_DAY = 10  # a host club's invites (each one messages the other club's leaders)
-INITIATIVE_INVITES_A_WEEK = 3  # an initiative's (collab-review S1): its invites mostly go to official clubs' leaders
+INITIATIVE_INVITES_A_WEEK = 3  # an initiative's: its invites mostly go to official clubs' leaders
 # the co-host's accepted row, its club still shown (hidden or archived later: gone from the card and the door)
 ACCEPTED = """SELECT x.*, o.name FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
     WHERE x.event_id = ? AND x.status = 'accepted' AND o.status = 'active'"""
@@ -49,12 +48,12 @@ def cohost_view(con, e: sqlite3.Row) -> dict | None:
 
 
 def _fits(e: sqlite3.Row) -> bool:
-    """A co-host only on a public event that is no meeting and no partner's (review 1)."""
+    """A co-host only on a public event that is no meeting and no partner's."""
     return e["visibility"] == "public" and not e["meeting"] and not e["guest_host"]
 
 
 def _free_ok(con, e: sqlite3.Row) -> bool:
-    """A collab with an initiative is free (owner, Nov 4; collab-review M1): only an official host's event has a price."""
+    """A collab with an initiative is free: only an official host's event has a price."""
     return not e["price"] or bool(one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0])
 
 
@@ -68,7 +67,7 @@ def _leaders(con, oid: int) -> list[int]:
 
 
 def _touch(con, eid: int) -> None:
-    """The card changed: Afisha's shared cache is keyed by the events row (review 10), so every worker rebuilds it."""
+    """The card changed: Afisha's shared cache is keyed by the events row, so every worker rebuilds it."""
     con.execute("UPDATE events SET updated_at = ? WHERE id = ?", (core.now(), eid))
     core._SHARED.pop(("event", eid), None)
 
@@ -92,7 +91,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
         if one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND org_id = ?", eid, oid):
             raise ApiError("conflict", "declined")  # they said no to this one: not asked again
         if one(con, "SELECT 1 FROM org_mutes WHERE org_id = ? AND muted_org_id = ?", oid, e["org_id"]):
-            raise ApiError("conflict", "declined")  # "Don't suggest again": the same answer as a no (collab-review S2)
+            raise ApiError("conflict", "declined")  # "Don't suggest again": the same answer as a no
         if not one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0]:
             week = f"cohost_wk:{e['org_id']}:{(core.now() + 5 * 3600) // (7 * 86400)}"  # an Almaty week (from Thursday)
             sent = one(con, "SELECT value FROM meta WHERE key = ?", week)
@@ -100,7 +99,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
                 raise ApiError("rate_limited")
             con.execute("DELETE FROM meta WHERE key LIKE 'cohost_wk:' || ? || ':%' AND key != ?", (e["org_id"], week))
             con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (week,))
-        # counted apart from the rows, which a withdrawal deletes (second review): per host club and Almaty day
+        # counted apart from the rows, which a withdrawal deletes: per host club and Almaty day
         day = f"cohost_inv:{e['org_id']}:{(core.now() + 5 * 3600) // 86400}"
         sent = one(con, "SELECT value FROM meta WHERE key = ?", day)
         if sent and int(sent[0]) >= COHOST_INVITES_A_DAY:
@@ -124,7 +123,7 @@ def invites(con, v: Viewer, oid: int) -> list[dict]:
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND h.status = 'active' ORDER BY e.starts_at""", oid, core.NO_END, core.now())
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in found))
     files = core._by_id(con, "files", [*(e["cover_file_id"] for e in found), *(h["logo_file_id"] for h in hosts.values())])  # the hosts' logos too
-    # what is being signed (collab-review S3): the cover, the description, the price, and whether our name goes on the
+    # what is being signed: the cover, the description, the price, and whether our name goes on the
     # @KBTUevents post (an official club vouching for an initiative)
     us = one(con, "SELECT official FROM orgs WHERE id = ?", oid)[0]
     return [{"event": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], "place": e["place"], "status": e["status"],
@@ -194,7 +193,7 @@ def end(con, v: Viewer, eid: int) -> None:
 
 def changed(con, e: sqlite3.Row, after: sqlite3.Row) -> None:
     """The host changed an event we co-host (our name may be on its channel post: any of what the post or the card
-    shows, collab-review R1): our leaders hear it once (a template, no words of the host's), edits within 10 minutes
+    shows): our leaders hear it once (a template, no words of the host's), edits within 10 minutes
     in one message, as event_changed (organizing._changed)."""
     x = one(con, ACCEPTED, e["id"])
     if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title", "place", "place_url", "online", "description", "cover_file_id")):
@@ -207,7 +206,7 @@ def changed(con, e: sqlite3.Row, after: sqlite3.Row) -> None:
 
 def tell(con, e: sqlite3.Row, actor: int) -> None:
     """The co-host's followers hear of a public event once it is out and accepted, under the co-host's own weekly limit
-    (review 7: an initiative can't reach its followers twice a week through co-hosting). Someone following both clubs
+    (an initiative can't reach its followers twice a week through co-hosting). Someone following both clubs
     hears once: the outbox key (user, new_event, event:<id>) is the host's message's."""
     x = one(con, ACCEPTED, e["id"])
     if not x or e["status"] != "published" or e["hidden_at"] or not _fits(e) or e["starts_at"] <= core.now():

@@ -1,4 +1,4 @@
-"""The forum channel (owner, Nov 1: replaces the in-app student forum). A Microsoft-verified student writes a post in
+"""The forum channel. A Microsoft-verified student writes a post in
 the app, under their name or anonymously; the bot publishes it in the public channel (FORUM_CHANNEL), where the
 comments happen in its Telegram discussion group (tgc.py). One post a day per student. The AI looks first: its exact
 OK publishes at once (the bot's next round, seconds); anything else, or an anonymous post aimed at a person, waits for
@@ -21,7 +21,7 @@ from ..db import tx
 from .core import ApiError, PERSON, PERSON_COLS, Viewer, avatar_of, log_action, need_student, one, person_ref, rows, short_name, shown_name
 
 BODY_MAX = 1000
-POSTS_A_GAP, POST_GAP = 2, 10 * 60  # a pace: at most two posts in any ten minutes (owner, Nov 6: no daily cap, nobody hit it)
+POSTS_A_GAP, POST_GAP = 2, 10 * 60  # a pace: at most two posts in any ten minutes (no daily cap: nobody reaches one)
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
 UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: Undo inside keeps the message and its comments
@@ -34,8 +34,8 @@ UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: 
 _CYR_TLD = "\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d|\u0441\u0430\u0439\u0442|\u043e\u0440\u0433|\u043a\u043e\u043c|\u043c\u043e\u0441\u043a\u0432\u0430|\u049b\u0430\u0437|\u0431\u0435\u043b|\u0443\u043a\u0440|\u0441\u0440\u0431|\u0434\u0435\u0442\u0438"
 LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_][\w-]*)*\.(?:[a-z]{2,}|" + _CYR_TLD + r")\b|@\w{3,}"
                    r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b)")
-# a link disguised so Telegram won't make it one but a reader still can (Nov 4: "https ://www .instagram. com/reel/..."
-# went out): a scheme or www. with spaces, a TLD before a slash, a known site's name with a spaced dot, "dot com",
+# a link disguised so Telegram won't make it one but a reader still can ("https ://www .instagram. com/reel/..."):
+# a scheme or www. with spaces, a TLD before a slash, a known site's name with a spaced dot, "dot com",
 # a bracketed dot ("x[.]com" reads as a dot, then LINKY). ponytail: lists, not every TLD; the AI is told too
 _TLDS = "com|ru|kz|org|net|io|me|ly|gg|app|xyz|link|site|info|tv|co|be|to|dev|ai|su|uk|us|cc|pro|online|store|shop"
 _SITES = "t|telegram|tg|instagram|insta|tiktok|youtube|youtu|wa|vk|discord|x|twitter|facebook|fb|threads|linktr|bit|clck|vm"
@@ -49,7 +49,7 @@ MONEY = re.compile(r"\s*(?:\u20b8|\u0442\u0433|\u0442\u0435\u043d\u0433|tg\b|kzt
 
 def _long_number(s: str) -> bool:
     """A phone or a card: ten digits or more in a run, unless it is a price: one round sum or a range of two ("10 000-15 000
-    \u0442\u0433", Nov 3), each under ten digits, twelve at most in all (a card is 16), with the tenge right after. A date's dots and a time's colons break a run anyway.
+    \u0442\u0433"), each under ten digits, twelve at most in all (a card is 16), with the tenge right after. A date's dots and a time's colons break a run anyway.
     ponytail: a phone shaped as such a range with tenge after it ("8 700-1 234 500 \u0442\u0433") still passes; the AI looks too"""
     for m in DIGITS.finditer(s):
         parts = m[0].split("-")
@@ -61,7 +61,7 @@ def _long_number(s: str) -> bool:
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
 FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
 ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
-SIGNED = "\u2212\u2500\u2501\u2796\u30fc"  # with every dash (Pd), what reads as one: minus, box lines, heavy minus, the long vowel mark. A last line like a "- Name L." signature (the bot signed so until Nov 2; still reads as one) (read NFKC: fullwidth, small dashes fold)
+SIGNED = "\u2212\u2500\u2501\u2796\u30fc"  # with every dash (Pd), what reads as one: minus, box lines, heavy minus, the long vowel mark. A last line like a "- Name L." signature (it reads as one) (read NFKC: fullwidth, small dashes fold)
 
 
 def _visible(c: str) -> bool:
@@ -87,7 +87,7 @@ def _clean(raw: object) -> str:
     return s
 
 
-# Meaningless posts (owner, Nov 2: "\u0444\u0440\u0440\u0440" went out): a cheap gate before the AI. The letters counted with every run of
+# Meaningless posts (such as "\u0444\u0440\u0440\u0440"): a cheap gate before the AI. The letters counted with every run of
 # one letter squeezed to one ("\u0444\u0440\u0440\u0440" is "\u0444\u0440"), a word is two letters or more with a vowel in it; a post needs two
 # words ("who is here?"), or one of ten letters. Then not the same as one of my posts this week
 # (near: SequenceMatcher on those squeezed letters). What gets past and is still noise, the AI calls NOISE (ai.py).
@@ -140,7 +140,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
     one carries its author (person: the app's avatar, name with the nick first, and profile), read once for all rows; its
     signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here).
-    One order, the channel's own (owner, Nov 3): by the message's id in the channel, so a post a moderator let out late
+    One order, the channel's own: by the message's id in the channel, so a post a moderator let out late
     sits where Telegram shows it, not where it was written; mine not out yet on top. before: the page under that message."""
     cursor = before if isinstance(before, int) and before > 0 else (1 << 63) - 1
     # Each side contributes at most a page: the public side walks its message index, instead of sorting the whole
@@ -157,7 +157,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     # people for students alone (a guest: none); never under an anonymous post: its author's face among them, or left
-    # out of them, would tell (Codex review, Nov 10)
+    # out of them, would tell
     faces = _faces(con, [p["id"] for p in ps if p["comments"] and not p["anon"]]) if v.student else {}
     hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
     pics = _photos(con, [p["id"] for p in ps])
@@ -207,7 +207,7 @@ TALK_MIN, TALK_AGE = 3, 86400  # "being discussed" over the day too: TALK_MIN pe
 def _talked(con, ids: list[int]) -> set[int]:
     """The posts TALK_MIN or more distinct people commented on in the last day, one query for all of them: comments still
     up; a signed post's author left out (it takes others). An anonymous one counts everyone: leaving its author out
-    would tell, by the label, whether a commenter is the author (review, Nov 3). ponytail: so its author can pad it by
+    would tell, by the label, whether a commenter is the author. ponytail: so its author can pad it by
     one; fine for a hint"""
     if not ids:
         return set()
@@ -261,7 +261,7 @@ def reserve(con, v: Viewer, body: dict) -> int:
         raise ApiError("bad_input", "short")
     with tx(con):
         # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
-        # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (owner, Nov 6: a
+        # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (a
         # delete refunds nothing, else post-delete-post floods the channel)
         if nxt := next_post(con, v.id):
             raise ApiError("rate_limited", "posts", {"retry": nxt})
@@ -291,7 +291,7 @@ def _attach(con, uid: int, pid: int, pics: list[int]) -> None:
         con.execute("UPDATE fchan_photos SET post_id = ?, n = ?, user_id = NULL WHERE id = ?", (pid, i, x))
 
 
-# Photos on a post (owner, Nov 5): up to PHOTOS_MAX, re-encoded by media (EXIF and every other byte of the phone's file
+# Photos on a post: up to PHOTOS_MAX, re-encoded by media (EXIF and every other byte of the phone's file
 # gone) under a random name (the content hash would match the same picture elsewhere, an avatar: an anonymous author's).
 # Uploaded first, each on its own (add_photo), then named in the post. A named post goes out as any (the AI reads the
 # words; it can't judge pictures); an anonymous one with photos always waits for a moderator (settle).
@@ -304,7 +304,7 @@ PHOTO_HIDE_AT = 2       # distinct people's open reports that take a post with p
 
 def photo_room(con, v: Viewer) -> None:
     """Before the decode: a student, and one of the hour's uploads taken, in one statement (two at once can't both
-    pass the last one). Its own count (Codex review): putting photos on a post, deleting them or a failed upload give
+    pass the last one). Its own count: putting photos on a post, deleting them or a failed upload give
     nothing back. ponytail: an hour's bucket, so up to twice PHOTO_UPLOADS across its edge; a sliding window if abused"""
     need_student(v)
     n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
@@ -355,7 +355,7 @@ def pics_gone(con) -> list[str]:
 def reported(con, pid: int) -> None:
     """moderation.report on a post with photos: PHOTO_HIDE_AT distinct people's open reports, and no moderator kept it
     before, take it out of the channel at once (a picture can't wait for the queue); the reports stay open, the
-    moderator's call removes it for good or brings it back (moderation.resolve_report). Words alone wait as before."""
+    moderator's call removes it for good or brings it back (moderation.resolve_report). Words alone wait in the queue."""
     if not _has_photos(con, pid) or one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'dismissed'", pid):
         return
     if one(con, "SELECT COUNT(DISTINCT reporter_id) FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'open'", pid)[0] < PHOTO_HIDE_AT:
@@ -375,7 +375,7 @@ def next_post(con, uid: int) -> int | None:
     return got[-1] + POST_GAP if len(got) >= POSTS_A_GAP else None
 
 
-NICK_FRESH = 800  # a new nick is none of the last this many anonymous posts' (review: no false links, no drawing another's)
+NICK_FRESH = 800  # a new nick is none of the last this many anonymous posts' (no false links, no drawing another's)
 
 
 def pick_nick(con) -> tuple[int, int]:
@@ -388,7 +388,7 @@ def pick_nick(con) -> tuple[int, int]:
 
 def signature(p) -> str:
     """A signed post's name in the channel, fixed as it's written: the first name and last initial, a nick or not (the
-    nick rule, owner Nov 2: the app's feed shows the nick, the channel the name; posts signed with a nick before it keep
+    nick rule: the app's feed shows the nick, the channel the name; posts signed with a nick before it keep
     theirs). Escaped when sent."""
     return short_name(p)
 
@@ -418,13 +418,13 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
 
 
 def _refused(pid: int, text: str) -> str:
-    """A refused post's words as a hash (the words are wiped): the words given back later must be these (review: an
-    appeal with other words reached a moderator labelled with the AI's word on the first ones)."""
+    """A refused post's words as a hash (the words are wiped): the words given back later must be these (else an
+    appeal with other words reaches a moderator labelled with the AI's word on the first ones)."""
     import hashlib
     return hashlib.sha256(f"{pid}\0{text}".encode()).hexdigest()
 
 
-APPEALS_A_DAY = 3      # an author's "Send to a moderator" a day (owner, Nov 4): a human's time is the scarce thing
+APPEALS_A_DAY = 3      # an author's "Send to a moderator" a day: a human's time is the scarce thing
 APPEAL_WINDOW = 3600   # a refusal can be appealed this long after it (the app asks right away; a reload loses it anyway)
 
 
@@ -457,13 +457,13 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
         con.execute("UPDATE fchan_posts SET status = 'held', body = ?, sign = ?, appealed_at = ?, refused = NULL WHERE id = ?", (text, sign, _now(), pid))
         _attach(con, v.id, pid, _pics(body))
         # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref);
-        # all of them, an appealing moderator too (review: the one who got no notice was the anonymous author)
+        # all of them, an appealing moderator too (as an anonymous author they'd get no notice otherwise)
         from .tgcomments import _mods
         notify_staff(con, _mods(con), "fch_appeal", f"fq:{_now() // 3600}")
     return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
 
 
-# The AI's reason for a refusal (ai.explain, phase 2) is asked apart from the post (owner, Nov 4: the outcome shows at
+# The AI's reason for a refusal (ai.explain, phase 2) is asked apart from the post (the outcome shows at
 # once, the reason comes in when ready): my own refused or held post or reply, fresh, once each (explained), so the
 # endpoint is no free model for any text. A refused post's words were wiped: the app sends them back (checked as a
 # post); a held one's are on the row.
@@ -501,7 +501,7 @@ def said(con, table: str, rid: int, got: dict | None) -> None:
     """The AI's validated reason onto its row, for the moderator who decides on it (the Admin queue's reason line)."""
     if got:
         # only while the row still waits (held) or is a fresh refusal: an author's delete during the model's seconds wipes
-        # the words, and the reason (it often quotes them) must not land after it (review)
+        # the words, and the reason (it often quotes them) must not land after it
         live = "status = 'held'" if table == "fchan_replies" else "(status = 'held' OR status = 'gone' AND refused IS NOT NULL)"
         con.execute(f"UPDATE {table} SET ai_reason = ? WHERE id = ? AND {live}", (got["reason"], rid))  # table: the route's own literal
         if table == "fchan_posts":  # the tip and the marked words too: the author's held post keeps them across a reload
@@ -564,7 +564,7 @@ def to_send(con) -> list:
 
 
 def anon_sign(body: str) -> str:
-    """An anonymous post's signature, short and in the post's own script (owner, Nov 2): "Anon" in Russian and Kazakh
+    """An anonymous post's signature, short and in the post's own script: "Anon" in Russian and Kazakh
     alike for any Cyrillic, else English."""
     return "\u0410\u043d\u043e\u043d\u0438\u043c" if re.search("[\u0400-\u04ff]", body or "") else "Anonymous"
 
@@ -615,7 +615,7 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
         for n, m in enumerate(pics or []):
             con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
-        # only after a moderator let it out (owner, Nov 5: the AI's yes is instant, the app already says so)
+        # only after a moderator let it out (the AI's yes is instant, the app already says so)
         a = one(con, """SELECT f.user_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND u.tg_id > 0
                         AND EXISTS (SELECT 1 FROM audit_log WHERE action IN ('fchan_release', 'fchan_undo', 'fchan_restore', 'fchan_republish')
                                     AND target = 'fchan:' || f.id)""", pid)
@@ -655,9 +655,9 @@ def found(con, msg_id: int, text: str) -> None:
     held as lost since) is in the channel after all. Its message id kept, so the author's delete and a take-down reach
     it; it was live when sent, so live again. Matched by the whole text as the copy shows it, in any format the bot
     used (a send lost across a deploy): the words, an empty line and "— name" (tgc.post_tick's, its italic gone; also
-    the plain one before Nov 2), or the signature line first, an empty one, the words (bold gone; Nov 2 for a day);
+    the plain one), or the signature line first, an empty one, the words (bold gone);
     and only when exactly one post matches and no post holds that message yet:
-    another student's same words must never become this one's (review)."""
+    another student's same words must never become this one's."""
     if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
         return
     hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
@@ -665,7 +665,7 @@ def found(con, msg_id: int, text: str) -> None:
     if len(hits) == 1:
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = COALESCE(posted_at, ?) WHERE id = ?", (msg_id, _now(), hits[0]))
         # an album: the caption is on its first photo, and Telegram numbers one album's messages in a row, so photo n
-        # is this one plus n; each then leaves with the post (Codex review: only the first did). ponytail: consecutive
+        # is this one plus n; each then leaves with the post (else only the first does). ponytail: consecutive
         # ids are how Telegram sends a media group; match the copies' media_group_id if that ever changes
         con.execute("UPDATE fchan_photos SET msg = ? + n WHERE post_id = ?", (msg_id, hits[0]))
 
@@ -914,17 +914,17 @@ def reveal(con, v: Viewer, pid: int) -> dict:
     return person_ref(one(con, PERSON + " WHERE u.id = ?", p["user_id"]))
 
 
-# ---- the anonymous author's replies in the comments (Nov 3, .claude/reports/anon-reply/review.md)
+# ---- the anonymous author's replies in the comments
 # The author of an anonymous post answers under it through the bot, so the answer doesn't carry their Telegram account.
 # No comment list in the app (other people's words are never stored): the reply goes to the thread, or to a comment
 # whose Telegram link the author pasted, checked against fchan_comments. Its own AI look, then the bot sends it once
-# (no pause: owner, Nov 9). Stored without a user id: the post
+# (no pause). Stored without a user id: the post
 # is the only way to its author (the owner's reveal, account deletion), and the replies go with it.
 
-REPLY_GAP = 10            # seconds between an author's replies (owner, Nov 4: a minute stalled a live talk)
+REPLY_GAP = 10            # seconds between an author's replies (a minute stalls a live talk)
 # a post's replies a day: the others' comments under it the bot saw (fchan_comments: students', still up or not; the
 # author's own from their account left out, or they could buy replies with them) and REPLIES_MORE on top: as many
-# answers as there are people talking, plus a few for the thread (owner, Nov 4; the per-comment cap went)
+# answers as there are people talking, plus a few for the thread
 REPLIES_MORE = 5
 COMMENT_LINK = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:s/)?(\w{4,32})/(\d+)/?\?(?:[^#\s]*&)?comment=(\d+)(?:[&#]\S*)?", re.I)
 

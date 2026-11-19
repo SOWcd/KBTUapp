@@ -1,4 +1,4 @@
-"""The tree of a club's Telegram groups (owner, Nov 16, for DMP): organisation -> its main group -> its departments' groups,
+"""The tree of a club's Telegram groups (for DMP): organisation -> its main group -> its departments' groups,
 then its other groups. Seen by the club's Vice+ in Studio -> Chats and by DMP (Head+) and the admin for every club.
 
 A group's place comes from what the server already knows: a chat sync link (chatsync.py, the creator's: main or a

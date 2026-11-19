@@ -41,13 +41,13 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     if not at_least(role, "member"):
         raise ApiError("forbidden")
     head = can(con, v, oid, "events")
-    # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for the whole team as our
-    # own (cohosts.py; their counters below stay the host's, their door and list our event team's as before)
-    # never a taken-down or deleted one, nor a hidden host's: the event's own page refuses those too (review)
+    # requests without an event: left, hidden; the events we co-host, out already, for the whole team as our
+    # own (cohosts.py; their counters below stay the host's, their door and list our event team's)
+    # never a taken-down or deleted one, nor a hidden host's: the event's own page refuses those too
     found = rows(con, f"""SELECT * FROM events WHERE (org_id = ? OR status != 'draft' AND hidden_at IS NULL
         AND org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden') AND id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 AND NOT {evdel('events')} ORDER BY starts_at""", oid, oid)
-    found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own (review)
+    found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
@@ -79,7 +79,7 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
 def _asking(con, eid: int, reader: int = 0) -> list:
     """Students' comments under an event that wait for the club: after its last answer (as the club, or by any of its
     Head+ as themselves; their own words are never questions) and, for a `reader`, after they last read the thread
-    (Studio's count stayed after he had read and answered). By ids, so the same second never hides one.
+    (else Studio's count stays after he has read and answered). By ids, so the same second never hides one.
     ponytail: an id freed by a deleted account's last comment can come back; a reader may then miss one question."""
     return rows(con, """WITH leads AS (SELECT m.user_id FROM org_members m JOIN events e ON e.org_id = m.org_id
             WHERE e.id = ? AND m.role IN ('president', 'vice', 'head')),
@@ -219,7 +219,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         visibility = None if i.get("visibility") is None else str(i["visibility"])  # left out: kept as it is
         leaders = str(i.get("leadersFrom") or "president") if visibility == "leaders" else None
         meeting = i.get("meeting") is True  # a club meeting (§2b): team-only, someone's tag or the whole club expected
-        # "For whom" (owner, Nov 4): one of the club's tags on any team-only event, required or not (_meeting_ok checks it)
+        # "For whom": one of the club's tags on any team-only event, required or not (_meeting_ok checks it)
         tag = int(i["meetingTag"]) if i.get("meetingTag") is not None else None
         board = i.get("forBoard") is True  # "For whom": the board (Head+), a built-in choice beside the tags
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
@@ -243,7 +243,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
 
 
 def online_fields(i: dict, was: str | None) -> dict:
-    """An online event (owner, Nov 19), resolved against the saved one (`was`: events.online; None for a new event):
+    """An online event, resolved against the saved one (`was`: events.online; None for a new event):
     - `online` left out: kept as it is (`onlineUrl` alone is refused: which way it was meant is unclear);
     - `online: true`: online; `onlineUrl` a link typed by the organizer (any https host, core.online_url), null or ''
       for none yet, left out to keep the saved link;
@@ -348,7 +348,7 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
         raise ApiError("conflict", "paid")  # someone has paid by these details already
     if v.lent_full and v.staff_org == org["id"] and price is not None and (new["pay_to_name"], new["pay_phone"]) != (old["pay_to_name"], old["pay_phone"]):
-        # the creator from Admin sets or changes the club's payee as its President would (owner, Nov 15): the owner's log
+        # the creator from Admin sets or changes the club's payee as its President would: the owner's log
         # keeps what it was and what it became, so a payment sent elsewhere can be traced
         log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None, "was": {"name": old["pay_to_name"], "phone": old["pay_phone"]},
                                                                             "now": {"name": name, "phone": phone}}, ensure_ascii=False))
@@ -361,7 +361,7 @@ HTTPS = re.compile(r"https://[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?")
 
 
 def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
-    """A partner's event (Oct 29, the Incubator's Halloween party): guestHost names the outside host, shown as
+    """A partner's event (such as the Incubator's Halloween party): guestHost names the outside host, shown as
     "With <host>" (the club stays the one accountable), externalUrl is where people sign up. Only an official club's
     organizers or DMP set it, and not once people have signed up here. Absent keeps both."""
     if "guestHost" not in body:
@@ -384,7 +384,7 @@ def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None
 
 def _partner_ok(f: dict, e: sqlite3.Row | None = None) -> None:
     """A partner's event has no tickets: no price, public, not a meeting (the link out is the only way in). Late sign-up
-    likewise: free, uncapped, public, ours (late review: no receipt judged at the door, no waitlist nobody leaves)."""
+    likewise: free, uncapped, public, ours (no receipt judged at the door, no waitlist nobody leaves)."""
     get = lambda k: f[k] if k in f else e[k] if e else None  # noqa: E731
     if get("guest_host") and (get("price") or get("meeting") or (get("visibility") or "public") != "public"):
         raise ApiError("bad_input", "partner")
@@ -550,7 +550,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
 
 def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     """Who hears that a published event moved (PLAN "Place and time", §4.9): the room DMP gave for a place to be confirmed,
-    or one KBTU room for another, tells nobody now (the 2-hour reminder shows it; at once for those with reminders off);
+    or one KBTU room for another, tells nobody (the 2-hour reminder shows it; at once for those with reminders off);
     another venue or a new time tells them, edits within 10 minutes in one message (the bot reads the event when it
     sends); within 2 hours of the start or during it, at once and only to those not checked in. A new place also gets a
     line in the event's Updates."""
@@ -833,7 +833,7 @@ def events_gone(con) -> tuple[list[str], list[str]]:
 
 
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3). Someone
+    """The host's event team; the co-host's sees short names only, no receipts or answers. Someone
     the organizers removed who had paid stays at the end ('cancelled'), their receipt a tap away for the refund, until
     they sign up again; a receipt counts only for the seat it was sent for (since the seat's created_at)."""
     e = _staff_event(con, v, eid, "events", cohost=True)
@@ -847,7 +847,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
         WHERE r.event_id = ? AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
-    # the club's members only: a friend's invite between two outsiders isn't the club's business (review, Oct 30)
+    # the club's members only: a friend's invite between two outsiders isn't the club's business
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
                                                one(con, "SELECT org_id FROM events WHERE id = ?", eid)[0], *ids)} if ids else {}
     # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
@@ -867,7 +867,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
     e = _staff_event(con, v, eid, "events")
-    # the phone only where this event asked for it (one club's ask reached every club's list)
+    # the phone only where this event asked for it (else one club's ask reaches every club's list)
     found = rows(con, """SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.student_id, s.course, s.school, s.email,
             CASE WHEN ? THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual, r.answers
@@ -1017,12 +1017,12 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
         if shut := door_shut(e, t):
             return {"result": shut}
         badge = PROFILE_QR.search(str(raw))
-        if badge:  # a scanner-only helper lets in who is going, never registers anyone (collab-review H1)
+        if badge:  # a scanner-only helper lets in who is going, never registers anyone
             r = _walk_in(con, e, int(badge[1]), badge[2], t, walk=can(con, v, e["org_id"], "door") or co_runs(con, v, eid) or crew_kind(con, v, e) != "scan")
             if isinstance(r, str):
                 return {"result": r}
         else:
-            c = re.sub(r"[\s-]+", "", str(raw)).upper()  # typed as "k7 m2", or the QR's KBTU<code> (KBTU-<code> before Oct 5)
+            c = re.sub(r"[\s-]+", "", str(raw)).upper()  # typed as "k7 m2", or the QR's KBTU<code> (KBTU-<code> on older tickets)
             # a code means something only within its event (seats._ticket_code): another event's is simply not found
             r = one(con, "SELECT * FROM registrations WHERE ticket_code IN (?, ?)", f"{eid}-{c}", f"{eid}-{c.removeprefix('KBTU')}")
             if not r:
@@ -1044,8 +1044,8 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
 
 
 def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict | None:
-    """A paid seat whose receipt nobody reviewed, not in yet: the door hears it before anything is recorded (Codex's
-    release blocker, Nov 14). Its organizers (the events right, a co-host's team) may let them in after a look (`admit`);
+    """A paid seat whose receipt nobody reviewed, not in yet: the door hears it before anything is recorded. Its
+    organizers (the events right, a co-host's team) may let them in after a look (`admit`);
     anyone else at the door (a member, a helper) is only told to call one, never that the receipt is flagged."""
     if r["checked_in_at"] or not e["price"] or not flagged(con, r["id"]):
         return None
@@ -1088,7 +1088,7 @@ def _rating_view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
 
 
 def rate_event(con, v: Viewer, eid: int, score: object, comment: object) -> dict:
-    """One tap after the event (from the Luma review): only those checked in, from the end until 7 days later;
+    """One tap after the event: only those checked in, from the end until 7 days later;
     changing one's mind is fine. Anonymous to the club."""
     need_student(v)
     e = _event(con, v, eid)
@@ -1150,7 +1150,7 @@ PHOTO_REPORT_AT = 3                              # the third photo tells everyon
 
 # A photo a viewer may see, an album's or the Gallery's (its one ?: the viewer; `f` is the file): reported by me, or by
 # PHOTO_HIDE people and not kept by a moderator, it's out. A photo taken down is out of event_photos altogether.
-PHOTO_HIDE = 3  # owner, Nov 11 (the Gallery): three different people
+PHOTO_HIDE = 3  # three different people
 PHOTO_SHOWN = f"""f.id NOT IN (SELECT r.target_id FROM reports r WHERE r.target = 'photo' AND r.status = 'open' GROUP BY r.target_id
                          HAVING (COUNT(DISTINCT r.reporter_id) >= {PHOTO_HIDE}  -- for everyone, unless a moderator already kept it
                                  AND NOT EXISTS (SELECT 1 FROM reports k WHERE k.target = 'photo' AND k.target_id = r.target_id AND k.status = 'dismissed'))
@@ -1163,7 +1163,7 @@ def _photo_by(f: sqlite3.Row) -> str | None:
 
 
 def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
-    """The guests' album (from the Luma review). Students see it (guests don't: people's faces); who came adds
+    """The guests' album. Students see it (guests don't: people's faces); who came adds
     photos, and so does the team; the one who added a photo or the club's Head+ take it out."""
     if not v.student:
         return {"photos": [], "canAddPhotos": False}
@@ -1325,8 +1325,8 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
         con.execute("DELETE FROM door_guests WHERE event_id = ? AND user_id = ?", (eid, uid))
 
 
-# A19 (Oct 23 night): someone at the door without the app typed their own first and last name on the organiser's phone;
-# a student with that name confirming with Microsoft later counts as came. The typing went with the check-in redesign.
+# A walk-in at the door without the app typed their own first and last name on the organiser's phone; a student with
+# that name confirming with Microsoft later counts as came.
 
 
 def _norm_name(s: str) -> str:
@@ -1340,8 +1340,8 @@ GUEST_DAYS = 30 * 86400  # a walk-in's name waits this long for its student, the
 # ponytail: nothing adds door_guests rows since Nov 14; link_door_guests, GUEST_DAYS and _norm_name can go after Dec 14
 def link_door_guests(con, uid: int) -> None:
     """A student confirmed by Microsoft (their names are KBTU's): a walk-in of the last 30 days with their full name was
-    them, only if no other student has that name (owner's rule with the review's guard: two Aruzhan Serikovas and
-    nobody can tell). Only where the door rules still hold: a public free event, not banned from the club; a
+    them, only if no other student has that name (two Aruzhan Serikovas and nobody can
+    tell). Only where the door rules still hold: a public free event, not banned from the club; a
     registration they had stays theirs (cancelled or waitlisted: they said no, the name is left alone)."""
     s = one(con, "SELECT first_name, last_name FROM students WHERE user_id = ?", uid)
     if not s or not s["first_name"] or not s["last_name"]:
@@ -1366,13 +1366,13 @@ def link_door_guests(con, uid: int) -> None:
             if not r:
                 con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at)
                     VALUES (?, ?, 'going', ?, 1, ?, ?)""", (g["event_id"], uid, _ticket_code(con, g["event_id"]), core.now(), core.now()))
-            # as a check-in at the door: the rating ask and the levels it brings (written directly, they were lost)
+            # as a check-in at the door: the rating ask and the levels it brings (written directly, they would be lost)
             _came(con, one(con, "SELECT * FROM events WHERE id = ?", g["event_id"]), uid, lambda g=g: con.execute(
                 """UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE event_id = ? AND user_id = ?""",
                 (g["created_at"], g["added_by"], core.now(), g["event_id"], uid)))
 
 
-# ---------------------------------------------------------------- the door's opening (owner, Nov 7)
+# ---------------------------------------------------------------- the door's opening
 
 def open_door(con, v: Viewer, eid: int) -> dict:
     """The host club's President or a Vice opens the door early, from 4 h before the start (it opens by itself at T-30,
@@ -1396,7 +1396,7 @@ def open_door(con, v: Viewer, eid: int) -> dict:
 
 def door_round(con) -> None:
     """The postman's round (bot._chores): once the open door has let its first person in (a scan, by name, the big
-    screen, a walk-in: the organizers are at the door, owner Nov 7), each guest going and not yet in hears it once,
+    screen, a walk-in: the organizers are at the door), each guest going and not yet in hears it once,
     until the start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
     t = core.now()
     for e in rows(con, """SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(guest_host, '') = ''

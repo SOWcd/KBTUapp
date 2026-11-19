@@ -38,13 +38,13 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
                     "depts": sorted(int(x) for x in (p["depts"] or "").split(",") if x), "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < core.now() - QUIET_FOR,
                     **({"brought": p["brought"]} if head else {}),  # Head+: who came by their link in these 60 days (a member's KPI)
-                    # theirs, and Head+ strictly above them (the rank rule; audit L10: a Head saw the Vice's)
+                    # theirs, and Head+ strictly above them (the rank rule: else a Head sees the Vice's)
                     **({"probation": bool(p["probation"])} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
 
 
 def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
-    """The roster as a file for the club's Vice+ (Medina, Nov 5): only what the team already sees (policy §4: full
+    """The roster as a file for the club's Vice+: only what the team already sees (policy §4: full
     name, @username, role) plus course and school (every student sees those); no ID, email or phone. The `team` right
     (Vice+, or a role given it). Audited."""
     _may(con, v, oid, "team")
@@ -125,7 +125,7 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
     if uid == v.id or not one(con, "SELECT 1 FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ? AND m.user_id = ?", oid, uid):
         raise ApiError("not_found")
     with tx(con):  # the club's own role names stay below the President: both start plain
-        # one official organization a President (owner, Nov 9): here alone; the admin's own ways (a link, an approval) stay free
+        # one official organization a President: here alone; the admin's own ways (a link, an approval) stay free
         if one(con, """SELECT 1 FROM orgs a JOIN org_members m ON m.user_id = ? AND m.role = 'president' JOIN orgs b ON b.id = m.org_id
                 WHERE a.id = ? AND a.official = 1 AND b.official = 1 AND b.status = 'active' AND b.id != a.id""", uid, oid):
             raise ApiError("conflict", "president_elsewhere")
@@ -137,8 +137,8 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
 
 # ---------------------------------------------------------------- Team 2.0 (SPEC §2b)
 # A club's own roles are a name and colour on one of the levels, so every rights check stays on the level. Tags are
-# groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off
-# (the strikes that came with it went on Oct 22; never used). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
+# groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off.
+# A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
 
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 
@@ -373,7 +373,7 @@ def _set_role(con, v: Viewer, oid: int, uid: int, rid: object, level: object) ->
 
 
 def assign_role(con, v: Viewer, oid: int, rid: int, body: dict) -> dict:
-    """One of the club's own roles to many at once (a president, Nov 6): `users` get it, its holders left out lose it
+    """One of the club's own roles to many at once: `users` get it, its holders left out lose it
     (they keep the level, as roleId null does). The same rule per person as update_member; whoever I may not change is
     skipped and counted. The official ranks are not handed out this way. One transaction."""
     users = body.get("users")
@@ -384,11 +384,11 @@ def assign_role(con, v: Viewer, oid: int, rid: int, body: dict) -> dict:
         raise ApiError("not_found")
     mine = role_in(con, v, oid)
     if r["fixed"] or not can(con, v, oid, "team") or not mine or RANK[r["level"]] >= RANK[mine] \
-            or not _has(con, v, oid, _rights_from(r["level"], r["rights"])):  # only a role with rights I have (Astra)
+            or not _has(con, v, oid, _rights_from(r["level"], r["rights"])):  # only a role with rights I have
         raise ApiError("forbidden")
     want, skipped = set(users), 0
     with tx(con):
-        # never myself: a role below me would lower me, and nobody raises their own rights (Astra)
+        # never myself: a role below me would lower me, and nobody raises their own rights
         for m in rows(con, "SELECT user_id, role, role_id FROM org_members WHERE org_id = ? AND user_id != ?", oid, v.id):
             on = m["user_id"] in want
             if on == (m["role_id"] == rid):
@@ -571,7 +571,7 @@ def _team_link(con, oid: int):
 
 
 def team_link(con, v: Viewer, oid: int) -> dict:
-    """The club's member link for the whole team (a president forwards one card to the senate chat; the one-time link let
+    """The club's member link for the whole team (a president forwards one card to the senate chat; a one-time link lets
     the first in only): many join by it as plain Members, never a role with rights, for 7 days. One per club: the live one
     is shared again (so it can go to several chats); ended early with team_link_off, the next one is new. The same people
     as the one-time link make it; it lands nobody in a department."""
@@ -622,7 +622,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
     r = one(con, "SELECT * FROM org_invites WHERE token = ? AND revoked_at IS NULL", token)
     o = _org(con, r["org_id"]) if r else None
     if not o or o["status"] != "active" or r["used_by"] or (r["expires_at"] or 0) < core.now():
-        raise ApiError("not_found")   # every link is one person's, once; the old reusable ones (no expiry) are dead
+        raise ApiError("not_found")   # every link is one person's, once; a reusable one (no expiry) is dead
     member = r["role"] == "member"
     if r["multi"] and not member:
         raise ApiError("not_found")  # a link for many never gives a role with rights (team_link can't make one; belt and braces)
@@ -654,8 +654,8 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
 
 
 # ---- indoor routes (PLAN item 22): the graph the owner edits on the map; the app finds the ways over it ----
-MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # Claude's graph from Uni-Q's plans, the only one (owner, Oct 16: the
-# editor is off, his saves were by accident; the old map_graph table's row is ignored)
+MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # the graph from Uni-Q's plans, the only one (the
+# editor is off: its saves were by accident; the map_graph table's row is ignored)
 
 
 def map_graph(con) -> dict:

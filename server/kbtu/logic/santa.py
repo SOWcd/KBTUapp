@@ -1,10 +1,10 @@
-"""Secret Santa on an event (owner, Nov 17): the editor's switch; signing up asks a wishlist (its line under the field
+"""Secret Santa on an event: the editor's switch; signing up asks a wishlist (its line under the field
 is the feature's own consent: name and wishlist go to one participant); the organizer draws once, from three people
 going: one random cycle, so nobody gives to themselves and everyone gives and receives once; sign-up closes with it
 (no promotion from the waitlist either). Who loses their seat is out for good: db.py's triggers splice them from the ring.
 Secrecy is the point: a pair and a wishlist are read in one place, view(), by the giver alone. No list, export, log or
 audit row has them (the wishlist lives here, not in registrations.answers, which the organizers read).
-Round 2 (Nov 18): a gift budget and the wishlists' deadline (the event's reg_until) set at the start; at the deadline the
+A gift budget and the wishlists' deadline (the event's reg_until) set at the start; at the deadline the
 bot's round draws by itself through the same _draw (tick()); reminders before the deadline and on the eve of the
 gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day."""
 from __future__ import annotations
@@ -66,7 +66,7 @@ def check_event(con, eid: int, f: dict) -> None:
 
 
 def _budget(raw: object) -> int:
-    # required (owner, Nov 18: "at least a rough sum"); games started before that keep their empty one
+    # required, at least a rough sum; a game started without one keeps its empty one
     if not isinstance(raw, int) or isinstance(raw, bool) or not BUDGET[0] <= raw <= BUDGET[1]:
         raise ApiError("bad_input", "budget")
     return raw
@@ -79,7 +79,7 @@ def _until(raw: object, starts: int) -> int:
 
 
 def start(con, v: Viewer, oid: int, body: dict) -> dict:
-    """Studio's one button (owner, Nov 17: "a person presses it and the game is there, no event form"): a published
+    """Studio's one button (a person presses it and the game is there, no event form): a published
     team-only Santa event. title: "Secret Santa" in the starter's language; startsAt: the gifts day the app proposed
     (a published event needs a start; the editor changes it later). One game at a time: a running one is returned."""
     _may(con, v, oid, "events")
@@ -98,7 +98,7 @@ def start(con, v: Viewer, oid: int, body: dict) -> dict:
         # a deadline within a day: the invite is the reminder (no "closes tomorrow" seconds after it)
         con.execute("UPDATE santa_games SET budget = ?, soon = ? WHERE event_id = ?", (budget, now() if until and until - DAY <= now() else None, made["id"]))
         out = publish_event(con, v, made["id"])
-        # a team-only event tells nobody by itself (owner, Nov 17: "how do I learn my club started it?"): the team hears
+        # a team-only event tells nobody by itself (the club wouldn't learn the game started): the team hears
         # once, and once a day per club at most, whatever game it is (one stopped and started again is no new news)
         e = one(con, "SELECT * FROM events WHERE id = ?", made["id"])
         told = [u for u in _not_in(con, e, reach=True) if u != v.id and not one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'santa_open'

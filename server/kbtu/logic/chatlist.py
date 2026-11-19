@@ -26,7 +26,7 @@ def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
 def chats(con, v: Viewer) -> dict:
     """Curated Telegram chats (§4.11), the biggest first (A8); "for you" are the ones aimed at my school and
     course plus those for everyone (my school and course first, by size within); a club's or school's chat says whose
-    (PLAN 86; the app no longer ticks the ones I opened; the owner didn't understand it)."""
+    (PLAN 86; no tick on the ones I opened: it isn't clear what one means)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
@@ -50,7 +50,7 @@ def pending_chats(con) -> list[dict]:
 
 
 def _org_refs(con, ids: set[int]) -> dict[int, dict]:
-    """The chats' clubs as org_ref shows them, their logos in one read (one per club ran on every app start)."""
+    """The chats' clubs as org_ref shows them, their logos in one read (one per club would run on every app start)."""
     found = rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(ids)})", *ids) if ids else []
     logos = core._by_id(con, "files", (o["logo_file_id"] for o in found))
     return {o["id"]: org_ref(con, o, logos) for o in found}
@@ -116,7 +116,7 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
 
 
 # A chat any student suggests (PLAN item 45): picked in the bot's own
-# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21: a closed
+# chat picker, sent to it, or typed in the app's sheet; any chat: a closed
 # one by its invite link, which only signed-in students then see (chats()) and the admin sees marked before approving.
 HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
 
@@ -230,7 +230,7 @@ def approve_chat(con, v: Viewer, cid: int) -> dict:
     return _owned(con, cid)
 
 
-# ---------------------------------------------------------------- sections: what a chat is for (Nov 2)
+# ---------------------------------------------------------------- sections: what a chat is for
 SECTIONS = ("study", "reviews", "admission", "schools", "clubs", "fun")
 SORT_AGAIN = 3600  # an AI that didn't answer is asked about the chat again an hour later
 
@@ -355,8 +355,8 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
 
 
 def may_chats(con, v: Viewer, oid: int) -> sqlite3.Row:
-    """Who links an org's chats: its Vice+ (the profile right; the owner said "the president", Studio's profile is Vice+
-    since Oct 5), and the admin (AdminChats links any chat; here: a school with no President yet). The org."""
+    """Who links an org's chats: its Vice+ (the profile right: Studio's profile is Vice+
+    too), and the admin (AdminChats links any chat; here: a school with no President yet). The org."""
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND status != 'archived'", oid)
     if not o:
         raise ApiError("not_found")
@@ -485,7 +485,7 @@ PICK_TTL = 600  # "Link a group / channel": Telegram's own picker, then our bot 
 
 
 def chat_pick(con, v: Viewer, oid: int) -> None:
-    """Studio's "Link a group / channel" (owner, Nov 5: no typing @names): Telegram's add-the-bot picker opens next; the
+    """Studio's "Link a group / channel" (no typing @names): Telegram's add-the-bot picker opens next; the
     chat our bot lands in from me in the next ten minutes becomes this org's (pick_claim). One pending pick a person."""
     may_chats(con, v, oid)
     tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)["tg_id"]
@@ -554,7 +554,7 @@ WAITS = 5  # remembered chats a person (the oldest go)
 
 
 def bot_admin(con, tg_from: int, chat: dict, invite: str | None) -> None:
-    """Our bot made admin in a chat no club holds, and no pick or card claimed it (owner, Nov 14: any order works):
+    """Our bot made admin in a chat no club holds, and no pick or card claimed it (any order works):
     remembered for the one who did it (Telegram's `from`, the action's performer) for PICK_TTL; Studio → Chats then
     lists it to him alone, and he links it to a club he may edit (claim_wait). Nothing is linked by itself."""
     u = one(con, "SELECT id FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
@@ -612,7 +612,7 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
     """Our bot is in a chat now, made admin there (or a group's own admin said /start oc_<id>): which org chat it is,
     among those of the orgs the one who added it may edit (the admin: any) and not yet kept by the bot. A group by
     Studio's link says (its /start oc_<id>); a channel can't carry one, so by its @name or its invite link (getChat
-    gives one to an admin bot); never by a title (Codex, Nov 14: a title proves nothing). The chat's id."""
+    gives one to an admin bot); never by a title (a title proves nothing). The chat's id."""
     u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
     if not u:
         return None
@@ -641,12 +641,12 @@ def banned(con, tg: int) -> bool:
 
 
 def student(con, tg: int) -> bool:
-    """Signed up in the app (a student's account, not a guest's first opening): only they may /all (owner, Nov 19)."""
+    """Signed up in the app (a student's account, not a guest's first opening): only they may /all."""
     return bool(one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", tg))
 
 
 def tag_all(con, tg_chat: int, tg_from: int, live: list[int] | tuple = ()) -> list[int]:
-    """/all in a group (bot._tag_all; anyone in the chat calls, owner Nov 18): whom to mention, each once, in this order:
+    """/all in a group (bot._tag_all; anyone in the chat calls): whom to mention, each once, in this order:
     as far as the app knows (a club's chat: a synced department chat its department, a club chat the club's members, an
     event's chat its going people), then whom the bot saw there (chat_seen; a chat no club holds: chat_seen_free), then
     `live`: the chat's participants Telegram just listed (mtbot.members). Never the caller, Telegram's service accounts or
@@ -706,7 +706,7 @@ def seen(con, tg_chat: int, user: dict | None) -> None:
         return
     if one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg):
         return
-    # a chat no club holds (owner, Nov 14: /all works there too, its Telegram admins call): chat_seen_free, no club
+    # a chat no club holds (/all works there too, its Telegram admins call): chat_seen_free, no club
     if t - _unheld.get(tg_chat, 0) < HELD_TTL or not (oid := _holder(con, tg_chat)[2]):
         if tg_chat not in _unheld or t - _unheld[tg_chat] >= HELD_TTL:
             if len(_unheld) > 10_000:  # a few bytes a chat; the bot sits in few

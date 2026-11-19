@@ -1,12 +1,11 @@
-"""The forum channel's comments in Telegram (FORUM_GROUP; owner, Nov 1; .claude/reports/tg-comments-review.md,
-tg-comments-final-review.md, tg-comments-mod-review.md). The channel is public and its discussion group open:
+"""The forum channel's comments in Telegram (FORUM_GROUP). The channel is public and its discussion group open:
 "Comments" goes straight into the field. Only students confirmed by Microsoft write there; the bot (tgc.py) deletes
 anyone else's comment, says so once as a reply in the thread (gone after a minute) with a button into the app, and
 bans a second try. The stranger's text waits an hour for him alone: the app shows it to the same Telegram account
 (the signed initData), never to whoever opens a link.
 Reports: a student replies /report; the bot deletes the command and answers in DM. A comment goes at once only when two
 reporters verified more than two weeks ago reported it AND the AI says it breaks the rules; its author hears in DM
-("removed after reports, under review"; his words only once restored, the app shows them) and a moderator has the last word: confirm or restore (owner, Nov 1: the
+("removed after reports, under review"; his words only once restored, the app shows them) and a moderator has the last word: confirm or restore (the
 AI never decides). Anything else reported waits in the same queue, still up (an hourly digest; 3+ reports at once).
 Reporters' accuracy changes only on a moderator's decision; /report is closed only by a moderator, and only for someone
 whose reports a moderator found abuse twice in 30 days. Here the rules; the Telegram calls are in tgc.py."""
@@ -28,14 +27,14 @@ ALERT_AT = 3               # reports on one comment still up: the moderators hea
 CLOSE_AT = 2               # reports a moderator found abuse within KEEP before /report closes (the policy: twice in 30 days)
 PAIR_AT = 2                # a reporter's wrong reports on one author: his reports on that author never delete again
 EDIT_LOOKS = 10            # an author's edits of reported comments a day that may each bring a fresh AI look (a paid call)
-AI_LOOKS = 30              # a reporter's reports a day that may each bring a fresh AI look (reports themselves: no cap, owner)
+AI_LOOKS = 30              # a reporter's reports a day that may each bring a fresh AI look (reports themselves: no cap)
 GOOD_AT = 10              # confirmed reports on as many different authors, none wrong: the owner hears (never a promotion)
 LIVE = ("open", "queued")  # in the moderators' queue, still up
 
 
 def commenter(con, tg_id: int | None) -> str | None:
     """'student' may comment; 'banned' (banned in the app) is banned in the group too; None: a stranger. Students
-    confirmed by Microsoft only (a typed-in ID could be anyone's), staff rows out until the owner decides (review 2)."""
+    confirmed by Microsoft only (a typed-in ID could be anyone's), staff rows out until the owner decides."""
     u = one(con, f"""SELECT u.banned_at, EXISTS (SELECT 1 FROM students s WHERE s.user_id = u.id AND s.manual = 0
         AND NOT {core.staff_sql()}) AS st FROM users u WHERE u.tg_id = ?""", tg_id)
     return None if not u else "banned" if u["banned_at"] else "student" if u["st"] else None
@@ -134,7 +133,7 @@ def _hash(body: str) -> str:
 
 def fresh_look(con, reporter_tg: int) -> bool:
     """May this reporter's new report bring about a fresh AI look? AI_LOOKS a day; past them the report still counts,
-    it reuses a look at the same text or waits for a moderator (review: the AI's cost, without capping /report)."""
+    it reuses a look at the same text or waits for a moderator (the AI's cost, without capping /report)."""
     return one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN users u ON u.id = r.reporter_id WHERE u.tg_id = ? AND r.at > ?""",
                reporter_tg, now() - 86400)[0] <= AI_LOOKS
 
@@ -191,7 +190,7 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
         if verdict is False and n >= DELETE_AT and not cleared:
             con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
-            if c["author_id"]:  # he hears at once, while the thread is still about it (review 3)
+            if c["author_id"]:  # he hears at once, while the thread is still about it
                 notify(con, c["author_id"], "tgc_removed", f"tr:{cid}")
             return "delete"
         if reports >= ALERT_AT:  # many at once: the moderators now, not in the hour's digest
@@ -314,7 +313,7 @@ def _clear(con, body: str) -> None:
 
 def _restore(con, cid: int) -> None:
     """Telegram can't bring a message back: still there (not yet deleted), it simply stays; gone, its author hears it
-    was a mistake and may post it again (his own words once more, in DM). Nothing in the thread (review 3)."""
+    was a mistake and may post it again (his own words once more, in DM). Nothing in the thread."""
     c = one(con, "SELECT * FROM tgc_comments WHERE id = ?", cid)
     con.execute("UPDATE tgc_comments SET status = ?, review = 0, shown = 0, decided_at = ? WHERE id = ?",
                 ("kept" if c["status"] == "deleting" else "restored", now(), cid))
@@ -325,7 +324,7 @@ def _restore(con, cid: int) -> None:
 
 def _good(con, uid: int) -> None:
     """An active reporter right every time, on GOOD_AT different authors (a pair feeding each other violations gets no
-    credit): the owner is told once, to offer the moderator status himself (review 2, 3: a person decides)."""
+    credit): the owner is told once, to offer the moderator status himself (a person decides)."""
     c = one(con, """SELECT COUNT(DISTINCT CASE WHEN r.outcome = 'confirmed' THEN x.author_tg END) AS ok,
         SUM(r.outcome IN ('overturned', 'abuse')) AS bad FROM tgc_reports r JOIN tgc_comments x ON x.id = r.comment_id
         WHERE r.reporter_id = ? AND r.at > ?""", uid, now() - KEEP)

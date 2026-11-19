@@ -1,5 +1,4 @@
-"""Appeals to the Student Government (APPEALS=1 everyone, APPEALS=staff the admins, moderators and SG's people; owner,
-Nov 10; Codex's reviews .claude/reports/codex/night/appeal*.log).
+"""Appeals to the Student Government (APPEALS=1 everyone, APPEALS=staff the admins, moderators and SG's people).
 
 A verified student writes anything in any form; only technical limits stop it (length, a day's count). Named or
 anonymous: the author's link lives apart (appeal_authors), for "my appeals", the quota and the answer's bot message;
@@ -11,7 +10,7 @@ change, answer, grant, revoke and reveal goes to the audit log (ids only, never 
 closing, 180 at most from sending; the author deletes theirs whenever. No drafts here: those stay on the phone.
 
 Two desks share it all (the column appeals.desk): `sg` the Student Government's appeals, `help` the questions KRI (the
-assistant) couldn't answer and the student handed to a person (ASK=1 everyone, ASK=staff the pilot; owner, Nov 15).
+assistant) couldn't answer and the student handed to a person (ASK=1 everyone, ASK=staff the pilot).
 Each desk has its own people (appeal_staff, help_staff) and its own consent (appeal_consents, help_consents); a desk's
 people never see the other's. The help desk has no topics, no AI tips (KRI tried already) and no "Solved" feed."""
 from __future__ import annotations
@@ -31,7 +30,7 @@ STATUSES = ("new", "work", "closed")    # Received / In progress / Closed
 MAX = 4000
 A_DAY = 3                               # sent in 24 h; deleting one gives nothing back (appeal_sends)
 CONSENT = "apl1"                        # the privacy policy's appeals section, agreed to on the first send (or AI help)
-ASK_CONSENT = "ask1"                    # the help desk's own: new recipients read the question (its policy clause: Codex's)
+ASK_CONSENT = "ask1"                    # the help desk's own: new recipients read the question (its policy clause)
 # a desk: its consent table and version, its people's table, the answer's bot message kind, the audit's prefix
 DESKS = {"sg": ("appeal_consents", CONSENT, "appeal_staff", "appeal_answer", "appeal"),
          "help": ("help_consents", ASK_CONSENT, "help_staff", "ask_answer", "help")}
@@ -183,7 +182,7 @@ def send(con, v: Viewer, body: dict, desk: str = "sg") -> dict:
             if a:
                 return _shape(a, t)
         if one(con, "SELECT COUNT(*) FROM appeal_sends WHERE user_id = ? AND at > ? AND desk = ?", v.id, t - 86400, desk)[0] >= A_DAY:
-            raise ApiError("rate_limited", "appeals")  # each desk its own day's count (review #1)
+            raise ApiError("rate_limited", "appeals")  # each desk its own day's count
         aid = con.execute("INSERT INTO appeals (topic, body, anon, created_at, due_at, nonce, desk) VALUES (?, ?, ?, ?, ?, ?, ?)",
                           (topic, text, 1 if body.get("anon") is True else 0, t, due(t), key, desk)).lastrowid
         con.execute("INSERT INTO appeal_authors (appeal_id, user_id) VALUES (?, ?)", (aid, v.id))
@@ -284,7 +283,7 @@ def act(con, v: Viewer, aid: int, body: dict, desk: str = "sg") -> dict:
 def months(con, desk: str = "sg") -> list[dict]:
     """Sent appeals a month by topic (Almaty months); a topic with fewer than FEW appeals that month goes into "other"
     (none chosen counts as other). Read from the appeals alone, never their authors: the numbers say nothing the queue
-    doesn't (counting authors told SG when a named and an anonymous appeal were one person's; Codex, Nov 10)."""
+    doesn't (counting authors would tell SG when a named and an anonymous appeal are one person's)."""
     got: dict[str, dict[str, int]] = {}
     for r in rows(con, "SELECT created_at, topic FROM appeals WHERE desk = ?", desk):
         m = dt.datetime.fromtimestamp(r["created_at"], ALMATY).strftime("%Y-%m")
@@ -305,7 +304,7 @@ def months(con, desk: str = "sg") -> list[dict]:
 # Two general lines, never an appeal's words and never linked to one (no appeal id anywhere): proof that writing
 # changes things. Who wrote it is kept for the audit only and never sent. The shapes below could point at an
 # anonymous author (a room, a floor, a date, an id, a contact), so they never pass; names no regex catches: the SG
-# writer is told why. Owner + adversarial review, Nov 13.
+# writer is told why.
 SOLVED_LEN = (10, 140)
 SOLVED_MONTH = 10                       # new entries a calendar month (Almaty); a deleted one still counts
 SOLVED_TOPIC = 90 * 86400               # an entry's topic shows only if FEW appeals had it in this time before

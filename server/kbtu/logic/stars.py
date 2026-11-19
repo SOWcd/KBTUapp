@@ -1,6 +1,6 @@
-"""Telegram Stars for "Support the app" (owner, Nov 9): one more way beside the banks, a gift and never a purchase. The
+"""Telegram Stars for "Support the app": one more way beside the banks, a gift and never a purchase. The
 app asks for an invoice, Telegram's own window takes the Stars, the bot records the charge. Nothing about the payer is
-kept on the gift. A new gift gives its payer the award Fuel (Nov 10, reviews: for Stars only, never a bank transfer;
+kept on the gift. A new gift gives its payer the award Fuel (for Stars only, never a bank transfer;
 no amount, no level): that one fact sits on their account (achievement_grants, gone with it) and needs the privacy
 policy's line (TODO(legal) there)."""
 from __future__ import annotations
