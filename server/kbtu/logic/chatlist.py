@@ -640,6 +640,11 @@ def banned(con, tg: int) -> bool:
     return bool(one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg))
 
 
+def student(con, tg: int) -> bool:
+    """Signed up in the app (a student's account, not a guest's first opening): only they may /all (owner, Nov 19)."""
+    return bool(one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", tg))
+
+
 def tag_all(con, tg_chat: int, tg_from: int, live: list[int] | tuple = ()) -> list[int]:
     """/all in a group (bot._tag_all; anyone in the chat calls, owner Nov 18): whom to mention, each once, in this order:
     as far as the app knows (a club's chat: a synced department chat its department, a club chat the club's members, an

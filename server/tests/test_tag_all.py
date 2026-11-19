@@ -144,12 +144,17 @@ def test_discussion_group_never_calls(env, monkeypatch):
 
 
 def test_anyone_in_the_chat_calls(env, monkeypatch):
-    """A plain member and someone the app doesn't hold in the club: their own message in the chat proves they're in it."""
+    """A plain member calls; someone with no account in the app, or a guest who only opened it, is told to sign up (owner, Nov 19)."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
     assert _tagged(_run(cfg, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
     bot._tagged.clear()
-    assert _tagged(_run(cfg, con, _Http(), _msg(800))) == [20, 21, 31, 32, 33, 34, 35, 36, 37]   # not even in the app
+    http = _Http()
+    assert _tagged(_run(cfg, con, http, _msg(800))) == []                     # not in the app: nobody is called, told why
+    assert http.sent[0]["text"] == bot.texts.bot_message("ru", "all_app")[0]
+    login(c, 801, "u801")
+    con.execute("DELETE FROM students WHERE user_id = (SELECT id FROM users WHERE tg_id = 801)")  # opened the app, never signed up
+    assert _tagged(_run(cfg, con, _Http(), _msg(801))) == []
 
 
 def test_live_list_union_order_and_cap(env, monkeypatch):

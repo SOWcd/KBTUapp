@@ -1347,6 +1347,9 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         # never call (silence).
         if logic.chatlist.banned(con, who):
             return
+        if not logic.chatlist.student(con, who):  # no account in the app: told so, nobody is called (owner, Nov 19)
+            _refuse(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_app")
+            return
         if chat["id"] in _tagging or time.time() - _tagged.get(chat["id"], 0) < ALL_AGAIN:  # one run, then ALL_AGAIN: say so, then both go
             _refuse(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_soon")
             return
@@ -1395,7 +1398,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 
 
 def _refuse(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lang: str | None, key: str) -> None:
-    """/all answered without calling (all_soon, all_none): one such answer a chat each ALL_NO_TTL, one pending."""
+    """/all answered without calling (all_soon, all_none, all_app): one such answer a chat each ALL_NO_TTL, one pending."""
     pending = tgc._last.get(f"allno:{chat}")
     if time.time() - _denied.get(chat, 0) > ALL_NO_TTL and not (pending and not pending.done()):  # one waiting a chat at most
         _denied[chat] = time.time()
