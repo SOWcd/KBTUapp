@@ -23,11 +23,11 @@ export function copyCap(): CapCopy | null {
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null; el: HTMLElement | null } = { at: null, cap: null, el: null };
 /** The iris: a screen opens out of the round button that was pressed (owner, Nov 17: the map's opening, more often).
  *  The opener marks its place on the click; whichever Sheet, Pane or Feed mounts next takes it, once, if still fresh. */
-type Iris = { x: number; y: number; r: number };
+type Iris = { x: number; y: number; r: number; el?: HTMLElement /* the control itself (the assistant's light hides it while it flies) */ };
 let irisAt: (Iris & { t: number }) | null = null;
 export function irisFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  irisAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2, t: performance.now() };
+  irisAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2, el: e.currentTarget as HTMLElement, t: performance.now() };
 }
 /** the mark, left for whoever takes it (the assistant's light flies out of the same place the Sheet's circle opens from) */
 export const peekIris = (): Iris | null =>
