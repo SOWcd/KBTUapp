@@ -2889,7 +2889,7 @@ def test_deadline_and_free_first(env):
     assert c.delete(f"/api/events/{eid}/registration", headers=tma(10)).status_code == 200                 # ann gives it back
     dan = c.get(f"/api/events/{eid}", headers=tma(13)).json()
     assert (dan["my"]["status"], dan["my"]["free"], dan["freeLeft"]) == ("going", True, 0)                 # the next 1st-year
-    assert ("seat_free", f"event:{eid}") in {tuple(r) for r in con.execute("SELECT kind, ref FROM bot_outbox")}
+    assert any(k == "seat_free" and r.startswith(f"event:{eid}:") for k, r in con.execute("SELECT kind, ref FROM bot_outbox"))  # one per promotion
 
     shot = io.BytesIO()
     Image.new("RGB", (600, 1200), (240, 240, 240)).save(shot, "PNG")

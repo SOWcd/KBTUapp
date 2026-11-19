@@ -2783,6 +2783,8 @@ const kk: Dict = {
   'tm.removeTeamText': "Барлық {n} адам іс-шарадан шығады, бот әрқайсысына хабарлайды.",
   'tm.teamRemoved': "Команда алынды",
   'tm.refund': "Ақшаны өздеріңіз қайтарыңыз: чек қосымшада қалады.",
+  'att.removedFold': "Алынғандар",
+  'tm.changed': "Команда құрамы өзгерді: қайта тексеріңіз",
   // the organizer's updates on an event
   'upd.title': "Жаңалық",
   'upd.more': "Тағы {n}",

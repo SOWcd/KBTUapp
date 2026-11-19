@@ -2783,6 +2783,8 @@ const en: Dict = {
   'tm.removeTeamText': "All {n} leave the event; the bot tells each.",
   'tm.teamRemoved': "Team removed",
   'tm.refund': "Return the money yourselves: the receipt stays in the app.",
+  'att.removedFold': "Removed",
+  'tm.changed': "The team changed: check it again",
   // the organizer's updates on an event
   'upd.title': "Update",
   'upd.more': "{n} more",

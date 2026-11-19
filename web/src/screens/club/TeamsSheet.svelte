@@ -13,8 +13,9 @@
   import { teamSize } from '../../lib/teams';
   import { onMount } from 'svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import { api, ApiErr, type Id, type PersonRef, type TeamsBoard } from '../../lib/api';
-  import { errorText } from '../../lib/state/data.svelte';
+  import { api, ApiErr, staffEvents, type Id, type PersonRef, type TeamsBoard } from '../../lib/api';
+  import { errorText, studioChanged } from '../../lib/state/data.svelte';
+  import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -67,12 +68,18 @@
       .map((x) => ({ ...x, captain: x.members[0].id })), solo: b.solo.filter((m) => !gone.has(m.id)) };
     haptic.tap();
     try {
-      await (tm ? api.removeTeam(id, tm.id) : api.removePerson(id, p!.id));
-      haptic.ok(); say(t(tm ? 'tm.teamRemoved' : 'att.removed'), 'waving_hand_3d_default');
+      await (tm ? api.removeTeam(id, tm.id, tm.members.map((m) => m.id)) : api.removePerson(id, p!.id));
+      haptic.ok(); say(t(tm ? 'tm.teamRemoved' : 'att.removed'), 'waving_hand_3d_default'); studioChanged();
       b = await api.teams(id);
-    } catch (e) { b = was; if (e instanceof ApiErr && e.message === 'checked_in') { haptic.error(); say(t('att.removeCame'), 'warning_3d'); } else fail(e); }
+    } catch (e) {
+      b = was;
+      if (e instanceof ApiErr && e.message === 'changed') { haptic.error(); say(t('tm.changed'), 'warning_3d'); b = await api.teams(id).catch(() => was); }
+      else if (e instanceof ApiErr && e.message === 'checked_in') { haptic.error(); say(t('att.removeCame'), 'warning_3d'); } else fail(e);
+    }
   }
-  const outItems = (p: PersonRef, tm: { id: Id; name: string; members: PersonRef[] } | null): MenuItem[] => [
+  // the app's admin from Admin never on a paid event (money is the club's; server remove_seats)
+  const plain = $derived(staffEvents.has(id) && !session.me?.founder);
+  const outItems = (p: PersonRef, tm: { id: Id; name: string; members: PersonRef[] } | null): MenuItem[] => plain && b?.paid ? [] : [
     { label: t('att.remove'), destructive: true, onselect: () => out(p, null) },
     ...(tm ? [{ label: t('tm.removeTeam'), destructive: true, onselect: () => out(null, tm) }] : []),
   ];
@@ -119,7 +126,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : p.off ? outItems(p, null) : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }, ...outItems(p, null)] : menuOf(p, null)}>
+              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || p.off && !outItems(p, null).length ? undefined : p.off ? outItems(p, null) : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }, ...outItems(p, null)] : menuOf(p, null)}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}

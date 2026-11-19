@@ -2805,6 +2805,8 @@ const ru = {
   'tm.removeTeamText': "Все {n} уйдут с события, бот сообщит каждому.",
   'tm.teamRemoved': "Команда убрана",
   'tm.refund': "Деньги верните сами: чек останется в приложении.",
+  'att.removedFold': "Убраны",
+  'tm.changed': "Состав команды изменился: проверьте ещё раз",
   // the organizer's updates on an event
   'upd.title': "Обновление",
   'upd.more': "Ещё {n}",
