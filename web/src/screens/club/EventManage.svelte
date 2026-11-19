@@ -253,7 +253,7 @@
   }
   // "Change room" on the day (rooms change on the spot; moved here from Studio's home, Nov 17): a KBTU room in one tap,
   // who's coming hears it by the rules (server change_place)
-  const roomDay = $derived(head && !plain && live && !e?.placeUrl && !!e && dayNo(e.startsAt) === dayNo(tick) && ends > tick);
+  const roomDay = $derived(head && !plain && live && !e?.placeUrl && !e?.online && !!e && dayNo(e.startsAt) === dayNo(tick) && ends > tick);
   let moving = $state(false), room = $state(''), roomForm = $state<HTMLFormElement>();
   async function startMove() { haptic.tap(); room = ''; moving = true; await frame(); roomForm?.querySelector('input')?.focus(); }
   async function move() {
@@ -274,7 +274,7 @@
       {#if staff}<Notice icon={ShieldCheck} text={t('mg.asStaff')} />{/if}
       <Group>
         <!-- the event's two doors on its card (owner, Nov 14): edit it, see it as students do -->
-        <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}">
+        <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place, e.online)}">
           {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
           {#snippet trailing()}<span class="yn">{#if head}<IconButton icon={Pencil} size="s" label={t('studio.edit')} onclick={() => sheets.editor(e.org.id, id)} />{/if}
             <IconButton icon={Eye} size="s" label={t('mg.asStudents')} onclick={() => sheets.event(id)} /></span>{/snippet}

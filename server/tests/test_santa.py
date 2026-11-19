@@ -639,7 +639,7 @@ def test_migration_on_the_live_shape(env, tmp_path):
     path = str(tmp_path / "live.db")
     db.init(path)
     con = db.connect(path)
-    con.executescript("DROP TABLE santa_games; DROP TRIGGER santa_moved_upd; DROP TRIGGER santa_moved_del; PRAGMA user_version = 183;")
+    con.executescript("ALTER TABLE events DROP COLUMN online; DROP TABLE santa_games; DROP TRIGGER santa_moved_upd; DROP TRIGGER santa_moved_del; PRAGMA user_version = 183;")
     t = int(time.time())
     con.execute("INSERT INTO users (id, tg_id, tg_first_name, lang, can_dm, created_at, seen_at, qr_code) VALUES (1, 501, 'P', 'ru', 1, 0, 0, 'Q1')")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")

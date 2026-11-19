@@ -258,6 +258,7 @@ def test_migration_does_not_backfill_old_receipts(paid, monkeypatch):
     # A legacy human review whose reviewer was deleted is indistinguishable in the old columns.
     con.execute("UPDATE receipts SET reviewed_at = ? WHERE id = ?", (now, row["id"]))
     con.execute("DROP TABLE receipt_auto_checks")
+    con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
     con.execute("PRAGMA user_version = 186")
     path = con.execute("PRAGMA database_list").fetchone()[2]
     db.init(path)

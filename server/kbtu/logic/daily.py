@@ -71,8 +71,8 @@ def memo(con, v: Viewer, oid: int, later: bool = False) -> dict:
     asked = [e for e in todo if later or e["starts_at"] < monday + 7 * 86400]
     me = _memo_sender(con, v, oid)
     sign = texts.memo_sign(o["name"], me, me["name"], me["nameEn"], me["phone"])
-    shape = lambda e: {"title": e["title"], "starts_at": e["starts_at"], "ends_at": e["ends_at"], "place": e["place"], "meeting": e["meeting"],  # noqa: E731
-                       "room": _room_no(e["place"], e["place_url"]), "off": bool(e["place_url"]), "seats": e["seats"]}
+    shape = lambda e: {"title": e["title"], "starts_at": e["starts_at"], "ends_at": e["ends_at"], "place": texts.where(e["place"], e["online"] is not None, "ru"), "meeting": e["meeting"],  # noqa: E731
+                       "room": _room_no(e["place"], e["place_url"]), "off": bool(e["place_url"]) or e["online"] is not None, "seats": e["seats"]}
     asks = [(shape(e), json.loads(e["memo"])) for e in asked]
     dmp = [(e, m) for e, m in asks if set(m) - {"print"}]  # an event asking only for printing has nothing for DMP
     text = texts.memo_text(o["name"], dmp, sign)

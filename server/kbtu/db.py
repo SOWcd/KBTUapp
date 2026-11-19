@@ -1977,6 +1977,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (187, """CREATE TABLE IF NOT EXISTS receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
       receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
     ) STRICT;"""),
+    # an online event (owner, Nov 19): NULL not online; '' online, no link yet; else its meeting link (core.online_url)
+    (188, "ALTER TABLE events ADD COLUMN online TEXT;"),
 ]
 
 

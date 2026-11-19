@@ -146,7 +146,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
-    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
+    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
     def listed(evs):  # a line per event, the first one opened
@@ -554,7 +554,7 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
-    where = f"\n📍 {e['place']}" if e["place"] else ""
+    where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
 
@@ -1532,7 +1532,7 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
     async def send(batch: list[int]) -> bool:
         nonlocal called, sent_n, failed
         marks = random.sample(TAG_MARKS, len(batch))
-        gap = TAG_FAST if sent_n < TAG_BURST else TAG_GAP
+        gap = 0 if not sent_n else TAG_FAST if sent_n < TAG_BURST else TAG_GAP  # the first one at once
         sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{premium(m)}</a>' for m, t in zip(marks, batch))}, gap)
         if sent and not sent.get("ok") and _custom_re:  # the pack's emoji refused inside a mention: the plain ones
             sent = await _call(cfg, http, "sendMessage", {**body, "text": head + "".join(f'<a href="tg://user?id={t}">{m}</a>' for m, t in zip(marks, batch))}, gap)
@@ -1545,13 +1545,17 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
 
     try:
         # the caller is in the chat now, by Telegram (one call per run; a guest in a channel's comments isn't)
+        t0 = time.monotonic()
         me = await _call(cfg, http, "getChatMember", {"chat_id": chat, "user_id": who}, 0)
         st = (me or {}).get("result") or {} if me and me.get("ok") else {}
         status = st.get("status")
         if not (status in ("creator", "administrator", "member") or status == "restricted" and st.get("is_member")):
             quiet = True
             return
+        t1 = time.monotonic()
         roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
+        # where a slow /all spends its time (owner, Nov 19): durations only, no chat and no person
+        log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
         # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
         live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
         con = db.connect(cfg.db_path)
@@ -1718,10 +1722,11 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
            and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]
     for e in evs[:20 if words else INLINE_EVENTS]:
         org = " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])])
-        caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"], org, e["price"], e["taken"])
+        place = texts.where(e["place"], e["online"], lang)
+        caption, button = texts.share_event(lang, e["title"], e["startsAt"], place, org, e["price"], e["taken"])
         poster = f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
         out.append(article(f"ev-{e['id']}", e["title"], caption, button, f"ev_{e['id']}", thumbnail_url=poster,
-                           description=" · ".join([texts.when(e["startsAt"], lang), *([e["place"]] if e["place"] else [])])))
+                           description=" · ".join([texts.when(e["startsAt"], lang), *([place] if place else [])])))
     return body
 
 

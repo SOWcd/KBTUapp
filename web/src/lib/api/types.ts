@@ -405,6 +405,8 @@ export interface EventCard {
   publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card
   place: string;
   placeUrl: string | null;      // 2GIS link for off-campus places
+  online: boolean;              // an online event: no place, the word "Online" in the reader's language
+  onlineUrl: string | null;     // its meeting link (server-checked https; any host when typed by hand, so its host is shown)
   cover: Media | null;          // photo or poster; null → emoji + colour
   video?: Video | null;         // a short vertical video the Feed plays (ready ones only; the editor also sees one being compressed)
   slides: Media[];              // photos after the cover, swiped sideways (PLAN 33)
@@ -574,6 +576,8 @@ export interface EventInput {
   endsAt: Ts | null;
   place: string;
   placeUrl: string | null;
+  online?: boolean;            // on: the place is cleared; left out: kept
+  onlineUrl?: string | null;   // its meeting link, https; null: none yet
   emoji: string;
   color: string;
   seats: number | null;

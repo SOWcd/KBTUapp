@@ -114,7 +114,7 @@
           </button>
           <div class="facts">
             <div><i>{t('tk.when')}</i><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt) + ', ' + time(e.startsAt)}</b></div>
-            <div><i>{t('tk.where')}</i><b>{placeOf(e.place)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
+            <div><i>{t('tk.where')}</i><b>{placeOf(e.place, e.online)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
           </div>
         </div>
         <!-- the stub: torn off at the notches along the perforation -->
