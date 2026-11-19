@@ -984,12 +984,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.evteams.remind(con, v, eid, uid)
 
     @app.get("/api/events/{eid}/people/{uid}/contact")
-    def attendee_contact(eid: int, uid: int, con: Con, v: Me):
+    def attendee_contact(eid: int, uid: int, con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"  # a handle never kept after the right to it is gone
         return logic.attendee_contact(con, v, eid, uid)  # one person's @username at a time, audited, capped
 
     @app.post("/api/events/{eid}/people/{uid}/ask")
-    def attendee_ask(eid: int, uid: int, con: Con, v: Me):
-        return logic.attendee_ask(con, v, eid, uid)  # no username: the bot asks them to write to the organizer
+    def attendee_ask(eid: int, uid: int, request: Request, con: Con, v: Me):
+        # no username: the bot asks them to write to the organizer, on his username as this signed session says
+        return logic.attendee_ask(con, v, eid, uid, request.state.tg.get("username"))
 
     @app.delete("/api/events/{eid}/people/{uid}", status_code=204)
     def remove_person(eid: int, uid: int, con: Con, v: Me):

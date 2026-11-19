@@ -188,10 +188,28 @@ def test_a_block_either_way_reads_as_no_username(paid, who):
     _named(con, 10, "ali_k")
     a, o = _uid(con, 10), _uid(con, 20)
     con.execute("INSERT INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, 0)", (a, o) if who == "attendee" else (o, a))
-    assert _contact(c, eid, a).json() == {"username": None, "asked": False}
+    assert _contact(c, eid, a).json() == {"username": None, "asked": False}  # as for someone with no username
     assert _reveals(con) == []
-    assert _ask(c, eid, a).json() == {"asked": True}  # as if sent: the block isn't shown
+    # the ask goes as a real one on his side (the audit line, the quota, asked after); only the message stays unsent
+    assert _ask(c, eid, a).json() == {"asked": True}
     assert _asks(con) == [] and _reveals(con) == []
+    assert [r["target"] for r in con.execute("SELECT target FROM audit_log WHERE action = 'attendee_ask'")] == [f"user:{a}"]
+    assert _contact(c, eid, a).json() == {"username": None, "asked": True}
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_at_the_cap_a_block_answers_the_same(paid, blocked):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    a, o = _uid(con, 10), _uid(con, 20)
+    if blocked:
+        _named(con, 10, "ali_k")
+        con.execute("INSERT INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, 0)", (a, o))
+    for i in range(organizing.REVEALS_A_DAY):
+        logic.log_action(con, o, "attendee_contact", f"user:{100000 + i}", json.dumps({"event": eid}))
+    r = _ask(c, eid, a)
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert _contact(c, eid, a).json() == {"username": None, "asked": False}
 
 
 def test_forty_a_day(paid, monkeypatch):
@@ -227,7 +245,8 @@ def test_ask_to_write_goes_once(paid):
     assert _ask(c, eid, a).json() == {"asked": True}
     assert _ask(c, eid, a).json() == {"asked": True}  # a repeat: nothing more
     m = _asks(con)
-    assert [(x["user_id"], x["ref"]) for x in m] == [(a, f"oa:{eid}:{_uid(con, 20)}")]
+    assert [(x["user_id"], x["ref"], json.loads(x["payload"])) for x in m] == [(a, f"oa:{eid}:{_uid(con, 20)}", {"nick": "pres_k"})]
+    assert m[0]["send_after"] >= logic.now() + organizing.ASK_DELAY - 1  # an old postman during a deploy never takes it
     assert [r["target"] for r in con.execute("SELECT target FROM audit_log WHERE action = 'attendee_ask'")] == [f"user:{a}"]
     text, button, keys = bot._render(con, m[0])
     assert text == texts.bot_message("ru", "org_ask", title="Case Cup", org="IT Club")[0]
@@ -263,3 +282,55 @@ def test_asks_count_toward_the_forty(paid):
 def test_org_ask_placeholders_match():
     for lang in ("kk", "en"):
         assert set(re.findall(r"{(\w+)}", texts.BOT[lang]["org_ask"][0])) == {"title", "org"}
+
+
+def test_ask_only_for_someone_without_a_username(paid):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    _named(con, 10, "ali_k")
+    assert _ask(c, eid, _uid(con, 10)).status_code == 400
+    assert _asks(con) == []
+
+
+def test_one_ask_per_person_and_event_for_the_whole_club(paid):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    a = _uid(con, 10)
+    logic.set_role(con, None, _uid(con, 11), 1, "head", "test")  # a second organizer
+    assert _ask(c, eid, a).json() == {"asked": True}
+    assert _contact(c, eid, a, 11).json() == {"username": None, "asked": True}
+    assert _ask(c, eid, a, 11, "bob_k").json() == {"asked": True}  # nothing more: no pile-on
+    assert len(_asks(con)) == 1
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'attendee_ask'").fetchone()[0] == 1
+
+
+def test_a_cancelled_event_reaches_nobody(paid):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    _named(con, 10, "ali_k")
+    con.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", (eid,))
+    assert _contact(c, eid, _uid(con, 10)).json()["error"] == "closed"
+    assert _ask(c, eid, _uid(con, 10)).json()["error"] == "closed"
+
+
+@pytest.mark.parametrize("change", ["nick", "banned", "cancelled", "late", "removed"])
+def test_the_bot_drops_an_ask_that_no_longer_holds(paid, monkeypatch, change):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    a, o = _uid(con, 10), _uid(con, 20)
+    assert _ask(c, eid, a).json() == {"asked": True}
+    m = _asks(con)[0]
+    _named(con, 20, "pres_k")
+    assert bot._render(con, m) is not None
+    if change == "nick":
+        _named(con, 20, "someone_else")  # the handle he asked with may be another person's now
+    elif change == "banned":
+        con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (o,))
+    elif change == "cancelled":
+        con.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", (eid,))
+    elif change == "late":
+        end = con.execute("SELECT ends_at FROM events WHERE id = ?", (eid,)).fetchone()[0]
+        set_clock(monkeypatch, lambda: end + organizing.REVEAL_AFTER + 60)
+    else:
+        con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed' WHERE user_id = ?", (a,))
+    assert bot._render(con, m) is None

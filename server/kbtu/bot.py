@@ -203,17 +203,20 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
-    if kind == "org_ask":  # oa:<event>:<organizer>: write to the event's organizer (no username of mine to give him); quiet once
-        # my seat or his right in the club is gone, either of us blocked the other since, or he has no username any more
+    if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
+        # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
+        # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
+        # isn't the one he asked with (a handle he gave up may be someone else's now)
         e = one(con, """SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id JOIN registrations r ON r.event_id = e.id
-            AND r.user_id = ? AND r.status IN ('going', 'hold') WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
-        o, me = int(ref[2]), m["user_id"]
-        nick = e and "events" in logic.rights_of(con, o, e["org_id"]) and not one(
-            con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", o, me, me, o) and one(con, "SELECT tg_username FROM users WHERE id = ?", o)
-        if not nick or not nick[0]:
+            AND r.user_id = ? AND (r.status = 'going' OR r.status = 'hold' AND r.hold_until >= ?)
+            WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", m["user_id"], logic.now(), int(ref[1]))
+        o, me, nick = int(ref[2]), m["user_id"], json.loads(m["payload"] or "{}").get("nick")
+        if not e or logic.seats.end_of(e) + logic.organizing.REVEAL_AFTER < logic.now() or "events" not in logic.rights_of(con, o, e["org_id"]) \
+                or not one(con, "SELECT 1 FROM users WHERE id = ? AND banned_at IS NULL AND tg_username = ?", o, nick) \
+                or one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", o, me, me, o):
             return None
         text, button = texts.bot_message(lang, kind, title=logic.title_in(e, lang), org=e["org_name"])
-        return text, None, [[{"text": button, "url": f"https://t.me/{nick[0]}"}]]
+        return text, None, [[{"text": button, "url": f"https://t.me/{nick}"}]]
     if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
         tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
         if not tok and (old := one(con, "SELECT id FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token IS NULL", int(ref[1]), m["user_id"])):
