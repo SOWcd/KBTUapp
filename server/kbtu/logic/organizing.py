@@ -51,7 +51,8 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
-        WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL GROUP BY r.event_id""", oid)) if head else {}
+        WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL AND c.created_at >= r.created_at
+        GROUP BY r.event_id""", oid)) if head else {}
     own = [e["id"] for e in found if e["org_id"] == oid]  # a co-hosted event's counts are its host's
     saved = dict(rows(con, f"SELECT event_id, COUNT(*) FROM saved_events WHERE event_id IN ({_qs(own)}) GROUP BY event_id", *own)) if head and own else {}
     asked = dict(rows(con, """SELECT x.event_id, COUNT(*) FROM volunteers x JOIN events e ON e.id = x.event_id
@@ -832,17 +833,19 @@ def events_gone(con) -> tuple[list[str], list[str]]:
 
 
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3)."""
+    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3). Someone
+    the organizers removed who had paid stays at the end ('cancelled'), their receipt a tap away for the refund, until
+    they sign up again; a receipt counts only for the seat it was sent for (since the seat's created_at)."""
     e = _staff_event(con, v, eid, "events", cohost=True)
     paid = can(con, v, e["org_id"], "events")
-    order = {"going": 0, "hold": 1, "waitlist": 2}
+    order = {"going": 0, "hold": 1, "waitlist": 2, "cancelled": 3}
     found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.reviewed_by, ac.receipt_id IS NOT NULL AS auto,
             c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
-        LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
+        LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
-        WHERE r.event_id = ? AND r.status != 'cancelled'""", eid)
+        WHERE r.event_id = ? AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business (review, Oct 30)
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
@@ -889,6 +892,8 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
         return "cancelled" if r else "not_found"
     if e["price"]:
         return "paid"
+    if r and r["cancel_reason"] == "removed" and r["status"] == "cancelled":
+        return "cancelled"  # the organizers took them off: back only by signing up again
     if r:  # waitlisted or cancelled earlier, at the door now
         con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                     (t, r["id"]))
@@ -914,6 +919,8 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
         dmp = e["visibility"] == "leaders" and one(con, "SELECT 1 FROM orgs WHERE id = ? AND slug = 'dmp'", e["org_id"])
         if dmp and not _visible(con, Viewer(uid, "user", True), e):
             return True
+        if r and r["status"] == "cancelled" and r["cancel_reason"] == "removed":
+            return False  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp \
                 or e["visibility"] == "members" and not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
             return False
@@ -983,7 +990,9 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 def flagged(con, rid: int) -> bool:
     """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
     A spot check or a receipt read in part ('spot', 'partial') isn't a warning: nothing wrong was found, the student walks in."""
-    return one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags NOT IN ('', 'spot', 'partial') AND reviewed_at IS NULL", rid) is not None
+    # only this seat's receipts: one from before a removal or a cancel (the seat's created_at restarts on a new sign-up) is the old seat's
+    return one(con, """SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.registration_id = ? AND c.status = 'accepted'
+        AND c.flags NOT IN ('', 'spot', 'partial') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long

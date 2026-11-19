@@ -177,7 +177,7 @@ def test_paid_receipts_stay_with_the_host(env):
     c.post(f"/api/events/{e['id']}/registration", headers=tma(OTHER), json={})
     rid = con.execute("SELECT id FROM registrations WHERE user_id = ?", (reg,)).fetchone()[0]
     con.execute("INSERT INTO files (sha256, kind, mime, bytes, width, height, path, created_at) VALUES ('x', 'receipt', 'image/webp', 1, 1, 1, 'r', 0)")
-    con.execute("INSERT INTO receipts (registration_id, file_id, via, amount, sender_name, created_at) VALUES (?, last_insert_rowid(), 'app', 2000, 'Ali T', 0)", (rid,))
+    con.execute("INSERT INTO receipts (registration_id, file_id, via, amount, sender_name, created_at) VALUES (?, last_insert_rowid(), 'app', 2000, 'Ali T', strftime('%s'))", (rid,))  # sent for this seat (after its sign-up)
     con.execute("UPDATE registrations SET status = 'going' WHERE id = ?", (rid,))
     co_view = c.get(f"/api/events/{e['id']}/attendees", headers=tma(CO)).json()
     assert co_view and co_view[0]["receipt"] is None  # the co-host sees the person, not the payment

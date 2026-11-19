@@ -3,13 +3,16 @@
   // waitlist; a check-in shows its time. A tap opens the person's card. "Export" has the bot send the list as a CSV
   // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
+  // Someone the organizers removed (⋯) who had paid waits folded at the end, their receipt there for the refund.
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import { menu } from '../../ui/menu';
   import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
-  import { eventById } from '../../lib/state/data.svelte';
+  import { eventById, studioChanged } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
@@ -34,7 +37,12 @@
   const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
   $effect(() => { void load(); });
   let q = $state('');
-  const shown = $derived((list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick])));
+  const found = $derived((list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick])));
+  // removed by the organizers after paying (server attendees): folded at the end, their receipt there for the refund;
+  // outside every total
+  const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
+  const removed = $derived(found.filter((a) => a.status === 'cancelled'));
+  let removedOpen = $state(false);
   const going = $derived((list ?? []).filter((a) => a.status === 'going').length);
   const came = $derived((list ?? []).filter((a) => a.checkedInAt).length);
   const title = $derived(eventById(id)?.title ?? '');
@@ -47,8 +55,8 @@
   const staff = $derived(staffEvents.has(id));
   const plain = $derived(staff && !session.me?.founder);
   const host = $derived(staff || !ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
-  const paid = $derived((list ?? []).filter((a) => a.receipt).length);
-  const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
+  const paid = $derived((list ?? []).filter((a) => a.receipt && a.status !== 'cancelled').length);
+  const read = $derived((list ?? []).reduce((n, a) => n + (a.status !== 'cancelled' && a.receipt?.amount || 0), 0)); // what OCR read off the receipts
   // a spot check or a receipt read in part (nothing wrong found, a person looks anyway) isn't a warning: the receipt
   // icon, tinted while nobody has looked at it
   const flagged = (a: Attendee) => !!a.receipt?.flags.some((f) => f !== 'spot' && f !== 'partial') && !a.receipt.reviewed;
@@ -74,6 +82,18 @@
     catch { say(t('common.error'), 'warning_3d'); }
   }
 
+  // the organizer takes someone off before the start (server seats.remove_seats): not a co-host, not someone who came
+  // the app's admin from Admin never on a paid event (money is the club's; server remove_seats)
+  const removable = (a: Attendee) => host && !(plain && price) && a.status !== 'cancelled' && !!ev && Date.now() / 1000 < ev.startsAt && !a.checkedInAt;
+  async function remove(a: Attendee) {
+    if (!list || !(await sheets.ask({ title: t('att.removeAsk', { name: a.fullName }), text: t(a.receipt ? 'att.removePaid' : 'att.removeText'),
+      ok: t('att.remove'), cancel: t('common.cancel'), danger: true }))) return;
+    const was = list;
+    list = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
+    try { await api.removePerson(id, a.person.id); haptic.ok(); say(t('att.removed'), 'waving_hand_3d_default'); void load(); studioChanged(); } // the waitlist moved in
+    catch (e) { list = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
+  }
+
   let sending = $state(false);
   async function exportList() {
     sending = true;
@@ -85,6 +105,32 @@
     } finally { sending = false; }
   }
 </script>
+
+{#snippet people(xs: Attendee[])}
+  {#each xs as a (a.person.id)}
+    {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen) || removable(a)}
+    <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
+    <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
+      {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
+      {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts && host} />{/snippet}
+    </Row>
+    {#snippet end()}
+      {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : a.receipt.reviewed ? 'gray' : 'tinted'} label={t('rc.title')}
+        onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
+      {#if a.checkedInAt}
+        {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}
+        <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
+      {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
+      {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
+      {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
+      {:else if a.status === 'waitlist'}<Tag>{t('att.waitlist')}</Tag>{/if}
+      {#if removable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
+        onclick={(e) => menu(e.currentTarget as Element, [{ label: t('att.remove'), destructive: true, onselect: () => remove(a) }])} />{/if}
+    {/snippet}
+    <!-- engine: Row needs content under it (the answers to the event's questions) -->
+    {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
+  {/each}
+{/snippet}
 
 <Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
@@ -98,31 +144,15 @@
     {/if}
     {#if list.length > 8}<SearchField bind:value={q} placeholder={t('att.search')} />{/if}
     {#if shown.length}
-      <Group>
-        {#each shown as a (a.person.id)}
-          {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
-          <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
-          <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
-            {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
-            {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts && host} />{/snippet}
-          </Row>
-          {#snippet end()}
-            {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : a.receipt.reviewed ? 'gray' : 'tinted'} label={t('rc.title')}
-              onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
-            {#if a.checkedInAt}
-              {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}
-              <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
-            {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
-            {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
-            {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
-            {:else}<Tag>{t('att.waitlist')}</Tag>{/if}
-          {/snippet}
-          <!-- engine: Row needs content under it (the answers to the event's questions) -->
-          {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
-        {/each}
-      </Group>
+      <Group>{@render people(shown)}</Group>
     {:else}
-      <EmptyState inline text={list.length ? t('clubs.nothing') : t('att.none')} />
+      <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
+    {/if}
+    {#if removed.length && !staff}
+      <Group>
+        <Row title={t('att.removedFold')} value={String(removed.length)} accessory="disclosure" open={removedOpen} onclick={() => { haptic.tap(); removedOpen = !removedOpen; }} />
+        {#if removedOpen}{@render people(removed)}{/if}
+      </Group>
     {/if}
   </div>{/if}
 </Sheet>

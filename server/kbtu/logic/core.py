@@ -571,7 +571,8 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
     part = shared("event", evs, lambda found: _event_parts(con, found)) if share else _event_parts(con, evs)
     mine = {r["event_id"]: r for r in rows(con, f"SELECT * FROM registrations WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
     regs = [r["id"] for r in mine.values()]
-    receipts = {c["registration_id"]: c for c in rows(con, f"SELECT registration_id, status, flags, reviewed_at FROM receipts WHERE registration_id IN ({_qs(regs)}) ORDER BY id", *regs)}  # the last one wins
+    receipts = {c["registration_id"]: c for c in rows(con, f"""SELECT c.registration_id, c.status, c.flags, c.reviewed_at FROM receipts c JOIN registrations r ON r.id = c.registration_id
+        WHERE c.registration_id IN ({_qs(regs)}) AND c.created_at >= r.created_at ORDER BY c.id""", *regs)}  # the last one of this seat wins
     rated = dict(rows(con, f"SELECT event_id, score FROM event_ratings WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))
     saved = {r[0] for r in rows(con, f"SELECT event_id FROM saved_events WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
     asks = dict(rows(con, f"SELECT event_id, status FROM team_asks WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))  # seats.team_ask
