@@ -42,9 +42,12 @@
   import ForumWho, { whyLine } from './ForumWho.svelte';
   import ForumPics from './ForumPics.svelte';
 
+  // limit: the Admin sheet's own top (owner, Nov 19: open Admin and decide): the first few cards, "N more" opens the
+  // whole queue (more); nothing waiting shows nothing there
+  let { limit = 0, more: rest }: { limit?: number; more?: () => void } = $props();
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
-  $effect(() => { void loadInbox(true); }); // fresh on every opening; what the app loaded shows meanwhile
+  $effect(() => { if (!limit) void loadInbox(true); }); // fresh on every opening; what the app loaded shows meanwhile
 
   // the list as shown: the server's, with the cards decided here kept in their place as slim lines (till Admin closes)
   let handled = $state<Record<string, { text: string; target?: string; it: InboxItem; at: number }>>({});
@@ -57,6 +60,8 @@
   const queue = $derived(list.filter((x) => x.kind !== 'autoev'));
   const drafts = $derived(list.filter((x) => x.kind === 'autoev'));
   const waiting = $derived(queue.filter((x) => !handled[x.key]).length);
+  // the cards shown: the decided lines in place, and up to limit still waiting
+  const shown = $derived.by(() => { let n = 0; return limit ? queue.filter((x) => handled[x.key] || n++ < limit) : queue; });
   const done = $derived(data.inbox?.done ?? []);
   // a decision's own Done row (by its audit target), once the reload brings it: its Undo
   const undoOf = (target?: string) => (target ? done.find((d) => d.target === target && d.mine && d.undo) : undefined);
@@ -332,10 +337,11 @@
 {#if queue.length}
   <Section title={t('adm.queue')} count={waiting}>
     <div class="list stagger">
-      {#each queue as it (it.key)}{@render card(it)}{/each}
+      {#each shown as it (it.key)}{@render card(it)}{/each}
     </div>
+    {#if limit && rest && waiting > limit}<Group><Row title={t('adm.more', { n: waiting - limit })} accessory="chevron" onclick={() => { haptic.tap(); rest(); }} /></Group>{/if}
   </Section>
-{:else if data.inbox}
+{:else if data.inbox && !limit}
   <Group><Row title={t('adm.nothing')}>{#snippet lead()}<span class="ok"><CircleCheck size={24} /></span>{/snippet}</Row></Group>
 {/if}
 
