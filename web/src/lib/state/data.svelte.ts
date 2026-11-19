@@ -317,9 +317,13 @@ export async function loadInbox(withStats = false): Promise<void> {
     const inbox = await api.inbox();
     if (!staff()) return;
     data.inbox = inbox;
-    if (session.me && session.me.counters.inbox !== data.inbox.items.length) session.me.counters.inbox = data.inbox.items.length;
+    const n = decisions(inbox);
+    if (session.me && session.me.counters.inbox !== n) session.me.counters.inbox = n;
   } catch { /* the list keeps what it had */ }
 }
+
+/** The badge's number: real decisions only; a channel's draft (autoev) waits in its club's Studio, nobody's call (server inbox.count) */
+export const decisions = (i: Inbox | null): number => i?.items.filter((x) => x.kind !== 'autoev').length ?? 0;
 
 /** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
