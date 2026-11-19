@@ -18,7 +18,7 @@
 
 <style>
   .seal { flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
-  .t { fill: var(--seal-tile, #fff); stroke: rgba(0, 0, 0, 0.16); stroke-width: 0.6; } /* the hairline: its edge on a white page */
+  .t { fill: var(--seal-tile, rgb(255, 255, 255)); stroke: rgba(0, 0, 0, 0.16); stroke-width: 0.6; } /* the hairline: its edge on a white page */
   .m { fill: var(--seal-mark, rgb(30, 30, 30)); }
   .idea .m { fill: var(--seal-mark, rgb(47, 91, 234)); }
 </style>
