@@ -1,4 +1,4 @@
-"""Casting (PLAN "Casting", designed Oct 11 from the owner's club's process): a club's recruitment round. The club opens
+"""Casting (PLAN "Casting", after a real club's process): a club's recruitment round. The club opens
 it with departments (its own tags, each with a line about it and maybe places) and at most six questions of its own;
 a student applies in a minute (name, year, school, KBTU email and Telegram are their profile already), picking up to
 `picks` departments in order (no departments: a round for the whole club; one: nothing to pick); the casting team (the "casting" right: HR, heads) screens the applications one by one
@@ -340,7 +340,7 @@ def is_dept(con, oid: int, tag: int) -> bool:
 def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
     """The results decided so far, in one tap: the accepted are members at once with their department's tag, the
     declined hear the club's own words (or the app's); each applicant is told once, the undecided wait for a later send
-    and the round goes on. final (the old one-tap results, a cached client's too): the undecided hear "no" and the round
+    and the round goes on. final (results and the round's end in one tap; a cached client's too): the undecided hear "no" and the round
     is over. The bot sends at its own pace."""
     r = _get(con, rid)
     _may(con, v, r["org_id"], "casting")
@@ -384,7 +384,7 @@ def _at(date: str, hm: str) -> int:
 
 def add_slots(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     """A day's slots: from..to every `minutes`, each for `capacity` people (1: one by one, more: a group), at `place`.
-    An open window (a club lead, Nov 17: "just come between 2 and 6"): minutes = the whole from..to, one slot for up to 500."""
+    An open window ("just come between 2 and 6"): minutes = the whole from..to, one slot for up to 500."""
     r = _get(con, rid)
     _may(con, v, r["org_id"], "casting")
     if r["status"] == "done":
@@ -457,7 +457,7 @@ def place_slot(con, a, sid: int):
 
 
 def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
-    """The venue moved (a club lead, Nov 19): a slot's place changes; the shortlisted it concerns (booked on it, or
+    """The venue moved: a slot's place changes; the shortlisted it concerns (booked on it, or
     invited with no time while it has room) hear it once from the bot, a couple of minutes later from what is current
     then, so a few quick edits are one message per slot. notice: 'sent', 'limit' (the day's notices are used up: saved,
     nobody told) or 'none'. Checked and written under the write lock (tx is BEGIN IMMEDIATE): a removed organizer, a

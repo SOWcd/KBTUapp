@@ -23,7 +23,7 @@ CLIENT = "7487a9a6-fe85-4d01-882b-ac48b42f45e4"   # "KBTU App" in the owner's di
 KBTU = "57081b5e-e66a-4993-8eaf-15b0b309293f"     # kbtu.kz's directory: the only one let in
 SCOPE = "openid profile email User.Read"
 TTL = 15 * 60  # a link is good for 15 minutes
-# exactly what the privacy policy lists and KBTU fills in (all 35 profiles on Oct 22): companyName is the account type
+# exactly what the privacy policy lists and KBTU fills in (all 35 profiles checked): companyName is the account type
 # ("student"), for roles later. Asking for more (phone, department...) would collect what the policy doesn't name the
 # day KBTU fills it: a new field goes into the policy first
 FIELDS = "id,displayName,givenName,surname,mail,userPrincipalName,userType,companyName,usageLocation,createdDateTime"

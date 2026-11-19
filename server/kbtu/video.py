@@ -4,7 +4,7 @@ The phone sends the file as it is, in 8 MB pieces (Cloudflare refuses a request 
 bad connection is sent again, not the whole file); the postman's process compresses one video at a time. What we
 keep is only our own copy: H.264 (every phone and Telegram's webviews play it; HEVC and AV1 don't play everywhere),
 at most 720 px wide, 30 frames a second, CRF 26 with a 2.5 Mbit/s cap, AAC 96 kbit/s, the index at the front so it
-starts before it has loaded. Measured Oct 14 on a 1080x1920 60 fps reel: 15 s -> 1.6 MB (an Instagram reel of the
+starts before it has loaded. Measured on a 1080x1920 60 fps reel: 15 s -> 1.6 MB (an Instagram reel of the
 same length is ~2 MB); CRF 23 was 30 % bigger for a VMAF 1 point higher, CRF 28 20 % smaller for 1 point lower.
 iPhones film in HDR (HLG, Dolby Vision); played as SDR it looks grey and washed out, so HDR is tone-mapped. Metadata
 (the GPS spot where it was filmed, the phone, the date) never makes it into our copy, and the original is deleted.

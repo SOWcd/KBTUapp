@@ -53,7 +53,7 @@ class Config:
     assist_lead: str = ""       # ASSIST_LEAD: unset or google, Google answers first for who said yes (assistant.GOOGLE_YES); off: never
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
     # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
-    # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md
+    # Never in the repo, the bundle or the logs (repr=False)
     donate_phone: str = field(default="", repr=False)
     # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py); empty: off
     volunteers: str = ""

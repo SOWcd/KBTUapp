@@ -211,8 +211,8 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
             fixed = mine is None or one(con, "SELECT fixed FROM org_roles WHERE id = ?", mine)["fixed"]
             if fixed:  # a role name the club gave in the app stays
                 t = one(con, "SELECT id, level FROM org_roles WHERE org_id = ? AND lower(name) = lower(?)", oid, r["title"][:40])
-                # a club's own role may carry rights: an unchecked claim never takes one (review), nor anyone one of
-                # another level than the row's (a member's row titled as the club's Vice-level "HR" got its rights)
+                # a club's own role may carry rights: an unchecked claim never takes one, nor anyone one of
+                # another level than the row's (else a member's row titled as the club's Vice-level "HR" gets its rights)
                 if t and (not trusted or t["level"] != role):
                     t = None
                     tid = None
@@ -244,15 +244,15 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
 
 
 def claim(con, uid: int, rid: int) -> None:
-    """"Yes, it's me" on a row listed under another name (a typo, a new surname): taken at the student's word (owner,
-    Nov 2), never the row's city, year or phone. A member's row: joined, done. An officer's row: joined as a member now;
+    """"Yes, it's me" on a row listed under another name (a typo, a new surname): taken at the student's word,
+    never the row's city, year or phone. A member's row: joined, done. An officer's row: joined as a member now;
     the position waits for whoever confirms (the club's President, or DMP's leads / the Admin sheet for a club without
     one), who hears it: a claimed "President" never runs a club unchecked."""
     from .logic import ApiError, notify
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)
     if r is None:
         raise ApiError("not_found")
-    if r["claimed_by"]:  # another student's claim on it waits: never overwritten (review)
+    if r["claimed_by"]:  # another student's claim on it waits: never overwritten
         raise ApiError("conflict")
     if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
         raise ApiError("forbidden", "banned")
@@ -260,7 +260,7 @@ def claim(con, uid: int, rid: int) -> None:
         join(con, uid, r, trusted=False)
         return
     with tx(con):
-        # under the lock: two claims at once, the second finds it taken (it overwrote the first's, who then stayed in)
+        # under the lock: two claims at once, the second finds it taken (else it overwrites the first's, who then stays in)
         if not con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ? AND claimed_by IS NULL", (uid, rid)).rowcount:
             raise ApiError("conflict")
         if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid):

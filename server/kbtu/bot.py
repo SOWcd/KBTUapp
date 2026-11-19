@@ -4,9 +4,8 @@
   language with a button into the app; only to users who let the bot write (can_dm). A user who blocked
   the bot loses can_dm until Telegram says otherwise.
 - Ears: whatever someone writes to the bot (/start first of all) is answered with what the app is and a button
-  into it (/start said nothing); a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
-Until Oct 7 it also refreshed schedules with each student's stored KBTU session; no session outlives a request
-now (SPEC §4.1), the stored ones were ended, and migration 18 dropped their table."""
+  into it; a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
+No KBTU session outlives a request (SPEC §4.1), so the bot keeps none to refresh schedules with."""
 from __future__ import annotations
 
 import asyncio
@@ -46,7 +45,7 @@ CHECKOUT_RETRY = 1         # seconds between rounds of retries of the answers th
 CHECKOUT_WINDOW = 8        # stop retrying after this: Telegram allows 10 s, and a try started later would land too late
 _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the look and the next round see the same ones
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
-FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
+FRESH = 300                 # an older message isn't answered: what piled up while nobody listened
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
 TAG_GAP = 3.0               # /all's messages: a group takes about 20 a minute
 TAG_FAST, TAG_BURST = 0.4, 18  # its first messages go quickly (90 people in a few seconds), the rest at TAG_GAP
@@ -69,7 +68,7 @@ _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member u
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
 # loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
 # rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
-# the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks; Oct 25: Telegram's own
+# the packs, first wins (NewsEmoji, made for bots; the older pack fills what it lacks; Telegram's own
 # RestrictedEmoji, ~1000, last, only for what the others lack)
 EMOJI_PACKS = ("NewsEmoji", "AnimatedAsianEmoji", "RestrictedEmoji")
 _custom: dict[str, str] = {}   # plain emoji (no variation selector) -> custom_emoji_id
@@ -102,7 +101,7 @@ def premium(text: str) -> str:
 
 
 def fancy(body: dict) -> dict:
-    """The pack's emoji in an HTML text or caption (owner, Nov 14: premium emoji everywhere the bot writes); the same
+    """The pack's emoji in an HTML text or caption (premium emoji everywhere the bot writes); the same
     dict back when nothing changes."""
     key = "caption" if "caption" in body else "text"
     if not body.get(key) or body.get("parse_mode") != "HTML" or (t := premium(body[key])) == body[key]:
@@ -183,7 +182,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "sid_free":  # sf:<student id>, parked for the one turned away; woken when it's freed (migration 127)
         free = not one(con, "SELECT 1 FROM students WHERE student_id = ?", ref[1])
         return (*texts.bot_message(lang, kind, sid=ref[1]), "me") if free else None
-    if kind == "id_clash":  # old rows only (Nov 4: the holder is asked now; they expire in 30 days)  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
+    if kind == "id_clash":  # old rows only (the holder is asked instead; they expire in 30 days)  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
         if not all(who):
@@ -693,7 +692,7 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
         logic.bot_left(con, chat["id"])
         return
     # every link needs our bot made an admin: only a chat's admin can do that, a plain member adding us proves nothing
-    # (Codex reviews, Nov 5 and 14: someone else's open group claimed); a later promotion comes as another update.
+    # (else someone else's open group can be claimed); a later promotion comes as another update.
     # A plain member's group links only by its admin's /start oc_<id> (_group)
     if status != "administrator" or chat.get("type") not in ("channel", "group", "supergroup"):
         return
@@ -774,9 +773,9 @@ def optimize_day(con) -> None:
 
 
 def backup_day(cfg: Config, con) -> None:
-    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
+    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept. It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
     db_path = Path(cfg.db_path).resolve()
-    # the copies db.py makes before a migration: two weeks, as the nightly ones (H2: deleted accounts must not outlive them)
+    # the copies db.py makes before a migration: two weeks, as the nightly ones (deleted accounts must not outlive them)
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
         if bak.stat().st_mtime < time.time() - 14 * 86400:
             bak.unlink(missing_ok=True)
@@ -911,7 +910,7 @@ def _chores(cfg: Config, con) -> None:
 
 
 def _due(con) -> list:
-    # the partial index outbox_todo (migration 109), named: the planner liked outbox_due, which walks every failed row
+    # the partial index outbox_todo (migration 109), named: else the planner picks outbox_due, which walks every failed row
     return rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
         WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
 
@@ -958,7 +957,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
-        await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
+        await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
@@ -1148,8 +1147,8 @@ def _sched_named(msg: dict) -> bool:
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
     """A student's week from the portal's schedule page (portal.py; PLAN 26; Share -> Web Archive ->
     Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one), each class
-    keeping its names in the languages sent before (the portal switched to another language, the page sent again: Oct
-    30). The answer has counts and language names only. The file is read in memory and never kept; nothing of the page
+    keeping its names in the languages sent before (the portal switched to another language, the page sent again).
+    The answer has counts and language names only. The file is read in memory and never kept; nothing of the page
     goes to the log. The student ID on it, once the name matched, may correct the account's (_page_sid)."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
@@ -1352,10 +1351,10 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         _moved[chat["id"]] = new  # a few bytes, once in a group's life
         return
     words = str(msg.get("text") or "").split()
-    # "@all": ours alone where another bot answers /all too; the plain words people really type (owner, Nov 13): "\u043a\u0430\u043b\u043b",
+    # "@all": ours alone where another bot answers /all too; the plain words people really type: "\u043a\u0430\u043b\u043b",
     # "\u043a\u043e\u043b\u043b" first in a message, "call" only as the whole message (it starts ordinary English sentences)
     cmd = rf"/(all|tag)(@{re.escape(cfg.bot_username)})?|@all|\u043a[\u0430\u043e]\u043b\u043b[!.]*"
-    # ... or last, after their own words (a club, Nov 18: "meeting at 6, \u043a\u0430\u043b\u043b"); never in the middle of a sentence
+    # ... or last, after their own words (as in "meeting at 6, \u043a\u0430\u043b\u043b"); never in the middle of a sentence
     last = len(words) > 1 and not re.fullmatch(cmd, words[0], re.I) and bool(re.fullmatch(cmd, words[-1], re.I))
     if words and (re.fullmatch(cmd, words[0], re.I) or last or len(words) == 1 and re.fullmatch(r"call[!.]*", words[0], re.I)):
         sender = msg.get("from") or {}
@@ -1368,12 +1367,12 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         if chat["id"] == cfg.tgc_chat or (msg.get("reply_to_message") or {}).get("is_automatic_forward"):
             return
         who = int(sender.get("id") or 0)
-        # anyone in the chat calls (owner, Nov 18: clubs asked), not only role holders and admins: Telegram is asked
+        # anyone in the chat calls, not only role holders and admins: Telegram is asked
         # once the run starts (_tag_all; a message alone proves nothing where guests may write). The app's banned
         # never call (silence).
         if logic.chatlist.banned(con, who):
             return
-        if not logic.chatlist.student(con, who):  # no account in the app: told so, nobody is called (owner, Nov 19)
+        if not logic.chatlist.student(con, who):  # no account in the app: told so, nobody is called
             _refuse(cfg, http, chat["id"], msg["message_id"], sender.get("language_code"), "all_app")
             return
         if chat["id"] in _tagging or time.time() - _tagged.get(chat["id"], 0) < ALL_AGAIN:  # one run, then ALL_AGAIN: say so, then both go
@@ -1545,8 +1544,8 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
     linked by id (no username needed), as replies under `to`; stops at the first refusal. Whom: the app's list, the seen
     ones, then the chat's participants Telegram lists to our bot right now (mtbot.members; none if it can't: the first two
     alone); logic.tag_all. Those Telegram just listed are in the chat; each of the others is asked (getChatMember, ten at a
-    time) and one not there forgotten. `say`: the caller's own words after the command, repeated over each five (owner,
-    Nov 13: a push then shows why one is called, as every tag bot does): plain text, escaped, short. Fast at first
+    time) and one not there forgotten. `say`: the caller's own words after the command, repeated over each five (a
+    push then shows why one is called, as every tag bot does): plain text, escaped, short. Fast at first
     (TAG_BURST messages TAG_FAST apart: a group takes about 20 a minute), then TAG_GAP.
     At most TAG_MAX people: past it the rest aren't called this run, and the chat waits ALL_AGAIN like after any run.
     Nobody to call (alone there, or nobody known): a template under the command (`mid`), and no wait after."""
@@ -1583,7 +1582,7 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
             return
         t1 = time.monotonic()
         roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
-        # where a slow /all spends its time (owner, Nov 19): durations only, no chat and no person
+        # where a slow /all spends its time: durations only, no chat and no person
         log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
         # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
         live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
@@ -1640,7 +1639,7 @@ def _event_copy(cfg: Config, msg: dict) -> bool:
 
 
 async def _discussion_bg(cfg: Config, http: httpx.AsyncClient, msg: dict) -> None:
-    """_discussion beside the ears (tgc.spawn): its wait for the post's id never holds up the batch (review 2)."""
+    """_discussion beside the ears (tgc.spawn): its wait for the post's id never holds up the batch."""
     con = db.connect(cfg.db_path)
     try:
         await _discussion(cfg, http, con, msg)
@@ -1852,7 +1851,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     log.warning("guard: %s", type(exc).__name__)
         for upd in answer["result"]:
             msg = {}
-            try:  # all of it: a locked database even in the ban check replayed the whole batch
+            try:  # all of it: a locked database even in the ban check would replay the whole batch
                 offset = upd["update_id"] + 1
                 if not tgc.ours(cfg, upd) and ((upd.get("message") or {}).get("chat") or {}).get("type") in ("group", "supergroup"):
                     _seen(con, upd["message"])  # cheap, never blocks: first, so a message the swear filter deletes still counts
@@ -1921,8 +1920,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         log.exception("suggest")
                         body = None
                 elif not _sched_file(msg) and _file(msg):
-                    # a receipt behind a burst of sign-ups: was, "database is locked" fell to the catch-all below, the update
-                    # was gone with no answer and the hold ran out (paid, no seat); now this update again next round, as a
+                    # a receipt behind a burst of sign-ups: "database is locked" in the catch-all below would lose the update
+                    # with no answer and the hold would run out (paid, no seat); so this update again next round, as a
                     # Stars payment does (the same picture is the same file, add_receipt one transaction)
                     try:
                         body = await _receipt(cfg, http, con, msg)
@@ -2137,7 +2136,7 @@ async def run(cfg: Config) -> None:
                 await load_pack(cfg, http)
                 await _commands(cfg, http)
                 # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
-                # poller outlives leadership (gather left them running after the lock was let go)
+                # poller outlives leadership (a plain gather leaves them running after the lock is let go)
                 while True:
                     try:
                         async with asyncio.TaskGroup() as tg:

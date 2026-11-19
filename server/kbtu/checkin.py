@@ -1,4 +1,4 @@
-"""Check-in by a QR on a big screen (owner, Oct 29: the volunteers' meetings were marked by hand in a 220-row sheet).
+"""Check-in by a QR on a big screen (instead of marking the volunteers' meetings by hand in a 220-row sheet).
 The organizer opens /show on a laptop and pairs it from the app (below); Start in the app: a QR rotating every 10 s
 (t.me/KBTUappBot?startapp=ci_<session>_<slot>_<sig>). A scan posts at once, signed in or not, and waits as "pending";
 it counts once that person is a KBTU student (signed in now or before), until Finish. Tier A: a student before Start,
@@ -22,8 +22,8 @@ from .logic import ApiError, Viewer, can, log_action, now, one, rows, tx
 from .texts import _cell
 
 SLOT = 10           # the QR on the screen changes this often (s)
-SCAN_OK = 90        # a scan is taken this long after its QR was shown: 5 min let a photo relay too long, 60 s was tight for
-                    # a cold Telegram start on crowded wifi (owner, Oct 29)
+SCAN_OK = 90        # a scan is taken this long after its QR was shown: 5 min lets a photo relay too long, 60 s is tight for
+                    # a cold Telegram start on crowded wifi
 GRACE = 30 * 60     # after Finish, someone who scanned in time may still finish signing in this long
 PAIR_TTL = 120      # a screen's pairing QR turns this often while nobody has bound it (a photo of it goes stale)
 PAIR_MAX = 5000     # unpaired screens at once, all together: junk requests can't fill the table
@@ -51,7 +51,7 @@ def new(con, title: str, people: list[dict], org_id: int | None = None, crew: in
     """A session with its expected people, run by the club's organizers (none: the admin only); `crew`: the event whose
     team it marks (crew below)."""
     with tx(con):
-        # pin_hash: the PIN went (pairing replaced it); the column is NOT NULL UNIQUE, so a random one
+        # pin_hash: unused (pairing, not a PIN); the column is NOT NULL UNIQUE, so a random one
         sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at, crew_event_id) VALUES (?, ?, ?, ?, ?)",
                           (title, secrets.token_hex(32), org_id, now(), crew)).lastrowid
         if not crew:  # a team's marks at its event never enter the volunteers ledger (no shifts, no hours)
@@ -113,7 +113,7 @@ def _people(con, org_id: int, tag: int | None = None) -> list[dict]:
 
 
 def crew(con, key: bytes, v: Viewer, eid: int, who: object = None, title: object = None) -> dict | None:
-    """An event's team marked (owner, Nov 13: a Vice opens the event in Studio, "Mark the team"): a club session of the
+    """An event's team marked (a Vice opens the event in Studio, "Mark the team"): a club session of the
     event's own club (a co-host's or partner's team marks in its own club), with club_new's right, list and caps; one
     per event (crew_event_id), never its guests' session (event_id): no ticket, no event check-in; anyone's scan counts
     and who isn't on its list is listed apart (people). Without `who`: the one there is, or None; with it: made if there's none."""
@@ -135,7 +135,7 @@ def crew(con, key: bytes, v: Viewer, eid: int, who: object = None, title: object
 
 
 # ------------------------------------------------------------ the screen, paired from an organizer's phone
-# (owner, Oct 29 night: a PIN typed in view of the hall let anyone open the screen elsewhere, press Finish and take the
+# (not a PIN: one typed in view of the hall lets anyone open the screen elsewhere, press Finish and take the
 # CSV with the volunteers' phones). The laptop shows a pairing QR (sh_<code>); only an organizer of a session may bind
 # it (anyone else's scan changes nothing, so nobody can lock the organizer out). The screen then only shows: Start,
 # Finish, the CSV and "disconnect" live in the app, for any of the session's organizers (a flat phone loses nothing).
@@ -219,7 +219,7 @@ def _state(con, key: bytes | None, s) -> dict:
 
 def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
     """A session's organizers: the admin, or who runs events in its club (an admin-made session without a club: the admin);
-    an event's session, its co-host's event team too, except for the CSV (cohost-review.md 3)."""
+    an event's session, its co-host's event team too, except for the CSV."""
     return v.role == "admin" or bool(s["org_id"] and can(con, v, s["org_id"], "events")) \
         or bool(cohost and s["event_id"] and logic.co_runs(con, v, s["event_id"]))
 
@@ -245,11 +245,11 @@ def _named(con, v: Viewer, e) -> bool:
 
 def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
     """An event's session: every member who works its door (the ticket scanner) may also start and show its QR, for a
-    guest who can't open a ticket (owner, Nov 10), at an ordinary public event while its door is open; Start from T-30
+    guest who can't open a ticket, at an ordinary public event while its door is open; Start from T-30
     only (a President's early opening doesn't move the tier line). Finishing, the CSV and the screens stay the
     organizers'. Raises why not: forbidden (an organizers' session), closed (with when it opens)."""
-    # and a door helper a President or Vice named (crew.py): the same Mark screen as the club's own (owner, Nov 14)
-    # and as the organizer would, before the door time too (owner, Nov 14: the team comes early; scans are judged as ever)
+    # and a door helper a President or Vice named (crew.py): the same Mark screen as the club's own
+    # and as the organizer would, before the door time too (the team comes early; scans are judged as ever)
     named = bool(e) and _named(con, v, e)
     if not e or not (named or can(con, v, e["org_id"], "door")):
         raise ApiError("forbidden", "screen")
@@ -289,7 +289,7 @@ def absent(con, v: Viewer, sid: int) -> list[str]:
 
 
 def people(con, v: Viewer, sid: int) -> dict:
-    """The organizer's three lists (owner, Nov 13: someone taken into the club but not yet in the app scans and is
+    """The organizer's three lists (someone taken into the club but not yet in the app scans and is
     marked, the organizer sees he isn't a member): who of the list came, who came not on it, who of it hasn't come.
     Names only, for absent's people (the CSV has the rest)."""
     _mine(con, v, sid, cohost=False)
@@ -413,7 +413,7 @@ def _finish(con, s, by: int | None) -> None:
 
 
 def sweep(con) -> None:
-    """What was left running (owner, Nov 13: "running" days later) finishes as Finish would: STALE after its Start, and
+    """What was left running (still "running" days later) finishes as Finish would: STALE after its Start, and
     after its event's end for an event's own session or its team's. Nightly (daily.stats_day), and as the organizer's list is read."""
     for s in rows(con, f"""SELECT s.* FROM qr_sessions s LEFT JOIN events e ON e.id = COALESCE(s.event_id, s.crew_event_id) WHERE s.started_at < ? AND s.ended_at IS NULL
             AND (e.id IS NULL OR COALESCE(e.ends_at, e.starts_at + {logic.DOOR_LATE}) < ?)""", now() - STALE, now()):
@@ -422,7 +422,7 @@ def sweep(con) -> None:
 
 def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
     """An event's own session (its organizer's "Check-in screen" in the app), made on first use: its title, its club. A
-    paid event keeps its tickets at the door, a partner's has no door (Oct 29)."""
+    paid event keeps its tickets at the door, a partner's has no door."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or not can(con, v, e["org_id"], "door") and not logic.co_runs(con, v, eid) and v.role != "admin" and not _named(con, v, e):
         raise ApiError("forbidden", "screen")
@@ -513,7 +513,7 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
 
 
 # ------------------------------------------------------------ helpers, let in by a QR
-# (owner, Nov 9, a live event) Whoever fully runs a session shows a rotating QR (hq_<session>_<slot>_<by>_<sig>, signed
+# Whoever fully runs a session shows a rotating QR (hq_<session>_<slot>_<by>_<sig>, signed
 # apart from ci_) to someone beside them. That student then shows the session's QR and works the event's scanner as a
 # scanner-only door helper (logic/crew.py), until Finish or "remove all"; nothing else of the session is theirs.
 
@@ -642,11 +642,11 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
 
 
 def _team(con, v: Viewer, e, s, t: int) -> dict | None:
-    """One QR at the door (owner, Nov 14): at a public event (_guests), a member of its own club (org_members now) with
+    """One QR at the door: at a public event (_guests), a member of its own club (org_members now) with
     no guest seat ('going': a paid one, a let-in team_ask, a President's; or a 'hold' offered) scanning the guests' QR is marked in its team's
     session (crew), exactly as a scan of that QR; on the event's day, the door open or not (a team comes early), never
     after its end. Only a team's session already running, made by its organizer opening this QR (crew_open); none (or
-    finished), a co-host's or partner's member, someone not signed in yet: None, the guest's way, as before. ponytail: a forwarded photo of the QR marks a member at home within its
+    finished), a co-host's or partner's member, someone not signed in yet: None, the guest's way. ponytail: a forwarded photo of the QR marks a member at home within its
     SCAN_OK, as the team's own QR does; a per-person proof (the badge, a geofence) if that gets abused.
     The event's audience (events.door_audience, set in the event screen) decides first: "guests" never routes here;
     "team" routes every scan here, whoever it is (the Talent Show: guests not recorded), someone not signed in yet
@@ -797,8 +797,8 @@ def prefill(con, email: str | None, ms: dict | None = None) -> dict | None:
 
 
 # ------------------------------------------------------------ the Mark screen: the team's list, by department, marked by hand
-# (owner, Nov 14, after the Talent Show: the Senate wanted its whole roster, ~104 by department, came / not came, and many
-# had no account yet). The list is read live: the club's members now (a department tag, else any tag), its roster rows
+# (a club's whole roster, e.g. the Senate's ~104 by department, came / not came, many
+# with no account yet). The list is read live: the club's members now (a department tag, else any tag), its roster rows
 # still waiting for their student (roster_pending, the sheet's dept), and whom an admin added to the team session's
 # expected list (`admin checkin expect`). Each row can be marked by hand, a row with no account too (qr_hand_marks);
 # a hand mark is flagged as one, never proof. Who sees and marks: the event's organizers and a door helper a President
