@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The forum (PLAN F1 + the adversarial review): for now one part, Find people (no switch until there's a second: one segment drew a lone button). Offers to answer, my skills and
+  // The forum (PLAN F1): for now one part, Find people (no switch until there's a second: one segment drew a lone button). Offers to answer, my skills and
   // switches, requests (mine first), and people by a skill. Contact is always an offer the other side accepts in the
   // bot; their Telegram shows only then. The app's staff only, behind the server's flag, while it's tried out. Its
   // moderation (held requests, the skills catalog) lives in Admin → Forum posts: this sheet is the same for everyone.

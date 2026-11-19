@@ -1,4 +1,4 @@
-// Kazakhstan phone numbers as people read them, "+7 (701) 234 56 78" (owner, Oct 29: one shape everywhere, the
+// Kazakhstan phone numbers as people read them, "+7 (701) 234 56 78" (one shape everywhere, the
 // organizers' sheets' own; the editor showed "77012345678"),
 // from whatever is typed, pasted or autofilled: iOS gives "8 (701) 234-56-78", the server keeps "+77012345678".
 

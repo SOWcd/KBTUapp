@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A day is one card, one timeline: events and the optional timetable's classes by start time (owner, Nov 19).
+  // A day is one card, one timeline: events and the optional timetable's classes by start time.
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import VideoCall from '@lucide/svelte/icons/video';
@@ -81,13 +81,13 @@
   const days = $derived.by(() => {
     const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
     for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
-    // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs (owner, Nov 9)
+    // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs
     for (const p of data.castings) { if (!p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
-    // the coming week's class days too (the owner missed his Wednesday), later only event days; today's classes stay
+    // the coming week's class days too (so a class day isn't missed), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
     const wanted = [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
-    // one card, one timeline: classes and events by start time (owner, Nov 19); an event still running from an earlier
+    // one card, one timeline: classes and events by start time; an event still running from an earlier
     // day starts before today, so it leads
     return wanted.map((d) => ({ d, items: [...(by.get(d) ?? []), ...(showClasses ? classesOf(d) : [])].sort(byStart) }));
   });
@@ -112,7 +112,7 @@
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
-  // "Your events": only the events I'm going to this week (owner, Nov 2: a class card there showed the class twice)
+  // "Your events": only the events I'm going to this week (a class card there showed the class twice)
   const going = $derived(shown.filter((e) => e.my?.status === 'going' && endOf(e) > now && e.startsAt - now < 7 * 86400).sort((a, b) => a.startsAt - b.startsAt));
   // the class on now comes alive in its own row (what's left, a thin progress line); the next one within the hour says
   // how soon. Read once for all rows: the row only compares its key.
@@ -163,7 +163,7 @@
                     <!-- one thin line between the events (the heroes): start over a small dim end in the covers' column (a double
                          class reads 10:00 / 11:50), subject, kind, room -->
                     <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
-                    <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
+                    <!-- the timetable's own name, the same as the capsule's (the short "PE" here, in full there) -->
                     <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
                       <small>{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
                         {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
@@ -263,7 +263,7 @@
     </div>
   {/if}
   {#if showClasses && askSched}
-    <!-- no timetable yet: one card at the top, under my events (owner, Nov 8: an empty "Your events" over this card in
+    <!-- no timetable yet: one card at the top, under my events (an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
     <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} text={t('sched.cardSub')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
   {/if}
@@ -435,7 +435,7 @@
   /* a class: one thin line between the events; its start in the covers' column, the text on the titles' edge, the room
      at the row's end */
   .cl { min-height: 48px; padding: 6px 0; gap: 14px; cursor: pointer; }
-  .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
+  .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column) */
   .cl.skip .cl-s b { text-decoration: line-through; }
   /* the class on now: its start in the accent (that says "now"), what's left, a thin line of how far it's gone under the text */
   .cl.live .cl-t b { color: var(--accent-text); }

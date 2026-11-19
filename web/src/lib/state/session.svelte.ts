@@ -42,7 +42,7 @@ const AGAIN = 'kb-again';
 /** The bar's corner is KRI (Nav): the assistant open to me (BOARD) and I'm a student; else it is the map (a guest, BOARD
  *  off), and Afisha's header drops its own map button. */
 export const kriCorner = (): boolean => session.board && !!session.me?.student;
-// lock: the sheet fills the screen and can't be pulled or backed away until signed in (a check-in scan, owner Oct 29)
+// lock: the sheet fills the screen and can't be pulled or backed away until signed in (a check-in scan)
 export function asStudent(action: () => void, again?: string, lock = false): void {
   if (session.me?.student) return action();
   try { if (again) localStorage.setItem(AGAIN, JSON.stringify({ p: again, at: Date.now() })); else localStorage.removeItem(AGAIN); } catch { /* blocked */ }

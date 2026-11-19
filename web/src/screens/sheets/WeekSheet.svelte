@@ -2,7 +2,7 @@
   // My whole week of classes (PLAN 26: the class card on Home, tapped; the bot's "check them in the app"): a day a
   // block, each class its times, kind, room and teacher, as the portal had them. A new one from the portal replaces it;
   // the last row deletes it. Its languages under the week: the portal's page sent again in another one adds its names
-  // (Oct 30; only what the student sends, no translation).
+  // (only what the student sends, no translation).
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import type { ClassItem } from '../../lib/api';
   import { close, open, type Overlay } from '../../lib/state/ui.svelte';

@@ -342,8 +342,8 @@ export interface Me {
   memberships: Membership[];
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
-  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one. Owner, Oct 13:
-   *  badges as skins; never picked, a new club's comes by itself. */
+  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
+   *  Badges as skins; never picked, a new club's comes by itself. */
   skin: Id | 'sower' | null;
   /** The frame over my photo on the lanyard (public/frames/<id>.svg), apart from the lanyard; null: none. */
   frame: string | null;
@@ -425,7 +425,7 @@ export interface EventCard {
   form?: Question[] | null;     // the event's own questions at sign-up, answered in the same tap
   santa?: { drawn: boolean; budget?: number }; // Secret Santa is on (server santa.py): sign-up asks a wishlist; drawn: sign-up is closed; budget: the gift's, tenge (the deadline is regUntil)
   externalUrl: string | null;
-  guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
+  guestHost?: string | null;    // a partner's event: "With <host>", the link out instead of tickets
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
   doorAt?: Ts | null;           // check-in opens: at T-30 by itself, earlier when the President or a Vice opened it
@@ -674,7 +674,7 @@ export type CheckinResult =
   | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
-  names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in (Oct 30) */ }
+  names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in */ }
 
 export interface Post {
   id: Id;

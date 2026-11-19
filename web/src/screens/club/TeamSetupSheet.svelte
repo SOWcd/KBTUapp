@@ -2,7 +2,7 @@
   // Team 2.0 (SPEC §2b), from Team: the club's own roles — a name, a colour and toggles of rights, as admin rights in
   // Telegram, made by whoever runs the team, only with rights they
   // have and below their own level — and its tags, groups of people ("people"). The team runner also sees who is banned
-  // and can lift it. Who has a tag is set here too, in the tag (owner, Oct 14: not on the fly in a person's card, where
+  // and can lift it. Who has a tag is set here too, in the tag (not on the fly in a person's card, where
   // a stray tap tagged someone).
   import { api, ApiErr, type ClubLevel, type ClubRole, type ClubTag, type Id, type Right, type TeamMember, type TeamSetup } from '../../lib/api';
   import { data, loadTeam } from '../../lib/state/data.svelte';
@@ -112,7 +112,7 @@
       void load(); onchange?.();
     } catch (e) { oops(e); } finally { tagging = null; }
   }
-  // one role to many at once (a president, Nov 6): tick who holds it, Save sends them all; those I may not change stay as they are
+  // one role to many at once (a president): tick who holds it, Save sends them all; those I may not change stay as they are
   let picked = $state<Id[]>([]);
   let q = $state('');
   const mayAssign = (x: TeamMember) => vice && !!mine && x.person.id !== session.me?.id && RANK[mine] > RANK[x.role];

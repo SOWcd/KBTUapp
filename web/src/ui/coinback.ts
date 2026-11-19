@@ -1,4 +1,4 @@
-// A struck medal's back (owner, Nov 9: the drawn medals get the First 500's and the initiation's). No three.js here: the
+// A struck medal's back (the drawn medals get the First 500's and the initiation's). No three.js here: the
 // CSS coin of AwardSheet paints it in the main bundle, coin3d.ts uses the same grey for its map and bump.
 
 /** polished metal, fine concentric guilloché and the app's colonnade (the icon's five columns) struck in low relief,

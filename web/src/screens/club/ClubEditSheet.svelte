@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The club's profile (Vice+, SPEC §2), Settings' way (owner, Nov 9: the old form was "maximally unclear, a lot of text"):
+  // The club's profile (Vice+, SPEC §2), Settings' way (a long form of text is unclear):
   // the logo, rows that say what is set, each long thing a tap deeper. A text's page writes straight into this form, so
   // Back there keeps it; Save sends only what changed, and leaving with changes asks first. Chats and short links save
   // on their own pages, at once.
@@ -68,7 +68,7 @@
     el.value = '';
     if (!file) return;
     if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return; }
-    const cut = await sheets.cropPhoto(file); // framed first, as my own photo (a president asked, Nov 2)
+    const cut = await sheets.cropPhoto(file); // framed first, as my own photo
     if (!cut) return;
     uploading = true;
     try { const m = await api.uploadPhoto(await shrink(cut, 1200)); logo = { id: m.id, url: m.thumb }; haptic.ok(); }

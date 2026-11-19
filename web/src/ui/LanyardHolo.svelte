@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (owner,
-  // Oct 20: "the bottom is the same on every card"). The shimmer follows the tilt (--gx, set by `glass` above it).
+  // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (never
+  // the same bottom on every card). The shimmer follows the tilt (--gx, set by `glass` above it).
   import { clubLook, type Look } from '../lib/awards';
 
   let { look, no }: { look: Look; no: string } = $props();
@@ -23,11 +23,11 @@
   .holo { position: relative; display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 12px; border-radius: 9px;
     background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A, #FFA6DA); background-size: 320% 100%;
     background-position: calc(50% + var(--gx, 0) * 60%) 0; color: rgba(14, 20, 48, 0.75); font: 800 10.5px/1 var(--font-text); letter-spacing: 0.16em; }
-  /* a long name gives way before the number does (round 5: JCC's motto ran into it at 320 px) */
+  /* a long name gives way before the number does (JCC's motto runs into it at 320 px) */
   .w { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; font: inherit; white-space: nowrap; }
   .holo > span { flex: none; margin-left: 10px; font-variant-numeric: tabular-nums; }
   .w.long { display: block; text-overflow: ellipsis; letter-spacing: 0.12em; }
-  /* StudEx (owner, Oct 31: the rainbow made it like every other lanyard; review: .claude/reports/studex-strip-review.md):
+  /* StudEx (the rainbow made it like every other lanyard; review: .claude/reports/studex-strip-review.md):
      a pearl strip, one light sliding with the tilt and a faint cool one slower behind it, their name as in their logo
      (STUD red, EX navy); no arrow here: the card above has it (owner: two arrows read as a tautology) */
   .studex { color: rgb(23, 48, 100); background-image:
@@ -52,13 +52,13 @@
     color: rgb(29, 32, 66); box-shadow: inset 0 0 0 1px rgba(255, 236, 190, 0.6), inset 0 -1px 2px rgba(70, 46, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
   .cheer span { font-variant-numeric: tabular-nums; }
   .ch { font: 800 11px/1 var(--font-display); letter-spacing: 0.2em; }
-  /* Knights (round 5b): navy enamel in a gold rim, their name in gold leaf, one light sliding with the tilt */
+  /* Knights: navy enamel in a gold rim, their name in gold leaf, one light sliding with the tilt */
   .knights { background: linear-gradient(100deg, transparent 38%, rgba(255, 236, 190, 0.2) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(26, 63, 134), rgb(11, 29, 68));
     color: rgba(232, 196, 120, 0.9); box-shadow: inset 0 0 0 1px rgba(232, 196, 120, 0.75), inset 0 1px 0 rgba(255, 236, 190, 0.35), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
   .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; color: transparent; -webkit-background-clip: text; background-clip: text;
     background-image: linear-gradient(180deg, rgb(255, 240, 200), rgb(232, 196, 120) 55%, rgb(184, 137, 62)); }
-  /* Moments (round 5b): a frame of colour negative, its amber base, sprocket holes along both edges, a light sliding */
+  /* Moments: a frame of colour negative, its amber base, sprocket holes along both edges, a light sliding */
   .moments { background: linear-gradient(100deg, transparent 38%, rgba(255, 240, 220, 0.35) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     repeating-linear-gradient(90deg, rgba(42, 18, 9, 0.6) 0 4px, transparent 4px 9px) 0 2px / 100% 3px no-repeat,
     repeating-linear-gradient(90deg, rgba(42, 18, 9, 0.6) 0 4px, transparent 4px 9px) 0 calc(100% - 2px) / 100% 3px no-repeat, linear-gradient(100deg, rgb(238, 154, 72), rgb(201, 98, 42) 60%, rgb(224, 138, 62));
@@ -76,7 +76,7 @@
     linear-gradient(100deg, var(--h1), var(--h2) 50%, var(--h1)); color: var(--h3);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 -1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .club span { font-variant-numeric: tabular-nums; }
-  /* Enactus (round 15, owner: the plain gold strip): their gold, deeper at the ends, a faint pattern of the phoenix's
+  /* Enactus (not a plain gold strip): their gold, deeper at the ends, a faint pattern of the phoenix's
      feathers pressed into it, a navy hairline under it; the specular slides as on every club's */
   .enactuskbtu { background:
       linear-gradient(100deg, transparent 38%, rgba(255, 252, 235, 0.55) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
@@ -84,7 +84,7 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='28' viewBox='0 0 26 28'%3E%3Cg fill='none' stroke='%238A5A00' stroke-opacity='.3' stroke-width='.8' stroke-linecap='round'%3E%3Cpath d='M3 25C8 19 12 13 13 4'/%3E%3Cpath d='M6 21C4 18 4 15 5 13M8.4 17.4C6.4 14.6 6.6 11.6 8 9.6M10.4 13.4C9 10.6 9.6 8 11.2 6.4M6 21C9 20.6 11.4 19 12.8 17M8.4 17.4C11.2 16.6 13 14.8 14 12.6M10.4 13.4C12.6 12.4 13.8 10.6 14.2 8.6'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 26px 28px,
       linear-gradient(100deg, rgb(214, 148, 12), rgb(255, 214, 84) 22%, rgb(255, 197, 33) 50%, rgb(255, 214, 84) 78%, rgb(214, 148, 12));
     box-shadow: inset 0 0 0 1px rgba(255, 240, 190, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 3px rgba(6, 10, 70, 0.22), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
-  /* new3 r2 (owner: the anime club's glossy red bar fought the ink wash): charcoal glass over their art, a fine red
+  /* the anime club (a glossy red bar fights the ink wash): charcoal glass over their art, a fine red
      hairline at its edge and a red ink stroke under their name, the number in their red */
   .klubanimeshnikov { color: rgba(246, 242, 240, 0.95); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     background: radial-gradient(38% 140% at 0% 50%, rgba(192, 38, 45, 0.5), transparent 70%), linear-gradient(180deg, rgba(30, 30, 33, 0.72), rgba(10, 10, 12, 0.82));
@@ -93,14 +93,14 @@
   /* óte and kbtu.mag: their colours, matte (the specular dimmed, no white rim) */
   .teentertainmentkbtu, .kbtumag { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
   .club .ch { white-space: nowrap; }
-  /* Dice and Destiny (round 21): engraved brass: brushed, bevelled, the letters cut into it (a dark cut, light on its
+  /* Dice and Destiny: engraved brass: brushed, bevelled, the letters cut into it (a dark cut, light on its
      lower lip), one light sliding with the tilt */
   .diceanddestinykbtu { color: rgb(52, 28, 10); text-shadow: 0 1px 0 rgba(255, 238, 196, 0.6), 0 -0.5px 0 rgba(40, 20, 4, 0.55);
     background: linear-gradient(100deg, transparent 38%, rgba(255, 246, 220, 0.5) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
       repeating-linear-gradient(180deg, rgba(255, 238, 196, 0.12) 0 0.5px, transparent 0.5px 2px),
       linear-gradient(180deg, rgb(230, 196, 122), rgb(184, 142, 66) 52%, rgb(138, 100, 42));
     box-shadow: inset 0 0 0 1px rgba(255, 232, 170, 0.75), inset 0 1px 0 rgba(255, 250, 228, 0.7), inset 0 -1.5px 2px rgba(60, 30, 6, 0.5), 0 0 0 0.5px rgba(40, 14, 4, 0.8), 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
-  /* CyberSport (round 19): dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
+  /* CyberSport: dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);
     box-shadow: inset 0 0 0 1px rgba(240, 124, 255, 0.9), inset 0 0 10px rgba(232, 90, 255, 0.28), 0 0 14px rgba(214, 58, 240, 0.5); }

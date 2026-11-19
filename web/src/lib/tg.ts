@@ -202,7 +202,7 @@ export async function shareCard(card: Record<string, string | number | boolean |
     ready?.();
     const sent = await shareMessage(id); // true once the user picked a chat
     if (sent !== null) return sent;
-    // a client without cards (a user on Telegram Desktop, Nov 4): Telegram's own picker with the link instead
+    // a client without cards (a user on Telegram Desktop): Telegram's own picker with the link instead
   }
   ready?.();
   openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);

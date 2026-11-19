@@ -1,7 +1,7 @@
 <script lang="ts">
   // Outside Telegram (a plain browser, not /show): the app signs in through Telegram, so it says where it lives, with the
   // button that opens it there and, on a computer, the same link as a code for the phone; "continue in the browser" still
-  // lets them in (owner, Oct 13: warn, never forbid; Oct 30: "open in Telegram"). On a computer the big screen leads (Nov 14):
+  // lets them in (warn, never forbid; "open in Telegram"). On a computer the big screen leads:
   // a laptop at the door is what opens the bare domain; it's a plain link, so no pairing code exists before the click
   // (PAIR_PER_IP is one campus Wi-Fi address: phones opening this page must never lock out the real screen).
   import Button from '../ui/Button.svelte';

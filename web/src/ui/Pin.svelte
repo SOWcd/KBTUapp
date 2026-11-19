@@ -1,8 +1,8 @@
 <script lang="ts">
-  // A pin (awards plan, Nov 3): a one-time award for a moment, an upright enamel shield in a thin metal frame, so it
+  // A pin (awards plan): a one-time award for a moment, an upright enamel shield in a thin metal frame, so it
   // never reads as a medal (round, levels) or a status (the seal by the name): an event's emoji on its colour
   // (zn-enamel's guilloche over it) under a milled metal frame, the year small from 64 px. The app's own drawn pins are
-  // round medals built as Recruiter's (ui/Medal, lib/awards layersOf; owner, Nov 4).
+  // round medals built as Recruiter's (ui/Medal, lib/awards layersOf).
   import Emoji from './Emoji.svelte';
   import { SHIELD } from '../lib/awards';
   let { color, emoji = '', metal = 'g', year, off = false, hidden = false, size = 58 }:

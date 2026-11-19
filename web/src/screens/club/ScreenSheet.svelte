@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Check-in", the check-in page (owner, Nov 13: the sheet was "awful"; a control room, one obvious action per state).
+  // "Check-in", the check-in page: a control room, one obvious action per state.
   // The organizer's side of /show (server checkin.py): Start, the QR, the lists, a laptop paired by its QR (sh_<code>).
   // Nothing open: a calm hero, "Start check-in" (one tap, the club's members expected; anyone may scan and is listed
   // apart) and "Connect a screen". Something open: that session is the page; several: a switcher on top. Past ones at
@@ -242,7 +242,7 @@
           {#if event && s.started}<Button kind="primary" size="l" full onclick={() => pairScan(s.session)}>{#snippet icon()}<MonitorUp size={19} />{/snippet}{t('scr.connect')}</Button>
           {:else if s.started}<Button kind="primary" size="l" full onclick={() => showQr(s)}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('aw.show')}</Button>
           {:else}<Button kind="primary" size="l" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>{/if}
-          <!-- what the door person needs next (owner, Nov 14): hand the check-in over -->
+          <!-- what the door person needs next: hand the check-in over -->
           {#if s.started && board(s) && !event}<Button kind="secondary" size="l" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('scr.hand')}</Button>{/if}
         </div>
       {/if}

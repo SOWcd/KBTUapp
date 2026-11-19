@@ -5,7 +5,7 @@
 </script>
 
 <script lang="ts">
-  // A scan of the event's check-in QR answered in the middle of the screen (owner, Nov 10: guests at the door couldn't
+  // A scan of the event's check-in QR answered in the middle of the screen (guests at the door couldn't
   // tell from a toast whether they were in). The event's own picture with a check drawn onto it, one line, the event's
   // name and the minute; a counted one settles into the event's sheet by itself. Calm: no confetti, one success haptic.
   import { onMount } from 'svelte';

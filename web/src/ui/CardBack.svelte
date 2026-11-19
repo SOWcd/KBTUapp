@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The back of my lanyard card (round 5, owner): the lanyard's own art, a QR on its white plate on the left, my name, role,
+  // The back of my lanyard card: the lanyard's own art, a QR on its white plate on the left, my name, role,
   // course line and number beside it, the medallion top right. One look for Hero's back (the badge's u_ code, the plate
   // opens the full-screen one, the medallion turns the card face on) and the invite sheet (RefSheet: the r_ invite link,
   // nothing to tap). The text and the QR are the caller's: this only draws them.
@@ -24,10 +24,10 @@
 </script>
 
 <div class="cb {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
-  <!-- the lanyard's own art on this side too (owner, Nov 3: the back was a bare colour) -->
+  <!-- the lanyard's own art on this side too (the back was a bare colour) -->
   {#if look === 'sower'}<SowerArt wide />{/if}
   {#if banded(look)}<LanyardBand {look} wide qr />{/if}
-  <!-- no JCC sakura pieces on this side (club, Nov 3): cut by the plate they read as stray bits; their scene has its own -->
+  <!-- no JCC sakura pieces on this side: cut by the plate they read as stray bits; their scene has its own -->
   <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
   {#snippet code()}<Qr {text} tone={QR_LOOK[look]} {lazy}>{#if mark}{@render mark()}{:else}<LookMark {look} />{/if}</Qr>{/snippet}
   {#if onplate}<button class="plate" onclick={onplate} aria-label={plateLabel}>{@render code()}</button>
@@ -38,7 +38,7 @@
     <span class="meta">{line}</span>
     <span class="bno">№ {no}</span>
   </span>
-  <!-- the medallion on the right, where the face has it (owner, Nov 3: QR left, name in the middle, the medallion right) -->
+  <!-- the medallion on the right, where the face has it (QR left, name in the middle, the medallion right) -->
   {#if onmedal}<button class="bmed" onclick={onmedal} aria-label={medalLabel}><OrgMedal {look} {logo} /><span class="qrhint"><RefreshCw size={10} strokeWidth={2.6} /></span></button>
   {:else}<span class="bmed"><OrgMedal {look} {logo} /></span>{/if}
 </div>

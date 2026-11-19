@@ -1,11 +1,11 @@
 <script lang="ts">
-  // An album full screen (SPEC §4.9), as the phone's Photos (owner, Nov 8): the photo grows out of the square it was
+  // An album full screen (SPEC §4.9), as the phone's Photos: the photo grows out of the square it was
   // tapped in and shrinks back into the one it is on when it closes; a swipe goes to the next (the browser's own
   // scroll, its momentum and snapping), a pull down drags the photo away (it shrinks, the black fades; far or fast
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo
   // pans with a rubber edge. A tap hides and shows the chrome: "3 / 12" in the capsule, the filmstrip (it follows the
   // photo, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
-  // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo (owner, Nov 3)
+  // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import { calm } from '../../ui/fold';
   import Images from '@lucide/svelte/icons/images';

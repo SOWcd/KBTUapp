@@ -1,6 +1,6 @@
 <script lang="ts">
   // The organizer's big screen at /show (server checkin.py), opened on a laptop in any browser, no Telegram. It holds
-  // no controls (owner, Oct 29 night: a PIN typed in view of the hall opened Finish and the CSV to anyone): it shows a
+  // no controls (a PIN typed in view of the hall opened Finish and the CSV to anyone): it shows a
   // pairing QR until an organizer scans it in the app, then the session the app runs: the rotating check-in QR, the
   // count going up live. A small QR stays in the corner so another organizer can reach the controls (a flat phone).
   // The screen's secret stays in this tab (sessionStorage): a reload or a dead network keeps the pairing, so the screen

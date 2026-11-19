@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Ask AI" on a card (owner, Nov 2: no tab of its own, the assistant where the question comes up): opens it carrying
+  // "Ask AI" on a card (no tab of its own, the assistant where the question comes up): opens it carrying
   // this card, its own suggestions first. Only with the assistant's switch (session.board), like the Afisha's sparkle.
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';

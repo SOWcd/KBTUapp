@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The app's own block, last on Profile (owner, Nov 15: only these): its channel, the bugs-and-ideas group, GitHub and
+  // The app's own block, last on Profile (only these): its channel, the bugs-and-ideas group, GitHub and
   // the people who made it (the creator and the idea's author; a tap: everyone, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
-  // The voluntary support row stays (owner, Nov 15) and opens Settings' donate page; the main admin is not here, Admin knows him.
+  // The voluntary support row stays and opens Settings' donate page; the main admin is not here, Admin knows him.
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // In-app confirmation. A plain yes/no is an iOS alert in the middle of the screen (owner, Nov 13: a bottom sheet
+  // In-app confirmation. A plain yes/no is an iOS alert in the middle of the screen (a bottom sheet
   // where a tap outside already says "no" made its cancel button look useless); one that asks for words stays a sheet
   // (the keyboard needs it). Back, Escape, a tap outside (and a pull, on the sheet) count as "no".
   // Destructive actions are always confirmed here, never by a system dialog. With `input`, a few words to write first (at least 2 characters), handed to `done`; with `input.tel`, a phone number (+7XXXXXXXXXX);

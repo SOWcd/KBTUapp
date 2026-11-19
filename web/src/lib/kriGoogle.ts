@@ -20,7 +20,7 @@ export function rest(): void {
   try { localStorage.setItem(key(), String(Date.now())); } catch { /* blocked: this opening only */ }
 }
 
-// the calls one at a time (review: an "on" answered after a later "off" left the switch on with no yes kept): the
+// the calls one at a time (an "on" answered after a later "off" left the switch on with no yes kept): the
 // latest tap wins, and once they are all through the switch shows what the server last said
 let saved: boolean | null = null, want = false, line: Promise<void> | null = null;
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // An event's own questions at sign-up (Oct 30, an organizer's ask: "a few more fields the buyer fills in"): asked in
+  // An event's own questions at sign-up (a few more fields the buyer fills in): asked in
   // the "I'm going" tap, sent with it. Text or a choice; the required ones must be answered. Closed without
   // answering: no sign-up. The organizers see the answers (Attendees, the CSV); they go 30 days after the event.
   import { onDestroy, untrack } from 'svelte';

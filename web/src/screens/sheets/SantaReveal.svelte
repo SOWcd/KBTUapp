@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Secret Santa's moment (owner, Nov 18: "it should feel like a game"): the sealed card lifts off the event's page to
+  // Secret Santa's moment (it should feel like a game): the sealed card lifts off the event's page to
   // the middle of a dark screen, turns over once and shows whom I give to, large; their wishlist rises under it.
   // Transform and opacity only. Reduced motion and power saving: the open card fades in, nothing moves.
   import { onMount } from 'svelte';

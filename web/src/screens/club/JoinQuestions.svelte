@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The always-open applications' own questions (Vice+; club presidents, Nov 6): the same editor as a round's. Sent
+  // The always-open applications' own questions (Vice+; club presidents): the same editor as a round's. Sent
   // applications keep the questions' text with their answers, so these may change any time.
   import { untrack } from 'svelte';
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';

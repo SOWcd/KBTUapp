@@ -1,5 +1,5 @@
-// The one door to data: screens import `api` from here (SPEC §8). Until Oct 11 an in-browser mock stood behind it too
-// (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
+// The one door to data: screens import `api` from here (SPEC §8). No in-browser mock behind it (a second
+// copy of the server's rules drifts); screens are checked on the real server with made-up people
 // (server/tools/qa.py).
 import { server } from './client';
 

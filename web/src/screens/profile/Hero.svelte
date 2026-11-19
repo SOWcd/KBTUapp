@@ -2,7 +2,7 @@
   import { calm } from '../../ui/fold';
   import { tick, untrack } from 'svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  // The profile hero, shared by Me and the person sheet (owner's pick of three): the profile as a KBTU
+  // The profile hero, shared by Me and the person sheet: the profile as a KBTU
   // event badge on a lanyard — clubs print their titles in English on theirs, so this one does too. It hangs
   // from the capsule or the sheet's grip, swings in from the clip, then follows the phone's tilt; the
   // holographic strip is the only iridescence and stays inside the card. Data: lib/awards.ts.
@@ -57,7 +57,7 @@
   const staff = $derived(p.founder ? null : p.staff ?? null);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
-  // someone's photo full screen (owner, Nov 3), our biggest copy (media's 1600 px .webp beside the 480 px .t.webp).
+  // someone's photo full screen, our biggest copy (media's 1600 px .webp beside the 480 px .t.webp).
   // It flies from the avatar alone: the viewer hides what it flies from, and the button holds the rim and the frame too
   function bigPhoto(e: MouseEvent) {
     const small = h.person.avatar!, at = e.currentTarget as Element;
@@ -65,13 +65,13 @@
       at.querySelector('.av') ?? at);
   }
 
-  // the Creator's coin by the name, tapped (owner, Nov 18: the full-screen sheet said "the creator's mark" and came in
+  // the Creator's coin by the name, tapped (the full-screen sheet said "the creator's mark" and came in
   // badly): it lifts on the spot and a toast says who this is with the mark in it. Transform only; calm: the toast alone
   function sealTap(e: MouseEvent) {
     haptic.soft();
     const coin = (e.currentTarget as Element).firstElementChild;
     coin?.getAnimations().forEach((x) => x.cancel());
-    // a lift and a settle, flat: iOS drew nothing of the SVG for the whole 3D turn (owner's recording, Nov 19: the mark vanished)
+    // a lift and a settle, flat: iOS drew nothing of the SVG for the whole 3D turn (the mark vanished)
     if (!calm()) coin?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.45) rotate(-8deg)', offset: 0.4 }, { transform: 'scale(1)' }],
       { duration: 420, easing: 'cubic-bezier(.3, 1.4, .5, 1)' });
     say(`${h.status}\n${t('seal.one')}`, p.founder ? 'seal:founder' : 'seal:idea', undefined, undefined, true); // low: at the top it lay on the strap
@@ -96,9 +96,9 @@
   $effect(() => { if (live) untrack(() => { if (due()) later(); else if (!calm()) swing.animate(frames, { duration: 1400 }); }); });
   // signed in from Profile itself: the sign-in sheet is still closing over it, so the drop waits for a free screen
   const later = () => { if (!overlays.some((o) => !o.closing)) { arrive(); return; } swing.style.opacity = '0'; moment(arrive); };
-  // the one wow of the first run (onboarding plan, Oct 31): the first Profile open after the sign-in, the badge drops in
+  // the one wow of the first run (onboarding plan): the first Profile open after the sign-in, the badge drops in
   // from above with its number (Unlock's medal curve), lands with a haptic and a burst, then swings as always; one toast.
-  // Due: "First 500" not yet celebrated (it has no Unlock of its own now), or the sign-up's mark (LoginSheet: past 500)
+  // Due: "First 500" not yet celebrated (it has no Unlock of its own), or the sign-up's mark (LoginSheet: past 500)
   function due(): boolean {
     const me = session.me;
     if (!mine || !me || p.id !== me.id || p.no == null) return false;
@@ -120,7 +120,7 @@
   // and a card scrolled away would animate for nobody
   let seen = $state(true);
   // and while a full-screen overlay (one with a mark in the capsule: the QR, the map) covers my card. Not Me's settings:
-  // they have a mark too but open under the card, which stays in sight (owner, Nov 10: the tilted card snapped flat
+  // they have a mark too but open under the card, which stays in sight (the tilted card snapped flat
   // and its loops froze on the tap, a twitch)
   const covered = $derived(mine && overlays.some((o) => !o.closing && o.icon && o.component !== SettingsMode));
   $effect(() => {
@@ -128,13 +128,13 @@
     io.observe(swing);
     return () => io.disconnect();
   });
-  // a new lanyard put on: the badge turns over on its strap (owner, Oct 31: the right way, but it jerked and the light
+  // a new lanyard put on: the badge turns over on its strap (the right way, but it jerked and the light
   // stripe looked childish). One continuous half turn: it speeds up to its edge and leaves the edge at that same speed
   // (matched curves, no overshoot, no sway); the new face is put on while edge-on and the turn goes on only a frame
   // later, so the redraw never lands in a moving frame. The light comes from the angle: the face darkens as it turns
   // away, the new one comes out of the shade with a soft sheen. Transform and opacity only, on the compositor.
   let spinning = false, shade: HTMLElement;
-  // the edge's speed matched: TURN ends at slope 2 over 170 ms, LAND starts at slope 4.67 over 400 ms, both ~1.05 deg/ms (owner: 240+560 was slow)
+  // the edge's speed matched: TURN ends at slope 2 over 170 ms, LAND starts at slope 4.67 over 400 ms, both ~1.05 deg/ms (240+560 ms is too slow)
   const TURN = 'cubic-bezier(.4, 0, .75, .5)', LAND = 'cubic-bezier(.12, .56, .25, 1)';
   function spin(to: typeof look, sk: typeof was) {
     spinning = true;
@@ -157,7 +157,7 @@
       });
     };
   }
-  // the card's back (round 5, owner: the edge-on turn into the full-screen QR was flat and empty in the middle): a real
+  // the card's back (an edge-on turn into the full-screen QR is flat and empty in the middle): a real
   // two-sided badge. A tap turns it a whole half turn in 3D, lifted toward you at the edge, the face darkening as it turns
   // away and the back coming out of the shade with a sheen; the back carries my QR big enough to scan on the card. A tap
   // on the code opens the full-screen one (MyQr) for a door's scanner; a tap elsewhere on the back, or Back, turns it face
@@ -165,8 +165,8 @@
   // turn always lands face on or back on, never edge-on (53a0929's lesson).
   let flipped = $state(false), side = $state(false), card: HTMLDivElement, bshade = $state<HTMLElement>(), strap: HTMLDivElement, clipEl: HTMLDivElement; // the back is mine only
   const DARK = 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))', LIGHT = 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.24))';
-  // one curve for the whole turn, with its own small overshoot (owner, Nov 3: the turn was jerky: four keyframes joined at
-  // corners, and the sides swapped by a timer that ran late on a busy phone). The lift is the `scale` property, apart
+  // one curve for the whole turn, with its own small overshoot (four keyframes joined at
+  // corners, and the sides swapped by a timer that runs late on a busy phone, turn jerkily). The lift is the `scale` property, apart
   // from the turn's transform; the sides swap on the turn's own clock at the moment it stands edge-on (EDGE)
   const FLIP_MS = 760, EASE: [number, number, number, number] = [0.3, 1.16, 0.42, 1];
   const EDGE = (() => {
@@ -230,7 +230,7 @@
     if (spinning) return;
     untrack(change);
   });
-  // a new lanyard waits, the old one on show, until its pictures are decoded (owner, Nov 3: it put itself together piece by
+  // a new lanyard waits, the old one on show, until its pictures are decoded (it put itself together piece by
   // piece as they came): its art is drawn unseen (.prep), each <img> decoded and each CSS picture fetched, at most WAIT_MS
   // on a slow network; then it turns on. The first card doesn't wait: it is drawn as it is
   const WAIT_MS = 1500;
@@ -253,7 +253,7 @@
   }
 </script>
 
-<!-- JCC's top layer (round 5, their own split): their sakura over the photo, its frame and the strip, where their mock puts
+<!-- JCC's top layer (their own split): their sakura over the photo, its frame and the strip, where their mock puts
      it; part of their lanyard, not a frame (a frame worn with it stays under it) -->
 {#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
 
@@ -267,7 +267,7 @@
       {#if face === 'sower'}<SowerArt wide />{/if}
       {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
       <span class="slot" aria-hidden="true"></span>
-      <!-- the organisation's medallion where the QR was (owner, Nov 2); on mine it turns the card over to its back, the
+      <!-- the organisation's medallion where the QR was; on mine it turns the card over to its back, the
            full-screen QR (MyQr), as a tap anywhere on the card does -->
       {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><QrCode size={10} strokeWidth={2.4} /></span></button>
       {:else}<span class="medal"><OrgMedal look={face} logo={medalLogo} /></span>{/if}
@@ -277,7 +277,7 @@
         {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
           <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
-          {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
+          {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>
         </span>
@@ -330,11 +330,11 @@
   .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
   .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); --sh: 8, 12, 34; display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
-  /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
+  /* the strap swings with the card, from its top (it stood still while the card moved) */
   .strap { position: absolute; top: -52px; left: 50%; margin-left: -13px; width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
-  /* the clip swings with the card, down into its slot (owner, Oct 29: it hung above it) */
+  /* the clip swings with the card, down into its slot (it hung above it) */
   .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
   .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; perspective: 1100px; } /* the card's turn in depth */
@@ -349,7 +349,7 @@
   /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
      parallax) through its parent's hidden backface, mirrored over the other side (JCC, Nov 3) */
   .card.sb .badge, .card:not(.sb) .back { visibility: hidden; }
-  /* and its loops wait: the back's SITE sweep ran unseen behind the face all the time (perf, Nov 10) */
+  /* and its loops wait: the back's SITE sweep ran unseen behind the face all the time */
   .card.sb .badge :global(*), .card:not(.sb) .back :global(*) { animation-play-state: paused; }
   .back { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: 22px; transform: rotateY(180deg);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75); }
@@ -373,8 +373,8 @@
     transform: translateX(calc(-30.769% - var(--gx, 0) * 27.692%)); will-change: transform; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
-  /* round 5: the name and the role give way to the medallion (its 66 px corner; 52 px, was 58: it outweighed the photo),
-     the course line has the card's width; the role and the course line wrap to two lines at most (owner: long names fit) */
+  /* the name and the role give way to the medallion (its 66 px corner; 52 px: bigger outweighs the photo),
+     the course line has the card's width; the role and the course line wrap to two lines at most (long names fit) */
   /* the photo, the name and its lines don't move with the tilt: the light's --gx/--gy, written on the badge every frame
      the phone moves, stop here, so the 80-odd elements under it (the seal's SVG among them) aren't restyled each frame */
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; --gx: 0; --gy: 0; }
@@ -389,7 +389,7 @@
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
   .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
-  /* a halo under the text on every look's art (owner, Nov 10: hard to read; Nov 18: better still): four soft layers in
+  /* a halo under the text on every look's art (hard to read; better still): four soft layers in
      the look's own dark (--sh), a hairline round the letters out to a wide one that dims the art just behind the lines;
      black read as a drop shadow, a patch behind the column as a grey box. Dark letters (.ink): the card's paper, tighter */
   .id { display: block; flex: 1; min-width: 0;
@@ -416,19 +416,19 @@
   .cheer { --role: #FFC83D; }
   .cheer .strap { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); box-shadow: inset 1px 0 0 rgba(232, 192, 98, 0.45), inset -1px 0 0 rgba(232, 192, 98, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25); } /* their navy, gold stitches at the edges */
   .cheer .strap span { color: rgb(255, 200, 61); }
-  .knights { --role: rgb(232, 196, 120); } /* round 5b: their navy, a knight's gold */
+  .knights { --role: rgb(232, 196, 120); } /* their navy, a knight's gold */
   .knights .strap { background: linear-gradient(90deg, rgb(11, 29, 68), rgb(30, 74, 158) 50%, rgb(11, 29, 68)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.6), inset -1px 0 0 rgba(232, 196, 120, 0.6), 0 2px 6px rgba(0, 0, 0, 0.25); }
   .knights .strap span { letter-spacing: 0.12em; color: rgb(232, 196, 120); } /* seven letters on the short strap */
   .moments { --role: #F4D9BE; }
   .moments .meta { color: rgba(255, 255, 255, 0.84); } /* with the darker column behind it (LanyardBand), 4.5:1 */
-  .moments .strap { background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) 3px 0 / 3px 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) calc(100% - 3px) 0 / 3px 100% no-repeat, rgb(27, 19, 16); } /* round 5b: a strip of film */
+  .moments .strap { background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) 3px 0 / 3px 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) calc(100% - 3px) 0 / 3px 100% no-repeat, rgb(27, 19, 16); } /* a strip of film */
   .moments .strap span { color: rgb(242, 179, 92); letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
   .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
-  /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
+  /* StudEx: red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  /* the halo in the look's own dark (owner, Oct 31: a dark patch behind the column was crude) */
+  /* the halo in the look's own dark (a dark patch behind the column is crude) */
   .studex { --sh: 6, 18, 48; }
   .moments { --sh: 40, 16, 8; }
   .cheer { --sh: 14, 15, 34; }
@@ -445,7 +445,7 @@
   /* the name's lines end before the hand's paper (its left edge 97 px in from the card's): a long name cuts, a long title wraps */
   .sower .id { padding-right: 84px; }
   .sower .nm, .sower .id > .role { padding-right: 0; }
-  /* Dice and Destiny (round 21): the lines end before the dragon's wing (a long name cuts, a long title wraps) */
+  /* Dice and Destiny: the lines end before the dragon's wing (a long name cuts, a long title wraps) */
   .diceanddestinykbtu .id { padding-right: 104px; }
   .diceanddestinykbtu .nm, .diceanddestinykbtu .id > .role { padding-right: 0; }
   @media (max-width: 359px) { .diceanddestinykbtu .id { padding-right: 88px; } }
@@ -457,23 +457,23 @@
   .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; } /* lookVars: two lines, or a long word a size smaller */
-  /* round 18: CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
+  /* CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
   .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
     box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
   .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
-  /* round 21: Dice and Destiny's strap stitched along both edges in old gold */
+  /* Dice and Destiny's strap stitched along both edges in old gold */
   .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .ink .id { text-shadow: 0 0 2px rgba(var(--sh), 0.95), 0 0 7px rgba(var(--sh), 0.9), 0 0 14px rgba(var(--sh), 0.7); }
   .club .meta { color: var(--ink2); }
-  /* JCC's sakura from their final PSD (round 8, .claude/reports/club-lanyards/cut-jcc-r8.py): one scale, 0.2 px per art px
+  /* JCC's sakura from their final PSD (.claude/reports/club-lanyards/cut-jcc-r8.py): one scale, 0.2 px per art px
      (at 375 px the card is their canvas), each piece pinned where their canvas has it: the photo's at the photo's centre
      (their 312,370; art 0..900 x 0..690), the strip's ends at the strip (their 80..1610 x 738..868; the right 1100..1712 x
      300..919, the left 0..400 x 690..919). Px, not the photo's %: a bigger photo no longer swells the flowers round it */
   .jt { position: absolute; z-index: 3; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
-  .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; transform: scale(0.8); transform-origin: 62.4px 74.1px; } /* drawn in to the photo: they ran onto the name (club, Nov 3) */
-  .badge :global(.petals) { display: none; } /* no falling petals on the face, only on the back and the badge (club, Nov 3) */
+  .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; transform: scale(0.8); transform-origin: 62.4px 74.1px; } /* drawn in to the photo: further out they run onto the name */
+  .badge :global(.petals) { display: none; } /* no falling petals on the face, only on the back and the badge */
   .jl { left: -16px; top: -9.6px; width: 80px; height: 45.8px; }
   .jr { right: -14px; top: -80px; width: 122.4px; height: 123.8px; }
   /* the name over the petals, a halo of the card's pink round its letters so a flower behind them steps back */

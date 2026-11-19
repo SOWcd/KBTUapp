@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The Forum tab (Nov 1: the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
-  // newest first and nothing else (owner, Nov 3: a pinned "popular" block put old posts first; a post being discussed
-  // says so in place). Each post a card on the ground (owner, Nov 4: the flat Threads list on black "limped"): the face
+  // The Forum tab (the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
+  // newest first and nothing else (a pinned "popular" block put old posts first; a post being discussed
+  // says so in place). Each post a card on the ground (the flat Threads list on black "limped"): the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as small chips (read-only: they are Telegram's) and, on the right, the one way to the comments, which live in
   // Telegram: who replied, and a real button with Telegram's mark and the count. The post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
@@ -62,7 +62,7 @@
   const SEEN = 'kb-fc-seen';
   function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
   let since = $state(0);
-  // my own anonymous post gets it as anyone's: leaving it out would tell whose it is (Codex review, Nov 10)
+  // my own anonymous post gets it as anyone's: leaving it out would tell whose it is
   const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && (!p.mine || p.anon) && !!p.msg;
 
   // what's on screen: the posts already shown (known), the older pages under them, mine; a refresh's others wait for
@@ -140,8 +140,8 @@
   const glyph = (e: string) => e.startsWith('custom:') ? '✨' : e === 'paid' ? '⭐' : e;
 
   // my own post's mark beside the time while only I see it: on its way (the AI looking), under review, removed, being
-  // published (out, the channel's message not back yet). Once in the channel: none, a card like anyone's (Codex review,
-  // Nov 10: "Mine" by a mask outs its author to whoever looks at the screen)
+  // published (out, the channel's message not back yet). Once in the channel: none, a card like anyone's
+  // ("Mine" by a mask outs its author to whoever looks at the screen)
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'quiet', key: 'fc.checking' } as const
     : p.status === 'held' ? (p.human ? { tone: 'warning', key: 'fc.human' } as const : { tone: 'quiet', key: 'fc.checking' } as const)
     : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : !p.msg ? { tone: 'quiet', key: 'fc.publishing' } as const : null;
@@ -277,7 +277,7 @@
               {#if why.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{why.fix}</span></p>{/if}
             </div>
           {/if}
-          <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
+          <!-- the AI looking: a running bar under the words, not just a word -->
           {#if p.id < 0 || (p.mine && p.status === 'live' && !p.msg)}<div class="chk" role="progressbar" aria-label={t(p.id < 0 ? 'fc.checking' : 'fc.publishing')}><span></span></div>{/if}
           {#if live}
             <div class="acts">
@@ -309,7 +309,7 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; }
   .page > :global(*) { flex-shrink: 0; }
-  /* every post a card on the ground (owner, Nov 4: "just a black background"): the app's surface and radius, a hairline
+  /* every post a card on the ground, not a bare black background: the app's surface and radius, a hairline
      rim in the dark (no shadow there), the soft card shadow in the light; the composer is the first card */
   .compose, .appeal, .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line); }
 
@@ -317,7 +317,7 @@
   .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
     transition: background var(--t-fast) var(--ease); }
   .compose:active { background: var(--surface-2); }
-  .compose.away { visibility: hidden; } /* it is the writing window now (ChannelCompose grows out of it and folds back) */
+  .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
   /* the appeal: the composer's quiet neighbour, a tinted seat instead of the loud pen */
   .appeal { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
     transition: transform 450ms var(--ease-bounce); }

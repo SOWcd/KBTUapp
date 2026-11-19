@@ -206,7 +206,7 @@ export const server = {
   readPosts: (ids: Id[]): Promise<void> => call('POST', '/posts/read', { ids }), // seen in News: unread marks go
   postVideo: (id: Id): Promise<{ src: string; poster: string | null }> => call('GET', `/posts/${id}/video`), // a channel's video: its CDN file (expires); 404 → the widget
 
-  // a badge held in several variants (a performer who also volunteered): each shows (owner, Nov 2)
+  // a badge held in several variants (a performer who also volunteered): each shows
   person: (id: Id): Promise<PersonCard> => call<PersonCard>('GET', `/users/${id}`).then((p) => (p?.awards ? { ...p, awards: { ...p.awards, achievements: splitVariants(p.awards.achievements) } } : p)),
 
   // friends (§4.7): a request the other one answers, or my one invite link (r_<code>) whose landing makes friends in one tap

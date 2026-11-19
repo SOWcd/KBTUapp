@@ -458,7 +458,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
     if (!leaving && onTeam(before, session.me?.memberships)) { haptic.tap(); say(t('event.team'), 'raising_hands_3d_default'); return; }
-    // a team event's sign-up is its teams consent (owner, Nov 18): one who hasn't agreed (or took it back) is asked
+    // a team event's sign-up is its teams consent: one who hasn't agreed (or took it back) is asked
     // first, every way in; a no signs nobody up. The waitlist isn't a sign-up yet: asked when it is a ticket.
     const fullNow = before.seats != null && before.taken >= before.seats;
     const agrees = !leaving && !!before.teamMax && !fullNow && !session.me?.teams?.consent;
@@ -552,7 +552,7 @@ export function toggleJoin(id: Id): void {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
     if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
-    // the only way in without a form of its own, and it pings the club's president: one question (a president's report, Nov 9)
+    // the only way in without a form of its own, and it pings the club's president: one question (a president's report)
     if (on && !(await sheets.ask({ title: t('join.applyAsk', { name: o.name }), ok: t('join.apply'), cancel: t('common.cancel') }))) return;
     if (!on && !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('join.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep') }))) return;
     o.myRequest = on ? 'pending' : null;
@@ -619,7 +619,7 @@ export async function dropSchedule(): Promise<void> {
     await api.deleteSchedule();
     skipped.clear();
     try { localStorage.removeItem(SKIP_KEY); } catch { /* blocked */ }
-    clearCache(); // the phone's saved copy of the app's data held the week for days (privacy review)
+    clearCache(); // else the phone's saved copy of the app's data holds the week for days
     haptic.ok(); say(t('pd.deleted'), 'sparkles_3d');
   } catch {
     // the server's own word, not the week from before: it may have deleted it, or a newer upload may have come

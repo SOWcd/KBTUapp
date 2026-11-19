@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-  // Admin → "To decide" (review Nov 3): everything waiting for the staff in one list, one request (server logic/inbox.py,
+  // Admin → "To decide": everything waiting for the staff in one list, one request (server logic/inbox.py,
   // loaded with the app, again as Admin opens): what's already hidden first (a person waits; a red edge says so), then
   // the oldest. A card says what it is, has one main action and one other; the rest is behind its ⋯. A decision answers
   // at once and leaves a slim line in its place with Undo (no "are you sure" for what can be undone); someone else's
@@ -42,7 +42,7 @@
   import ForumWho, { whyLine } from './ForumWho.svelte';
   import ForumPics from './ForumPics.svelte';
 
-  // limit: the Admin sheet's own top (owner, Nov 19: open Admin and decide): the first few cards, "N more" opens the
+  // limit: the Admin sheet's own top (open Admin and decide): the first few cards, "N more" opens the
   // whole queue (more); nothing waiting shows nothing there
   let { limit = 0, more: rest }: { limit?: number; more?: () => void } = $props();
   const admin = $derived(session.me?.role === 'admin');

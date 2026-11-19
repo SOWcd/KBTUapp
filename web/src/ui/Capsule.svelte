@@ -6,7 +6,7 @@
   // The capsule (SPEC §8.2): one liquid-glass object at the top, between Telegram's own buttons, that
   // always says where you are and what's happening now: the title of the view on top (a sheet, a full-screen view, else
   // the tab), or the live status (an event today, a class soon) when nothing is on top. It never switches pages
-  // (Oct 30: one tab, one screen).
+  // (one tab, one screen).
   //
   // Geometry is the prototype's, approved on an iPhone: a 184 px window whose right edge sits 94 px
   // right of centre. On a phone Telegram's left button first shows the app name, then turns into
@@ -65,7 +65,7 @@
   }
 
   // a new name (a tab, a page, a sheet, a word of work): it rises in out of a blur while the glass resizes, never a
-  // flat swap (owner, Oct 30: "it switches like a toggle")
+  // flat swap (else it switches like a toggle)
   let ttl: HTMLDivElement, said: string | null = null;
   $effect(() => {
     const now = title;
@@ -106,14 +106,14 @@
     transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base);
     animation: capIn 400ms cubic-bezier(.2, .9, .25, 1.2) backwards;
   }
-  /* Android (a user's video, Nov 6): the pill's live blur over a sheet or the WebGL medal dropped its title for seconds */
+  /* Android: the pill's live blur over a sheet or the WebGL medal dropped its title for seconds */
   .cap.flat { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .cap.flat > .tone-base { background: var(--glass-solid); }
   .cap.wide { width: min(174px, calc(100vw - 208px)); }
   .cap.boot { width: min(152px, calc(100vw - 230px)); }
   .cap > .tone-base { background: var(--glass-clear); }
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
-  /* power saving: no blur, so no colour comes through the glass; a solid fill takes it instead (owner, Nov 3: a flat
+  /* power saving: no blur, so no colour comes through the glass; a solid fill takes it instead (a flat
      grey capsule on a tinted page). The page's own mix (its tint under the ground's veil), a step lighter (--fill) */
   :global(html.lowfx) .cap.tinted > .tone-base { background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--cap-tint); }
   :global(html.lowfx) .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.9); } /* the Feed's slide, near solid */

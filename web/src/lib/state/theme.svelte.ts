@@ -31,7 +31,7 @@ export const paintFor = (t: Theme) => paint(t === 'light' ? '#F3F5FB' : '#07080F
 
 const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Android/.test(navigator.userAgent); // iPhone, Mac Safari
 // the soft edge is a share of the circle, so it widens as the circle grows: crisp at the tap, a wide dusk by the far
-// corner (it was a fixed 28 px). Same mask, same cost
+// corner. Same mask, same cost
 const FEATHER = 0.16;
 const DUSK = 'radial-gradient(closest-side, black 84%, transparent)'; // 84% = 1 - FEATHER
 // ponytail: not yet timed on a phone (a mask repaints the full-screen snapshot each frame); if frames drop, `soft = false`
@@ -40,7 +40,7 @@ const soft = typeof CSS !== 'undefined' && CSS.supports('mask-image', DUSK);
 let running: ViewTransition | null = null; // a second tap mid-way starts over; only the latest one tidies up
 /** the running theme or language switch, if any, until its glass has cleared up again (vt-solid, base.css: 360 ms).
  *  The moment it ends the whole page restyles (every glass's colour glides back, iOS rebuilds the backdrops): a toast
- *  that started right then stuttered for its first ~150 ms on an iPhone (owner's video, Nov 6), so it waits this out */
+ *  that started right then stuttered for its first ~150 ms on an iPhone, so it waits this out */
 export const switching = () => running?.finished.catch(() => {}).then(() => new Promise<void>((ok) => setTimeout(ok, 380)));
 
 // cubic-bezier(.3, 0, .2, 1), the circle's easing: the share of its duration it takes to reach progress p
@@ -90,7 +90,7 @@ export function reveal(change: () => void, done: () => void, from?: Element, loo
 }
 
 /** Telegram's surfaces (its buttons over the top, the status bar's tint) turn as the circle reaches the top, so the
- *  top changes with the rest of it (they used to snap over after the circle). */
+ *  top changes with the rest of it, not snapping over after the circle. */
 function flow(t: Theme, from?: Element, also = () => {}): void {
   if (t !== theme.current) reveal(() => { also(); applyTheme(t, false); }, () => applyTheme(theme.current), from);
   else also();

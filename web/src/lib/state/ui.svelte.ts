@@ -8,11 +8,11 @@ import { queue } from '../moments';
 import { switching } from './theme.svelte';
 
 export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
-// the forum second (Oct 30): the students' everyday place, next to the events
+// the forum second: the students' everyday place, next to the events
 export const TABS: Tab[] = ['afisha', 'forum', 'club', 'profile'];
 const NAV_KEY = 'kb-nav';
 
-// one tab = one scrolling screen (Oct 30: the pages side by side in a tab were an 11-place grid even the owner got lost
+// one tab = one scrolling screen (pages side by side in a tab make a grid one gets lost
 // in); the tab and the club picked are kept across launches
 function restore(): { tab: Tab; club: number | null } {
   try {
@@ -107,7 +107,7 @@ export function removeOverlay(id: number): void {
 export const toast = $state<{ text: string; emoji: string; id: number; undo?: (() => void) | null; toggle?: boolean | null; low?: boolean }>({ text: '', emoji: 'party_popper_3d', id: 0 });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function say(text: string, emoji = 'sparkles_3d', undo?: () => void, toggle?: boolean, low?: boolean): void {
-  // a toast born mid-switch came solid and cleared up after (owner, Oct 31): it waits for the switch to end
+  // a toast born mid-switch came solid and cleared up after: it waits for the switch to end
   const vt = switching();
   if (vt) { vt.then(() => say(text, emoji, undo, toggle, low)); return; }
   untrack(() => { if (text === t('common.error')) count(`err.${[...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const)}`); });

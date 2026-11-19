@@ -60,7 +60,7 @@
   <div class="page">
   <p class="kicker up">{t('unlock.kicker')}</p>
   <span class="medal" bind:this={medal}><Medal {a} size={168} /><span class="shine"></span></span>
-  <!-- the level first, under the medal it belongs to (owner, Nov 1) -->
+  <!-- the level first, under the medal it belongs to -->
   {#if tier}<p class="tier up">{t('aw.level', { tier })}</p>{/if}
   <h2 class="name up">{achName(a)}</h2>
   {#if a.variant}<p class="tier up">{variantName(a.code, a.variant)}</p>{/if}

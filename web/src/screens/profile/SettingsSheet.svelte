@@ -39,7 +39,7 @@
   import { answerCredits } from '../../lib/credits';
   import { setReportConsent } from '../../lib/reports';
   import { setKriGoogle } from '../../lib/kriGoogle';
-  // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
+  // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice)
   onMount(() => void loadMe());
 
   type Part = 'last' | 'first' | 'middle';
@@ -90,7 +90,7 @@
   }
   // my name and student ID: corrected once each (it came in wrong), then through support; the server holds the rules
   // (account.fix_identity: the ID's year stays, the name stays KBTU's in another spelling at most)
-  // each name part one row (owner, Nov 2: six rows read as duplicates): its Cyrillic and Latin forms together, both a
+  // each name part one row (six rows read as duplicates): its Cyrillic and Latin forms together, both a
   // tap deeper on the part's own page
   const PARTS: [Part, Typed, Typed, Key][] = [['last', 'lastName', 'lastLat', 'pd.lastLat'], ['first', 'firstName', 'firstLat', 'pd.firstLat'],
     ['middle', 'middleName', 'middleLat', 'pd.middleLat']];
@@ -111,7 +111,7 @@
       say(t(why ?? 'common.error'), 'pleading_face_3d');
     }
   }
-  // my school over the list's, which can be wrong (owner, Nov 2): KBTU's schools from the store, or none. The lanyard
+  // my school over the list's, which can be wrong: KBTU's schools from the store, or none. The lanyard
   // turns at once and the page goes back to it; the server keeps the school's own name (account.update_me)
   const schools = $derived(data.orgs.filter((o) => o.kind === 'school').sort((a, b) => a.name.localeCompare(b.name, i18n.lang)));
   const mySchool = $derived(schoolOf(me?.student?.school));
@@ -144,7 +144,7 @@
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
     catch { say(t('common.error'), 'warning_3d'); }
   }
-  // my city, picked or typed (owner, Nov 3: students set it themselves); optimistic, the card follows
+  // my city, picked or typed (students set it themselves); optimistic, the card follows
   let picking = $state(false);
   async function setCity(name: string) {
     const was = me;
@@ -178,13 +178,13 @@
   const SEES = [['set.portal', 'set.portalText'], ['set.allSee', 'set.allSeeText'], ['set.orgSee', 'set.orgSeeText'],
     ['set.teamSee', 'set.teamSeeText'], ['set.youSee', 'set.youSeeText'], ['set.never', 'set.neverText']] as const;
   const page = (path: string) => openLink(`${location.origin}/${path}?lang=${i18n.lang}`);
-  // Support the app (owner, Nov 3): a gift, never a purchase. The number is copied and nothing else: no Kaspi link (none
+  // Support the app: a gift, never a purchase. The number is copied and nothing else: no Kaspi link (none
   // is public, and a payment link breaks Telegram's rules), no amounts, and nothing recorded, so no badge, status or
   // thanks can ever depend on it (.claude/reports/donate-review.md)
   const donate = $derived(session.donate ? fmtPhone(session.donate) : '');
-  // owner, Nov 6: a transfer inside one bank is free, so the page lists every bank the number has (the same number in
-  // each); a tap copies it and opens that bank's app (Nov 7: the app itself, not its store page). Each link is the
-  // bank's own universal / app link, checked in its apple-app-site-association and assetlinks.json (Nov 7): the bank's
+  // a transfer inside one bank is free, so the page lists every bank the number has (the same number in
+  // each); a tap copies it and opens that bank's app (the app itself, not its store page). Each link is the
+  // bank's own universal / app link, checked in its apple-app-site-association and assetlinks.json: the bank's
   // domain or its AppsFlyer OneLink, which falls back to the bank's store page when the app isn't installed (Forte's
   // falls to a 404 on its site, Kaspi's and Halyk's to the site). It opens the app's home only: never a transfer link
   // with a number or an amount (Telegram's rules), and nothing of ours is in it.
@@ -192,7 +192,7 @@
     ['freedom', 'Freedom', 'https://freedombank.onelink.me/PcDG/'], ['forte', 'Forte', 'https://forte.kz/app/'],
     ['bereke', 'Bereke', 'https://berekebank.onelink.me/lyyx/'], ['bcc', 'BCC', 'https://bcc-kz.onelink.me/DHqP/'],
     ['homecredit', 'Home Credit', 'https://homekz.onelink.me/vrwF/'], ['alatau', 'Alatau', 'https://app.alataucitybank.kz/sFFz/']] as const;
-  // Telegram Stars beside the banks (owner, Nov 9): the server makes the invoice, Telegram's own window confirms it.
+  // Telegram Stars beside the banks: the server makes the invoice, Telegram's own window confirms it.
   // Cancelled or failed: nothing to say. An old client has no such row (canStars).
   const stars = canStars();
   let giving = $state<number | null>(null); // lit in the tap's own frame, until Telegram's window closes
@@ -212,7 +212,7 @@
     await copyDonate();
     openLink(url);
   }
-  // the page names itself in its own centred heading, so the capsule shows the icon alone (owner, Nov 6: the title twice)
+  // the page names itself in its own centred heading, so the capsule shows the icon alone (the title twice)
   $effect(() => { overlay.mark = kind === 'donate'; });
   let copied = $state(false);
   let copiedT: ReturnType<typeof setTimeout> | undefined;
@@ -259,7 +259,7 @@
           {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
           {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
         {/if}
-        <!-- the email is the Microsoft login, never edited; whole, on two lines if it must (owner, Oct 31) -->
+        <!-- the email is the Microsoft login, never edited; whole, on two lines if it must -->
         {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
         {@render link(t('look.school'), () => sheets.settings('school'), schoolShort(st.school) || t('look.noSchool'))}
         {#if courseFix}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
@@ -356,8 +356,8 @@
       <Group footnote={t('pd.support')}><Row title={t('person.course', { n: me.student.course ?? 0 })} /></Group>
     {/if}
   {:else if kind === 'school' && me?.student && !me.student.fixable?.includes('school')}
-    <!-- the once spent: my school alone, then support; a mis-tap undone: the one before comes back, free, once (owner,
-         Nov 3: everyone wrote to support) -->
+    <!-- the once spent: my school alone, then support; a mis-tap undone: the one before comes back, free, once (else
+         everyone writes to support) -->
     {@const undo = me.student.undo && 'school' in me.student.undo}
     <Group footnote={undo ? undefined : t('pd.support')}><Row title={mySchool?.name ?? me.student.school ?? t('look.noSchool')}>{#snippet detail()}{#if mySchool}<span class="short">{shortOf(mySchool)}</span>{/if}{/snippet}</Row></Group>
     {#if undo}{@const was = me.student.undo?.school ?? null}
@@ -369,7 +369,7 @@
         <Row title={o.name} accessory="check" checked={mySchool?.id === o.id} onclick={() => void pickSchool(o.orig?.name ?? o.name)}>{#snippet detail()}<span class="short">{shortOf(o)}</span>{/snippet}</Row>
       {/each}
     </Group>
-    <!-- no "no school" here: two students cleared theirs by mistake (Nov 2), and the once went with it -->
+    <!-- no "no school" here: two students cleared theirs by mistake, and the once went with it -->
   {:else if kind === 'sees'}
     <!-- who sees what: read rather than tapped -->
     <Group>{#each SEES as [h, text] (h)}<Row title={t(h)} subtitle={t(text)} />{/each}</Group>
@@ -381,7 +381,7 @@
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
   {:else if kind === 'donate' && donate}
-    <!-- owner, Nov 6 (v2): one centred column, the title once; the number in one card with its copy as a plain line under
+    <!-- one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->
     <div class="don">
       <Emoji name="blue_heart_3d" size={56} />

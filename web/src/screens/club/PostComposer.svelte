@@ -83,7 +83,7 @@
   let uploading = $state(false);
   let busy = $state(false);
   // the title is the post's headline (the bot's message, the comments): a tap without one says so and puts the cursor
-  // there, never a grey button that doesn't say why (a tester)
+  // there, never a grey button that doesn't say why
   // engine: Field could hand out its input (focus): found in its wrapper for now
   let titleBox = $state<HTMLElement>();
   let tried = $state(false);

@@ -5,7 +5,7 @@
   //   icon     a lucide icon, monochrome (a topic's colour on a chip fails contrast: Board.svelte had to undo it)
   //   full     the whole width of its cell, the words centred: a grid of choices (the forum composer's topics)
   // Put a row of them in a scroller with 4 px of block padding, or the 44 px hit areas get clipped.
-  // A Chip without `selected` is a status label from before (Oct 30): it draws a Tag; use Tag.
+  // A Chip without `selected` is a status label from before: it draws a Tag; use Tag.
   import type { Component, Snippet } from 'svelte';
   import Tag from './Tag.svelte';
 

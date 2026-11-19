@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Add a friend (SPEC §4.7). My invite QR on the badge's material, the one link (Nov 2, lib/friends): a friend points
+  // Add a friend (SPEC §4.7). My invite QR on the badge's material, the one link (lib/friends): a friend points
   // the camera, taps "Add as a friend" on my card and we're friends. While the sheet is open it watches for a new friend,
   // shows them and celebrates. The same invite goes out as our bot's card (a line and a button; no bare links). Or:
   // look someone up by @username and send a request they answer.

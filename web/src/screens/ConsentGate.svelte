@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The privacy policy changed (lib/legal.ts): a signed-in student agrees again before using the app (owner, Nov 1:
-  // the sheet got swiped away unread). Full screen, not a Sheet: no swipe, not in the overlay stack, so Back can't
-  // close it. App renders it over the tabs and holds every other overlay until it's accepted. One button (owner, Nov 1:
-  // no "Delete account" here); the way out is Telegram's own close, the policy one tap away.
+  // The privacy policy changed (lib/legal.ts): a signed-in student agrees again before using the app (a
+  // sheet gets swiped away unread). Full screen, not a Sheet: no swipe, not in the overlay stack, so Back can't
+  // close it. App renders it over the tabs and holds every other overlay until it's accepted. One button (no
+  // "Delete account" here); the way out is Telegram's own close, the policy one tap away.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
@@ -19,7 +19,7 @@
   import { haptic, openLink } from '../lib/tg';
   import { CONSENT_VOL } from '../lib/legal';
 
-  // oncancel: asked only when a student does what needs the policy in force (owner, Nov 13: never on opening the app), so they may also not
+  // oncancel: asked only when a student does what needs the policy in force (never on opening the app), so they may also not
   let { oncancel }: { oncancel?: () => void } = $props();
   let busy = $state(false), done = $state(false), seal: HTMLElement;
   // what's asked, one short line each with its mark: the rewritten policy, and the volunteers ledger's part ("+vol1"
@@ -72,7 +72,7 @@
       <Button kind="plain" size="m" onclick={() => openLink(`${location.origin}/privacy?lang=${i18n.lang}`)}>{t('login.consentLink')}<ArrowUpRight size={16} /></Button>
     </span>
   </div>
-  <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
+  <!-- a button, not a panel: its own width, centred, the list fading out above it -->
   <div class="foot" style="--i:{count + 4}">
     <Button kind="glass" size="l" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
     {#if oncancel}<Button kind="plain" size="m" onclick={oncancel}>{t('common.cancel')}</Button>{/if}
@@ -91,14 +91,14 @@
   :global(html[data-theme='light']) .blob { opacity: 0.3; }
   @keyframes drift { to { transform: translate(12vw, 8vh) scale(1.15); } }
   .body { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 40px 0 calc(var(--safe-bottom) + 96px); }
-  /* the list runs to the screen's edge under the button: a bottom padding on .gate cut it off in a hard band (owner, Nov 2) */
+  /* the list runs to the screen's edge under the button: a bottom padding on .gate cut it off in a hard band */
   .body::-webkit-scrollbar { display: none; }
   /* centred while it fits, scrolled from the top when it doesn't (a short phone): justify-content would cut the top off */
   .body > :first-child { margin-top: auto; }
   .body > :last-child { margin-bottom: auto; }
   .hero { position: relative; width: 96px; height: 96px; display: grid; place-items: center; margin-bottom: 4px; animation: pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
   .seal { position: relative; width: 96px; height: 96px; border-radius: var(--r-full); display: grid; place-items: center; color: var(--accent-text); }
-  /* a slow turning light behind the seal, its colours the app's blue and violet (the owner liked it here, Nov 1) */
+  /* a slow turning light behind the seal, its colours the app's blue and violet */
   .halo { position: absolute; inset: -34px; border-radius: 50%; filter: blur(18px); opacity: 0.8; pointer-events: none;
     background: conic-gradient(from 0deg, rgba(59, 107, 255, 0.9), rgba(124, 77, 255, 0.85), rgba(53, 208, 255, 0.7), rgba(255, 107, 214, 0.55), rgba(59, 107, 255, 0.9));
     -webkit-mask: radial-gradient(closest-side, transparent 52%, black 60%, transparent 100%); mask: radial-gradient(closest-side, transparent 52%, black 60%, transparent 100%);
@@ -129,7 +129,7 @@
   .lnk { display: flex; }
   .lnk :global(.lbl) { display: inline-flex; align-items: center; gap: 4px; }
 
-  /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
+  /* the button floats over the list, no band of its own behind it: the list scrolls under it */
   .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
   .foot :global(.btn) { min-width: 220px; pointer-events: auto; } /* the app's glass button as it is (ui/Button glass) */
   /* the button slides up from below the screen, never fading: WebKit drops a backdrop-filter under a fading parent,

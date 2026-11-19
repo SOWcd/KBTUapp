@@ -1,8 +1,8 @@
 <script lang="ts">
-  // My invite as a QR (owner, Oct 31) with my photo in the middle (Nov 1); the one link that also adds friends (Nov 2).
-  // It is r_<link code>, never the lanyard's u_<id>_<badge code>: this QR is made to be posted and the badge code checks me in at the door (review, Nov 1).
+  // My invite as a QR with my photo in the middle; the one link that also adds friends.
+  // It is r_<link code>, never the lanyard's u_<id>_<badge code>: this QR is made to be posted and the badge code checks me in at the door.
   // A newcomer who scans my lanyard in person still counts for me (server refer).
-  // Drawn as the back of my lanyard card (owner, Nov 3: the blue card looked weak; ui/CardBack): its art, my name and
+  // Drawn as the back of my lanyard card (the blue card looked weak; ui/CardBack): its art, my name and
   // number, the medallion; only the code is the invite's, with my photo in its middle.
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { say } from '../../lib/state/ui.svelte';

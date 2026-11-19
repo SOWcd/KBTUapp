@@ -20,7 +20,7 @@ export const LONG_TITLE = 48;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** the title without the club's own name around it ("TSS by BCL", "BCL | TSS", "TSS x KBTU"), or null when there's none:
- * the club is on every card, so a name in the title says it twice (owner, Nov 2) */
+ * the club is on every card, so a name in the title says it twice */
 export function titleWithoutClub(title: string, names: string[]): string | null {
   const ns = [...new Set([...names, 'KBTU', '\u041a\u0411\u0422\u0423', '\u049a\u0411\u0422\u0423'].map((n) => n.trim()).filter((n) => n.length >= 2))]
     .sort((a, b) => b.length - a.length).map(esc).join('|');

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Secret Santa's welcome (owner, Nov 18: the bot's announcement "just opened Studio with a Santa row"): over the club's
+  // Secret Santa's welcome (the bot's announcement "just opened Studio with a Santa row"): over the club's
   // Studio, from the bot's sn_<club> and from Studio's row, the one place to start it. How it works in three lines and
   // one Start (santa.start: the game published, the team told by the bot); a game running: its count and the way in.
   import Gift from '@lucide/svelte/icons/gift';

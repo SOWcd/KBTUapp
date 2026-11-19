@@ -32,7 +32,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { nameOf } from '../../lib/short';
 
-  // invite: opened by their invite link (r_<code>, the one link, Nov 2): the landing. A big "Add as a friend" makes
+  // invite: opened by their invite link (r_<code>, the one link): the landing. A big "Add as a friend" makes
   // friends in one tap, no request (sharing the link was their yes); guests see the card too and sign in at the tap
   let { overlay, id, invite }: { overlay: Overlay; id: Id; invite?: { code: string; card: LinkCard } } = $props();
 
@@ -246,7 +246,7 @@
 </Sheet>
 
 <style>
-  /* a sheet's buttons stand apart (owner, Nov 3: "Write" over "Decline / Accept" looked cramped, as if overlapping) */
+  /* a sheet's buttons stand apart ("Write" over "Decline / Accept" looks cramped, as if overlapping) */
   .act { margin: var(--s-5) 0 var(--s-1); display: flex; flex-direction: column; align-items: center; gap: var(--s-3); }
   .act > :global(.btn) { width: 100%; }
   .two { display: flex; gap: var(--s-3); width: 100%; }

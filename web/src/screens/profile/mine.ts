@@ -53,7 +53,7 @@ export function photoItems(): MenuItem[] {
   ];
 }
 
-// ---- the nick: lists and feeds show it instead of my name, my profile shows both (the nick rule, Nov 2) ----
+// ---- the nick: lists and feeds show it instead of my name, my profile shows both (the nick rule) ----
 export async function editNick() {
   const now = session.me?.nick ?? '';
   const v = await sheets.askText({ title: t('look.nick'), placeholder: t('look.nickPh'), max: 24, line: true, value: now, ok: t('common.save'), cancel: t('common.cancel') });

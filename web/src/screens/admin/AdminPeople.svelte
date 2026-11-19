@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Admin → Team (pushed from the right; review Nov 3): the app's team with their roles, the banned under it with
-  // the reason; a row opens the person (role, awards, ban). The creator adds someone from the search on top (owner, Nov 3:
-  // no invite link, a link forwarded would make anyone staff).
+  // Admin → Team (pushed from the right): the app's team with their roles, the banned under it with
+  // the reason; a row opens the person (role, awards, ban). The creator adds someone from the search on top (no
+  // invite link, a link forwarded would make anyone staff).
   import { staffOnly } from '../../lib/state/staffGate.svelte';
   import { api, type Staff, type StaffRow } from '../../lib/api';
   import { open, say, type Overlay } from '../../lib/state/ui.svelte';
