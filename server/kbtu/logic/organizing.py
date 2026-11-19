@@ -891,7 +891,7 @@ def _reach(con, v: Viewer, eid: int, uid: int) -> tuple[sqlite3.Row, bool, str, 
         raise ApiError("forbidden")
     e = _staff_event(con, v, eid, "events")
     t = core.now()
-    if e["status"] != "published" or end_of(e) + REVEAL_AFTER < t:
+    if e["status"] != "published" or e["hidden_at"] is not None or end_of(e) + REVEAL_AFTER < t:  # hidden by moderation: as the bot's check
         raise ApiError("closed")
     u = one(con, """SELECT u.id, u.tg_username FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.user_id = ?
         AND (r.status = 'going' OR r.status = 'hold' AND r.hold_until >= ?)""", eid, uid, t)
