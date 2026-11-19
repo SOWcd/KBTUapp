@@ -58,6 +58,8 @@
   import Composer from '../../ui/Composer.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { keyboard as kbd } from '../../lib/state/keyboard.svelte';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
@@ -83,8 +85,9 @@
     // after the layout, before the paint: no layout forced inside the tap
     const ro = new ResizeObserver(() => {
       ro.disconnect();
-      const b = o.getBoundingClientRect(), p = (f.offsetParent as HTMLElement).getBoundingClientRect();
-      f.style.cssText = `left:${b.left - p.left}px;top:${b.top - p.top}px;width:${b.width}px;height:${b.height}px;visibility:visible`;
+      // (from the footer's padding edge, inside its top line: counted from the border, the light landed 1 px low)
+      const b = o.getBoundingClientRect(), par = f.offsetParent as HTMLElement, p = par.getBoundingClientRect();
+      f.style.cssText = `left:${b.left - p.left - par.clientLeft}px;top:${b.top - p.top - par.clientTop}px;width:${b.width}px;height:${b.height}px;visibility:visible`;
       const dx = from.x - b.left - b.width / 2, dy = from.y - b.top - b.height / 2;
       // across and up on two curves: an arc, not a ruler's line
       f.animate({ translate: [`${dx}px 0`, '0 0'] }, { duration: 520, easing: 'cubic-bezier(.4, 0, .2, 1)' });
@@ -101,6 +104,24 @@
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? [['as.e1', Backpack], ['as.e2', Navigation], ['as.e3', Users]] as const
     : chat.ctx?.kind === 'club' ? [['as.c1', UserPlus], ['as.c2', Info]] as const
     : [['as.s1', Landmark], ['as.s2', CalendarClock], ['as.s3', CalendarDays], ['as.s4', UtensilsCrossed]] as const);
+  // The opening on trial (owner, Nov 19: "the orb is not in the centre and it should be", as Gemini opens): the light in
+  // the middle with the colonnade in it, one question under it that keeps changing, the starters low over the field.
+  // localStorage kb-asst-home = a | b picks a take; anything else is the opening as it was, until the owner picks.
+  // ponytail: a switch in localStorage, read once; the losing take and the switch go when he has chosen.
+  const home = (() => { try { const v = localStorage.getItem('kb-asst-home'); return v === 'a' || v === 'b' ? v : null; } catch { return null; } })();
+  let qi = $state(0); // the question on show
+  $effect(() => {
+    // power saving, less motion: the first question stays; a hidden tab: it waits
+    if (!home || chat.turns.length || power.lite || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const n = SUGGEST.length, id = setInterval(() => { if (!document.hidden) qi = (qi + 1) % n; }, 3600);
+    return () => clearInterval(id);
+  });
+  const pick = (k: (typeof SUGGEST)[number][0]) => { haptic.tap(); void ask(t(k)); };
+  // The keyboard: Sheet raises the footer over the body and the body stays as it is, so the middle moves itself to the
+  // middle of what is left in view (a transform on the keyboard's timing, no layout), smaller; no room for it: it fades.
+  // Not under a light still flying to its place: it lands first, then goes up
+  const kb = $derived(flying ? 0 : kbd.h);
+  const tight = $derived(kb > 0 && (list?.clientHeight ?? 0) - kb < 190);
   const down = () => setTimeout(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
   $effect(() => { void chat.turns.length; untrack(down); });
 
@@ -198,7 +219,17 @@
 
 <Sheet {overlay} {opener} icon={Sparkles} tall shut title={t('as.title')}>
   <div class="list" class:flown={!!from} bind:this={list}>
-    {#if !chat.turns.length}
+    {#if !chat.turns.length && home}
+      <div class={['mid', home, { up: kb > 0, tight }]} style:--kb="{kb}px">
+        <i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"><span class="mark"><KbtuMark /></span></i>
+        {#if home === 'b'}<h2 class="greeting clamp-2">{chat.ctx ? t('as.about', { title: chat.ctx.title }) : t('as.hello', { name: first ? ', ' + first : '' })}</h2>
+        {:else if chat.ctx}<p class="about ellipsis">{t('as.about', { title: chat.ctx.title })}</p>{/if}
+        <!-- every question in one cell: the tallest holds the height, a change moves nothing -->
+        <button class="rot" onclick={() => pick(SUGGEST[qi][0])}>
+          {#each SUGGEST as [k], i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}</span>{/each}
+        </button>
+      </div>
+    {:else if !chat.turns.length}
       <!-- as in the AI apps: the greeting and the starters sit over the field, where the thumb is; the space above stays calm -->
       <div class="hello">
         <i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"></i>
@@ -266,7 +297,13 @@
   </div>
 
   {#snippet footer()}
-    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"></i>{/if}
+    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true">{#if home}<span class="mark"><KbtuMark /></span>{/if}</i>{/if}
+    {#if home && !chat.turns.length}
+      <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll -->
+      <div class={['eg', home]}>{#each SUGGEST as [k, Icon] (k)}
+        <button onclick={() => pick(k)}>{#if home === 'a'}<Icon size={16} strokeWidth={2} />{/if}<span>{t(k)}</span></button>
+      {/each}</div>
+    {/if}
     <div class="bar">
       <!-- the map, one tap away as when it had the bar's corner: beside the field, there with or without a conversation -->
       <button class="mapb" aria-label={t('as.map')} onclick={openMap}><MapIcon size={20} /></button>
@@ -304,6 +341,40 @@
   @keyframes land { from { opacity: 0; transform: scale(0.6); } }
   .orb.hid { visibility: hidden; }
   .orb.fly { position: absolute; z-index: 1; visibility: hidden; pointer-events: none; }
+
+  /* the opening on trial (kb-asst-home): the light in the middle of the body, the colonnade in it */
+  .list:has(> .mid) { padding: 0; }
+  .mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--s-2) var(--s-1);
+    transition: transform 250ms cubic-bezier(.2, .8, .3, 1), opacity 180ms ease-out; }
+  .flown .mid { --land: 380ms; } /* the words under the light wait until it is over them, not on them */
+  .mid.up { transform: translateY(calc(var(--kb) / -2)) scale(0.8); }
+  .mid.tight { opacity: 0; pointer-events: none; }
+  .mid .orb.big { position: relative; left: auto; bottom: auto; width: 112px; height: 112px; }
+  .mid.b .orb.big { width: 84px; height: 84px; }
+  .mark { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: rgb(255, 255, 255); }
+  .mark :global(svg) { width: 44%; height: auto; }
+  .about { max-width: 100%; margin-top: var(--s-5); font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
+  .mid .greeting { margin-top: var(--s-5); font-size: var(--fs-t1); }
+  .rot { display: grid; max-width: 100%; margin-top: var(--s-6); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text);
+    font: 600 var(--fs-t3)/1.25 var(--font-display); letter-spacing: -0.016em; text-wrap: balance;
+    animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; transition: opacity var(--t-fast); }
+  .about + .rot { margin-top: 2px; }
+  .b .rot { margin-top: 0; color: var(--text-3); font-size: var(--fs-row); }
+  .rot:active { opacity: 0.6; }
+  /* one leaves, then the next comes up: the two are never read through each other */
+  .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(6px); transition: opacity 240ms ease-in, transform 240ms ease-in; }
+  .rot span.on { opacity: 1; transform: none; transition: opacity 420ms var(--ease) 220ms, transform 420ms var(--ease) 220ms; }
+  /* the starters over the field. a: one row to swipe, out to the sheet's edges; b: two by two, the words on two lines */
+  .eg { margin-bottom: var(--s-2); }
+  .eg button { display: flex; align-items: center; gap: 6px; background: var(--fill); color: var(--text); font: 600 var(--fs-sub)/1.25 var(--font-text);
+    transition: transform var(--t-fast); }
+  .eg button:active { transform: scale(0.96); }
+  .eg.a { display: flex; gap: var(--s-2); margin-inline: calc(-1 * var(--gutter)); padding: 4px var(--gutter); overflow-x: auto; scrollbar-width: none; }
+  .eg.a::-webkit-scrollbar { display: none; }
+  .eg.a button { flex: none; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); white-space: nowrap; color: var(--text-2); }
+  .eg.b { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+  .eg.b button { min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); text-align: left; text-wrap: balance; overflow-wrap: anywhere; }
+  .eg.b button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
   .mine { align-self: flex-end; max-width: 86%; margin-top: var(--s-2); padding: 9px 14px; border-radius: var(--r-l); background: var(--accent-soft); transform-origin: 100% 100%; }
   .mine:first-child { margin-top: 0; }
@@ -347,6 +418,7 @@
   :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     .list *, .orb, .orb::before { animation: none !important; }
+    .mid, .rot span { transition: none !important; }
   }
 
   .bar { display: flex; align-items: flex-end; gap: var(--s-2); }
