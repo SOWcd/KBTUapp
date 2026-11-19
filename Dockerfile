@@ -24,6 +24,8 @@ COPY server/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server/kbtu ./kbtu
 COPY --from=web /web/dist /app/web/dist
+# the map's room list: the assistant gives a room's floor only from it (logic/assistant.py MAP_ROOMS)
+COPY web/src/assets/map/uniq-rooms.json /app/web/src/assets/map/uniq-rooms.json
 
 # the database is the only state; it must survive image updates (back it up: SPEC §9)
 VOLUME /var/lib/kbtu
