@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex">
+<title>KBTU App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap" rel="stylesheet">
+<style>
+/* The pitch (Nov 20, 2026), variant F: black, one typeface, one phone that travels between slides.
+   Arrows, space, a tap or a swipe move it; Home/End; f = fullscreen. */
+:root {
+  --bg: #000; --ink: #f5f5f7; --dim: rgba(245, 245, 247, 0.56); --faint: rgba(245, 245, 247, 0.32);
+  --card: #0f0f10; --rim: rgba(255, 255, 255, 0.075); --line: rgba(255, 255, 255, 0.1);
+  --accent: #9fb4ff; /* the app's own blue, on one key number per slide at most */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pad: 7vw; --ph: 78vh;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
+body { font: 400 18px/1.45 Inter, -apple-system, 'SF Pro Display', system-ui, sans-serif; -webkit-font-smoothing: antialiased; cursor: default; user-select: none; }
+
+/* preloader: a counter to 100, then the curtain lifts */
+.loader { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; align-items: flex-end; justify-content: space-between; padding: 6vh var(--pad); transition: transform 1.2s var(--ease) 0.2s; }
+.loader.done { transform: translateY(-100%); }
+.loader .n { font-size: clamp(72px, 13vw, 220px); font-weight: 600; letter-spacing: -0.05em; line-height: 0.82; font-variant-numeric: tabular-nums; }
+.loader .cap { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+.loader i { position: absolute; left: 0; top: 0; height: 1px; width: 100%; background: var(--ink); transform-origin: 0 50%; transform: scaleX(0); }
+
+/* chrome */
+.brand { position: fixed; left: var(--pad); top: 4.5vh; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; z-index: 5; }
+.hud { position: fixed; right: var(--pad); top: 4.5vh; display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; z-index: 5; }
+.segs { display: flex; gap: 5px; }
+.segs b { width: 22px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.16); transition: background 0.8s var(--ease); }
+.segs b.on { background: var(--ink); }
+
+/* slides */
+.slide { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 12vh var(--pad) 8vh; opacity: 0; visibility: hidden; transition: opacity 0.45s ease, visibility 0s 0.45s; }
+.slide.on { opacity: 1; visibility: visible; transition: opacity 0s; }
+.tag { font-size: clamp(12px, 0.95vw, 20px); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 2.6vh; }
+h1, h2 { font-weight: 600; letter-spacing: -0.04em; line-height: 1.04; text-wrap: balance; }
+h1 { font-size: clamp(38px, min(5.4vw, 10vh), 124px); }
+h2 { font-size: clamp(32px, min(4.6vw, 8.4vh), 104px); }
+.lead { font-size: clamp(17px, 1.55vw, 28px); color: var(--dim); max-width: 34em; margin-top: 2.6vh; letter-spacing: -0.01em; text-wrap: balance; }
+
+/* words rise out of a mask; everything else settles in. Leaving resets them unseen, after the fade. */
+.w { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.1em 0.04em 0.14em; margin: -0.1em -0.04em -0.14em; }
+.w > span { display: inline-block; transform: translateY(112%); transition: transform 1.3s var(--ease); transition-delay: calc(var(--i) * 55ms + var(--d, 150ms)); }
+.fade { opacity: 0; transform: translateY(18px); transition: opacity 1.2s var(--ease), transform 1.4s var(--ease); transition-delay: var(--d, 0ms); }
+.on .w > span, .on .fade { transform: none; opacity: 1; }
+.slide:not(.on) .w > span, .slide:not(.on) .fade { transition-duration: 0s; transition-delay: 0.45s; }
+
+/* the phone: one object for the whole talk; each slide gives it a place */
+.phone { position: fixed; left: 50%; top: 50%; z-index: 3; height: var(--ph); width: calc(var(--ph) * 0.474); font-size: calc(var(--ph) / 100); pointer-events: none;
+  transform: translate(-50%, -50%) translate(var(--px, 0), var(--py, 125vh)) scale(var(--ps, 1)); opacity: var(--po, 0);
+  transition: transform 1.7s var(--ease), opacity 0.9s ease; }
+body[data-s="0"] .phone { --px: 0vw; --py: 56vh; --ps: 1.5; --po: 1; }
+body[data-s="2"] .phone { --px: 23vw; --py: 2.5vh; --ps: 1.08; --po: 1; }
+.phone .glow { position: absolute; inset: -22% -60%; background: radial-gradient(closest-side, rgba(86, 118, 255, 0.17), transparent 70%); }
+.body { position: absolute; inset: 0; border-radius: 7.6em; padding: 1.25em; background: linear-gradient(140deg, #47474b, #1a1a1c 22%, #0b0b0c 60%, #2c2c2f);
+  box-shadow: inset 0 0 0 0.1em rgba(255, 255, 255, 0.16), inset 0 0 0 0.62em #060607, 0 5em 12em rgba(0, 0, 0, 0.9); animation: float 9s ease-in-out infinite alternate; }
+.body::before, .body::after { content: ''; position: absolute; width: 0.35em; background: #2a2a2d; border-radius: 0.2em; }
+.body::before { left: -0.3em; top: 22em; height: 6em; box-shadow: 0 8.4em 0 #2a2a2d; }
+.body::after { right: -0.3em; top: 27em; height: 9.5em; }
+@keyframes float { to { transform: translateY(-0.7em); } }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 6.4em; overflow: hidden; background: #000; }
+.screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; opacity: 0; transform: scale(1.035); transition: opacity 1s ease, transform 1.8s var(--ease); }
+.screen img.cur { opacity: 1; transform: none; }
+.screen::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+
+/* 1: hero */
+.hero { justify-content: flex-start; align-items: center; text-align: center; padding-top: 14vh; }
+
+/* 2: the scattered places, then one name */
+.field { position: relative; height: 56vh; margin-top: 5vh; }
+.bit { position: absolute; left: var(--x); top: var(--y); padding: 0.85em 1.25em; border-radius: 1.2em; background: var(--card); box-shadow: inset 0 0 0 1px var(--rim); white-space: nowrap;
+  font-size: clamp(15px, 1.45vw, 26px); font-weight: 500; letter-spacing: -0.01em; color: rgba(245, 245, 247, 0.82); opacity: 0; transform: translateY(22px);
+  transition: opacity 1.2s var(--ease), transform 1.5s var(--ease), left 1.5s cubic-bezier(0.65, 0, 0.2, 1), top 1.5s cubic-bezier(0.65, 0, 0.2, 1), filter 1.2s ease; transition-delay: calc(var(--i) * 90ms + 350ms); }
+.bit > span { display: block; animation: drift 7s ease-in-out calc(var(--i) * -1.3s) infinite alternate; }
+@keyframes drift { from { transform: translateY(5px); } to { transform: translateY(-5px); } }
+.on .bit { opacity: 1; transform: none; }
+.on .field.pull .bit { left: 50%; top: 46%; opacity: 0; transform: translate(-50%, -50%) scale(0.7); filter: blur(10px); transition-delay: calc(var(--i) * 45ms); }
+.slide:not(.on) .bit { transition-duration: 0s; transition-delay: 0.45s; }
+.one { position: absolute; left: 0; right: 0; top: 46%; transform: translateY(-50%); text-align: center; }
+.one .name { font-size: clamp(44px, min(7.4vw, 14vh), 170px); font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+.one .w > span { transform: translateY(112%); }
+.on .field.pull .one .w > span { transform: none; transition-delay: calc(var(--i) * 90ms + 900ms); }
+.on .field:not(.pull) .one .w > span { transform: translateY(112%); transition-duration: 0s; }
+
+/* 3: what it does, a grouped list beside the phone */
+.what { max-width: 46vw; }
+.list { position: relative; list-style: none; margin-top: 4.5vh; padding: 0.55em; border-radius: 1.5em; background: var(--card); box-shadow: inset 0 0 0 1px var(--rim); font-size: clamp(15px, 1.55vw, 30px); max-width: 29em; }
+.list li { position: relative; display: flex; gap: 1.1em; align-items: baseline; padding: 0.82em 1em; color: var(--faint); letter-spacing: -0.012em; transition: color 0.9s var(--ease); }
+.list li + li::before { content: ''; position: absolute; left: 3.4em; right: 1em; top: 0; height: 1px; background: rgba(255, 255, 255, 0.055); }
+.list li b { font-weight: 500; font-size: 0.72em; font-variant-numeric: tabular-nums; min-width: 1.9em; color: var(--faint); }
+.list li.act { color: var(--ink); }
+.hl { position: absolute; left: 0.55em; right: 0.55em; top: 0; height: 0; border-radius: 1em; background: rgba(255, 255, 255, 0.07); overflow: hidden; opacity: 0; transition: transform 1s var(--ease), height 1s var(--ease), opacity 0.8s ease; }
+.hl i { position: absolute; left: 0; bottom: 0; height: 1.5px; width: 100%; background: rgba(255, 255, 255, 0.5); transform-origin: 0 50%; transform: scaleX(0); }
+.hl.run i { animation: fill var(--dur, 3200ms) linear forwards; }
+@keyframes fill { to { transform: scaleX(1); } }
+
+/* 4, 5: numbers; a tiny caps label, a big figure */
+.cap { font-size: clamp(11px, 0.86vw, 18px); font-weight: 500; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dim); }
+.num { font-weight: 600; letter-spacing: -0.045em; line-height: 1; font-variant-numeric: tabular-nums; }
+.lead-stat { margin-top: 5.5vh; }
+.lead-stat .num { font-size: clamp(88px, min(16.5vw, 30vh), 380px); letter-spacing: -0.06em; margin: 0.06em 0 0 -0.045em; color: var(--accent); }
+.row { display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); margin-top: 5.5vh; border-top: 1px solid var(--line); }
+.row > div { padding: 2.6vh 1.6vw 0 0; display: flex; flex-direction: column; justify-content: space-between; }
+.row > div + div { padding-left: 1.6vw; border-left: 1px solid var(--line); }
+.row .num { font-size: clamp(30px, min(3.7vw, 7vh), 84px); margin-top: 0.3em; }
+.eq { font-size: clamp(42px, min(9.6vw, 19vh), 220px); font-weight: 600; letter-spacing: -0.05em; line-height: 1; white-space: nowrap; }
+.eq .op { color: var(--faint); font-weight: 400; margin: 0 0.18em; }
+
+/* 6: the ask */
+.end { display: grid; grid-template-columns: 1fr auto; gap: 6vw; align-items: center; }
+.links { margin-top: 5.5vh; border-radius: 1.5em; background: var(--card); box-shadow: inset 0 0 0 1px var(--rim); font-size: clamp(15px, 1.38vw, 25px); max-width: 27em; padding: 0.3em 1.5em; }
+.links div { display: flex; justify-content: space-between; gap: 1.5em; padding: 0.95em 0; }
+.links div + div { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.links span { color: var(--dim); }
+.links b { font-weight: 500; }
+.qr { width: min(38vh, 26vw); padding: 5.5%; background: #fff; border-radius: 12%; }
+.qr svg { display: block; width: 100%; height: auto; }
+
+@media (max-width: 760px) {
+  :root { --pad: 18px; }
+  .slide { padding: 13vh var(--pad) 6vh; }
+  .slide.top { justify-content: flex-start; }
+  .lead-stat .num { font-size: 27vw; }
+  .hud { gap: 10px; } .segs b { width: 14px; }
+  body[data-s="0"] .phone { --py: 49vh; --ps: 1; }
+  body[data-s="2"] .phone { --px: 0vw; --py: 31vh; --ps: 1; }
+  .hero { padding-top: 13vh; }
+  .field { height: 58vh; margin-top: 4vh; }
+  .bit { left: var(--mx); top: calc(var(--i) * 12.2%); padding: 0.7em 1em; }
+  .on .field.pull .bit { top: 44%; }
+  .one { top: 44%; }
+  .what { max-width: none; }
+  .list { margin-top: 2.4vh; }
+  .list li:not(.act) { display: none; }
+  .list li.act { animation: rowin 0.9s var(--ease); }
+  @keyframes rowin { from { opacity: 0; transform: translateY(8px); } }
+  .list li::before { display: none; }
+  .hl { opacity: 0 !important; }
+  .row { grid-template-columns: 1fr 1fr; border-top: 0; margin-top: 3vh; }
+  .row > div, .row > div + div { padding: 2vh 0 2vh; border-left: 0; border-top: 1px solid var(--line); }
+  .lead-stat { margin-top: 4vh; }
+  .end { grid-template-columns: 1fr; gap: 5vh; }
+  .links { margin-top: 3.5vh; }
+  .qr { width: 46vw; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; } }
+</style>
+</head>
+<body data-s="-1">
+
+<div class="loader" id="loader"><i id="pbar"></i><div class="cap">KBTU App</div><div class="n" id="pct">0</div></div>
+
+<div class="brand">KBTU App</div>
+<div class="hud"><span id="count">1 / 6</span><div class="segs" id="segs"></div></div>
+
+<section class="slide hero top">
+  <div class="tag fade">Telegram Mini App · КБТУ</div>
+  <h1 class="split-words">Весь кампус в&nbsp;одном приложении</h1>
+  <p class="lead fade" style="--d: 650ms">Мероприятия и билеты, клубы, расписание, карта, друзья. Сделано студентом для студентов.</p>
+</section>
+
+<section class="slide">
+  <div class="tag fade">Проблема</div>
+  <h2 class="split-words">Студенческая жизнь разбросана</h2>
+  <div class="field" id="field">
+    <div class="bit" style="--i:0;--x:1%;--y:6%;--mx:0%"><span>40+ чатов клубов</span></div>
+    <div class="bit" style="--i:1;--x:35%;--y:0%;--mx:34%"><span>расписание в портале</span></div>
+    <div class="bit" style="--i:2;--x:71%;--y:12%;--mx:8%"><span>афиши в Instagram</span></div>
+    <div class="bit" style="--i:3;--x:13%;--y:42%;--mx:26%"><span>Google-формы на запись</span></div>
+    <div class="bit" style="--i:4;--x:49%;--y:35%;--mx:2%"><span>чеки Kaspi в переписке</span></div>
+    <div class="bit" style="--i:5;--x:78%;--y:56%;--mx:44%"><span>списки на входе</span></div>
+    <div class="bit" style="--i:6;--x:3%;--y:80%;--mx:12%"><span>где аудитория 405?</span></div>
+    <div class="bit" style="--i:7;--x:41%;--y:74%;--mx:30%"><span>кто из друзей идёт?</span></div>
+    <div class="one"><div class="name split-words">KBTU App</div></div>
+  </div>
+</section>
+
+<section class="slide top">
+  <div class="what">
+    <div class="tag fade">Решение</div>
+    <h2 class="split-words">Одно место для&nbsp;всего</h2>
+    <ul class="list fade" id="list" style="--d: 450ms">
+      <div class="hl" id="hl"><i></i></div>
+      <li data-shot="afisha"><b>01</b>Афиша и запись в один тап</li>
+      <li data-shot="event"><b>02</b>Платные билеты по чеку Kaspi, проверка автоматически</li>
+      <li data-shot="ticket"><b>03</b>Вход по QR на большом экране</li>
+      <li data-shot="clubs"><b>04</b>Клубы и их студия: события, команда, набор</li>
+      <li data-shot="map"><b>05</b>Расписание, карта кампуса, свободные аудитории</li>
+      <li data-shot="profile"><b>06</b>Друзья, награды, ИИ-ассистент</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="tag fade">Результат за 6 недель</div>
+  <h2 class="split-words">Студенты уже здесь</h2>
+  <div class="lead-stat fade" style="--d: 350ms"><div class="cap">Пользователей · с 5 октября 2026</div><div class="num" data-to="4172">0</div></div>
+  <div class="row">
+    <div class="fade" style="--d: 600ms"><div class="cap">Подтверждённых студентов</div><div class="num" data-to="2886">0</div></div>
+    <div class="fade" style="--d: 690ms"><div class="cap">Заходят каждую неделю</div><div class="num" data-to="1586">0</div></div>
+    <div class="fade" style="--d: 780ms"><div class="cap">Клубов</div><div class="num" data-to="117">0</div></div>
+    <div class="fade" style="--d: 870ms"><div class="cap">Записей на мероприятия</div><div class="num" data-to="959">0</div></div>
+    <div class="fade" style="--d: 960ms"><div class="cap">Пар друзей</div><div class="num" data-to="8806">0</div></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="tag fade">Как это сделано</div>
+  <div class="eq"><span class="split-words">1 студент</span><span class="op fade" style="--d: 550ms">+</span><span class="split-words" style="--d: 800ms">ИИ</span></div>
+  <div class="row" style="--n: 4">
+    <div class="fade" style="--d: 1000ms"><div class="cap">Обновлений кода</div><div class="num" data-to="1650">0</div></div>
+    <div class="fade" style="--d: 1090ms"><div class="cap">Автотестов</div><div class="num" data-to="1200">0</div></div>
+    <div class="fade" style="--d: 1180ms"><div class="cap">Языка: русский, казахский, английский</div><div class="num">3</div></div>
+    <div class="fade" style="--d: 1270ms"><div class="cap">Открытый код на GitHub</div><div class="num">Open</div></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="end">
+    <div>
+      <div class="tag fade">Дальше</div>
+      <h1 class="split-words">Следующий&nbsp;— ваш университет</h1>
+      <div class="links fade" style="--d: 800ms"><div><span>Приложение</span><b>t.me/KBTUappBot</b></div><div><span>Связь</span><b>t.me/Sowers</b></div></div>
+    </div>
+    <div class="qr fade" style="--d: 600ms" id="qr"></div>
+  </div>
+</section>
+
+<div class="phone" aria-hidden="true"><div class="glow"></div><div class="body"><div class="screen" id="screen">
+  <img class="cur" data-shot="afisha" src="pitch/afisha.webp" alt=""><img data-shot="event" src="pitch/event.webp" alt=""><img data-shot="ticket" src="pitch/ticket.webp" alt=""><img data-shot="clubs" src="pitch/clubs.webp" alt=""><img data-shot="map" src="pitch/map.webp" alt=""><img data-shot="profile" src="pitch/profile.webp" alt="">
+</div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const slides = [...document.querySelectorAll('.slide')];
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PRODUCT = 2, SHOT_MS = 3200;
+let cur = -1, pullTimer = 0, shotTimer = 0;
+
+$('segs').innerHTML = slides.map(() => '<b></b>').join('');
+const segs = [...$('segs').children];
+
+// split headings into masked words
+document.querySelectorAll('.split-words').forEach((el) => {
+  let i = 0;
+  const walk = (node) => [...node.childNodes].forEach((n) => {
+    if (n.nodeType !== 3) return walk(n);
+    const f = document.createDocumentFragment();
+    // a no-break space keeps its two words on one line: they share a nowrap box
+    n.textContent.split(/( +|\n+)/).forEach((t) => {
+      if (!t) return;
+      if (/^[ \n]+$/.test(t)) return f.append(' ');
+      const box = document.createElement('span'); box.style.whiteSpace = 'nowrap';
+      t.split(' ').forEach((part, k) => {
+        if (k) box.append(' ');
+        const w = document.createElement('span'); w.className = 'w';
+        const s = document.createElement('span'); s.textContent = part; s.style.setProperty('--i', i++);
+        w.append(s); box.append(w);
+      });
+      f.append(box);
+    });
+    n.replaceWith(f);
+  });
+  walk(el);
+});
+
+function countUp(root) {
+  root.querySelectorAll('[data-to]').forEach((el) => {
+    const to = +el.dataset.to, fmt = (v) => Math.round(v).toLocaleString('ru-RU');
+    if (calm) { el.textContent = fmt(to); return; }
+    el.textContent = '0';
+    const t0 = performance.now() + 500, dur = 2200, on = cur;
+    const step = (t) => {
+      if (on !== cur) return;
+      const k = Math.min(1, Math.max(0, (t - t0) / dur));
+      el.textContent = fmt(to * (1 - Math.pow(1 - k, 5)));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+// the phone's screens follow the list: one feature, one screen
+const imgs = [...document.querySelectorAll('#screen img')];
+const feats = [...document.querySelectorAll('#list li')];
+const hl = $('hl');
+const has = (name) => { const im = imgs.find((x) => x.dataset.shot === name); return im && !(im.complete && !im.naturalWidth); };
+function show(name) { imgs.forEach((im) => im.classList.toggle('cur', im.dataset.shot === name)); }
+function feature(i) {
+  feats.forEach((li, k) => li.classList.toggle('act', k === i));
+  const li = feats[i];
+  show(li.dataset.shot);
+  hl.style.opacity = 1; hl.style.height = li.offsetHeight + 'px'; hl.style.transform = `translateY(${li.offsetTop}px)`;
+  hl.style.setProperty('--dur', SHOT_MS + 'ms');
+  hl.classList.remove('run'); void hl.offsetWidth; hl.classList.add('run');
+}
+function cycle(on) {
+  clearInterval(shotTimer);
+  if (!on) { show('afisha'); return; }
+  let i = 0;
+  feature(0);
+  shotTimer = setInterval(() => {
+    for (let k = 0; k < feats.length; k++) { i = (i + 1) % feats.length; if (has(feats[i].dataset.shot)) break; }
+    feature(i);
+  }, SHOT_MS);
+}
+
+function go(n) {
+  n = Math.max(0, Math.min(slides.length - 1, n));
+  if (n === cur) return;
+  if (cur >= 0) slides[cur].classList.remove('on');
+  cur = n;
+  const s = slides[cur];
+  void s.offsetWidth; // restart the entrance
+  s.classList.add('on');
+  document.body.dataset.s = cur;
+  $('count').textContent = cur + 1 + ' / ' + slides.length;
+  segs.forEach((b, i) => b.classList.toggle('on', i <= cur));
+  countUp(s);
+  clearTimeout(pullTimer);
+  const field = $('field');
+  field.classList.remove('pull');
+  if (s.contains(field)) pullTimer = setTimeout(() => field.classList.add('pull'), 3600);
+  cycle(cur === PRODUCT);
+}
+
+addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  if (e.key === 'Home') go(0);
+  if (e.key === 'End') go(slides.length - 1);
+  if (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+});
+let tx = 0, swiped = false;
+addEventListener('touchstart', (e) => { tx = e.touches[0].clientX; swiped = false; }, { passive: true });
+addEventListener('touchend', (e) => { const d = e.changedTouches[0].clientX - tx; if (Math.abs(d) > 40) { swiped = true; go(cur + (d < 0 ? 1 : -1)); } }, { passive: true });
+addEventListener('click', (e) => { if (swiped) { swiped = false; return; } if (cur >= 0) go(cur + (e.clientX > innerWidth / 3 ? 1 : -1)); });
+addEventListener('resize', () => { if (cur === PRODUCT) cycle(true); });
+
+// the QR to the bot
+try {
+  const q = qrcode(0, 'M'); q.addData('https://t.me/KBTUappBot'); q.make();
+  $('qr').innerHTML = q.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
+} catch { $('qr').remove(); }
+
+// preloader: count to 100 while the fonts come, then lift
+(function load() {
+  const pct = $('pct'), bar = $('pbar'), t0 = performance.now(), dur = calm ? 1 : 1500;
+  let fonts = false;
+  document.fonts.ready.then(() => { fonts = true; });
+  setTimeout(() => { fonts = true; }, 2500); // no network at the venue: go on with the system font
+  const tick = (t) => {
+    let k = Math.min(1, (t - t0) / dur);
+    if (!fonts && k > 0.9) k = 0.9;
+    const e = 1 - Math.pow(1 - k, 3);
+    pct.textContent = Math.round(100 * e); bar.style.transform = `scaleX(${e})`;
+    if (k < 1 || !fonts) return requestAnimationFrame(tick);
+    $('loader').classList.add('done');
+    setTimeout(() => go(0), 450);
+  };
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
