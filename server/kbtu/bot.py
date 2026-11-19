@@ -448,6 +448,15 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return None
         return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when_span(s["starts_at"], s["ends"], lang),
                                    place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
+    if kind == "round_call":  # ivc:<application>:<slot>:<start>, casting.call_slot: "come over" while the window is on; quiet once decided, came or over
+        a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
+            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+        s = a and a["rstatus"] != "done" and one(con, f"""SELECT s.*, {casting._ENDS} AS ends, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
+            FROM round_slots s WHERE s.id = ? AND s.round_id = ? AND s.starts_at = ?""", int(ref[2]), a["round_id"], int(ref[3]))
+        if not casting.call_holds(a, s):
+            return None
+        return (*texts.bot_message(lang, kind, org=a["name"], when=texts.when_span(s["starts_at"], s["ends"], lang),
+                                   place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
     if kind in ("round_yes", "round_no"):  # ry: / rn:<application>, the results, to each applicant
         a = one(con, """SELECT a.*, r.org_id, r.decline_text, r.group_link, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
             JOIN orgs o ON o.id = r.org_id LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))

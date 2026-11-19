@@ -419,6 +419,7 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
     with tx(con):  # its waiting place notices go with it: SQLite may hand the id to the next slot made
         con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_place' AND sent_at IS NULL AND ref LIKE ?", (f"ivp:%:{sid}:%",))
+        con.execute("DELETE FROM bot_outbox WHERE kind = 'round_call' AND sent_at IS NULL AND ref LIKE ?", (f"ivc:%:{sid}:%",))
     return slots(con, v, s["round_id"])
 
 
@@ -499,6 +500,44 @@ def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
         return {"slots": slots(con, v, rid), "notice": "limit" if limited else "sent" if told or covered else "none"}
 
 
+CALL_AHEAD = 2 * 3600  # "come over" from two hours before a window until it ends
+# whom a "come over" reaches: shortlisted, invited, no result yet, not marked as came; booked on any window or none
+_CALLED = "stage = 'next' AND sent_at IS NULL AND invited_at IS NOT NULL AND came IS NOT 1"
+
+
+def _callable(s) -> bool:
+    return s["starts_at"] - CALL_AHEAD <= now() < s["starts_at"] + _mins(s) * 60
+
+
+def call_ref(a_id: int, s) -> str:
+    """ivc:<application>:<slot>:<start>: the start too, so a new slot that gets a dropped one's id is a new window."""
+    return f"ivc:{a_id}:{s['id']}:{s['starts_at']}"
+
+
+def call_holds(a, s) -> bool:
+    """The bot's check when it sends: still someone to call, the window not over."""
+    return bool(s and a["stage"] == "next" and not a["sent_at"] and a["invited_at"] and a["came"] != 1 and _callable(s))
+
+
+def call_slot(con, v: Viewer, sid: int) -> dict:
+    """The team is at the window now (a club lead, Nov 19: "I'm here, come over"): every shortlisted without a result
+    hears it from the bot once per window, a fixed template (the club, the window, its place). told: how many now."""
+    with tx(con):
+        s = one(con, """SELECT s.*, r.org_id, r.status AS rstatus, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
+            FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?""", sid)
+        if not s:
+            raise ApiError("not_found")
+        _may(con, v, s["org_id"], "casting")
+        if s["rstatus"] == "done" or not _callable(s):
+            raise ApiError("closed")
+        told = 0
+        for a in rows(con, f"SELECT id, user_id FROM round_apps WHERE round_id = ? AND {_CALLED}", s["round_id"]):
+            told += con.execute("INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'round_call', ?, ?)",
+                                (a["user_id"], call_ref(a["id"], s), now())).rowcount
+        log_action(con, v.id, "round_call", f"round:{s['round_id']}", json.dumps({"slot": sid, "told": told}))
+        return {"told": told, "slots": slots(con, v, s["round_id"])}
+
+
 def slots(con, v: Viewer, rid: int) -> list[dict]:
     """The round's slots in time order: the team sees who booked each (and whether they came); an invited applicant the
     coming ones with room left, and their own."""
@@ -511,6 +550,14 @@ def slots(con, v: Viewer, rid: int) -> list[dict]:
     for a in rows(con, f"""SELECT a.id AS app, a.slot_id, a.came, {PERSON_COLS} FROM round_apps a JOIN users u ON u.id = a.user_id
             JOIN students s ON s.user_id = u.id WHERE a.round_id = ? AND a.slot_id IS NOT NULL AND a.stage != 'withdrawn'""", rid):
         booked.setdefault(a["slot_id"], []).append(a)
+    calls: dict[tuple, set] = {}  # a window's "come over": whom it reached; read once for all rows
+    reach: set = set()
+    if team:
+        for ref, aid in rows(con, "SELECT b.ref, a.id FROM bot_outbox b JOIN round_apps a ON a.user_id = b.user_id AND a.round_id = ? WHERE b.kind = 'round_call'", rid):
+            app, sid, at = (int(x) for x in ref.split(":")[1:4])
+            if app == aid:  # this round's application, not the same person's in another round
+                calls.setdefault((sid, at), set()).add(app)
+        reach = {a[0] for a in rows(con, f"SELECT id FROM round_apps WHERE round_id = ? AND {_CALLED}", rid)}
     out = []
     for s in rows(con, "SELECT s.*, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide FROM round_slots s WHERE s.round_id = ? ORDER BY s.starts_at", rid):
         people = booked.get(s["id"], [])
@@ -519,6 +566,9 @@ def slots(con, v: Viewer, rid: int) -> list[dict]:
         if team:
             x["people"] = [{"appId": a["app"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(),
                             "showed": None if a["came"] is None else bool(a["came"])} for a in people]
+            if _callable(s) and r["status"] != "done":
+                told = calls.get((s["id"], s["starts_at"]), set())
+                x["call"] = {"told": len(told), "left": len(reach - told)}
         elif s["id"] == mine["slot_id"]:
             x["mine"] = True
         elif x["left"] <= 0 or s["starts_at"] <= now():

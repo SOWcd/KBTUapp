@@ -180,6 +180,17 @@
       say(t(code === 'bad_input' ? 'cast.placeBad' : code === 'rate_limited' ? 'cast.placeMany' : 'common.error'), 'pleading_face_3d');
     } finally { saving = false; }
   }
+  // at the venue: everyone shortlisted without a result hears "come over" to this window from the bot, once each.
+  // Optimistic: the button says how many at once and goes dim; a failure puts it back
+  async function callSlot(s: RoundSlot) {
+    const c = s.call;
+    if (!c?.left || !(await sheets.ask({ title: t('cast.callAsk'), text: t('cast.callText', { n: c.left }), ok: t('cast.call'), cancel: t('common.cancel') }))) return;
+    s.call = { told: c.told + c.left, left: 0 };
+    try {
+      const res = await api.callSlot(s.id);
+      slots = res.slots; haptic.ok(); say(t('cast.callDone', { n: res.told }), 'party_popper_3d');
+    } catch { s.call = c; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function inviteAll() {
     if (!r) return;
     try {
@@ -313,6 +324,12 @@
                 {#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}
               </span>{/snippet}
             </Row>
+            {#if s.call && (s.call.left || s.call.told)}
+              <div class="stack edit">
+                <Button kind="secondary" size="m" full disabled={!s.call.left} onclick={() => callSlot(s)}>
+                  {s.call.left ? t('cast.callGo', { n: s.call.left }) : t('cast.callDone', { n: s.call.told })}</Button>
+              </div>
+            {/if}
             {#if placing === s.id}
               <div class="stack edit" transition:fold>
                 <Field label={t('memo.where')} bind:value={placeDraft} maxlength={120} />
