@@ -603,6 +603,7 @@ const kk: Dict = {
   'cast.ivBooked2': "Бұл уақытқа біреу жазылып қойған",
   'cast.callGo': "Сұхбатқа шақыру · {n}",
   'cast.callDone': "Шақырылды: {n}",
+  'cast.callSoon': "Сұхбатқа шақыру · {time} бастап",
   'cast.callQueued': "Бот оларға жазып жатыр: {n}",
   'cast.callSending': "Бот жіберіп жатыр…",
   'cast.callAsk': "Сұхбатқа шақырамыз ба?",

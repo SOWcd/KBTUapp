@@ -603,6 +603,7 @@ const en: Dict = {
   'cast.ivBooked2': "Someone booked this time",
   'cast.callGo': "Call to the interview · {n}",
   'cast.callDone': "Called: {n}",
+  'cast.callSoon': "Call to the interview · from {time}",
   'cast.callQueued': "The bot is writing to them: {n}",
   'cast.callSending': "The bot is sending…",
   'cast.callAsk': "Call them to the interview?",

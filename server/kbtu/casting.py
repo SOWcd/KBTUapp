@@ -570,10 +570,13 @@ def slots(con, v: Viewer, rid: int) -> list[dict]:
         if team:
             x["people"] = [{"appId": a["app"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(),
                             "showed": None if a["came"] is None else bool(a["came"])} for a in people]
-            if _callable(s) and r["status"] != "done":
+            # a coming window shows the button dim with its opening time, so the team knows it's there
+            if now() < s["starts_at"] + _mins(s) * 60 and r["status"] != "done":
                 went = calls.get((s["id"], s["starts_at"]), {})
                 x["call"] = {"told": sum(w == "told" for w in went.values()), "waiting": sum(w == "waiting" for w in went.values()),
                              "tried": len(went), "left": len(reach - went.keys())}
+                if not _callable(s):
+                    x["call"]["opensAt"] = s["starts_at"] - CALL_AHEAD
         elif s["id"] == mine["slot_id"]:
             x["mine"] = True
         elif x["left"] <= 0 or s["starts_at"] <= now():

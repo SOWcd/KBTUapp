@@ -603,6 +603,7 @@ const ru = {
   'cast.ivBooked2': "На это время уже записались",
   'cast.callGo': "Позвать на собеседование · {n}",
   'cast.callDone': "Позвали: {n}",
+  'cast.callSoon': "Позвать на собеседование · с {time}",
   'cast.callQueued': "Бот пишет им: {n}",
   'cast.callSending': "Бот отправляет…",
   'cast.callAsk': "Позвать на собеседование?",
