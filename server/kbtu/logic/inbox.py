@@ -1,6 +1,6 @@
 """Admin → Inbox (review Nov 3): everything that waits for the app's staff in one typed list, one request, filtered by
 role (a moderator never gets club applications or roster claims; the admin also gets the map's open flaws as a count); its count is the Admin shield's
-badge. And "Done": what the staff decided lately, who and when, with the Undo where there is one."""
+badge, real decisions only: a channel's draft (autoev) waits in the club's own Studio, so it never lights the badge. And "Done": what the staff decided lately, who and when, with the Undo where there is one."""
 from __future__ import annotations
 
 import json
@@ -78,8 +78,7 @@ def count(con, v: Viewer) -> int:
         from .. import roster  # it imports kbtu.logic itself
         n += one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0]
         n += one(con, "SELECT COUNT(*) FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0")[0]
-        n += autoev.waiting(con)
-        n += len(roster.requests(con, v))  # the map's flaws aren't counted: a quiet row at Admin's bottom (owner, Nov 7)
+        n += len(roster.requests(con, v))  # the map's flaws and channel drafts aren't counted: quiet rows, nobody's decision (owner)
     return n
 
 

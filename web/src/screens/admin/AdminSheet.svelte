@@ -2,7 +2,7 @@
   // The Admin sheet (owner, Nov 17: "too many tabs and buttons, several doing the same; the search line is the best
   // thing there: I type an organization and go"). Everything starts from the search on top: organizations first, then
   // people, events (a tap runs one as its organizers do in Studio: EventManage, staff) and awards. Before a letter is
-  // typed: what waits (the queue as one row with its count), the organizations opened last, the
+  // typed: what waits (its first cards inline, AdminInbox limit), the organizations opened last, the
   // admins' numbers, then the few places that are lists of their own. "An event for a club" and "A club's Studio" are
   // no longer places: they are on the organization's page (AdminOrg), where the search leads.
   // A moderator has no search: his sheet is the queue itself and his two places.
@@ -16,7 +16,6 @@
   import Users from '@lucide/svelte/icons/users';
   import Bell from '@lucide/svelte/icons/bell';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
-  import Inbox from '@lucide/svelte/icons/inbox';
   import { untrack, type Component } from 'svelte';
   import { api, staffEvents, type AdminOrg, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
   import { hit } from '../../lib/clubs';
@@ -150,7 +149,7 @@
   <!-- hidden, not gone, while a search is typed: a moderator's queue keeps its decided lines and their Undo -->
   <div class="page stagger" hidden={!!s}>
     {#if admin}
-      <Group>{@render place(Inbox, t('adm.queue'), () => open(AdminQueue, {}), data.inbox?.items.length ?? 0)}</Group>
+      <AdminInbox limit={3} more={() => open(AdminQueue, {})} />
       {#if recent.length}
         <Group caption={t('adm.recent')}>{#each recent as o (o.id)}{@render orgRow(o)}{/each}</Group>
       {/if}

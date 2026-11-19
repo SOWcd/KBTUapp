@@ -1,5 +1,6 @@
 <script lang="ts" module>
   let doneOpen = $state(false); // the Done list stays as he left it, opening to opening
+  let draftsOpen = $state(false); // the channels' drafts too
 </script>
 
 <script lang="ts">
@@ -41,9 +42,12 @@
   import ForumWho, { whyLine } from './ForumWho.svelte';
   import ForumPics from './ForumPics.svelte';
 
+  // limit: the Admin sheet's own top (owner, Nov 19: open Admin and decide): the first few cards, "N more" opens the
+  // whole queue (more); nothing waiting shows nothing there
+  let { limit = 0, more: rest }: { limit?: number; more?: () => void } = $props();
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
-  $effect(() => { void loadInbox(true); }); // fresh on every opening; what the app loaded shows meanwhile
+  $effect(() => { if (!limit) void loadInbox(true); }); // fresh on every opening; what the app loaded shows meanwhile
 
   // the list as shown: the server's, with the cards decided here kept in their place as slim lines (till Admin closes)
   let handled = $state<Record<string, { text: string; target?: string; it: InboxItem; at: number }>>({});
@@ -52,7 +56,12 @@
     for (const h of Object.values(handled).sort((a, b) => a.at - b.at)) out.splice(Math.min(h.at, out.length), 0, h.it);
     return out;
   });
-  const waiting = $derived(list.filter((x) => !handled[x.key]).length);
+  // a channel's draft is nobody's decision (it waits in its club's Studio): a quiet fold below, never the queue or its badge
+  const queue = $derived(list.filter((x) => x.kind !== 'autoev'));
+  const drafts = $derived(list.filter((x) => x.kind === 'autoev'));
+  const waiting = $derived(queue.filter((x) => !handled[x.key]).length);
+  // the cards shown: the decided lines in place, and up to limit still waiting
+  const shown = $derived.by(() => { let n = 0; return limit ? queue.filter((x) => handled[x.key] || n++ < limit) : queue; });
   const done = $derived(data.inbox?.done ?? []);
   // a decision's own Done row (by its audit target), once the reload brings it: its Undo
   const undoOf = (target?: string) => (target ? done.find((d) => d.target === target && d.mine && d.undo) : undefined);
@@ -177,160 +186,172 @@
   <div class="btns"><Button kind="gray" size="m" onclick={onother}>{other}</Button><Button kind="filled" size="m" full onclick={onmain}>{main}</Button></div>
 {/snippet}
 
-{#if waiting || Object.keys(handled).length}
+{#snippet card(it: InboxItem)}
+  {@const h = handled[it.key]}
+  {#if h}
+    {@const u = undoOf(h.target)}
+    <div class="slim" in:fold>
+      <Group>
+        {#if u}
+          <Row dense title={h.text} subtitle={what(it) || undefined}>
+            {#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}
+            {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(u)}>{t('adm.undo')}</Button>{/snippet}
+          </Row>
+        {:else}
+          <Row dense title={h.text} subtitle={what(it) || undefined}>{#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}</Row>
+        {/if}
+      </Group>
+    </div>
+  {:else if it.kind === 'report'}
+    {@const r = it.data}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, [], r.target === 'tgc' ? (e) => tgcMenu(e, it, r) : undefined)}
+      <button class="body" onclick={() => look(r)}>
+        {#if r.target === 'photo'}<img class="ph" src={r.text} alt="" />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
+        <i>{r.target === 'tgc'
+          ? [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', whoReported(r), t('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
+          : `${reasons(r)}${r.count > 1 ? ' · ' + tn('adm.reports', r.count) : ''}`}</i>
+      </button>
+      <ForumPics photos={r.photos} />
+      {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
+      {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
+      {:else if r.target === 'photo' && data.galleryPost}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
+      {:else}{@render two(t('adm.takeDown'), () => resolve(it, r, true), t('adm.keep'), () => resolve(it, r, false))}{/if}
+    </div>
+  {:else if it.kind === 'capp'}
+    {@const a = it.data}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, more(it))}
+      <button class="who" aria-expanded={opened === a.id} onclick={() => { haptic.select(); opened = opened === a.id ? null : a.id; }}>
+        <OrgLogo org={{ id: 0, slug: '', name: a.name, short: a.short, emoji: a.emoji, cover: a.cover, kind: 'club', official: false }} size={44} />
+        <span class="tx"><b>{a.name}</b><i>{a.applicant ? withNick(a.applicant.fullName, a.applicant.person) : '—'}{a.applicant?.course ? ' · ' + t('person.course', { n: a.applicant.course }) : ''}{a.applicant?.school ? ' · ' + schoolShort(a.applicant.school) : ''}</i></span>
+        <span class="turn"><ChevronDown size={18} /></span>
+      </button>
+      {#if opened === a.id}
+        <div class="cb" transition:fold>
+          <p class="selectable">{a.description}</p>
+          {#if a.why}<p class="selectable"><b>{t('adm.cappWhy')}</b> {a.why}</p>{/if}
+          {#each a.links as l (l)}<Button kind="plain" size="s" onclick={() => openLink(l)}>{l.replace('https://', '')}</Button>{/each}
+        </div>
+      {/if}
+      {#if refusing === it.key}
+        <div class="cb" transition:fold>
+          <Field label={t('adm.cappReason')} bind:value={why} multiline rows={2} maxlength={300} />
+          <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
+            <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
+              onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.capp_no'), `capp:${a.id}`, () => api.decideClubApplication(a.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
+        </div>
+      {:else}
+        {@render two(t('adm.cappApprove'), () => decide(it, t('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
+      {/if}
+    </div>
+  {:else if it.kind === 'opath'}
+    {@const r = it.data}
+    <div class="card" out:fold>
+      {@render head(it, [])}
+      <button class="who" onclick={() => sheets.club(r.org.id)}>
+        <OrgLogo org={r.org} size={44} />
+        <span class="tx"><b>{nameOf(r.org)}</b><i>{tn('studio.members', r.members)}</i></span>
+      </button>
+      {#if refusing === it.key}
+        <div class="cb" transition:fold>
+          <Field label={t('adm.opathReason')} bind:value={why} multiline rows={2} maxlength={300} />
+          <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
+            <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
+              onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.opath_no'), `opath:${r.id}`, () => api.decideOfficial(r.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
+        </div>
+      {:else}
+        {@render two(t('adm.opathApprove'), () => decide(it, t('adm.act.opath_yes'), `opath:${r.id}`, () => api.decideOfficial(r.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
+      {/if}
+    </div>
+  {:else if it.kind === 'fpost'}
+    {@const p = it.data as ChannelModPost}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, more(it))}
+      <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
+      {#if p.why}<i class="meta">{whyLine(p.why, p.aiWhy)}</i>{/if}
+      <p class="text selectable">{p.body}</p>
+      <ForumPics photos={p.photos} />
+      {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
+      {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
+        t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
+    </div>
+  {:else if it.kind === 'freply'}
+    {@const r = it.data}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, more(it))}
+      <ForumWho anon={r.anon} nick={r.nick} />
+      {#if r.why || r.reports}<i class="meta">{[whyLine(r.why, r.aiWhy, true), r.reports ? t('fcr.reports', { n: r.reports }) : ''].filter(Boolean).join(' · ')}</i>{/if}
+      <p class="quote">{r.postBody}</p>
+      <p class="text selectable">{r.body}</p>
+      {#if it.hidden && r.why === 'lost'}
+        {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
+      {:else if it.hidden}
+        {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(r.id, true)),
+          t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
+      {:else}
+        {@render two(t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)),
+          t('fcr.keep'), () => decide(it, t('adm.act.fchan_reply_keep'), undefined, () => api.channelReplyMod(r.id, true)))}
+      {/if}
+    </div>
+  {:else if it.kind === 'chat'}
+    {@const c = it.data}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, [])}
+      <!-- the link itself, so a look tells a real chat from a stray one -->
+      <button class="who" onclick={() => openLink(c.url)}>
+        <ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={44} />
+        <span class="tx"><b>{c.title}</b><i>{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}{c.org ? ' · ' + nameOf(c.org) : ''}</i></span>
+        <span class="turn"><ArrowUpRight size={18} /></span>
+      </button>
+      {@render two(t('adm.chatApprove'), () => decide(it, t('adm.act.chat_approve'), undefined, () => api.approveChat(c.id)),
+        t('adm.chatDecline'), () => decide(it, t('adm.act.chat_decline'), `chat:${c.id}`, () => api.deleteChat(c.id)))}
+    </div>
+  {:else if it.kind === 'claim'}
+    {@const r = it.data}
+    <div class="card" class:hid={it.hidden} out:fold>
+      {@render head(it, [])}
+      <div class="who"><Avatar person={r.person} size={44} />
+        <span class="tx"><b>{r.name}</b><i>{t('ro.listed', { name: r.sheetName ?? '—' })}</i>
+          <i>{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
+      {@render two(t('ro.confirm'), () => decide(it, t('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
+        t('ro.decline'), () => decide(it, t('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
+    </div>
+  {:else if it.kind === 'autoev'}
+    {@const e = it.data}
+    <div class="card" out:fold>
+      {@render head(it, more(it))}
+      <div class="evr">
+        <button class="who" onclick={() => openDraft(e)}>
+          <Poster item={e} size={56} radius={14} />
+          <span class="tx"><b>{e.title}</b><i>{nameOf(e.org)} · {relDay(e.startsAt)}, {time(e.startsAt)}{e.place ? ' · ' + e.place : ''}</i></span>
+        </button>
+        <IconButton icon={Eye} kind="gray" size="s" label={t('ed.preview')} onclick={() => previewDraft(e)} />
+      </div>
+      {@render two(t('adm.autoevOpen'), () => openDraft(e), t('adm.autoevDismiss'),
+        () => decide(it, t('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
+    </div>
+  {/if}
+{/snippet}
+
+{#if queue.length}
   <Section title={t('adm.queue')} count={waiting}>
     <div class="list stagger">
-      {#each list as it (it.key)}
-        {@const h = handled[it.key]}
-        {#if h}
-          {@const u = undoOf(h.target)}
-          <div class="slim" in:fold>
-            <Group>
-              {#if u}
-                <Row dense title={h.text} subtitle={what(it) || undefined}>
-                  {#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}
-                  {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(u)}>{t('adm.undo')}</Button>{/snippet}
-                </Row>
-              {:else}
-                <Row dense title={h.text} subtitle={what(it) || undefined}>{#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}</Row>
-              {/if}
-            </Group>
-          </div>
-        {:else if it.kind === 'report'}
-          {@const r = it.data}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, [], r.target === 'tgc' ? (e) => tgcMenu(e, it, r) : undefined)}
-            <button class="body" onclick={() => look(r)}>
-              {#if r.target === 'photo'}<img class="ph" src={r.text} alt="" />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
-              <i>{r.target === 'tgc'
-                ? [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', whoReported(r), t('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
-                : `${reasons(r)}${r.count > 1 ? ' · ' + tn('adm.reports', r.count) : ''}`}</i>
-            </button>
-            <ForumPics photos={r.photos} />
-            {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
-            {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
-            {:else if r.target === 'photo' && data.galleryPost}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
-            {:else}{@render two(t('adm.takeDown'), () => resolve(it, r, true), t('adm.keep'), () => resolve(it, r, false))}{/if}
-          </div>
-        {:else if it.kind === 'capp'}
-          {@const a = it.data}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, more(it))}
-            <button class="who" aria-expanded={opened === a.id} onclick={() => { haptic.select(); opened = opened === a.id ? null : a.id; }}>
-              <OrgLogo org={{ id: 0, slug: '', name: a.name, short: a.short, emoji: a.emoji, cover: a.cover, kind: 'club', official: false }} size={44} />
-              <span class="tx"><b>{a.name}</b><i>{a.applicant ? withNick(a.applicant.fullName, a.applicant.person) : '—'}{a.applicant?.course ? ' · ' + t('person.course', { n: a.applicant.course }) : ''}{a.applicant?.school ? ' · ' + schoolShort(a.applicant.school) : ''}</i></span>
-              <span class="turn"><ChevronDown size={18} /></span>
-            </button>
-            {#if opened === a.id}
-              <div class="cb" transition:fold>
-                <p class="selectable">{a.description}</p>
-                {#if a.why}<p class="selectable"><b>{t('adm.cappWhy')}</b> {a.why}</p>{/if}
-                {#each a.links as l (l)}<Button kind="plain" size="s" onclick={() => openLink(l)}>{l.replace('https://', '')}</Button>{/each}
-              </div>
-            {/if}
-            {#if refusing === it.key}
-              <div class="cb" transition:fold>
-                <Field label={t('adm.cappReason')} bind:value={why} multiline rows={2} maxlength={300} />
-                <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
-                  <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
-                    onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.capp_no'), `capp:${a.id}`, () => api.decideClubApplication(a.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
-              </div>
-            {:else}
-              {@render two(t('adm.cappApprove'), () => decide(it, t('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
-            {/if}
-          </div>
-        {:else if it.kind === 'opath'}
-          {@const r = it.data}
-          <div class="card" out:fold>
-            {@render head(it, [])}
-            <button class="who" onclick={() => sheets.club(r.org.id)}>
-              <OrgLogo org={r.org} size={44} />
-              <span class="tx"><b>{nameOf(r.org)}</b><i>{tn('studio.members', r.members)}</i></span>
-            </button>
-            {#if refusing === it.key}
-              <div class="cb" transition:fold>
-                <Field label={t('adm.opathReason')} bind:value={why} multiline rows={2} maxlength={300} />
-                <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
-                  <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
-                    onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.opath_no'), `opath:${r.id}`, () => api.decideOfficial(r.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
-              </div>
-            {:else}
-              {@render two(t('adm.opathApprove'), () => decide(it, t('adm.act.opath_yes'), `opath:${r.id}`, () => api.decideOfficial(r.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
-            {/if}
-          </div>
-        {:else if it.kind === 'fpost'}
-          {@const p = it.data as ChannelModPost}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, more(it))}
-            <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
-            {#if p.why}<i class="meta">{whyLine(p.why, p.aiWhy)}</i>{/if}
-            <p class="text selectable">{p.body}</p>
-            <ForumPics photos={p.photos} />
-            {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
-            {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
-              t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
-          </div>
-        {:else if it.kind === 'freply'}
-          {@const r = it.data}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, more(it))}
-            <ForumWho anon={r.anon} nick={r.nick} />
-            {#if r.why || r.reports}<i class="meta">{[whyLine(r.why, r.aiWhy, true), r.reports ? t('fcr.reports', { n: r.reports }) : ''].filter(Boolean).join(' · ')}</i>{/if}
-            <p class="quote">{r.postBody}</p>
-            <p class="text selectable">{r.body}</p>
-            {#if it.hidden && r.why === 'lost'}
-              {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
-            {:else if it.hidden}
-              {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(r.id, true)),
-                t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
-            {:else}
-              {@render two(t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)),
-                t('fcr.keep'), () => decide(it, t('adm.act.fchan_reply_keep'), undefined, () => api.channelReplyMod(r.id, true)))}
-            {/if}
-          </div>
-        {:else if it.kind === 'chat'}
-          {@const c = it.data}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, [])}
-            <!-- the link itself, so a look tells a real chat from a stray one -->
-            <button class="who" onclick={() => openLink(c.url)}>
-              <ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={44} />
-              <span class="tx"><b>{c.title}</b><i>{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}{c.org ? ' · ' + nameOf(c.org) : ''}</i></span>
-              <span class="turn"><ArrowUpRight size={18} /></span>
-            </button>
-            {@render two(t('adm.chatApprove'), () => decide(it, t('adm.act.chat_approve'), undefined, () => api.approveChat(c.id)),
-              t('adm.chatDecline'), () => decide(it, t('adm.act.chat_decline'), `chat:${c.id}`, () => api.deleteChat(c.id)))}
-          </div>
-        {:else if it.kind === 'claim'}
-          {@const r = it.data}
-          <div class="card" class:hid={it.hidden} out:fold>
-            {@render head(it, [])}
-            <div class="who"><Avatar person={r.person} size={44} />
-              <span class="tx"><b>{r.name}</b><i>{t('ro.listed', { name: r.sheetName ?? '—' })}</i>
-                <i>{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
-            {@render two(t('ro.confirm'), () => decide(it, t('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
-              t('ro.decline'), () => decide(it, t('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
-          </div>
-        {:else if it.kind === 'autoev'}
-          {@const e = it.data}
-          <div class="card" out:fold>
-            {@render head(it, more(it))}
-            <div class="evr">
-              <button class="who" onclick={() => openDraft(e)}>
-                <Poster item={e} size={56} radius={14} />
-                <span class="tx"><b>{e.title}</b><i>{nameOf(e.org)} · {relDay(e.startsAt)}, {time(e.startsAt)}{e.place ? ' · ' + e.place : ''}</i></span>
-              </button>
-              <IconButton icon={Eye} kind="gray" size="s" label={t('ed.preview')} onclick={() => previewDraft(e)} />
-            </div>
-            {@render two(t('adm.autoevOpen'), () => openDraft(e), t('adm.autoevDismiss'),
-              () => decide(it, t('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
-          </div>
-        {/if}
-      {/each}
+      {#each shown as it (it.key)}{@render card(it)}{/each}
     </div>
+    {#if limit && rest && waiting > limit}<Group><Row title={t('adm.more', { n: waiting - limit })} accessory="chevron" onclick={() => { haptic.tap(); rest(); }} /></Group>{/if}
   </Section>
-{:else if data.inbox}
+{:else if data.inbox && !limit}
   <Group><Row title={t('adm.nothing')}>{#snippet lead()}<span class="ok"><CircleCheck size={24} /></span>{/snippet}</Row></Group>
+{/if}
+
+{#if drafts.length}
+  <div class="done">
+    <Group><Row title={t('adm.drafts')} value={String(drafts.filter((x) => !handled[x.key]).length)} accessory="disclosure" open={draftsOpen} onclick={() => { haptic.select(); draftsOpen = !draftsOpen; }} /></Group>
+    {#if draftsOpen}
+      <div class="list" transition:fold>{#each drafts as it (it.key)}{@render card(it)}{/each}</div>
+    {/if}
+  </div>
 {/if}
 
 {#if done.length}

@@ -114,6 +114,16 @@ def log_action(con, actor: int | None, action: str, target: str, data: str = "{}
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)", (actor, action, target, data, now()))
 
 
+def evdel(e: str = "e") -> str:
+    """SQL: the event `e` (its alias) is under the admin's delete (organizing.admin_delete_event): gone for everyone at
+    once, its club's team too; only Admin's Undo still names it until events_gone purges it."""
+    return f"EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || {e}.id)"
+
+
+def deleting(con, eid: int) -> bool:
+    return bool(one(con, "SELECT 1 FROM meta WHERE key = ?", f"evdel:{eid}"))
+
+
 # an orgs row with an official club's tools: official, KBTU's own office or school, or a club at the Ascent's top (clubs.py)
 FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
 

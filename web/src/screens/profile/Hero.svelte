@@ -66,15 +66,25 @@
   }
 
   // the Creator's coin by the name, tapped (owner, Nov 18: the full-screen sheet said "the creator's mark" and came in
-  // badly): it turns over once on the spot, lifted toward you, the card's own flip in small, and a toast says who this
-  // is with the coin in it. Transform only; calm: the toast alone
+  // badly): it lifts on the spot and a toast says who this is with the mark in it. Transform only; calm: the toast alone
   function sealTap(e: MouseEvent) {
     haptic.soft();
     const coin = (e.currentTarget as Element).firstElementChild;
     coin?.getAnimations().forEach((x) => x.cancel());
-    if (!calm()) coin?.animate([{ transform: 'perspective(140px) rotateY(0) scale(1)' }, { transform: 'perspective(140px) rotateY(180deg) scale(1.4)', offset: 0.45 },
-      { transform: 'perspective(140px) rotateY(360deg) scale(1)' }], { duration: 520, easing: 'cubic-bezier(.45, 0, .2, 1)' });
-    say(`${h.status}\n${t('seal.one')}`, p.founder ? 'seal:founder' : 'seal:idea');
+    // a lift and a settle, flat: iOS drew nothing of the SVG for the whole 3D turn (owner's recording, Nov 19: the mark vanished)
+    if (!calm()) coin?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.45) rotate(-8deg)', offset: 0.4 }, { transform: 'scale(1)' }],
+      { duration: 420, easing: 'cubic-bezier(.3, 1.4, .5, 1)' });
+    say(`${h.status}\n${t('seal.one')}`, p.founder ? 'seal:founder' : 'seal:idea', undefined, undefined, true); // low: at the top it lay on the strap
+  }
+  // a name too long for its row steps down a size before it is cut (the Creator's lanyard keeps 84 px for the hand)
+  function fit(node: HTMLElement, _key: string) {
+    const run = () => {
+      const text = node.firstElementChild as HTMLElement;
+      node.style.fontSize = '';
+      for (let px = parseFloat(getComputedStyle(node).fontSize); text.scrollWidth > text.clientWidth && px > 16; ) node.style.fontSize = `${--px}px`;
+    };
+    run();
+    return { update: run };
   }
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
   const frames = Array.from({ length: 41 }, (_, f) => {
@@ -266,7 +276,7 @@
         {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
         {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
-          <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
+          <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>

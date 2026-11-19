@@ -6,7 +6,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, log_action, need_student, one, org_ref,
+from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, deleting, log_action, need_student, one, org_ref,
     person_ref, rows, shown_name)
 
 
@@ -328,7 +328,7 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             AND at > ? AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)""",
             f"{target}:{tid}", core.now() - TAKEDOWN_KEEP):
         raise ApiError("not_found")
-    if target == "event" and one(con, "SELECT 1 FROM meta WHERE key = ?", f"evdel:{tid}"):
+    if target == "event" and deleting(con, tid):
         raise ApiError("conflict", "deleting")  # the admin's delete: its own Undo brings it back
     gone: list[str] = []
     with tx(con):

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { classesLeft, classesOn, joinClasses } from './classes';
+import { byStart, classesLeft, classesOn, joinClasses } from './classes';
 import { at, dayNo } from './time';
 
 const c = (weekday: number, begins: string, ends: string, subject = 'Algorithms', room: string | null = '388') =>
@@ -27,4 +27,9 @@ test('no classes on a day off of the academic calendar', () => {
   expect(classesOn(mon, dayNo(at(2026, 9, 26, 9, 0)))).toEqual([]);     // Mon, Oct 26 2026: classes online, asynchronous
   expect(classesLeft(mon, at(2026, 9, 26, 10, 30))).toEqual([]);
   expect(classesOn(mon, dayNo(at(2026, 10, 2, 9, 0)))).toHaveLength(1); // Mon, Nov 2: a normal day
+});
+
+test("a day's timeline: by start time, a class first at the same minute", () => {
+  const items = [{ at: 17, k: 'e2' }, { at: 15, k: 'e1' }, { at: 16, k: 'c2', c: 1 }, { at: 14, k: 'c1', c: 1 }, { at: 15, k: 'c15', c: 1 }, { at: 3, k: 'running' }];
+  expect(items.sort(byStart).map((x) => x.k)).toEqual(['running', 'c1', 'c15', 'e1', 'c2', 'e2']);
 });
