@@ -158,9 +158,9 @@
                   {@const isLive = it.key === live?.key}
                   <div class="row cl" class:done={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive}>
                     <button class="hit" aria-label={it.c.begins + '–' + it.c.ends + ' · ' + subjectOf(it.c) + ' · ' + t(skipped.has(it.key) ? 'skip.cancel' : 'skip.ok')} aria-pressed={skipped.has(it.key)} onclick={() => void skipClass(it.key, it.c)}></button>
-                    <!-- one thin line between the events (the heroes): start, subject, kind, room; the end (and so a double class's
-                         length) only in the label: the line has no room for it -->
-                    <span class="cl-t num" title={it.c.begins + '–' + it.c.ends}>{it.c.begins}</span>
+                    <!-- one thin line between the events (the heroes): start over a small dim end in the covers' column (a double
+                         class reads 10:00 / 11:50), subject, kind, room -->
+                    <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
                     <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
                     <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
                       <small>{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
@@ -432,14 +432,15 @@
 
   /* a class: one thin line between the events; its start in the covers' column, the text on the titles' edge, the room
      at the row's end */
-  .cl { min-height: 44px; padding: 6px 0; gap: 14px; cursor: pointer; }
+  .cl { min-height: 48px; padding: 6px 0; gap: 14px; cursor: pointer; }
   .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
   .cl.skip .cl-s b { text-decoration: line-through; }
   /* the class on now: its start in the accent (that says "now"), what's left, a thin line of how far it's gone under the text */
-  .cl.live .cl-t { color: var(--accent-text); }
+  .cl.live .cl-t b { color: var(--accent-text); }
   .soon { font-weight: 600; color: var(--accent-text); }
   .prog { position: absolute; left: 78px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
-  .cl-t { flex: none; width: 64px; text-align: center; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
+  .cl-t { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
+  .cl-t b { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
   /* one line: the subject yields (its ellipsis), the kind stays whole and leaves the subject at least 3em */
   .cl-s { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; container-type: inline-size; }
   .cl-s b { flex: 0 1 auto; min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); }
