@@ -1343,11 +1343,18 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
     return receipts, photos
 
 
+def class_ends(hm: str) -> str:
+    """When a class really ends: the portal gives the hour's slot ("14:00-15:00"), a class lasts 50 minutes of it
+    (owner, Nov 19): an end on the hour is ten minutes earlier. Any other end is the portal's own."""
+    h, m = hm.split(":")
+    return f"{int(h) - 1:02d}:50" if m == "00" and int(h) else hm
+
+
 def schedule(con, v: Viewer) -> list[dict]:
     if not v.student:
         return []
     got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins", v.id)
-    return [{"weekday": c["weekday"], "begins": c["begins"], "ends": c["ends"], "subject": c["subject"], "kind": c["kind"],
+    return [{"weekday": c["weekday"], "begins": c["begins"], "ends": class_ends(c["ends"]), "subject": c["subject"], "kind": c["kind"],
              "room": c["room"], "teacher": c["teacher"], "names": n or None} for c, n in zip(got, _names(got))]
 
 
