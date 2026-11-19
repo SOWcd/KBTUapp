@@ -323,10 +323,11 @@ def _ai_eu() -> dict:
 
 
 def board_writer(request: Request, v: Board, con: Con) -> Viewer:
-    """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only).
-    Staff trying it (BOARD=staff) are on the policy they have."""
+    """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only). BOARD=staff
+    too (review, Nov 19): with the forum channel on, the assistant's providers are the policy's in force, so a staff
+    member on an earlier version stays on the EU host as a student would."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
-    if request.app.state.cfg.board == "all" and s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
+    if s and not logic.account.on_policy(s[0], request.app.state.policy) and s[0] not in ("staff", "admin"):
         _eu_only()
     return v
 
@@ -1777,13 +1778,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503.
         lead (llm.chat's): asked first, only where the policy in force applies (never on the EU host alone)."""
         only = _ai_only(assist_only)
-        lead = lead if only == ai.ASSIST_PROVIDERS else None
+        lead = lead if only == ai.ASSIST_PROVIDERS and cfg.assist_lead == "google" else None
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
         try:
             async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
                 for last in (False, True):
                     try:
-                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=only, chain=ai.chain(cfg), lead=lead, **kw))[0]
+                        # the lead on the first round alone: the chain's bad answer never sends the question to it again
+                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=only, chain=ai.chain(cfg), lead=None if last else lead, **kw))[0]
                     except llm.BadAnswers:
                         if last:
                             raise ApiError("unavailable", "assistant") from None
@@ -1903,7 +1905,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod, Nov 16: with
             # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
             # call, and the slow ones were the host's, which the race covers)
-            # Google first, for this answer alone (policy section 5, Nov 19); its failure: the chain as before
+            # Google first, for this answer alone (policy section 5, Nov 19), with ASSIST_LEAD=google only (off: the owner
+            # decides on its speed and consent first); its failure: the chain as before
             text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
                                race=True, effort="none", lead=llm.GOOGLE)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress

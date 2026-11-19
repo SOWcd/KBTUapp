@@ -44,9 +44,11 @@ REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh
 TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
-# Google, the assistant's first try (chat's lead=): series 4 only (owner), the one on the free tier. Free tier: often 503
-# "high demand" (Nov 19: 2 of 3 calls answered), so one quick retry, then the usual chain; both tries share LEAD_WAIT,
-# the most a student waits longer than before when Google fails.
+# Google, the assistant's first try (chat's lead=, app.py's ASSIST_LEAD=google): series 4 only (owner), the one on the
+# free tier. Free tier: often 503 "high demand" (Nov 19: 2 of 3 calls answered), so one quick retry, then the usual
+# chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
+# ponytail: 6 s cuts some real answers (Nov 19: 6.5, 3.1, 3.2 s at effort low, 700 tokens); the switch stays off until
+# the owner picks the wait
 GOOGLE = "google:gemini-4-hydrogen"
 LEAD_WAIT = 6.0
 LEAD_BACKOFF = 0.4
@@ -120,6 +122,11 @@ def _count(path: str | None, link: str, ok: bool) -> None:
         c.close()
 
 
+def _rest_until(name: str, until: float) -> None:
+    """A rest only ever grows: a later failure (a lead's retry) never shortens one a Retry-After set."""
+    _rest[name] = max(_rest.get(name, 0), until)
+
+
 def _rest_for(r: httpx.Response) -> float:
     try:
         return max(1.0, min(float(r.headers.get("retry-after") or REST), 86400.0))
@@ -142,6 +149,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     and a 400 rests its link for hours. lead: links ("provider:model,...", outside only= and chain=) asked first, each
     within LEAD_WAIT and once more after a busy failure; then everything above as without it. No key: nothing asked."""
     answered = busy = False
+    after = None  # the last busy answer's Retry-After, in seconds (inf: one we can't read)
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
     if only:  # stable: each provider's links keep the chain's order
@@ -152,9 +160,9 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     awake = [x for x in pool if _rest.get(x.name, 0) <= time.time()]
 
     async def ask(link, wait: float = timeout) -> str | None:
-        nonlocal answered, busy
+        nonlocal answered, busy, after
         t0 = time.time()
-        busy = False
+        busy, after = False, None
         thought = effort if link.provider in EFFORT_OK else GOOGLE_EFFORT if link.provider == "google" else None
         try:
             r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=wait,
@@ -163,18 +171,24 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         except httpx.HTTPError as exc:
             busy = True
             log.warning("ai %s: %s", link.name, type(exc).__name__)
-            _rest[link.name] = time.time() + REST
+            _rest_until(link.name, time.time() + REST)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         if r.status_code in (429, 503) or r.status_code >= 500:
             busy = True
-            _rest[link.name] = time.time() + _rest_for(r)
+            if (hint := r.headers.get("retry-after")) is not None:
+                try:
+                    after = float(hint)
+                except ValueError:
+                    after = float("inf")
+            _rest_until(link.name, time.time() + _rest_for(r))
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
-            _rest[link.name] = time.time() + REST_BROKEN
-            log.warning("ai %s: http %d: %s", link.name, r.status_code, r.text[:160].replace("\n", " "))
+            _rest_until(link.name, time.time() + REST_BROKEN)
+            said = "(withheld: it repeats the key)" if link.token in r.text else r.text[:160].replace("\n", " ")  # never headers
+            log.warning("ai %s: http %d: %s", link.name, r.status_code, said)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         try:
@@ -182,7 +196,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             choice = (body.get("choices") or body.get("result", {}).get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content")
             cut = choice.get("finish_reason") == "length"
-        except (ValueError, AttributeError, TypeError):
+        except (ValueError, AttributeError, TypeError, KeyError, IndexError):  # JSON of another shape ("choices": {...})
             text, cut = None, False
         answered = True
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
@@ -193,18 +207,26 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         await asyncio.to_thread(_count, path, link.name, True)  # a write: never on the event loop
         return text
 
+    async def lead_try(link) -> str | None:
+        for again in (False, True):
+            text = await ask(link, LEAD_WAIT)
+            # a retry only after a busy answer that didn't ask for a longer wait than ours
+            if text is not None or again or not busy or (after or 0) > LEAD_BACKOFF:
+                return text
+            await asyncio.sleep(LEAD_BACKOFF)
+
     for link in links(cfg, lead) if lead else ():
         if _rest.get(link.name, 0) > time.time():  # failed both tries lately: the chain at once
             continue
-        end = time.time() + LEAD_WAIT
-        for again in (False, True):
-            text = await ask(link, max(end - time.time(), 0.5))
-            if text is not None:
-                _rest.pop(link.name, None)  # the retry answered: not resting for the first try's 503
-                return text, link.name
-            if again or not busy or end - time.time() < LEAD_BACKOFF + 1:
-                break
-            await asyncio.sleep(LEAD_BACKOFF)
+        try:  # the wall clock for both tries and their counting: the chain starts within LEAD_WAIT whatever happens
+            text = await asyncio.wait_for(lead_try(link), LEAD_WAIT)
+        except Exception as exc:  # noqa: BLE001 - out of time, or anything its answer raised: a failed lead, the chain runs
+            log.warning("ai %s: lead given up (%s)", link.name, type(exc).__name__)
+            _rest_until(link.name, time.time() + REST)
+            continue
+        if text is not None:
+            _rest.pop(link.name, None)  # the retry answered: not resting for the first try's 503
+            return text, link.name
 
     # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
     # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often)
