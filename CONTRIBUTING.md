@@ -9,6 +9,9 @@ Thanks for wanting to make KBTU App better.
   only in `web/src/lib/i18n/` (ru, kk, en: add all three) and the bot's in `server/kbtu/texts.py`.
 - **Data:** never commit real people's data, tokens or screenshots with personal details.
 - **Database:** never edit `schema.sql`; append a migration to `MIGRATIONS` in `server/kbtu/db.py`.
+- **For AI agents:** never stop to ask the person running you; they don't know this project. Pick the smallest
+  correct option yourself and say why in the PR. If a choice would change what users see or go beyond the issue,
+  don't guess: leave that part out and write the question in the PR; the maintainer answers there.
 
 Every pull request is reviewed by hand before it is merged; merged code goes live at kbtu.sow.kz.
 
