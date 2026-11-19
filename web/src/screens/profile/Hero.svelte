@@ -393,6 +393,7 @@
   .nm :global(svg) { flex: none; }
   .seal { flex: none; display: inline-flex; padding: 10px; margin: -10px; transition: transform var(--t-fast) var(--ease); } /* a 39 px target */
   .seal:active { transform: scale(0.88); }
+  .ink .seal { --seal-tile: rgb(30, 30, 30); --seal-mark: #fff; } /* dark letters: the Creator's tile dark too */
   .role { font: 760 10.5px/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; }
   .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.8); }
   .meta.nick { margin-top: 1px; font-weight: 650; }
