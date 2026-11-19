@@ -1070,7 +1070,7 @@ const ru = {
   'list.kind.practice': "П",
   'list.kind.lab': "Лб",
   'list.dayOff': "Сегодня выходной по академическому календарю: пары онлайн, асинхронно.",
-  'list.nowLeft': "Сейчас · ещё {n} мин",
+  'list.nowLeft': "ещё {n} мин",
   'list.week': { one: "{n} на этой неделе", few: "{n} на этой неделе", many: "{n} на этой неделе", other: "{n} на этой неделе" },
   'list.kind.lectureLong': "Лекция",
   'list.kind.practiceLong': "Практика",

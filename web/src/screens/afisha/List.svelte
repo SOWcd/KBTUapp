@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Events lead each day; the optional timetable stays in its own quiet group.
+  // A day is one card, one timeline: events and the optional timetable's classes by start time (owner, Nov 19).
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
@@ -20,7 +20,7 @@
   import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
-  import { classesOn, classesLeft } from '../../lib/classes';
+  import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
   import { openLink, haptic } from '../../lib/tg';
@@ -85,7 +85,9 @@
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
     const wanted = [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
-    return wanted.map((d) => ({ d, items: [...(by.get(d) ?? []).sort((a, b) => a.at - b.at), ...(showClasses ? classesOf(d) : [])] }));
+    // one card, one timeline: classes and events by start time (owner, Nov 19); an event still running from an earlier
+    // day starts before today, so it leads
+    return wanted.map((d) => ({ d, items: [...(by.get(d) ?? []), ...(showClasses ? classesOf(d) : [])].sort(byStart) }));
   });
   // the first screenfuls come with the tab, the rest a few days per idle moment: a term's worth of events (200 rows,
   // 5k nodes) was one 2 s task at 4x CPU before the Afisha showed. Off-screen days skip layout and paint (.day)
@@ -151,18 +153,19 @@
 </script>
 
 {#snippet clRow(it: Extract<Item, { c: ClassItem }>)}
-            {@const hours = Math.round((it.end - it.at) / 3600)}
                   {@const k = lessonKind(it.c.kind)}
-                  <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
+                  <!-- a class: a slim row, its start where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
                   {@const isLive = it.key === live?.key}
                   <div class="row cl" class:done={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive}>
-                    <button class="hit" aria-label={subjectOf(it.c) + ' · ' + t(skipped.has(it.key) ? 'skip.cancel' : 'skip.ok')} aria-pressed={skipped.has(it.key)} onclick={() => void skipClass(it.key, it.c)}></button>
+                    <button class="hit" aria-label={it.c.begins + '–' + it.c.ends + ' · ' + subjectOf(it.c) + ' · ' + t(skipped.has(it.key) ? 'skip.cancel' : 'skip.ok')} aria-pressed={skipped.has(it.key)} onclick={() => void skipClass(it.key, it.c)}></button>
+                    <!-- one thin line between the events (the heroes): start over a small dim end in the covers' column (a double
+                         class reads 10:00 / 11:50), subject, kind, room -->
                     <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
                     <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
                     <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
-                      <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
+                      <small>{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
                         {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
-                        {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
+                        {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
                     {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
                     {#if floorOf(it.c.room) != null}<span class="cl-r on"><Button kind="tinted" size="s" onclick={() => sheets.map(it.c.room!)}>{#snippet icon()}<MapIcon size={14} />{/snippet}{it.c.room}</Button></span>
                     {:else if atBldg2(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(BLDG2_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</Button></span>
@@ -283,12 +286,10 @@
       {@const [a, b] = head(day.d)}
       <div class="day">
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
-      <!-- Event covers first, then a labelled timetable with no competing artwork. -->
+      <!-- one timeline: an event's full row, a class's thin one between them -->
       <div class="list">
-        {#each day.items as it, i (it.key)}
-          {#if 'c' in it}
-            {#if !i || !('c' in day.items[i - 1])}<p class="class-label">{t('list.classes')}</p>{/if}
-            {@render clRow(it)}
+        {#each day.items as it (it.key)}
+          {#if 'c' in it}{@render clRow(it)}
           {:else if 'p' in it}<CastingCard post={it.p} />
           {:else}
             {@const e = it.e}
@@ -358,9 +359,6 @@
   .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px var(--s-1) 4px; }
   .sec.two { min-width: 0; margin: 0; }
   .cls { flex: none; display: flex; align-items: center; gap: 10px; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
-  /* a day's classes inside its card: a grey caps label over them */
-  .class-label { position: relative; padding: var(--s-3) 0 var(--s-1); font: 600 var(--fs-micro)/1.3 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .list > .class-label:not(:first-child)::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 0.5px; background: var(--separator); }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
@@ -432,20 +430,23 @@
   .av :global(.av + .av) { margin-left: -5px; }
   .av :global(.av) { box-shadow: 0 0 0 1.5px var(--surface); }
 
-  /* a class: its times in the covers' column, the room at the row's end */
-  .cl { min-height: 56px; padding: 8px 0; gap: var(--s-2); cursor: pointer; }
+  /* a class: one thin line between the events; its start in the covers' column, the text on the titles' edge, the room
+     at the row's end */
+  .cl { min-height: 48px; padding: 6px 0; gap: 14px; cursor: pointer; }
   .cl.done, .cl.skip { opacity: 0.5; } /* "done", not "past": .past is the Past list's column (a finished class stood in a column, Nov 10) */
   .cl.skip .cl-s b { text-decoration: line-through; }
-  .class-label + .cl::before { display: none; }
-  /* the class on now: its times in the accent, what's left, a thin line of how far it's gone under the text */
+  /* the class on now: its start in the accent (that says "now"), what's left, a thin line of how far it's gone under the text */
   .cl.live .cl-t b { color: var(--accent-text); }
   .soon { font-weight: 600; color: var(--accent-text); }
   .prog { position: absolute; left: 78px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
   .cl-t { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
-  .cl-t b { font: 600 var(--fs-body)/1 var(--font-text); color: var(--text); }
-  .cl-s { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; margin-left: 6px; }
-  .cl-s b { font: 600 var(--fs-body)/1.25 var(--font-text); }
-  .cl-s small { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
+  .cl-t b { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
+  /* one line: the subject yields (its ellipsis), the kind stays whole and leaves the subject at least 3em */
+  .cl-s { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; container-type: inline-size; }
+  .cl-s b { flex: 0 1 auto; min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); }
+  .cl-s small { flex: none; max-width: calc(100% - 3em - 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
+  /* a narrow phone (320 px): the subject alone; the live time and its line, the capsule above, say the rest */
+  @container (max-width: 120px) { .cl-s small { display: none; } }
   .cl-k { font-style: normal; }
   .cl-k.lecture { color: var(--accent-text); }
   .cl-k.practice { color: var(--success-text); }
@@ -453,7 +454,7 @@
   .cl-r { position: relative; z-index: 2; flex: none; max-width: 42%; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   /* a room in the main building opens the map on its floor; the dorm and the second building open 2GIS */
   .cl-r.on { display: flex; justify-content: flex-end; }
-  .cl-r.on :global(.btn) { max-width: 100%; }
+  .cl-r.on :global(.btn) { max-width: 100%; padding: 0 var(--s-3); } /* a little tighter: the subject's room */
   .free { margin: 0 var(--s-1); color: var(--text-3); }
 
   .ask { margin-top: 14px; }
