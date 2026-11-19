@@ -26,8 +26,6 @@
   import { session } from '../../lib/state/session.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import Medal from '@lucide/svelte/icons/medal';
-  import Crown from '@lucide/svelte/icons/crown';
-  import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import ShieldIcon from '@lucide/svelte/icons/shield'; // plain: a check reads as "verified"
 
@@ -186,8 +184,8 @@
   const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : va?.level && tiers ? t('aw.level', { tier: tierOf(va.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
-  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) || isCoin(it.ach) ? 'cap.achievement' : 'cap.badge') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : it.staff ? t('cap.staff') : t('cap.badge');
-    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : it.staff ? ShieldIcon : BadgeCheck; });
+  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) || isCoin(it.ach) ? 'cap.achievement' : 'cap.badge') : it.staff ? t('cap.staff') : t('cap.badge');
+    overlay.icon = it.ach ? Medal : it.staff ? ShieldIcon : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
   // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
@@ -279,8 +277,6 @@
     {/if}
   {:else if b}
     <p class="t-callout how">{t('aw.badgeHow')}</p>
-  {:else if it.founder || it.idea}
-    <p class="t-callout how">{t('seal.one')}</p>
   {:else if it.staff}
     <p class="t-callout how up">{t(it.staff === 'admin' ? 'seal.adminHow' : 'seal.moderatorHow')}</p>
   {/if}

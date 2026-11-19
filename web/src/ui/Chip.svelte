@@ -5,22 +5,15 @@
   //   icon     a lucide icon, monochrome (a topic's colour on a chip fails contrast: Board.svelte had to undo it)
   //   full     the whole width of its cell, the words centred: a grid of choices (the forum composer's topics)
   // Put a row of them in a scroller with 4 px of block padding, or the 44 px hit areas get clipped.
-  // A Chip without `selected` is a status label from before (Oct 30): it draws a Tag; use Tag.
   import type { Component, Snippet } from 'svelte';
-  import Tag from './Tag.svelte';
 
-  type Props = { selected?: boolean; icon?: Component<any>; full?: boolean; onclick?: (e: MouseEvent) => void;
-    tone?: 'neutral' | 'accent' | 'success' | 'danger' | 'warning' | 'onphoto'; children: Snippet };
-  let { selected, icon: Icon, full = false, onclick, tone, children }: Props = $props();
+  type Props = { selected?: boolean; icon?: Component<any>; full?: boolean; onclick?: (e: MouseEvent) => void; children: Snippet };
+  let { selected, icon: Icon, full = false, onclick, children }: Props = $props();
 </script>
 
-{#if selected === undefined}
-  <Tag {tone}>{@render children()}</Tag>
-{:else}
-  <button class="fc" class:on={selected} class:full aria-pressed={selected} {onclick}>
-    {#if Icon}<span class="ic"><Icon size={16} strokeWidth={2} /></span>{/if}{@render children()}
-  </button>
-{/if}
+<button class="fc" class:on={selected} class:full aria-pressed={selected} {onclick}>
+  {#if Icon}<span class="ic"><Icon size={16} strokeWidth={2} /></span>{/if}{@render children()}
+</button>
 
 <style>
   .fc { position: relative; display: inline-flex; align-items: center; gap: 6px; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); flex: none;
