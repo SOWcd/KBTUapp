@@ -49,8 +49,7 @@
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
-                                gh:login: a pull request's author, listed under the login until named);
-                                credit bind <login> <telegram id>: that login's lines are this Telegram's (checked with them);
+                                gh:login: a pull request's author, listed under the public login, never tied to an account);
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
                                 `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
@@ -279,13 +278,11 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
-    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"], ["bind"]):  # the people of the app (logic/credits.py)
+    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and len(args) == 7:
                 print(f"credit {credits.add(con, *args[2:])} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
-            elif args[1] == "bind" and len(args) == 4:
-                print(f"bound {credits.bind(con, args[2], int(args[3]))} lines")
             elif args[1] == "ship" and len(args) in (3, 4):
                 print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
             elif args[1] == "del" and len(args) == 3:
@@ -296,8 +293,7 @@ def main(args: list[str]) -> None:
             elif args[1] == "list" and len(args) == 2:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
-                    who = (f"gh {r['gh']}, " if r["gh"] else "") + (("no Telegram yet" if r["gh"] else "deleted account") if r["tg_id"] is None
-                                                                     else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)"))
+                    who = f"gh {r['gh']}" if r["gh"] else "deleted account" if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:

@@ -425,37 +425,33 @@ def test_cli(env, capsys, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM credits").fetchone()[0] == 0
 
 
+
 def test_github_login(env, capsys, monkeypatch):
-    """A pull request's author: listed under the login (lines together) until bound and named; deleting the bound
-    account takes the login off too; a line never bound keeps it."""
+    """A pull request's author: never tied to an account, listed under the login (any case: one row, the newest
+    spelling), never as the creator or the idea's author; deleting an account leaves it as it is."""
     c, cfg = env
     con = _con(cfg)
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
-    login(c, 900, "viewer")
+    boss = login(c, 900, "viewer")
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (boss["id"],))
+    muse = login(c, 7000702, "muse")
+    con.execute("UPDATE users SET mark = 'idea' WHERE id = ?", (muse["id"],))
+    con.commit()
     assert "gh" in {r[1] for r in con.execute("PRAGMA table_info(credits)")}  # migration 191
-    a = _line(con, "gh:octo-cat", kind="code", day="2026-11-02", word="one")
+    a = _line(con, "gh:Octo-Cat", kind="idea", day="2026-11-02", word="one")
     _line(con, "gh:octo-cat", kind="code", day="2026-11-01", word="two")
     _line(con, "gh:other", kind="code", word="three")
     _line(con, 7000701, word="plain")
+    assert con.execute("SELECT COUNT(*) FROM credits WHERE gh IS NOT NULL AND tg_id IS NOT NULL").fetchone()[0] == 0
     got = _get(c)
     assert sorted((p.get("gh", ""), [i["text"]["en"] for i in p["items"]]) for p in got["people"] if not p["person"]) == [
-        ("", ["en plain"]), ("octo-cat", ["en one", "en two"]), ("other", ["en three"])]
+        ("", ["en plain"]), ("Octo-Cat", ["en one", "en two"]), ("other", ["en three"])]
+    assert got["idea"] == {"person": None, "items": []} and got["mine"] is None  # an idea line by login: not the idea's
     for bad in (["credit", "add", "gh:-bad", "code", "a", "b", "c"], ["credit", "add", "gh:a_b", "code", "a", "b", "c"],
-                ["credit", "add", "gh:" + "x" * 40, "code", "a", "b", "c"], ["credit", "bind", "nobody", "7000702"]):
+                ["credit", "add", "gh:" + "x" * 40, "code", "a", "b", "c"], ["credit", "bind", "octo-cat", "7000702"]):
         with pytest.raises(SystemExit):
             admin.main(bad)
-    admin.main(["credit", "bind", "Octo-Cat", "7000702"])
-    assert "bound 2" in capsys.readouterr().out
-    with pytest.raises(SystemExit):
-        admin.main(["credit", "bind", "octo-cat", "7000703"])  # already another Telegram's
     admin.main(["credit", "list"])
-    assert f"#{a}  2026-11-02  code  gh octo-cat, tg 7000702 (no account)" in capsys.readouterr().out
-    login(c, 7000702, "coder")
-    assert _get(c)["people"][0].get("gh") == "octo-cat"  # bound, no yes yet: still the login
-    assert _yes(c, 7000702).status_code == 200
-    top = _get(c)["people"][0]
-    assert top["person"]["id"] == con.execute("SELECT id FROM users WHERE tg_id = 7000702").fetchone()[0] and "gh" not in top and len(top["items"]) == 2
+    assert f"#{a}  2026-11-02  idea  gh Octo-Cat, no answer" in capsys.readouterr().out
     delete_now(c, cfg, tma(7000702))
-    assert con.execute("SELECT COUNT(*) FROM credits WHERE gh = 'octo-cat' OR tg_id = 7000702").fetchone()[0] == 0
-    assert con.execute("SELECT COUNT(*) FROM credits WHERE gh = 'other' AND tg_id IS NULL").fetchone()[0] == 1
-    assert {p.get("gh") for p in _get(c)["people"]} == {"other", None}
+    assert con.execute("SELECT COUNT(*) FROM credits WHERE gh IS NOT NULL").fetchone()[0] == 3

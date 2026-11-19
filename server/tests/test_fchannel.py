@@ -531,6 +531,7 @@ def test_old_board_cleaned_up(env):
     con.execute("DROP TABLE chat_asks")
     con.execute("ALTER TABLE qr_sessions DROP COLUMN lease_until")  # 144's
     con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
+    con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)

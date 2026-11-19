@@ -1990,8 +1990,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (190, """CREATE TRIGGER IF NOT EXISTS kri_consents_student_gone AFTER DELETE ON students BEGIN
       DELETE FROM kri_consents WHERE user_id = OLD.user_id;
     END;"""),
-    # (Nov 19) a credit by a GitHub login (credits.py): code that came as a pull request, its author's Telegram not
-    # known yet (`credit bind` adds it later); public already, so shown under the login while not named
+    # (Nov 19) a credit by a GitHub login (credits.py): a pull request's author, the line never tied to an account
+    # (tg_id NULL); the login is public already, so the line is shown under it
     (191, "ALTER TABLE credits ADD COLUMN gh TEXT;"),
 ]
 
