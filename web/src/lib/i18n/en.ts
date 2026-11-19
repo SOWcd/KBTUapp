@@ -1575,6 +1575,7 @@ const en: Dict = {
   'adm.k.hidden': "Hidden",
   'adm.decided': "Already handled by {name}",
   'adm.decidedAnon': "Already handled",
+  'adm.more': "{n} more",
   'adm.drafts': "From channels",
   'adm.doneList': "Done",
   'adm.undo': "Undo",
