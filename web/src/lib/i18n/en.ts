@@ -234,7 +234,6 @@ const en: Dict = {
   'as.psych': "Book a psychologist",
   'as.askAi': "Ask KRI",
   'as.askClub': "How to join and what they do",
-  'as.what': "How can I help?",
   'as.about': "About “{title}”",
   'as.e1': "What should I bring?",
   'as.e2': "How do I get there?",
