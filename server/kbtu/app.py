@@ -2859,7 +2859,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
         if path == "demo" or path.startswith("demo/"):  # the in-browser demo went: its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
-        if f := file(path, request):
+        if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
