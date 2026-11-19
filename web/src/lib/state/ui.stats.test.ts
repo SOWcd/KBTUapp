@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 vi.stubGlobal('document', { hidden: false, addEventListener: () => {}, documentElement: { dataset: {} } });
 const count = vi.hoisted(() => vi.fn());
 vi.mock('../stats', () => ({ count }));
-vi.mock('../tg', () => ({ haptic: {}, tg: {} }));
+vi.mock('../tg', () => ({ haptic: {}, tg: {}, onShareBusy: () => {} }));
 vi.mock('./theme.svelte', () => ({ switching: () => null }));
 vi.mock('../i18n/index.svelte', () => ({ t: (k: string) => k }));
 const { open, close, say, ui } = await import('./ui.svelte');
