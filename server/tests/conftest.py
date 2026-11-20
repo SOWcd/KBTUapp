@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from kbtu import db
@@ -25,3 +27,12 @@ def _schema_db(tmp_path_factory):
     path = tmp_path_factory.mktemp("schema") / "t.db"
     db.init(str(path))
     return path
+
+
+def pytest_collection_modifyitems(config, items):
+    """SHARD=i/n keeps every n-th test from the i-th: CI runs the suite as n jobs side by side."""
+    if shard := os.environ.get("SHARD"):
+        i, n = map(int, shard.split("/"))
+        keep = items[i::n]
+        config.hook.pytest_deselected(items=[x for k, x in enumerate(items) if k % n != i])
+        items[:] = keep

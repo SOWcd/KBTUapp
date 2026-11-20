@@ -41,6 +41,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [0, 1]  # half the tests each (conftest.py's SHARD), on its own 4 cores
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -55,6 +58,8 @@ jobs:
       - run: pip install -r server/requirements.txt pytest==9.1.1 pytest-xdist==3.8.0
       - run: python -m pytest -q -n auto
         working-directory: server
+        env:
+          SHARD: ${{ matrix.shard }}/2
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true'
