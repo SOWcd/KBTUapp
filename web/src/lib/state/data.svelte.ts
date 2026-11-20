@@ -25,7 +25,7 @@ export const data = $state({
   // kept for the session so their buttons work; never saved on the phone
   opened: [] as EventCard[],
   eventsReady: false,
-  past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
+  past: [] as EventCard[], // Afisha's "Past": every Afisha event of the last month, mine marked by `my`, newest first (with the Afisha)
   credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
@@ -274,7 +274,7 @@ export async function loadAfisha(): Promise<void> {
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
     const at = taps;
-    const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true), api.castings()]);
+    const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(), api.castings()]);
     if (castings.status === 'fulfilled') data.castings = castings.value;
     if (past.status === 'fulfilled') data.past = past.value;
     if (events.status === 'fulfilled' && at === taps) data.events = events.value;

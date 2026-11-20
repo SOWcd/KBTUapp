@@ -15,7 +15,8 @@
   import { inner } from '../lib/perms';
   import { shortOf } from '../lib/short';
 
-  let { e, showDate = false, dateLine = '', onopen }: { e: EventCard; showDate?: boolean; dateLine?: string; onopen?: () => void } = $props();
+  // wasThere: Afisha's "Past" of everyone's events marks mine (signed up or came), not only a check-in
+  let { e, showDate = false, dateLine = '', wasThere = false, onopen }: { e: EventCard; showDate?: boolean; dateLine?: string; wasThere?: boolean; onopen?: () => void } = $props();
 
   const st = $derived(e.my?.status);
   const full = $derived(e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
@@ -35,7 +36,7 @@
       {#if e.toCheck && !cancelled}<Tag tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Tag>{/if}
       {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>
       {:else if e.status === 'draft'}<Tag>{t('studio.draft')}</Tag>
-      {:else if over}{#if e.my?.checkedInAt}<Tag tone="success">{t('event.attended')}</Tag>{/if}
+      {:else if over}{#if wasThere && (e.my?.checkedInAt || st === 'going')}<Tag tone="success">{t('list.wasThere')}</Tag>{:else if e.my?.checkedInAt}<Tag tone="success">{t('event.attended')}</Tag>{/if}
       {:else if live}<Tag tone="success">{t(e.lateSignup && st !== 'going' ? 'event.liveOpen' : 'event.live')}</Tag>
       {:else if st === 'going'}<Tag tone="accent">{t('event.youGo')}</Tag>
       {:else if st === 'hold'}<Tag tone="warning">{t('event.pay', { price: money(e.price ?? 0) })}</Tag>
