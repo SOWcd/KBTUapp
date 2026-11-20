@@ -509,6 +509,8 @@
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
+    const ap = p.match(/^apl_(\d+)$/); // the bot: SG answered this appeal: its own view, the answer on top
+    if (ap) { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.myAppeal(Number(ap[1])); return; }
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
     if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)

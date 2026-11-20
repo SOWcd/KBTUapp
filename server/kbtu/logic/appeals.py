@@ -227,11 +227,21 @@ def _for_sg(con, a, t: int) -> dict:
     return out
 
 
+def _queue_row(con, a, t: int) -> dict:
+    """A queue row: the list's first line of the words (as the web's headOf cuts it), no answer; the whole only from
+    detail, each read of it logged."""
+    out = _for_sg(con, a, t)
+    head = out["text"].split("\n")[0]
+    out["text"] = head if len(head) <= 70 else head[:68] + "\u2026"
+    del out["answer"]
+    return out
+
+
 def queue(con, v: Viewer, desk: str = "sg") -> dict:
-    """The desk's whole queue (one audit line for the look) and the months' counts by topic."""
+    """The desk's whole queue (one audit line for the look; rows carry a preview only) and the months' counts by topic."""
     _sg(con, v, desk)
     t = core.now()
-    items = [_for_sg(con, a, t) for a in rows(con, "SELECT * FROM appeals WHERE desk = ? ORDER BY status = 'closed', id DESC", desk)]
+    items = [_queue_row(con, a, t) for a in rows(con, "SELECT * FROM appeals WHERE desk = ? ORDER BY status = 'closed', id DESC", desk)]
     log_action(con, v.id, f"{DESKS[desk][4]}_queue", "appeals")
     return {"items": items, "months": months(con, desk)}
 

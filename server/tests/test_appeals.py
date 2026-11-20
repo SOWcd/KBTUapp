@@ -84,7 +84,7 @@ def test_guest_cannot_send(ap):
 def test_rights_and_anonymity(ap):
     c, _, con = ap
     a = _send(c, ANN, anon=True, topic="food").json()
-    b = _send(c, BEK, "named one").json()
+    b = _send(c, BEK, "named one\n" + "z" * 100).json()
     assert a["anon"] and a["status"] == "new" and a["topic"] == "food"
     for tg in (ANN, PRES):                                                            # a student, SG's club President
         assert c.get("/api/sg/appeals", headers=tma(tg)).status_code == 403
@@ -94,6 +94,8 @@ def test_rights_and_anonymity(ap):
     assert q.status_code == 200
     items = {x["id"]: x for x in q.json()["items"]}
     assert "author" not in items[a["id"]] and items[b["id"]]["author"] == "Bek T"     # a named one: the short name only
+    assert items[b["id"]]["text"] == "named one" and "answer" not in items[b["id"]]   # a row: the first line only; the whole from detail
+    assert "z" * 10 not in q.text
     d = c.get(f"/api/sg/appeals/{a['id']}", headers=tma(SG))
     # nothing of the anonymous author anywhere SG reads: name, ids, student ID, Telegram
     ann = con.execute("SELECT u.id, u.tg_id FROM users u WHERE tg_id = ?", (ANN,)).fetchone()
@@ -129,7 +131,7 @@ def test_status_answer_overdue_and_message(ap, monkeypatch):
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'appeal_answer'").fetchall()
     assert len(m) == 1 and m[0]["user_id"] == _uid(c, ANN)                           # once, to the author
     text, button, start = bot._render(con, {**dict(m[0]), "lang": "en"})
-    assert start == "apl" and "Fixed" not in text and text == texts.bot_message("en", "appeal_answer")[0]
+    assert start == f"apl_{a['id']}" and "Fixed" not in text and text == texts.bot_message("en", "appeal_answer")[0]
     mine = c.get("/api/appeals", headers=tma(ANN)).json()["items"][0]
     assert mine["status"] == "closed" and mine["answer"] == "Fixed on Wednesday"
     assert {r[0] for r in con.execute("SELECT action FROM audit_log WHERE action LIKE 'appeal_%'")} >= {"appeal_answer", "appeal_status"}
