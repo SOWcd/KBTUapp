@@ -3052,6 +3052,7 @@ const en: Dict = {
   'ledg.handNotMember': "The link is for the club's members only",
   'ledg.e.resolve': "Left without check-out",
   'apl.row': "Appeal to the Student Government",
+  'apl.chip': "Student Government",
   'apl.rowSub': "Private, anonymous if you like. An answer in 5 working days",
   'sj.row': "Subjects",
   'sj.rowSub': "Find people to study a subject with",

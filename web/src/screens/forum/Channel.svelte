@@ -29,7 +29,6 @@
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import BookOpen from '@lucide/svelte/icons/book-open';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Avatar from '../../ui/Avatar.svelte';
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
@@ -47,6 +46,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Button from '../../ui/Button.svelte';
+  import Chip from '../../ui/Chip.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
@@ -217,21 +217,13 @@
     <span class="prompt ellipsis">{t('fc.share')}</span>
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
-  <!-- the other way to speak up (APPEALS): a post is for everyone, an appeal goes to the Student Government alone -->
-  <!-- the subjects' cards (SUBJECTS_FILE): find people to study a subject with -->
-  {#if me?.subjects}
-    <button class="appeal" onclick={() => { haptic.tap(); sheets.subjects(); }}>
-      <span class="seat" aria-hidden="true"><BookOpen size={18} strokeWidth={2} /></span>
-      <span class="aw"><b class="ellipsis">{t('sj.row')}</b><span class="as">{t('sj.rowSub')}</span></span>
-      <span class="chev" aria-hidden="true"><ChevronRight size={18} /></span>
-    </button>
-  {/if}
-  {#if me?.appeals}
-    <button class="appeal" onclick={() => { haptic.tap(); sheets.appeals(); }}>
-      <span class="seat" aria-hidden="true"><Megaphone size={18} strokeWidth={2} /></span>
-      <span class="aw"><b class="ellipsis">{t('apl.row')}</b><span class="as">{t('apl.rowSub')}</span></span>
-      <span class="chev" aria-hidden="true"><ChevronRight size={18} /></span>
-    </button>
+  <!-- the tab's two side doors, quiet chips under the composer (two full cards here crowded the feed's head):
+       the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the Student Government alone) -->
+  {#if me?.subjects || me?.appeals}
+    <div class="doors">
+      {#if me?.subjects}<Chip icon={BookOpen} onclick={() => { haptic.tap(); sheets.subjects(); }}>{t('sj.row')}</Chip>{/if}
+      {#if me?.appeals}<Chip icon={Megaphone} onclick={() => { haptic.tap(); sheets.appeals(); }}>{t('apl.chip')}</Chip>{/if}
+    </div>
   {/if}
 
   {#if channel.feed?.length}
@@ -311,22 +303,16 @@
   .page > :global(*) { flex-shrink: 0; }
   /* every post a card on the ground, not a bare black background: the app's surface and radius, a hairline
      rim in the dark (no shadow there), the soft card shadow in the light; the composer is the first card */
-  .compose, .appeal, .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line); }
+  .compose, .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line); }
 
   /* the composer: my face, a quiet prompt, the pen */
   .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
     transition: background var(--t-fast) var(--ease); }
   .compose:active { background: var(--surface-2); }
   .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
-  /* the appeal: the composer's quiet neighbour, a tinted seat instead of the loud pen */
-  .appeal { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
-    transition: transform 450ms var(--ease-bounce); }
-  .appeal:active { transform: scale(0.98); transition-duration: 80ms; }
-  .seat { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
-  .aw { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .aw b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
-  .as { font: 450 var(--fs-sub)/1.25 var(--font-text); color: var(--text-2); text-wrap: balance; } /* two even lines on a phone, never a lone word */
-  .chev { flex: none; display: flex; color: var(--text-3); }
+  /* the side doors: a row of quiet chips on the ground, no card; a scroller on a narrow phone (4 px: the chips' hit areas) */
+  .doors { display: flex; gap: var(--s-2); margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: 4px var(--gutter); overflow-x: auto; scrollbar-width: none; }
+  .doors::-webkit-scrollbar { display: none; }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
