@@ -19,7 +19,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
   import type { MenuItem } from '../../ui/menu';
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -83,7 +83,24 @@
     { label: t('att.remove'), destructive: true, onselect: () => out(p, null) },
     ...(tm ? [{ label: t('tm.removeTeam'), destructive: true, onselect: () => out(null, tm) }] : []),
   ];
-  const menuOf = (p: PersonRef, from: Id | null): MenuItem[] => !b || b.locked ? [] : [
+  // "Write in Telegram", as on the attendees' list (a club lead, Nov 20: "send me the solo players' usernames"):
+  // one @username at a time, logged; none: the bot asks them to write instead (server organizing.attendee_contact)
+  async function write(p: PersonRef) {
+    try {
+      const { username, asked } = await api.attendeeContact(id, p.id);
+      if (username) { openLink(`https://t.me/${encodeURIComponent(username)}`); return; }
+      if (asked) { say(t('att.asked'), 'waving_hand_3d_default'); return; }
+      if (!(await sheets.ask({ title: t('att.askTitle'), text: t('att.askText'), ok: t('att.askOk'), cancel: t('common.cancel') }))) return;
+      await api.askToWrite(id, p.id);
+      haptic.ok(); say(t('att.asked'), 'waving_hand_3d_default');
+    } catch (e) {
+      haptic.error();
+      say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'rate_limited' ? t('att.writeTooMany') : e.message === 'own_username' ? t('att.ownUsername') : t('common.error'), 'warning_3d');
+    }
+  }
+  const some = (m: MenuItem[]) => (m.length ? m : undefined); // an empty menu draws no dots
+  const writeItem = (p: PersonRef): MenuItem[] => plain || p.id === session.me?.id ? [] : [{ label: t('person.write'), onselect: () => void write(p) }];
+  const menuOf = (p: PersonRef, from: Id | null): MenuItem[] => !b || b.locked ? writeItem(p) : [...writeItem(p),
     ...b.teams.filter((tm) => tm.id !== from).map((tm) => ({ label: t('tm.toTeam', { team: tm.name, n: tm.members.length, max: b!.max }), disabled: tm.members.length >= b!.max, onselect: () => move(p, tm.id, tm.name) })),
     ...(from !== null ? [{ label: t('tm.toSolo'), onselect: () => move(p, null, '') }] : []),
     ...outItems(p, b.teams.find((tm) => tm.id === from) ?? null),
@@ -117,7 +134,7 @@
         {#each b.teams as tm (tm.id)}
           <Group caption="{tm.name} · {tm.members.length}/{b.max}{tm.members.length < b.max ? ' · ' + t('tm.shortBy', { n: b.max - tm.members.length }) : ''}{tm.open && tm.members.length < b.max ? ' · ' + t('tm.looking') : ''}">
             {#each tm.members as p (p.id)}
-              <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} value={b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked ? undefined : menuOf(p, tm.id)}>
+              <Row dense title={p.name} subtitle={p.id === tm.captain ? t('tm.captain') : undefined} value={b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={some(menuOf(p, tm.id))}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}
@@ -126,7 +143,7 @@
         {#if b.solo.length}
           <Group caption="{t('tm.solo')} · {b.solo.length}">
             {#each b.solo as p (p.id)}
-              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={b.locked || p.off && !outItems(p, null).length ? undefined : p.off ? outItems(p, null) : !p.consent ? [{ label: t('tm.remind'), onselect: () => remind(p) }, ...outItems(p, null)] : menuOf(p, null)}>
+              <Row dense title={p.name} value={p.off ? t('tm.offConsent') : !p.consent ? t('tm.noConsent') : b.unchecked.includes(p.id) ? t('tm.unchecked') : undefined} menu={some(b.locked ? writeItem(p) : p.off ? [...writeItem(p), ...outItems(p, null)] : !p.consent ? [...writeItem(p), { label: t('tm.remind'), onselect: () => remind(p) }, ...outItems(p, null)] : menuOf(p, null))}>
                 {#snippet lead()}<Avatar person={p} size={32} />{/snippet}
               </Row>
             {/each}
