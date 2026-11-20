@@ -12,9 +12,11 @@
   export function warm(): void {
     if (warmed.length) return;
     prewarm();
-    const im = new Image(); im.src = sheet('main', false, 1); void im.decode().catch(() => {}); warmed.push(im);
     const at = 2 ** SHEET_Z;
-    for (const x of [at, at + 1]) for (const y of [at, at + 1]) fetch(tilesAt('main', false, 1).replace('{z}', String(SHEET_Z + 1)).replace('{x}_{y}', `${x}_${y}`)).catch(() => {});
+    for (const dark of [false, true]) { // ours opens by default, light or dark by the look (not known here)
+      const im = new Image(); im.src = sheet('kbtu', dark, 1); void im.decode().catch(() => {}); warmed.push(im);
+      for (const x of [at, at + 1]) for (const y of [at, at + 1]) fetch(tilesAt('kbtu', dark, 1).replace('{z}', String(SHEET_Z + 1)).replace('{x}_{y}', `${x}_${y}`)).catch(() => {});
+    }
   }
 </script>
 
@@ -78,9 +80,10 @@
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
-  // which map (a list at the top left): Uni-Q's, ours (floors 1 and 2 so far, not the default yet), the 2023 plan
-  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list; Uni-Q stays the default for now
-  let ver = $state<Ver>('main');
+  // which map (a list at the top left): ours, the newest and the default (owner, Nov 20), Uni-Q's, the 2023 plan.
+  // Opened on a room or a place: Uni-Q's (its rooms are ringed there, the basement is only there)
+  const VERS: Ver[] = ['kbtu', 'main', 'old'];
+  let ver = $state<Ver>(untrack(() => (place ? 'main' : 'kbtu')));
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
   let routing = $state(false);
