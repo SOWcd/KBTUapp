@@ -68,6 +68,7 @@
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
+  .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
   .venv/bin/python -m kbtu.admin round-nudge <round id> [--dry]   a recruitment round's "pick an interview time" nudge (due
@@ -351,6 +352,16 @@ def main(args: list[str]) -> None:
         except UnicodeError:
             sys.exit("guest CSV must be UTF-8")
         print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
+    elif cmd == "groups-draw" and len(args) == 4 and all(re.fullmatch(r"[0-9]{1,4}", a) for a in args[1:]):
+        from .logic import evgroups
+        boss, e = one(con, "SELECT id FROM users WHERE is_founder = 1"), one(con, "SELECT org_id FROM events WHERE id = ?", int(args[1]))
+        if not boss or not e:
+            sys.exit("needs the creator (`founder`) and an existing event")
+        try:
+            got = evgroups.draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
+        except ApiError as exc:
+            sys.exit(f"refused: {exc.code}")
+        print("groups", " ".join(f"{g['name']}:{len(g['standings'])}" for g in got["groups"]))
     elif cmd == "reg-until" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]):
         at = _event_time(args[2], "time")
         with db.tx(con):

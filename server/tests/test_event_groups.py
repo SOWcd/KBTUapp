@@ -138,3 +138,14 @@ def test_group_visibility_and_admin_match_scope(club):
     result = {"home_score": 2, "away_score": 1}
     assert c.put(match, headers={**VIEWER, "X-Staff-Event": str(other)}, json=result).status_code == 403
     assert c.put(match, headers={**VIEWER, "X-Staff-Event": str(eid)}, json=result).status_code == 200
+
+
+def test_admin_groups_draw(club, env, monkeypatch, capsys):
+    from kbtu import admin
+    _, cfg = env
+    c, eid, _, _ = _seed(club, [f"T{i}" for i in range(11)])
+    con = club[1]
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = (SELECT MIN(id) FROM users)")
+    admin.main(["groups-draw", str(eid), "6", "2"])
+    assert capsys.readouterr().out.strip() == "groups A:6 B:5"
