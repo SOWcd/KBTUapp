@@ -501,5 +501,5 @@ def test_help_desk_review_cases(env, monkeypatch):
     monkeypatch.setattr(appeals, "ASK", "")
     assert bot._render(con, m) is None
     monkeypatch.setattr(appeals, "ASK", "all")
-    assert bot._render(con, m)[2] == "ask"
+    assert bot._render(con, m)[2] == f"ask_{ids[1]}"  # that question's own view, the answer first
     con.close()
