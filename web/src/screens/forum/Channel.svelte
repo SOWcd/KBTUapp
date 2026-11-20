@@ -1,7 +1,9 @@
 <script lang="ts">
   // The Forum tab (the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
   // newest first and nothing else (a pinned "popular" block put old posts first; a post being discussed
-  // says so in place). Each post a card on the ground (the flat Threads list on black "limped"): the face
+  // says so in place). Liquid Glass (flat cards read as old iOS): a still, soft light behind the feed, each post a clear
+  // pane over it (a translucent body, a lit rim, no blur: fifty live blurs would cook an old iPhone), the composer and
+  // the side doors real glass (base.css .glass-pill, Button's glass). Each post a card: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
   // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
@@ -47,7 +49,6 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Button from '../../ui/Button.svelte';
-  import Chip from '../../ui/Chip.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
@@ -212,18 +213,18 @@
   <div class="pill">{#if waiting && !atTop}<span class="pin" transition:slide={{ duration: 220, axis: 'y' }}>
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
   </span>{/if}</div>
-  <!-- the way to write: a card of its own, my face and a quiet prompt, the pen at the end; the whole card a tap -->
-  <button class="compose" class:away={channel.writing > 0} data-compose onclick={write}>
+  <!-- the way to write: a glass capsule, my face and a quiet prompt, the pen at the end; the whole capsule a tap -->
+  <button class="compose glass glass-pill" class:away={channel.writing > 0} data-compose onclick={write}>
     {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
     <span class="prompt ellipsis">{t('fc.share')}</span>
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
-  <!-- the tab's two side doors, quiet chips under the composer (two full cards here crowded the feed's head):
+  <!-- the tab's two side doors, small glass pills under the composer (two full cards here crowded the feed's head):
        the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the Student Government alone) -->
   {#if me?.subjects || me?.appeals}
     <div class="doors">
-      {#if me?.subjects}<Chip quiet icon={BookOpen} onclick={() => { haptic.tap(); sheets.subjects(); }}>{t('sj.row')}</Chip>{/if}
-      {#if me?.appeals}<Chip quiet icon={Megaphone} onclick={() => { haptic.tap(); sheets.appeals(); }}>{t('apl.chip')}</Chip>{/if}
+      {#if me?.subjects}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.subjects(); }}>{#snippet icon()}<BookOpen size={16} strokeWidth={2} />{/snippet}{t('sj.row')}</Button>{/if}
+      {#if me?.appeals}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.appeals(); }}>{#snippet icon()}<Megaphone size={16} strokeWidth={2} />{/snippet}{t('apl.chip')}</Button>{/if}
     </div>
   {/if}
 
@@ -300,26 +301,60 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; }
+  /* the ground: three soft cool lights that stay put while the feed scrolls (a scroller's own background doesn't
+     move with its content), so every pane and the capsule have something to bend. Static paint, no filter, no motion:
+     nothing to stop under lowfx or reduced motion.
+     ponytail: still lights; a slow drift on a layer of its own (transform only) if the owner wants it alive */
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column;
+    --pane: rgba(255, 255, 255, 0.05); --pane-sheen: rgba(255, 255, 255, 0.05);
+    --pane-hi: rgba(255, 255, 255, 0.42); --pane-lo: rgba(255, 255, 255, 0.14); --pane-rim: rgba(255, 255, 255, 0.07);
+    --pane-lift: 0 16px 30px -22px rgba(0, 0, 0, 0.7);
+    background:
+      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.24), transparent 70%),
+      radial-gradient(75% 40% at 105% 58%, rgba(124, 92, 255, 0.15), transparent 70%),
+      radial-gradient(85% 50% at -5% 95%, rgba(40, 160, 255, 0.13), transparent 70%); }
+  /* light: white rims vanish on white, so a pane is a milky body with a white lit arc, an ink reflection and a navy lift */
+  :global(:root[data-theme='light']) .page {
+    --pane: rgba(255, 255, 255, 0.56); --pane-sheen: rgba(255, 255, 255, 0.55);
+    --pane-hi: var(--lg-rim-hi); --pane-lo: rgba(11, 20, 51, 0.16); --pane-rim: rgba(11, 20, 51, 0.05);
+    --pane-lift: 0 1px 2px rgba(24, 36, 90, 0.04), 0 14px 28px -18px rgba(24, 36, 90, 0.22);
+    background:
+      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.2), transparent 70%),
+      radial-gradient(75% 40% at 105% 58%, rgba(150, 110, 255, 0.15), transparent 70%),
+      radial-gradient(85% 50% at -5% 95%, rgba(60, 180, 255, 0.16), transparent 70%); }
   .page > :global(*) { flex-shrink: 0; }
-  /* every post a card on the ground, not a bare black background: the app's surface and radius, a hairline
-     rim in the dark (no shadow there), the soft card shadow in the light; the composer is the first card */
-  .compose, .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line); }
+  /* a post: a clear pane over the lights. The glass family's recipe (base.css, ui/Button) without the live blur: a
+     translucent body with a sheen in its top, a rim bright on the arc that faces the light and dim on the opposite
+     one (two gradients through a ring mask, painted once), a soft lift */
+  .post { border-radius: var(--r-xl); background: linear-gradient(180deg, var(--pane-sheen), transparent 96px) var(--pane); box-shadow: var(--pane-lift); }
+  .post::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+    background:
+      radial-gradient(ellipse 60% 110px at 22% 0%, var(--pane-hi), transparent 72%),
+      radial-gradient(ellipse 55% 90px at 78% 100%, var(--pane-lo), transparent 75%),
+      var(--pane-rim);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude; }
 
-  /* the composer: my face, a quiet prompt, the pen */
-  .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
-    transition: background var(--t-fast) var(--ease); }
-  .compose:active { background: var(--surface-2); }
+  /* the composer: the capsule's glass (base.css .glass-pill: the one live blur here besides the doors'), my face, a
+     quiet prompt, the pen */
+  .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-full); text-align: left;
+    transition: transform 450ms var(--ease-bounce); }
+  .compose:active { transform: scale(0.985); transition-duration: 80ms; }
   .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
-  /* the side doors: a row of quiet chips on the ground, no card; a scroller on a narrow phone (4 px: the chips' hit areas) */
-  .doors { display: flex; gap: var(--s-2); margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: 4px var(--gutter); overflow-x: auto; scrollbar-width: none; }
+  /* the side doors: a row of small glass pills, no card; a scroller on a narrow phone (4 px above: their hit areas;
+     the room below, taken back by the margin: their lift, which the scroller would cut) */
+  .doors { display: flex; gap: var(--s-2); margin: var(--s-3) calc(-1 * var(--gutter)) -14px; padding: 4px var(--gutter) 18px; overflow-x: auto; scrollbar-width: none; }
+  .doors :global(.btn) { box-shadow: var(--lg-bevel), var(--lg-lift); }
   .doors::-webkit-scrollbar { display: none; }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
-  /* the pen: a quiet grey seat, not an accent blob (a saturated blue circle read as childish); the whole card is the tap */
-  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2); }
+  /* the pen: a quiet lens in the capsule, not an accent blob (a saturated blue circle read as childish); the whole capsule is the tap */
+  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text);
+    box-shadow: inset 0 1px 0.5px var(--lg-rim-lo), inset 0 0 0 0.5px var(--line-2); }
 
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */
@@ -360,7 +395,7 @@
   @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
-  .pics { display: grid; gap: 2px; margin-top: var(--s-3); border-radius: var(--r-m); overflow: hidden; }
+  .pics { display: grid; gap: 2px; margin-top: var(--s-3); border-radius: var(--r-m); overflow: hidden; box-shadow: 0 0 0 0.5px var(--line-2); }
   .pics.n2, .pics.n4 { grid-template-columns: 1fr 1fr; }
   .pics.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
   .pics.n3 .ph:first-child { grid-row: span 2; }
@@ -392,6 +427,10 @@
   .f + .f { margin-left: -6px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
   .talk { flex: none; display: flex; margin-left: auto; }
+  /* the button's glass on a clear body here (Button's sits on the solid surface): the pane and its light show through */
+  .talk :global(.btn) { background:
+    radial-gradient(ellipse 40% 60% at var(--hx) 0%, var(--lg-spot), transparent 70%),
+    linear-gradient(180deg, var(--lg-sheen), transparent 60%) var(--fill); }
   .share + .talk { margin-left: 0; }
   /* share: a quiet icon just before the comments, the actions together under the thumb */
   .share { flex: none; display: flex; margin-left: auto; --plain-ink: var(--text-3); }
