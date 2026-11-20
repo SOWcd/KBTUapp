@@ -59,11 +59,6 @@ export function openMapFrom(e: MouseEvent) {
   sheets.map();
 }
 
-/** The door screen's half last used on this phone (scanner or QR); none yet: null (the screen picks by the event). */
-export function doorMode(mode?: 'scan' | 'qr'): 'scan' | 'qr' | null {
-  try { if (mode) localStorage.setItem('door.mode', mode); const m = localStorage.getItem('door.mode'); return m === 'qr' || m === 'scan' ? m : null; } catch { return mode ?? null; }
-}
-
 /** The door screen (owner, Nov 14): the event's QR and the scanner on this phone, one switch apart (Scanner.svelte).
  *  A member's QR: an ordinary public event only, never the volunteers ledger's club `vol` (server checkin._guests:
  *  those scans count hours and misses), so there the scanner has no switch. runs: its organizers. */

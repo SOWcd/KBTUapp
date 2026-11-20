@@ -174,10 +174,6 @@ export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; foun
 
 export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + achKey(a), ach: a, name: achName(a), sub: tierName(a) });
 export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) });
-/** the Creator's seal by the name, up close: what it is and why */
-export const founderItem = (): ShelfItem => ({ key: 'founder', founder: true, name: t('person.founder'), sub: '' });
-/** the idea author's blue seal */
-export const ideaItem = (): ShelfItem => ({ key: 'idea', idea: true, name: t('person.idea'), sub: '' });
 /** the app's moderator's or admin's shield (ui/Shield): what the role is, never an action */
 export const staffItem = (role: 'admin' | 'moderator'): ShelfItem => ({ key: 'staff', staff: role, name: t(role === 'admin' ? 'seal.admin' : 'seal.moderator'), sub: '' });
 /** A showcase key (an achievement code, or b<event id> for a badge) as an item of this person's, if they have it. */
