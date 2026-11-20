@@ -1986,4 +1986,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     # users by lower(tg_username): account.support() on every /api/me and the @handle lookups (oversight, profiles, vol)
     # take an index instead of a scan; not partial: SQLite can't prove lower(x) = ? implies x IS NOT NULL
     (192, """CREATE INDEX IF NOT EXISTS users_handle ON users (lower(tg_username));"""),
+    # (issue #44) scans EXPLAIN QUERY PLAN found on the main screens: my round applications on a club's page
+    # (round_apps by user), a photo's event row in the gallery and the moderators' report count (event_photos by file:
+    # SQLite built an automatic index per query), a photo's reports in the gallery (reports by target), Studio's role
+    # list counting members per role (org_members by role)
+    (193, """CREATE INDEX IF NOT EXISTS round_apps_by_user ON round_apps (user_id);
+    CREATE INDEX IF NOT EXISTS event_photos_by_file ON event_photos (file_id);
+    CREATE INDEX IF NOT EXISTS reports_by_target ON reports (target, target_id);
+    CREATE INDEX IF NOT EXISTS members_by_role ON org_members (role_id);"""),
 ]
