@@ -825,7 +825,14 @@
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
-      void loadCredits(); // People of the app: Profile's row and its screen, ahead of any tap
+      // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
+      // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
+      void loadCredits().then(() => {
+        const v = data.credits?.version, k = `cr.asked.${v}`;
+        if (data.credits?.mine?.consent !== null || data.credits?.mine == null || ui.gate) return;
+        try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
+        sheets.creditAsk();
+      });
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
       for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       for (const k of TABS) loadPage(k).catch(() => {});
