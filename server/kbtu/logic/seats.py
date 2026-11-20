@@ -455,10 +455,15 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)], share=True)
 
 
+PAST_DAYS = 30  # the Afisha's "Past" reaches back a month
+
+
 def past_events(con, v: Viewer, org: int | None = None, mine: bool = False) -> list[dict]:
-    """The afisha's past events, or a club's latest few (its page's "Recent": its own and the ones it co-hosts), or
-    mine: the ones I was signed up for or came to (Afisha's "Past")."""
-    where, args, n = (on_afisha(), on_afisha_args(v), 50) if org is None else ("""(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x
+    """The afisha's past events of the last PAST_DAYS (Afisha's "Past": what happened on campus, mine marked by the
+    card's `my`), or a club's latest few (its page's "Recent": its own and the ones it co-hosts), or mine: the ones I
+    was signed up for or came to."""
+    where, args, n = (f"{on_afisha()} AND COALESCE(ends_at, starts_at + ?) > ?", [*on_afisha_args(v), NO_END, core.now() - PAST_DAYS * 86400], 50) \
+        if org is None else ("""(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))""", [org, org], 6)
     if mine:
         where, args, n = ("id IN (SELECT event_id FROM registrations WHERE user_id = ? AND (status = 'going' OR checked_in_at IS NOT NULL))",

@@ -753,6 +753,7 @@ const en: Dict = {
   'list.ihn': "IHN",
   'list.freeDay': 'Free day',
   'list.past': 'Past',
+  'list.wasThere': "✓ You were there",
 
   'feed.end': "That's every event",
   'feed.endText': "New ones appear every day. Follow clubs: the bot tells you first.",

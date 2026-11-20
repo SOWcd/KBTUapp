@@ -133,10 +133,10 @@
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
 
-  const past = $derived(data.past); // "Past": mine that ended, newest first (the server's order)
+  const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
 
-  // the pull-down search: the events held, upcoming and mine that ended, by title, place or club
+  // the pull-down search: the events held, upcoming and the last month's that ended, by title, place or club
   let q = $state('');
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
@@ -217,7 +217,7 @@
   </header>
   {#if searching}
     <div class="past">
-      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />
+      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
       {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
     </div>
   {:else}
@@ -321,12 +321,12 @@
   {#if galleryAt === undefined}<GalleryCard />{/if}
 
   {#if past.length}
-    <!-- where I've been: the events I was signed up for or came to, newest first (their albums, my rating); folded
-         into one row until tapped (owner, Nov 15: the main tab is what is ahead) -->
+    <!-- what happened on campus: the last month's events, newest first, the ones I was at marked (their albums, my
+         rating); folded into one row until tapped (owner, Nov 15: the main tab is what is ahead) -->
     <div class="pastrow"><Group><Row title={t('list.past')} value={String(past.length)} accessory="disclosure" open={pastOpen} onclick={() => { haptic.select(); pastOpen = !pastOpen; }} /></Group></div>
     {#if pastOpen}
     <div class="past">
-      {#each allPast ? past : past.slice(0, 5) as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />{/each}
+      {#each allPast ? past : past.slice(0, 5) as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />{/each}
       {#if past.length > 5 && !allPast}<span class="lnk"><Button kind="plain" size="s" onclick={() => (allPast = true)}>{t('common.more')}</Button></span>{/if}
     </div>
     {/if}

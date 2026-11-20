@@ -62,6 +62,29 @@ def test_initiative_events_stay_off_the_afisha(env):
     assert logic.assistant.brief(con, other)[2] == {collab, theirs}  # both started within its window
 
 
+def test_past_is_the_last_month_for_everyone_mine_marked(env):
+    """Afisha's "Past" (issue #72): every afisha event that ended in the last 30 days, not only mine; the card's `my`
+    says I was there (signed up, or checked in); a club's page and "mine" still reach further back."""
+    c, cfg = env
+    con, init, off = _setup(c, cfg)
+    went, came, missed, old = (_event(c, off, OFF, t) for t in ("Went", "Came", "Missed", "Old"))
+    for eid in (went, came, old):
+        assert c.post(f"/api/events/{eid}/registration", headers=tma(SIGNED)).status_code == 200
+    con.execute("UPDATE registrations SET checked_in_at = ? WHERE event_id = ?", (logic.core.now() - 86400, came))
+    now, day = logic.core.now(), 86400
+    for eid, ago in ((went, 2), (came, 29), (missed, 10), (old, 31)):
+        con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (now - ago * day - 3600, now - ago * day, eid))
+    con.execute("UPDATE events SET ends_at = NULL WHERE id = ?", (missed,))  # no end: counts as 3 h long
+
+    past = {e["id"]: e for e in c.get("/api/events/past", headers=tma(SIGNED)).json()}
+    assert list(past) == [went, missed, came]  # newest first; a month and a day ago is gone
+    assert past[went]["my"]["status"] == "going" and past[came]["my"]["checkedInAt"] and past[missed]["my"] is None
+    assert [e["id"] for e in c.get("/api/events/past", headers=tma(OTHER)).json()] == [went, missed, came]  # for everyone
+    assert all(e["my"] is None for e in c.get("/api/events/past", headers=tma(OTHER)).json())
+    assert {e["id"] for e in c.get("/api/events/past?mine=1", headers=tma(SIGNED)).json()} == {went, came, old}
+    assert old in {e["id"] for e in c.get(f"/api/events/past?org={off}", headers=tma(OTHER)).json()}
+
+
 def _report(c, who, eid):
     return c.post("/api/reports", headers=tma(who), json={"target": "event", "id": eid, "reason": "danger"})
 
