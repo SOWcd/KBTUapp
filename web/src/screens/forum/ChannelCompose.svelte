@@ -46,12 +46,18 @@
     channel.feed = [temp, ...(channel.feed ?? [])];
     return temp;
   }
+  // the feed's key for a post that was my stand-in: the stand-in's own, so the card stays the same card when the
+  // server's id comes (a new key swapped it for a twin, a blink at the top). ponytail: grows by one per post I send
+  // in this session
+  const born = new Map<Id, Id>();
+  export const keyOf = (p: ChannelFeedPost): Id => born.get(p.id) ?? p.id;
   /** The stand-in becomes the real one (or just goes, if a refresh brought the real one already: no twin keys) */
   export function land(temp: ChannelFeedPost, p: { id: Id; status: ChannelFeedPost['status']; at: number; nick: ChannelFeedPost['nick'] }, human = false,
     review?: ChannelFeedPost['review']): void {
     const feed = channel.feed ?? []; touched();
-    channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
-      : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human, review } : x));
+    if (feed.some((x) => x.id === p.id)) { channel.feed = feed.filter((x) => x.id !== temp.id); return; }
+    born.set(p.id, temp.id);
+    channel.feed = feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human, review } : x));
   }
   export const unstand = (temp: ChannelFeedPost): void => { channel.feed = (channel.feed ?? []).filter((x) => x.id !== temp.id); };
 </script>
@@ -75,6 +81,7 @@
   import { type Key } from '../../lib/i18n/index.svelte';
   import { brokenAll, meaningful, type Rule } from '../../lib/forumRules';
   import { haptic } from '../../lib/tg';
+  import { keyboard } from '../../lib/state/keyboard.svelte';
   import { burst } from '../../ui/burst';
   import { grow } from '../../ui/grow';
   import { glass } from '../../ui/glass';
@@ -151,36 +158,40 @@
     caret = null;
   }
 
-  let win: HTMLDivElement;
-  let motion: Animation | undefined;
+  // Three layers, transforms only (an animated clip-path repainted the whole window every frame on iPhone): win, the
+  // frame, rounds and clips; pane, the surface, slides down out of the pill's row; inner slides back by as much, so
+  // the words never move inside the window while its lower edge sweeps open.
+  let win: HTMLDivElement, pane: HTMLDivElement, inner: HTMLDivElement;
+  let motion: Animation[] = [];
   let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
   let gone = false, sent = false;
   let still = $state(false);  // the opening is over: only then the feed behind blurs (a blur under a moving window and the keyboard lags on iPhone)
-  const full = () => `inset(0% 0% 0% 0% round ${getComputedStyle(win).borderTopLeftRadius})`;
-  const ease = () => getComputedStyle(win).getPropertyValue('--ease').trim();
+  const ease = () => getComputedStyle(win).getPropertyValue('--ease-spring').trim();
 
-  // Percentage insets follow the window as the keyboard changes its height. Pixel insets would expose a different
-  // amount of the editor on resize, then pop to the full height when the animation releases them.
-  function pill(): Keyframe | null {
+  // where the pill is, against the window's resting place (its layout box: read with no motion on it)
+  function pill(): { dy: number; h: number } | null {
     const p = document.querySelector('[data-compose]')?.getBoundingClientRect();
     if (!p?.width || p.left < -1 || p.right > innerWidth + 1 || p.bottom < 0 || p.top > innerHeight) return null;
-    const r = win.getBoundingClientRect();
-    return { transform: `translateY(${p.top - r.top}px)`,
-      clipPath: `inset(0% ${(r.right - p.right) / r.width * 100}% ${Math.max(0, 1 - p.height / r.height) * 100}% ${(p.left - r.left) / r.width * 100}% round ${getComputedStyle(win).borderTopLeftRadius})` };
+    return { dy: p.top - win.getBoundingClientRect().top, h: Math.min(p.height, win.offsetHeight) };
+  }
+  // the pill's row and the window, one morph either way; from: the frame on screen (Back mid-growth folds from there)
+  function morph(f: { dy: number; h: number }, from?: string[]): Animation[] {
+    const H = win.offsetHeight, ends = [`translateY(${f.dy}px)`, `translateY(${f.h - H}px)`, `translateY(${H - f.h}px)`];
+    return [win, pane, inner].map((el, i) => el.animate(from ? [{ transform: from[i] }, { transform: ends[i] }] : [{ transform: ends[i] }, { transform: 'none' }],
+      { duration: from ? 260 : 320, easing: ease(), fill: from ? 'forwards' : 'none' }));
   }
 
   function leave() {
     if (gone) return;
     gone = true; out = true;
-    // Back can arrive mid-growth: start from the frame on screen, without jumping to the fully open window.
-    const style = getComputedStyle(win), current = { transform: style.transform, clipPath: style.clipPath, opacity: style.opacity };
-    // Keep the exit's geometry as the keyboard retracts, so its last frame still matches the source card.
+    const from = [win, pane, inner].map((el) => getComputedStyle(el).transform), shown = getComputedStyle(win).opacity;
+    // the keyboard going down must not grow the window under the exit: its last frame still matches the pill
     win.style.height = win.style.maxHeight = `${win.offsetHeight}px`;
-    motion?.cancel();
-    const to = calm() ? null : pill();
+    for (const a of motion) a.cancel();
+    const f = calm() ? null : pill();
     (document.activeElement as HTMLElement | null)?.blur?.(); // the keyboard goes with it
-    motion = win.animate([current, to ?? { opacity: 0 }], { duration: calm() ? 1 : 240, easing: ease(), fill: 'forwards' });
-    motion.onfinish = () => {
+    motion = f ? morph(f, from) : [win.animate([{ opacity: shown }, { opacity: 0 }], { duration: calm() ? 1 : 200, easing: ease(), fill: 'forwards' })];
+    motion[0].onfinish = () => {
       flushSync(() => removeOverlay(overlay.id));
       document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });
     };
@@ -193,27 +204,18 @@
     // the feed behind is out of reach while I write: no focus, no screen reader (the dialog is modal)
     const bg = document.querySelector('section.tab.on'), was = bg?.hasAttribute('inert');
     bg?.setAttribute('inert', '');
-    // Measure the layout position, never the animated rectangle: otherwise each keyboard resize feeds the motion
-    // back into the available height. The inset leaves a little ground between the window and the keyboard.
-    const vv = window.visualViewport;
-    // once a frame at most: iOS fires several resizes while the keyboard slides, each a full layout of the window
-    let tick = 0;
-    const fit = () => {
-      if (tick) return;
-      tick = requestAnimationFrame(() => {
-        tick = 0;
-        if (vv && !gone) win.style.setProperty('--room', `${Math.max(0, vv.offsetTop + vv.height - win.offsetTop - 12)}px`);
-      });
-    };
-    fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
-    const from = calm() ? null : pill();
-    motion = win.animate(from ? [from, { transform: 'none', clipPath: full() }]
-      : [{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 1 : 300, easing: ease() });
-    motion.onfinish = () => { if (!gone) still = true; };
-    const frame = requestAnimationFrame(() => { if (!gone) out = false; });
+    // The opening starts a frame on: by then the tap's focus has told the keyboard (keyboard.h, guessed on iOS at once,
+    // lib/state/keyboard), so the window is measured at the size it keeps, never relaid out under the motion.
+    const frame = requestAnimationFrame(() => {
+      if (gone) return;
+      const f = calm() ? null : pill();
+      motion = f ? morph(f) : [win.animate([{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 1 : 200, easing: ease() })];
+      motion[0].onfinish = () => { if (!gone) still = true; };
+      out = false;
+    });
     return () => {
-      cancelAnimationFrame(frame); cancelAnimationFrame(tick); motion?.cancel();
-      channel.writing--; chrome(); vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit);
+      cancelAnimationFrame(frame); for (const a of motion) a.cancel();
+      channel.writing--; chrome();
       if (!was) bg?.removeAttribute('inert');
     };
   });
@@ -255,7 +257,11 @@
 </script>
 
 <div class="scrim" class:out class:still onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="cw glass glass-sheet" class:out use:glass bind:this={win} role="dialog" aria-modal="true" aria-label={t('fc.new')}>
+<!-- the window ends above the keyboard (keyboard.h: the app's one number for it); its scroller keeps its own room
+     (data-kb-own): a spacer the keyboard code put under the words slid them down and back while it came up -->
+<div class="cw" class:out bind:this={win} style:--kb="{keyboard.h}px" role="dialog" aria-modal="true" aria-label={t('fc.new')}>
+<div class="pane glass glass-sheet" use:glass bind:this={pane}>
+<div class="in" bind:this={inner}>
   <!-- the pill's own row, the same places: my face, then who it goes out as (the pill's words fade into it), Send -->
   <div class="top">
     {#key anon || !session.me}<span class="face">{#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
@@ -268,7 +274,7 @@
     </button>
   </div>
   <div class="body">
-  <div class="rest scroll">
+  <div class="rest scroll" data-kb-own>
     <!-- who it goes out as, said outright; the tap keeps the keyboard and the caret -->
     <div class="mode" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
       <Segmented label={t('fc.anon')} value={anon ? 'anon' : 'name'} onchange={mode}
@@ -312,17 +318,24 @@
   </div>
   </div>
 </div>
+</div>
+</div>
 
 <style>
-  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 300ms var(--ease); }
-  .scrim.still { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 300ms var(--ease), backdrop-filter 200ms var(--ease); }
+  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 280ms var(--ease); }
+  /* the blur comes once the window stands, by its layer's opacity (an animated backdrop-filter re-blurs every frame) */
+  .scrim.still::before { content: ''; position: absolute; inset: 0; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: blur-in 220ms var(--ease) both; }
+  @keyframes blur-in { from { opacity: 0; } }
   .scrim.out { opacity: 0; transition-duration: 240ms; }
-  /* The rim and softened ground give the window depth. The same full clip at rest keeps interrupted exits
-     interpolating smoothly, without an exterior shadow popping in after the reveal. */
+  /* the frame: where the window rests, its rounding and its clip (nothing painted of its own); the ground ends 12 px
+     above the keyboard */
   .cw { position: absolute; z-index: var(--z-sheet); top: calc(var(--head-bottom) + var(--s-2)); left: var(--gutter); right: var(--gutter);
-    max-width: 560px; margin: 0 auto; max-height: min(var(--room, 100%), calc(100% - var(--head-bottom) - var(--s-2) - var(--s-4) - var(--safe-bottom)));
-    display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); transform-origin: 50% 0; background: var(--surface-solid); box-shadow: none; clip-path: inset(0 round var(--r-l));
+    max-width: 560px; margin: 0 auto; max-height: calc(100% - var(--head-bottom) - var(--s-2) - max(var(--kb, 0px) + 12px, var(--s-4) + var(--safe-bottom)));
+    display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); }
+  /* the surface and the words, each a layer of its own while they slide (morph in the script) */
+  .pane { position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: inherit; background: var(--surface-solid); box-shadow: none;
     -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .in { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
   /* the top row: the pill's paddings and sizes, so its face and its pen stay put */
   .top { position: relative; flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
@@ -340,7 +353,9 @@
   /* the pen turns into Send: one round button, the accent while it can send (held: grey, a tap says why) */
   .send { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--fill-2); color: var(--text-3);
     transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform var(--t-base) var(--ease); }
-  .send.ready, .out .send { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 12px -4px var(--accent); }
+  .send.ready { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 12px -4px var(--accent); }
+  /* folded: the pill's own quiet pen lens (Channel .pen), so the hand-over at either end changes nothing */
+  .out .send { background: var(--fill); color: var(--text); box-shadow: inset 0 1px 0.5px var(--lg-rim-lo), inset 0 0 0 0.5px var(--line-2); }
   .send::after { content: ''; position: absolute; inset: -4px; } /* 44 to the finger */
   .ic { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 200ms var(--ease), transform var(--t-base) var(--ease); }
   .pen { opacity: 0; transform: rotate(24deg) scale(0.8); }
@@ -402,5 +417,6 @@
   @media (prefers-reduced-motion: reduce) {
     .pic.up img { animation: none; }
     .scrim, .who, .ghost, .send, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
+    .scrim.still::before { animation: none; }
   }
 </style>
