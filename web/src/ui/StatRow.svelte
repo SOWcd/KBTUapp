@@ -16,4 +16,5 @@
   dt { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   dd { margin: 0; font: 700 var(--fs-t1)/1.05 var(--font-display); letter-spacing: -0.03em; color: var(--text); }
   .key { color: var(--accent-text); }
+  @media (max-width: 359px) { .stats { gap: var(--s-2); } dt { letter-spacing: 0.02em; } } /* 320 px: a long caps label stays whole */
 </style>

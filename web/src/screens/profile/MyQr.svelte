@@ -128,7 +128,7 @@
 
   /* the badge's own material, seen from the back */
   .pass {
-    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 480px)); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it so the two-line hint under it stays in sight */ border-radius: 26px; color: #fff;
+    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), max(220px, calc(100dvh - 480px))); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it so the two-line hint under it stays in sight */ border-radius: 26px; color: #fff;
     background: radial-gradient(110% 70% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(160deg, #2A4FD6, #121A3D 70%);
     box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.75), 0 10px 24px -12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
@@ -142,7 +142,9 @@
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
 
   .who { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 18px; }
-  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), calc(100dvh - 520px)); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight; not so soon that a big phone gets a thin card */
+  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), max(220px, calc(100dvh - 520px))); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight; not so soon that a big phone gets a thin card;
+     never under 220 px (an SE-sized phone made it thinner than its name and number): the page scrolls instead */
+  /* the 220 px floor: on a short phone (SE, 320x568) the card went thinner than its name and number; the page scrolls instead */
   .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
   .ph { position: relative; flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }

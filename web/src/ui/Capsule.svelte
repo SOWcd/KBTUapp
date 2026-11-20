@@ -49,9 +49,12 @@
   function fit(node: HTMLElement) {
     const run = () => {
       const icon = node.previousElementSibling as SVGElement | null, hide = icon && !node.parentElement!.classList.contains('spin');
+      // the words' own fractional width, not scrollWidth: that rounds, and a title 0.03 px too wide read as fitting
+      // and was cut ("Profi…" at 320 px)
+      const ratio = () => { const r = document.createRange(); r.selectNodeContents(node); const w = r.getBoundingClientRect().width; return w ? node.getBoundingClientRect().width / w : 1; };
       node.style.fontSize = ''; if (icon) icon.style.display = '';
-      let k = node.clientWidth / node.scrollWidth;
-      if (k < 11 / 14 && hide) { icon.style.display = 'none'; k = node.clientWidth / node.scrollWidth; }
+      let k = ratio();
+      if (k < 11 / 14 && hide) { icon.style.display = 'none'; k = ratio(); }
       if (k < 1) node.style.fontSize = `${Math.max(11, Math.floor(14 * k * 2) / 2)}px`;
     };
     const ro = new ResizeObserver(run); // the capsule widens after boot, on a narrow phone it starts smaller
@@ -144,6 +147,7 @@
 
   .ttl { justify-content: center; gap: 7px; font: 650 14px/1 var(--font-text); letter-spacing: -0.01em; padding: 0 14px; }
   .ttl :global(svg) { flex: none; opacity: 0.8; }
+  @media (max-width: 340px) { .ttl { padding: 0 10px; } } /* 320 px: a title at the 11 px floor still whole ("New award") */
   .ttl.mk { gap: 0; }
   .ttl.spin :global(svg) { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
