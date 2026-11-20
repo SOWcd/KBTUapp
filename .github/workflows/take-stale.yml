@@ -1,0 +1,31 @@
+# A claimed task nobody works on goes back: once a day, a helper task assigned more than 3 days ago with no open pull
+# request from its assignee that names it ("#N") is unassigned, with a comment. A draft PR counts: open one early.
+name: take-stale
+on:
+  schedule: [{ cron: "0 3 * * *" }]
+  workflow_dispatch:
+permissions:
+  issues: write
+  pull-requests: read
+jobs:
+  free:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo, DAYS = 3, now = Date.now();
+            const issues = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', labels: 'helper task' });
+            for (const issue of issues.filter((i) => !i.pull_request && i.assignees.length)) {
+              const events = await github.paginate(github.rest.issues.listEvents, { owner, repo, issue_number: issue.number });
+              for (const a of issue.assignees) {
+                const at = events.filter((e) => e.event === 'assigned' && e.assignee?.login === a.login).pop()?.created_at;
+                if (!at || now - Date.parse(at) < DAYS * 864e5) continue;
+                const q = `repo:${owner}/${repo} is:pr is:open author:${a.login} "#${issue.number}"`;
+                const { data } = await github.rest.search.issuesAndPullRequests({ q });
+                if (data.total_count) continue;
+                await github.rest.issues.removeAssignees({ owner, repo, issue_number: issue.number, assignees: [a.login] });
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number,
+                  body: `Freed: taken ${DAYS}+ days ago with no open pull request. @${a.login}, comment /take again to continue.` });
+              }
+            }
