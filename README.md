@@ -20,7 +20,7 @@ This is "source-available", not open source in the OSI sense. Third-party materi
 
 - `web/`: Svelte 5 + Vite + TypeScript, a static build.
 - `server/`: Python (FastAPI) with SQLite in WAL mode: the API, the Telegram bot and the background jobs in one process.
-  The schema is `server/kbtu/schema.sql` plus the migrations in `server/kbtu/db.py`.
+  The schema is `server/kbtu/schema.sql` plus the migrations in `server/kbtu/migrations.py`.
 - One Docker image (`Dockerfile`) serves both.
 
 What the app stores and who sees it: the privacy policy at [kbtu.sow.kz/privacy](https://kbtu.sow.kz/privacy)
