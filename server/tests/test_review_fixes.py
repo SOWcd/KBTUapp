@@ -25,7 +25,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
              if {r[1] for r in con.execute(f"PRAGMA table_info({t})")} & {"email", "student_id", "tg_id", "author_tg", "phone"}}
     # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, only the row I claimed goes
     assert keyed == {"users", "students", "prefill", "prefill_rest", "qr_expected", "tgc_saved", "tgc_strangers", "chat_seen_free", "tgc_comments",
-                     "roster_pending", "swear_hits", "chat_seen", "credits"}, keyed  # credits: account.delete_me -> credits.gone (test_credits)
+                     "roster_pending", "swear_hits", "chat_seen", "credits", "event_guests"}, keyed
 
     ali = login(c, 21, "ali")
     con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
@@ -34,6 +34,8 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
                                    {"email": "y@kbtu.kz", "name": "Bek Omarov", "studentId": "24Bali"}, {"email": "dan@kbtu.kz", "name": "Dan"}])
     aid = ali["id"]
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO events (id, org_id, title, guest_list, created_at, updated_at) VALUES (1, 1, 'Guest list', 1, 0, 0)")
+    con.execute("INSERT INTO event_guests (event_id, student_id) VALUES (1, '24Bali'), (1, '24Bbob')")
     mail = con.execute("SELECT lower(email) FROM students WHERE user_id = ?", (aid,)).fetchone()[0]
     for key, claimed, rejected, email in (("claimed", aid, None, mail), ("my_word", aid, None, None), ("turned_down", None, aid, None), ("someone", None, None, None)):
         con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, rejected_by, created_at)
@@ -50,6 +52,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, 'join_request', ?, 0, 1)", (bob, f"jr:{aid}:999:1"))  # a club's number, not mine
     con.execute("UPDATE users SET announce_ok = 1 WHERE id = ?", (aid,))
     delete_now(c, cfg, tma(21, "Ali"))
+    assert [r[0] for r in con.execute("SELECT student_id FROM event_guests")] == ["24Bbob"]
     assert con.execute("SELECT announce_ok FROM users WHERE id = ?", (aid,)).fetchone()[0] is None
     assert [r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE user_id = ?", (bob,))] == [f"jr:{aid}:999:1"]
     # who made the link leaves the line, the line stays

@@ -7,10 +7,12 @@ import base64
 import io
 import json
 import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
-from kbtu import admin, config
+from kbtu import admin, config, logic
 from test_admin_events import _as, _setup
 from test_core import env, tma  # noqa: F401  (env: the fixture)
 from test_review_fixes import _png
@@ -183,6 +185,71 @@ def test_from_the_server(env, monkeypatch, capsys):
     assert refused(["event", "publish", eid]) == "refused: conflict"   # out already
     assert refused(["event", "publish", "999"]) == "no such event"
     assert len(_lines(con, "staff_event")) == 1
+
+
+@pytest.mark.parametrize("org_ref", ["it", "1"])
+def test_admin_event_new_publishes_guest_list_quietly(env, monkeypatch, capsys, org_ref):
+    c, con, ids = _setup(env)
+    cfg = env[1]
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
+    con.execute("UPDATE orgs SET official = 1 WHERE id = 1")
+    con.execute("INSERT INTO subscriptions (org_id, user_id, created_at) VALUES (1, ?, 0)", (ids["ali"],))
+    start = datetime.now(timezone(timedelta(hours=5))).replace(microsecond=0) + timedelta(days=1)
+    end = start + timedelta(hours=2)
+    body = {"title": "Guest night", "description": "Doors open at six", "place": "Hall 1", "starts_at": start.isoformat(),
+            "guest_list": True, "age_check": True}
+    if org_ref == "it":
+        body.update(ends_at=end.isoformat(), poster_b64=base64.b64encode(_png((10, 200, 10))).decode())
+    monkeypatch.setattr(admin.sys, "stdin", io.StringIO(json.dumps(body)))
+    admin.main(["event-new", org_ref])
+    published, link = capsys.readouterr().out.splitlines()
+    label, eid = published.split()
+    assert label == "published" and link == f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}"
+    event = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    assert (event["org_id"], event["created_by"], event["price"], event["guest_list"], event["age_check"], event["silent_publish"]) == (
+        1, ids["boss"], None, 1, 1, 1)
+    card = next(e for e in c.get("/api/events", headers=tma(63)).json() if e["id"] == int(eid))
+    assert (card["status"], card["visibility"], card["title"], card["place"]) == ("published", "public", body["title"], body["place"])
+    assert card["publishedAt"] and card["startsAt"] == int(start.timestamp())
+    assert card["endsAt"] == (int(end.timestamp()) if org_ref == "it" else None)
+    if "poster_b64" in body:
+        f = con.execute("SELECT * FROM files WHERE id = ?", (event["cover_file_id"],)).fetchone()
+        assert (f["kind"], f["owner_id"], f["id"]) == ("event_cover", ids["boss"], card["cover"]["id"])
+        assert all(c.get(f"/media/{f['path']}{suffix}").status_code == 200 for suffix in (".webp", ".t.webp", ".jpg"))
+    else:
+        assert card["cover"] is None
+    r = c.post(f"/api/events/{eid}/registration", headers=tma(63), json={})
+    assert r.status_code == 403 and r.json()["error"] == "guest_list"
+    assert not con.execute("SELECT 1 FROM registrations WHERE event_id = ?", (eid,)).fetchone()
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'new_event' AND ref = ?", (f"event:{eid}",)).fetchone()
+    assert not con.execute("SELECT 1 FROM meta WHERE key = 'told:1'").fetchone()
+    due = {e["id"] for e, *_ in logic.channel_due(con, limit=99)}
+    assert 1 in due and int(eid) not in due
+
+
+def test_admin_event_new_refuses_invalid_input(env, monkeypatch):
+    _, con, _ = _setup(env)
+    monkeypatch.setattr(config, "load", lambda: env[1])
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
+    future = datetime.now(timezone.utc) + timedelta(days=1)
+    body = {"title": "Guest night", "description": "", "place": "Hall 1", "starts_at": future.isoformat(),
+            "guest_list": True, "age_check": True}
+    poster = base64.b64encode(_png((10, 200, 10))).decode()
+    for changes, error in [
+        ({"starts_at": future.replace(tzinfo=None).isoformat()}, "starts_at"),
+        ({"ends_at": future.isoformat()}, "bad_input"),
+        ({"starts_at": (future - timedelta(days=2)).isoformat(), "poster_b64": poster}, "closed"),
+        ({"age_check": 1}, "must be true"),
+        ({"poster_b64": "!"}, "poster_b64"),
+    ]:
+        monkeypatch.setattr(admin.sys, "stdin", io.StringIO(json.dumps({**body, **changes})))
+        with pytest.raises(SystemExit, match=error):
+            admin.main(["event-new", "it"])
+    assert not _lines(con) and not _lines(con, "staff_event")
+    assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 2
+    assert not con.execute("SELECT 1 FROM files WHERE kind = 'event_cover'").fetchone()
+    assert not list(Path(env[1].db_path).parent.glob("media/**/*.*"))
 
 
 def test_admin_fills_it_from_the_announcement(env, monkeypatch):

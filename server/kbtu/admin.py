@@ -61,6 +61,13 @@
                                 person and event; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
+  .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
+                                CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
+                                The surname must match. A Telegram username is used only without a valid student ID.
+                                The first import closes prior app sign-ups outside the list. Counts only.
+  .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
+                                JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
+                                optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
   .venv/bin/python -m kbtu.admin round-nudge <round id> [--dry]   a recruitment round's "pick an interview time" nudge (due
                                 48 hours after the invite) goes now to the invited without a time; --dry: the count only
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
@@ -137,7 +144,7 @@ from . import config, db, texts
 from pathlib import Path
 
 from .logic.account import _DEL_GONE, staff_row
-from .logic import credits
+from .logic import credits, guests
 from .logic.core import is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
@@ -150,7 +157,7 @@ def print(*a, **k) -> None:  # noqa: A001
     _print(*(_UNSAFE.sub("?", str(x)) for x in a), **k)
 
 
-EVENT_STDIN = 8 << 20  # `event create`: the JSON with its cover in base64
+EVENT_STDIN = 8 << 20  # event JSON with a base64 picture
 
 
 def _user(con, who: str):
@@ -158,6 +165,87 @@ def _user(con, who: str):
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _event_input() -> dict:
+    raw = getattr(sys.stdin, "buffer", sys.stdin).read(EVENT_STDIN + 1)
+    try:
+        body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
+    except ValueError:  # not JSON, not UTF-8
+        body = None
+    if not isinstance(body, dict):
+        sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
+    return body
+
+
+def _event_picture(body: dict, field: str, root: Path) -> dict | None:
+    import base64
+    from . import media
+    raw = body.pop(field, None)
+    if raw is None:
+        return None
+    try:
+        data = base64.b64decode(raw, validate=True)
+        if not data or len(data) > media.MAX_BYTES:
+            raise ValueError
+        return media.save(data, root)
+    except (TypeError, ValueError):
+        sys.exit(f"{field}: not a base64 picture")
+
+
+def _event_time(value: object, field: str) -> int:
+    from datetime import datetime
+    try:
+        at = datetime.fromisoformat(value)
+        if at.utcoffset() is not None:
+            return int(at.timestamp())
+    except (TypeError, ValueError, OverflowError):
+        pass
+    sys.exit(f"{field}: expected ISO date and time with an offset")
+
+
+def _event_new(con, cfg: config.Config, org_ref: str) -> None:
+    from tempfile import TemporaryDirectory
+    from .logic import add_photo, publish_event, staff_create_event
+    boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
+    if not boss:
+        sys.exit("needs the creator (`founder`)")
+    org = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", org_ref)
+    if not org and re.fullmatch(r"[0-9]{1,19}", org_ref) and int(org_ref) < 2**63:
+        org = one(con, "SELECT id FROM orgs WHERE id = ? AND status = 'active'", int(org_ref))
+    if not org:
+        sys.exit("no active organization (see `orgs`)")
+    raw = _event_input()
+    if raw.get("guest_list") is not True or raw.get("age_check") is not True:
+        sys.exit("guest_list and age_check must be true")
+    fields = ("title", "description", "place")
+    if any(not isinstance(raw.get(k), str) for k in fields):
+        sys.exit("title, description and place must be strings")
+    body = {k: raw[k] for k in fields}
+    body.update(startsAt=_event_time(raw.get("starts_at"), "starts_at"), emoji="sparkles_3d", color="#3B6BFF")
+    if raw.get("ends_at") is not None:
+        body["endsAt"] = _event_time(raw["ends_at"], "ends_at")
+    v = Viewer(boss[0], "admin", True, staff_org=org[0])
+    photos = Path(cfg.db_path).resolve().parent / "media"
+    try:
+        with TemporaryDirectory(dir=photos.parent) as staged:
+            saved = _event_picture(raw, "poster_b64", Path(staged))
+            with db.tx(con):
+                if saved:
+                    body["coverId"] = add_photo(con, v, saved)["id"]
+                eid = staff_create_event(con, v, org[0], body, "server", guest_list=True)["id"]
+                publish_event(con, v, eid, announce=False)
+                log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": "publish", "via": "server"}))
+                if saved:
+                    # A refused event leaves its poster outside the public media directory.
+                    src, dst = Path(staged) / saved["path"], photos / saved["path"]
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    for variant in src.parent.glob(f"{src.name}.*"):
+                        variant.replace(dst.parent / variant.name)
+    except ApiError as exc:
+        sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
+    print(f"published {eid}")
+    print(f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}")
 
 
 def _vol_import(con, rest: list[str]) -> None:
@@ -232,7 +320,23 @@ def main(args: list[str]) -> None:
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
     cmd = args[0] if args else ""
-    if cmd == "roster" and len(args) == 4 and args[1] == "load":
+    if cmd == "guests" and len(args) == 2 and re.fullmatch(r"[0-9]{1,19}", args[1]):
+        eid = int(args[1])
+        if eid >= 2**63:
+            sys.exit("no such event")
+        guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
+        try:
+            registered, pending, offline, bad = guests.import_csv(con, eid, sys.stdin)
+        except ApiError as exc:
+            if exc.code == "bad_input":
+                sys.exit(exc.message)
+            sys.exit("needs the creator" if exc.code == "forbidden" else "no such event")
+        except UnicodeError:
+            sys.exit("guest CSV must be UTF-8")
+        print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
+    elif cmd == "event-new" and len(args) == 2:
+        _event_new(con, cfg, args[1])
+    elif cmd == "roster" and len(args) == 4 and args[1] == "load":
         from . import roster
         try:
             got = roster.load(con, json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8")))
@@ -468,6 +572,8 @@ def main(args: list[str]) -> None:
         u = _user(con, args[1])
         with db.tx(con):
             n = con.execute("UPDATE students SET manual = 0, verified_at = ? WHERE user_id = ? AND manual = 1", (now(), u["id"])).rowcount
+            if n:
+                guests.claim(con, u["id"])
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
     elif cmd == "staff" and len(args) in (4, 5):  # SPEC §1: the student ID can't be a real one, so a KBTU sign-in is refused
         u = _user(con, args[1])
@@ -496,6 +602,7 @@ def main(args: list[str]) -> None:
         with db.tx(con):
             con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at,
                 verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)""", (u["id"], sid, args[3], args[4], int(args[5]), t, t, t))
+            guests.claim(con, u["id"])
         print(f"@{u['tg_username'] or u['tg_id']}: student {sid}")
     elif cmd == "fix" and len(args) == 3 and args[2] == "reset":  # support: My data's one-time corrections again
         u = _user(con, args[1])
@@ -624,8 +731,6 @@ def main(args: list[str]) -> None:
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
     elif cmd == "event" and len(args) == 3 and args[1] in ("create", "publish"):
-        import base64
-        from . import media
         from .logic import add_photo, publish_event, staff_create_event
         boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
         if not boss:
@@ -643,23 +748,9 @@ def main(args: list[str]) -> None:
             org = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", args[2])
             if not org:
                 sys.exit(f"no active club {args[2]!r} (see `orgs`)")
-            raw = sys.stdin.buffer.read(EVENT_STDIN + 1)
-            try:
-                body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
-            except ValueError:  # not JSON, not UTF-8
-                body = None
-            if not isinstance(body, dict):
-                sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
-            v, cover = Viewer(boss[0], "admin", True, staff_org=org[0]), body.pop("cover", None)
-            saved = None
-            if cover is not None:  # as an upload: POST /api/photos, then the editor's coverId
-                try:
-                    data = base64.b64decode(cover, validate=True)
-                    if not data or len(data) > media.MAX_BYTES:
-                        raise ValueError
-                    saved = media.save(data, Path(cfg.db_path).resolve().parent / "media")
-                except (TypeError, ValueError, media.BadImage):
-                    sys.exit("cover: not a base64 picture")
+            body = _event_input()
+            v = Viewer(boss[0], "admin", True, staff_org=org[0])
+            saved = _event_picture(body, "cover", Path(cfg.db_path).resolve().parent / "media")
             with db.tx(con):  # a refused event keeps no cover row
                 if saved:
                     body["coverId"] = add_photo(con, v, saved)["id"]

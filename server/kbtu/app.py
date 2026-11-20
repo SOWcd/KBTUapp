@@ -468,6 +468,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
+    logic.guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
     logic.assistant.DOCS = docs.Index(cfg.docs_db) if cfg.docs else None  # the university's documents (DOCS; kbtu/docs.py)
@@ -1578,6 +1579,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not isinstance(code, str) or len(code) > 64:
             raise ApiError("bad_input")
         return logic.checkin(con, v, eid, code, body.get("admit") is True)
+
+    @app.post("/api/events/{eid}/age")
+    def mark_age(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.mark_age(con, v, eid, body.get("user_id"), body.get("adult"))
+
+    @app.post("/api/events/{eid}/age/notify")
+    def notify_minors(eid: int, con: Con, v: Me):
+        return logic.organizing.notify_minors(con, v, eid)
 
     @app.put("/api/events/{eid}/rating")
     def rate_event(eid: int, con: Con, v: Me, body: dict = Body(...)):

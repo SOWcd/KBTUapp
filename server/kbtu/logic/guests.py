@@ -1,0 +1,158 @@
+"""Off-app tickets and age marks for the event's door."""
+from __future__ import annotations
+
+import csv
+import hmac
+from collections.abc import Iterable
+
+from ..db import tx
+from . import core, seats
+from .core import ApiError, one, rows
+
+KEY = b""  # app.create and the import CLI derive this key from TOKEN_KEY
+_HASH_BYTES = 16
+
+
+def _name_words(name: str | None) -> set[str]:
+    from ..roster import _words
+
+    return _words((name or "").casefold().replace("'", "-").replace("\u2019", "-"))
+
+
+def _surnames(student) -> set[str]:
+    surnames = set()
+    for col in ("last_name", "last_lat"):
+        words = _name_words(student[col])
+        if len(words) == 1:
+            surnames.update(words)
+    return surnames
+
+
+def _surname_hash(eid: int, sid: str, word: str) -> bytes:
+    # Use the event and student number as the row's salt, and a server key against surname guesses.
+    return hmac.digest(KEY, f"{eid}:{sid}:{word}".encode(), "sha256")[:_HASH_BYTES]
+
+
+def _proves_surname(code: bytes | None, eid: int, sid: str, surnames: set[str]) -> bool:
+    if not code:
+        return False
+    hashes = {code[i:i + _HASH_BYTES] for i in range(0, len(code), _HASH_BYTES)}
+    return any(_surname_hash(eid, sid, word) in hashes for word in surnames)
+
+
+def set_age(con, rid: int, adult: int | bool, by: int | None) -> None:
+    con.execute("""INSERT INTO reg_age (registration_id, adult, set_by, set_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT (registration_id) DO UPDATE SET adult = excluded.adult, set_by = excluded.set_by,
+            set_at = excluded.set_at WHERE excluded.set_by IS NOT NULL
+            OR (reg_age.set_by IS NULL AND reg_age.adult != excluded.adult)""", (rid, adult, by, core.now()))
+
+
+def _ticket(con, eid: int, uid: int, adult: int | None) -> None:
+    t = core.now()
+    r = one(con, "SELECT id, status FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+    if not r:
+        rid = con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
+            VALUES (?, ?, 'going', ?, ?, ?)""", (eid, uid, seats._ticket_code(con, eid), t, t)).lastrowid
+    else:
+        rid = r["id"]
+        if r["status"] != "going":
+            con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL,
+                hold_until = NULL, waitlisted_at = NULL, updated_at = ? WHERE id = ?""", (t, rid))
+    if adult is not None:
+        set_age(con, rid, adult, None)
+
+
+def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int]:
+    from ..roster import tg_of
+
+    parsed = []
+    registered = pending = offline = bad = 0
+    for i, line in enumerate(source):
+        # IDs and age flags are single-line fields. A malformed row cannot consume the next one.
+        try:
+            row = next(csv.reader([line.lstrip("\ufeff") if i == 0 else line], strict=True))
+        except csv.Error:
+            bad += 1
+            continue
+        row = [value.strip() for value in row]
+        if i == 0:
+            header = [value.lower() for value in row]
+            if (len(header) == 4 and header[:2] == ["student_id", "adult"]
+                    and header[2] in ("username", "tg_username", "telegram_username")):
+                continue
+        if len(row) != 4 or row[1] not in ("0", "1", ""):
+            bad += 1
+            continue
+        sid = row[0].upper()
+        if not core.STUDENT_ID.fullmatch(sid):
+            sid = None
+        username = tg_of(row[2]) if sid is None else None
+        words = _name_words(row[3])
+        if not words or not (sid or username):
+            bad += 1
+            continue
+        parsed.append((sid, int(row[1]) if row[1] else None, username, words))
+
+    if not parsed:
+        raise ApiError("bad_input", "guest CSV has no valid rows")
+
+    matched = set()
+    with tx(con):
+        if not one(con, "SELECT 1 FROM users WHERE is_founder = 1"):
+            raise ApiError("forbidden")
+        e = one(con, "SELECT guest_list FROM events WHERE id = ?", eid)
+        if not e:
+            raise ApiError("not_found")
+        con.execute("UPDATE events SET guest_list = 1, age_check = 1 WHERE id = ?", (eid,))
+        for sid, adult, username, words in parsed:
+            if sid:
+                u = one(con, "SELECT user_id, last_name, last_lat FROM students WHERE student_id = ? AND manual = 0", sid)
+            else:
+                # A reused handle can still be cached on the old account, even if only one account is verified.
+                found = rows(con, f"""SELECT s.user_id, s.last_name, s.last_lat FROM users u LEFT JOIN students s
+                    ON s.user_id = u.id AND s.manual = 0 AND NOT {core.staff_sql()}
+                    WHERE lower(u.tg_username) = ? LIMIT 2""", username)
+                u = found[0] if len(found) == 1 and found[0][0] is not None else None
+            surnames = _surnames(u) if u else set()
+            if words & surnames:
+                old = one(con, """DELETE FROM event_guests WHERE event_id = ? AND student_id = ?
+                    RETURNING adult, surname_hash""", eid, sid) if sid else None
+                if adult is None and old and _proves_surname(old["surname_hash"], eid, sid, surnames):
+                    adult = old["adult"]
+                _ticket(con, eid, u[0], adult)
+                matched.add(u[0])
+                registered += 1
+            elif sid:
+                # The surname can be in any position. Keep only the codes of the possible surname words.
+                code = b"".join(sorted(_surname_hash(eid, sid, word) for word in words))
+                con.execute("""INSERT INTO event_guests (event_id, student_id, adult, surname_hash) VALUES (?, ?, ?, ?)
+                    ON CONFLICT (event_id, student_id) DO UPDATE SET surname_hash = excluded.surname_hash,
+                    adult = COALESCE(excluded.adult, CASE WHEN excluded.surname_hash = event_guests.surname_hash
+                        THEN event_guests.adult END)""", (eid, sid, adult, code))
+                pending += 1
+            else:
+                offline += 1
+        if not e["guest_list"]:
+            # On activation, existing app sign-ups only keep a ticket if the spreadsheet includes them.
+            for r in rows(con, "SELECT * FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
+                if r["user_id"] not in matched:
+                    seats._seat_out(con, r, "removed")
+    return registered, pending, offline, bad
+
+
+def claim(con, uid: int) -> None:
+    with tx(con):
+        for g in rows(con, """SELECT g.*, s.last_name, s.last_lat FROM students s JOIN event_guests g ON g.student_id = s.student_id
+            JOIN events e ON e.id = g.event_id WHERE s.user_id = ? AND s.manual = 0 AND e.guest_list = 1
+            AND e.status != 'cancelled' AND (COALESCE(e.ends_at, e.starts_at + ?) > ?
+                OR (e.starts_at IS NULL AND e.ends_at IS NULL))""", uid, core.NO_END, core.now()):
+            if not _proves_surname(g["surname_hash"], g["event_id"], g["student_id"], _surnames(g)):
+                continue
+            _ticket(con, g["event_id"], uid, g["adult"])
+            con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))
+
+
+def need_ticket(con, eid: int, uid: int) -> None:
+    if one(con, """SELECT 1 FROM events e WHERE e.id = ? AND e.guest_list = 1 AND NOT EXISTS (
+        SELECT 1 FROM registrations r WHERE r.event_id = e.id AND r.user_id = ? AND r.status = 'going')""", eid, uid):
+        raise ApiError("guest_list")

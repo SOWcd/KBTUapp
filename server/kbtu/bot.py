@@ -361,6 +361,12 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "photo_call":  # ph2:<event>, admin photo-call: those who came, once; quiet once guests can't add (closed, a week on)
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
         return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang)), f"ph_{e['id']}") if e and logic.now() <= logic.end_of(e) + logic.ALBUM_FOR else None
+    if kind == "u18_leave":  # u18:<event>:<round>; a corrected age or undone check-in makes it stale
+        e = one(con, """SELECT e.* FROM events e JOIN registrations r ON r.event_id = e.id
+            JOIN reg_age a ON a.registration_id = r.id WHERE e.id = ? AND e.age_check = 1 AND e.status = 'published'
+            AND e.hidden_at IS NULL AND r.user_id = ? AND r.status = 'going' AND r.checked_in_at IS NOT NULL AND a.adult = 0""",
+                int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, kind), f"ev_{e['id']}") if e and now() < logic.end_of(e) else None
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
         e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))
@@ -909,6 +915,7 @@ def _chores(cfg: Config, con) -> None:
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
     logic.clubs.hidden_day(con)  # 11:00: a club too small for the registry, to its president, once
     logic.door_round(con)  # the door is open (early, or at T-30): each guest going hears it once
+    logic.daily.guest_age_round(con)  # guest-list data and age marks expire a day after the event
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on

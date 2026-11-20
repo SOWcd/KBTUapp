@@ -376,6 +376,10 @@ export const server = {
   deleteUpdate: (id: Id, update: Id): Promise<void> => call('DELETE', `/events/${id}/updates/${update}`),
   checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),
+  /** an age_check event's door (server organizing.mark_age): a ticket holder 18+ or not, after a look at the ID */
+  markAge: (id: Id, user: Id, adult: boolean): Promise<{ adult: boolean }> => call('POST', `/events/${id}/age`, { user_id: user, adult }),
+  /** the bot asks the checked-in guests marked under 18 to leave (once in 10 min: rate_limited); count = messaged */
+  notifyMinors: (id: Id): Promise<{ count: number }> => call('POST', `/events/${id}/age/notify`),
   uploadPhoto: (file: Blob): Promise<Media> => call('POST', '/photos', file), // Head+; re-encoded by the server, use its id as coverId
   uploadVideo, // Head+; in pieces, then compressed: its id as videoId (wide: wideVideoId)
   video: (id: Id): Promise<Video> => call('GET', `/videos/${id}`), // my upload, while it is compressed

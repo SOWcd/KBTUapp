@@ -694,6 +694,9 @@
           </div>
         {:else if going}
           <Button kind="primary" size="l" full onclick={() => sheets.ticket(id)}>{#snippet icon()}<Ticket size={18} />{/snippet}{t('event.ticket')}</Button>
+        {:else if e.guestList}
+          <!-- tickets come from the organizers' imported list (server guests.py): no sign-up here, the ticket shows once matched -->
+          <p class="tnote gl">{t('event.guestList')}</p>
         {:else if shut}
           <Button kind="neutral" size="l" full disabled>{t('event.started')}</Button>
         {:else if st === 'hold'}
@@ -792,6 +795,7 @@
   /* the footer: the one primary action, alone */
   .actions { display: flex; gap: 8px; align-items: center; }
   .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
+  .gl { flex: 1; margin: 0; padding: var(--s-2) var(--s-4); text-wrap: pretty; }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
   @media (max-width: 350px) { .yes :global(svg) { display: none; } } /* the words stay on one line */

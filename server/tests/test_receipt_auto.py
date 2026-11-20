@@ -261,6 +261,9 @@ def test_migration_does_not_backfill_old_receipts(paid, monkeypatch):
     con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
     con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's
     con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
+    con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
+        ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
+    con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("PRAGMA user_version = 186")
     path = con.execute("PRAGMA database_list").fetchone()[2]
     db.init(path)
