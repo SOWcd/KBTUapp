@@ -6966,6 +6966,44 @@ def test_userpic_copy(env):
     assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()
 
 
+def test_userpic_refetch(env, monkeypatch):
+    import io
+    import httpx
+    from PIL import Image
+
+    c, cfg = env
+    url = "https://t.me/i/userpic/320/same.svg"
+    headers = {"Authorization": "tma " + auth.sign_init_data({"id": 10, "first_name": "Ali", "photo_url": url}, BOT)}
+    assert c.get("/api/me", headers=headers).json()["avatar"] == url
+    con = db.connect(cfg.db_path)
+    root = Path(cfg.db_path).parent / "media"
+    t = logic.now()
+    monkeypatch.setattr(bot, "now", lambda: t)
+
+    async def fetch(status, color):
+        buf = io.BytesIO()
+        if color:
+            Image.new("RGB", (32, 32), color).save(buf, "PNG")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda r: httpx.Response(status, content=buf.getvalue()))) as http:
+            await bot._userpics(cfg, http, con)
+        path, at = con.execute("SELECT tg_photo_path, tg_photo_at FROM users WHERE tg_id = 10").fetchone()
+        assert at == t
+        return root / f"{path}.t.webp"
+
+    first = asyncio.run(fetch(200, "red"))
+    assert first.is_file()
+    con.execute("UPDATE users SET tg_photo_at = ? WHERE tg_id = 10", (t - 4 * 86400,))
+    second = asyncio.run(fetch(200, "green"))
+    assert second != first and second.is_file() and not first.exists()
+    os.utime(second, (1, 1))
+    con.execute("UPDATE users SET tg_photo_at = ? WHERE tg_id = 10", (t - 4 * 86400,))
+    assert asyncio.run(fetch(200, "green")) == second and second.stat().st_mtime == 1
+    con.execute("UPDATE users SET tg_photo_at = ? WHERE tg_id = 10", (t - 4 * 86400,))
+    assert asyncio.run(fetch(503, None)) == second and second.is_file()
+    con.close()
+
+
 def _board_on(c, cfg) -> None:
     """The student forum's routes open (BOARD=1) for this app; the policy version stays the env's (sign-ins keep working)."""
     import dataclasses

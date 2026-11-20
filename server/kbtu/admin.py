@@ -417,7 +417,7 @@ def main(args: list[str]) -> None:
                if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
         if why:
             sys.exit(f"refused: {why}")
-        cols = ("tg_id", "tg_username", "tg_first_name", "tg_last_name", "tg_photo_url", "tg_photo_path", "tg_photo_src", "can_dm")
+        cols = ("tg_id", "tg_username", "tg_first_name", "tg_last_name", "tg_photo_url", "tg_photo_path", "tg_photo_src", "tg_photo_at", "can_dm")
         ra, rb = (tuple(one(con, f"SELECT {', '.join(cols)} FROM users WHERE id = ?", x["id"])) for x in (a, b))
         sets = ", ".join(f"{c} = ?" for c in cols)
         with db.tx(con):  # swap the Telegram side of the two rows; tg_id is UNIQUE, so one steps aside first

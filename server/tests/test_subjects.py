@@ -422,6 +422,7 @@ def test_migration_gives_old_offers_tokens(env):  # noqa: F811
     con.execute("INSERT INTO contacts (from_id, to_id, created_at) VALUES (?, ?, 0)", (b, a))
     con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
     con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's
+    con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
     con.execute("PRAGMA user_version = 176")
     con.close()
     db.init(cfg.db_path)

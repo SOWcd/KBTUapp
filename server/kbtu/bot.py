@@ -652,22 +652,29 @@ async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat
 
 
 async def _userpics(cfg: Config, http: httpx.AsyncClient, con, n: int = 5) -> None:
-    """A few users whose Telegram photo is new to us: saved under /media (tg_photo_path), the old copy dropped. A photo
-    that fails is marked done all the same (tg_photo_src) and stays on t.me until Telegram gives a new URL."""
+    """Copy new Telegram photos first, then refresh stale copies for recently seen users."""
     root = Path(cfg.db_path).resolve().parent / "media"
-    for u in logic.rows(con, """SELECT id, tg_photo_url, tg_photo_path FROM users WHERE tg_photo_url IS NOT NULL
-            AND tg_photo_src IS NOT tg_photo_url LIMIT ?""", n):
+    t = now()
+    for u in logic.rows(con, """SELECT id, tg_photo_url, tg_photo_path, tg_photo_src FROM users WHERE tg_photo_url IS NOT NULL
+            AND (tg_photo_src IS NOT tg_photo_url OR (seen_at >= ? AND (tg_photo_at IS NULL OR tg_photo_at < ?)))
+            ORDER BY tg_photo_src IS NOT tg_photo_url DESC LIMIT ?""", t - 86400, t - 3 * 86400, n):
+        old_path = u["tg_photo_path"]
         path = None
         try:
             r = await http.get(u["tg_photo_url"], follow_redirects=True, timeout=15)
             if r.status_code == 200:
-                path = (await asyncio.to_thread(media.save, r.content, root))["path"]
+                if old_path and Path(old_path).name == hashlib.sha256(r.content).hexdigest() and (root / f"{old_path}.t.webp").is_file():
+                    path = old_path  # keep unchanged copies on disk without rewriting them
+                else:
+                    path = (await asyncio.to_thread(media.save, r.content, root))["path"]
         except (httpx.HTTPError, media.BadImage, OSError) as exc:
             log.warning("userpic: %s", type(exc).__name__)
+        if path is None and u["tg_photo_src"] == u["tg_photo_url"]:
+            path = old_path
         # only if the URL is still the one fetched: a newer photo meanwhile is the next round's
-        if con.execute("UPDATE users SET tg_photo_path = ?, tg_photo_src = ? WHERE id = ? AND tg_photo_url = ?",
-                       (path, u["tg_photo_url"], u["id"], u["tg_photo_url"])).rowcount:
-            _drop_free(con, root, u["tg_photo_path"] if u["tg_photo_path"] != path else None)
+        if con.execute("UPDATE users SET tg_photo_path = ?, tg_photo_src = ?, tg_photo_at = ? WHERE id = ? AND tg_photo_url = ?",
+                       (path, u["tg_photo_url"], now(), u["id"], u["tg_photo_url"])).rowcount:
+            _drop_free(con, root, old_path if old_path != path else None)
         else:
             _drop_free(con, root, path)
 
