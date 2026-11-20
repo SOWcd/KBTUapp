@@ -342,8 +342,8 @@ export const CLUB_LOOKS = {
   diceanddestinykbtu: { strap: 'DICE &\nDESTINY', strip: 'DICE AND DESTINY', short: 'DD', bg: ['#2E0808', '#140405', '#060203'], straps: ['#5E0E0B', '#A3191A', '#F0DDB4'],
     holo: ['#D9B46A', '#9C7634', '#341C0A'], ring: 'linear-gradient(135deg, #F0DDB4, #C9A15A 45%, #7A1410)', role: '#E8B867', qr: ['#7A1410', '#2A0806'], plate: ['#3A0E0B', '#120504'], mark: ddDragon },
   // The Bay Harbor Society (a Dexter fan club): Miami at night, clinical and cold, a drop of blood: black, blood red, light
-  // grey; the strip a glass slide (LanyardHolo)
-  thebayharborsociety: { strap: 'DEXTER', strip: 'FAN CLUB', bg: ['#141416', '#0A0A0A', '#050505'], straps: ['#050505', '#1C1C1E', '#E6E2DA'],
+  // grey; the strip a glass slide (LanyardHolo); BHS in the role line keeps it one line at 320 px, as DD does
+  thebayharborsociety: { strap: 'DEXTER', strip: 'FAN CLUB', short: 'BHS', bg: ['#141416', '#0A0A0A', '#050505'], straps: ['#050505', '#1C1C1E', '#E6E2DA'],
     holo: ['#F2EFEA', '#CFCAC1', '#0A0A0A'], ring: 'linear-gradient(135deg, #F4F1EB, #9A968F 45%, #B3121E)', role: '#E6E2DA', qr: ['#8E0E17', '#0A0A0A'], plate: ['#1C1C1E', '#0A0A0A'], mark: bhDrop },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
