@@ -42,7 +42,7 @@
   <div class="grid" bind:this={grid}>
     {#each photos as p, i (p.id)}
       <!-- mine still uploading: the phone's own copy, dimmed, not to be opened yet -->
-      <div class="c" class:wait={p.pending} role="button" tabindex="0" data-id={p.id} style:background-color={p.color ?? 'var(--surface-2)'}
+      <div class="c" class:wait={p.pending} role="button" tabindex="0" aria-label={t('fc.photo')} data-id={p.id} style:background-color={p.color ?? 'var(--surface-2)'}
         onclick={() => p.pending || view(i)} onkeydown={(e) => { if (!p.pending && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); view(i); } }}>
         <img src={p.thumb} alt="" loading="lazy" decoding="async" draggable="false" use:fade />
       </div>

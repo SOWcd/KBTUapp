@@ -150,7 +150,7 @@
             <div class="rowp" class:lead={row.lead} class:three={row.tiles.length === 3}>
               {#each row.tiles as { p, i, ar } (p.key ?? p.id)}
                 {@const what = p.event?.title}
-                <div class="ph" class:wait={p.pending} class:mine={p.key != null} class:plain={!what && !p.by} class:two={!!what && !!p.by} role="button" tabindex="0" data-id={p.id}
+                <div class="ph" class:wait={p.pending} class:mine={p.key != null} class:plain={!what && !p.by} class:two={!!what && !!p.by} role="button" tabindex="0" data-id={p.id} aria-label={what || p.by ? undefined : t('fc.photo')}
                   style:--ar={ar} style:background-color={p.color ?? 'var(--surface-2)'} style:background-image={p.blur ? `url("${p.blur}")` : null}
                   aria-busy={p.pending} onclick={() => open(p, i)} onkeydown={(e) => key(e, () => open(p, i))}>
                   <img src={p.thumb} alt="" loading="lazy" decoding="async" draggable="false" use:fade />

@@ -351,7 +351,7 @@
       {:else if !e.video?.url && e.cover && e.slides?.length}
         <div class="strip" onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
           {#each [e.cover, ...e.slides] as p, i (p.id)}
-            <button class="pic" onclick={() => sheets.photos([e.cover!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
+            <button class="pic" aria-label={t('fc.photo')} onclick={() => sheets.photos([e.cover!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
               <img src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>
           {/each}
         </div>
@@ -411,7 +411,7 @@
         {#if shown || adding}
           <div class="mosaic n{Math.min(shown, 3)}" bind:this={mosaic}>
             {#each photos.slice(0, shown) as p, i (p.id)}
-              <button class="ph" data-id={p.id} style="background-color:{p.color ?? 'var(--surface-2)'}" onclick={() => (i === shown - 1 && photos.length > shown ? allPhotos() : viewAlbum(i))}>
+              <button class="ph" data-id={p.id} style="background-color:{p.color ?? 'var(--surface-2)'}" aria-label={i === shown - 1 && photos.length > shown ? undefined : t('fc.photo')} onclick={() => (i === shown - 1 && photos.length > shown ? allPhotos() : viewAlbum(i))}>
                 <img src={p.thumb} alt="" loading="lazy" decoding="async" />
                 {#if i === shown - 1 && photos.length > shown}<span class="more num">+{photos.length - shown}</span>{/if}
               </button>

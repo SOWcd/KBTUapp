@@ -207,7 +207,7 @@
     <div class="card" class:hid={it.hidden} out:fold>
       {@render head(it, [], r.target === 'tgc' ? (e) => tgcMenu(e, it, r) : undefined)}
       <button class="body" onclick={() => look(r)}>
-        {#if r.target === 'photo'}<img class="ph" src={r.text} alt="" />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
+        {#if r.target === 'photo'}<img class="ph" src={r.text} alt={t('adm.rep.photo')} />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
         <i>{r.target === 'tgc'
           ? [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', whoReported(r), t('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
           : `${reasons(r)}${r.count > 1 ? ' · ' + tn('adm.reports', r.count) : ''}`}</i>
