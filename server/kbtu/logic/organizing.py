@@ -14,7 +14,7 @@ from .. import media, pdfpages
 from ..db import tx
 
 from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, door_shut, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
-    _may, _org, _qs, at_least, can, card, cards, deleting, evdel, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
+    _by_id, _may, _org, _qs, at_least, can, card, cards, deleting, evdel, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
     overseer, person_ref, role_in, rows, short_name, taken)
 
 
@@ -168,14 +168,19 @@ def leaders_answers(con, v: Viewer, eid: int) -> list[dict]:
         raise ApiError("bad_input")
     roles = LEAD_ROLES[e["leaders_from"] or "president"]
     out = []
-    for o in rows(con, "SELECT * FROM orgs WHERE kind IN ('club', 'school', 'council') AND status = 'active' ORDER BY official DESC, name"):
-        people = rows(con, f"""SELECT {PERSON_COLS}, m.role, r.status AS answer FROM org_members m JOIN users u ON u.id = m.user_id
+    orgs = rows(con, "SELECT * FROM orgs WHERE kind IN ('club', 'school', 'council') AND status = 'active' ORDER BY official DESC, name")
+    by_org: dict[int, list] = {}  # every club's leaders in one read, not one per club
+    for p in rows(con, f"""SELECT {PERSON_COLS}, m.org_id, m.role, r.status AS answer FROM org_members m JOIN users u ON u.id = m.user_id
             JOIN students s ON s.user_id = u.id LEFT JOIN registrations r ON r.event_id = ? AND r.user_id = u.id
-            WHERE m.org_id = ? AND m.role IN ({','.join('?' * len(roles))})""", eid, o["id"], *roles)
+            WHERE m.role IN ({','.join('?' * len(roles))}) ORDER BY m.org_id, m.user_id""", eid, *roles):
+        by_org.setdefault(p["org_id"], []).append(p)
+    logos = _by_id(con, "files", (o["logo_file_id"] for o in orgs if o["id"] in by_org))
+    for o in orgs:
+        people = by_org.get(o["id"])
         if not people:
             continue
         said = lambda p: "yes" if p["answer"] in ("going", "hold") else "no" if p["answer"] == "cancelled" else "none"  # noqa: E731
-        out.append({"org": org_ref(con, o), "people": sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(),
+        out.append({"org": org_ref(con, o, logos), "people": sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(),
                                                           "role": p["role"], "answer": said(p)} for p in people), key=lambda x: -RANK[x["role"]])})
     return out
 
@@ -1117,11 +1122,13 @@ def event_invites(con, v: Viewer, eid: int) -> list[dict]:
     need_student(v)
     e = _event(con, v, eid)
     out = []
+    # who's coming and whom I asked: read once for the list, not per friend
+    signed = {r[0] for r in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going', 'hold', 'waitlist')", eid)}
+    invited = {r[0] for r in rows(con, "SELECT to_id FROM friend_invites WHERE from_id = ? AND event_id = ?", v.id, eid)}
     for p in rows(con, PERSON + " WHERE u.id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)", v.id, v.id):
-        if not sees_school(con, p["id"], e):  # a school's own event: friends of another school aren't offered
+        if not sees_school(con, p["id"], e):  # a school's own event: friends of another school aren't offered (no query for any other event)
             continue
-        going = p["show_going"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", eid, p["id"])
-        asked = one(con, "SELECT 1 FROM friend_invites WHERE from_id = ? AND to_id = ? AND event_id = ?", v.id, p["id"], eid)
+        going, asked = p["show_going"] and p["id"] in signed, p["id"] in invited
         out.append({"person": person_ref(p), "state": "going" if going else "invited" if asked else "none"})
     rank = {"none": 0, "invited": 1, "going": 2}
     return sorted(out, key=lambda x: (rank[x["state"]], x["person"]["name"]))

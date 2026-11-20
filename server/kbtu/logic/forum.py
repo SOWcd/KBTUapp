@@ -168,11 +168,21 @@ def _matches(con, me: int, skill_ids: list[int], skip: int) -> list[int]:
 
 
 def _card(con, uid: int) -> dict:
-    """A person as the forum shows them before any contact: the short name, year of study and skills. No @username."""
-    p = one(con, PERSON + " WHERE u.id = ?", uid)
-    s = one(con, "SELECT student_id FROM students WHERE user_id = ?", uid)
-    return {"person": person_ref(p), "name": short_name(p), "course": course_of(s["student_id"]) if s else None,
-            "skills": _skills_of(con, "user_skills", "user_id", uid)}
+    return _cards(con, [uid])[uid]
+
+
+def _cards(con, uids: list[int]) -> dict[int, dict]:
+    """People as the forum shows them before any contact: the short name, year of study and skills. No @username.
+    One read per fact for the whole list."""
+    ids = list(set(uids))
+    q = ",".join("?" * len(ids))
+    skills: dict[int, list[dict]] = {}
+    for r in rows(con, f"""SELECT t.user_id, s.id, s.name FROM user_skills t JOIN skills s ON s.id = t.skill_id
+            WHERE t.user_id IN ({q}) ORDER BY s.name""", *ids):
+        skills.setdefault(r["user_id"], []).append({"id": r["id"], "name": r["name"]})
+    sid = dict(rows(con, f"SELECT user_id, student_id FROM students WHERE user_id IN ({q})", *ids))
+    return {p["id"]: {"person": person_ref(p), "name": short_name(p), "course": course_of(sid[p["id"]]) if p["id"] in sid else None,
+                      "skills": skills.get(p["id"], [])} for p in rows(con, PERSON + f" WHERE u.id IN ({q})", *ids)}
 
 
 def search_people(con, v: Viewer, skill: object = None, q: object = None) -> list[dict]:
@@ -189,7 +199,9 @@ def search_people(con, v: Viewer, skill: object = None, q: object = None) -> lis
     else:
         words = norm_skill(q)
         ids = [r[0] for r in rows(con, "SELECT id FROM skills WHERE name LIKE ?", f"%{words}%")] if words else []
-    return [_card(con, uid) for uid in _matches(con, v.id, ids, v.id)[:50]]
+    found = _matches(con, v.id, ids, v.id)[:50]
+    cards = _cards(con, found)
+    return [cards[uid] for uid in found]
 
 
 # ---- requests
@@ -201,9 +213,10 @@ def _ask_shape(con, v: Viewer, a) -> dict:
            "expiresAt": a["expires_at"], "mine": mine, "author": _card(con, a["user_id"]) | {"skills": []},
            "matches": len(_matches(con, v.id, [s["id"] for s in sk], a["user_id"]))}
     if mine:  # how it stands, and who offered to help (by the card only, until I accept)
+        offers = rows(con, "SELECT * FROM contacts WHERE ask_id = ? AND status != 'declined' ORDER BY id DESC", a["id"])
+        cards = _cards(con, [c["from_id"] for c in offers])
         out |= {"status": a["status"], "why": a["why"], "found": a["found"],
-                "offers": [{"id": c["id"], "status": c["status"], **_card(con, c["from_id"])} for c in
-                           rows(con, "SELECT * FROM contacts WHERE ask_id = ? AND status != 'declined' ORDER BY id DESC", a["id"])]}
+                "offers": [{"id": c["id"], "status": c["status"], **cards[c["from_id"]]} for c in offers]}
     else:
         c = one(con, "SELECT status FROM contacts WHERE ask_id = ? AND from_id = ?", a["id"], v.id)
         out["offered"] = c["status"] if c else None
@@ -333,7 +346,9 @@ def ask_people(con, v: Viewer, aid: int) -> list[dict]:
     if not a:
         raise ApiError("not_found")
     ids = [s["id"] for s in _skills_of(con, "ask_skills", "ask_id", aid)]
-    return [_card(con, uid) for uid in _matches(con, v.id, ids, a["user_id"])[:50]]
+    found = _matches(con, v.id, ids, a["user_id"])[:50]
+    cards = _cards(con, found)
+    return [cards[uid] for uid in found]
 
 
 # ---- contact: an offer the other side accepts or declines in the bot; then each gets the other's Telegram
@@ -390,19 +405,26 @@ def decide_contact(con, uid: int, cid: int, yes: bool, token: str | None = None)
 def contacts(con, v: Viewer) -> list[dict]:
     """My offers both ways: pending ones to answer, and, once accepted, the other's Telegram to write to."""
     out = []
-    for c in con.execute("SELECT * FROM contacts WHERE (from_id = :me OR to_id = :me) AND status != 'declined' ORDER BY id DESC LIMIT 50", {"me": v.id}).fetchall():
-        other = c["to_id"] if c["from_id"] == v.id else c["from_id"]
-        a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        x = {"id": c["id"], "token": c["token"], "status": c["status"], "incoming": c["to_id"] == v.id, "ask": a["title"] if a else None, **_card(con, other)}
+    got = con.execute("SELECT * FROM contacts WHERE (from_id = :me OR to_id = :me) AND status != 'declined' ORDER BY id DESC LIMIT 50", {"me": v.id}).fetchall()
+    others = [c["to_id"] if c["from_id"] == v.id else c["from_id"] for c in got]
+    asks = [c["ask_id"] for c in got if c["ask_id"]]
+    titles = dict(rows(con, f"SELECT id, title FROM asks WHERE id IN ({','.join('?' * len(asks))})", *asks))  # one read each for the list
+    cards = _cards(con, others)
+    tg = {u["id"]: u for u in rows(con, f"SELECT id, tg_id, tg_username FROM users WHERE id IN ({','.join('?' * len(others))})", *others)}
+    for c, other in zip(got, others):
+        x = {"id": c["id"], "token": c["token"], "status": c["status"], "incoming": c["to_id"] == v.id, "ask": titles.get(c["ask_id"]), **cards[other]}
         if c["status"] == "accepted":
-            x["telegram"] = telegram_of(con, other)
+            x["telegram"] = _link(tg[other])
         out.append(x)
     return out
 
 
 def telegram_of(con, uid: int) -> str:
     """Where to write to someone: their t.me link, or Telegram's own link by ID when they have no username."""
-    u = one(con, "SELECT tg_id, tg_username FROM users WHERE id = ?", uid)
+    return _link(one(con, "SELECT tg_id, tg_username FROM users WHERE id = ?", uid))
+
+
+def _link(u) -> str:
     return f"https://t.me/{u['tg_username']}" if u["tg_username"] else f"tg://user?id={u['tg_id']}"
 
 

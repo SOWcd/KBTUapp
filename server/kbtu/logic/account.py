@@ -560,11 +560,15 @@ def me(con, v: Viewer) -> dict:
 def roster_requests(con, v: Viewer, org: int | None = None) -> list[dict]:
     """Claims I confirm (roster.requests) with the club and the student as the app shows them."""
     from .. import roster
-    out = []
-    for r in roster.requests(con, v, org):
-        o, p = one(con, "SELECT * FROM orgs WHERE id = ?", r["org"]), one(con, PERSON + " WHERE u.id = ?", r["user"])
+    out, got = [], roster.requests(con, v, org)
+    orgs = core._by_id(con, "orgs", (r["org"] for r in got))  # the clubs, their logos and the people: one read each for the list
+    logos = core._by_id(con, "files", (o["logo_file_id"] for o in orgs.values()))
+    uids = list({r["user"] for r in got})
+    people = {p["id"]: p for p in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(uids))})", *uids)} if uids else {}
+    for r in got:
+        o, p = orgs.get(r["org"]), people.get(r["user"])
         if o and p:
-            out.append({**r, "org": org_ref(con, o), "person": person_ref(p)})
+            out.append({**r, "org": org_ref(con, o, logos), "person": person_ref(p)})
     return out
 
 
