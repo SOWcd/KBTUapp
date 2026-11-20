@@ -221,8 +221,8 @@
        the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the Student Government alone) -->
   {#if me?.subjects || me?.appeals}
     <div class="doors">
-      {#if me?.subjects}<Chip icon={BookOpen} onclick={() => { haptic.tap(); sheets.subjects(); }}>{t('sj.row')}</Chip>{/if}
-      {#if me?.appeals}<Chip icon={Megaphone} onclick={() => { haptic.tap(); sheets.appeals(); }}>{t('apl.chip')}</Chip>{/if}
+      {#if me?.subjects}<Chip quiet icon={BookOpen} onclick={() => { haptic.tap(); sheets.subjects(); }}>{t('sj.row')}</Chip>{/if}
+      {#if me?.appeals}<Chip quiet icon={Megaphone} onclick={() => { haptic.tap(); sheets.appeals(); }}>{t('apl.chip')}</Chip>{/if}
     </div>
   {/if}
 
@@ -317,8 +317,8 @@
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
-  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
-    box-shadow: 0 4px 12px -4px var(--accent); }
+  /* the pen: a quiet grey seat, not an accent blob (a saturated blue circle read as childish); the whole card is the tap */
+  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2); }
 
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */
