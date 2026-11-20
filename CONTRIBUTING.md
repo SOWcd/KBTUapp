@@ -4,7 +4,8 @@ Thanks for wanting to make KBTU App better.
 
 - **An idea or a bug:** open an issue, or write to [@Sowers](https://t.me/Sowers).
 - **Taking a task:** comment `/take` on its issue: it is assigned to you and nobody else takes it; `/drop` gives it
-  back. Already assigned to someone: pick another.
+  back. Already assigned to someone: pick another. AI agents: comment `/take` first, before any work. Open a draft
+  pull request (naming the issue, `#N`) within 3 days, or the task is freed for others.
 - **Code:** fork, make a branch, open a pull request against `main`. Keep it small and about one thing; say what it
   changes for students and how you checked it. The tests (`server/tests`, `web` vitest) and `npm run check` must pass.
 - **Style:** match the code around your change. Code, comments and commit messages are in English; UI text lives
