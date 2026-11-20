@@ -3,8 +3,9 @@
   // newest first and nothing else (a pinned "popular" block put old posts first; a post being discussed
   // says so in place). Each post a card on the ground (the flat Threads list on black "limped"): the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
-  // as small chips (read-only: they are Telegram's) and, on the right, the one way to the comments, which live in
-  // Telegram: who replied, and a real button with Telegram's mark and the count. The post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
+  // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
+  // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
+  // one on every card outshouted the words). The post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
   // Nothing jumps: the 30 s refresh never puts posts above the one I'm reading; they wait behind an "N new" pill (at
   // the top already: they just come in). Under the 50th, "Show earlier" brings the next 50.
   // No large title (the capsule names the tab): the feed starts with a "Share with KBTU…" row that opens the new post
@@ -240,10 +241,10 @@
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
             <span class="rail">
-              {#if p.person}<Avatar person={p.person} size={40} />
+              {#if p.person}<Avatar person={p.person} size={36} />
               {:else}
                 <!-- anonymous: the mask; an author no longer here (a deleted account): the signature's initials -->
-                <span class="av" class:anon={p.anon} aria-hidden="true">{#if p.anon}<VenetianMask size={19} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
+                <span class="av" class:anon={p.anon} aria-hidden="true">{#if p.anon}<VenetianMask size={18} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
               {/if}
               {#if fresh(p)}<span class="dot" aria-hidden="true"></span>{/if}
             </span>
@@ -280,7 +281,7 @@
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="share"><IconButton kind="plain" size="s" icon={Share} label={t('event.share')} onclick={() => share(p)} /></span>
-              <span class="talk"><Button kind="tinted" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
+              <span class="talk"><Button kind="gray" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
                 {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
               </Button></span>
             </div>
@@ -322,9 +323,9 @@
 
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */
-  .post { position: relative; display: flex; flex-direction: column; padding: var(--s-3) var(--s-4) var(--s-4);
-    animation: rise 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */ }
-  .post:has(.acts) { padding-bottom: var(--s-2); }
+  .post { position: relative; display: flex; flex-direction: column; padding: var(--s-4);
+    animation: rise 420ms var(--ease) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */ }
+  .post:has(.acts) { padding-bottom: var(--s-3); }
   /* the line between the new and the seen: a word on a hairline in the accent, between the cards */
   .nw { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-1) var(--s-2) var(--s-3);
     font: 600 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); letter-spacing: 0.02em; }
@@ -335,11 +336,10 @@
   @keyframes lit { 0%, 45% { background: var(--accent-soft); } }
   .post.off { opacity: 0.6; }
 
-  .head { display: flex; align-items: center; gap: var(--s-3); min-height: 40px; }
+  .head { display: flex; align-items: center; gap: var(--s-3); min-height: 36px; }
   .rail { position: relative; flex: none; display: flex; }
-  .av { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
+  .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
     color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); letter-spacing: 0.02em; }
-  .compose .av { width: 36px; height: 36px; }
   .av.anon { background: var(--fill-2); color: var(--text); }
   /* new since my last visit: a small accent dot on the face's shoulder, cut out of it by the card */
   .dot { position: absolute; top: 0; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface-solid); }
@@ -368,7 +368,7 @@
   .pics.n1 .ph { aspect-ratio: var(--ar, 4 / 3); } /* one: whole, its own shape (between 3:4 and 2:1) */
   .pics.n3 .ph { aspect-ratio: auto; min-height: 90px; }
   .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .tx { margin-top: var(--s-2); font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
+  .tx { margin-top: var(--s-3); font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
     max-height: 5.9em; overflow: hidden; transition: max-height 420ms var(--ease); }
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
   .tx.open { max-height: var(--h); }
@@ -378,13 +378,12 @@
   .held .fix { display: flex; gap: 6px; margin-top: var(--s-2); color: var(--text); }
   .held .fix :global(svg) { flex: none; margin-top: 1px; color: var(--warning-text); }
 
-  /* the row under the words: Telegram's reactions on the left (small chips), the talk's faces and its one button on
-     the right (under the thumb); 44 to the finger */
-  .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; margin-top: var(--s-2); }
-  .rx { flex: none; display: flex; gap: 6px; }
-  .r { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border-radius: var(--r-full); background: var(--fill);
-    color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); font-variant-numeric: tabular-nums; }
-  .e { font-size: var(--fs-sub); line-height: 1; }
+  /* the row under the words: Telegram's reactions on the left (bare counts: they are read-only, a chip promised a tap),
+     the talk's faces and its one button on the right (under the thumb); 36 seen, 44 to the finger */
+  .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; margin-top: var(--s-3); }
+  .rx { flex: none; display: flex; gap: var(--s-3); }
+  .r { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
+  .e { font-size: var(--fs-body); line-height: 1; }
   /* as many faces as the row has room for, the newest first and on top: the ones that don't fit wrap to a second
      line, out of sight (whole faces only, never a cut one); none when the reactions and the two buttons fill the row */
   .faces { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; height: 24px; padding: 2px; overflow: hidden; }
@@ -398,7 +397,7 @@
   .share { flex: none; display: flex; margin-left: auto; --plain-ink: var(--text-3); }
   .faces + .share { margin-left: 0; }
   .go { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; } /* ↗: it leaves the app, for Telegram */
-  .n { margin-left: 2px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .n { margin-left: 2px; opacity: 0.6; font-variant-numeric: tabular-nums; }
   @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } .faces + .share { margin-left: auto; } } /* 320: the top reaction, the button on the right */
 
   .earlier { display: flex; justify-content: center; padding: var(--s-3) 0; }
