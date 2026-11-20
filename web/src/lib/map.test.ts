@@ -84,6 +84,9 @@ it('a typed street address becomes a 2GIS search; rooms and campus places never 
   expect(addressGis('Gogolya 157')).toBe('https://2gis.kz/almaty/search/Gogolya%20157');
   expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
   for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
+  // a named venue off campus is searched too (owner, Nov 20); the campus's own places never are
+  expect(addressGis("Mad Murphy's Irish Pub")).toBe("https://2gis.kz/almaty/search/Mad%20Murphy's%20Irish%20Pub");
+  for (const p of ['\u0410\u043a\u0442\u043e\u0432\u044b\u0439 \u0437\u0430\u043b', 'KBTU Atrium', '\u041a\u0411\u0422\u0423, \u0445\u043e\u043b\u043b', 'Main Hall', '\u0423\u0442\u043e\u0447\u043d\u044f\u0435\u0442\u0441\u044f']) expect(addressGis(p)).toBeNull();
 });
 
 // Our map's SVGs are made from a floor's geometry and one style (tools/map): an edit to either without building
