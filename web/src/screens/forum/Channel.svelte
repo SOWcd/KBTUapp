@@ -382,7 +382,7 @@
   .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .name { display: flex; min-width: 0; max-width: 100%; padding: 0; text-align: left; }
   .name:active { opacity: 0.6; }
-  .meta { display: flex; gap: 6px; min-width: 0; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
   .mk { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .mk::before { content: '·'; margin-right: 6px; color: var(--text-3); }
   .mk.accent { color: var(--accent-text); }

@@ -71,6 +71,8 @@
   .tx b { font: 700 var(--fs-body)/1.2 var(--font-text); }
   .left { margin-top: 5px; font: 500 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
   /* the nine levels: a mark each, in its metal; the next one fills as friends come */
+  /* 320 px: a 138 px square; the medal smaller and the padding tighter, so the count and the level line stay in it */
+  @media (max-width: 359px) { .sq { padding: 10px 10px 11px; } .art { zoom: 0.7; } }
   .marks { display: flex; gap: 3px; margin-top: 8px; }
   .marks i { flex: 1; height: 4px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
   .marks s { display: block; height: 100%; border-radius: inherit; transform-origin: left; transition: transform 600ms var(--ease-out, ease); }

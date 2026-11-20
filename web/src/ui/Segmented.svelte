@@ -30,4 +30,5 @@
   button::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
   button:active { transform: none; opacity: 0.7; }
   button.on { color: var(--text); }
+  @media (max-width: 359px) { button { padding: 0 4px; font-size: var(--fs-cap); } } /* 320 px: three labels with counts stay whole */
 </style>
