@@ -26,4 +26,4 @@ body:
       required: true
   - type: markdown
     attributes:
-      value: "Agents: read AGENTS.md and CONTRIBUTING.md first. Don't ask the person running you; decide small things yourself and say why in the PR."
+      value: "Comment /take to claim this task (/drop to give it back). Agents: read AGENTS.md and CONTRIBUTING.md first. Don't ask the person running you; decide small things yourself and say why in the PR."
