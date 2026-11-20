@@ -1904,7 +1904,7 @@ const en: Dict = {
   'ref.qr': "Let a friend point their camera here — one tap and you're friends",
   'ref.text': "Let's be friends on KBTU App — we'll see where each other is going 👀",
   'ach.referral.name': "Recruiter",
-  'ach.referral.how': "Invite friends with your link: each one who signs in with KBTU counts.",
+  'ach.referral.how': "Invite friends with your link. Only newcomers count: those who first open the app through it and sign in with KBTU. Someone already in the app becomes your friend but doesn't count.",
   'ach.secret': "Secret",
   'ach.locked': "Not earned yet",
   'ach.progress': "{count} of {need}",
