@@ -1,4 +1,8 @@
+import os
+
 import pytest
+
+from kbtu import db
 
 
 @pytest.fixture
@@ -14,3 +18,21 @@ def no_receipt_audit(monkeypatch):
     """A clean receipt's random spot-check (seats._audit, 1 in 5) is off; its own tests switch it on."""
     from kbtu.logic import seats
     monkeypatch.setattr(seats, "_audit", lambda: False)
+
+
+@pytest.fixture(scope="session")
+def _schema_db(tmp_path_factory):
+    """The schema and every migration, built once per test process; each env starts from a copy (db.init then finds
+    nothing left to do but still runs its `after` catch-up)."""
+    path = tmp_path_factory.mktemp("schema") / "t.db"
+    db.init(str(path))
+    return path
+
+
+def pytest_collection_modifyitems(config, items):
+    """SHARD=i/n keeps every n-th test from the i-th: CI runs the suite as n jobs side by side."""
+    if shard := os.environ.get("SHARD"):
+        i, n = map(int, shard.split("/"))
+        keep = items[i::n]
+        config.hook.pytest_deselected(items=[x for k, x in enumerate(items) if k % n != i])
+        items[:] = keep

@@ -36,7 +36,7 @@ def tma(uid: int, first: str = "Test") -> dict:
 
 
 @pytest.fixture
-def env(tmp_path, monkeypatch):
+def env(tmp_path, monkeypatch, _schema_db):
     dist = tmp_path / "dist"
     (dist / "assets").mkdir(parents=True)
     (dist / "index.html").write_text("<!doctype html><html><head><title>app</title></head></html>")
@@ -52,6 +52,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(logic.clubs, "CLUB_QUIET", 1 << 40)  # and its activity bar
     monkeypatch.setattr(logic.profiles, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
+    shutil.copy(_schema_db, cfg.db_path)
     DB[:] = [cfg.db_path]
     client = TestClient(server.create(cfg))
     return client, cfg

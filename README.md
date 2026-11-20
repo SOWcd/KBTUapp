@@ -40,7 +40,7 @@ cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.t
 .venv/bin/python tools/qa.py --port 8790
 ```
 
-Checks: `cd server && .venv/bin/python -m pytest -q tests`, `cd web && npm run check && npm test`.
+Checks: `cd server && .venv/bin/python -m pytest -q -n auto tests`, `cd web && npm run check && npm test`.
 
 ## The assistant's documents
 
