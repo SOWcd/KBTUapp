@@ -31,6 +31,8 @@
   import nisTree from '../assets/lanyards/nis-tree.webp';
   import cybPan from '../assets/lanyards/cyber-pan.webp'; // round 19: their panther in full colour, cut off its badge
   import ddDragon from '../assets/lanyards/dd-dragon.webp'; // round 20: Dice and Destiny's dragon and dice, cut off their logo's white
+  import bhWord from '../assets/lanyards/bh-dexter.webp'; // The Bay Harbor Society's DEXTER, their logo as they sent it
+  import bhDrop from '../assets/lanyards/bh-drop.webp';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -38,8 +40,8 @@
   const CARD = import.meta.glob('../assets/lanyards/scenes/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
   // round 11's scenes (their files' prefix) and the marks on their badge's band
-  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb', diceanddestinykbtu: 'dd' };
-  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan, diceanddestinykbtu: ddDragon };
+  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb', diceanddestinykbtu: 'dd', thebayharborsociety: 'bh' };
+  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan, diceanddestinykbtu: ddDragon, thebayharborsociety: bhWord };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -152,7 +154,8 @@
          lit windows, a garland of heart lights, a knitted runner. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}
-    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}{/if}
+      {#if look === 'thebayharborsociety'}<i class="bhglow"></i><span class="fig bhd"><img src={bhDrop} alt="" /></span>{/if}
+    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}{#if look === 'thebayharborsociety'}<i class="bhglow"></i>{/if}{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -379,6 +382,18 @@
   @keyframes ddflick { 0%, 100% { opacity: 0.85; transform: scale(1); } 18% { opacity: 1; transform: scale(1.03); } 31% { opacity: 0.78; transform: scale(0.98); }
     47% { opacity: 0.95; transform: scale(1.02); } 63% { opacity: 0.82; } 80% { opacity: 1; transform: scale(1.025); } }
   .bw.diceanddestinykbtu { top: 4px; height: 116px; filter: drop-shadow(0 0 12px rgba(255, 120, 50, 0.45)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)); }
+  /* The Bay Harbor Society: Miami at night, a cold light from the top left, the red sun's haze on the right; on the card
+     their drop stands on the strip under the medallion, on the band their DEXTER over the sun */
+  .sc.thebayharborsociety { background: radial-gradient(55% 75% at 70% 52%, rgba(179, 18, 30, 0.2), transparent 68%), radial-gradient(50% 70% at 0% 0%, rgba(230, 226, 218, 0.07), transparent 70%),
+    linear-gradient(160deg, rgb(20, 20, 22), rgb(10, 10, 10) 55%, rgb(5, 5, 5)); }
+  .sc.thebayharborsociety:not(.wide) { background: radial-gradient(60% 80% at 50% 85%, rgba(179, 18, 30, 0.24), transparent 68%), linear-gradient(180deg, rgb(20, 20, 22), rgb(10, 10, 10)); }
+  /* the sun's glow on the haze and the bay, breathing slowly (opacity only); centred on the drawn sun */
+  .bhglow { right: 46px; bottom: 33px; width: 120px; height: 90px; border-radius: 50%; mix-blend-mode: screen;
+    background: radial-gradient(closest-side, rgba(226, 48, 58, 0.22), rgba(179, 18, 30, 0.08) 60%, transparent); animation: bhglow 9s ease-in-out infinite alternate; }
+  .sc:not(.wide) .bhglow { right: auto; left: 50%; margin-left: -60px; bottom: -17px; }
+  @keyframes bhglow { from { opacity: 0.55; } to { opacity: 1; } }
+  .bhd img { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7)); }
+  .bw.thebayharborsociety { top: 16px; height: 50px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.75)); }
   .bw.cybersportkbtu { top: 4px; height: 118px; max-width: none; filter: drop-shadow(0 0 14px rgba(214, 58, 240, 0.55)); }
   /* round 19: a holographic foil sheen sliding with the tilt, a neon rim round the card */
   .cybersportkbtu .gloss { background: linear-gradient(115deg, transparent 38%, rgba(255, 120, 255, 0.1) 45%, rgba(140, 200, 255, 0.09) 50%, rgba(255, 230, 150, 0.06) 54%, transparent 60%) calc(55% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
@@ -395,8 +410,8 @@
   .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash, .flick { animation: none; } .spark { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash, .flick, .bhglow { animation: none; } .spark { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, 
-  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash, :global(html.lowfx) .flick { animation: none; }
+  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash, :global(html.lowfx) .flick, :global(html.lowfx) .bhglow { animation: none; }
   :global(html.lowfx) .spark { display: none; }
 </style>

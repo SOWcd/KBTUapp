@@ -463,6 +463,8 @@
   .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
   /* Dice and Destiny's strap stitched along both edges in old gold */
   .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
+  /* The Bay Harbor Society's black strap, a blood-red hairline down both edges */
+  .thebayharborsociety .strap { box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.6), inset -1px 0 0 rgba(0, 0, 0, 0.6), inset 2px 0 0 rgba(179, 18, 30, 0.85), inset -2px 0 0 rgba(179, 18, 30, 0.85); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .ink .id { text-shadow: 0 0 2px rgba(var(--sh), 0.95), 0 0 7px rgba(var(--sh), 0.9), 0 0 14px rgba(var(--sh), 0.7); }

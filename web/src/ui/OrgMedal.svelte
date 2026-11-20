@@ -22,13 +22,15 @@
   import magLogo from '../assets/lanyards/kbtumag-logo.webp'; // their wordmark on its cream, squared
   import cyberLogo from '../assets/lanyards/cyber-logo.webp'; // their badge on its black, squared
   import ddLogo from '../assets/lanyards/dd-logo.webp'; // their round logo on its black, squared
+  import bhLogo from '../assets/lanyards/bh-logo.webp'; // The Bay Harbor Society's DEXTER on its black, squared
 
   // Cinema's avatar is an AI picture; our camera in their gold on their navy (DRAWN)
   let { look, logo = null }: { look: Look; logo?: string | null } = $props();
   const DRAWN: Look[] = ['cheer', 'moments', 'faces', 'aichekbtu', 'crystalkbtu', 'arthousekbtu', 'choice', 'kbtucinema'];
   // the official logos we ship: this file whatever the org's avatar is
   const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo,
-    teentertainmentkbtu: oteLogo, kbtumag: magLogo, cybersportkbtu: cyberLogo, diceanddestinykbtu: ddLogo };
+    teentertainmentkbtu: oteLogo, kbtumag: magLogo, cybersportkbtu: cyberLogo, diceanddestinykbtu: ddLogo,
+    thebayharborsociety: bhLogo };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 
