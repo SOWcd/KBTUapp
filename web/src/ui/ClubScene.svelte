@@ -383,17 +383,18 @@
     47% { opacity: 0.95; transform: scale(1.02); } 63% { opacity: 0.82; } 80% { opacity: 1; transform: scale(1.025); } }
   .bw.diceanddestinykbtu { top: 4px; height: 116px; filter: drop-shadow(0 0 12px rgba(255, 120, 50, 0.45)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)); }
   /* The Bay Harbor Society: Miami at night, a cold light from the top left, the red sun's haze on the right; on the card
-     their drop stands on the strip under the medallion, on the band their DEXTER over the sun */
+     their drop stands on the strip in the cold light falling from the medallion (drawn in the mid layer), on the band their
+     DEXTER over the sun */
   .sc.thebayharborsociety { background: radial-gradient(55% 75% at 70% 52%, rgba(179, 18, 30, 0.2), transparent 68%), radial-gradient(50% 70% at 0% 0%, rgba(230, 226, 218, 0.07), transparent 70%),
     linear-gradient(160deg, rgb(20, 20, 22), rgb(10, 10, 10) 55%, rgb(5, 5, 5)); }
   .sc.thebayharborsociety:not(.wide) { background: radial-gradient(60% 80% at 50% 85%, rgba(179, 18, 30, 0.24), transparent 68%), linear-gradient(180deg, rgb(20, 20, 22), rgb(10, 10, 10)); }
   /* the sun's glow on the haze and the bay, breathing slowly (opacity only); centred on the drawn sun */
-  .bhglow { right: 46px; bottom: 33px; width: 120px; height: 90px; border-radius: 50%; mix-blend-mode: screen;
+  .bhglow { right: 50px; bottom: 33px; width: 120px; height: 90px; border-radius: 50%; mix-blend-mode: screen;
     background: radial-gradient(closest-side, rgba(226, 48, 58, 0.22), rgba(179, 18, 30, 0.08) 60%, transparent); animation: bhglow 9s ease-in-out infinite alternate; }
-  .sc:not(.wide) .bhglow { right: auto; left: 50%; margin-left: -60px; bottom: -17px; }
+  .sc:not(.wide) .bhglow { right: auto; left: 50%; margin-left: -60px; bottom: -15px; }
   @keyframes bhglow { from { opacity: 0.55; } to { opacity: 1; } }
   .bhd img { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7)); }
-  .bw.thebayharborsociety { top: 16px; height: 50px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.75)); }
+  .bw.thebayharborsociety { top: 12px; height: 46px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.75)); }
   .bw.cybersportkbtu { top: 4px; height: 118px; max-width: none; filter: drop-shadow(0 0 14px rgba(214, 58, 240, 0.55)); }
   /* round 19: a holographic foil sheen sliding with the tilt, a neon rim round the card */
   .cybersportkbtu .gloss { background: linear-gradient(115deg, transparent 38%, rgba(255, 120, 255, 0.1) 45%, rgba(140, 200, 255, 0.09) 50%, rgba(255, 230, 150, 0.06) 54%, transparent 60%) calc(55% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
