@@ -377,7 +377,7 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
                           (core.next_id(con, "contacts"), v.id, to, aid, _now(), token))
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
-        # an offer an old worker wrote without a token (a rolling deploy): it gets one now and a fresh card goes out
+        # Give tokenless offers a fresh card so its buttons can identify the exact offer.
         elif old := one(con, "SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0) AND token IS NULL",
                         v.id, to, aid):
             con.execute("UPDATE contacts SET token = ? WHERE id = ?", (token, old["id"]))

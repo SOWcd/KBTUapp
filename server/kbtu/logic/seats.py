@@ -435,8 +435,8 @@ def sweep_holds(con) -> None:
 def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
     sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
-    # starts_at's bound makes it an index range, not a scan of every event ever: a year back, wider than the
-    # 31-day cap (organizing.clean_event) so a long event published before the cap still shows while it runs
+    # Bound starts_at to use an index range. The lookback covers even stored events longer than the
+    # 31-day cap in organizing.clean_event, so they stay visible while they run.
     sql = "SELECT * FROM events e WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
     args: list = [core.now() - 366 * 86400, NO_END, core.now()]
     if org is None:
@@ -574,7 +574,7 @@ ANSWER_MAX = 200  # one answer to an event's question at sign-up
 
 
 # a host club's member's guest seat at its own upcoming public event: a free event's, or a waitlist place anywhere (a
-# paid seat or hold stays: money; a check-in stays: it's history). Migration 135 ran the same rule once over old data.
+# paid seat or hold stays to preserve payments, and a check-in stays as an attendance record).
 # A President's or a Vice's seat stays, and so does a member's whom one of them let in (team_ask).
 # ponytail: clubs whose own people sign up to its events like anyone (CyberSport's members play its
 # cups); a per-club switch in Admin if more clubs want it

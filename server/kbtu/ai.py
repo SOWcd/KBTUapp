@@ -104,14 +104,12 @@ ASSIST_PROVIDERS = ("munitoeu", "munito", "groq", "cf")  # the assistant: a priv
 PUBLIC_PROVIDERS = ASSIST_PROVIDERS                       # public or about to be: the same (see above)
 EU_ONLY = ("munitoeu",)  # app.py: with no public section on (BOARD=staff, FORUM=founder) the visible policy names this alone
 EU_CHAIN = "munitoeu:deepseek-ai/deepseek-v4.1-flash-1017,munitoeu:deepseek-ai/deepseek-v4-flash"  # the EU host's models (llm.URLS)
-# Links that gave no usable answer in four days of prod (thinking models cut at a short answer's few tokens);
-# each one asked is a wasted round trip before the next, so a slow check. Back here once they answer.
+# Skip links that exhaust the short verdict budget on reasoning to avoid a wasted round trip.
+# Restore them when they can return a usable verdict.
 DEAD = {"munitoeu:zai-org/glm-5.3-flash", "munitoeu:qwen/qwen3.8-27b", "munito:zai-org/glm-5.3-flash", "groq:openai/gpt-oss-120b"}
 
 
-# A one-word verdict's cap. Not the word's own few tokens: most free models reason first and the reasoning counts, so a
-# cap of 5 cuts every DeepSeek answer before its word (on prod 5 of 9 post checks got no answer). The checks
-# still take exactly one word, whatever the room.
+# Reasoning tokens count toward the budget, so allow enough room for the model to reach its one-word verdict.
 WORD_TOKENS = 300
 
 

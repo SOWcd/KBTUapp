@@ -68,7 +68,7 @@ def args(src: Path, dst: Path, info: dict) -> list[str]:
     # 720 on the short side, whichever way the clip stands (ffmpeg has turned it upright by now; probe's width hasn't)
     fit = ("scale=w='if(gt(iw,ih),min(1280,iw),min(720,iw))':h='if(gt(iw,ih),min(720,ih),min(1280,ih))'"
            ":force_original_aspect_ratio=decrease:force_divisible_by=2")
-    # the wide slot plays muted behind the event's sheet in a loop: no sound, 20 s, a lower cap (PLAN 32: data cost)
+    # Cap the muted loop at 20 seconds and a lower bitrate to limit data use on the event's sheet.
     wide = info.get("wide")
     sound = ["-an"] if wide else ["-c:a", "aac", "-b:a", "96k", "-ac", "2"]
     # HDR to SDR: to linear light, BT.709 primaries, Hable's curve, back to BT.709 (zimg; the input's own transfer named,

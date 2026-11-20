@@ -22,7 +22,7 @@ URLS = {
     "cf": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions",
     "munito": "https://api.munito.ai/inference/v1/chat/completions",
     # Munito's EU host: the global one "can run in any region" (docs.munito.ai/gdpr-data-residency); the forum's look
-    # must stay in the EU (privacy policy, section 11). Fewer models there: no deepseek-v4.1 (measured)
+    # must stay in the EU (privacy policy, section 11).
     "munitoeu": "https://api.eu.munito.ai/inference/v1/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
@@ -119,7 +119,7 @@ def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
             row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
             use = json.loads(row[0]) if row else {}
             n = use.setdefault(link, [0, 0])
-            n += [0] * (4 - len(n))  # an old [ok, fail]: its answers were never timed
+            n += [0] * (4 - len(n))  # Supply zero timing totals for counters stored without latency samples.
             n[0 if ok else 1] += 1
             if ok:
                 n[2] += ms

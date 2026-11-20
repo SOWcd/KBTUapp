@@ -30,7 +30,7 @@ def _shape(f, v: Viewer) -> dict:
     return {**media_shape(f), "canDelete": f["uid"] == v.id and on(v), "by": _photo_by(f), "mine": f["uid"] == v.id,
             **({"uid": f["poster"]} if f["poster"] else {}),
             **({"at": f["posted"] or f["created_at"]} if f["poster"] or on(v) else {}),  # the feed's days; off: no more than the album says
-            **({"topic": f["topic"] or "other"} if f["poster"] and not f["event_id"] else {}),  # one posted before topics, or its event gone: other
+            **({"topic": f["topic"] or "other"} if f["poster"] and not f["event_id"] else {}),  # Use Other for a standalone photo without a topic.
             **({"event": {"id": f["event_id"], "title": f["title"],
                           **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(f["i18n"]).items()}} if f["i18n"] else {})}}
                if f["event_id"] else {})}
@@ -110,7 +110,7 @@ def check(con, v: Viewer, eid: int | None = None, topic: str | None = None) -> N
     again as it is saved. A photo of no event says its topic (none yet from an old bundle); an event's never does."""
     if not on(v):
         raise ApiError("not_found")
-    # ponytail: until 2026-11-25, then require: an old web bundle posts with neither (saved as topic NULL, reads as other)
+    # ponytail: allow standalone photos without a topic for cached web bundles until 2026-11-25, then require one.
     if topic is not None and (eid is not None or topic not in TOPICS):  # never both
         raise ApiError("bad_input", "topic")
     if eid is not None and _album_room(con, v, _event(con, v, eid)) <= 0:
@@ -197,7 +197,7 @@ def restore(con, d: dict) -> None:
     if g["event_id"] and not eid and not g.get("open"):
         return
     con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
-                (g["file_id"], g["user_id"], eid, g["created_at"], g.get("topic")))  # taken down before topics: none
+                (g["file_id"], g["user_id"], eid, g["created_at"], g.get("topic")))  # An undo snapshot can omit the optional topic.
     for p in d["albums"]:
         if one(con, "SELECT 1 FROM events WHERE id = ?", p["event_id"]):
             con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",

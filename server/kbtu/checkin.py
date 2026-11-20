@@ -589,8 +589,8 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         raise ApiError("bad_input", "qr")
     had = one(con, "SELECT done_at, scanned_at FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    # finished: only someone who scanned before Finish may still complete it, for GRACE (said before "old": a photo
-    # scanned after Finish is "closed")
+    # Give pending scans GRACE seconds to complete after Finish. Check session closure first so a scan
+    # of a finished session gets the closure message even if its code has expired.
     if not s or s["started_at"] is None or s["ended_at"] is not None and not (had and s["ended_at"] > now() - GRACE):
         raise ApiError("closed", "qr")
     out = s["phase"] == "out" and s["ended_at"] is None

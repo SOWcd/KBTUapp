@@ -339,8 +339,8 @@ def i18n(p) -> dict | None:
     return {k: {"title": x.get("title", ""), "body": x.get("body", "")} for k, x in json.loads(p["i18n"]).items()} if p["i18n"] else None
 
 
-# A video post plays in the app's own <video> (PLAN 86): on a tap the server reads the post's public embed page
-# (t.me/<channel>/<id>?embed=1) for its file on Telegram's CDN. The address is built from our own row, never the
+# Read the public embed page (t.me/<channel>/<id>?embed=1) for the CDN URL so the app can play the video inline.
+# The address is built from our own row, never the
 # client's; what comes back must be a CDN file, or it's not_found and the app frames Telegram's widget instead (a long
 # video's embed has no file either). The file's token expires: resolved on a tap, kept a few minutes, never stored.
 _POST = re.compile(r"https://t\.me/([A-Za-z0-9_]{4,32})/(\d{1,12})")

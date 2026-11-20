@@ -767,7 +767,7 @@ def initials(name: str) -> str:
 
 
 # Org names, one style: no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
-# one is the abbr. Done to a name as it's created or renamed; the names already there were fixed by hand.
+# one is kept in abbr so the display name need not repeat it.
 KBTU = {"KBTU", "\u041a\u0411\u0422\u0423", "\u049a\u0411\u0422\u0423"}  # and in Russian and Kazakh
 _KB = r"(?:kbtu|\u043a\u0431\u0442\u0443|\u049b\u0431\u0442\u0443)"
 _SEP = r"[\s\-\u2013\u2014|:,.]"
@@ -909,7 +909,7 @@ def fill_abbrs(con) -> None:
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
             con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
-        # one typed before the rule (letters and digits, no KBTU: "JCC_KBTU") loses what breaks it
+        # Normalize stored abbreviations so Studio and the public cards use the same naming rules.
         for o in rows(con, "SELECT id, name, abbr FROM orgs WHERE abbr IS NOT NULL"):
             if re.fullmatch(r"[^\W_]{2,8}", o["abbr"]) and not re.search("kbt[uy]", _skeleton(o["abbr"])):
                 continue
@@ -995,7 +995,7 @@ def _slug_free(con, s: str, oid: int | None) -> bool:
         and not one(con, "SELECT 1 FROM short_links WHERE slug = ?", s)
 
 
-OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))  # with the President: db migration 40
+OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))
 
 
 def _official(con, oid: int, level: str) -> int | None:

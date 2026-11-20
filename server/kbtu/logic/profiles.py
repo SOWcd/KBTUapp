@@ -287,9 +287,8 @@ def use_grant_link(con, v: Viewer, token: str, qr: bool = False) -> dict:
     'conflict', and the use stays for whom it was meant. Expired, revoked or full: 'closed'."""
     need_student(v)
     with tx(con):
-        # the maker still an admin (a demoted or banned one's links stop with the role); the creator's own awards only
-        # from his links (an admin's from before they became his alone: closed). multi = 0: an older one-time link,
-        # closed once used (used_at: used_by goes NULL with the user's account)
+        # Check the issuer's current role so a demoted or banned admin's links cannot grant awards.
+        # Require the founder for creator-only awards. Use used_at so account deletion cannot reopen a one-time link.
         r = one(con, """SELECT g.*, u.is_founder, (SELECT COUNT(*) FROM grant_link_uses x WHERE x.token = g.token) AS used
             FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
             WHERE g.token = ? AND (g.multi = 1 OR g.used_at IS NULL) AND g.expires_at > ? AND g.qr = ? AND (g.qr = 0 OR g.lease_until > ?)""",
@@ -525,7 +524,7 @@ def badge_sessions(con, v: Viewer) -> list[dict]:
         FROM qr_sessions q ORDER BY q.id DESC LIMIT 20""")]
 
 
-FIRST_N = 500  # cards 1-500 under the code "first50", as stored; at 50 a pilot club alone could take them all
+FIRST_N = 500  # Keep the stored "first50" key so existing grants still count for First 500.
 
 
 def card_no(con, uid: int) -> None:
@@ -703,7 +702,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     return {
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
         "master": (s["student_id"] or "")[2:3] == "M",  # a master's 1st year isn't a bachelor's (the ID's letter)
-        "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
+        "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # Honor profile visibility for fields supplied by a club roster.
         "attended": len(attended(con, uid)),
         "clubs": [{"org": org_ref(con, m, logos), "role": m["role"] if m["mine"] else None, **(core.titled(m) if m["mine"] else {"title": None})} for m in clubs],
         "past": [{"org": org_ref(con, h, logos), "role": h["role"] if h["mine"] else None, "since": h["since"], "until": h["until"]} for h in past],

@@ -653,9 +653,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
     return org_shape(con, v, o)
 
 
-# ---- indoor routes (PLAN item 22): the graph the owner edits on the map; the app finds the ways over it ----
-MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # the graph from Uni-Q's plans, the only one (the
-# editor is off: its saves were by accident; the map_graph table's row is ignored)
+MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # Use the graph from Uni-Q's plans so accidental editor saves cannot affect routing.
 
 
 def map_graph(con) -> dict:

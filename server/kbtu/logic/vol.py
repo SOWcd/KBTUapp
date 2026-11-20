@@ -27,7 +27,7 @@ import secrets
 from ..db import tx
 from .core import PERSON_COLS, ApiError, Viewer, log_action, now, one, person_ref, rows, _qs
 
-# ponytail: v1 shortcuts, each with its upgrade: grants survive a new President (have her re-confirm them); a scan that
+# ponytail: grants survive a new President (have her re-confirm them). A scan that
 # waits for a sign-in (checkin.became_student) opens no shift (hook it there); only the club's own sessions count, not
 # other clubs' events it helps at (the request flow); a teambuilding's validity is frozen only when an account is deleted
 # (freeze_held), live until then so the President's corrections still count; the hand-over link's holder gets no capsule
@@ -41,7 +41,7 @@ GRACE = 30 * 60          # as checkin.GRACE: a late sign-in may still complete a
 REASON_MAX = 200
 SHIFT_CAP = 12 * 3600    # one shift counts this long at most, and a session of the club gives hours for this long after its Start
 RESOLVE_FOR = 7 * 86400  # an unmarked shift is answered for within this long after Finish; later it stays 0
-FROM = "vol_resolve_from"  # meta: when answering for the unmarked began (migration 157); sessions finished before it stay as they were
+FROM = "vol_resolve_from"  # Only sessions finished from this cutoff count unmarked shifts for resolution.
 HAND_MAX = 14 * 86400    # a hand-over link dies this long after it was made, opened or not (a session never finished)
 MEMBERS, HOURS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"   # the club's sheets, matched loosely below
 

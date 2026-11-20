@@ -115,7 +115,7 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
     return c["photo"] if c["photo"] and c["photo"] != photo else None
 
 
-# A chat any student suggests (PLAN item 45): picked in the bot's own
+# A chat any student suggests is picked in the bot's own
 # chat picker, sent to it, or typed in the app's sheet; any chat: a closed
 # one by its invite link, which only signed-in students then see (chats()) and the admin sees marked before approving.
 HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
@@ -326,7 +326,7 @@ def chats_gone(con) -> list[str]:
     return [p for p in out if photo_free(con, p)]
 
 
-# ---------------------------------------------------------------- an org's own chats (PLAN 86)
+# ---------------------------------------------------------------- an org's own chats
 # A club's or school's Telegram chats on its page: channels, groups, topics groups, open and closed. chats.org_id says
 # whose a chat is (a catalog row shows on the page too; one linked only from Studio waits as status 'org', out of the
 # catalog); one public channel is the MAIN one, with the big Subscribe button (and later the userbot mirror's source).
