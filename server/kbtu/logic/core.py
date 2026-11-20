@@ -86,7 +86,7 @@ STUDENT_ID = re.compile(r"\d{2}(?:[A-Z]\d{5,7}|[A-Z]{2}\d{4,7})", re.ASCII)  # a
 
 class ApiError(Exception):
     STATUS = {"need_student": 401, "forbidden": 403, "not_found": 404, "full": 409, "closed": 409,
-              "conflict": 409, "rate_limited": 429, "bad_input": 400, "unavailable": 503}
+              "conflict": 409, "guest_list": 403, "rate_limited": 429, "bad_input": 400, "unavailable": 503}
 
     def __init__(self, code: str, message: str = "", extra: dict | None = None):
         super().__init__(code)
@@ -626,6 +626,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         # its own questions at sign-up ("questions" is Studio's count)
         "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "visibility": e["visibility"],
         "regUntil": e["reg_until"], "doorAt": door_at(e) if e["starts_at"] else None, "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
+        "guestList": bool(e["guest_list"]), "ageCheck": bool(e["age_check"]),
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
         **({"school": e["school"]} if e["school"] else {}),  # only its students see it (seats.school_ok): their label

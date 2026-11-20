@@ -2021,4 +2021,22 @@ MIGRATIONS: list[tuple[int, str]] = [
       DELETE FROM ev_matches WHERE stage = 'group' AND home = OLD.id;
       DELETE FROM ev_matches WHERE stage = 'group' AND away = OLD.id;
     END;"""),
+    (197, """ALTER TABLE events ADD COLUMN guest_list INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE events ADD COLUMN age_check INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE event_guests (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      student_id TEXT NOT NULL,
+      adult INTEGER CHECK (adult IN (0, 1)),
+      surname_hash BLOB,
+      PRIMARY KEY (event_id, student_id)
+    ) STRICT;
+    CREATE INDEX event_guests_by_student ON event_guests (student_id);
+    CREATE TABLE reg_age (
+      registration_id INTEGER PRIMARY KEY REFERENCES registrations(id) ON DELETE CASCADE,
+      adult INTEGER NOT NULL CHECK (adult IN (0, 1)),
+      set_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      set_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS outbox_u18 ON bot_outbox (ref) WHERE kind = 'u18_leave';"""),
+    (198, "ALTER TABLE events ADD COLUMN silent_publish INTEGER NOT NULL DEFAULT 0;"),
 ]

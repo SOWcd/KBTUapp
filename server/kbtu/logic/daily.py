@@ -196,6 +196,23 @@ def visit(con, uid: int, t: int) -> None:
     con.execute("INSERT OR IGNORE INTO visits (day, user_id) VALUES (?, ?)", (day_of(t), uid))
 
 
+def guest_age_round(con) -> None:
+    cutoff = core.now() - 86400
+    # Undated events have no end to keep the data against.
+    active = "SELECT 1 FROM events e WHERE e.id = {event_id} AND COALESCE(e.ends_at, e.starts_at + ?) > ?"
+    with tx(con):
+        con.execute(f"DELETE FROM event_guests WHERE NOT EXISTS ({active.format(event_id='event_guests.event_id')})",
+                    (core.NO_END, cutoff))
+        con.execute(f"""DELETE FROM reg_age WHERE registration_id IN (SELECT r.id FROM reg_age a
+            JOIN registrations r ON r.id = a.registration_id WHERE NOT EXISTS ({active.format(event_id='r.event_id')}))""",
+                    (core.NO_END, cutoff))
+        # The queue's recipient and kind also reveal the age mark.
+        con.execute(f"""DELETE FROM bot_outbox WHERE kind = 'u18_leave'
+            AND NOT EXISTS ({active.format(event_id='CAST(substr(bot_outbox.ref, 5) AS INTEGER)')})""", (core.NO_END, cutoff))
+        con.execute(f"""DELETE FROM meta WHERE key >= 'u18:' AND key < 'u18;'
+            AND NOT EXISTS ({active.format(event_id='CAST(substr(meta.key, 5) AS INTEGER)')})""", (core.NO_END, cutoff))
+
+
 def stats_day(con) -> None:
     """Just after midnight (Almaty), once: yesterday's row for the admin's chart. seen_at is the last time someone opened
     the app, so seen_at >= yesterday's start counts exactly who opened it since (a few minutes of today included)."""

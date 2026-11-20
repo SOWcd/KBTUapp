@@ -14,7 +14,8 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
-  import { api, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
@@ -95,7 +96,7 @@
     busy = true; last = raw;
     try {
       const r = await api.checkin(id, raw, admit);
-      res = r; seq++;
+      res = r; seq++; aged = false;
       if (r.result === 'ok' || r.result === 'already') count = { came: r.came, going: r.going };
       if (r.result === 'ok') {
         haptic.ok();
@@ -124,7 +125,7 @@
     busy = true;
     try {
       const r = await api.checkinPerson(id, d.person.id, admit);
-      res = r; seq++; pendingAdmit = r.result === 'flagged' ? d : null;
+      res = r; seq++; aged = false; pendingAdmit = r.result === 'flagged' ? d : null;
       if (r.result === 'ok' || r.result === 'already') count = { came: r.came, going: r.going };
       if (r.result === 'ok') {
         haptic.ok(); who = '';
@@ -143,6 +144,31 @@
       haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default');
       people = await api.door(id);
     } catch { say(t('common.error'), 'warning_3d'); }
+  }
+
+  // ---- an age_check event (server organizing.mark_age): the ID looked at, one tap marks 18+ or not; the queue never waits ----
+  let aged = $state(false); // marked by a tap on this result (else a mark shown came from the imported list)
+  async function setAge(adult: boolean) {
+    const r = res;
+    if (!r || !('person' in r) || r.adult === adult) return;
+    const was = r.adult ?? null, uid = r.person.id, d = people?.find((x) => x.person.id === uid);
+    r.adult = adult; aged = true; if (d) d.adult = adult; // at once; back if the server says no
+    haptic.select();
+    try { await api.markAge(id, uid, adult); } catch {
+      r.adult = was; if (d) d.adult = was;
+      haptic.error(); say(t('common.error'), 'warning_3d');
+    }
+  }
+  let notifying = $state(false);
+  async function notifyMinors() {
+    if (!(await sheets.ask({ title: t('age.notifyAsk'), text: t('age.notifyText'), ok: t('age.notifyOk'), cancel: t('common.cancel') }))) return;
+    notifying = true;
+    try {
+      const { count: n } = await api.notifyMinors(id);
+      haptic.ok(); say(n ? t('age.sent', { n }) : t('age.nobody'), 'speech_balloon_3d');
+    } catch (x) {
+      haptic.error(); say(t(x instanceof ApiErr && x.code === 'rate_limited' ? 'age.tooOften' : 'common.error'), 'warning_3d');
+    } finally { notifying = false; }
   }
 
   onMount(() => {
@@ -207,6 +233,13 @@
             {#if res.walkIn || res.late >= 5 || undoFor === res.person.id}<span class="more">{[undoFor === res.person.id && t('door.byHand'), res.walkIn && t('scan.walkIn'), res.late >= 5 && t('scan.late', { n: res.late })].filter(Boolean).join(' · ')}</span>{/if}
             {#if res.flagged}<span class="flag"><TriangleAlert size={16} />{t('scan.flagged')}</span>{/if}
             {#if undoFor === res.person.id}<Button kind="secondary" size="s" onclick={undo}>{t('door.undo')}</Button>{/if}
+            {#if e?.ageCheck}
+              <span class="more">{t(res.adult != null && !aged ? 'age.listed' : 'age.look')}</span>
+              <div class="age">
+                <Button kind={res.adult === true ? 'primary' : 'secondary'} size="l" full onclick={() => setAge(true)}>{t('age.adult')}</Button>
+                <Button kind={res.adult === false ? 'primary' : 'secondary'} destructive={res.adult === false} size="l" full onclick={() => setAge(false)}>{t('age.minor')}</Button>
+              </div>
+            {/if}
           </div>
         {:else}
           <div class="res bad"><span class="ic"><TriangleAlert size={44} /></span><b class="nm">{t(MSG[res.result])}</b></div>
@@ -234,6 +267,10 @@
       </div>
     {/if}
 
+    {#if e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}
+      <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
+    {/if}
+
     {#if names || (qr && (mode === 'qr' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
@@ -253,6 +290,7 @@
             <Group>
               {#each found as d (d.person.id)}
                 {#snippet end()}
+                  {#if d.adult != null}<Tag tone={d.adult ? 'neutral' : 'warning'}>{t(d.adult ? 'age.adult' : 'age.u18')}</Tag>{/if}
                   {#if d.checkedInAt}<Tag tone="success">{t('door.came', { time: time(d.checkedInAt) })}</Tag>
                   {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => mark(d)}>{t('door.mark')}</Button>{/if}
                 {/snippet}
@@ -299,6 +337,8 @@
   .bad .nm { font-size: 18px; }
   .more { font: 650 14px/1.3 var(--font-text); color: var(--text-2); }
   .ic { display: flex; }
+  .age { align-self: stretch; display: flex; gap: var(--s-2); margin-top: 4px; }
+  .age > :global(*) { flex: 1 1 0; min-width: 0; }
   @keyframes pop { from { opacity: 0; transform: scale(0.92); } }
 
   .hint { color: var(--text-2); }

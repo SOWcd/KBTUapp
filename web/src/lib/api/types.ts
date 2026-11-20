@@ -7,7 +7,7 @@ export type OrgRole = 'member' | 'head' | 'vice' | 'president';
 export type PlatformRole = 'user' | 'moderator' | 'admin';
 export type OrgKind = 'club' | 'school' | 'council' | 'office' | 'app';
 
-export interface ApiError { error: 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict' | 'rate_limited' | 'bad_input' | 'unavailable'; message?: string }
+export interface ApiError { error: 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict' | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable'; message?: string }
 
 /** Image prepared by the server: WebP, thumbnail and a tiny inline blur preview. */
 /** An application to start a club (§4.6): it opens after the creator's check. `applicant` for moderators and the admin. */
@@ -430,6 +430,8 @@ export interface EventCard {
   regUntil?: Ts | null;         // registration closes; null = open until the start
   doorAt?: Ts | null;           // check-in opens: at T-30 by itself, earlier when the President or a Vice opened it
   lateSignup?: boolean;         // sign-up stays open from the start until the end (free, uncapped, public)
+  guestList: boolean;            // tickets come from the imported guest list
+  ageCheck: boolean;             // the door records whether a guest is 18+
   freeFirst?: number | null;    // a paid event: how many 1st-year students come free (the first to register)
   freeLeft?: number | null;     // ... of them still free
   my: MyRegistration | null;
@@ -660,7 +662,7 @@ export interface AttendeeReceipt {
 }
 /** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
-export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean }
+export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null }
 /** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
 /** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */
 export interface TeamMember {
@@ -695,7 +697,7 @@ export interface TeamList { session: Id | null; audience: DoorAudience; rows: Te
 /** Door scanner answer (§4.4): a ticket or a badge QR. `walkIn` = registered at the door by their badge,
  *  `late` = minutes after the start. */
 export type CheckinResult =
-  | { result: 'ok' | 'already' | 'flagged' | 'ask_org' /* flagged: a receipt nobody checked, not let in yet (its organizer admits after a look); ask_org: the same, said to anyone else */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
+  | { result: 'ok' | 'already' | 'flagged' | 'ask_org' /* flagged: a receipt nobody checked, not let in yet (its organizer admits after a look); ask_org: the same, said to anyone else */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; adult?: boolean | null; flagged?: boolean /* a receipt to look at (§4.3) */ }
   | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;

@@ -23,6 +23,7 @@
   import SearchField from '../../ui/SearchField.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Tag from '../../ui/Tag.svelte';
 
   let { overlay, id, onchange }: { overlay: Overlay; id: Id; onchange?: () => void } = $props();
 
@@ -36,11 +37,11 @@
   const aud = $derived(team?.audience ?? 'both');
 
   // one shape for both lists: a team row (key) or a guest going (uid)
-  type Item = { key: string; uid?: Id; name: string; group: string; at: number | null; manual: boolean; app: boolean };
+  type Item = { key: string; uid?: Id; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null };
   const items = $derived.by<Item[]>(() => [
     ...(aud !== 'guests' ? (team?.rows ?? []).map((r) => ({ ...r, group: r.group ?? t('mk.noGroup') })) : []),
     ...(aud !== 'team' ? (guests ?? []).map((d) => ({ key: `g${d.person.id}`, uid: d.person.id, name: d.person.realName, group: t('mk.guestsGroup'),
-      at: d.checkedInAt, manual: d.manual, app: true })) : []),
+      at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
   ]);
   let tab = $state<'not' | 'came' | 'other'>('not');
   // rows marked or unmarked in this tab stay in it until the next switch
@@ -120,7 +121,7 @@
         <Group caption={name} note={t('mk.ofN', { n: g.came, m: g.all })}>
           {#each g.rows as x (x.key)}
             <Row dense title={x.name} subtitle={sub(x)} disabled={!x.at && shut(x)} onclick={x.at && !x.manual ? undefined : (ev) => tap(x, ev)}>
-              {#snippet detail()}<span class="ck" class:on={!!x.at}>{#if x.at}<CircleCheck size={24} />{:else}<Circle size={24} />{/if}</span>{/snippet}
+              {#snippet detail()}{#if x.adult != null}<span class="tg"><Tag tone={x.adult ? 'neutral' : 'warning'}>{t(x.adult ? 'age.adult' : 'age.u18')}</Tag></span>{/if}<span class="ck" class:on={!!x.at}>{#if x.at}<CircleCheck size={24} />{:else}<Circle size={24} />{/if}</span>{/snippet}
             </Row>
           {/each}
         </Group>
@@ -131,6 +132,8 @@
 
 <style>
   .ck { display: flex; margin-left: auto; color: var(--text-3); }
+  .tg { margin-left: auto; }
+  .tg + .ck { margin-left: var(--s-2); }
   .ck.on { color: var(--accent); }
   .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }
 </style>

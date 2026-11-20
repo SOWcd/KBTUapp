@@ -209,7 +209,7 @@ def tell(con, e: sqlite3.Row, actor: int) -> None:
     (an initiative can't reach its followers twice a week through co-hosting). Someone following both clubs
     hears once: the outbox key (user, new_event, event:<id>) is the host's message's."""
     x = one(con, ACCEPTED, e["id"])
-    if not x or e["status"] != "published" or e["hidden_at"] or not _fits(e) or e["starts_at"] <= core.now():
+    if not x or e["status"] != "published" or e["silent_publish"] or e["hidden_at"] or not _fits(e) or e["starts_at"] <= core.now():
         return
     if _tell_after(con, {"org_id": x["org_id"], "id": e["id"]}) is not None:
         return

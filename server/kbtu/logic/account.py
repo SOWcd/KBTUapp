@@ -61,6 +61,7 @@ def ms_link(con, uid: int, who: dict) -> None:
             con.execute("DELETE FROM prefill_rest WHERE id = ?", (r["id"],))
             listed = {**_from_list(con, uid, r), **listed}  # the main list's row first
     _fill_lat(con, uid, who.get("profile") or {}, listed)
+    guests.claim(con, uid)
     link_door_guests(con, uid)
     checkin.became_student(con, uid)  # a QR scan waiting for the sign-up counts now (the form's and the relink's path)
     if before is not None:
@@ -1212,6 +1213,9 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             WHERE r.user_id = ?""", v.id)]
         con.execute("DELETE FROM receipts WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
         con.execute("DELETE FROM receipt_replaced WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
+        # Ended registrations move to an anonymous account, so their age marks need explicit deletion.
+        con.execute("DELETE FROM reg_age WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
+        con.execute("DELETE FROM event_guests WHERE student_id = (SELECT student_id FROM students WHERE user_id = ? AND manual = 0)", (v.id,))
         receipts = [p for f in paid + [r[0] for r in rows(con, "SELECT id FROM files WHERE owner_id = ? AND kind = 'receipt'", v.id)]
                     for p in _drop_unused(con, f)]
         # future seats first, so the waitlist moves: directly, an event he can no longer see (hidden, members-only) too
@@ -1494,7 +1498,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, fchannel, inbox, profiles, santa  # noqa: E402
+from . import chatlist, core, credits, fchannel, guests, inbox, profiles, santa  # noqa: E402
 from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402

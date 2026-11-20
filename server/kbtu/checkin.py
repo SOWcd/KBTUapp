@@ -19,6 +19,7 @@ import time
 
 from . import logic
 from .logic import ApiError, Viewer, can, log_action, now, one, rows, tx
+from .logic import guests
 from .texts import _cell
 
 SLOT = 10           # the QR on the screen changes this often (s)
@@ -615,12 +616,14 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
             return r
         if not had and logic.door_shut(e, t) == "not_open":  # a guest before the door: refused before any mark (no count to undo)
             raise ApiError("closed", "not_open", {"at": logic.door_at(e)})
-        r = e["price"] and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
+        r = (e["price"] or e["guest_list"]) and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
         if r and r["checked_in_at"] and not had:  # this ticket came in already (a screenshot at the scanner): the door must see it
             return {"title": s["title"], "done": False, "left": False, "already": r["checked_in_at"]}
-        if r and not r["checked_in_at"] and logic.organizing.flagged(con, r["id"]):  # the scanner shows the flag: that's where it goes
+        if r and not e["guest_list"] and not r["checked_in_at"] and logic.organizing.flagged(con, r["id"]):  # the scanner shows the flag
             return {"title": s["title"], "done": False, "left": False, "flagged": True}
     with tx(con):
+        if s["event_id"] and not out:
+            guests.need_ticket(con, s["event_id"], uid)
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
         if out:  # leaving: the last time counts (out and back in, out again)
             con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
@@ -656,8 +659,9 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
         return None
     with tx(con):  # who they are, read under the write lock with the mark: a removal or a sign-up landing meanwhile wins
         member = bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id))
-        if aud == "both" and (not member or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id)):
-            return None  # a seat (or a waitlist offer held): a guest
+        if aud == "both" or e["guest_list"]:
+            if not member or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold')", e["id"], v.id):
+                return None  # a seat (or a waitlist offer held): a guest
         if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
             raise ApiError("forbidden", "banned")  # "team": whoever scans, but never someone the club banned
         x = one(con, "SELECT id FROM qr_sessions WHERE crew_event_id = ? AND started_at IS NOT NULL AND ended_at IS NULL", e["id"])
@@ -726,12 +730,14 @@ def badge(con, v: Viewer, sid: int, raw: object) -> dict:
     uid = m and int(m[1])
     if not m or uid == v.id or not one(con, "SELECT 1 FROM users u JOIN students st ON st.user_id = u.id AND st.manual = 0 WHERE u.id = ? AND u.qr_code = ? AND u.banned_at IS NULL", uid, m[2]):
         raise ApiError("not_found", "badge")  # a wrong, foreign, stale (rotated) or own badge
-    r = s["event_id"] and one(con, "SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going' AND checked_in_at IS NULL",
-                              s["event_id"], uid)
-    if r and logic.organizing.flagged(con, r["id"]):  # a receipt nobody reviewed: the door scanner shows its flags (as mark)
-        raise ApiError("conflict", "flagged")
     t = now()
     with tx(con):
+        if s["event_id"]:
+            guests.need_ticket(con, s["event_id"], uid)
+            r = one(con, """SELECT r.id FROM registrations r JOIN events e ON e.id = r.event_id AND e.guest_list = 0
+                WHERE r.event_id = ? AND r.user_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL""", s["event_id"], uid)
+            if r and logic.organizing.flagged(con, r["id"]):
+                raise ApiError("conflict", "flagged")
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by) VALUES (?, ?, ?, ?)", (sid, uid, t, v.id))
         if not con.execute("UPDATE qr_marks SET done_at = ?, marked_by = COALESCE(marked_by, ?) WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, v.id, sid, uid)).rowcount:
             raise ApiError("conflict", "already")  # counted already (rolls the row above back: none was made)
@@ -770,11 +776,12 @@ def became_student(con, uid: int) -> None:
     """Just signed up: the scans waiting for it count now (sessions open or finished under GRACE ago)."""
     t = now()
     with tx(con):
-        due = rows(con, """SELECT s.id, s.event_id, m.scanned_at FROM qr_marks m JOIN qr_sessions s ON s.id = m.session_id WHERE m.user_id = ?
-            AND m.done_at IS NULL AND (s.ended_at IS NULL OR s.ended_at > ?)""", uid, t - GRACE)
-        con.execute("""UPDATE qr_marks SET done_at = ? WHERE user_id = ? AND done_at IS NULL
-            AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ?)""", (t, uid, t - GRACE))
+        due = rows(con, """SELECT s.id, s.event_id, m.scanned_at FROM qr_marks m JOIN qr_sessions s ON s.id = m.session_id
+            LEFT JOIN events e ON e.id = s.event_id LEFT JOIN registrations r ON r.event_id = e.id AND r.user_id = m.user_id AND r.status = 'going'
+            WHERE m.user_id = ? AND m.done_at IS NULL AND (s.ended_at IS NULL OR s.ended_at > ?)
+            AND (e.guest_list IS NOT 1 OR r.id IS NOT NULL)""", uid, t - GRACE)
         for r in due:
+            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ?", (t, r["id"], uid))
             # judged at the scan's moment: a sign-in may outlast the QR or the door, and an early scan isn't saved by signing in during the event
             if r["event_id"] and logic.screen_came(con, r["event_id"], uid, r["scanned_at"]):
                 _attendance(con, r, uid, r["scanned_at"])

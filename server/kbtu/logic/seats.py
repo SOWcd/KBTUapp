@@ -192,6 +192,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
             e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND e.school IS NULL
+              AND e.silent_publish = 0
               AND (e.guest_host IS NULL OR e.channel_msg IS NOT NULL)  -- a partner's event isn't announced; one posted before it became one is kept in step
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) AS live
             FROM events e JOIN orgs o ON o.id = e.org_id
@@ -552,7 +553,7 @@ def add_seats(con, v: Viewer, eid: int, n: object) -> dict:
 def promote(con, e: sqlite3.Row) -> None:
     """Free seats go to the waitlist in order: going, or a 30-min hold for paid events (§4.2); a 1st-year student
     takes one of a paid event's free seats while any are left (§4.3)."""
-    if e["status"] != "published" or end_of(e) <= core.now():
+    if e["guest_list"] or e["status"] != "published" or end_of(e) <= core.now():
         return  # a cancelled or finished event hands out no seats (a hold to pay for nothing)
     if one(con, "SELECT 1 FROM santa_events WHERE event_id = ? AND drawn_at IS NOT NULL", e["id"]):
         return  # Secret Santa is drawn: nobody new comes in, they would have no Santa (santa.py)
@@ -582,7 +583,7 @@ GUESTS_OK = frozenset({"cybersportkbtu"})
 
 
 TEAM_SEATS = """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND e.org_id = ?
-    AND e.status = 'published' AND e.visibility = 'public' AND e.team_max IS NULL AND e.starts_at > ?
+    AND e.status = 'published' AND e.visibility = 'public' AND e.team_max IS NULL AND e.starts_at > ? AND e.guest_list = 0
     AND (SELECT slug FROM orgs WHERE id = e.org_id) NOT IN ({}) AND r.checked_in_at IS NULL
     AND (r.status = 'waitlist' OR r.status IN ('going', 'hold') AND e.price IS NULL)
     AND NOT EXISTS (SELECT 1 FROM team_asks a WHERE a.event_id = e.id AND a.user_id = r.user_id AND a.status = 'yes')
@@ -630,6 +631,8 @@ def team_ask(con, v: Viewer, eid: int) -> dict:
     need_student(v)
     with tx(con):
         e = _event(con, v, eid)
+        if e["guest_list"]:
+            raise ApiError("guest_list")
         if e["status"] != "published" or e["visibility"] != "public" or not signup_open(e) or e["external_url"] or e["guest_host"]:
             raise ApiError("closed")
         if team_guest(con, e, v.id) is not False:
@@ -707,6 +710,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         e = _event(con, v, eid)
         if e["status"] == "draft":
             raise ApiError("not_found")
+        if e["guest_list"]:
+            raise ApiError("guest_list")
         if e["status"] == "cancelled" or not signup_open(e):
             raise ApiError("closed")
         if e["reg_until"] and e["reg_until"] <= core.now():
@@ -772,6 +777,8 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     says when a receipt looks wrong, "upload another?")."""
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('hold', 'going')", eid, v.id)
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+    if e and e["guest_list"] and (r or _visible(con, v, e)):
+        raise ApiError("guest_list")
     old = None
     if r and (e["status"] != "published" or r["status"] == "hold" and r["hold_until"] < core.now()):
         r = None  # cancelled since, or the hold ran out while the file was read (OCR): the waitlist's seat
@@ -919,7 +926,7 @@ def review_receipt(con, v: Viewer, rid: int, reject: object, why: object = None)
             log_action(con, v.id, "receipt_reject", f"receipt:{rid}", json.dumps({"why": why}) if why else "{}")
             # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a
             # free one (1st-year seat), not one on an event free now, not one paid by a newer receipt
-            if c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
+            if not e["guest_list"] and c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
                 evteams.left(con, e["id"], c["user_id"])  # the captain hears it
                 con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
                 con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
@@ -936,6 +943,8 @@ def seat_by_hand(con, uid: int, eid: int) -> str:
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published'", eid)
         if not e or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
             return "no such published event, or not a student"
+        if e["guest_list"]:
+            return "use guests for this event"
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
         if r and r["status"] == "going":
             return "already going"
