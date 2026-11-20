@@ -1,0 +1,27 @@
+# A helper claims a task: a comment "/take" on an open issue assigns it to them (GitHub lets an issue's commenter be
+# assigned), so two people don't build the same thing. "/drop" gives it back. Already taken: says by whom.
+name: take
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  issues: write
+jobs:
+  take:
+    if: ${{ !github.event.issue.pull_request && (startsWith(github.event.comment.body, '/take') || startsWith(github.event.comment.body, '/drop')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue, who = context.payload.comment.user.login;
+            const p = { owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number };
+            const taken = issue.assignees.map((a) => a.login);
+            if (context.payload.comment.body.startsWith('/drop')) {
+              if (taken.includes(who)) await github.rest.issues.removeAssignees({ ...p, assignees: [who] });
+              return;
+            }
+            if (issue.state !== 'open') return;
+            if (taken.length && !taken.includes(who))
+              return github.rest.issues.createComment({ ...p, body: `Already taken by @${taken[0]}. Pick another task.` });
+            await github.rest.issues.addAssignees({ ...p, assignees: [who] });
