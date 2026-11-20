@@ -5,7 +5,8 @@
 FROM node:22-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# the npm cache lives on the builder, not in a layer: a lockfile change re-downloads only what changed
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --prefer-offline
 COPY web/ ./
 # npm run build: vite, then the check that no bundle uses regex lookbehind (Safari < 16.4 fails at start on it)
 RUN npm run build
@@ -17,11 +18,13 @@ FROM python:3.14-slim
 # Debian's rus and kaz models are the "fast" ones the reading was tested with (Oct 11). ffmpeg compresses event videos
 # (server/kbtu/video.py; Debian's build has x264 and zimg for the HDR tone mapping). age encrypts the off-site backups
 # (server/kbtu/offsite.py)
-RUN apt-get update && apt-get install -y --no-install-recommends curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age \
-    && rm -rf /var/lib/apt/lists/*
+# apt's lists and .debs in cache mounts (kept on the builder, never in the image); docker-clean would empty them
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update && apt-get install -y --no-install-recommends curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age
 WORKDIR /app/server
 COPY server/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 COPY server/kbtu ./kbtu
 COPY --from=web /web/dist /app/web/dist
 # the map's room list: the assistant gives a room's floor only from it (logic/assistant.py MAP_ROOMS)
