@@ -66,6 +66,7 @@
                                 The surname must match. A Telegram username is used only without a valid student ID.
                                 The first import closes prior app sign-ups outside the list. Counts only.
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
+                                (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -168,8 +169,20 @@ def _user(con, who: str):
     return u
 
 
-def _event_input() -> dict:
-    raw = getattr(sys.stdin, "buffer", sys.stdin).read(EVENT_STDIN + 1)
+def _gz_arg(args: list[str]) -> bytes | None:
+    """`--gz <base64 gzip>` at the end instead of stdin: the prod gate passes arguments, not stdin (ssh claude-kbtu)."""
+    import base64
+    import gzip
+    if len(args) >= 2 and args[-2] == "--gz":
+        try:
+            return gzip.decompress(base64.b64decode(args[-1], validate=True))[:EVENT_STDIN + 1]
+        except (ValueError, OSError, EOFError):
+            sys.exit("--gz: base64 of gzip expected")
+    return None
+
+
+def _event_input(given: bytes | None = None) -> dict:
+    raw = given if given is not None else getattr(sys.stdin, "buffer", sys.stdin).read(EVENT_STDIN + 1)
     try:
         body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
     except ValueError:  # not JSON, not UTF-8
@@ -205,7 +218,7 @@ def _event_time(value: object, field: str) -> int:
     sys.exit(f"{field}: expected ISO date and time with an offset")
 
 
-def _event_new(con, cfg: config.Config, org_ref: str) -> None:
+def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -> None:
     from tempfile import TemporaryDirectory
     from .logic import add_photo, publish_event, staff_create_event
     boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
@@ -216,7 +229,7 @@ def _event_new(con, cfg: config.Config, org_ref: str) -> None:
         org = one(con, "SELECT id FROM orgs WHERE id = ? AND status = 'active'", int(org_ref))
     if not org:
         sys.exit("no active organization (see `orgs`)")
-    raw = _event_input()
+    raw = _event_input(gz)
     if raw.get("guest_list") is not True or raw.get("age_check") is not True:
         sys.exit("guest_list and age_check must be true")
     fields = ("title", "description", "place")
@@ -321,13 +334,16 @@ def main(args: list[str]) -> None:
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
     cmd = args[0] if args else ""
+    gz = _gz_arg(args)
+    if gz is not None:
+        args = args[:-2]
     if cmd == "guests" and len(args) == 2 and re.fullmatch(r"[0-9]{1,19}", args[1]):
         eid = int(args[1])
         if eid >= 2**63:
             sys.exit("no such event")
         guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
         try:
-            registered, pending, offline, bad = guests.import_csv(con, eid, sys.stdin)
+            registered, pending, offline, bad = guests.import_csv(con, eid, gz.decode("utf-8", "replace").splitlines(keepends=True) if gz is not None else sys.stdin)
         except ApiError as exc:
             if exc.code == "bad_input":
                 sys.exit(exc.message)
@@ -342,7 +358,7 @@ def main(args: list[str]) -> None:
                 sys.exit("no such event, or it starts before that time")
         print("sign-up closes", args[2])
     elif cmd == "event-new" and len(args) == 2:
-        _event_new(con, cfg, args[1])
+        _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and len(args) == 4 and args[1] == "load":
         from . import roster
         try:
