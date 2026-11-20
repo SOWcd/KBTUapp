@@ -17,7 +17,7 @@
   // An appeal to the Student Government (server logic/appeals.py): an optional topic, the words as they are, Anonymous,
   // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). The draft stays on
   // this phone only (localStorage), never on the server. My appeals under it. The section's consent: asked once, on the
-  // first send or AI help. "Solved by your appeals" on top: the proof that writing changes things. The funnel counts taps (lib/stats), never a word.
+  // first send or AI help. "Solved by your appeals" under it all: the proof that writing changes things. The funnel counts taps (lib/stats), never a word.
   // desk 'help': KRI's "Ask a person": the same composer with the question in it (q, editable, sent only on the tap),
   // its own consent, no topics, no AI tips (KRI tried), no Solved feed, no funnel; my questions under it.
   import { onMount, untrack } from 'svelte';
@@ -32,7 +32,6 @@
   import { i18n } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { count } from '../../lib/stats';
-  import { nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
@@ -55,7 +54,7 @@
   const first = untrack(() => (q?.trim() ? { text: q.trim(), topic: null, anon: false } : readDraft()));
   let text = $state(first.text), topic = $state<AppealTopic | null>(first.topic), anon = $state(first.anon);
   let tips = $state<string[]>([]), care = $state<string | null>(null), helping = $state(false), down = $state(false);
-  let typed = !!first.text, sent = false;
+  let typed = !!first.text, sending = $state(false);
 
   $effect(() => {
     const d: Draft = { text, topic, anon };
@@ -66,7 +65,7 @@
     if (!sg) { void loadAsks(); return; }
     count('apl.open');
     void loadAppeals();
-    return () => { if (typed && !sent && text.trim()) count('apl.drop'); };
+    return () => { if (typed && !sending && text.trim()) count('apl.drop'); };
   });
 
   /** undefined: agreed before; the version: just agreed; null: said no */
@@ -93,43 +92,39 @@
     } catch { down = true; } finally { helping = false; }
   }
 
+  // the button spins at once; the draft goes and "Received" shows only once the server has it: a failure keeps every word
   async function send() {
     const body = text.trim();
-    if (!body || sent) return;
+    if (!body || sending) return;
     const consent = await agree();
     if (consent === null) return;
-    sent = true;
-    const was = { topic, anon }, key = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const temp: Appeal = { id: -Date.now(), topic, text: body, anon, status: 'new', answer: null, at: nowTs(), due: nowTs() + 7 * 86400, answeredAt: null, closedAt: null, overdue: false };
-    setList([temp, ...list()]);
-    text = ''; topic = null; tips = []; care = null; down = false;
-    haptic.ok(); say(k('sent'), 'raising_hands_3d_default');
+    sending = true;
+    const key = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
-      const a = sg ? await api.sendAppeal({ text: body, topic: was.topic, anon: was.anon, key, consent })
-        : await api.sendAsk({ text: body, anon: was.anon, key, consent });
+      const a = sg ? await api.sendAppeal({ text: body, topic, anon, key, consent })
+        : await api.sendAsk({ text: body, anon, key, consent });
       agreed(); if (sg) count('apl.sent');
-      setList(list().map((x) => (x.id === temp.id ? a : x)));
+      setList([a, ...list()]);
+      if (text.trim() === body) { text = ''; topic = null; } // words typed while it went stay
+      tips = []; care = null; down = false; typed = false;
+      haptic.ok(); say(k('sent'), 'raising_hands_3d_default');
     } catch (e) {
-      setList(list().filter((x) => x.id !== temp.id));
-      text = body; topic = was.topic; sent = false; haptic.error();
+      haptic.error();
       say(t(e instanceof ApiErr && e.code === 'rate_limited' ? (sg ? 'apl.slow' : 'ask.slow') : e instanceof ApiErr && e.code === 'unavailable' ? 'common.offline' : 'common.error'), 'pleading_face_3d');
-      return;
-    }
-    sent = false; typed = false;
+    } finally { sending = false; }
   }
 </script>
 
 <Sheet {overlay} title={t(sg ? 'apl.row' : 'ask.button')} icon={sg ? Megaphone : MessageCircleQuestion} full>
   <div class="page">
+    <Field label={k('text')} placeholder={k('ph')} bind:value={text} multiline rows={5} maxlength={4000} />
     {#if sg}
-      <Solved />
       <div class="chips" role="group" aria-label={t('apl.row')}>
         {#each TOPICS as c (c)}
           <Chip selected={topic === c} onclick={() => { haptic.select(); topic = topic === c ? null : c; }}>{t(`apl.t.${c}`)}</Chip>
         {/each}
       </div>
     {/if}
-    <Field label={k('text')} placeholder={k('ph')} bind:value={text} multiline rows={5} maxlength={4000} />
     <Group footnote={anon ? k('anonOn') : k('anonOff')}>
       <Row title={t('apl.anon')} accessory="switch" checked={anon} onchange={(on) => { haptic.select(); anon = on; }} />
     </Group>
@@ -150,10 +145,11 @@
         {/each}
       </Group>
     {/if}
+    {#if sg}<Solved />{/if}
   </div>
 
   {#snippet footer()}
-    <Button kind="primary" size="l" full disabled={!text.trim()} onclick={send}>{t('apl.send')}</Button>
+    <Button kind="primary" size="l" full loading={sending} disabled={!text.trim()} onclick={send}>{t('apl.send')}</Button>
   {/snippet}
 </Sheet>
 

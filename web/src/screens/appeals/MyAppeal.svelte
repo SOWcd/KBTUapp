@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One of my appeals: its status, by when the answer is due (overdue stays overdue), my words, SG's answer, Delete.
+  // One of my appeals: its status, by when the answer is due (overdue stays overdue), SG's answer first, my words, Delete.
   // desk 'help': one of my questions to a person, the same way.
   import { untrack } from 'svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -43,10 +43,10 @@
         <Tag tone={a.overdue && a.status !== 'closed' ? 'danger' : a.status === 'closed' ? 'success' : 'accent'}>{statusOf(a)}</Tag>
         <p class="fs-sub faint">{lineOf(a)}{a.anon ? ' · ' + t('apl.anon') : ''}{a.status !== 'closed' ? ' · ' + t('apl.due', { date: dayMonth(a.due) }) : ''}</p>
       </div>
-      <p class="body selectable">{a.text}</p>
       {#if a.answer}
         <Group caption={k('answer')}><p class="body selectable ans">{a.answer}</p></Group>
       {/if}
+      <p class="body selectable">{a.text}</p>
       <Group><Row title={k('delete')} tone="destructive" onclick={drop} /></Group>
     </div>
   {/if}

@@ -172,7 +172,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, _appeal_kind(n), n=n), "capps") if n else None
     if kind == "appeal_answer":  # apl:<appeal>, to its author: SG answered (a template, never the words); gone: nothing
         mine = one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", int(ref[1]), m["user_id"])
-        return (*texts.bot_message(lang, kind), "apl") if mine else None
+        return (*texts.bot_message(lang, kind), f"apl_{int(ref[1])}") if mine else None  # that appeal's own view
     if kind == "ask_answer":  # apl:<question>, to its author: a person answered the question KRI couldn't (a template)
         mine = one(con, "SELECT 1 FROM appeal_authors WHERE appeal_id = ? AND user_id = ?", int(ref[1]), m["user_id"])
         return (*texts.bot_message(lang, kind), "ask") if mine and logic.appeals.ask_open(con, m["user_id"]) else None  # ASK off for me: its button would open nothing

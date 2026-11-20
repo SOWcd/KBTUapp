@@ -857,7 +857,8 @@ export interface Appeal { id: Id; topic: AppealTopic | null; text: string; anon:
 /** "Solved by your appeals" (server appeals.solved): SG's two general lines, never an appeal's words; month YYYY-MM;
  *  id: SG's people only (to delete) */
 export interface Solved { id?: Id; raised: string; changed: string; topic: AppealTopic | null; month: string }
-export interface SgQueue { items: Appeal[]; months: { month: string; total: number; topics: Partial<Record<AppealTopic, number>> }[] }
+export interface SgQueue { items: Appeal[]; // a row: text is its first line only and no answer (server appeals._queue_row); the whole from the detail
+  months: { month: string; total: number; topics: Partial<Record<AppealTopic, number>> }[] }
 export interface AppealHelp { tips: string[]; care?: boolean; help?: string } // help: the helplines (signs of self-harm)
 export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; access: PersonRef[] }
 
