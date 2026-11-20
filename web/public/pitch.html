@@ -128,6 +128,20 @@ h2 { font-size: clamp(34px, 4.6vw, 80px); line-height: 1.02; }
 .track { position: fixed; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, 0.06); z-index: 5; }
 .track i { display: block; height: 100%; background: rgba(255, 255, 255, 0.7); width: 0; transition: width 1.2s var(--ease); }
 
+/* 3b: real events, rows rise one by one */
+.evs { list-style: none; margin-top: 5vh; background: var(--card); border: 1px solid var(--rim); border-radius: 24px; padding: 6px 0; max-width: 980px; width: 100%; }
+.evs li { display: grid; grid-template-columns: 1fr auto auto; gap: 3vw; align-items: baseline; padding: 1.9vh 26px; position: relative;
+  font-size: clamp(16px, 1.5vw, 24px); letter-spacing: -0.01em; opacity: 0; transform: translateY(16px);
+  transition: opacity 1s var(--ease), transform 1.2s var(--ease); transition-delay: calc(var(--i) * 110ms + 400ms); }
+.on .evs li { opacity: 1; transform: none; }
+.evs li + li::before { content: ""; position: absolute; top: 0; left: 26px; right: 0; height: 1px; background: var(--rim); }
+.evs .eo { color: var(--dim); font-size: 0.8em; }
+.evs .en { color: var(--dim); font-size: 0.8em; min-width: 7.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.evs .en b { color: var(--ink); font-weight: 600; }
+.evs em { font-style: normal; }
+.lang { position: fixed; top: 4.2vh; left: 50%; transform: translateX(-50%); z-index: 6; font: 500 13px Inter, sans-serif; letter-spacing: 0.08em; color: var(--faint); text-decoration: none; }
+.lang b { color: var(--ink); font-weight: 600; }
+
 @media (max-width: 760px) {
   .slide { padding: 13vh 20px 8vh; justify-content: flex-start; }
   .brand { left: 20px; } .count { right: 20px; }
@@ -154,6 +168,10 @@ h2 { font-size: clamp(34px, 4.6vw, 80px); line-height: 1.02; }
   .facts { grid-template-columns: 1fr 1fr; gap: 3vh 20px; margin-top: 6vh; }
   .qrcard { justify-self: start; padding: 16px; }
   .qr { width: 150px; }
+  .evs li { grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 14px; font-size: 15px; }
+  .evs .eo { grid-row: 2; }
+  .evs .en { grid-row: 1 / 3; grid-column: 2; align-self: center; min-width: 0; }
+  .evs li + li::before { left: 14px; }
 }
 @media (max-height: 520px) { .s1 .phone { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; } }
@@ -167,43 +185,44 @@ h2 { font-size: clamp(34px, 4.6vw, 80px); line-height: 1.02; }
 </div></div>
 
 <div class="brand">KBTU App</div>
-<div class="count" id="count">01 / 06</div>
+<div class="count" id="count">01 / 07</div>
+<a class="lang" id="lang" href="?en"><b>RU</b> · EN</a>
 
 <section class="slide s1">
-  <div class="tag up">Telegram Mini App · КБТУ</div>
-  <h1 class="words">Весь кампус<br>в одном приложении.</h1>
-  <p class="lead up" style="--d:600ms">Мероприятия и билеты, клубы, расписание, карта, друзья. Сделано студентом для студентов.</p>
+  <div class="tag up" data-en="Telegram Mini App · KBTU">Telegram Mini App · КБТУ</div>
+  <h1 class="words" data-en="The whole campus<br>in one app.">Весь кампус<br>в одном приложении.</h1>
+  <p class="lead up" style="--d:600ms" data-en="Events and tickets, clubs, timetable, map, friends. Made by a student for students.">Мероприятия и билеты, клубы, расписание, карта, друзья. Сделано студентом для студентов.</p>
   <div class="stage"><div class="glow"></div><div class="phone"><div class="scr"><img class="cur" src="pitch/afisha.webp" alt=""></div></div></div>
 </section>
 
 <section class="slide s2">
-  <div class="tag up">Проблема</div>
-  <h2 class="words">Студенческая жизнь разбросана.</h2>
+  <div class="tag up" data-en="The problem">Проблема</div>
+  <h2 class="words" data-en="Student life is scattered.">Студенческая жизнь разбросана.</h2>
   <div class="cards" id="cards">
-    <div class="card" style="--i:0"><div><small>01</small>40+ чатов клубов</div></div>
-    <div class="card" style="--i:1"><div><small>02</small>Расписание в портале</div></div>
-    <div class="card" style="--i:2"><div><small>03</small>Афиши в Instagram</div></div>
-    <div class="card" style="--i:3"><div><small>04</small>Google-формы на запись</div></div>
-    <div class="card" style="--i:4"><div><small>05</small>Чеки Kaspi в переписке</div></div>
-    <div class="card" style="--i:5"><div><small>06</small>Списки на входе</div></div>
-    <div class="card" style="--i:6"><div><small>07</small>Где аудитория 405?</div></div>
-    <div class="card" style="--i:7"><div><small>08</small>Кто из друзей идёт?</div></div>
+    <div class="card" style="--i:0"><div><small>01</small><span data-en="40+ club chats">40+ чатов клубов</span></div></div>
+    <div class="card" style="--i:1"><div><small>02</small><span data-en="Timetable on the portal">Расписание в портале</span></div></div>
+    <div class="card" style="--i:2"><div><small>03</small><span data-en="Posters on Instagram">Афиши в Instagram</span></div></div>
+    <div class="card" style="--i:3"><div><small>04</small><span data-en="Google Forms to sign up">Google-формы на запись</span></div></div>
+    <div class="card" style="--i:4"><div><small>05</small><span data-en="Kaspi receipts in DMs">Чеки Kaspi в переписке</span></div></div>
+    <div class="card" style="--i:5"><div><small>06</small><span data-en="Paper lists at the door">Списки на входе</span></div></div>
+    <div class="card" style="--i:6"><div><small>07</small><span data-en="Where is room 405?">Где аудитория 405?</span></div></div>
+    <div class="card" style="--i:7"><div><small>08</small><span data-en="Which friends are going?">Кто из друзей идёт?</span></div></div>
   </div>
-  <p class="after">Теперь всё это — <span>в одном месте.</span></p>
+  <p class="after" data-en="Now all of it is <span>in one place.</span>">Теперь всё это — <span>в одном месте.</span></p>
 </section>
 
 <section class="slide s3">
   <div class="split">
     <div>
-      <div class="tag up">Решение</div>
-      <h2 class="words">Одно место для&nbsp;всего.</h2>
+      <div class="tag up" data-en="The solution">Решение</div>
+      <h2 class="words" data-en="One place for&nbsp;everything.">Одно место для&nbsp;всего.</h2>
       <ul class="feats up" id="feats" style="--d:300ms">
-        <li><b>01</b>Афиша и запись в один тап<i></i></li>
-        <li><b>02</b>Платные билеты по чеку Kaspi, проверка автоматически<i></i></li>
-        <li><b>03</b>Вход по QR на большом экране<i></i></li>
-        <li><b>04</b>Клубы и их студия: события, команда, набор<i></i></li>
-        <li><b>05</b>Расписание, карта кампуса, свободные аудитории<i></i></li>
-        <li><b>06</b>Друзья, награды, ИИ-ассистент<i></i></li>
+        <li><b>01</b><span data-en="Events and sign-up in one tap">Афиша и запись в один тап</span><i></i></li>
+        <li><b>02</b><span data-en="Paid tickets by Kaspi receipt, checked automatically">Платные билеты по чеку Kaspi, проверка автоматически</span><i></i></li>
+        <li><b>03</b><span data-en="QR check-in on a big screen">Вход по QR на большом экране</span><i></i></li>
+        <li><b>04</b><span data-en="Clubs and their studio: events, team, recruiting">Клубы и их студия: события, команда, набор</span><i></i></li>
+        <li><b>05</b><span data-en="Timetable, campus map, free rooms">Расписание, карта кампуса, свободные аудитории</span><i></i></li>
+        <li><b>06</b><span data-en="Friends, awards, an AI assistant">Друзья, награды, ИИ-ассистент</span><i></i></li>
       </ul>
     </div>
     <div class="stage"><div class="glow"></div><div class="phone"><div class="scr" id="screen">
@@ -212,38 +231,51 @@ h2 { font-size: clamp(34px, 4.6vw, 80px); line-height: 1.02; }
   </div>
 </section>
 
+<section class="slide s7">
+  <div class="tag up" data-en="Real events · November 2026">Реальные события · ноябрь 2026</div>
+  <h2 class="words" data-en="Clubs already run on it.">Клубы уже живут здесь.</h2>
+  <ul class="evs">
+    <li style="--i:0"><span class="et">CASE №X</span><span class="eo">StudEx</span><span class="en"><b data-to="106">0</b> <em data-en="sign-ups">записей</em></span></li>
+    <li style="--i:1"><span class="et">Anime Quiz</span><span class="eo">Crystal</span><span class="en"><b data-to="94">0</b> <em data-en="sign-ups">записи</em></span></li>
+    <li style="--i:2"><span class="et" data-en="Photo booth">Фотобудка</span><span class="eo">Moments</span><span class="en"><b data-to="79">0</b> <em data-en="sign-ups">записей</em></span></li>
+    <li style="--i:3"><span class="et">Tech Talk</span><span class="eo">SPE SC</span><span class="en"><b data-to="65">0</b> <em data-en="sign-ups">записей</em></span></li>
+    <li style="--i:4"><span class="et">CS2 Tournament 5×5</span><span class="eo">Cybersport</span><span class="en"><b data-to="63">0</b> <em data-en="sign-ups">записи</em></span></li>
+    <li style="--i:5"><span class="et" data-en="Charyn Canyon trip">Поездка на Чарын</span><span class="eo">Mountain Kings</span><span class="en"><b data-to="48">0</b> <em data-en="sign-ups">записей</em></span></li>
+  </ul>
+</section>
+
 <section class="slide s4">
-  <div class="tag up">Результат за 6 недель · с 5 октября 2026</div>
-  <h2 class="words">Студенты уже здесь.</h2>
+  <div class="tag up" data-en="6 weeks in · since October 5, 2026">Результат за 6 недель · с 5 октября 2026</div>
+  <h2 class="words" data-en="Students are already here.">Студенты уже здесь.</h2>
   <div class="stats">
-    <div class="stat hero up" style="--d:250ms"><div class="lbl">Пользователей</div><div class="num" data-to="4172">0</div></div>
-    <div class="stat up" style="--d:350ms"><div class="lbl">Подтверждённых студентов</div><div class="num" data-to="2886">0</div></div>
-    <div class="stat up" style="--d:450ms"><div class="lbl">Заходят каждую неделю</div><div class="num" data-to="1586">0</div></div>
-    <div class="stat up" style="--d:550ms"><div class="lbl">Клубов</div><div class="num" data-to="117">0</div></div>
-    <div class="stat up" style="--d:650ms"><div class="lbl">Записей на мероприятия</div><div class="num" data-to="959">0</div></div>
-    <div class="stat up" style="--d:750ms"><div class="lbl">Пар друзей</div><div class="num" data-to="8806">0</div></div>
+    <div class="stat hero up" style="--d:250ms"><div class="lbl" data-en="Users">Пользователей</div><div class="num" data-to="4172">0</div></div>
+    <div class="stat up" style="--d:350ms"><div class="lbl" data-en="Verified students">Подтверждённых студентов</div><div class="num" data-to="2886">0</div></div>
+    <div class="stat up" style="--d:450ms"><div class="lbl" data-en="Weekly active">Заходят каждую неделю</div><div class="num" data-to="1586">0</div></div>
+    <div class="stat up" style="--d:550ms"><div class="lbl" data-en="Clubs">Клубов</div><div class="num" data-to="117">0</div></div>
+    <div class="stat up" style="--d:650ms"><div class="lbl" data-en="Event sign-ups">Записей на мероприятия</div><div class="num" data-to="959">0</div></div>
+    <div class="stat up" style="--d:750ms"><div class="lbl" data-en="Friendships">Пар друзей</div><div class="num" data-to="8806">0</div></div>
   </div>
 </section>
 
 <section class="slide s5">
-  <div class="tag up">Как это сделано</div>
-  <div class="eq"><span class="big words">1&nbsp;студент</span><span class="tail"><span class="op up" style="--d:500ms">+</span><span class="big words" style="--d:650ms">ИИ</span></span></div>
+  <div class="tag up" data-en="How it is built">Как это сделано</div>
+  <div class="eq"><span class="big words" data-en="1&nbsp;student">1&nbsp;студент</span><span class="tail"><span class="op up" style="--d:500ms">+</span><span class="big words" style="--d:650ms" data-en="AI">ИИ</span></span></div>
   <div class="facts">
-    <div class="fact up" style="--d:900ms"><div class="lbl">Обновлений кода</div><div class="num" data-to="1650">0</div></div>
-    <div class="fact up" style="--d:1000ms"><div class="lbl">Автотестов</div><div class="num" data-to="1200">0</div></div>
-    <div class="fact up" style="--d:1100ms"><div class="lbl">Языка</div><div class="num">3</div><p>русский, казахский, английский</p></div>
-    <div class="fact up" style="--d:1200ms"><div class="lbl">Код</div><div class="num">Open</div><p>открытый код на GitHub</p></div>
+    <div class="fact up" style="--d:900ms"><div class="lbl" data-en="Code updates">Обновлений кода</div><div class="num" data-to="1650">0</div></div>
+    <div class="fact up" style="--d:1000ms"><div class="lbl" data-en="Automated tests">Автотестов</div><div class="num" data-to="1500">0</div></div>
+    <div class="fact up" style="--d:1100ms"><div class="lbl" data-en="Languages">Языка</div><div class="num">3</div><p data-en="Russian, Kazakh, English">русский, казахский, английский</p></div>
+    <div class="fact up" style="--d:1200ms"><div class="lbl" data-en="Code">Код</div><div class="num">Open</div><p data-en="open source on GitHub">открытый код на GitHub</p></div>
   </div>
 </section>
 
 <section class="slide s6">
   <div class="end">
     <div>
-      <div class="tag up">Дальше</div>
-      <h1 class="words">Следующий —<br>ваш университет.</h1>
-      <div class="contact up" style="--d:800ms"><div><span>Приложение</span>t.me/KBTUappBot</div><div><span>Связь</span>t.me/Sowers</div></div>
+      <div class="tag up" data-en="Next">Дальше</div>
+      <h1 class="words" data-en="Next:<br>your university.">Следующий —<br>ваш университет.</h1>
+      <div class="contact up" style="--d:800ms"><div><span data-en="App">Приложение</span>t.me/KBTUappBot</div><div><span data-en="Contact">Связь</span>t.me/Sowers</div></div>
     </div>
-    <div class="qrcard up" style="--d:550ms"><div class="qr" id="qr"></div><p>Открыть в Telegram</p></div>
+    <div class="qrcard up" style="--d:550ms"><div class="qr" id="qr"></div><p data-en="Open in Telegram">Открыть в Telegram</p></div>
   </div>
 </section>
 
@@ -251,6 +283,14 @@ h2 { font-size: clamp(34px, 4.6vw, 80px); line-height: 1.02; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
+// ?en: the English version (the same page; RU · EN switch at the top)
+const EN = /[?&](en|lang=en)\b/.test(location.search);
+if (EN) {
+  document.documentElement.lang = 'en';
+  document.querySelectorAll('[data-en]').forEach((el) => { el.innerHTML = el.dataset.en; });
+  const l = document.getElementById('lang'); l.href = location.pathname; l.innerHTML = 'RU · <b>EN</b>';
+}
+document.getElementById('lang').addEventListener('click', (e) => e.stopPropagation());
 const slides = [...document.querySelectorAll('.slide')];
 const N = slides.length;
 let cur = -1, timer = 0, cycle = 0;
@@ -279,7 +319,7 @@ function countUp(root) {
     el.textContent = '0';
     const step = (t) => {
       const k = Math.min(1, Math.max(0, (t - t0) / dur)), e = 1 - Math.pow(1 - k, 4);
-      el.textContent = Math.round(to * e).toLocaleString('ru-RU');
+      el.textContent = Math.round(to * e).toLocaleString(EN ? 'en-US' : 'ru-RU');
       if (k < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
