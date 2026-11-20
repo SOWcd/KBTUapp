@@ -1950,4 +1950,75 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS reports_by_target ON reports (target, target_id);
     CREATE INDEX IF NOT EXISTS members_by_role ON org_members (role_id);"""),
     (194, "ALTER TABLE users ADD COLUMN tg_photo_at INTEGER;"),
+    # 195 is reserved on another branch. Merge it before deploying 196.
+    (195, """CREATE TABLE IF NOT EXISTS ev_groups (  -- IDs are never reused after a draw.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      advance INTEGER NOT NULL DEFAULT 2 CHECK (advance >= 0),
+      position INTEGER NOT NULL,
+      UNIQUE (event_id, position)) STRICT;
+    CREATE TABLE IF NOT EXISTS ev_group_teams (
+      group_id INTEGER NOT NULL REFERENCES ev_groups(id) ON DELETE CASCADE,
+      team_id INTEGER NOT NULL UNIQUE REFERENCES event_teams(id) ON DELETE CASCADE,
+      PRIMARY KEY (group_id, team_id)) STRICT;
+    CREATE TABLE IF NOT EXISTS ev_matches (  -- A stale score entry must miss a replaced fixture.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER NOT NULL REFERENCES ev_groups(id) ON DELETE CASCADE,
+      home INTEGER NOT NULL REFERENCES event_teams(id) ON DELETE CASCADE,
+      away INTEGER NOT NULL REFERENCES event_teams(id) ON DELETE CASCADE,
+      home_score INTEGER CHECK (home_score >= 0),
+      away_score INTEGER CHECK (away_score >= 0),
+      played_at INTEGER,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      CHECK (home < away),
+      CHECK ((home_score IS NULL) = (away_score IS NULL)),
+      UNIQUE (group_id, home, away)) STRICT;
+    CREATE INDEX IF NOT EXISTS ev_matches_home ON ev_matches(home);
+    CREATE INDEX IF NOT EXISTS ev_matches_away ON ev_matches(away);
+    CREATE INDEX IF NOT EXISTS ev_matches_editor ON ev_matches(updated_by);"""),
+    (196, """DROP TRIGGER IF EXISTS ev_matches_drop_group_team;
+    ALTER TABLE ev_matches RENAME TO ev_matches_196;
+    CREATE TABLE ev_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      group_id INTEGER REFERENCES ev_groups(id) ON DELETE CASCADE,
+      stage TEXT NOT NULL DEFAULT 'group' CHECK (stage IN ('group', 'upper', 'lower', 'final')),
+      round INTEGER,
+      slot INTEGER,
+      next_win INTEGER REFERENCES ev_matches(id),
+      next_lose INTEGER REFERENCES ev_matches(id),
+      home INTEGER REFERENCES event_teams(id) ON DELETE SET NULL,
+      away INTEGER REFERENCES event_teams(id) ON DELETE SET NULL,
+      home_score INTEGER CHECK (home_score >= 0),
+      away_score INTEGER CHECK (away_score >= 0),
+      played_at INTEGER,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      CHECK ((home_score IS NULL) = (away_score IS NULL)),
+      CHECK ((stage = 'group' AND group_id IS NOT NULL AND home IS NOT NULL AND away IS NOT NULL AND home < away
+              AND round IS NULL AND slot IS NULL AND next_win IS NULL AND next_lose IS NULL)
+          OR (stage != 'group' AND group_id IS NULL AND round IS NOT NULL AND round > 0 AND slot IS NOT NULL AND slot > 0
+              AND (stage = 'upper' AND round = 1 OR home IS NULL AND away IS NULL)
+              AND (home_score IS NULL OR home_score != away_score))),
+      UNIQUE (group_id, home, away),
+      UNIQUE (event_id, stage, round, slot)) STRICT;
+    INSERT INTO ev_matches (id, event_id, group_id, home, away, home_score, away_score, played_at, updated_by)
+      SELECT m.id, g.event_id, m.group_id, m.home, m.away, m.home_score, m.away_score, m.played_at, m.updated_by
+      FROM ev_matches_196 m JOIN ev_groups g ON g.id = m.group_id;
+    -- Keep IDs retired by a previous draw, even when the old match table is empty.
+    INSERT INTO sqlite_sequence (name, seq) SELECT 'ev_matches', seq FROM sqlite_sequence WHERE name = 'ev_matches_196'
+      AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'ev_matches');
+    UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'ev_matches_196'), 0))
+      WHERE name = 'ev_matches';
+    DROP TABLE ev_matches_196;
+    CREATE INDEX ev_matches_home ON ev_matches(home);
+    CREATE INDEX ev_matches_away ON ev_matches(away);
+    CREATE INDEX ev_matches_editor ON ev_matches(updated_by);
+    CREATE INDEX ev_matches_next_win ON ev_matches(next_win);
+    CREATE INDEX ev_matches_next_lose ON ev_matches(next_lose);
+    -- Group fixtures are dropped with either team. Bracket slots and results keep their place.
+    CREATE TRIGGER ev_matches_drop_group_team BEFORE DELETE ON event_teams BEGIN
+      DELETE FROM ev_matches WHERE stage = 'group' AND home = OLD.id;
+      DELETE FROM ev_matches WHERE stage = 'group' AND away = OLD.id;
+    END;"""),
 ]

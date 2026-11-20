@@ -39,7 +39,8 @@ writes none and still signs up. Those signed up without it get the bot's templat
 once a day), never a consent. Withdrawing it takes me out of my teams on events not started yet.
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
-an invite link's holder sees the team it invites to; anyone else, only that it is a team event and its sizes.
+an invite link's holder sees the team it invites to. Other event viewers see the team settings and the names in a drawn
+stage (evgroups.py and evbracket.py).
 """
 from __future__ import annotations
 
@@ -50,6 +51,7 @@ import unicodedata
 
 from .. import texts
 from ..db import tx
+from . import evmatches
 from .core import PERSON_COLS, ApiError, Viewer, full, need_student, one, person_ref, rows
 
 SIZE = (2, 10)    # the editor's bounds for a team's min and max
@@ -130,6 +132,8 @@ def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
     if e["status"] != "draft" and e["starts_at"] <= core.now():
         raise ApiError("closed", "locked")
     if get("team_max") is None:
+        con.execute("DELETE FROM ev_groups WHERE event_id = ?", (e["id"],))
+        evmatches.remove_bracket(con, e["id"])
         con.execute("DELETE FROM event_teams WHERE event_id = ?", (e["id"],))
     elif one(con, "SELECT 1 FROM event_team_members WHERE event_id = ? GROUP BY team_id HAVING COUNT(*) > ?", e["id"], get("team_max")):
         raise ApiError("conflict", "team_size")
@@ -141,6 +145,13 @@ def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
 
 def _team_event(con, v: Viewer, eid: int) -> sqlite3.Row:
     e = _event(con, v, eid)
+    if e["team_max"] is None:
+        raise ApiError("not_found")
+    return e
+
+
+def staff_event(con, v: Viewer, eid: int) -> sqlite3.Row:
+    e = _staff_event(con, v, eid, "events")
     if e["team_max"] is None:
         raise ApiError("not_found")
     return e
@@ -209,9 +220,7 @@ def invite(con, v: Viewer, token: str) -> dict:
 def teams_list(con, v: Viewer, eid: int) -> dict:
     """The organizer's screen: every team with its people, then who has none yet (in the order they signed up). The
     "events" right (the admin from Admin too, core.STAFF_RIGHTS). Full names, as in the attendees list."""
-    e = _staff_event(con, v, eid, "events")
-    if e["team_max"] is None:
-        raise ApiError("not_found")
+    e = staff_event(con, v, eid)
     teams = rows(con, "SELECT * FROM event_teams WHERE event_id = ? ORDER BY id", eid)
     rosters = _rosters(con, eid)
     # paid players whose latest receipt nobody checked yet (maybe a fake): the organizer sees them; never the members
@@ -577,6 +586,8 @@ def left(con, eid: int, uid: int) -> None:
 
 def cancelled(con, eid: int) -> None:
     """The event is called off: its teams go (the sign-ups stay, as for every cancelled event)."""
+    con.execute("DELETE FROM ev_groups WHERE event_id = ?", (eid,))
+    evmatches.remove_bracket(con, eid)
     con.execute("DELETE FROM event_teams WHERE event_id = ?", (eid,))
 
 

@@ -463,6 +463,28 @@ export interface TeamInvite { event: Id; title: string; team: { name: string; ca
 /** The sign-up's choice on a team event: make one, join by its link; left out: "I have no team" */
 export type TeamPick = { create: string } | { join: string };
 
+export interface EventStanding {
+  team_id: Id; name: string; played: number; won: number; drawn: number; lost: number;
+  scored: number; conceded: number; diff: number; points: number; advance: boolean;
+}
+export interface MatchScore { home_score: number; away_score: number }
+export interface EventMatch { id: Id; group_id: Id; home: Id; away: Id; home_score: number | null; away_score: number | null; played_at: Ts | null }
+export interface EventGroup { id: Id; name: string; position: number; advance: number; standings: EventStanding[]; matches: EventMatch[] }
+export interface EventGroups { groups: EventGroup[] }
+
+export type BracketSeed = 'random' | Id[];
+export interface BracketMatch {
+  id: Id; stage: 'upper' | 'lower' | 'final'; round: number; slot: number;
+  home: Id | null; away: Id | null; home_score: number | null; away_score: number | null; played_at: Ts | null;
+  next_win: Id | null; next_lose: Id | null; winner: Id | null;
+  status: 'pending' | 'ready' | 'bye' | 'empty' | 'played';
+}
+export interface BracketRound { round: number; matches: BracketMatch[] }
+export interface EventBracket {
+  upper: BracketRound[]; lower: BracketRound[]; final: BracketRound[];
+  teams: { id: Id; name: string }[]; winner: Id | null;
+}
+
 /** A host club's member asking to come to its public event as a guest (server seats.team_asks) */
 export interface TeamAsk { person: PersonRef; createdAt: Ts }
 
