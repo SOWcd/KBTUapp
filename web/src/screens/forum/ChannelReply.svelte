@@ -8,7 +8,7 @@
   // why in its words once they come (/why, to me alone). No comments are listed here: the app never keeps other
   // people's words. Sending answers at once: the reply stands at the top "checking".
   import { untrack } from 'svelte';
-  import { slide } from 'svelte/transition';
+  import { fold } from '../../ui/fold';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Link2 from '@lucide/svelte/icons/link-2';
   import Copy from '@lucide/svelte/icons/copy';
@@ -114,7 +114,7 @@
   <p class="post">{post.body}</p>
   <!-- how: three steps in full until I've answered a comment once; then one small line that opens them -->
   {#if steps}
-    <ol class="steps" transition:slide={{ duration: 260 }}>
+    <ol class="steps" transition:fold>
       {#each STEPS as s, i (s.key)}<li><span class="si" aria-hidden="true"><s.icon size={16} strokeWidth={2} /></span><span class="sn">{i + 1}</span><span>{t(s.key)}</span></li>{/each}
     </ol>
   {:else}

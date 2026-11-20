@@ -17,8 +17,9 @@
   // moderation lives in Admin alone.
   import { tick, untrack } from 'svelte';
   import { flip } from 'svelte/animate';
-  import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import type { TransitionConfig } from 'svelte/transition';
+  import { calm } from '../../ui/fold';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
@@ -53,7 +54,17 @@
   import Marked from './Marked.svelte';
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
   import { hit } from '../../lib/search';
-  import { compose } from './ChannelCompose.svelte';
+  import { compose, keyOf } from './ChannelCompose.svelte';
+
+  // A card (or the "N new" line, the pill) comes and goes in place by opacity and a touch of scale, the compositor's
+  // work; the others glide to their new places (flip). A height slide relaid the whole feed every frame and, with
+  // flip on the same rows, moved them twice. scale, not transform: flip's translate and the leaving card's own
+  // (Svelte pins it where it was) stay untouched.
+  function card(_: Element, _p?: unknown, o?: { direction?: 'in' | 'out' | 'both' }): TransitionConfig {
+    if (calm()) return { duration: 0 };
+    const away = o?.direction === 'out';
+    return { duration: away ? 200 : 280, delay: away ? 0 : 60, easing: cubicOut, css: (t) => `opacity: ${t}; scale: ${0.96 + 0.04 * t}` };
+  }
 
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
@@ -88,6 +99,12 @@
     const i = list.findIndex((p) => p.id > 0 && p.id <= since), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
     return n ? { id: list[i].id, n } : null;
   });
+  // the rows: the posts, and the line a row of its own above its post (inside the post's row it pushed that card down
+  // in one step as it came)
+  const rows = $derived(matched.flatMap((p): (ChannelFeedPost | 'nw')[] => (!searching && cut?.id === p.id ? ['nw', p] : [p])));
+  // the first screen settles top down (rise); later cards come by their own transition only
+  let settled = $state(false);
+  $effect(() => { if (channel.feed?.length && !settled) { const t = setTimeout(() => (settled = true), 900); return () => clearTimeout(t); } });
 
   // older posts: the next page under the last one (they come in under it, nothing above moves)
   let older = $state(false);
@@ -106,7 +123,7 @@
   });
 
   // fresh while open: back from the background (Telegram's activated, the page shown again) and every 30 s while seen;
-  // a new post slides in at the top, the rest glide down (flip)
+  // a new post fades in at the top, the rest glide down (flip)
   $effect(() => {
     if (!here) return;
     const pull = () => { if (!document.hidden) void loadChannel(); };
@@ -210,7 +227,7 @@
 <div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < PULL + 40; }}>
   <PullSearch bind:value={q} placeholder={t('fc.search')} />
   <!-- new posts from the refresh while I read further down: a pill, never a jump -->
-  <div class="pill">{#if waiting && !atTop}<span class="pin" transition:slide={{ duration: 220, axis: 'y' }}>
+  <div class="pill">{#if waiting && !atTop}<span class="pin" transition:card>
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
   </span>{/if}</div>
   <!-- the way to write: a glass capsule, my face and a quiet prompt, the pen at the end; the whole capsule a tap -->
@@ -229,15 +246,17 @@
   {/if}
 
   {#if channel.feed?.length}
-    <div class="feed">
-      {#each matched as p, i (p.id)}
+    <div class="feed" class:settled>
+      {#each rows as r, i (r === 'nw' ? r : keyOf(r))}
+        <!-- one element per row (flip needs it) -->
+        <div class="item" animate:flip={{ duration: calm() ? 0 : 320, easing: cubicOut }} transition:card>
+        {#if r === 'nw'}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut?.n ?? 0)}</span></div>
+        {:else}
+        {@const p = r}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
         {@const why = p.mine && p.human ? heldWhy(p) : undefined}
         {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
-        <!-- one element per post (flip needs it) -->
-        <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
-        {#if !searching && cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
         <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
@@ -288,6 +307,7 @@
             </div>
           {/if}
         </article>
+        {/if}
         </div>
       {/each}
       {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
@@ -358,16 +378,16 @@
 
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */
-  .post { position: relative; display: flex; flex-direction: column; padding: var(--s-4);
-    animation: rise 420ms var(--ease) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */ }
+  .post { position: relative; display: flex; flex-direction: column; padding: var(--s-4); }
+  .feed:not(.settled) .post { animation: rise 320ms var(--ease) backwards; animation-delay: calc(var(--i) * 30ms); } /* the first screen settles top down */
   .post:has(.acts) { padding-bottom: var(--s-3); }
   /* the line between the new and the seen: a word on a hairline in the accent, between the cards */
-  .nw { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-1) var(--s-2) var(--s-3);
+  .nw { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-1) var(--s-2) 0; /* below it: the feed's gap */
     font: 600 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); letter-spacing: 0.02em; }
   .nw::before, .nw::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.35; }
   .nwl { display: inline-flex; align-items: center; gap: 3px; } /* the arrow: the new ones are above the line */
   /* the post the bot's button pointed at: an accent wash that fades */
-  .post.lit { animation: lit 1.8s var(--ease); }
+  .feed .post.lit { animation: lit 1.8s var(--ease); }
   @keyframes lit { 0%, 45% { background: var(--accent-soft); } }
   .post.off { opacity: 0.6; }
 
@@ -392,7 +412,7 @@
   .chk { position: relative; height: 3px; margin-top: var(--s-3); border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
   .chk span { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--accent); animation: chk 1.1s ease-in-out infinite; }
   @keyframes chk { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
-  @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
+  @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } .feed .post { animation: none; } }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
   .pics { display: grid; gap: 2px; margin-top: var(--s-3); border-radius: var(--r-m); overflow: hidden; box-shadow: 0 0 0 0.5px var(--line-2); }
