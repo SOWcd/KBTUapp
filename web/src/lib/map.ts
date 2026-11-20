@@ -80,9 +80,15 @@ export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
 /** A typed street address ("Gogolya 157", "Abaya 150, 2nd floor") → 2GIS's search for it in Almaty, the route one tap
  *  away (else an address stays plain text). Not a room, a campus spot, the dorm or the
  *  second building: a word of three letters or more and a house number. */
+// kbtu (ru, kk), room, a secret location, campus, hall, atrium, coworking, foyer, auditorium, room, library, canteen, yard, online, to be confirmed (ru, kk, en)
+const CAMPUS_WORDS = /kbtu|[\u043a\u049b]\u0431\u0442\u0443|room|secret|campus|\u043a\u0430\u043c\u043f\u0443\u0441|hall|\u0437\u0430\u043b|\u0445\u043e\u043b\u043b|atri|\u0430\u0442\u0440\u0438\u0443\u043c|cowork|\u043a\u043e\u0432\u043e\u0440\u043a|foyer|\u0444\u043e\u0439\u0435|\u0430\u0443\u0434\u0438\u0442|\u043a\u0430\u0431\u0438\u043d\u0435\u0442|library|\u0431\u0438\u0431\u043b\u0438\u043e\u0442|\u043a\u0456\u0442\u0430\u043f\u0445\u0430\u043d|canteen|\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|yard|\u0434\u0432\u043e\u0440|\u0430\u0443\u043b\u0430|online|\u043e\u043d\u043b\u0430\u0439\u043d|\u0443\u0442\u043e\u0447\u043d|tba|\u0442\u0435\u0440\u0440\u0430\u0441|\u043a\u043e\u0440\u043f\u0443\u0441|building/i;
 export function addressGis(place: string): string | null {
   const p = place.trim();
-  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || awayOf(p) || !/\p{L}{3,}/u.test(p) || !/(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p)) return null;
+  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || awayOf(p) || !/\p{L}{3,}/u.test(p)) return null;
+  // a street address (a house number), or a named venue off campus ("Mad Murphy's Irish Pub", owner Nov 20): two words or
+  // more; never with the campus's own words, so "Hall" or an assembly hall stay plain
+  const address = /(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p);
+  if (CAMPUS_WORDS.test(p) || (!address && (/\d/.test(p) || p.split(/\s+/).filter((w) => /\p{L}{2,}/u.test(w)).length < 2))) return null;
   return `https://2gis.kz/almaty/search/${encodeURIComponent(p)}`;
 }
 export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
