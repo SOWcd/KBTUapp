@@ -1949,4 +1949,5 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS event_photos_by_file ON event_photos (file_id);
     CREATE INDEX IF NOT EXISTS reports_by_target ON reports (target, target_id);
     CREATE INDEX IF NOT EXISTS members_by_role ON org_members (role_id);"""),
+    (194, "ALTER TABLE users ADD COLUMN tg_photo_at INTEGER;"),
 ]
