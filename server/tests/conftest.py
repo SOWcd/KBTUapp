@@ -1,5 +1,7 @@
 import pytest
 
+from kbtu import db
+
 
 @pytest.fixture
 def dmp_on(monkeypatch):
@@ -14,3 +16,12 @@ def no_receipt_audit(monkeypatch):
     """A clean receipt's random spot-check (seats._audit, 1 in 5) is off; its own tests switch it on."""
     from kbtu.logic import seats
     monkeypatch.setattr(seats, "_audit", lambda: False)
+
+
+@pytest.fixture(scope="session")
+def _schema_db(tmp_path_factory):
+    """The schema and every migration, built once per test process; each env starts from a copy (db.init then finds
+    nothing left to do but still runs its `after` catch-up)."""
+    path = tmp_path_factory.mktemp("schema") / "t.db"
+    db.init(str(path))
+    return path

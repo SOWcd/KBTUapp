@@ -32,14 +32,14 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 
 ```bash
 cd web && npm ci && npm run build                     # the build fails if a bundle uses regex lookbehind (old iOS)
-cd server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cd server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest pytest-xdist
 .venv/bin/python tools/qa.py --port 8790              # a seeded server; prints a signed link per made-up person
 ```
 
 Before every commit, all of these pass:
 
 ```bash
-cd server && .venv/bin/python -m pytest -q tests      # ~3-4 min
+cd server && .venv/bin/python -m pytest -q -n auto tests   # ~5 min on 4 cores
 cd web && npm run check && npm test                   # svelte-check 0 errors, 0 warnings; vitest
 ```
 
