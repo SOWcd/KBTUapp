@@ -2082,6 +2082,7 @@ const ru = {
   'cr.idea': "Идея",
   'cr.list': "Идеи и находки",
   'cr.student': "Студент",
+  'cr.students': "Студенты",
   'cr.kind.idea': "идея",
   'cr.kind.find': "находка",
   'cr.kind.code': "код",

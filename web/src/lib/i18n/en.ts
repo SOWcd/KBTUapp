@@ -2061,6 +2061,7 @@ const en: Dict = {
   'cr.idea': "Idea",
   'cr.list': "Ideas and finds",
   'cr.student': "Student",
+  'cr.students': "Students",
   'cr.kind.idea': "idea",
   'cr.kind.find': "find",
   'cr.kind.code': "code",

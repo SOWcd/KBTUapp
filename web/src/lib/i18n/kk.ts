@@ -2061,6 +2061,7 @@ const kk: Dict = {
   'cr.idea': "Идея",
   'cr.list': "Идеялар мен табылған қателер",
   'cr.student': "Студент",
+  'cr.students': "Студенттер",
   'cr.kind.idea': "идея",
   'cr.kind.find': "табылған қате",
   'cr.kind.code': "код",
