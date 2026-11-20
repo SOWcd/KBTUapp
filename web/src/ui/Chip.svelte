@@ -3,15 +3,16 @@
   // one tinted (accent-soft, accent text and icon), so it never outshines the one filled button.
   //   selected (aria-pressed), onclick
   //   icon     a lucide icon, monochrome (a topic's colour on a chip fails contrast: Board.svelte had to undo it)
+  //   quiet    the secondary ink (a side door beside the main thing, the Forum tab's)
   //   full     the whole width of its cell, the words centred: a grid of choices (the forum composer's topics)
   // Put a row of them in a scroller with 4 px of block padding, or the 44 px hit areas get clipped.
   import type { Component, Snippet } from 'svelte';
 
-  type Props = { selected?: boolean; icon?: Component<any>; full?: boolean; onclick?: (e: MouseEvent) => void; children: Snippet };
-  let { selected, icon: Icon, full = false, onclick, children }: Props = $props();
+  type Props = { selected?: boolean; quiet?: boolean; icon?: Component<any>; full?: boolean; onclick?: (e: MouseEvent) => void; children: Snippet };
+  let { selected, quiet = false, icon: Icon, full = false, onclick, children }: Props = $props();
 </script>
 
-<button class="fc" class:on={selected} class:full aria-pressed={selected} {onclick}>
+<button class="fc" class:on={selected} class:full class:quiet aria-pressed={selected} {onclick}>
   {#if Icon}<span class="ic"><Icon size={16} strokeWidth={2} /></span>{/if}{@render children()}
 </button>
 
@@ -21,6 +22,7 @@
     transition: background-color var(--t-base) var(--ease), color var(--t-base) var(--ease), transform 450ms var(--ease-bounce); }
   .fc::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
   .full { width: 100%; justify-content: center; }
+  .quiet { color: var(--text-2); font-weight: 500; }
   .fc.on { background: var(--accent-soft); color: var(--accent-text); }
   .ic { display: inline-flex; margin-left: -2px; }
   @media (hover: hover) { .fc:not(.on):hover { background: var(--fill-2); } }
