@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Forum channel (owner, Nov 1: staff tools live in Admin alone; the Forum tab looks the same for everyone).
-  // What waits for a moderator is in Admin → Inbox (Nov 3); here this week's live ones (Take down; Publish again for
+  // Admin → Forum channel (staff tools live in Admin alone; the Forum tab looks the same for everyone).
+  // What waits for a moderator is in Admin → Inbox; here this week's live ones (Take down; Publish again for
   // one whose message someone deleted in Telegram by hand), and this week's
   // take-downs with Bring back (published anew); the owner alone reveals an anonymous author, each look audited.
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).

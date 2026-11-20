@@ -1,6 +1,6 @@
 <script lang="ts">
   // A status on a card or a row ("You're going", "Draft", "Full"): a soft tone, never solid (solid colour is the
-  // primary button's); onphoto over a poster or a photo. Was ui/Chip (Oct 30): the same look.
+  // primary button's); onphoto over a poster or a photo. Was ui/Chip: the same look.
   import type { Snippet } from 'svelte';
   let { tone = 'neutral', children }: { tone?: 'neutral' | 'accent' | 'success' | 'danger' | 'warning' | 'onphoto'; children: Snippet } = $props();
 </script>

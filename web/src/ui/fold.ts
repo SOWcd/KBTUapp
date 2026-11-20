@@ -1,4 +1,4 @@
-// The one way a block opens or closes in place: `transition:fold` on the {#if} block (owner, Oct 13: a block that
+// The one way a block opens or closes in place: `transition:fold` on the {#if} block (a block that
 // just appears looks cheap). Instant under lowfx and "reduce motion", like the rest of the motion.
 import { slide } from 'svelte/transition';
 import { cubicOut } from 'svelte/easing';

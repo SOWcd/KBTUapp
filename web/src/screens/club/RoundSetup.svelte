@@ -35,7 +35,7 @@
 
   let { overlay, org, round = null, onsaved }: { overlay: Overlay; org: Id; round?: Round | null; onsaved?: () => void } = $props();
 
-  // "Always open" (any-time applications, the team right) sits on top here: Studio's Recruiting opens this form directly (owner, Nov 14)
+  // "Always open" (any-time applications, the team right) sits on top here: Studio's Recruiting opens this form directly
   const o = $derived(data.orgs.find((x) => x.id === org));
   const team = $derived(may(session.me?.memberships.find((x) => x.org.id === org), 'team'));
   async function setOpen(on: boolean) {

@@ -1,12 +1,12 @@
 <script lang="ts">
   // A reply in my anonymous post's comments, sent by the bot so it doesn't carry my Telegram account (server
   // fchannel.reply_*). How it works, in three short steps with their icons (copy the comment's link in Telegram, come
-  // back and Paste, write), shown in full until I once send a reply to a comment, then folded to one small line (owner,
-  // Nov 4). Then one card in the order of the steps: the comment's link with a one-tap Paste (Telegram's clipboard where
+  // back and Paste, write), shown in full until I once send a reply to a comment, then folded to one small line.
+  // Then one card in the order of the steps: the comment's link with a one-tap Paste (Telegram's clipboard where
   // it may read it, else the browser's; neither: pasted by hand), a hairline, the words under the mask. One honest line
   // about what can still give me away. Under it, my replies and where each stands, each deletable; one the AI held says
   // why in its words once they come (/why, to me alone). No comments are listed here: the app never keeps other
-  // people's words (review). Sending answers at once: the reply stands at the top "checking".
+  // people's words. Sending answers at once: the reply stands at the top "checking".
   import { untrack } from 'svelte';
   import { slide } from 'svelte/transition';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';

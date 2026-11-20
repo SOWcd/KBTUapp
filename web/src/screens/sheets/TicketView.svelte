@@ -4,7 +4,7 @@
   // middle). Opens from the event sheet, Profile → Me, the live capsule and t.me links (tk_<id>).
   // Telegram's Back, a tap outside or Close dismisses it. The pass is lit like the glass: its light and
   // a slight 3D tilt follow the phone, and it leans toward a pressing finger, like a card in Wallet.
-  // A real ticket (owner, Nov 3: the flat red card with a huge sparse code was weak): a club with a lanyard of its own
+  // A real ticket, not a flat card with a huge sparse code: a club with a lanyard of its own
   // prints it in its lanyard's art and colours (lib/awards.ts skinOf, ui/LanyardBand), its medallion top right; the rest
   // in their colour on a security print. The stub tears off at notches and a perforation; its QR is a finer 33×33
   // (Qr minVersion), as dense as the badge's.
@@ -120,7 +120,7 @@
         <!-- the stub: torn off at the notches along the perforation -->
         <div class="stub">
           <i class="perf" aria-hidden="true"></i>
-          {#if skin === 'japanesecultureclub'}<i class="petals" aria-hidden="true"></i>{/if}<!-- their petals fall past the tear too (owner, Nov 3) -->
+          {#if skin === 'japanesecultureclub'}<i class="petals" aria-hidden="true"></i>{/if}<!-- their petals fall past the tear too -->
           {#if valid && my?.ticketCode}
             <div class="qrbox" class:used={!!my.checkedInAt}>
               <Qr text={'KBTU' + my.ticketCode} minVersion={4} tone={skin ? QR_LOOK[skin] : undefined}>{#if skin}<LookMark look={skin} />{:else}<OrgLogo org={e.org} />{/if}</Qr>
@@ -271,7 +271,7 @@
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .pill { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
   .pill:active { transform: scale(0.96); }
-  .acts .pill { padding: 0 16px; } /* the calendar and the cancel in one row at 375: a second row ended up half under the x (owner, Nov 16) */
+  .acts .pill { padding: 0 16px; } /* the calendar and the cancel in one row at 375: a second row ended up half under the x */
   .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
   .doubt { height: 40px; padding: 0 18px; color: #FFD27A; background-color: rgba(255, 176, 32, 0.18); font-size: 14px; }
 </style>

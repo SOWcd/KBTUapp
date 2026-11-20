@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club's links (Oct 5 and Oct 24), Settings' group: a row per link (a network's username or a pasted link, any
+  // A club's links, Settings' group: a row per link (a network's username or a pasted link, any
   // site too), "Add" at the end picks the network; six at most. The caller turns the drafts into links with linkUrl.
   import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';

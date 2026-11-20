@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Studio → the Ascent (owner, Nov 17: no ladder panel on Studio's home): the ladder and the ask for the ✓ on a page of
+  // Studio → the Ascent (no ladder panel on Studio's home): the ladder and the ask for the ✓ on a page of
   // their own. path: as Studio holds it, so the page opens full; the ask answers here at once, Studio reads it again.
   import { untrack } from 'svelte';
   import { api, ApiErr, type Id, type OfficialPath } from '../../lib/api';

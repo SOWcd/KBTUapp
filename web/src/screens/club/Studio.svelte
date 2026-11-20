@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Studio (owner, Nov 17: "too many buttons, useless panels"; the Admin sheet's way): the name with one + (the Create
+  // Studio (few buttons, no idle panels; the Admin sheet's way): the name with one + (the Create
   // menu); the event of the day with the door, the screen's one main button; what waits for me; the club's places as
   // plain rows (the Ascent's ladder and the club's profile among them, a tap deeper); then the events by tabs.
   import Plus from '@lucide/svelte/icons/plus';
@@ -213,7 +213,7 @@
   const claimOrg = $derived(dmp ? undefined : m?.org.id);
   const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests(claimOrg).then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
   $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
-  // Waiting applications (or no casting right) open the inbox; otherwise straight to the round's board or its form (owner, Nov 14).
+  // Waiting applications (or no casting right) open the inbox; otherwise straight to the round's board or its form.
   const recruitTile = $derived(casting || vice);
   const openRecruit = () => (vice && (waiting || !casting) ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
   // Secret Santa (server santa.py): one row. No game: its welcome (SantaHi, the one place to start it); a game running:
@@ -229,7 +229,7 @@
     ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),
     ...(may(m, 'posts') ? [{ label: t('casting.mark'), icon: Megaphone, onselect: () => sheets.composer(m!.org.id, undefined, true) }] : []),
   ]);
-  // a club made by mistake (club presidents, Nov 6): its President deletes it while nobody else is in it and no event
+  // a club made by mistake (club presidents): its President deletes it while nobody else is in it and no event
   // went out (the server checks it too, logic.delete_org); otherwise the row says why
   const ownClub = $derived(m?.role === 'president' && m.org.kind === 'club' && !m.org.official);
   const emptyClub = $derived(members <= 1 && events.every((e) => e.status === 'draft'));
@@ -248,8 +248,8 @@
 <div class="page stagger" class:scroll={!onTitle} class:inpane={!!onTitle}>
   {#if m}
     <header class="hd">
-      <!-- the club's name switches clubs (A3; no chips row); top right the one way to make something (owner, Nov 17:
-           no full-width Create, the event of the day's QR is the screen's one main button) -->
+      <!-- the club's name switches clubs (A3; no chips row); top right the one way to make something (no
+           full-width Create, the event of the day's QR is the screen's one main button) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>

@@ -3,7 +3,7 @@
   // Telegram account that wrote it and nobody else: a stranger's comment after he signed in, or one removed after
   // reports while the bot couldn't write to me. Its words, Copy, and back to the thread (a student only: for anyone
   // else that button would walk him into the second-comment ban). Telegram's "allow messages" is asked on a tap here,
-  // never in front of the text (review 2): a "no" changes nothing.
+  // never in front of the text: a "no" changes nothing.
   import { copyText } from '../../ui/copy';
   import MessageSquareText from '@lucide/svelte/icons/message-square-text';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';

@@ -48,7 +48,7 @@
     const team = e?.teamMax != null;
     haptic.ok(); burst(false, undefined, e?.emoji); say(t(team ? 'pay.doneTeam' : 'pay.done'), 'party_popper_3d'); // the ticket: a moment
     close(overlay.id);
-    // a team event: the next step is the team (the event page's block; the ticket is one tap away there), owner Nov 16
+    // a team event: the next step is the team (the event page's block; the ticket is one tap away there)
     if (!team) sheets.ticket(id);
     else if (!overlays.some((o) => !o.closing && o.stat === 'sheet.event' && o.props.id === id)) sheets.event(id);
   }

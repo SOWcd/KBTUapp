@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The app's staff seal by the name (Hero only: never in rows or lists, review Nov 3), Founder's craft in a shield:
+  // The app's staff seal by the name (Hero only: never in rows or lists), Founder's craft in a shield:
   // a struck metal rim, a field, a five-point star struck in it. 'moderator': steel blue in silver; 'admin': the same shield in
   // gold, the star struck in black (Founder's gold coin). A tap by the name opens what it is (AwardSheet).
-  // `deep` (the award sheet, owner Nov 3: "more effect"): rim, field and star are layers that slide apart with the tilt
+  // `deep` (the award sheet): rim, field and star are layers that slide apart with the tilt
   // glass.ts writes on an ancestor (--gx/--gy, -1..1), the star raised over its own shadow, a glint crossing the metal.
   // Still under power saving and reduced motion. The small seal by the name stays flat.
   let { size = 16, role, deep = false }: { size?: number; role: 'admin' | 'moderator'; deep?: boolean } = $props();
@@ -12,7 +12,7 @@
   const mark = $derived(gold ? ['rgb(42, 28, 5)', 'rgb(20, 13, 2)'] : ['rgb(255, 255, 255)', 'rgb(190, 200, 216)']);
   const id = $props.id(); // gradient ids per seal, as Founder's
   const SHIELD = 'M16 1.6 27.6 5.4V14.2C27.6 21.8 22.6 27.4 16 30.4 9.4 27.4 4.4 21.8 4.4 14.2V5.4Z';
-  // a star, not a check: a check reads as "verified account" (owner, Nov 3)
+  // a star, not a check: a check reads as "verified account"
   const STAR = 'M16 8.6 17.7 13.25 22.66 13.44 18.76 16.5 20.11 21.26 16 18.5 11.89 21.26 13.24 16.5 9.34 13.44 14.3 13.25Z';
 </script>
 

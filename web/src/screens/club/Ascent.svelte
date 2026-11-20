@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The Ascent (server clubs.py, official_path): a student initiative's checklist as a ladder; it locks nothing (owner,
-  // Nov 6). Done ones are ticked, the first open one is lit, an open one shows its count; the collab and the top say their reward.
+  // The Ascent (server clubs.py, official_path): a student initiative's checklist as a ladder; it locks nothing.
+  // Done ones are ticked, the first open one is lit, an open one shows its count; the collab and the top say their reward.
   // At the top: the ask to DMP for the ✓, a separate decision (not a step).
   import Check from '@lucide/svelte/icons/check';
   import MountainSnow from '@lucide/svelte/icons/mountain-snow';

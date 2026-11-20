@@ -15,7 +15,7 @@
   }
   /** the places, then the offices under their own title */
   export const placeGroups = () => [{ title: tr('pad.places'), tiles: placeTiles() }, { title: tr('pad.admin'), tiles: placeTiles(true) }];
-  /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (*  "from one entrance to another, through the building") */
+  /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike ("from one entrance to another, through the building") */
   export function exitTiles(g: Graph | null): PadTile[] {
     const now = new Date(), seen = new Set<string>();
     const till = (x: MapNode) => x.h?.[now.getDay() === 0 ? 2 : now.getDay() === 6 ? 1 : 0]?.split('-')[1] ?? '';
@@ -39,8 +39,8 @@
   // The map's own keypad (mockup design/mock/map.html): every input on the map is a room number or a
   // named place, so no system keyboard at all (B7: the iOS keyboard jerked the route card). A big number that pops in
   // digit by digit, the rooms that start so under it (five, one row, no scrolling), round keys that flash under the
-  // finger, a letter key cycling a-b-v-g (251a); the named places on a second side as tiles, not a sideways row (owner:
-  // "scrolling left and right to find one is bad").
+  // finger, a letter key cycling a-b-v-g (251a); the named places on a second side as tiles, not a sideways row
+  // (scrolling left and right to find one is bad).
   import { untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Delete from '@lucide/svelte/icons/delete';

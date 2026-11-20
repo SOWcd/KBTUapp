@@ -1,6 +1,6 @@
 <script lang="ts">
   // The Creator's seal: a flat tile like the app's icon, the colonnade (the icon's five columns) in graphite on white
-  // (owner, Nov 19: the tile over the enamel coin; Nov 18: a graphite disc was barely seen on a lanyard's art). Under
+  // (the tile over the enamel coin; a graphite disc was barely seen on a lanyard's art). Under
   // dark letters the card turns it over (--seal-tile / --seal-mark, Hero's .ink). By a name a tap says what it is (Hero).
   // `idea`: the same tile in the brand's blue, for the one who came up with the app.
   let { size = 16, idea = false }: { size?: number; idea?: boolean } = $props();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club of mine, its Studio pushed from the right over the Clubs tab (round 5: the tab is one feed; my club's card
+  // A club of mine, its Studio pushed from the right over the Clubs tab (the tab is one feed; my club's card
   // opens this, Telegram's Back closes it). Each club its own pane: Studio and Team read the club from ui.club.
   // asCreator: the creator opened it from Admin (lib/state/creator): the club's membership stands in his list meanwhile.
   import { untrack } from 'svelte';

@@ -15,7 +15,7 @@ export const LOW = /;\s*LOW\)/.test(navigator.userAgent);
 
 const lit = new Set<HTMLElement>();
 // only the lit elements on screen are written each frame: a hidden tab's badge or a card scrolled away was restyled with
-// every move of the phone, its animated layers sampled on the main thread with it (perf, Nov 10). One coming into view
+// every move of the phone, its animated layers sampled on the main thread with it. One coming into view
 // takes the light where it is.
 const seen = new Set<HTMLElement>();
 const shine = (n: HTMLElement) => { n.style.setProperty('--gx', light.x.toFixed(2)); n.style.setProperty('--gy', light.y.toFixed(2)); };
@@ -58,8 +58,8 @@ function startTilt() {
     if (d.beta == null || d.gamma == null) return; // radians
     const [x, y, z] = upOf(d.beta, d.gamma), now = performance.now();
     // the way the phone is held is "neutral": taken when the sensor starts (or recenter()), then it follows the pose
-    // with a few seconds' lag, so a steady hold settles face on and only movement tilts (owner, Nov 1: lying on his
-    // side, a medal opened turned far away: gamma was read as absolute)
+    // with a few seconds' lag, so a steady hold settles face on and only movement tilts (lying on one's
+    // side, a medal would open turned far away if gamma were read as absolute)
     if (!light.n || now - light.at > 1000) light.n = [x, y, z];
     else {
       const k = 1 - Math.exp(-(now - light.at) / TAU), n = light.n;
@@ -71,7 +71,7 @@ function startTilt() {
     // that's rolled by gravity (on one's side, in landscape) reads as no tilt at all
     const [tx, ty] = tiltFrom(light.n, [x, y, z], screen.orientation?.angle ?? 0);
     // a phone at rest still reads a few tenths of a degree of noise: below ~1 deg it is no move, nothing is written
-    // (Android, Nov 2: the noise kept every glass and the award coin repainting 20 times a second, idle)
+    // (Android: the noise kept every glass and the award coin repainting 20 times a second, idle)
     if (Math.abs(tx - light.tx) + Math.abs(ty - light.ty) < 0.016) return;
     [light.tx, light.ty] = [tx, ty];
     if (!light.raf) light.raf = requestAnimationFrame(paintLight);

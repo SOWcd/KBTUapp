@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One person of a club's Team, their own sheet over it (owner, Nov 16: giving roles reworked): who they are, the roles
+  // One person of a club's Team, their own sheet over it (giving roles reworked): who they are, the roles
   // I may give them as rows (what each can do, how many hold it, theirs checked), their departments, probation as a
   // switch, then handing the club over and removing, each its own row at the bottom. Telegram's Back closes it.
   // The rules are Team's (perms.ts, the server's): this sheet only shows what I may do.

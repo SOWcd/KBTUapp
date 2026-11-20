@@ -1,4 +1,4 @@
-// The creator opens any club's Studio from Admin (owner, Nov 15): the club's President's membership stands in his own
+// The creator opens any club's Studio from Admin: the club's President's membership stands in his own
 // list while that Studio is open (every Studio screen reads memberships), its routes go as the club's (api staffOrg,
 // X-Staff-Org), and "view as" swaps in another role of the club's model, which the server enforces too (X-Staff-Role).
 import { api, staffOrg, type Id, type LentStudio, type Membership, type OrgRef } from '../api';

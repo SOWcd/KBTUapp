@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection in two
+  // Awards (SPEC §4.11), a sheet from the badge's numbers: the whole collection in two
   // tabs. Medals: on top, the one closest to its next level (the reason to go to one more event); then every medal as a
   // card — the medal in its level's rim, the level, the way to the next one, how rare it is — earned first. Pins: the
   // app's one-time ones, then the events'. "Showcase" turns the page into a picker: up to 6 medals or pins for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.
@@ -28,7 +28,7 @@
   let opened = false;
   $effect(() => { void me?.showcase; if (!me?.student) return; void loadMyCard(!opened); opened = true; });
 
-  // two tabs (awards plan, Nov 3): Medals (levels, the way up) and Pins (one time: the app's, then the events'). The
+  // two tabs (awards plan): Medals (levels, the way up) and Pins (one time: the app's, then the events'). The
   // statuses are no award: they stay as the seal by the name. All from the one card: no fetch
   const all = $derived(p?.awards.achievements ?? []);
   const ach = $derived(all.filter(isMedal));
@@ -209,7 +209,7 @@
   .ach.gold, .ach.one { --g: rgba(255, 200, 61, 0.24); }
   .ach.legend { --g: rgba(124, 77, 255, 0.3); }
   .md { position: relative; display: flex; margin-bottom: 6px; }
-  /* one pass of light across an earned medal when it comes into view (inside the object only: owner's taste) */
+  /* one pass of light across an earned medal when it comes into view (inside the object only) */
   .ach:not(.off):not(.zn) .md::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay;
     background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%) no-repeat; background-size: 250% 100%;
     animation: sheen 1.6s ease-out 700ms backwards; animation-delay: calc(700ms + var(--i) * 90ms); background-position: 160% 0; }

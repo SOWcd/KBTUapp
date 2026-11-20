@@ -1,6 +1,6 @@
 <script lang="ts">
-  // An official club's mark beside its name: a filled seal with a tick, as the platforms' verified badges are (owner,
-  // Nov 3: the outline tick looked so-so). One shape everywhere: rows, the club's sheet, Admin, the registry
+  // An official club's mark beside its name: a filled seal with a tick, as the platforms' verified badges are (an
+  // outline tick looks weak). One shape everywhere: rows, the club's sheet, Admin, the registry
   // explain: a tap says who gives it (the club's sheet; in a list the tap is the row's)
   import { t } from '../lib/i18n/index.svelte';
   import { say } from '../lib/state/ui.svelte';

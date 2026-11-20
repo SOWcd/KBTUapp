@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One award up close (SPEC §4.11), full screen over a dimmed profile (owner, Nov 1: the sheet's top cut the light
+  // One award up close (SPEC §4.11), full screen over a dimmed profile (the sheet's top cut the light
   // behind the medal). An achievement: the medal big with the
   // tilt light, what it takes, the way to the next level and how rare every level is; a secret one shows only its
   // hint until earned. A badge: the event it came from. The Creator's seal: what it is, in the words everyone
@@ -38,7 +38,7 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { sharing = false; }
   }
-  // "Recruiter" is earned by my invite link: the link right here (owner, Oct 29: no hunting for it on Me)
+  // "Recruiter" is earned by my invite link: the link right here (no hunting for it on Me)
   let inviting = $state(false);
   const ref = $derived(mine && it.ach?.code === 'referral' ? session.me?.referrals : null);
   async function invite() {
@@ -49,7 +49,7 @@
     finally { inviting = false; }
   }
   const a = $derived(it.ach), b = $derived(it.badge);
-  // every level side by side under the progress (owner, Nov 3): a tap shows that level's medal in the hero spot, a
+  // every level side by side under the progress: a tap shows that level's medal in the hero spot, a
   // tap on it again (or on mine) comes back to mine. The hero, its light and the line over the name follow it
   let peek = $state(0);
   const shown = $derived<ShelfItem>(peek && a ? { ...it, ach: { ...a, level: peek } } : it);
@@ -93,12 +93,12 @@
   };
   const round = $derived(a ? isRound(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
   const glow = $derived(it.staff ? (it.staff === 'admin' ? GLOW[3] : STEEL) : it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (artOf(va).startsWith('layer_zn_') ? GLOW[3] : tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
-  // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
+  // the coin's edge (a real coin): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
   const lit = $derived((round || !!it.staff || (!!a && isDrawnPin(a))) && !!glow); // a shield stands in the light as a coin does, without its edge
   const SIZE = 220;
-  // the edge: one band of N flat facets round the coin, each a small plane square to the face (owner, Nov 10: the old
+  // the edge: one band of N flat facets round the coin, each a small plane square to the face (the old
   // 22 stacked discs read as moiré stripes and broke into a striped slit edge-on). A facet spans the whole thickness,
   // so the band is solid at every angle and meets the face (z 0) and the back (z -THICK) exactly. Each carries its
   // place on the circle: the light from above is baked in (--d), the turn's light follows --spin/--gx in CSS (--c)
@@ -109,14 +109,14 @@
   });
   const APO = (SIZE / 2) * Math.cos(Math.PI / FACETS); // the corners on the face's circle
   const FACET = 2 * APO * Math.tan(Math.PI / FACETS) + 1; // +1: neighbours overlap half a pixel, no hairline between them
-  // Android (a user's video, Nov 2): the CSS coin flickered between its face and its milled edge many times a second
+  // Android: the CSS coin flickered between its face and its milled edge many times a second
   // at rest, and the capsule's title blinked empty with it. Its 24 composited 3D planes (22 edge discs, face, back,
   // each 660 px square at 3x) re-sorted and re-rastered on every tilt step overran the WebView's GPU budget, so tiles
   // went missing frame by frame. There the coin is one flat layer that tilts; the 3D (three.js) medals are one canvas
   // and keep their spin. ponytail: no edge on Android; the facet band (32 small planes, not 22 full discs) is the
   // upgrade to try there on a real phone
   const layered = $derived(!!edge && !onAndroid);
-  // a drawn medal's back: the owner's coins' reverse in its own metal, the letter of its rim file (the temporary vb set
+  // a drawn medal's back: the coins' reverse in its own metal, the letter of its rim file (the temporary vb set
   // has none: gold, no ribbon). The rest (the coins without WebGL, the seals) keep the mirrored face
   const drawn = $derived(va?.level ? layersOf(artOf(va)) : null);
   const rim = $derived(drawn ? /rim-([bsgl])$/.exec(drawn[drawn.length - 1][0])?.[1] : undefined);
@@ -157,10 +157,10 @@
     if (Math.abs(vel) > 6) haptic.tap();
     raf = requestAnimationFrame(coast);
   }
-  // a drawn medal is a real 3D coin (WebGL, three.js in its own lazy chunk; owner, Nov 1: the CSS layers read cheap).
+  // a drawn medal is a real 3D coin (WebGL, three.js in its own lazy chunk; CSS layers read cheap).
   // The flat art shows until the first frame is drawn, and stays when there is no WebGL, under power saving or reduced
   // motion. ponytail: the tier medals and seals keep the CSS coin; a canvas-painted face for them is the upgrade
-  // The 2026 initiation's coins (isCoin) are the ones that reach it: First 500 is a pin, a shield (awards plan, Nov 3)
+  // The 2026 initiation's coins (isCoin) are the ones that reach it: First 500 is a pin, a shield (awards plan)
   const art = $derived(round && a && a.level && artOf(a).startsWith('medal_') ? artOf(a) : '');
   let gl = $state<'' | 'wait' | 'on'>('');
   // another level's coin tapped in the row (Early bird): the 3D coin is mine, so that one shows flat in its place
@@ -188,11 +188,11 @@
     overlay.icon = it.ach ? Medal : it.staff ? ShieldIcon : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
-  // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
+  // for the whole 620 ms and then jumped
   let medal: HTMLSpanElement, scrim: HTMLDivElement, wrap: HTMLDivElement;
   let gone = false;
   onMount(() => {
-    recenter(); // it opens face on, however the phone is held (owner, Nov 1: lying on his side it opened turned away)
+    recenter(); // it opens face on, however the phone is held (lying on his side it opened turned away)
     haptic.soft();
     scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: 'ease-out' });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -242,7 +242,7 @@
     {#if a.level && a.at && tiers}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
     {#if !hidden}
       {#if a.level && !tiers}
-        <!-- earned, one level: the day and how rare, one quiet line (owner, Nov 1: the boxed card looked clunky) -->
+        <!-- earned, one level: the day and how rare, one quiet line (the boxed card looked clunky) -->
         <!-- Fuel: no share of students (the server counts no givers) -->
         <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')}{#if a.code !== 'supporter'} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}{/if}</p>
       {:else if next}
@@ -281,7 +281,7 @@
     <p class="t-callout how up">{t(it.staff === 'admin' ? 'seal.adminHow' : 'seal.moderatorHow')}</p>
   {/if}
 
-  <!-- small glass pills in the medal's metal, right under it (owner, Nov 1: the wide blue button at the bottom was ugly) -->
+  <!-- small glass pills in the medal's metal, right under it, not a wide button at the bottom -->
   {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter')}<!-- Fuel: not shared ("can you get one too?" would ask for money) -->
     <div class="acts up" style:--glow={glow || GLOW[0]}>
       {#if ref}<button class="pill glass glass-pill main" use:glass disabled={inviting} onclick={invite}><Megaphone size={17} />{t('ref.invite')}</button>{/if}
@@ -299,7 +299,7 @@
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet);
     background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.88);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-  /* Android + the WebGL medal (a user's video, Nov 6: the capsule's title, the name under the medal and the x went missing
+  /* Android + the WebGL medal (the capsule's title, the name under the medal and the x went missing
      for seconds): a full-screen blur re-rastered under a canvas that redraws every frame overran the GPU; solid there */
   .scrim.flat { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
@@ -330,7 +330,7 @@
   .rays { width: 480px; aspect-ratio: 1; background: radial-gradient(closest-side, rgba(var(--glow), 0.07), rgba(var(--glow), 0.025) 55%, transparent); }
   .halo { bottom: calc(var(--below) - 36px); translate: -50% 0; width: 300px; height: 64px;
     background: radial-gradient(closest-side, rgba(var(--glow), 0.2), rgba(var(--glow), 0.06) 60%, transparent); }
-  /* the halo, rays and shadow stay put: only the coin turns (owner, Nov 1: the glow moving with the coin looked strange) */
+  /* the halo, rays and shadow stay put: only the coin turns (the glow moving with the coin looked strange) */
   .shade { position: absolute; left: 50%; top: 50%; width: 196px; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%;
     background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.22) 62%, transparent);
     transform: translateY(18px); }
@@ -348,7 +348,7 @@
   /* under the coin, Apple's award view: the name large, one quiet line, the words, a quiet meta line */
   .kick { text-align: center; margin-top: 6px; font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .meta { text-align: center; margin-top: 14px; font: 560 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
-  /* the coin only turns, it never slides (owner, Nov 1). No transition: glass.ts's lerp already smooths --gx/--gy */
+  /* the coin only turns, it never slides. No transition: glass.ts's lerp already smooths --gx/--gy */
   .big { position: relative; display: inline-flex; will-change: transform; transform-style: preserve-3d;
     transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg + var(--spin, 0deg))); }
   .big.flat { transform: none; }
@@ -388,7 +388,7 @@
   .coin .face > :global(:first-child), .coin :is(.face, .back) :global(img) { box-shadow: none; filter: none; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
-  /* a soft specular band that slides with the tilt, as on polished metal (owner, Nov 1: the white spot was so-so) */
+  /* a soft specular band that slides with the tilt, as on polished metal */
   .round .shine { display: block; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: soft-light;
     background: linear-gradient(125deg, transparent calc(28% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), rgba(255, 255, 255, 0.5) calc(40% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), transparent calc(54% + var(--gx, 0) * 34% + var(--gy, 0) * 14%)); }
   .name { text-align: center; margin-top: 10px; color: var(--text); font: 750 var(--fs-title)/1.12 var(--font-display); letter-spacing: -0.02em; }

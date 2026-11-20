@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → To decide, the whole queue (owner, Nov 19: the sheet shows its first cards, "N more" leads here; before, one row with
+  // Admin → To decide, the whole queue (the sheet shows its first cards, "N more" leads here; before, one row with
   // its count): the same queue and its Done list (AdminInbox), on a page of their own. A moderator, whose whole Admin
   // the queue is, keeps it on the sheet itself.
   import { staffOnly } from '../../lib/state/staffGate.svelte';

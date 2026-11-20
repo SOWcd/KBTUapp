@@ -6,7 +6,7 @@
   import { overview as sheet, tilesOf as tilesAt, Z0 as SHEET_Z } from '../../lib/mapgl';
   setWorkerUrl(workerUrl);
   const warmed: HTMLImageElement[] = [];
-  /** Ahead of the first tap (lib/map.ts warmMap, in an idle moment after the app starts; owner, Nov 15: the first tap
+  /** Ahead of the first tap (lib/map.ts warmMap, in an idle moment after the app starts, so the first tap
    *  opens the map at once): MapLibre's workers started, the floor the map opens on by default decoded as its overview,
    *  its first tiles in the browser's cache. This chunk itself is loaded by whoever calls this */
   export function warm(): void {
@@ -21,21 +21,21 @@
 <script lang="ts">
   // The campus map (CONTEXT): a floor of the main building full screen, pinch to zoom and drag to look around, a
   // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Three versions, picked from a list at the top left
-  // (owner, Oct 6 and Oct 27): ours, KBTU App's, the main one, Uni-Q's plans (credited under the map), and the old one, our redraw of
-  // the 2023 plans (floors 1-5, which nobody updates, so it says so; every wall one ink, and a switch lays the plan as it was given over it: owner, Nov 15). Opens on a room's floor ("Aud. 305"
-  // → 3), rings the room's number and glides in to it (owner, Oct 5: "show where the room is"); a room the plan
+  //: ours, KBTU App's, the main one, Uni-Q's plans (credited under the map), and the old one, our redraw of
+  // the 2023 plans (floors 1-5, which nobody updates, so it says so; every wall one ink, and a switch lays the plan as it was given over it). Opens on a room's floor ("Aud. 305"
+  // → 3), rings the room's number and glides in to it; a room the plan
   // doesn't number frames its nearest numbers on the floor, "somewhere here, look yourself", or just says it couldn't
-  // find it (the old plan won't have it either: owner, Oct 6).
-  // MapLibre GL moves and draws it (owner, Nov 15: a ready, fast library, not our own pan and zoom): each plan is a
+  // find it (the old plan won't have it either).
+  // MapLibre GL moves and draws it (a ready, fast library, not our own pan and zoom): each plan is a
   // pyramid of tiles (lib/mapgl.ts), the level the size on screen needs fading in over the coarser one, and the room
   // numbers are its labels, at a size one can read at any zoom, as many as fit without touching, halls and bigger rooms
-  // first, fading in and out (owner, Nov 15: "zoomed out the map is empty"). Opened on a room, the whole floor shows
-  // first, then it flies in (owner, Oct 12: "show the whole map first, then zoom"). The main plans are black on white: the dark look inverts them (the
+  // first, fading in and out (zoomed out, the map is never empty). Opened on a room, the whole floor shows
+  // first, then it flies in. The main plans are black on white: the dark look inverts them (the
   // colours keep their hue). The capsule says "Map · floor 3", or "Room 305 · floor 3" (SPEC §8.2). The magnifier at the top
-  // turns the whole top row into a search box (owner, Oct 12: one row, not a big box), which finds a room by its number or a hall by its name (roomOf), goes to its floor and glides to it (owner, Oct 12).
-  // The sun/moon at the top right turns the map light or dark (owner, Oct 5: "let the student pick right on the map"),
-  // the map only and for this look: the app keeps its own theme, and the map opens in it again next time (owner: "I
-  // turn white on, look at it, and that's it; the app stays dark"). The panel carries the theme as a class (tokens.css).
+  // turns the whole top row into a search box (one row, not a big box), which finds a room by its number or a hall by its name (roomOf), goes to its floor and glides to it.
+  // The sun/moon at the top right turns the map light or dark, picked right on the map,
+  // the map only and for this look: the app keeps its own theme, and the map opens in it again next time (a
+  // glance at the light map, and the app stays dark). The panel carries the theme as a class (tokens.css).
   import { onMount, tick, untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Check from '@lucide/svelte/icons/check';
@@ -73,18 +73,18 @@
   const roomFloor = $derived(floorOf(room)); // 0: the basement's 1-99
   const onRoomFloor = $derived(!!room && cur === roomFloor);
   const title = $derived(cur === 0 ? t('map.basement') : t('map.title', { n: cur }));
-  // on the way: where from and where to, in the header (owner, Oct 15)
+  // on the way: where from and where to, in the header
   $effect(() => { overlay.title = rt.route && rt.ends ? `${rt.ends[0]} → ${rt.ends[1]}` : onRoomFloor ? (cur ? t('map.room', { room: room!, n: cur }) : t('map.roomBasement', { room: room! })) : title; overlay.icon = MapIcon; });
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
-  // which map (owner, Oct 27: a list at the top left): Uni-Q's, ours (floors 1 and 2 so far, not the default yet), the 2023 plan
-  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); Uni-Q stays the default for now
+  // which map (a list at the top left): Uni-Q's, ours (floors 1 and 2 so far, not the default yet), the 2023 plan
+  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list; Uni-Q stays the default for now
   let ver = $state<Ver>('main');
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
   let routing = $state(false);
-  let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one (owner, Oct 15)
+  let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one
   async function openRoute() {
     haptic.tap();
     if (ver !== 'main') setVer('main');
@@ -97,11 +97,11 @@
   async function go(f: number, pts: { u: number; v: number }[]) {
     if (f !== cur) { halt(); cur = f; touched++; }
     framed = pts.map((p) => [p.u, p.v]);
-    await tick(); // the step's card, not the tall one it replaces (owner, Oct 15: the first step was framed far off)
+    await tick(); // the step's card, not the tall one it replaces (the first step was framed far off)
     reframe();
   }
   // the step on screen: framed again whenever the stage changes size (the keyboard going away after "Lead me out" grows
-  // it: owner, Oct 15, the way sat small at the top) until a finger moves the map
+  // it: else the way sits small at the top) until a finger moves the map
   let framed: number[][] | null = null, reframeT = 0;
   function reframe() { if (!framed || !rt.route) return; glided = false; clearTimeout(glideT); frame(framed); }
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
@@ -115,7 +115,7 @@
   let plan: HTMLDivElement;
   let gone = false;
 
-  // The camera is MapLibre's (owner, Nov 15: our own pan and zoom "perceived gestures badly"): it draws the floor's tiles
+  // The camera is MapLibre's (our own pan and zoom "perceived gestures badly"): it draws the floor's tiles
   // of the level the size on screen needs, a finer level fading in over the coarser one, and the labels, which fade in
   // and out as they find room. Here the plan's scale is 1 when it is as wide as the stage, up to MAX; a place on it is
   // (u, v), fractions of its width and height (lib/mapgl.ts turns those into MapLibre's own).
@@ -133,7 +133,7 @@
   /** the plan's point under a point of the stage */
   function uvAt(px: number, py: number): [number, number] { const at = map.unproject([px, py]); return uvOf(fr, at.lng, at.lat); }
   /** the screen's middle stays on the plan, so half a screen of room past each edge: a corner, or a route under the
-   *  card, can be dragged to the middle (owner, Oct 15); never smaller than the stage's width, never past MAX */
+   *  card, can be dragged to the middle; never smaller than the stage's width, never past MAX */
   function within(at: LngLat, zoom: number) {
     const [u, v] = uvOf(fr, at.lng, at.lat), on = (n: number) => Math.min(1, Math.max(0, n));
     return { center: new LngLat(...lngLat(fr, on(u), on(v))), zoom: Math.min(zoomFor(fr, W() * MAX), Math.max(zoomFor(fr, W()), zoom)) };
@@ -145,26 +145,26 @@
     plan.style.width = `${pw}px`; plan.style.transform = `translate3d(${p.x}px,${p.y}px,0)`;
     first.style.transform = `translate3d(${p.x}px,${p.y}px,0) scale(${pw / fr.fx / 512})`;
   }
-  // the stage runs under Telegram's header (full-bleed, owner Nov 4); the plan rests below it, where .side starts
+  // the stage runs under Telegram's header (full-bleed); the plan rests below it, where .side starts
   let side: HTMLDivElement;
   const head = () => side.offsetTop - 10;
   /** the view a floor opens in: on the main map the building (u .12-.85 of Uni-Q's sheet, white margins round it) fills
-   *  the width (owner, Oct 24: "why is it so far away"); the drawn plans have no margins, the whole of them */
+   *  the width, not far away; the drawn plans have no margins, the whole of them */
   const homeK = () => (ver === 'main' ? 1.3 : 1);
   /** the building in the middle of what's under the header, at scale k: where the plan rests zoomed out */
   const middle = (k = homeK()) => cam(k, ver === 'main' ? 0.485 : 0.5, 0.5, W() / 2, head() + (H() - head()) / 2);
-  /** zoomed out: the whole floor, where one finger turns floors and never pans (owner, Nov 15: the swipe "doesn't
+  /** zoomed out: the whole floor, where one finger turns floors and never pans (the swipe "doesn't
    *  understand what I want"); a hair of zoom left by a pinch still counts, and the let-go takes it back (rest) */
   const NEAR = 1.15;
   const out = () => scale() < homeK() * NEAR;
   function reset() { halt(); map.jumpTo(middle()); }
   /** a running glide stops where it is on screen (a finger, a floor, the other version came) */
   const halt = () => map.stop();
-  // off at once, settles without a crawl: a critically damped spring (owner, Oct 12: an easy ease was "very slow", the
-  // spring "was good"; Oct 9: an ease-out one crawled at the end)
+  // off at once, settles without a crawl: a critically damped spring (an easy ease is too slow, an
+  // ease-out one crawls at the end)
   const spring = (p: number) => (p >= 1 ? 1 : 1 - (1 + 10 * p) * Math.exp(-10 * p));
   /** fingers let the plan go: zoomed out it may rest only in the middle and goes back there, at the size they left it
-   *  under the whole floor's, or at the whole floor's from a hair over it; zoomed in it stays where it was left (owner, Oct 15) */
+   *  under the whole floor's, or at the whole floor's from a hair over it; zoomed in it stays where it was left */
   function rest() {
     if (fingers || !out()) return;
     const to = middle(Math.min(scale(), homeK())), a = map.project(to.center), b = map.project(map.getCenter());
@@ -194,14 +194,14 @@
   // the room looked for is the first to get its place among the labels: its ring is never round nothing
   const words = () => labelData(fr, orig && ver === 'old' ? [] : labelsOf(ver, cur, look === 'dark', (k) => t(`kmap.${k}` as 'kmap.canteen'), room ?? ''));
   const wordsNow = () => `${ver}|${cur}|${look}|${i18n.lang}|${orig}|${room}`;
-  /** the labels: one layer a tier (always; from mid zoom; up close: owner, Oct 28, far off the small ones were specks).
-   *  Each is printed on the plan (owner, Nov 15): its size (lib/mapgl.ts, in units of a 1000-wide plan) grows with the
+  /** the labels: one layer a tier (always; from mid zoom; up close: far off the small ones were specks).
+   *  Each is printed on the plan: its size (lib/mapgl.ts, in units of a 1000-wide plan) grows with the
    *  plan, and it fades in as it gets big enough to read. Uni-Q's numbers stand on a plate of the paper's colour over the
    *  tiny printed ones, and fade away as those get big enough to read (the plan 720 to 920 px wide: printed digits 5 to
    *  6.5 px tall, still under the plate), so a number is never seen twice. A value of both the zoom and a label's own
    *  data MapLibre reads at whole zooms only (between them it blends): Uni-Q's hand-over is by zoom alone */
   const ZS = [-1, 0, 1, 2, 3, 4].map((n) => Z0 + n);
-  // owner, Nov 17: a number never leaves its room's walls and never swells into a giant: the plan's own size (fitted to
+  // a number never leaves its room's walls and never swells into a giant: the plan's own size (fitted to
   // the room, lib/mapgl.ts) up to a reading size and no further; one too small to read yet waits for the pinch
   const px = (z: number) => ['min', ['case', ['<=', ['get', 'rank'], 1], 17, 14], ['*', ['get', 's'], widthAt(fr, z) / 1000]];
   // the size by two stops round every zoom the map goes to: MapLibre sizes a label between the stops round its tile's
@@ -231,7 +231,7 @@
       },
     }) as unknown as LayerSpecification);
   }
-  /** my flaws' pins win over the labels (owner, Nov 15): each holds its place among them as an empty mark, so a label
+  /** my flaws' pins win over the labels: each holds its place among them as an empty mark, so a label
    *  under a pin gives way */
   const pinData = () => ({ type: 'FeatureCollection' as const, features: [...flawsHere, ...(draft && draft.f === cur && draft.ver === ver ? [draft] : [])]
     .map(({ u, v }) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: lngLat(fr, u, v) } })) });
@@ -272,10 +272,10 @@
   let lastTap = 0, tapAt = { x: 0, y: 0 };
   const local = (e: PointerEvent) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   let press: { x: number; y: number } | null = null; // the first finger down, for a hold in place
-  // a long press in place: "something's wrong here" (owner, Oct 29: the map's flaws marked in the app, not by screenshots),
+  // a long press in place: "something's wrong here" (the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
   let holdT: ReturnType<typeof setTimeout> | undefined;
-  // where it was marked (Nov 7: the spot was saved, but nothing showed where): a pin at the pressed point while the note
+  // where it was marked (the spot was saved, but nothing showed where): a pin at the pressed point while the note
   // is written, a check on it once saved, and my own open ones on the floor as small pins; a tap on one shows its words.
   // Only mine, never anyone else's (the admin's list has all of them)
   type Flaw = { id: number; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string };
@@ -343,7 +343,7 @@
     if (fitting && e.isPrimary) { fitting = false; map.jumpTo(middle(Math.min(scale(), homeK()))); } else halt();
     clearTimeout(holdT); held = false;
     // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
-    // sheet opened over it, so every later press read as a second finger and never held: owner, Nov 15)
+    // sheet opened over it, so every later press read as a second finger and never held)
     fingers = e.isPrimary ? 1 : fingers + 1;
     if (!e.isPrimary) { press = null; swipeEnd(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
     const at = (press = local(e)), id = e.pointerId;
@@ -396,10 +396,10 @@
   }
 
   // another floor keeps the view: the floors share one frame, so the same part of the building stays on screen and
-  // only the tiles change (owner, Oct 6: "switching floors resets the map's size")
-  // ---- floors (PLAN 97; owner's iPhone videos IMG_6661/6663, Oct 25): a tap on the rail, a drag along it, or a sideways
-  // swipe on the map while it's zoomed out. The owner's model is the route card's floor row: the plan changes floor in
-  // place, the same frame (no sliding pictures: "disgusting"), and the knob springs over with the jelly squash. The knob
+  // only the tiles change (one's place isn't lost with each floor)
+  // ---- floors: a tap on the rail, a drag along it, or a sideways
+  // swipe on the map while it's zoomed out. The model is the route card's floor row: the plan changes floor in
+  // place, the same frame (no sliding pictures), and the knob springs over with the jelly squash. The knob
   // follows the finger while it drags (on the map: a page turn, the finger to the left goes a floor up); the floor
   // changes on the let-go.
   let knob = $state<HTMLSpanElement>();
@@ -408,7 +408,7 @@
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
-  // the change itself (owner, Oct 25: "the picture just swaps, give it a push so you feel the floor changed"): a lift's
+  // the change itself (a bare swap of the picture doesn't feel like a floor changing): a lift's
   // depth. Going up, the floor you leave sinks away under you and the new one comes down from above, settling to size;
   // going down, the other way. Both pictures scale about the middle of the screen; opacity and transform only.
   let ghost = $state<string | null>(null), ghostEl = $state<HTMLImageElement>();
@@ -431,7 +431,7 @@
   }
   // the floors next to this one decoded ahead (each one's overview: its coarsest tile), so the new one is there the
   // moment the floor changes (a swipe goes one floor; a far one on the rail decodes from the cache under the
-  // cross-fade). Only the neighbours: all six were ~60 MB of decoded pixels kept for the whole visit (the glass went grey, Oct 31)
+  // cross-fade). Only the neighbours: all six were ~60 MB of decoded pixels kept for the whole visit (the glass went grey)
   $effect(() => {
     const i = railFloors.indexOf(cur), dark = ver === 'kbtu' && look === 'dark';
     const held = railFloors.slice(Math.max(0, i - 1), i + 2).map((f) => { const im = new Image(); im.src = overview(ver, dark, f); void im.decode().catch(() => {}); return im; });
@@ -505,7 +505,7 @@
     const [[a, c], [b, d], [e, f]] = FIT, X0 = X - e, Y0 = Y - f, det = a * d - b * c;
     return [(d * X0 - b * Y0) / det / uniq.w, (a * Y0 - c * X0) / det / uniq.h];
   }
-  /** another map: the same part of the building stays on screen at the same size (owner, Oct 27: it zoomed out) */
+  /** another map: the same part of the building stays on screen at the same size (it zoomed out) */
   function setVer(v: Ver) {
     if (v === ver) return;
     haptic.select(); halt();
@@ -518,7 +518,7 @@
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
   let glided = false, glideT = 0, touched = 0;
-  // the map's controls (owner, Oct 24, mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
+  // the map's controls (mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
   // a lift panel on the right with the look button above it; every input is our keypad (MapPad), no system keyboard
   let pad = $state(false);
   // a found place without a number (canteen, Independence Hall); the schedule can open the map on one
@@ -527,7 +527,7 @@
     return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
   }));
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
-  // the entrances on B too (owner, Oct 24); the graph has them, fetched when the keypad opens
+  // the entrances on B too; the graph has them, fetched when the keypad opens
   const doorNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   async function openPad() {
     haptic.tap(); pad = true;
@@ -576,13 +576,13 @@
       if (gone) return;
       const ns = fit ? zoom : Math.max(scale(), zoom), { top, bottom } = fit ? free() : { top: head(), bottom: 0 };
       const to = cam(ns, u, v, W() / 2, (top + H() - bottom) / 2);
-      // just opened: the whole floor for a blink (owner, Oct 12: "you can't see where it came from"; "less than a tenth of
-      // a second", no waiting for tiles); the landing's tiles come while it moves, over the coarser ones
+      // just opened: the whole floor for a blink (so one sees where it came from; less than a tenth of
+      // a second, no waiting for tiles); the landing's tiles come while it moves, over the coarser ones
       const t0 = ++touched;
       await new Promise((done) => setTimeout(done, Math.max(0, shownAt + 90 - performance.now())));
       await new Promise((done) => requestAnimationFrame(done));
       if (gone || touched !== t0) return; // a finger, a floor or the other version came first
-      map.easeTo({ ...to, duration: 800, easing: spring }); // the spring: an easy ease (0.95 s, then 0.62 s) was "very slow", 0.52 s "too fast" (owner, Oct 12)
+      map.easeTo({ ...to, duration: 800, easing: spring }); // the spring: an easy ease felt too slow at 0.95 s and 0.62 s, too fast at 0.52 s
     });
   }
   // where the room's number stands on this map (Uni-Q's: read off the plan; the drawn ones: their own labels); 251a is
@@ -599,7 +599,7 @@
     return { top: head() + 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
   }
   /** glide to show all of `pts`, between the buttons at the top and `inset` px at the bottom (a route's card): the whole
-   *  step, never closer than it fits (owner, Oct 15: the way didn't fit and he had to find himself) */
+   *  step, never closer than it fits (the way didn't fit and he had to find himself) */
   function frame(pts: number[][]) {
     const { top, bottom } = free(), us = pts.map((p) => p[0]), vs = pts.map((p) => p[1]), W = stage.clientWidth, H = stage.clientHeight - top - bottom;
     const bw = Math.max(...us) - Math.min(...us) + 0.08, bh = (Math.max(...vs) - Math.min(...vs)) * AR + 0.08;
@@ -624,11 +624,11 @@
     }
     const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }, far = reach(iris.at);
     panel.animate({ clipPath: [iris(iris.at.r), iris(far)] }, o);
-    // the map's own round button grows out of the one tapped (owner, Oct 31: from the slim bar the small button and
+    // the map's own round button grows out of the one tapped (from the slim bar the small button and
     // the big one read as two buttons): it starts on the tapped one's place and size and settles on its own
     const shut = panel.querySelector<HTMLElement>('.shut'), sb = shut?.getBoundingClientRect();
     if (shut && sb?.width) shut.animate({ transform: [`translate(${iris.at.x - sb.left - sb.width / 2}px, ${iris.at.y - sb.top - sb.height / 2}px) scale(${(iris.at.r * 2) / sb.width})`, 'none'] }, o);
-    // Telegram's Close turns into Back a moment into the circle, not at the tap nor at its end (owner, PLAN 80)
+    // Telegram's Close turns into Back a moment into the circle, not at the tap nor at its end
     setTimeout(() => (overlay.holdBack = false), BACK_AFTER);
     // the map breathes out to meet you: a touch larger at first, it settles as the circle opens
     stage.animate({ transform: ['scale(1.08)', 'none'], transformOrigin: [`${iris.at.x}px ${iris.at.y - stage.offsetTop}px`, `${iris.at.x}px ${iris.at.y - stage.offsetTop}px`] }, o);
@@ -640,11 +640,11 @@
     // composited under the map the whole visit; it shows again the moment the map starts closing
     under?.finished.then(() => { if (!gone && underEl) underEl.style.visibility = 'hidden'; }, () => {});
     const h = halo(30, far, o, [1, 1, 1, 0]);
-    // the capsule is cut by the circle (owner, Oct 25): inside it already says "Map", outside it's still the old one
+    // the capsule is cut by the circle: inside it already says "Map", outside it's still the old one
     if (iris.cap) split(h, iris.cap, false);
   }
   let under: Animation | null = null, underEl: HTMLElement | null = null;
-  // opened from the nav's round button (owner, Oct 25: "one with the bar"): the map grows out of that circle and
+  // opened from the nav's round button (one with the bar): the map grows out of that circle and
   // shrinks back into it; clip-path only, the map under it is painted once
   const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
   const iris = (() => {
@@ -652,7 +652,7 @@
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
     return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap, el });
   })();
-  const BACK_AFTER = 180; // ms into the iris. Owner, Oct 26: exactly right, lands on the animation: keep it for good
+  const BACK_AFTER = 180; // ms into the iris: lands on the animation
   untrack(() => { if (iris) overlay.holdBack = true; }); // until a moment into the circle (appear); set before the first frame
   // the map's own capsule, copied whenever it changes (the floor), for the way back: closing, the real one is the
   // old page's at once, the copy shows inside the shrinking circle
@@ -683,7 +683,7 @@
     };
     frame();
   }
-  // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
+  // the circle's edge lit like the glass (without it the map "just takes over like a picture"): a ring
   // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
   function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[], c: { x: number; y: number } = iris!.at): HTMLElement {
     const h = document.createElement('i');
@@ -734,18 +734,18 @@
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
     let a: Animation;
     if (iris) {
-      // eases out into the button (owner's video, Oct 25: an ease-in close was fastest at its last frame and "hit like a
-      // hammer"); the page under comes back on the same curve. Owner, Oct 25: it shrank off the button's centre (the nav
-      // slides back in as it closes, the opening's point was stale) and the button didn't react: it closes on where the
+      // eases out into the button (an ease-in close is fastest at its last frame and hits like a
+      // hammer); the page under comes back on the same curve. The nav slides back in as it closes, so the opening's
+      // point is stale and the circle would shrink off the button's centre: it closes on where the
       // button comes to rest, to the button's own size, and the button takes the ring's glow, then lets it fade
       const o = { duration: 480, easing: 'cubic-bezier(.45, 0, .2, 1)' };
-      // back into the control it opened from (owner, Nov 17: opened from Afisha's header, it closed into the bar's corner,
+      // back into the control it opened from (opened from Afisha's header, it closed into the bar's corner,
       // KRI's by then); that control gone from the page: the point it opened at. Only the bar's own button slides with its dock
       const b = iris.el?.isConnected ? iris.el : null, dock = b?.classList.contains('mapb') ? b.parentElement : null;
       const bt = b?.getBoundingClientRect(), dm = dock && getComputedStyle(dock).transform !== 'none' ? new DOMMatrix(getComputedStyle(dock).transform) : null;
       const c = bt ? { x: bt.left + bt.width / 2 - (dm?.e ?? 0), y: bt.top + bt.height / 2 - (dm?.f ?? 0) } : iris.at;
       const end = bt ? Math.min(bt.width, bt.height) / 2 : iris.at.r, far = reach(c);
-      // the map's own button goes back into the one it came from (owner, Oct 31: the bar stays as it was, slim or full)
+      // the map's own button goes back into the one it came from (the bar stays as it was, slim or full)
       const shut = panel.querySelector<HTMLElement>('.shut'), sb = shut?.getBoundingClientRect();
       if (shut && sb?.width) shut.animate({ transform: ['none', `translate(${c.x - sb.left - sb.width / 2}px, ${c.y - sb.top - sb.height / 2}px) scale(${(end * 2) / sb.width})`] }, { ...o, fill: 'forwards' });
       const circle = (r: number) => `circle(${r}px at ${c.x}px ${c.y}px)`;
@@ -761,7 +761,7 @@
         u.cancel(); // the forwards hold goes, the new animation starts where it left the page
       }
       a = panel.animate({ clipPath: [circle(far), circle(end)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
-      // the button catches it (owner, Oct 25: "smoother, more alive, more professional"): the ring lands on the button's
+      // the button catches it: the ring lands on the button's
       // rim and goes on out as two soft ripples, the button gives under it and springs back, a glow swells inside it and
       // fades. Only opacity and transform move (the stepped box-shadow repainted every frame and read as steps).
       setTimeout(() => {
@@ -804,7 +804,7 @@
         {#each freeHere as f (f.r + f.u + f.v)}<span class="room" class:free={f.free} data-room={f.r} style:left="{f.u * 100}%" style:top="{f.v * 100}%"></span>{/each}
         {#if legsHere.length}
           <svg class="way" viewBox="0 0 1000 {1000 * AR}" preserveAspectRatio="none" aria-hidden="true">
-            <!-- the way (owner, Oct 24: "chic"): a soft glow, the line, white dots running along the step on screen -->
+            <!-- the way: a soft glow, the line, white dots running along the step on screen -->
             {#each legsHere as l (l.i)}
               {#if l.i === rt.step}<polyline class="glow" points={line(l.pts)} />{/if}
               <polyline points={line(l.pts)} class:now={l.i === rt.step} />
@@ -816,7 +816,7 @@
           {@const a = l.pts[0]}
           {@const b = l.pts[l.pts.length - 1]}
           {#if l.i === 0}
-            <!-- where you are: a dot and "You are here" above it (the mockup the owner liked, Oct 24) -->
+            <!-- where you are: a dot and "You are here" above it -->
             <span class="pin me" style:left="{a.u * 100}%" style:top="{a.v * 100}%"></span>
             <span class="pin tag" style:left="{a.u * 100}%" style:top="{a.v * 100}%">{t('route.here')}</span>
           {:else}<span class="pin start" class:now={l.i === rt.step} style:left="{a.u * 100}%" style:top="{a.v * 100}%"></span>{/if}
@@ -831,9 +831,9 @@
       {#if draft && draft.f === cur && draft.ver === ver}<span class="pin mark draft" style:left="{draft.u * 100}%" style:top="{draft.v * 100}%"></span>{/if}
     </div>
   </div>
-  <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
+  <!-- the top row: the floors, the map's look at its end (a lift panel on the right covered the plan) -->
   <div class="side" bind:this={side}>
-    <!-- the maps: a tap lists them (owner, Oct 27; it was a toggle to the 2023 plan) -->
+    <!-- the maps: a tap lists them -->
     <div class="maps" class:away={!!rt.route}>
       <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }}
         aria-label={t('map.maps')} aria-expanded={menu} aria-haspopup="menu"><Layers size={20} /></button>
@@ -843,9 +843,9 @@
         </div>
       {/if}
     </div>
-    <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
+    <!-- on the way only the look button stays: the floors move into the step card -->
     <div class="rail glass glass-pill" class:away={!!rt.route} class:dragging inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')} style:--kp={kp}>
-      <!-- the knob: a clear glass lens, the rail's numbers again inside it, magnified around its middle (owner, Oct 25) -->
+      <!-- the knob: a clear glass lens, the rail's numbers again inside it, magnified around its middle -->
       <span class="knob" bind:this={knob} aria-hidden="true"><span class="mag">{#each [0, 1, 2, 3, 4, 5] as n (n)}<i class:gone={!railFloors.includes(n)}>{n || t('map.bShort')}</i>{/each}</span></span>
       <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
            instead of jumping (owner, Oct 24 video) -->
@@ -853,7 +853,7 @@
         class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => { if (!railSwiped) pick(n); }}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
-    <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
+    <!-- a tap turns the map light or dark at once (the menu it opened looked foreign and lagged) -->
     <button class="rb glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)} aria-label={t('map.theme')}>
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
@@ -862,14 +862,14 @@
     <button class="freeb glass glass-pill" class:on={freeOn} class:away={!!rt.route} use:glass onclick={toggleFree} aria-pressed={freeOn}>
       <i aria-hidden="true"></i>{t('map.freeNow')}</button>
   {/if}
-  <!-- the 2023 plan as it was given, over our redraw of it, to compare (owner, Nov 15) -->
+  <!-- the 2023 plan as it was given, over our redraw of it, to compare -->
   {#if ver === 'old'}
     <button class="freeb glass glass-pill" class:on={orig} use:glass onclick={() => { haptic.select(); orig = !orig; }} aria-pressed={orig}>
       <i aria-hidden="true"></i>{t('map.orig')}</button>
   {/if}
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
   <p class="note" class:away={pad || card || routing}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
-  <!-- the bottom, under the thumb (owner's layout, Oct 26): the way out small on the left, the search, and on the right
+  <!-- the bottom, under the thumb: the way out small on the left, the search, and on the right
        the app's own map button, lit: a tap there closes the map, as the button opened it -->
   <div class="dock" class:away={pad || card || routing} inert={pad || card || routing}>
     <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
@@ -879,7 +879,7 @@
   {#if card}
     <div class="rcard" data-cover>
       <span class="grab" aria-hidden="true"></span>
-      <!-- the place itself is the way to another one (owner, Oct 24: an "Other" button beside the route looked wrong) -->
+      <!-- the place itself is the way to another one (an "Other" button beside the route looked wrong) -->
       <div class="rhead"><button class="rfind" onclick={openPad} aria-label={t('map.other')}>
           <span class="ptb" aria-hidden="true">{t('pad.b')}</span><span class="rt"><b>{cardTitle}</b><small>{floorName(at ? at.f : (roomFloor ?? 0))}</small></span>
           <Search size={18} /></button>
@@ -897,7 +897,7 @@
 <style>
   :global(.map-halo) {
     position: fixed; z-index: 9999; translate: -50% -50%; border-radius: 50%; pointer-events: none;
-    /* clear, not heavy (owner, Oct 25: thin was lost, 3.5 px "even too much"); the glow is stepped rings with no blur,
+    /* clear, not heavy (thinner gets lost, 3.5 px is too much); the glow is stepped rings with no blur,
        a blurred shadow repainted the whole growing circle every frame and the opening stuttered */
     box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.95), 0 0 0 5px rgba(150, 180, 255, 0.5), 0 0 0 9px rgba(130, 165, 255, 0.24),
       0 0 0 14px rgba(120, 160, 255, 0.1), inset 0 0 0 4px rgba(150, 180, 255, 0.3), inset 0 0 0 9px rgba(130, 165, 255, 0.12);
@@ -906,7 +906,7 @@
   :global(.map-glow) { position: fixed; z-index: 9998; translate: -50% -50%; border-radius: 50%; pointer-events: none;
     background: radial-gradient(circle, rgba(170, 195, 255, 0.55), rgba(120, 160, 255, 0.22) 45%, transparent 70%); }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
-  /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
+  /* on the way the floors are the step card's last row (one panel, not two) */
   /* the paper all round: white, or inverted with the plan in the dark look (Uni-Q's and the 2023 plan); ours has its ground */
   .panel.main { background: #fff; }
   .panel.main.theme-dark { background: #0d0d0d; }
@@ -930,7 +930,7 @@
      on a pin still moves the map; as wide as the plan is on screen, moved with the camera */
   .plan { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; pointer-events: none;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  /* the room found: a ring that breathes out, its name in a blue flag above (mockup, Oct 24) */
+  /* the room found: a ring that breathes out, its name in a blue flag above (mockup) */
   .spot { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
     border: 3px solid var(--accent-text); background: rgba(59, 107, 255, 0.14); box-shadow: 0 0 22px rgba(59, 107, 255, 0.6); }
   .spot::before, .spot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 3px solid var(--accent-text); animation: ripple 2s var(--ease-spring) infinite; }
@@ -942,7 +942,7 @@
   .room { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: auto;
     background: rgba(142, 142, 147, 0.28); }
   .room.free { background: rgba(48, 209, 88, 0.3); box-shadow: inset 0 0 0 2px rgba(48, 209, 88, 0.85); }
-  /* the way: a soft glow under the step on screen, the line, white dots running along it (owner, Oct 24: "chic") */
+  /* the way: a soft glow under the step on screen, the line, white dots running along it */
   .way { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   .way polyline { fill: none; stroke: var(--accent); stroke-opacity: 0.35; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
   .way polyline.now { stroke: #6e92ff; stroke-opacity: 1; stroke-width: 7; }
@@ -953,7 +953,7 @@
   .pin.start { width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 3px solid var(--accent); opacity: 0.5; }
   .pin.start.now { opacity: 1; }
   .pin.me { width: 22px; height: 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.22), 0 4px 14px rgba(0, 0, 0, 0.5); }
-  .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: #2fc277; } /* A is green, B blue (owner, Oct 24) */
+  .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: #2fc277; } /* A is green, B blue */
   .pin.tag { transform: translate(-50%, calc(-100% - 20px)); padding: 6px 10px; border-radius: 10px; background: #fff; color: #0a0f24; font: 750 12px/1 var(--font-text); white-space: nowrap;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
   .pin.end { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fff, 0 6px 18px rgba(59, 107, 255, 0.8); }
@@ -980,7 +980,7 @@
   :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before { animation: none; }
   @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag, .pin.mark.draft::after { animation: none; } }
 
-  /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
+  /* right edge: the look button, the floors as a lift panel, "whole floor" */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .rb { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
   .rb.on { background: var(--accent); color: #fff; }
@@ -1028,7 +1028,7 @@
   .bar { position: relative; flex: 1; min-width: 0; height: 60px; border-radius: 30px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font: 600 16px/1 var(--font-text); color: var(--text-2); }
   .bar :global(svg) { color: var(--text); flex: none; }
   .exit { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
-  /* the same glass as its neighbours, lit from inside in the accent: this is where you are (owner, Oct 29: the solid
+  /* the same glass as its neighbours, lit from inside in the accent: this is where you are (the solid
      white disc was too loud) */
   .shut { position: relative; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--accent); }
   .shut::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;

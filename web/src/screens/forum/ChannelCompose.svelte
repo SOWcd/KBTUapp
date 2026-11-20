@@ -32,7 +32,7 @@
   }
 
   // the bot's signature, as the server makes it (fchannel.signature): the real first name and the last initial, a nick or
-  // not (owner, Nov 2: the nick rule; the app's feed shows the nick)
+  // not (the nick rule; the app's feed shows the nick)
   export function signOf(): string {
     const s = session.me?.student;
     return s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] : ''}`.trim() : session.me?.name ?? '';

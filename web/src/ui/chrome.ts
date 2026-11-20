@@ -22,7 +22,7 @@ export function feedChrome(k: number, ease = ''): void {
   for (const f of fades) fadeOut(f, ease);
 }
 
-// the fades under the capsule and the nav go away over the Feed, with the same blend (the owner's video, Oct 21)
+// the fades under the capsule and the nav go away over the Feed, with the same blend
 const fades = new Set<HTMLElement>();
 function fadeOut(f: HTMLElement, ease: string) {
   f.style.transition = ease ? ease.replace(/transform/g, 'opacity') : 'none';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The creator's own lanyard (owner, Nov 16: from scratch, his avatar itself): the photo's horns hand screened again at
+  // The creator's own lanyard (from scratch, his avatar itself): the photo's horns hand screened again at
   // the card's size on its torn white paper, the creator's seal held between its two fingers (Hero: .sower .medal), on
   // the avatar's charcoal checker that turns into a print's halftone behind it; crop marks, one red dot. Layers far to
   // near (assets/lanyards/sower, made by .claude/reports/club-lanyards/owner/round1/gen/gen-owner.py; as pictures:

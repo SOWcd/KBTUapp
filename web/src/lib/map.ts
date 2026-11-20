@@ -75,10 +75,10 @@ export function floorOf(place: string | null | undefined): number | null {
 }
 
 /** The dormitory: the portal names classes held there "DMiS ..." (PE: "DMiS OFP (Rugby)..."); the schedule shows a
- *  small "Dorm" that opens it in 2GIS instead (*  since Oct 7 the official card of KBTU's Dorm No. 3, the link he sent). The escapes are the Russian letters of DMiS. */
+ *  small "Dorm" that opens it in 2GIS instead (the official card of KBTU's Dorm No. 3). The escapes are the Russian letters of DMiS. */
 export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
 /** A typed street address ("Gogolya 157", "Abaya 150, 2nd floor") → 2GIS's search for it in Almaty, the route one tap
- *  away (owner, Oct 29: the Halloween party's address stayed plain text). Not a room, a campus spot, the dorm or the
+ *  away (else an address stays plain text). Not a room, a campus spot, the dorm or the
  *  second building: a word of three letters or more and a house number. */
 export function addressGis(place: string): string | null {
   const p = place.trim();
@@ -98,7 +98,7 @@ export const atBldg2 = (place: string | null | undefined): boolean => !!place &&
 const BLDG2_LEAD = new RegExp(`^(?:${BLDG2.source})[\\s,.:-]*`, 'i');
 export const bldg2Room = (place: string): string | null => place.trim().replace(BLDG2_LEAD, '').match(/^\d+[^\s(,]*/)?.[0] ?? null;
 
-/** Two institutes off campus where labs are held (Yaroslav, a student, Nov 18: they stood as plain text): the portal
+/** Two institutes off campus where labs are held (else they stand as plain text): the portal
  *  writes "ITKiE kab No1 (Kunaeva 142)" and "IHN No25". No map here: the schedule shows "IHN 25" that opens the
  *  institute in 2GIS (his links, without the invite marks). The escapes are the two abbreviations in Russian. */
 const AWAY = [
@@ -110,7 +110,7 @@ export function awayOf(place: string | null | undefined): { k: 'itkie' | 'ihn'; 
   return a ? { k: a.k, url: a.url, room: place.match(/\u2116\s*(\d+[a-z\u0430-\u044f]?)/i)?.[1] ?? null } : null;
 }
 
-/** The map ahead of its first opening (owner, Nov 15: the first tap opens it at once): its chunk with MapLibre, the
+/** The map ahead of its first opening (the first tap opens it at once): its chunk with MapLibre, the
  *  workers, the first floor's overview and tiles (screens/map/CampusMap.svelte warm). Called in an idle moment after the
  *  app has started and again on the tap; once */
 let warmed = false;
@@ -121,7 +121,7 @@ export function warmMap(): void {
 }
 
 /** A room the plan doesn't number: the nearest numbers below and above it on its floor (within 10), both when they sit
- *  close together, else the nearer one ("376 isn't there but 377 is: zoom there"; Oct 15: routes lead
+ *  close together, else the nearer one ("376 isn't there but 377 is: zoom there"; routes lead
  *  there too). rooms: the floor's room -> where its number is printed; ar: the plan's height to its width. [room, [u, v]] */
 export function nearRooms(rooms: Record<string, number[][]>, room: string, ar: number): [string, number[]][] {
   const n = parseInt(room, 10), by = Object.entries(rooms)

@@ -54,7 +54,7 @@ export function clearAdminOrgs(): void {
 }
 onStaffLoss((has) => { if (!has('admin')) clearAdminOrgs(); });
 
-/** The ones opened last come first (owner, Nov 16: running an event with one club, he searched it every time); this device only. */
+/** The ones opened last come first (running an event with one club, he searched it every time); this device only. */
 export function seen(id: Id): void {
   adminOrgs.recent = [id, ...adminOrgs.recent.filter((x) => x !== id)].slice(0, 5);
   try { localStorage.setItem(KEY, JSON.stringify(adminOrgs.recent)); } catch { /* private mode */ }

@@ -61,7 +61,7 @@ export const multiDay = (start: number, end: number | null): end is number => en
 /** A multi-day event's days, short: "2–12 Nov". */
 export const daySpan = (start: number, end: number): string => dayRange(dateInput(start), dateInput(end), 'short');
 /** An event's end as a time to show: '' without one, and for days of it whose last day has no time (the editor stores
- *  that as 23:59; shown, it read as "until midnight": a club's question, Nov 16). */
+ *  that as 23:59; shown, it read as "until midnight": a club's question). */
 export const endTime = (start: number, end?: number | null): string => (end && !(multiDay(start, end) && time(end) === '23:59') ? time(end) : '');
 /** Day and short month (3 Oct). */
 export const dayMonthShort = (ts: number): string => fmt({ day: 'numeric', month: 'short' }, ts);

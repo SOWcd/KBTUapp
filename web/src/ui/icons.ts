@@ -7,5 +7,5 @@ import ClubsIcon from './ClubsIcon.svelte';
 import CircleUserRound from '@lucide/svelte/icons/circle-user-round';
 import type { Tab } from '../lib/state/ui.svelte';
 
-/** the tabs, in the bar and in the capsule's inline title (Clubs: three people, owner Nov 10; not `landmark`, which reads "government") */
+/** the tabs, in the bar and in the capsule's inline title (Clubs: three people; not `landmark`, which reads "government") */
 export const TAB_ICON: Record<Tab, Component<any>> = { afisha: Ticket, forum: MessagesSquare, club: ClubsIcon, profile: CircleUserRound };

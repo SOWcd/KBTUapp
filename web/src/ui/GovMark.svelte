@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Student Government's seal beside its name, like the verified tick (owner: the Russian "Student Government"
+  // The Student Government's seal beside its name, like the verified tick (the Russian "Student Government"
   // chip under the club named "Student Government" said it twice); the words stay as its label and tooltip
   import Vote from '@lucide/svelte/icons/vote';
   import { t } from '../lib/i18n/index.svelte';

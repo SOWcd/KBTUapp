@@ -47,14 +47,14 @@
   // loaded with the app (and kept for the next launch), so the page opens full; coming into view refreshes it quietly
   const casts = $derived(data.news?.casts ?? []);
   // every public post, not only my clubs' (the circles on List keep those): the copy the app loads with the Afisha and
-  // keeps for the next launch, so the page opens full (it used to wait for its own request); each visit
+  // keeps for the next launch, so the page opens full, never waiting for its own request; each visit
   // refreshes it quietly
   const posts = $derived(data.eventsReady ? data.posts : null);
   const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
   onMount(() => { if (student) void loadNews(); void loadAll(); }); // staff read the feed too
   $effect(() => { if (casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
-  // (a sheet now: closed sooner, the marks still go, as Stories does)
+  // (a sheet closed sooner: the marks still go, as Stories does)
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: number[] = [];
   const send = () => { const ids = pending; pending = []; if (ids.length) api.readPosts(ids).then(() => loadMe()).catch(() => {}); };

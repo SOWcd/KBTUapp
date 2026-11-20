@@ -1,6 +1,6 @@
 <script lang="ts">
   // On a computer (Telegram Desktop, the web clients, a desktop browser): the app is made for phones, so it says so once
-  // with a code to open it on the phone, and "I understand, continue on the computer" lets them in (owner, Oct 13: warn,
+  // with a code to open it on the phone, and "I understand, continue on the computer" lets them in (warn,
   // never forbid). Closed any other way, it asks again next time.
   import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';

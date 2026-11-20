@@ -21,7 +21,7 @@ export function copyCap(): CapCopy | null {
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null; el: HTMLElement | null } = { at: null, cap: null, el: null };
-/** The iris: a screen opens out of the round button that was pressed (owner, Nov 17: the map's opening, more often).
+/** The iris: a screen opens out of the round button that was pressed (the map's opening, more often).
  *  The opener marks its place on the click; whichever Sheet, Pane or Feed mounts next takes it, once, if still fresh. */
 type Iris = { x: number; y: number; r: number; el?: HTMLElement /* the control itself (the assistant's light hides it while it flies) */ };
 let irisAt: (Iris & { t: number }) | null = null;
@@ -59,7 +59,7 @@ export function openMapFrom(e: MouseEvent) {
   sheets.map();
 }
 
-/** The door screen (owner, Nov 14): the event's QR and the scanner on this phone, one switch apart (Scanner.svelte).
+/** The door screen: the event's QR and the scanner on this phone, one switch apart (Scanner.svelte).
  *  A member's QR: an ordinary public event only, never the volunteers ledger's club `vol` (server checkin._guests:
  *  those scans count hours and misses), so there the scanner has no switch. runs: its organizers. */
 export function registration(e: EventCard, runs: boolean, vol?: Id): void {
@@ -173,7 +173,7 @@ export const sheets = {
   consent: () => {},
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
-  /** what used to be a tab's other pages (Oct 30: one tab, one screen): every post (Afisha's "All"), the Feed full screen
+  /** a tab's other pages (one tab, one screen): every post (Afisha's "All"), the Feed full screen
    *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row) */
   news: () => {},
   feed: () => {},
@@ -197,7 +197,7 @@ export const sheets = {
   createClub: () => {},
   /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
   academic: () => {},
-  /** KBTU's anthem to listen to and learn: Afisha's card until the Oct 31 initiation, Profile's row, startapp=anthem */
+  /** KBTU's anthem to listen to and learn: Profile's row, startapp=anthem */
   anthem: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},

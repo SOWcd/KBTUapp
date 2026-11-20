@@ -29,7 +29,7 @@
   let mine = $state<ClubApplication | null | undefined>(undefined);
   $effect(() => { api.myClubApplication().then((a) => (mine = a)).catch(() => (mine = null)); });
   const waiting = $derived(!!mine && mine.status === 'rejected' && (mine.reapplyAt ?? 0) > nowTs());
-  // after a yes, another club too (owner, Oct 24: a President starts one with a friend and hands it over; KBTU allows one
+  // after a yes, another club too (a President starts one with a friend and hands it over; KBTU allows one
   // presidency, so the form says so)
   let again = $state(false);
   const form = $derived(mine !== undefined && (!mine || again || (mine.status === 'rejected' && !waiting)));

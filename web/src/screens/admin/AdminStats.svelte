@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → the numbers card (owner, Nov 3: just these three): the students who signed up first (the number that
+  // Admin → the numbers card (just these three): the students who signed up first (the number that
   // matters), how many of them today, then everyone who opened the app. Held with the inbox (data store), so it never pops in late. A tap pushes the stats page.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { data } from '../../lib/state/data.svelte';

@@ -33,7 +33,7 @@
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={L.worn === k.id} class:on={L.worn === k.id} class:locked={'locked' in k && k.locked}
                     onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: L.kindOf(k) === 'school' }; else { ui.tryOn = null; pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
-              <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2);
+              <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones;
                    now a picture each (perf round 3), the locked ones keep their plain colours as before -->
               <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<img class="mini" src={MINI[`../../assets/lanyards/minis/${k.kind}.webp`]} alt="" loading="lazy" decoding="async" />{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
               {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
@@ -43,7 +43,7 @@
         </div>
       {/each}
     {/if}
-    <!-- a frame over the photo, apart from the lanyard: any frame with any lanyard (owner, Nov 2) -->
+    <!-- a frame over the photo, apart from the lanyard: any frame with any lanyard -->
     <h3 class="sub">{t('look.frame')}</h3>
     <div class="frames" role="radiogroup" aria-label={t('look.frame')}>
       {#each FRAMES as f (f ?? 'none')}
@@ -88,7 +88,7 @@
   .ly .ln { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln.s { width: 60%; opacity: 0.6; }
   .ly .hl { grid-column: 1 / 3; align-self: end; height: 7px; border-radius: 3px; background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A); }
-  .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }  /* whole names on two lines (owner: "Big City Lig..." cut) */
+  .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }  /* whole names on two lines, never "Big City Lig..." */
   .ly .ph { z-index: 1; }
   .ly .ln, .ly .hl { position: relative; z-index: 1; }
   /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch, still and flat: its picture */

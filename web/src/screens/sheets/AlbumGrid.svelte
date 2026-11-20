@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Every photo of an event's album at once, as in the phone's Photos (owner, Nov 8): square thumbnails edge to edge,
+  // Every photo of an event's album at once, as in the phone's Photos: square thumbnails edge to edge,
   // 3 a row (4 on a wide screen), 2 px apart, in the album's own order. A tap opens the viewer at that photo, grown out
   // of its square; closing it shrinks back into the square it is on now (scrolled to it). Telegram's Back goes
   // viewer -> grid -> sheet; the grid's scroll stays where it was (it never leaves the page under the viewer).

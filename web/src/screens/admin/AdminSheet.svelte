@@ -1,10 +1,9 @@
 <script lang="ts">
-  // The Admin sheet (owner, Nov 17: "too many tabs and buttons, several doing the same; the search line is the best
-  // thing there: I type an organization and go"). Everything starts from the search on top: organizations first, then
+  // The Admin sheet (few tabs and buttons, none doing the same: type an organization and go). Everything starts from the search on top: organizations first, then
   // people, events (a tap runs one as its organizers do in Studio: EventManage, staff) and awards. Before a letter is
   // typed: what waits (its first cards inline, AdminInbox limit), the organizations opened last, the
   // admins' numbers, then the few places that are lists of their own. "An event for a club" and "A club's Studio" are
-  // no longer places: they are on the organization's page (AdminOrg), where the search leads.
+  // not places: they are on the organization's page (AdminOrg), where the search leads.
   // A moderator has no search: his sheet is the queue itself and his two places.
   import { staffOnly } from '../../lib/state/staffGate.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -167,7 +166,7 @@
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
       {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
-      <!-- the map's flaws: quiet and last (owner, Nov 7: a card on top pulled from moderation) -->
+      <!-- the map's flaws: quiet and last (a card on top pulled from moderation) -->
       {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>
   </div>

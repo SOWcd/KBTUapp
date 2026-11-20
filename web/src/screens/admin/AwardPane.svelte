@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → Awards → one award (pushed from the right; owner + review Nov 3): its medal large, the variant picked here
+  // Admin → Awards → one award (pushed from the right): its medal large, the variant picked here
   // (Initiation: Performer / Volunteer / Guest, which sets what everything below gives), then Show QR (BadgeQr: one
   // rotating code the hall scans), Scan (the camera stays open: each card QR is one grant, the person's face with a
   // tick, this run's people below, each undoable) and Link (up
@@ -135,7 +135,7 @@
     ]);
   }
 
-  // ---- everyone counted at a check-in (the owner), one Undo for all
+  // ---- everyone counted at a check-in, one Undo for all
   let sessOpen = $state(false);
   let bulk = $state<{ n: number; batch: string; title: string; code: Code } | null>(null);
   async function giveAll(s: BadgeSession) {
@@ -195,7 +195,7 @@
           <Segmented bind:value={code} label={t(`ach.${a.code}.name` as Key)} onchange={() => haptic.select()}
             items={a.variants.map((v) => ({ value: v.code, label: manualName(v.code, true) }))} />
         {/if}
-        <!-- Show QR first: the hall scans one code, faster than scanning each card (owner, Nov 6) -->
+        <!-- Show QR first: the hall scans one code, faster than scanning each card -->
         {#if a.scan}<Button kind="filled" full onclick={() => { haptic.tap(); sheets.badgeQr(a, code); }}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('aw.show')}</Button>{/if}
         <div class="btns">
           {#if a.scan}<Button kind="tinted" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
@@ -234,7 +234,7 @@
       {/if}
 
       {#if owner && checkins.length}
-        <!-- folded (owner, Nov 10: clutter): one quiet row; the sessions show only when it's opened -->
+        <!-- folded (clutter): one quiet row; the sessions show only when it's opened -->
         <Group>
           <Row dense title={t('bdg.sessions')} accessory="disclosure" open={sessOpen} onclick={() => { haptic.select(); sessOpen = !sessOpen; }} />
           {#if sessOpen}

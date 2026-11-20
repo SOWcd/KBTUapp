@@ -1,5 +1,5 @@
 <script lang="ts">
-  // My photos into the Gallery (GALLERY; owner, Nov 11): chosen already (the Gallery's Add opened the phone's
+  // My photos into the Gallery (GALLERY): chosen already (the Gallery's Add opened the phone's
   // picker), so they come first and large, each with an x to leave it out. Under them the two choices at a glance:
   // "Where" as one row (the general feed, or an event whose album takes my photos now; there only when one does) and,
   // for a photo of no event, its theme as four chips (chosen already when Add was tapped under that theme). They are

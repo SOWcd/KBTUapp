@@ -13,7 +13,7 @@
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha') void untrack(() => loadNews(true)); });
-  // a club whose full name runs past its circle ("Club Fem...") goes by its short name (owner, Nov 3); measured, once each
+  // a club whose full name runs past its circle ("Club Fem...") goes by its short name; measured, once each
   const tight = new SvelteSet<number>();
   // (by the text's own width, so a row laid out on a hidden tab measures right too; 66: the circle's width, .s)
   let pen: CanvasRenderingContext2D | null = null;
@@ -24,7 +24,7 @@
     pen.font = getComputedStyle(node).font;
     if (pen.measureText(nameOf(o)).width > 66) tight.add(o.id);
   }
-  // a new event earns a circle only from an official organization or one I'm in or follow (owner, Nov 9), as the posts do (server _REACH)
+  // a new event earns a circle only from an official organization or one I'm in or follow, as the posts do (server _REACH)
   const reach = $derived(new Set(data.orgs.filter((o) => o.official || o.kind !== 'club' || o.top || o.myRole || o.subscribed).map((o) => o.id)));
   const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv).filter((g) => g.org.kind === 'club'));
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // KBTU's anthem as a music player (owner, Nov 2: "like a real player"): a slow soft light behind, the emblem, the
+  // KBTU's anthem as a music player: a slow soft light behind, the emblem, the
   // title and its three languages, then the words centred, one flow without stanza labels; the controls at the bottom.
   // One audio element, made on the first tap (iOS plays only from a tap; nothing loads before it), paused as the sheet
   // leaves.
@@ -39,7 +39,7 @@
 
   // while it plays the clock is read each frame (timeupdate comes ~4 times a second: a word would fill in steps), and
   // the frame touches no state: sync() writes CSS variables and a word's class straight to the page (a Svelte state
-  // per frame re-ran the whole sheet's template every frame, Nov 2); reduced motion: words light whole, timeupdate is enough
+  // per frame re-ran the whole sheet's template every frame); reduced motion: words light whole, timeupdate is enough
   let raf = 0;
   function tick() {
     if (!audio || audio.paused) { raf = 0; return; }
@@ -73,7 +73,7 @@
     return a;
   }
 
-  // the award for the whole anthem without skipping (owner, Nov 2): a play is followed from its first 2 s; a jump forward
+  // the award for the whole anthem without skipping: a play is followed from its first 2 s; a jump forward
   // past what was heard (the scrubber, the arrows, a line tapped ahead) loses it, once with a word why; back and pause
   // are fine. At the end (or as `loop` wraps it round) the server gives it, once a student, and its moment shows here
   let run = -1, runAt = 0, told = false, sent = false; // run: how far the followed play has got (s), -1: none; runAt: when (ms)
@@ -158,7 +158,7 @@
   // scrolling the page wins for 3 s, then it comes back.
   // The glide (FLIP): the page jumps to its new place at once and every line in sight starts back where it was, then
   // slides home with one CSS transition of `translate` (the compositor's, one per line, the lines after the sung one a
-  // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone (Nov 2).
+  // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone.
   // A line still gliding starts from where it is (its live translate added), so a quick change never snaps
   let userAt = 0, back = 0, free = $state(false);
   const focus = $derived(aim);
@@ -197,7 +197,7 @@
   $effect(() => { if (overlay.closing) audio?.pause(); });
   onMount(() => {
     const box = words.parentElement!;
-    // while a hand scrolls, every line is sharp and readable (owner, Nov 3: the words stayed blurred, so why scroll);
+    // while a hand scrolls, every line is sharp and readable (the words stayed blurred, so why scroll);
     // 3 s after it lets go, the song takes the page back and the soft lines with it
     const hand = () => { userAt = performance.now(); free = true; clearTimeout(back); back = window.setTimeout(() => { free = false; if (on) follow(focus); }, 3100); };
     box.addEventListener('touchmove', hand, { passive: true });
@@ -280,7 +280,7 @@
   .aura::after { content: ''; position: absolute; inset: 0; opacity: 0.07;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
   @keyframes drift { 33% { transform: translate(18vw, 10vh) scale(1.15); } 66% { transform: translate(-8vw, 22vh) scale(0.9); } 100% { transform: translate(10vw, -6vh) scale(1.05); } }
-  /* light: the lights a little stronger than in the dark (white swallows them: 0.3 read as plain white, owner) */
+  /* light: the lights a little stronger than in the dark (white swallows them: 0.3 read as plain white) */
   :global(html[data-theme='light']) .aura i { opacity: 0.6; }
   :global(html[data-theme='light']) .aura i:nth-child(3) { opacity: calc(0.18 + 0.3 * var(--prog, 0)); }
   :global(html[data-theme='light']) .aura i:nth-child(4) { opacity: 0; }
@@ -297,7 +297,7 @@
   @supports (transition-timing-function: linear(0, 1)) {
     .words { --glide: linear(0, 0.022 3%, 0.075 6%, 0.173 10%, 0.283 14%, 0.417 19%, 0.559 25%, 0.692 32%, 0.801 40%, 0.888 50%, 0.939 60%, 0.971 72%, 0.987 85%, 1); }
   }
-  /* only what the compositor moves (the owner, Nov 2: the glide felt laggy): a blur or a colour in a transition
+  /* only what the compositor moves (the glide felt laggy): a blur or a colour in a transition
      repainted every soft line each frame on the main thread, so a line's blur and colour change at once, under the glide */
   .fl { transition: opacity 650ms var(--glide), transform 800ms var(--glide), translate 800ms var(--glide) var(--lag, 0ms); }
   .words:global(.snap) .fl { transition-property: opacity, transform; }

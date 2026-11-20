@@ -157,7 +157,7 @@
   const role = $derived(mem?.role ?? null);
   const crew = $derived(!preview && !!e && e.status === 'published' && may(mem, 'door'));
   const head = $derived(may(mem, 'events'));
-  // whom the door records (server checkin.set_audience), right under the Mark row where the organizer lands (owner, Nov 14)
+  // whom the door records (server checkin.set_audience), right under the Mark row where the organizer lands
   const AUD = { both: 'mk.aBoth', guests: 'mk.aGuests', team: 'mk.aTeam' } as const;
   async function setAud(a: DoorAudience) {
     if (!detail) return;
@@ -298,7 +298,7 @@
   }
 
   const hidePhoto = (p: AlbumPhoto) => { galleryGone(p); if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
-  // a tile opens its photo, grown out of the tile; the header, "+N" and the bar open all of them, a grid (owner, Nov 8)
+  // a tile opens its photo, grown out of the tile; the header, "+N" and the bar open all of them, a grid
   let mosaic = $state<HTMLDivElement>();
   const viewAlbum = (i = 0) => sheets.photos(photos, i, removePhoto, hidePhoto, (p) => mosaic?.querySelector(`[data-id="${p.id}"]`));
   const allPhotos = () => sheets.album(() => photos, removePhoto, hidePhoto, detail?.canAddPhotos ? () => picker?.click() : undefined, () => adding);
@@ -482,7 +482,7 @@
     {#if gis || !e.santa || e.place || e.online}
     <Group>
       {#if e.online}
-        <!-- online (owner, Nov 19): the meeting opens outside, the server checked the link (core.online_url) -->
+        <!-- online: the meeting opens outside, the server checked the link (core.online_url) -->
         {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
         {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
       {:else if gis}
@@ -524,7 +524,7 @@
         {#if crew}
           {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
             {#if head && !doorOver}<Row icon={QrCode} title={t('scr.showQr')} accessory="chevron" onclick={() => sheets.eventQr(id)} />{/if}
-          <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart (owner, Nov 10) -->
+          <!-- the registration mode: the scanner and the event's QR on this phone, one switch apart -->
           {:else}<Row icon={ScanLine} title={t('mk.title')} accessory="chevron" onclick={() => register(head)} />
             {#if head && detail && !over && !e.guestHost}<Row icon={UserCheck} title={t('mk.audience')} value={t(AUD[detail.audience ?? 'both'])}
               menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === (detail?.audience ?? 'both'), onselect: () => void setAud(a) }))} />{/if}
@@ -571,7 +571,7 @@
     {#if detail?.doc}{@const d = detail.doc}<Group><Row icon={FileText} title={d.title ?? t('event.doc')} accessory="chevron" onclick={() => sheets.photos(d.pages.map((x, k) => ({ ...x, id: -k - 1, by: null, mine: true, canDelete: false })), 0)} /></Group>{/if}
     {#if about}
       <Section title={t('event.about')}>
-        <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form (an organizer, Nov 17) -->
+        <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form -->
         {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
       </Section>
     {/if}

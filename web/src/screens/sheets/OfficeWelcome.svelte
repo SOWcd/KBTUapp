@@ -1,6 +1,6 @@
 <script lang="ts">
   // An office's own people (DMP) greeted as the team, once per phone (App.svelte teamHi): full screen, its logo, its
-  // name, one button (not signed in yet: Microsoft, and a quiet Later). Was a toast (owner, Nov 17: missed it on his
+  // name, one button (not signed in yet: Microsoft, and a quiet Later). Was a toast (missed it on his
   // own phone). The award reveal's shape (Unlock), calm: a fade and a short rise, no confetti. `ondone`: the link's own
   // sheet, once it's gone.
   import { onMount } from 'svelte';

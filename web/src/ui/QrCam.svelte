@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Our own QR camera (the door scanner's since Oct 15, the admin's award scanner since Oct 22: owner, "our scanner
-  // everywhere, not Telegram's"). Decoding: the phone's own BarcodeDetector where it has one (Android), else ZXing in
+  // Our own QR camera (the door scanner's, the admin's award scanner: our scanner
+  // everywhere, not Telegram's). Decoding: the phone's own BarcodeDetector where it has one (Android), else ZXing in
   // wasm (iPhone: WebKit has none), served from our origin. The same code staying in view counts once per 4 s.
   // `live` goes 'failed' when the camera is refused or missing: the parent then offers Telegram's popup.
   import { onMount } from 'svelte';
@@ -41,7 +41,7 @@
         if (gone) return;
         video.srcObject = st;
         await video.play();
-        // iPhone's WebKit ignores object-fit on a camera <video> (letterboxed, owner's recording Nov 14): we size it to
+        // iPhone's WebKit ignores object-fit on a camera <video> (letterboxed): we size it to
         // cover the box ourselves, now and whenever the stream or the box changes size
         // and its first frames come in another size before the real one: shown once the size has held for 300 ms (1.5 s at most)
         let dims = '', held = 0;
