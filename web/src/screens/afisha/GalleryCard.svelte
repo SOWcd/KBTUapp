@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Afisha's way into the Gallery (owner, Nov 9): the freshest photos on one wide card, a tap opens the Gallery
+  // The Afisha's way into the Gallery: the freshest photos on one wide card, a tap opens the Gallery
   // (Gallery.svelte). Not a student, or nothing to show or do: no card.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { data } from '../../lib/state/data.svelte';

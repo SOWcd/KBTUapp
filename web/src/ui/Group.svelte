@@ -1,7 +1,7 @@
 <script lang="ts">
   // A list group: Rows on one rounded surface (--r-group), a caption above it, a footnote under it. What needs saying
-  // goes in the footnote, under the group, never under a row. The look is Settings' (owner, Nov 3: "very simple but very
-  // beautiful"; the glass on groups read as childish): every list moved onto Group and Row looks like it.
+  // goes in the footnote, under the group, never under a row. The look is Settings' (simple; glass on groups
+  // reads as childish): every list on Group and Row looks like it.
   //   caption   Settings' section heading (.set-h): --fs-t3 700 in the display face
   //   --group-bg  the body (default --surface)
   //   note      grey after the caption ("3 of 5"), kept whole

@@ -38,7 +38,7 @@
   let picks = $state<Id[]>([]);
   let answers = $state<Record<string, string | string[]>>({});
   let sent = $state(false);
-  // a sent application shows where it stands; its form opens again only on "Change" (owner, Oct 22: the form stayed after
+  // a sent application shows where it stands; its form opens again only on "Change" (the form stayed after
   // sending, and a pull after saving asked "leave without saving?")
   let editing = $state(false);
   let saved = $state('');
@@ -165,7 +165,7 @@
     <div class="body">
     <!-- the steps, done as they pass; the club's own "what's next" under them (shown like its description) -->
     <div>
-      <!-- the steps once it's sent (before: one line on what the club gets, over the button; owner, Nov 3) -->
+      <!-- the steps once it's sent (before: one line on what the club gets, over the button) -->
       {#if sent}<Group>
         {#each steps as [label, done] (label)}<Row icon={done ? CircleCheck : Circle} title={label} />{/each}
       </Group>{/if}

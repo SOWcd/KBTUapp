@@ -1,4 +1,4 @@
-// The campus map's frame for MapLibre (owner, Nov 15: a ready, fast library moves the map, not our own pan and zoom).
+// The campus map's frame for MapLibre (a ready, fast library moves the map, not our own pan and zoom).
 // No geography: every map is a square sheet, one web-mercator tile at zoom Z0 right and down of the world's middle,
 // 8192 px at its finest level, cut in tiles (tools/map/tiles.mjs) under public/map/<cut>/. A plan is the sheet's top
 // left part: `fx` of its width, `ar` its height to its width; a point of it is (u, v), fractions of its own width and
@@ -38,7 +38,7 @@ export const tilesOf = (ver: Ver, dark: boolean, floor: number): string => `${MA
 /** a floor's whole sheet in one small picture (its coarsest tile): what shows the moment the map opens */
 export const overview = (ver: Ver, dark: boolean, floor: number): string =>
   tilesOf(ver, dark, floor).replace('{z}', String(Z0)).replace('{x}_{y}', `${2 ** (Z0 - 1)}_${2 ** (Z0 - 1)}`);
-/** the 2023 plan as it was given, a picture a floor (owner, Nov 15: to compare the redraw with) */
+/** the 2023 plan as it was given, a picture a floor (to compare the redraw with) */
 export const scan = (floor: number): string => `${MAPS}p1/f${floor}.webp`;
 /** where each floor's picture lies in the redraw's frame, [left, top, right, bottom] as fractions of it: the redraw put
  *  all floors into one frame, the given pictures each have their own (fitted by the red walls' extent in both) */
@@ -70,7 +70,7 @@ export function roomAt(ver: Ver, floor: number, room: string): number[][] {
 export type Label = { u: number; v: number; t: string; s: number; turn: number; left: boolean; tier: number; color: string; halo: string; space: number; alpha: number; rank: number; plate: boolean };
 const INK = ['#1c1c1e', '#e5e5ea'], PAPER = ['#ffffff', '#0d0d0d'];
 
-// ---- a label printed inside its own room (owner, Nov 15: labels "pasted on top" ran over walls) ----
+// ---- a label printed inside its own room (labels "pasted on top" ran over walls) ----
 type Box = number[]; // tools/map/boxes.mjs: [l, r] free along the words for each band of half-height BANDS[i]
 const BOXES = boxes as unknown as { kbtu: Record<string, Box[]>; old: Record<string, Box[]>; main: Record<string, Record<string, Box[]>> };
 const BANDS = [3, 5, 8, 12, 18];
@@ -108,7 +108,7 @@ function sized(t: string, box: Box | undefined, print: number, left: boolean, sp
   return [Math.min(s, CAP * print, MAXS), words];
 }
 
-/** A floor's labels, printed on the plan (owner, Nov 15): each in its own room at the biggest size the room takes,
+/** A floor's labels, printed on the plan: each in its own room at the biggest size the room takes,
  *  growing and shrinking with the plan as one zooms, gone while too small to read (CampusMap's layers). The collision
  *  of labels still decides between two that meet, halls and bigger rooms first. Room numbers and names always; the
  *  small print of our map (a legend, a two-line name) from mid zoom. word: a kmap.* key in the UI's language;

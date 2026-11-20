@@ -2,7 +2,7 @@
   // News as stories (PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
-  // No reactions or comments on a club's own post (owner, Nov 4: two reactions were thin; talk lives in the forum). In ⋯: edit, pin, show on
+  // No reactions or comments on a club's own post (two reactions were thin; talk lives in the forum). In ⋯: edit, pin, show on
   // List, take down, report. A club's new event is a story of its own: its cover, when and where, and a tap to open it.
   import { onMount } from 'svelte';
   import X from '@lucide/svelte/icons/x';
@@ -169,7 +169,7 @@
 
     {#key p.id}
       <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
-      <!-- its links as buttons under the words, never a bare address (owner, Nov 3) -->
+      <!-- its links as buttons under the words, never a bare address -->
       {@const lt = linkButtons(p.title)}
       {@const lb = linkButtons(p.body)}
       {@const btns = [...lt.buttons, ...lb.buttons.filter((b) => !lt.buttons.some((x) => x.url === b.url))].slice(0, 2)}
@@ -201,8 +201,8 @@
   .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 22%, transparent 45%, rgba(0, 0, 0, 0.85)); }
   .tapzone { position: absolute; inset: 0; }
   /* an event: its poster centred on its own tint */
-  /* an event's poster whole, never cut (owner, Nov 11: a wide poster lost its title and date in a square) */
-  /* behind it the same picture out of focus fills the screen: a wide poster no longer sits in an empty field */
+  /* an event's poster whole, never cut (a wide poster lost its title and date in a square) */
+  /* behind it the same picture out of focus fills the screen: a wide poster never sits in an empty field */
   .bg.ev .haze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(36px) saturate(1.2); transform: scale(1.25); opacity: 0.55; }
   .bg.ev .whole { width: auto; height: auto; max-width: calc(100% - 32px); max-height: 46vh; object-fit: contain; position: relative; border-radius: var(--r-l); box-shadow: var(--shadow-card); }
   .bg.ev { overflow: hidden; display: grid; place-items: center; padding-bottom: 18vh; background: radial-gradient(90% 60% at 50% 35%, color-mix(in srgb, var(--c) 55%, transparent), #0E0F14 75%); }
@@ -221,7 +221,7 @@
   .txt { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 84px); display: flex; flex-direction: column; gap: 10px; pointer-events: none; animation: in 240ms ease-out both; }
   .txt h2 { margin: 0; font: 760 26px/1.12 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   .txt p { margin: 0; max-height: 34vh; overflow-y: auto; pointer-events: auto; white-space: pre-line; font: 450 15.5px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.88); touch-action: pan-y; }
-  /* no photo: the words are the story, in the middle of the screen, not a caption over nothing (owner, Nov 3) */
+  /* no photo: the words are the story, in the middle of the screen, not a caption over nothing */
   .links { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
   .plain .links { justify-content: center; }
   .lk { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; border-radius: var(--r-full); }
@@ -231,7 +231,7 @@
   .txt.card { left: 12px; right: 12px; padding: 16px 16px 14px; gap: 8px; border-radius: 22px; background: rgba(12, 13, 18, 0.62); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
   .txt.card h2 { font-size: 21px; }
   .txt.card p { max-height: 30vh; color: rgba(255, 255, 255, 0.92); }
-  /* Android: no blur on a full-screen layer over the stacked sheets (a user's report, Nov 13: after a few posts opened from
+  /* Android: no blur on a full-screen layer over the stacked sheets (after a few posts opened from
      a club's page and closed, the club's sheet under them came back an empty dimmed panel with old tiles showing through:
      the blur re-rasters everything under it and overran the GPU, as the sheets' and the award's did, a4098232, 582802e5) */
   .flat .txt.card { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(12, 13, 18, 0.9); }

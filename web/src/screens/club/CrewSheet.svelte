@@ -1,6 +1,6 @@
 <script lang="ts">
   // An event's door helpers (server logic/crew.py), for a running club's President or Vice, the Mark screen's «Helper»:
-  // one place (owner, Nov 14) for the helper's QR (whoever scans it: the scanner, until Finish) and the helpers named
+  // one place for the helper's QR (whoever scans it: the scanner, until Finish) and the helpers named
   // here, a friend or someone from the team, at this one event's door until it ends: the scanner by default, the scanner
   // and the list after a confirm. Three named at most. Each tap answers at once; back if the server says no.
   import { api, ApiErr, staffEvents, type CrewKind, type CrewMember, type Id, type PersonRef } from '../../lib/api';

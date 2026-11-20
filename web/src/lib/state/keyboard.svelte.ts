@@ -11,7 +11,7 @@
 // iOS reports late: Telegram's frame change lands ~0.4 s after the keyboard started, when it is fully up, and the
 // content then jumped into place under a keyboard that had slid over it. So on iOS a tap into a field starts the ride
 // at once, towards the height the keyboard had last time (remembered per screen width); the real report then corrects
-// it with a short glide. No report at all (seen Nov 18: a field in a sheet stayed under the keyboard on one iPhone):
+// it with a short glide. No report at all (a field in a sheet can stay under the keyboard on an iPhone):
 // the guess holds while the field has the focus, a field too high beats a field nobody can see.
 // ponytail: an iPhone with a hardware keyboard gets a sheet lifted for nothing; tell them apart if someone meets it.
 // Android's webview resizes in step with its keyboard: no guess there.
@@ -53,7 +53,7 @@ const root = typeof document !== 'undefined' ? document.documentElement : null;
 
 /** how far a bottom-anchored box (a sheet) may rise: up to its max-height, read as the height it takes stretched for one
  *  layout. Its computed max-height keeps the percentage ("calc(100% - 58px)"): parsed, that was NaN, a short sheet never
- *  rose and its footer went up alone, clipped out of the panel (Ask's team name under the keyboard, Nov 18) */
+ *  rose and its footer went up alone, clipped out of the panel (Ask's team name under the keyboard) */
 export function roomAbove(el: HTMLElement) {
   const h = el.offsetHeight, was = el.style.height;
   el.style.height = '100000px';

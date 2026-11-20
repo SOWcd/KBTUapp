@@ -1,12 +1,12 @@
 <script lang="ts">
-  // The mark in the middle of a badge's QR: the app's for KBTU and SOWER, else the club's own (owner, Oct 29),
+  // The mark in the middle of a badge's QR: the app's for KBTU and SOWER, else the club's own,
   // the same art as its lanyard (ui/LanyardBand) on its colours.
   import { clubLook, type Look } from '../lib/awards';
   import KbtuMark from './KbtuMark.svelte';
   import panther from '../assets/lanyards/panther-mark.webp'; // white: a black head on navy is a blob this small
   import KnightsHelm from './KnightsHelm.svelte';
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
-  import facesMark from '../assets/lanyards/faces-mark.webp'; // their wordmark on its black (round 5: their logo, not the hands)
+  import facesMark from '../assets/lanyards/faces-mark.webp'; // their wordmark on its black (their logo, not the hands)
 
   let { look }: { look: Look } = $props();
   const club = $derived(clubLook(look)); // the template's clubs: their mark on their plate's colours (lookVars)
@@ -34,6 +34,6 @@
   .moments img { width: 66%; height: 66%; }
   .faces { background: #000; }
   .faces img { width: 100%; height: 100%; }
-  .japanesecultureclub img { width: 70%; height: 70%; } /* their sakura alone (the loose petal cut off), a middle size: edge to edge was too much (club, Nov 3) */
+  .japanesecultureclub img { width: 70%; height: 70%; } /* their sakura alone (the loose petal cut off), a middle size: edge to edge is too much */
   .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
 </style>

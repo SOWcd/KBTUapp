@@ -1,9 +1,9 @@
 <script lang="ts">
-  // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
+  // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (a label under
   // each icon only repeated it); the active one in the accent on a raised lighter pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
-  // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The corner: its own round glass
-  // button beside it, KRI (owner, Nov 17: the assistant leads anywhere, the map is its first row); the map for a guest
+  // switches on release. Always the slim size; hides under a sheet (and the Feed). The corner: its own round glass
+  // button beside it, KRI (the assistant leads anywhere, the map is its first row); the map for a guest
   // and where the assistant is off (BOARD).
   import MapIcon from '@lucide/svelte/icons/map';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -97,7 +97,7 @@
   .nav, .mapb {
     position: relative; flex: none; height: 54px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
     /* the capsule's clear glass (on the big bar the dark frosted body read as plastic) */
-    /* calmer than it was (what scrolled under it smeared through "crookedly"): a stronger blur, less
+    /* calm (what scrolls under it must not smear through crookedly): a stronger blur, less
        saturation; still the one backdrop filter, the rim and glow below are plain paint */
     -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.04);
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));

@@ -1,7 +1,7 @@
 <script lang="ts">
-  // A page pushed over another, the phone's own way (Settings' rows, owner Oct 30: "like Apple"; a sheet from below read
+  // A page pushed over another, the phone's own way (Settings' rows, like Apple's; a sheet from below reads
   // as cheap there): it slides in from the right while the page under it (a tab, a sheet, another pane) drifts left;
-  // Telegram's Back or a swipe from the left edge takes it away the same road (no "‹ Back" of our own: owner, Oct 31,
+  // Telegram's Back or a swipe from the left edge takes it away the same road (no "‹ Back" of our own:
   // Telegram's is the only Back button). Its large title fits its line
   // (34 down to 24); the capsule shows the live status or nothing until that title scrolls away, then the title.
   // Text typed and not sent asks before a hand closes it, as in a Sheet.

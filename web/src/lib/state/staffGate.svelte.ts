@@ -1,4 +1,4 @@
-// Admin's pages stay open only while I hold the role they need (review Nov 17: a demoted admin kept the controls of
+// Admin's pages stay open only while I hold the role they need (a demoted admin kept the controls of
 // the page he had open, the server refusing each tap). Called as a page is set up: the page closes the moment the
 // role is gone (what the app held for the staff is cleared by the stores themselves: staffAccess's onStaffLoss).
 import { session } from './session.svelte';

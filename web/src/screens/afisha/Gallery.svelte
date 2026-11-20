@@ -1,9 +1,9 @@
 <script lang="ts">
-  // The Gallery (owner's pick, Nov 11): the capsule names it, no large title. Two shelves, each with a clear end:
+  // The Gallery: the capsule names it, no large title. Two shelves, each with a clear end:
   // "Albums … All ›", the events' albums as dated cover cards in a strip (one and a half in view; a tap opens the event
   // with its album over it), and "Photos … Add", the one tinted control (GALLERY: pick, then GalleryAdd). Under it the
   // themes, which stay under the capsule on glass as the feed scrolls, with a round "+" at their end once the Add has
-  // scrolled away. The feed is told by time and people (round 2): "Today", "Yesterday", "This week", then months
+  // scrolled away. The feed is told by time and people: "Today", "Yesterday", "This week", then months
   // (lib/gallery), justified rows inside each, the newest photo large; a tile says whose it is, an event's its event
   // first. My own posts land on top under All, marked while they upload. `albums`: every album alone, two a row.
   import { calm } from '../../ui/fold';
@@ -86,7 +86,7 @@
     if (files.length) sheets.galleryAdd(files, into);
   }
 
-  // the "Photos" head gone under the capsule: the themes are on glass now and carry the Add
+  // the "Photos" head gone under the capsule: the themes are on glass and carry the Add
   let head = $state<HTMLDivElement>();
   let stuck = $state(false);
   $effect(() => {

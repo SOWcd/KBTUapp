@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Awards (pushed from the right; owner, Nov 3: "one Initiation 2026 medal as three buttons is dumb"): one card
-  // per award in a two-column grid (owner, Nov 10) with its real medal and how many hold it; a card opens the award's
+  // Admin → Awards (pushed from the right; one award is one card, never one button per variant): one card
+  // per award in a two-column grid with its real medal and how many hold it; a card opens the award's
   // page (its variant, Scan, Link, the links, who has it). A person's awards are given from the person (Admin's search →
   // a person).
   import { staffOnly } from '../../lib/state/staffGate.svelte';

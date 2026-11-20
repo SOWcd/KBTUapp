@@ -32,7 +32,7 @@ export function fitTitle(el: HTMLElement, min = 24): { destroy: () => void } {
 export function largeTitle(el: HTMLElement, to: Tab | ((gone: boolean) => void)): { destroy: () => void } {
   const say = (gone: boolean) => { if (typeof to === 'function') to(gone); else if (!!ui.gone[to] !== gone) ui.gone[to] = gone; };
   // measured in the next frame, whose layout runs anyway: read here, mid-mount, it laid the half-built screen out once
-  // more inside the first build (perf round 4: ~70 ms at 4x CPU of the Afisha's first task). A new title is in view.
+  // more inside the first build (~70 ms at 4x CPU of the Afisha's first task). A new title is in view.
   let io: IntersectionObserver | undefined;
   const raf = requestAnimationFrame(() => {
     const top = document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46; // the capsule's lower edge

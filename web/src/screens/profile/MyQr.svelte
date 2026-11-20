@@ -26,8 +26,8 @@
   let { overlay, link, p }: { overlay: Overlay; link: string; p: PersonCard } = $props();
   const h = $derived(hero(p));
   const look = $derived(lookOf(p)); // the class and the strap's word
-  // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look it was dark
-  // text on a darkened glass
+  // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look dark text
+  // on a darkened glass reads poorly
   $effect(() => { overlay.title = t('me.qr'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 
   let wrap: HTMLDivElement;
@@ -73,7 +73,7 @@
 <div class="wrap" bind:this={wrap}>
   <div class="page">
   <div class="stage {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
-    <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
+    <!-- the card and its clip tilt as one (the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
     <div class="pass" class:banded={banded(look)}>
@@ -142,7 +142,7 @@
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
 
   .who { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 18px; }
-  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), calc(100dvh - 520px)); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight; not so soon that a big phone gets a thin card (owner, Nov 3) */
+  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), calc(100dvh - 520px)); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight; not so soon that a big phone gets a thin card */
   .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
   .ph { position: relative; flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }
@@ -155,7 +155,7 @@
   .plate { position: relative; margin: 14px 18px 0; padding: 16px; border-radius: 22px; background: #fff;
     box-shadow: 0 16px 30px -18px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(10, 15, 36, 0.05); }
 
-  /* round 19: CyberSport's QR in a neon frame */
+  /* CyberSport's QR in a neon frame */
   .cybersportkbtu .plate { box-shadow: 0 0 0 1.5px rgb(240, 124, 255), 0 0 0 5px rgba(232, 90, 255, 0.16), 0 0 26px rgba(214, 58, 240, 0.6), 0 16px 30px -18px rgba(0, 0, 0, 0.6); }
   /* each look's body and strap below its band (LanyardBand), as on the badge (Hero.svelte) */
   .cheer { --role: #FFC83D; }
@@ -190,11 +190,11 @@
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; }
-  /* round 18: CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
+  /* CyberSport's strap edged in neon, a faint angular hatch, the letters glowing */
   .cybersportkbtu .strap { background: repeating-linear-gradient(135deg, rgba(240, 124, 255, 0.09) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1));
     box-shadow: inset 1px 0 0 rgba(240, 124, 255, 0.75), inset -1px 0 0 rgba(240, 124, 255, 0.75), 0 0 8px rgba(214, 58, 240, 0.35); }
   .cybersportkbtu .strap span { text-shadow: 0 0 4px rgba(240, 124, 255, 0.7); }
-  /* round 21: Dice and Destiny's strap stitched along both edges in old gold */
+  /* Dice and Destiny's strap stitched along both edges in old gold */
   .diceanddestinykbtu .strap { box-shadow: inset 1.5px 0 0 rgba(30, 4, 4, 0.5), inset -1.5px 0 0 rgba(30, 4, 4, 0.5), inset 2.5px 0 0 rgba(201, 161, 90, 0.7), inset -2.5px 0 0 rgba(201, 161, 90, 0.7); }
   .club .ph { background: var(--ring); }
 

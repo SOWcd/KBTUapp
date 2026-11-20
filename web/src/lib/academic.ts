@@ -75,8 +75,8 @@ export const termsOf = (sid?: string | null): Terms => (/^\d{2}M/.test(sid ?? ''
 /** classes on these days are held online, asynchronously (the PDF's footnote) */
 export const ONLINE = ['2026-10-26', '2026-12-16', '2027-01-07', '2027-03-08', '2027-03-15', '2027-03-22/2027-03-24', '2027-05-01', '2027-07-06'];
 
-/** no classes in rooms that day: a holiday, or a day whose classes are online and asynchronous (owner, Oct 26: the
- * app showed a class "now" on the Oct 26 day off). Both calendars have the same days off (a test holds it), so the
+/** no classes in rooms that day: a holiday, or a day whose classes are online and asynchronous (else the
+ * app shows a class "now" on a day off). Both calendars have the same days off (a test holds it), so the
  * timetable keeps the default. */
 export const noClasses = (day: string, terms: Terms = TERMS): boolean =>
   [...ONLINE, ...terms.flatMap((x) => x.rows.filter((r) => r.key === 'holiday' && !r.who).map((r) => r.at))]
@@ -85,7 +85,7 @@ export const noClasses = (day: string, terms: Terms = TERMS): boolean =>
 /** first and last day of a row (both the deadline for "until") */
 export const span = (r: Row): [string, string] => { const [a, b = a] = r.at.split('/'); return [a || b, b]; };
 // a day off by its name: the dates are fixed by the Labour Code
-// (art. 84), so a list beats an API that missed Christmas; a day KBTU moved (Mar 15) stays "Day off"
+// (art. 84), so a list beats an API that missed Christmas; a day KBTU moved stays "Day off"
 const HOLIDAYS: Record<string, string> = { '01-01': 'newYear', '01-07': 'christmas', '03-08': 'women', '03-21': 'nauryz', '03-22': 'nauryz',
   '05-01': 'unity', '05-07': 'defender', '05-09': 'victory', '07-06': 'capital', '08-30': 'constitution', '10-25': 'republic', '12-16': 'independence' };
 export const nameOf = (r: Row): string => {

@@ -65,8 +65,8 @@
     if (!el || !from[0] || calm()) return;
     const to = [el.offsetWidth, el.offsetHeight];
     if (Math.abs(to[0] - from[0]) < 2 && Math.abs(to[1] - from[1]) < 2) return;
-    // the new line is laid out at its final width while the pill springs to it (owner's video, Oct 24: the narrow start
-    // wrapped the new line, the pill grew a line taller and jumped up); the pill's edge uncovers it, the height (one
+    // the new line is laid out at its final width while the pill springs to it (a narrow start
+    // wraps the new line, and the pill grows a line taller and jumps up); the pill's edge uncovers it, the height (one
     // line or two) moves with the width, nothing reflows and nothing is cut at the end
     const tx = [...el.querySelectorAll<HTMLElement>('.tx')].find((n) => !n.style.position);
     if (tx) tx.style.flex = `0 0 ${tx.offsetWidth + 1}px`; // a pixel more: offsetWidth rounds, a line that just fitted broke at its soft hyphen

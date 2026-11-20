@@ -28,7 +28,7 @@
   // n: how many are linked (the profile's row says it)
   let { org, n = $bindable() }: { org: Id; n?: number } = $props();
   let chats = $state<StudioChat[]>([]);
-  // chats I made our bot an admin in before opening Studio (Nov 14: any order works): mine to link here, ten minutes
+  // chats I made our bot an admin in before opening Studio (any order works): mine to link here, ten minutes
   let waits = $state<WaitingChat[]>([]);
   const load = () => {
     void api.waitingChats(org).then((l) => (waits = l)).catch(() => {});
@@ -76,7 +76,7 @@
     if (c.by === 'hand') items.push({ label: t('ct.unplace'), onselect: () => setPlace(c, null) });
     menu(at, items);
   }
-  // back from Telegram's picker: the chat our bot was just added to shows up (the bot links it, PLAN Nov 5)
+  // back from Telegram's picker: the chat our bot was just added to shows up (the bot links it)
   $effect(() => {
     const back = () => { if (!document.hidden) setTimeout(load, 1500); };
     document.addEventListener('visibilitychange', back);
@@ -187,7 +187,7 @@
         {/snippet}
       </Row>
     {/each}
-    <!-- Telegram's own picker: our bot is added there as an admin and links the chat (no typing @names, owner Nov 5) -->
+    <!-- Telegram's own picker: our bot is added there as an admin and links the chat (no typing @names) -->
     <Row tone="add" title={t('oc.pickGroup')} disabled={!!picking} onclick={() => pick('group')} />
     <Row tone="add" title={t('oc.pickChannel')} disabled={!!picking} onclick={() => pick('channel')} />
     {#if !byLink}<Row tone="add" title={t('oc.byLink')} onclick={() => (byLink = true)} />{/if}

@@ -22,7 +22,7 @@ export function missing(f: { date: string; start: string; place: string; tba: bo
 export type FillForm = { title: string; date: string; endDate: string; start: string; end: string; place: string; description: string; price: string };
 export type Differs = 'date' | 'start' | 'end' | 'place' | 'price';
 
-/** "Add more" (owner, Nov 13): a second message into a form already filled. What the form has is never overwritten, an
+/** "Add more": a second message into a form already filled. What the form has is never overwritten, an
  *  empty field takes the new value (a field still at its default, `dflt`, counts as empty), the description is the
  *  model's merge of both; a filled field the new text says otherwise is only listed, for a tap to accept. */
 export function merge(now: FillForm, x: Filled, dflt: Partial<FillForm> = {}): { set: Partial<FillForm>; differs: { k: Differs; v: string }[] } {

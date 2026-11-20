@@ -1,6 +1,6 @@
 <script lang="ts">
-  // My invite (referrals), the right square beside Friends (owner, Nov 1), and since Nov 4 my Recruiter's only home on my
-  // profile (my own shelf hides it). Its craft is the medal's (owner, Nov 4: the tile looked weak): the medal big and lit,
+  // My invite (referrals), the right square beside Friends, and my Recruiter's only home on my
+  // profile (my own shelf hides it). Its craft is the medal's (a plain tile looks weak): the medal big and lit,
   // a soft burst of its metal's light behind it, its layers floating with the tilt (glass.ts writes --gx/--gy here);
   // how many came, clean, in the corner; under the title the nine levels as nine small marks in their metals, the next
   // one filling. The medal opens its award view (the levels); the rest of the tile opens RefSheet (my profile QR, Share).

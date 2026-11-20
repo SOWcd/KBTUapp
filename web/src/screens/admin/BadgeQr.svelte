@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → Awards → Show QR (owner, Nov 6): the award's code full screen on the giver's phone, big and bright on a
+  // Admin → Awards → Show QR: the award's code full screen on the giver's phone, big and bright on a
   // white plate, for the hall's cameras: a scan opens the app straight onto the award (App.svelte, bq_…). The code is
   // the server's, a new one every 20 s (a photo of it goes stale within a minute, logic/profiles.py claim_qr); the
   // screen closing closes it on the server too, and its polls hold a 15 s lease (a killed screen's code stops by

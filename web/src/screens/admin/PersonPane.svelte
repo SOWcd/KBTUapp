@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → a person (from the search or the team; review Nov 3): their face (a tap opens the profile), the role from a
+  // Admin → a person (from the search or the team): their face (a tap opens the profile), the role from a
   // small menu at its row (the owner gives admin, an admin gives moderator), their awards as chips, the ban last and
   // alone in red with the reason they will read. Nobody touches the owner, himself or (unless the owner) another admin.
   //   row  the person as the list had them;  onchange  the team as it is after a change (the Team page's list)
@@ -27,7 +27,7 @@
   const iOwn = $derived(!!session.me?.founder);
   const touchable = $derived(!p.owner && p.person.id !== session.me?.id && (p.role !== 'admin' || iOwn));
   const banned = $derived(!!p.banned || !!p.banReason);
-  const roles: PlatformRole[] = ['user', 'moderator', 'admin']; // the creator's alone to give (owner, Nov 3)
+  const roles: PlatformRole[] = ['user', 'moderator', 'admin']; // the creator's alone to give
   let banning = $state(false), why = $state(''), busy = $state(false);
 
   async function act(go: () => Promise<Staff>, done: string, emoji: string) {
@@ -54,7 +54,7 @@
       </span>
     </div>
 
-    <!-- staff reach anyone from here, always (owner, Nov 10); without an @username Telegram has no link to open -->
+    <!-- staff reach anyone from here, always; without an @username Telegram has no link to open -->
     {#if p.username}
       <Button kind="filled" size="l" full onclick={() => openLink(`https://t.me/${encodeURIComponent(p.username!)}`)}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('person.write')}</Button>
     {:else}

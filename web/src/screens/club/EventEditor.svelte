@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Studio → a new event or an edit, full screen, laid out like Luma's create screen (owner, Nov 2: the old one long
-  // form was "cluttered, strange"): tinted by the event, a big cover, a big name, Start/End in one card, then a few
+  // Studio → a new event or an edit, full screen, laid out like Luma's create screen (not one long
+  // cluttered form): tinted by the event, a big cover, a big name, Start/End in one card, then a few
   // grouped rows; each row opens a focused panel at the bottom (Telegram's Back closes the panel first), rare things
   // under "More". Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text
   // asked 7500 tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Save draft"; a published one:
@@ -113,7 +113,7 @@
   const plain = $derived(staff && !lent);
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
   const canPrice = $derived((lent || !staff && may(mine, 'money')) && (full || !!saved?.price));
-  // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
+  // a partner's event: an outside host's, posted by an official club or DMP; the link out instead of tickets
   const canPartner = $derived(full || !plain && oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
@@ -130,7 +130,7 @@
   const castLike = $derived(!id && /\u043a\u0430\u0441\u0442\u0438\u043d\u0433|\u043d\u0430\u0431\u043e\u0440 \u0432|recruit|casting|\u0456\u0440\u0456\u043a\u0442\u0435\u0443/i.test(f.title)
     && may(session.me?.memberships?.find((x) => x.org.id === org), 'casting'));
   let base = $state(JSON.stringify(blank)); // the form with nothing to lose
-  // only after a touch of mine (owner, Oct 13: an untouched new event asked "Leave without saving?"; iOS rewrites a
+  // only after a touch of mine (an untouched new event asked "Leave without saving?"; iOS rewrites a
   // date or time input's value as it renders, so the form differed from its blank by itself): the first touch takes the
   // form as it stands then (capture: before the change lands) as the base
   let touched = $state(false);
@@ -148,7 +148,7 @@
   // a Head with departments calls only those (PLAN 35): the first is picked, the rest of the club's aren't offered
   let ownDepts = $state<Id[]>([]), inDept = $state(false); // in a department only the chat sync gave: none to call
   const deptOnly = $derived(inDept && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
-  // "For whom" (owner, Nov 4): any team-only event, required or not; picking a department doesn't make it required
+  // "For whom": any team-only event, required or not; picking a department doesn't make it required
   let tagsRead = $state(false);
   const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDepts = s.myDepts ?? []; inDept = !!s.inDept; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDepts[0] ?? null; }).catch(() => {});
   $effect(() => { if (f.teamOnly && !tagsRead) readTags(); });
@@ -196,7 +196,7 @@
     reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
-  // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
+  // a room from DMP: asked in the weekly memo (the block at the end), not in the app
 
   // An example instead of "e.g. …": a real place from the events in the app, another one each time
   // the editor opens; built-in ones until the app has events of its own.
@@ -284,7 +284,7 @@
   }
   function dropVideo(slot: Slot) { vids[slot] = null; f[KEY[slot]] = null; }
 
-  // the event's rules (a PDF, an organizer's ask, Nov 17): put at once, not on Save; the server keeps only its pages as
+  // the event's rules (a PDF, an organizer's ask): put at once, not on Save; the server keeps only its pages as
   // pictures (organizing.put_doc), the event's page opens them in the photo viewer
   let docUp = $state(false), docName = $state(''); // docName: the title while it uploads (the row's own words would wrap)
   let docPick = $state<HTMLInputElement>();
@@ -448,18 +448,18 @@
     } finally { busy = ''; }
   }
 
-  // a new event from the announcement the club already wrote (the owner, Oct 30): the AI fills what the text says,
+  // a new event from the announcement the club already wrote: the AI fills what the text says,
   // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
   let filling = $state(false);
   let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
-  // a new event starts with the announcement (owner, Nov 13: the fill existed, nobody found it): a paste screen first,
+  // a new event starts with the announcement (the fill existed, nobody found it): a paste screen first,
   // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
   let step = $state<'paste' | 'form'>(untrack(() => !id && session.board ? 'paste' : 'form'));
   let ai = $state<Marked[]>([]);
   let fromAi = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
   const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
-  // "Add more" (owner, Nov 13): with something in the form, a second message merges into it (lib/eventFill merge);
+  // "Add more": with something in the form, a second message merges into it (lib/eventFill merge);
   // what the new text says otherwise than a filled field waits here for a tap
   const more = $derived(fromAi || !!(f.title.trim() || f.description.trim()));
   let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]); // the meeting link: the editor's own (lib/meet linkFill)
@@ -599,7 +599,7 @@
   const leadMenu = $derived<MenuItem[]>((['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })));
   const tagMenu = $derived<MenuItem[]>([
     ...(deptOnly && f.meeting ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null && !f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = false; } }]),
-    // the board (Head+, from roles; owner, Nov 4): built in, no tag to make
+    // the board (Head+, from roles): built in, no tag to make
     ...(deptOnly ? [] : [{ label: t('ed.meetingBoard'), checked: f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = true; } }]),
     ...tags.filter((g) => !deptOnly || ownDepts.includes(g.id)).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
     ...(tags.length ? [] : [{ label: t('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
@@ -693,9 +693,9 @@
       <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
       <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
-    <!-- the preview: a round eye beside the cover, clear of Telegram's own buttons in the bar above (owner, Nov 13) -->
+    <!-- the preview: a round eye beside the cover, clear of Telegram's own buttons in the bar above -->
     <span class="pv"><IconButton icon={Eye} label={t('ed.preview')} onclick={showPreview} /></span>
-    <!-- whose event it is, one quiet line under the cover (owner, Nov 13: the box took the form's room); the full
+    <!-- whose event it is, one quiet line under the cover (the box took the form's room); the full
          sentence on a tap -->
     {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
       <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
@@ -722,7 +722,7 @@
     <textarea class="name" class:bad={tried && err.title} class:ai={ai.includes('title')} oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
     {#if castLike}
-      <!-- a casting made as an event (JCC, Nov 3): the club's recruitment does it properly -->
+      <!-- a casting made as an event (JCC): the club's recruitment does it properly -->
       <Notice tone="accent" text={t('ed.castHint')} action={{ label: t('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
@@ -753,7 +753,7 @@
       </Group>
     {/if}
 
-    <!-- who it is for; "for first-years" is gone from the editor (owner, Nov 13: an event that has it keeps it, sent back
+    <!-- who it is for; "for first-years" is gone from the editor (an event that has it keeps it, sent back
          as it is), the phone is asked in "Questions at sign-up" -->
     {#if !f.partner && !plain}
     <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
@@ -790,7 +790,7 @@
       {#if full && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
     </Group>
 
-    <!-- the form's end, as Luma's Create (owner, Nov 2: no floating bar over the form) -->
+    <!-- the form's end, as Luma's Create (no floating bar over the form) -->
     <div class="foot">
       {#if live}
         <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
@@ -939,7 +939,7 @@
           </div>
 
         {:else if pick === 'form'}
-          <!-- what a participant is asked, in one place (owner, Nov 13): the phone first, a ready-made one; then the event's
+          <!-- what a participant is asked, in one place: the phone first, a ready-made one; then the event's
                own questions (Oct 30): up to five, text or a choice; with the forum's policy section -->
           <Group footnote={t('ed.formPhoneHint')}><Row icon={Phone} title={t('ed.formPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} /></Group>
           <!-- Secret Santa (server santa.py): sign-up asks a wishlist, the draw is in the event's management; fixed once drawn -->
@@ -1107,7 +1107,7 @@
   .pk { --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); translate: 0 calc(-1 * var(--up)); transition: translate 250ms cubic-bezier(.2, .8, .2, 1);
     position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px - var(--up)); display: flex; flex-direction: column;
     border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards;
-    background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy (owner, Nov 3); Sheet's .ground the same */
+    background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy; Sheet's .ground the same */
   @keyframes rise { from { transform: translate3d(0, 100%, 0); } }
   .pkh { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-2) var(--s-5); }
   .pkh b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.015em; }

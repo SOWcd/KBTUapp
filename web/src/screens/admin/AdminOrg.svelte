@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → an organization (owner, Nov 17: "I type an organization and go"; the list's card dropped six pills). One page
+  // Admin → an organization (type an organization and go; no pills on the list's card). One page
   // a club, from the search, the recent ones or the list: its face (a tap opens its public page), one main action (the
   // creator: its Studio as its President; an admin: a new event for it as staff), then plain rows: its events (any
   // deletable here only), the ✓, the leaders with their roles (a row's menu changes one), the President's one-time link
@@ -130,7 +130,7 @@
     } catch (e) { oops(e); }
   }
 
-  // ---- its events, any of them deletable by the admin only (owner, Oct 13: a club asks him to remove a test, test
+  // ---- its events, any of them deletable by the admin only (a club asks him to remove a test, test
   // payments included). The confirm names what goes; hidden at once, gone in a day: Undo in the queue's Done ----
   let evOpen = $state(false), evs = $state<AdminEvent[] | null>(null), evFailed = $state(false);
   // read again on every opening (one made a moment ago, another admin's delete); the last list shows meanwhile

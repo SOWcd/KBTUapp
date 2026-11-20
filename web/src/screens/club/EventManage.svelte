@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Studio → an event: the organizer's screen (owner, Oct 11: "inside Studio a tap on an event must open another
-  // screen than from the Afisha"; Nov 14: far too many buttons, organizers are students on a phone at a door). The card
+  // Studio → an event: the organizer's screen, not the Afisha's (few
+  // buttons: organizers are students on a phone at a door). The card
   // (its pencil the editor, its eye the usual sheet); on the event's day one «Show QR» (the door screen: QR and scanner);
   // who came; rows only when they ask for something (receipts to check, the team's asks, holds, the waitlist,
   // volunteers); the money of a paid event; the rest folded under «More» (shown plainly when three or fewer).
@@ -171,8 +171,8 @@
       if (x instanceof ApiErr && x.message === 'decided') { gone(); return; }
       haptic.error();
       if (!(x instanceof ApiErr && x.message === 'paid')) { say(t('common.error'), 'warning_3d'); return; }
-      // receipts are the only record of money that changed hands: only the creator deletes such an event (owner,
-      // Oct 18: say why, and a way to ask him, with the message already written)
+      // receipts are the only record of money that changed hands: only the creator deletes such an event (say
+      // why, and a way to ask him, with the message already written)
       if (await sheets.ask({ title: t('studio.deletePaid'), text: t('studio.deletePaidText'), ok: t('studio.deletePaidAsk'), cancel: t('common.close') }))
         openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
@@ -196,7 +196,7 @@
     try { regOn((await api.setRegUntil(id, 'now')).regUntil); studioChanged(); haptic.ok(); say(t(few ? 'mg.regClosed' : 'santa.closeSoon'), 'locked_3d'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // the door (owner, Nov 7): shut until T-30, or until the club's President or a Vice opens it, from 4 h before (server
+  // the door: shut until T-30, or until the club's President or a Vice opens it, from 4 h before (server
   // organizing.open_door; the app's admin never). An hour or more ahead asks twice, the second "Open" after 2 s.
   const doorAt = $derived(e?.doorAt ?? (e ? e.startsAt - 1800 : 0));
   let tick = $state(nowTs());  // a ticking now: "opens at" turns into "open since" at T-30 with the screen open
@@ -226,7 +226,7 @@
     registration(e, co || head, session.me?.vol?.org);
   }
   let more = $state(false);
-  // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (owner: a fold of two is pointless)
+  // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (a fold of two is pointless)
   const folded = $derived(!e ? 0 : [head, head && e.teamMax, head && e.status !== 'cancelled' && !plain, head && e.needsVolunteers,
     head && e.guestHost && teamMark, head && live && !e.guestHost, reports, head && live && !e.guestHost && !e.santa?.drawn && (!started || e.lateSignup),
     head && live && !started, head && e.status === 'cancelled'].filter(Boolean).length);
@@ -251,7 +251,7 @@
     try { await api.teamDecide(id, x.person.id, yes); haptic.ok(); say(t(yes ? 'ta.saidYes' : 'ta.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); studioChanged(); }
     catch { asks = [x, ...asks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // "Change room" on the day (rooms change on the spot; moved here from Studio's home, Nov 17): a KBTU room in one tap,
+  // "Change room" on the day (rooms change on the spot; moved here from Studio's home): a KBTU room in one tap,
   // who's coming hears it by the rules (server change_place)
   const roomDay = $derived(head && !plain && live && !e?.placeUrl && !e?.online && !!e && dayNo(e.startsAt) === dayNo(tick) && ends > tick);
   let moving = $state(false), room = $state(''), roomForm = $state<HTMLFormElement>();
@@ -273,7 +273,7 @@
     <div class="pg">
       {#if staff}<Notice icon={ShieldCheck} text={t('mg.asStaff')} />{/if}
       <Group>
-        <!-- the event's two doors on its card (owner, Nov 14): edit it, see it as students do -->
+        <!-- the event's two doors on its card: edit it, see it as students do -->
         <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place, e.online)}">
           {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
           {#snippet trailing()}<span class="yn">{#if head}<IconButton icon={Pencil} size="s" label={t('studio.edit')} onclick={() => sheets.editor(e.org.id, id)} />{/if}

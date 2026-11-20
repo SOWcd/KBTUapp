@@ -7,10 +7,10 @@
   --font-display: 'Inter Variable', system-ui, -apple-system, sans-serif;
   --font-text: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  /* type scale (mockup v23; screens move to it one by one, 419 raw sizes before it): large title, section, card
+  /* type scale (screens move to it one by one): large title, section, card
      title, body, sub, caption, micro */
   --fs-title: 34px; --fs-sec: 22px; --fs-card: 17px; --fs-body: 15px; --fs-sub: 13px; --fs-cap: 12px; --fs-micro: 11px;
-  /* the design system's steps the scale lacked (Oct 30; a value never changes under an existing name): a person's or a
+  /* the design system's steps the scale lacked (a value never changes under an existing name): a person's or a
      club's name in their sheet, big numbers in stat tiles, menu-like rows (Settings, the admin hub, pickers: data rows
      stay at --fs-body), the tab bar's labels. Weights: 450, 600, 700, 800 (large titles only). The classes: base.css .fs-* */
   --fs-t1: 28px; --fs-t3: 20px; --fs-row: 17px; --fs-tab: 10.5px;
@@ -19,7 +19,7 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-7: 28px; --s-8: 32px; --s-10: 40px;
   --gutter: 16px; --gap-group: 22px;
 
-  /* radii; --r-group: list groups and cards share 22 (owner, Oct 31: settings under the lanyard) */
+  /* radii; --r-group: list groups and cards share 22 (settings under the lanyard) */
   --r-xs: 8px; --r-s: 12px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
   --r-group: 22px;
 
@@ -96,7 +96,7 @@
   --fill: rgba(235, 238, 255, 0.12);
   --fill-2: rgba(235, 238, 255, 0.2);
   --thumb: rgba(235, 238, 255, 0.24);
-  /* the tab bar (owner's pick, Oct 31: Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
+  /* the tab bar (Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
      icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 30, 38, 0.45);
   --lens: rgba(235, 238, 255, 0.16);
@@ -111,7 +111,7 @@
   --menu-bg: rgba(30, 34, 52, 0.9); /* a Menu: thick glass, what is under it must not read through */
   --text: #F4F6FF;
   --text-2: rgba(240, 243, 255, 0.68);
-  --text-3: rgba(232, 236, 255, 0.52); /* 4.8:1 or more on every dark surface (was 3.9; owner asked about the dark colours, Oct 6) */
+  --text-3: rgba(232, 236, 255, 0.52); /* 4.8:1 or more on every dark surface */
   --accent-text: #8FA8FF;
   --accent-soft: rgba(59, 107, 255, 0.18);
   --success-text: #5FD99A;
@@ -131,7 +131,7 @@
   --shadow-card: none;
   --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3);
   --scrim: rgba(3, 4, 10, 0.62);
-  --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day (owner, Oct 24) */
+  --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day */
   /* the button family's glass (ui/Button): rim arcs, a top sheen, the bevel with the pink/blue fringes, the lift */
   --lg-rim-hi: rgba(255, 255, 255, 0.8); --lg-rim-lo: rgba(255, 255, 255, 0.32); --lg-rim-base: rgba(255, 255, 255, 0.08);
   --lg-spot: rgba(255, 255, 255, 0.14); --lg-sheen: rgba(255, 255, 255, 0.07);
@@ -169,7 +169,7 @@
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0B1433;
   --text-2: rgba(11, 20, 51, 0.70);
-  --text-3: rgba(11, 20, 51, 0.60); /* 4.56:1 or more on every light surface (AA); text-2 moved to 0.70 to stay apart */
+  --text-3: rgba(11, 20, 51, 0.60); /* 4.56:1 or more on every light surface (AA); text-2 at 0.70 to stay apart */
   --accent-text: #2A57E6;
   --accent-soft: rgba(59, 107, 255, 0.12);
   --success-text: #117640; /* the chips' text: 4.6:1 on their own soft colour (was 3.4-3.9) */

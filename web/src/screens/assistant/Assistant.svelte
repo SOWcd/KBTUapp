@@ -7,13 +7,13 @@
 </script>
 
 <script lang="ts">
-  // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
+  // The students' assistant (server logic/assistant.py: "where is my dean's office?" and the app knows
   // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
   // three buttons (a room or the whole map, an event, a club, my classes, a Settings page, the Gallery, the news, a tab,
   // my tickets, friends, awards, the subjects, a new forum post, my club's Studio or a new event there), checked by the
   // server against what it told the model; a button only opens a screen. The bar's corner opens it (Nav), so the map,
   // which was there, is the round button beside the field. Under an answer 👍/👎 (on 👎, the student may send that one question
-  // and answer); when the server sees distress, its fixed help card with the helplines (review, Oct 31: nothing of
+  // and answer); when the server sees distress, its fixed help card with the helplines (nothing of
   // it is kept or sent by us; the student calls or writes themselves). When KRI didn't know, "Ask a person" (ASK): the
   // help desk's composer with the question in it, sent only on the student's tap.
   import { untrack } from 'svelte';
@@ -76,13 +76,13 @@
     chat.turns.splice(i - 1, 2); born = Math.min(born, i - 1);
     void ask(q, false);
   }
-  // KRI is a light (owner, Nov 18: the sheet with a hello and a list was "too simple"): it leaves the button that was
+  // KRI is a light, not a sheet with a hello and a list: it leaves the button that was
   // pressed and takes its place in the middle, over the greeting, while the Sheet's circle opens from that same button, waits beside
   // "thinking", and stands over the newest answer only. It flies in the footer (the body clips at the footer's edge) and
   // hands over on landing. Power saving, less motion, a conversation to read: no flight, it is in its place
   // The round button itself turns into the light: its glyph fades into the colonnade on the way up, the button is not
-  // seen while the light is out of it. On any close from the empty opening the light goes back the same road (owner,
-  // Nov 19), over the leaving sheet, and the next opening tapped meanwhile takes it from where it is
+  // seen while the light is out of it. On any close from the empty opening the light goes back the same road,
+  // over the leaving sheet, and the next opening tapped meanwhile takes it from where it is
   // svelte-ignore state_referenced_locally
   const btn = !focus && !power.lite ? peekIris() : null; // the button it opened from (Nav): where it goes back to
   const mid = btn && !chat.turns.length ? back?.take() : null;
@@ -149,7 +149,7 @@
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
   let draft = $state(untrack(() => keyboard?.value ?? '')), busy = $state(false);
   let list = $state<HTMLDivElement>();
-  // The opening (owner, Nov 19: "the orb is not in the centre and it should be", as Gemini opens): the light in the middle
+  // The opening (as Gemini opens): the light in the middle
   // with the colonnade in it, the greeting, one starter under it that keeps changing, all of them low over the field
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
     : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
@@ -256,7 +256,7 @@
   }
   const openMap = openMapFrom;
   // opening with the keyboard: the plain rise. The iris holds the sheet in place while the keyboard resizes it under
-  // the circle, and the whole opening stutters on a phone (owner's recording, Nov 17); dropped here before Sheet takes it
+  // the circle, and the whole opening stutters on a phone; dropped here before Sheet takes it
   // svelte-ignore state_referenced_locally
   if (focus) takeIris();
   // optimistic: the tap shows at once; a failed call quietly takes it back

@@ -5,7 +5,7 @@
 
 <script lang="ts">
   // A real, styled QR: round dots, rounded ink eyes and a clear square in the middle for the organizer's
-  // mark (the owner picked this look from four). Error correction Q (25 %) keeps it readable with the middle
+  // mark. Error correction Q (25 %) keeps it readable with the middle
   // (≤ 11 % of the modules) covered; H made the badge's link a busy 41×41, Q draws it 37×37 with bigger dots that also
   // read from further away (checked with zbarimg). All dots are one path: a single DOM node.
   import type { Snippet } from 'svelte';
@@ -30,7 +30,7 @@
     let q;
     try { q = encode(text, minV); } catch { q = encode(text, 0); }
     // the middle's size follows the code's: a ticket's short code is a 21×21, where a 7×7 hole lost too much to read
-    // (zbarimg: none of five tickets read, all with 5×5; owner, Nov 3)
+    // (zbarimg: none of five tickets read, all with 5×5)
     const n = q.getModuleCount(), mid = Math.floor(n / 2), h = n > 29 ? 4 : n > 21 ? 3 : 2;
     const eye = (x: number, y: number) => (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
     let dots = '';

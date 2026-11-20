@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Clubs and schools: every organization by name, one line each (owner, Nov 17: the order was unclear, the
-  // card dropped a pile of pills). A to Z, hidden ones last; a row opens the organization's page (AdminOrg). Finding
+  // Admin → Clubs and schools: every organization by name, one line each (a clear order, no
+  // pile of pills on the card). A to Z, hidden ones last; a row opens the organization's page (AdminOrg). Finding
   // one is the Admin search's job, so no second search here. A new club on top (schools come from KBTU's site);
   // DMP's registry is the third tab.
   import { staffOnly } from '../../lib/state/staffGate.svelte';

@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The Mark screen's «People» (owner, Nov 14, after the Talent Show: the Senate wanted its whole roster by department,
+  // The Mark screen's «People» (a club wants its whole roster by department,
   // came / not came, many without the app): one list of everyone this event's door records, the team by department
   // (server checkin.team: members, roster rows with no account) and the guests going (the door list), each group with
-  // its own «12 of 18». The whole row is the tap (owner, Nov 14: not a button on every row): its circle turns into a check
+  // its own «12 of 18». The whole row is the tap (not a button on every row): its circle turns into a check
   // at once, the row stays where it is (no jump under the thumb) and moves to «Came» at the next tab switch; an Undo in
   // the toast. A tap on a hand mark offers to take it back (a scan stays: it proves they came). Fixable until the
   // midnight ending the day after the event.

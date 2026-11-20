@@ -1,5 +1,5 @@
 <script lang="ts">
-  // What a chat is, Telegram's three kinds, as a small lit badge on its avatar (owner, Oct 25: the stock line icons
+  // What a chat is, Telegram's three kinds, as a small lit badge on its avatar (the stock line icons
   // looked default). Filled glyphs drawn for this app, a dark glass chip; a forum's chip is a squircle like its avatar.
   import type { Chat } from '../lib/api';
   import { t } from '../lib/i18n/index.svelte';

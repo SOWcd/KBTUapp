@@ -1,9 +1,9 @@
 <script lang="ts" module>
   import { t, type Key } from '../../lib/i18n/index.svelte';
 
-  // why a forum post or reply waits for a moderator, as one line (owner, Nov 4): an appeal says so first, then the
+  // why a forum post or reply waits for a moderator, as one line: an appeal says so first, then the
   // verdict's own word, always; the reason the AI gave its author (ai.explain, kept on the row) after it in quotes, never
-  // in its place (review: the post's words steer that model, so an injected "a false alarm" could hide the verdict)
+  // in its place (the post's words steer that model, so an injected "a false alarm" could hide the verdict)
   const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost',
     noise: 'fc.whyNoise', ad: 'fc.whyAd', reports: 'fcr.whyReports', photo: 'fc.whyPhoto', tgno: 'fc.whyTg' };
   const AI = new Set(['ai', 'person', 'noise', 'ad']);

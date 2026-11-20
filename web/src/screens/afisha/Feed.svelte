@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Afisha → "In a row": the Feed full screen over the list (Oct 30: it was the page left of it), full-screen posters,
+  // Afisha → "In a row": the Feed full screen over the list, full-screen posters,
   // one per event, vertical snap; Back (or the last slide's button) closes it. Perf rules from the prototype:
   // no backdrop-filter inside slides (tinted solid buttons instead), the slow zoom runs only on the
   // slide on screen (IntersectionObserver), images decode async.
@@ -208,7 +208,7 @@
 
   .side { position: absolute; right: 12px; bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--on-accent); }
-  /* a press on a ring never pans the Feed (B3, video); the labels still swipe (the whole column was dead) */
+  /* a press on a ring never pans the Feed (B3); the labels still swipe, so the column is never dead */
   .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
   .ring.sm { width: 48px; height: 48px; }
   .act:active .ring { transform: scale(0.9); }

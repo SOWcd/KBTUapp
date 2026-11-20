@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Clubs: three people, one in front (owner, Nov 10: two read as "just a person" beside Profile). Drawn in lucide's own
+  // Clubs: three people, one in front (two read as "just a person" beside Profile). Drawn in lucide's own
   // grid and stroke so it sits in the nav and the capsule like the others; takes lucide's props.
   let { size = 24, strokeWidth = 2, class: cls = '' }: { size?: number; strokeWidth?: number; class?: string } = $props();
 </script>

@@ -125,7 +125,7 @@
       {@render consent()}
     {:else}
       {#if relink}<Notice text={t('login.relink')} />{/if}
-      <!-- the hello (owner, Oct 29: the full-screen sign-in after a scan "was right; make it beautiful"): the hand waves,
+      <!-- the hello (the full-screen sign-in after a scan): the hand waves,
            the brand's light drifts behind it, the rest comes in after it; still under power saving and reduced motion -->
       <div class="big" class:hero={lock}>
         <span class="aura" aria-hidden="true"><i></i><i></i></span>

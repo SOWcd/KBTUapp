@@ -70,8 +70,8 @@
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
   const shown = $derived((list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))));
-  // one list, highest role first (the server's order); departments are their own chips (owner, Oct 20: grouped, the
-  // President sat last under "no department" and the heads were scattered)
+  // one list, highest role first (the server's order); departments are their own chips (grouped, the
+  // President would sit last under "no department" and the heads would scatter)
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
   const otherTags = $derived((setup?.tags ?? []).filter((g) => !g.department));
   const dept = $derived(typeof filter === 'number' ? depts.find((g) => g.id === filter) ?? null : null);
@@ -87,8 +87,8 @@
 
   // a role of my own level on myself, a name only; tags are picked in the tag (TeamSetupSheet)
   const ownLevel = $derived((setup?.roles ?? []).filter((r) => r.level === m?.role && r.rights.every((k) => may(m, k))));
-  // the avatar is the profile; the row opens what I can do with them, or the profile when there's nothing (owner, Oct 14:
-  // no "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
+  // the avatar is the profile; the row opens what I can do with them, or the profile when there's nothing (no
+  // "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
   function tap(x: TeamMember) {
     if (!hasActs(x)) { sheets.person(x.person.id); return; }
     if (m) sheets.member(m.org.id, x.person.id, () => setup, deptChoices, refresh);
@@ -141,7 +141,7 @@
     close(overlay.id); // not my team any more: the sheet would show the next club's
     void loadMe();
   }
-  // the roster as a file, from the bot (Medina, Nov 5): Vice+, like the attendees' list
+  // the roster as a file, from the bot (Medina): Vice+, like the attendees' list
   let sending = $state(false);
   async function exportRoster() {
     if (!m || sending) return;

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  // One family, Liquid Glass (owner, Nov 3: "Liquid Glass buttons next to plain old-iOS ones"): every kind has the glass
+  // One family, Liquid Glass (never next to plain old-iOS buttons): every kind has the glass
   // rim (a bright arc facing the light, a dim reflection opposite), a top sheen and the bevel with its pink/blue fringes.
   //   primary      the accent body with a sheen and a coloured lift: THE action (one in sight)
   //   secondary    clear glass on the --fill body (accent ink when called by an old accent-soft name)

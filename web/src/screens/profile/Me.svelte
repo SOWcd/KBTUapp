@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
+  // Profile, one screen. Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), two squares: my friends (the Friends sheet: requests,
-  // everyone, Add) and my invite (RefSheet), then groups of rows (owner, Nov 15); my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it); in a group of its own KBTU's psychologist
+  // everyone, Add) and my invite (RefSheet), then groups of rows; my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it); in a group of its own KBTU's psychologist
   // (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
   // on Me, not Settings).
   // Top right: the admin panel's shield, the Student Government's panel and the gear (a guest's too). Settings open in place under the lanyard
@@ -63,9 +63,9 @@
   const friends = $derived(data.friends?.friends ?? []);
   const asked = $derived(me?.counters.friendRequests ?? 0);
   // the faces' cluster: [width, left, top] in % of its box (132 × 104; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
-  // packed so seventeen faces fill the box without holes (owner, Nov 2: as many faces as fit, the whole tile above its name); fewer friends take the biggest
+  // packed so seventeen faces fill the box without holes (as many faces as fit, the whole tile above its name); fewer friends take the biggest
   const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
-  // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
+  // which friends: shuffled once per app open (not always the same A-names first), the ones with a photo first
   const faces = $derived(photosFirst(friends));
   const staff = $derived(me?.role === 'admin' || me?.role === 'moderator');
   const asks = $derived(staff ? me!.counters.inbox : 0);
@@ -94,7 +94,7 @@
   let hold = $state(false);  // a fade runs: the page takes no taps
   let List = $state<Component<{ editing: boolean; onlanyard: () => void }, { photoMenu: (at: Element) => void }> | null>(null);
   // the lanyard's editor in place of the list (its first row), under the same badge: a second overlay over the
-  // settings' (etok), so Back returns to the list; the check saves and leaves the settings (owner, Nov 8)
+  // settings' (etok), so Back returns to the list; the check saves and leaves the settings
   let edit = $state(false), etok = 0;
   let list = $state<{ photoMenu: (at: Element) => void }>();
   let lift = $state<HTMLDivElement>(), gear = $state<HTMLButtonElement>(), shield = $state<HTMLSpanElement>();
@@ -172,7 +172,7 @@
     swapEdit(true);
   }
   const dirty = () => !!ui.look && !!me && (ui.look.skin !== me.skin || ui.look.frame !== (me.frame ?? null));
-  // a locked lanyard tried on (owner, Oct 31): said it isn't mine, and mine turns back
+  // a locked lanyard tried on: said it isn't mine, and mine turns back
   function untry() {
     if (ui.tryOn) { say(t(ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
   }
@@ -271,7 +271,7 @@
     <!-- my photo: settings, or in them the photo's menu at it -->
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
       onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on' && !edit) list?.photoMenu(el); }} /></div>{/if}
-    <!-- two squares (owner, Nov 1): my friends as a cluster of faces, and my invite -->
+    <!-- two squares: my friends as a cluster of faces, and my invite -->
     {#if rest}<div class="duo" data-away>
       <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
         {#if friends.length}
@@ -303,11 +303,11 @@
     <div data-away><Notice tone="danger" text={t('del.soon', { date: dayMonth(me.deleteAt) })} action={{ label: t('del.keep'), onclick: keepAccount }} /></div>
   {/if}
 
-  <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it; out of term the row
+  <!-- the term: a strip of its weeks, the academic calendar behind it; out of term the row
        names what comes next. Under it KBTU's psychologist and the anthem -->
   <div data-away><Group>
     {#if sem}
-      <!-- v25: one track with the term filled to this week and a glowing dot on it,
+      <!-- one track with the term filled to this week and a glowing dot on it,
            the midterm a gold band, the exams red at the end; the next calendar day its own row, never cut -->
       {@const at = (w: number) => `${((w - 0.5) / (sem.weeks + 1)) * 100}%`}
       <!-- engine: Group takes Rows alone; kb-row (Row's own mark) gives the strip the line under it -->
@@ -336,9 +336,9 @@
     <!-- the check-in page lives in Studio; here only for whom Studio doesn't lead there (a door handed over, the app's
          admin, while a session is open: server account.me) and a helper's own QR -->
     {#if session.me?.bigScreen === 'qr' || (session.me?.bigScreen === 'pair' && !session.me.memberships.some((m) => may(m, 'events')))}<Row icon={MonitorUp} title={t('scr.page')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
-    <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
+    <!-- KBTU's anthem: the words and the song -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
-    <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer (owner, Nov 11);
+    <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer;
          here only for a person without that tab, so nobody loses it (SG's queue is its panel, top right) -->
     {#if session.me?.appeals && !session.channel}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
   </Group></div>
@@ -346,7 +346,7 @@
   <AppCard />
   {/if}
   <!-- last before the tail, so no block's stagger delay shifts -->
-  <!-- a failure inside the list shows itself instead of a blank page (Nov 2: Settings came up empty on phones) -->
+  <!-- a failure inside the list shows itself instead of a blank page (Settings came up empty on phones) -->
   {#if set && List}<svelte:boundary onerror={(e) => console.error(e)}><List bind:this={list} editing={edit} onlanyard={lanyard} />
     {#snippet failed(error, retry)}<p class="t-foot crash">{String((error as Error)?.message ?? error).slice(0, 300)} <button class="t-foot" onclick={retry}>↻</button></p>{/snippet}
   </svelte:boundary>{/if}
@@ -381,7 +381,7 @@
   .spot :global(.seal) { display: none; }
   :global(html.lowfx) .spot { animation: none; }
   @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
-  /* no friends yet: the places waiting for them, the biggest with a plus (owner, Nov 2: not a waving hand) */
+  /* no friends yet: the places waiting for them, the biggest with a plus (not a waving hand) */
   .ghost .spot { align-items: center; justify-content: center; background: var(--fill); box-shadow: none; color: var(--accent); }
   .ghost .spot:not(:first-child) { opacity: 0.55; }
   .ft { display: flex; align-items: baseline; gap: 8px; }
@@ -407,7 +407,7 @@
   .done .gi.c { opacity: 1; color: var(--accent-text); }
   .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
 
-  /* the term's strip of weeks, the first block of its group (mockup v24) */
+  /* the term's strip of weeks, the first block of its group */
   .sem { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; text-align: left; }
   /* a <button> doesn't stretch its flex children on older iOS WebKit: the track had no width and every label sat on the
      left ("3midterms", Oct 31) */

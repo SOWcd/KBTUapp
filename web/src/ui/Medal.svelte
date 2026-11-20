@@ -1,10 +1,10 @@
 <script lang="ts">
-  // An achievement's art (awards plan, Nov 3): a medal, or a pin (one time: ui/Pin, a shield). A medal is round, drawn
+  // An achievement's art (awards plan): a medal, or a pin (one time: ui/Pin, a shield). A medal is round, drawn
   // in layers (lib/awards layersOf): the field, the picture and its near part float with the tilt (base.css .z, the
   // glass's --gx/--gy from above) under the still rim, whose metal is the level; from 96 px it hangs on a ribbon of that
   // metal, from 160 px (the award card, the unlock) its name is engraved round the band, as on the owner's coins, and the
   // level's numeral sits on the rim. The owner's coins and the other whole coins are one picture each (coinOf).
-  // Iridescence lives inside one object, never smeared over text (owner's taste).
+  // Iridescence lives inside one object, never smeared over text.
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
   import Pin from './Pin.svelte';
@@ -18,7 +18,7 @@
   const zn = $derived(vb ? undefined : ZNAKI[a.emoji]);
   const layers = $derived(layersOf(artOf(a)));
   const legend = $derived(size >= 160 && a.level > 0 ? legendOf(artOf(a)) : null);
-  // the light on the metal (round 4, owner: "charm"): a specular band over the rim and the relief alone (masked by their
+  // the light on the metal: a specular band over the rim and the relief alone (masked by their
   // own files), moving with the tilt (--gx/--gy from the glass above; still in a list, where nothing writes them). The
   // round medals but Recruiter, earned
   const lit = $derived(a.level > 0 && !!legendOf(artOf(a)) && layers);

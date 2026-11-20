@@ -2,13 +2,13 @@
   // How the week gets into the app (PLAN 26): the portal's schedule page saved on the phone and sent to
   // the bot, which reads the whole week (server portal.py) and answers "found N classes". iPhone: Safari's Share ->
   // Options -> Web Archive -> Telegram; Android: Chrome's "Download page" (.mht). Offered from Today's card until a
-  // schedule is there (no longer right after the sign-in: one thing at a time, the onboarding plan of Oct 31).
-  // Oct 30 (owner): the portal is the big button (Nov 2: the pinned one; no "open the bot", the steps say it), and
+  // schedule is there (not right after the sign-in: one thing at a time).
+  // The portal is the big button (the pinned one; no "open the bot", the steps say it), and
   // the iPhone way is shown as his own screen recording (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
-  // Nov 6 (owner): only this phone's own steps (a computer still sees both), and the recording is an animated WebP:
+  // Only this phone's own steps (a computer still sees both), and the recording is an animated WebP:
   // an <img> loops by itself where Telegram's iOS webview never played the mp4, muted and play() or not.
   // `addLang` (the Week sheet's "Add a language"): the lead says to switch the portal's language first; the same page
-  // sent again adds that language's names (Oct 30).
+  // sent again adds that language's names.
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import type { Overlay } from '../../lib/state/ui.svelte';

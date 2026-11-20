@@ -1,6 +1,6 @@
 <script lang="ts">
   // Event card #1 (of three): the list row used in List, club pages and tickets. A saved event has a small bookmark in
-  // its corner (Oct 30: Profile's "Coming up" is gone, the saved ones are found on the list).
+  // its corner (Profile's "Coming up" is gone, the saved ones are found on the list).
   import type { EventCard } from '../lib/api';
   import { t, tn, money, friendsLine, placeOf } from '../lib/i18n/index.svelte';
   import { time, nowTs, multiDay, daySpan } from '../lib/time';

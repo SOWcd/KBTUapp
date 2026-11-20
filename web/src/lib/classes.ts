@@ -1,4 +1,4 @@
-// The timetable as a student lives it (owner, Oct 7: Algorithms 12:00-13:00 and 13:00-14:00 in 388 "is one long class,
+// The timetable as a student lives it (Algorithms 12:00-13:00 and 13:00-14:00 in 388 "is one long class,
 // you come to it once"): back-to-back classes of one subject in one room are one, from the first start to the last end;
 // a break of up to 10 minutes still joins them. The List draws it as one row with "×2"/"×3" by its hours; the capsule, "I won't go" and
 // the event sheet take it as one class.

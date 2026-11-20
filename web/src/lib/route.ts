@@ -34,7 +34,7 @@ export const examOnly = (n: MapNode, d: Date) => !!n.q && d.getDay() === 0;
 export const showsOpen = (n: MapNode, d: Date) => openAt(n, d) && !examOnly(n, d);
 
 /** The lifts' rush: classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
- *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (*  Oct 24, a Saturday evening said "rush"). The phone's own clock, which in Almaty is campus time. */
+ *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (else a Saturday evening says "rush"). The phone's own clock, which in Almaty is campus time. */
 export const RUSH_WAIT = 180;
 export const liftRush = (d: Date): boolean => {
   const day = d.getDay(), h = d.getHours(), m = d.getMinutes();

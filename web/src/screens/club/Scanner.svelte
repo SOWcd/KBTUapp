@@ -1,6 +1,6 @@
 <script lang="ts">
   import { withNick } from '../../lib/perms';
-  // The door scanner (Member+, full screen): our own camera on top (owner, Oct 15: so the screen around it
+  // The door scanner (Member+, full screen): our own camera on top (so the screen around it
   // is ours: the result, the count, haptics, without a popup closing after each scan), Telegram's QR popup when the
   // camera is refused or missing, the typed code anywhere. It takes a
   // ticket or a badge QR (§4.4): a badge registers a person who didn't sign up, on a free event, at the door.
@@ -36,7 +36,7 @@
   import EventQr from './EventQr.svelte';
 
   // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
-  // qr: the Mark screen (owner, Nov 14): the rotating QR first («QR | Scanner»: the camera for tickets and
+  // qr: the Mark screen: the rotating QR first («QR | Scanner»: the camera for tickets and
   // badges, a ticket's code typed there too), one line of counts (only whom this door records), then «People» (the
   // lists by department, marked by hand: People.svelte) and «Helper» (President/Vice). sess: a helper's session (the
   // QR they were let show, server checkin.qr_helping)
@@ -85,7 +85,7 @@
   const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
   // one of our own QRs (the door's own check-in QR, a club's link...) read by this scanner: opened as if tapped, so a
-  // team member scanning the door's QR here is marked himself (owner, Nov 14: people scanned it with this scanner)
+  // team member scanning the door's QR here is marked himself (people scanned it with this scanner)
   const ours = (raw: string) => raw.trim().match(/^(?:https?:\/\/)?t\.me\/KBTUappBot(?:\/\w+)?\?startapp=([\w-]{1,64})$/i)?.[1];
   let last = ''; // the code just read: a flagged receipt is let in by it after a look (admit)
   async function check(raw: string, admit = false) {

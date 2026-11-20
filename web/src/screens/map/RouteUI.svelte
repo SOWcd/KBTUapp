@@ -5,7 +5,7 @@
 </script>
 
 <script lang="ts">
-  // Indoor routes on the main map (PLAN item 22, mockup Oct 15): "How to get there" (from a room or an entrance to a
+  // Indoor routes on the main map (PLAN item 22): "How to get there" (from a room or an entrance to a
   // room: fastest by stairs, by lift, another staircase), "How do I get out?" (the exits open now, nearest first), the
   // way step by step, floor by floor. (The graph's editor went with its save route: the graph is edited in the repo.)
   import { untrack } from 'svelte';
@@ -128,7 +128,7 @@
 
 {#if chosen && rt.route}
   {@const n = rt.route.legs.length}
-  <!-- the step on the way (Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
+  <!-- the step on the way: glass over the plan, a bar per step; the floors are the rail's -->
   <div class="card step glass glass-sheet" data-cover use:glass={{ bloom: true }} use:refract>
     <div class="top"><span>{t('route.step', { i: rt.step + 1, n })} · {floorName(rt.route.legs[rt.step].f)} · {t('route.min', { n: mins(secs(rt.route)) })}</span>
       <button onclick={toWays} aria-label={t('common.close')}><X size={18} /></button></div>
@@ -138,7 +138,7 @@
       {#if rt.step < n - 1}<button class="p" onclick={() => { haptic.tap(); show(rt.step + 1); }} aria-label={t('route.next')}><ChevronRight size={22} /></button>
       {:else}<button class="p ok" onclick={() => { haptic.ok(); say(t('pad.arrived'), 'partying_face_3d'); stop(); }} aria-label={t('pad.arrived')}><Check size={22} /></button>{/if}
     </div>
-    <!-- on the way the floors are the card's last row, the rail is gone (Oct 15 and again Oct 24; it hid the way) -->
+    <!-- on the way the floors are the card's last row, the rail is gone (it hid the way) -->
     <div class="fls" role="tablist" aria-label={t('map.floors')}>
       <span class="drop" bind:this={drop} style:left="calc(3px + (100% - 6px) * {cur} / 6)" aria-hidden="true"></span>
       {#each [0, 1, 2, 3, 4, 5] as f (f)}<button role="tab" aria-selected={cur === f} class:on={cur === f} class:r={rt.route.legs.some((l) => l.f === f)} onclick={() => pick(f)}>{f || t('map.bShort')}</button>{/each}

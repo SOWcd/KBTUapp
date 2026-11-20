@@ -1,4 +1,4 @@
-// Whether what the staff asked for may still be written (review Nov 17): a role taken away while an answer is on its
+// Whether what the staff asked for may still be written: a role taken away while an answer is on its
 // way (a role change, the organizations, the numbers, the inbox) must not put privileged data back into the stores.
 // One epoch for every staff request: it moves each time my role steps down, and the stores that hold staff data
 // clear themselves then (onStaffLoss), whether or not an Admin page is open.

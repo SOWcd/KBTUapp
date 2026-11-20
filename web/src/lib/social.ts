@@ -18,7 +18,7 @@ export function social(url: string): { kind: SocialKind; label: string } {
 
 /** The server's rule for a saved link. */
 export const LINK = /^https:\/\/[A-Za-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/;
-/** Telegram is no social (Nov 6): a club's chats go in its Chats, "Message the club" writes to its President. */
+/** Telegram is no social: a club's chats go in its Chats, "Message the club" writes to its President. */
 export const TG_LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.(?:me|dog)(?:\/|$)|^tg:/i;
 
 // The club's editor: pick a network and type the username, or paste a
@@ -69,7 +69,7 @@ export function linked(text: string): { s: string; url?: string }[] {
 export const videoLinks = (text: string) =>
   [...new Set(linked(text).flatMap((p) => (p.url ? [p.url] : [])))]
     .map((url) => ({ url, ...social(url) })).filter((x) => ['instagram', 'tiktok', 'youtube'].includes(x.kind)).slice(0, 2);
-/** a post's links as buttons (owner, Nov 3: a bare invite link in a story looked broken): each address once, at most
+/** a post's links as buttons (a bare invite link in a story looked broken): each address once, at most
  *  two, a Telegram group's invite "join" and any other t.me "open"; `rest` is the text with those addresses taken out */
 export function linkButtons(text: string): { buttons: { url: string; kind: SocialKind; join: boolean }[]; rest: string } {
   const parts = linked(text);

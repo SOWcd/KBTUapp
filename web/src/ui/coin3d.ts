@@ -1,5 +1,5 @@
-// A real 3D medal for the award view (owner, Nov 1: the CSS layers read as "a picture moving to emulate 3D"; then
-// "make these coins like medals"; then "the straps look 2D, not attached"). three.js lives only in this lazy chunk.
+// A real 3D medal for the award view (CSS layers read as a picture moving to emulate 3D; a coin
+// should look like a medal, its straps attached, not 2D). three.js lives only in this lazy chunk.
 // The chain, top to bottom: a satin V-ribbon hanging from the neck (two thick straps, stripes woven in, draped,
 // gathered where they loop under the jump ring's top bar), the jump ring, a lug on the medal's rim, the medal (a
 // cylinder ~9.5% thick: the drawn art in front, polished metal with guilloché and the app's mark behind, a milled
@@ -17,7 +17,7 @@ import { drawCoinBack } from './coinback';
 
 export type CoinState = () => { x: number; y: number; spin: number }; // tilt -1..1, spin in degrees
 // the canvas round the medal, in medal sizes: wide enough for the swing, tall above for the ribbon
-const W = 1.55, UP = 1.42, DOWN = 0.8; // DOWN: room under the medal for a tilt toward me while it turns (owner, Nov 3: at 0.62 its bottom was cut flat)
+const W = 1.55, UP = 1.42, DOWN = 0.8; // DOWN: room under the medal for a tilt toward me while it turns (at 0.62 its bottom was cut flat)
 // the chain in medal radii (the medal's centre at 0): lug, jump ring, the bar the ribbon loops under, the neck
 const LUG = 1.05, RING_R = 0.13, TUBE = 0.028, RING_Y = LUG + RING_R - 0.02, NECK = 2.38;
 const WID = 0.6, THICK = 0.016, GATHER = 0.2; // a strap's width, its thickness, its width where it loops the ring
@@ -31,7 +31,7 @@ const canvas2d = (w: number, h: number) => { const c = document.createElement('c
 /** Mounts the medal into `host`; resolves once the first frame is drawn. Throws without WebGL. */
 export async function mountCoin(host: HTMLElement, o: { src: string; tint: string; ribbon: string[]; size: number; state: CoinState; onLand?: () => void; watch?: HTMLElement }): Promise<() => void> {
   const renderer = new WebGLRenderer({ antialias: !onAndroid, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(onAndroid ? 2 : 3, devicePixelRatio || 1)); // Android: 3x + MSAA lost the medal's face and the page's layers (video, Nov 6) // 3x phones too: at 2 the edge stepped (owner, Nov 3: "no pixels")
+  renderer.setPixelRatio(Math.min(onAndroid ? 2 : 3, devicePixelRatio || 1)); // Android: 3x + MSAA lost the medal's face and the page's layers // 3x phones too: at 2 the edge stepped
   const w = Math.round(o.size * W), up = Math.round(o.size * UP), h = up + Math.round(o.size * DOWN);
   renderer.setSize(w, h);
   renderer.toneMapping = NeutralToneMapping; // ACES pushed the blue enamel toward lavender and the gold to cream
@@ -73,7 +73,7 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   backMap.center.set(0.5, 0.5); backMap.rotation = Math.PI; backMap.wrapS = RepeatWrapping; backMap.repeat.x = -1; // upright from behind
   const backBump = own(new CanvasTexture(bc)); backBump.center.set(0.5, 0.5); backBump.rotation = Math.PI; backBump.wrapS = RepeatWrapping; backBump.repeat.x = -1;
 
-  // the face's relief, read off the art's colours (owner, Nov 1: the gold should stand in front of the enamel): warm =
+  // the face's relief, read off the art's colours (the gold should stand in front of the enamel): warm =
   // struck gold, raised and metal; blue enamel and the white peaks sunk and glassy; the dark rim letters cut into the
   // gold. A silver medal: whatever isn't blue is its metal. One texture: R height (softened: a bevel for the bump),
   // G roughness, B metalness (three's ORM channels)
@@ -94,9 +94,9 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   rg2.filter = 'blur(1.5px)'; rg2.drawImage(hc, 0, 0); // no canvas filter (old Safari): a sharp bevel, still fine
   const relief = own(new CanvasTexture(rc2));
 
-  // ridges half as deep: at full depth the milling sparkled into coloured specks at a glancing angle (owner, Nov 3: "pixels")
+  // ridges half as deep: at full depth the milling sparkled into coloured specks at a glancing angle
   const rim = new MeshStandardMaterial({ color: metal.clone().multiplyScalar(0.72), metalness: 1, roughness: 0.34, normalMap: ridges, normalScale: new Vector2(0.5, 0.5) });
-  // a thin, wide-lobed lacquer: the room's lights glance off it without blanking the enamel (owner, Nov 1: at some
+  // a thin, wide-lobed lacquer: the room's lights glance off it without blanking the enamel (at some
   // tilts the blue went lavender and the gold cream)
   const top = new MeshPhysicalMaterial({ map: front, metalnessMap: relief, roughnessMap: relief, bumpMap: relief, bumpScale: 3, metalness: 1, roughness: 1,
     clearcoat: 0.1, clearcoatRoughness: 0.35, specularIntensity: 0.35, envMapIntensity: 0.7 });
@@ -224,7 +224,7 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   const deg = Math.PI / 180;
   // the pendulum from the neck: damped springs toward where the tilt pulls it (sideways, toward/away)
   const sz = { x: 4, v: 0 }, sx = { x: 0, v: 0 }; // sideways and toward/away; the entrance starts it swinging
-  // the entrance (owner, Nov 1: "super beautiful"): lowered from above on a damped spring (a slight overshoot),
+  // the entrance: lowered from above on a damped spring (a slight overshoot),
   // 1.5 turns that slow to face front, a glint across the metal as it settles; ~1.2 s. Added on top of the tilt and
   // the finger, so nothing jumps when it ends
   const t0 = performance.now(), ZETA = 0.7, OMEGA = 5.5, WD = OMEGA * Math.sqrt(1 - ZETA * ZETA);

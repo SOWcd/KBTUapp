@@ -9,9 +9,9 @@
 
 <script lang="ts">
   // Settings under my lanyard (Me's gear or my photo; Me runs the way in and out, this is the list). The phone's own
-  // way (owner, Oct 30: "like Apple"): a short label, its value in grey, an end mark: › a page or a sheet, ⇅ a menu at
+  // way (like Apple's): a short label, its value in grey, an end mark: › a page or a sheet, ⇅ a menu at
   // the row, ↗ out of the app, an accent label with no mark does it now. No subtitles; few words.
-  // Sections (each a unit Me animates, [data-unit]), what students look for first on top (owner, Nov 10: the student ID
+  // Sections (each a unit Me animates, [data-unit]), what students look for first on top (the student ID
   // hid in "Name", Privacy at the very bottom): the lanyard first (its editor opens here in place, under the badge:
   // `editing`, Me runs it); me (About me: my data a page deeper, Privacy, Notifications); the app; about. A guest: the
   // app and about.
@@ -54,7 +54,7 @@
   // ---- the app ----
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
   // the other languages' dictionaries are asked for as Settings opens, a beat before the language row can be tapped,
-  // not by every launch at its start (perf round 4: ~80 KB gzip of a first launch; most students never switch)
+  // not by every launch at its start (~80 KB gzip of a first launch; most students never switch)
   for (const l of LANGS) void loadLang(l).catch(() => {});
   const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
   function lang(l: Lang) {
@@ -62,11 +62,11 @@
     keep({ lang: l });
     void loadLang(l).then(() => reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang'));
   }
-  // the theme is a snap (owner, Oct 31): the menu fades, the row's sun turns into the moon (or back) with a spring, and
+  // the theme is a snap: the menu fades, the row's sun turns into the moon (or back) with a spring, and
   // at its peak a click and the new theme grows from that icon. The menu is gone by then (its exit is 150 ms), so the
   // transition's snapshots never hold it; the icon's tail plays in the live new snapshot, the circle opening on it
   $effect.pre(() => { glyph.dark = theme.current === 'dark'; });
-  // no "as in the system" item: until a pick the app follows Telegram's scheme on its own (owner, Oct 31)
+  // no "as in the system" item: until a pick the app follows Telegram's scheme on its own
   function look(to: Theme, ic: Element | null) {
     if (theme.chosen === to) return;
     keep({ theme: to });
@@ -92,13 +92,13 @@
     try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // my week off the server, here too and not only in the Week sheet (owner, Nov 1)
+  // my week off the server, here too and not only in the Week sheet
   async function dropWeek() {
     if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
   }
   $effect(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
   // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
-  // no "added" within a few seconds -> say where to allow it (owner, Nov 2: "the button does nothing")
+  // no "added" within a few seconds -> say where to allow it, never a button that seems to do nothing
   let homeWait: ReturnType<typeof setTimeout> | undefined;
   function addHome() {
     haptic.tap();

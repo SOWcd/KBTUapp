@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "People of the app" (owner, Nov 18): the creator, the idea's author, then everyone whose idea, find or code shipped,
+  // "People of the app": the creator, the idea's author, then everyone whose idea, find or code shipped,
   // newest first by the day it shipped: never by amount. A little like film credits (a centred top, air), scrolled by
   // hand. A name and a face only after that person's own yes (server credits.py); without it the app signs the lines
   // "Student", each line a row of its own: a plain row, nothing to tap; a pull request's lines stand under its GitHub
@@ -30,7 +30,7 @@
   // this session made seconds ago, the bot's link, is that word)
   void loadCredits(5000);
   const open = (p: PersonRef) => { haptic.tap(); sheets.person(p.id); };
-  // his Telegram with the app's draft: the creator's row on Profile opened it before it became the way here
+  // his Telegram with the app's draft
   const tgOf = $derived(session.support.find((x) => x.founder)?.username);
   const realOf = (p: PersonRef) => p.realName ?? p.name;
 </script>

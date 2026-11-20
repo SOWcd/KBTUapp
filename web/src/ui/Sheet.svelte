@@ -43,7 +43,7 @@
   let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, shut = false, children, footer, opener, hold, onhold }: Props = $props();
   const iris = takeIris(); // opened out of a round button (lib/state/sheets irisFrom) instead of the rise
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
-  // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
+  // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy
   const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
 
   let panel: HTMLDivElement;
@@ -57,7 +57,7 @@
   // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
   let rising = $state(tg.platform === 'android');
   // another overlay over this one: nothing in it moves (its loops, the tilt light, a lanyard's depth and its card). Android
-  // re-blurs the top sheet's backdrop on every change under it: the event sheet over a friend's card shimmered (Nov 2)
+  // re-blurs the top sheet's backdrop on every change under it: the event sheet over a friend's card shimmered
   const under = $derived(overlays.some((o) => o.id > overlay.id && !o.closing));
 
   // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
@@ -267,7 +267,7 @@
   }
   .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; animation-play-state: paused !important; }
   .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-  /* Android (a user's video, Nov 6: the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
+  /* Android (the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
      person's card opened over the member list): the sheet stays solid there, as under power saving. ponytail: no glass on
      Android sheets; a one-off blurred snapshot behind them is the upgrade */
   .flat { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: var(--glass-solid); }
@@ -297,7 +297,7 @@
     position: relative; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
     border-top: 1px solid var(--line);
   }
-  /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom (owner, Nov 3) */
+  /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom */
   .foot:not(:has(*)) { display: none; }
   .hasfoot .body { --pb: var(--s-4); }
   .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }

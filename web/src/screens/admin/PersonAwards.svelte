@@ -1,8 +1,8 @@
 <script lang="ts">
-  // One person's manual awards as chips (Admin → a person; owner, Nov 3: giving was "very inconvenient"): ui/Chip, a
+  // One person's manual awards as chips (Admin → a person; giving is one tap): ui/Chip, a
   // held one selected with its medal in colour, the rest greyed. A tap gives at once (the bot sends them the award's
   // card; a toast says so); a held one is taken back behind a confirm. Bug hunter adds up: one more, or all of it back.
-  // A badge is one chip, its held variants in the label; a tap opens its variants (owner, Nov 3: never a chip per
+  // A badge is one chip, its held variants in the label; a tap opens its variants (never a chip per
   // variant). The creator's own two show for the creator alone (the server refuses the rest).
   //   person  whose;  has  their awards when the caller has them already (the search's rows), else they load here
   import { api, ApiErr, type GrantItem, type PersonRef } from '../../lib/api';
