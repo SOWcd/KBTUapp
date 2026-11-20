@@ -245,3 +245,15 @@ def test_guest_age_deleted_when_ended_ticket_is_anonymized(door_event):
     logic.delete_me(con, logic.Viewer(uid, "user", True))
     assert con.execute("SELECT user_id FROM registrations WHERE event_id = 1").fetchone()[0] != uid
     assert not con.execute("SELECT 1 FROM reg_age").fetchone()
+
+
+def test_reg_until_closes_sign_up(door_event, monkeypatch):
+    c, cfg, con = door_event
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    starts = con.execute("SELECT starts_at FROM events WHERE id = 1").fetchone()[0]
+    from datetime import datetime, timezone
+    at = datetime.fromtimestamp(starts - 3600, timezone.utc).isoformat()
+    admin.main(["reg-until", "1", at])
+    assert tuple(con.execute("SELECT reg_until, late_signup FROM events WHERE id = 1").fetchone()) == (starts - 3600, 0)
+    with pytest.raises(SystemExit):
+        admin.main(["reg-until", "1", datetime.fromtimestamp(starts + 60, timezone.utc).isoformat()])

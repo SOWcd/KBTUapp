@@ -66,6 +66,7 @@
                                 The surname must match. A Telegram username is used only without a valid student ID.
                                 The first import closes prior app sign-ups outside the list. Counts only.
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
+  .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
   .venv/bin/python -m kbtu.admin round-nudge <round id> [--dry]   a recruitment round's "pick an interview time" nudge (due
@@ -334,6 +335,12 @@ def main(args: list[str]) -> None:
         except UnicodeError:
             sys.exit("guest CSV must be UTF-8")
         print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
+    elif cmd == "reg-until" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]):
+        at = _event_time(args[2], "time")
+        with db.tx(con):
+            if not con.execute("UPDATE events SET reg_until = ?, late_signup = 0 WHERE id = ? AND starts_at > ?", (at, int(args[1]), at)).rowcount:
+                sys.exit("no such event, or it starts before that time")
+        print("sign-up closes", args[2])
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1])
     elif cmd == "roster" and len(args) == 4 and args[1] == "load":
