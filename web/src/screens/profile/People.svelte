@@ -1,9 +1,9 @@
 <script lang="ts">
-  // "People of the app", in the pitch's manner (black, hairlines, a quiet label over one big thing per block): what
-  // shipped in three numbers, the creator, the idea's author, then every line, newest first by the day it shipped:
-  // never by amount. A name and a face only after that person's own yes (server credits.py); without it a line is a
-  // row of its own signed "Student" beside its kind: no face, no icon, nothing to tap, nothing that ties two such
-  // lines together. A pull request's lines stand under its GitHub login, the row opens the profile there.
+  // "People of the app": what shipped in three numbers, then a card a person: the creator's, the idea's author's, then
+  // everyone's, newest first by the day it shipped: never by amount. A name and a face only after that person's own
+  // yes (server credits.py); without it a line goes in the last card, "Students", each line on its own under its kind:
+  // no face, nothing to tap, nothing that ties two such lines together. A pull request's lines stand under its GitHub
+  // login, its card opens the profile there.
   // The numbers count lines, never people: nameless lines say nothing of how many people they are.
   // The list comes with the app (data.credits): the page never waits.
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -18,7 +18,7 @@
   import { largeTitle } from '../../ui/title';
   import Pane from '../../ui/Pane.svelte';
   import Avatar from '../../ui/Avatar.svelte';
-  import Group from '../../ui/Group.svelte';
+  import Card from '../../ui/Card.svelte';
   import Skeleton from '../../ui/Skeleton.svelte';
   import CreditLines from '../../ui/CreditLines.svelte';
   import GitHubMark from '../../ui/GitHubMark.svelte';
@@ -40,12 +40,14 @@
     for (const r of c ? [...c.people, ...(c.idea ? [c.idea] : [])] : []) for (const i of r.items) n[i.kind]++;
     return KINDS.filter((k) => n[k]).map((k) => ({ k, n: n[k] }));
   });
+  const named = $derived(c ? c.people.filter((r) => r.person || r.gh) : []);
+  const anon = $derived(c ? c.people.filter((r) => !r.person && !r.gh).flatMap((r) => r.items) : []); // newest first, as listed
 </script>
 
 <!-- a word rising from under its own baseline, as the pitch's headings do -->
 {#snippet rise(text: string, at = 0)}{#each text.split(' ') as w, i (i)}<span class="w"><span style:--i={at + i}>{w}</span></span>{/each}{/snippet}
 
-<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare opal>
+<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare opal glow>
   <div class="ppl">
     <h1 class="lbl ttl" use:largeTitle={(g) => (overlay.quiet = !g)}>{t('cr.title')}</h1>
     {#if !c}
@@ -60,42 +62,49 @@
       {/if}
       {#if c.founder}
         {@const p = c.founder}
-        <div class="blk first up" style:--d="1">
-          <button class="star press" onclick={() => open(p)}>
+        <div class="crown up" style:--d="1"><Card onclick={() => open(p)}>
+          <span class="star">
+            <Avatar person={p} size={56} tappable={false} />
             <span class="txt"><span class="lbl">{t('cr.founder')}</span><b class="nm big">{@render rise(realOf(p), 3)}</b></span>
-            <Avatar person={p} size={64} tappable={false} />
-          </button>
+            <span class="mk"><ChevronRight size={18} /></span>
+          </span>
           {#if tgOf}<button class="link press" onclick={() => { haptic.tap(); openLink(`https://t.me/${tgOf}?text=${encodeURIComponent(t('fb.draft'))}`); }}><span>@{tgOf}</span><ArrowUpRight size={15} /></button>{/if}
-        </div>
+        </Card></div>
       {/if}
       {#if c.idea}
         {@const p = c.idea.person}
-        <div class="blk up" style:--d="2">
-          <svelte:element this={p ? 'button' : 'div'} class="star" class:press={!!p} onclick={p ? () => open(p) : undefined} role={p ? undefined : 'group'}>
-            <span class="txt"><span class="lbl">{t('cr.idea')}</span><b class="nm">{p ? realOf(p) : t('cr.student')}</b></span>
+        <div class="one up" style:--d="2"><Card onclick={p ? () => open(p) : undefined}>
+          <span class="star">
             {#if p}<Avatar person={p} size={44} tappable={false} />{/if}
-          </svelte:element>
+            <span class="txt"><span class="lbl">{t('cr.idea')}</span><b class="nm">{p ? realOf(p) : t('cr.student')}</b></span>
+            {#if p}<span class="mk"><ChevronRight size={18} /></span>{/if}
+          </span>
           {#if c.idea.items.length}<span class="more"><CreditLines items={c.idea.items} under="idea" /></span>{/if}
-        </div>
+        </Card></div>
       {/if}
       {#if c.people.length}
-        <div class="list up" style:--d="3"><Group caption={t('cr.list')}>
-          {#each c.people as row, i (i)}
-            {@const p = row.person}
-            {@const gh = !p && row.gh}
-            <svelte:element this={p || gh ? 'button' : 'div'} class="who" class:tap={!!(p || gh)} role={p || gh ? undefined : 'group'}
-              onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
-              {#if p}
-                <span class="hd"><Avatar person={p} size={28} tappable={false} /><b class="wn">{p.name}</b><span class="mk"><ChevronRight size={18} /></span></span>
-              {:else if gh}
-                <span class="hd"><span class="gh"><GitHubMark size={22} /></span><b class="wn">{gh}</b><span class="mk"><ArrowUpRight size={18} /></span></span>
-              {/if}
-              <CreditLines items={row.items} by={p || gh ? undefined : t('cr.student')} />
-            </svelte:element>
-          {/each}
-        </Group></div>
+        <h2 class="cap up" style:--d="3">{t('cr.list')}</h2>
+        <!-- a card a person (or a GitHub login); the nameless lines last, together in one card, each its own line:
+             nothing there says two of them are one person's -->
+        {#each named as row, i (i)}
+          {@const p = row.person}
+          {@const gh = !p && row.gh}
+          <div class="one up" style:--d={Math.min(4 + i, 9)}><Card onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
+            <span class="hd">
+              {#if p}<Avatar person={p} size={36} tappable={false} /><b class="wn">{p.name}</b><span class="mk"><ChevronRight size={18} /></span>
+              {:else if gh}<span class="gh"><GitHubMark size={24} /></span><b class="wn">{gh}</b><span class="mk"><ArrowUpRight size={18} /></span>{/if}
+            </span>
+            <CreditLines items={row.items} />
+          </Card></div>
+        {/each}
+        {#if anon.length}
+          <div class="one up" style:--d={Math.min(4 + named.length, 9)}><Card>
+            <span class="hd"><span class="gh anon"><UsersRound size={18} /></span><b class="wn">{t('cr.students')}</b></span>
+            <CreditLines items={anon} />
+          </Card></div>
+        {/if}
       {/if}
-      <button class="link code press up" style:--d="4" onclick={() => { haptic.tap(); openLink(CODE); }}>
+      <button class="link code press up" style:--d={Math.min(5 + named.length, 10)} onclick={() => { haptic.tap(); openLink(CODE); }}>
         <GitHubMark size={16} /><span>{t('cr.code')}</span><ArrowUpRight size={15} />
       </button>
     {/if}
@@ -112,24 +121,24 @@
   .stat { display: flex; flex-direction: column; gap: var(--s-2); padding-top: var(--s-3); border-top: 1px solid var(--separator); }
   .num { font: 700 var(--fs-title)/1 var(--font-display); letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
 
-  .blk { display: flex; flex-direction: column; align-items: flex-start; margin-top: var(--s-8); padding-top: var(--s-4); border-top: 1px solid var(--separator); }
-  .blk.first { margin-top: var(--s-10); }
-  .star { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); width: 100%; color: var(--text); text-align: left; }
-  .txt { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-  .nm { font: 700 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere; }
-  .nm.big { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
-  .more { margin-top: var(--s-3); }
-  .link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-bottom: calc(-1 * var(--s-3)); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  /* a card a person: the creator's first, a quiet brand tint in its corner; the idea's author; then everyone else */
+  .one, .crown { margin: var(--s-3) calc(-1 * var(--s-1)) 0; }
+  .crown { margin-top: var(--s-8); }  /* after .one's shorthand */
+  .crown :global(.card) { background: radial-gradient(120% 90% at 0% 0%, var(--accent-soft), transparent 65%), var(--surface); }
+  .star { display: flex; align-items: center; gap: var(--s-4); width: 100%; color: var(--text); }
+  .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .nm { font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.015em; overflow-wrap: anywhere; }
+  .nm.big { font: 700 var(--fs-t1)/1.05 var(--font-display); letter-spacing: -0.03em; }
+  .more { display: block; margin-top: var(--s-4); }
+  .link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .crown .link { margin: var(--s-2) 0 calc(-1 * var(--s-3)); }
   .code { align-self: center; margin: var(--s-8) 0 0; padding: 0 var(--s-3); }
 
-  .list { margin: var(--s-10) calc(-1 * var(--s-1)) 0; }
-  .who { position: relative; display: flex; flex-direction: column; gap: var(--s-3); width: 100%; padding: 14px var(--s-4); text-align: left; color: var(--text); }
-  .tap { transition: background-color var(--t-fast); }
-  .tap:active { background: var(--fill); transform: none; opacity: 1; }
-  @media (hover: hover) { .tap:hover { background: var(--fill); } }
-  .who + .who::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
-  .hd { display: flex; align-items: center; gap: 10px; }
-  .gh { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; }
+  .cap { margin: var(--s-10) var(--s-1) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }
+  .cap + .one { margin-top: 10px; }
+  .hd { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4); }
+  .gh { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; }
+  .anon { border-radius: 50%; background: var(--surface-2); color: var(--text-2); }
   .wn { flex: 1; min-width: 0; font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.01em; overflow-wrap: anywhere; }
   .mk { flex: none; display: inline-flex; margin-right: -4px; color: var(--text-3); opacity: 0.6; }
   .wait { margin-top: var(--s-10); }
