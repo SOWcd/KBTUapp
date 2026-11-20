@@ -46,12 +46,18 @@ def registry_memos(con, v: Viewer) -> list[dict]:
     club's word: the email itself is in DMP's mailbox, not here."""
     _overseer_only(con, v)
     out: dict[tuple[int, int], dict] = {}
-    for e in rows(con, """SELECT id, org_id, title, starts_at, memo_sent_at, memo_sent_by FROM events
-            WHERE memo_sent_at > ? ORDER BY memo_sent_at DESC, starts_at""", core.now() - 7 * 86400):
+    evs = rows(con, """SELECT id, org_id, title, starts_at, memo_sent_at, memo_sent_by FROM events
+            WHERE memo_sent_at > ? ORDER BY memo_sent_at DESC, starts_at""", core.now() - 7 * 86400)
+    # the clubs, their logos and who said "sent": one read each for the list
+    orgs = _by_id(con, "orgs", (e["org_id"] for e in evs))
+    logos = _by_id(con, "files", (o["logo_file_id"] for o in orgs.values()))
+    by = list({e["memo_sent_by"] for e in evs if e["memo_sent_by"]})
+    people = {p["id"]: p for p in rows(con, PERSON + f" WHERE u.id IN ({_qs(by)})", *by)}
+    for e in evs:
         m = out.get((e["org_id"], e["memo_sent_at"]))
         if not m:
-            p = one(con, PERSON + " WHERE u.id = ?", e["memo_sent_by"]) if e["memo_sent_by"] else None
-            m = out[(e["org_id"], e["memo_sent_at"])] = {"org": org_ref(con, _org(con, e["org_id"])), "sentAt": e["memo_sent_at"],
+            p = people.get(e["memo_sent_by"])
+            m = out[(e["org_id"], e["memo_sent_at"])] = {"org": org_ref(con, orgs[e["org_id"]], logos), "sentAt": e["memo_sent_at"],
                                                           "by": short_name(p) if p else None, "events": []}
         m["events"].append({"id": e["id"], "title": e["title"], "startsAt": e["starts_at"]})
     return list(out.values())
@@ -342,20 +348,32 @@ def find_user(con, who: str) -> sqlite3.Row | None:
 
 
 def _admin_org(con, o: sqlite3.Row) -> dict:
-    """A club as the admin sees it: the leaders (Telegram names only, as the CLI prints them) and the member count."""
-    team = rows(con, """SELECT m.role, u.id, u.tg_username, u.tg_first_name, u.tg_last_name, s.user_id IS NOT NULL AS student
-        FROM org_members m JOIN users u ON u.id = m.user_id LEFT JOIN students s ON s.user_id = u.id
-        WHERE m.org_id = ? AND m.role != 'member'""", o["id"])
-    return {**org_ref(con, o), "hidden": o["status"] == "hidden", "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
-            "team": sorted(({"id": m["id"], "role": m["role"], "username": m["tg_username"], "name": f"{m['tg_first_name']} {m['tg_last_name']}".strip(),
-                             "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"])),
-            "shortLinks": [r[0] for r in rows(con, "SELECT slug FROM short_links WHERE org_id = ? ORDER BY slug", o["id"])],
-            "awards": clubs.awards(con, [o["id"]]).get(o["id"], [])}
+    return _admin_orgs(con, [o])[0]
+
+
+def _admin_orgs(con, orgs: list[sqlite3.Row]) -> list[dict]:
+    """Clubs as the admin sees them: the leaders (Telegram names only, as the CLI prints them) and the member count.
+    Each fact read once for the whole list, never club by club."""
+    ids = [o["id"] for o in orgs]
+    team: dict[int, list] = {}
+    for m in rows(con, f"""SELECT m.org_id, m.role, u.id, u.tg_username, u.tg_first_name, u.tg_last_name, s.user_id IS NOT NULL AS student
+            FROM org_members m JOIN users u ON u.id = m.user_id LEFT JOIN students s ON s.user_id = u.id
+            WHERE m.org_id IN ({_qs(ids)}) AND m.role != 'member' ORDER BY m.org_id, m.user_id""", *ids):
+        team.setdefault(m["org_id"], []).append(m)
+    members = dict(rows(con, f"SELECT org_id, COUNT(*) FROM org_members WHERE org_id IN ({_qs(ids)}) GROUP BY org_id", *ids))
+    links: dict[int, list[str]] = {}
+    for r in rows(con, f"SELECT org_id, slug FROM short_links WHERE org_id IN ({_qs(ids)}) ORDER BY slug", *ids):
+        links.setdefault(r["org_id"], []).append(r["slug"])
+    won, logos = clubs.awards(con, ids), _by_id(con, "files", (o["logo_file_id"] for o in orgs))
+    return [{**org_ref(con, o, logos), "hidden": o["status"] == "hidden", "members": members.get(o["id"], 0),
+             "team": sorted(({"id": m["id"], "role": m["role"], "username": m["tg_username"], "name": f"{m['tg_first_name']} {m['tg_last_name']}".strip(),
+                              "student": bool(m["student"])} for m in team.get(o["id"], [])), key=lambda m: (-RANK[m["role"]], m["name"])),
+             "shortLinks": links.get(o["id"], []), "awards": won.get(o["id"], [])} for o in orgs]
 
 
 def admin_orgs(con, v: Viewer) -> list[dict]:
     _admin(v)
-    return [_admin_org(con, o) for o in rows(con, "SELECT * FROM orgs WHERE status != 'archived' ORDER BY id DESC")]
+    return _admin_orgs(con, rows(con, "SELECT * FROM orgs WHERE status != 'archived' ORDER BY id DESC"))
 
 
 def admin_hide_org(con, v: Viewer, oid: int, hidden: bool) -> dict:
