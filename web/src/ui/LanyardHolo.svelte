@@ -100,6 +100,14 @@
       repeating-linear-gradient(180deg, rgba(255, 238, 196, 0.12) 0 0.5px, transparent 0.5px 2px),
       linear-gradient(180deg, rgb(230, 196, 122), rgb(184, 142, 66) 52%, rgb(138, 100, 42));
     box-shadow: inset 0 0 0 1px rgba(255, 232, 170, 0.75), inset 0 1px 0 rgba(255, 250, 228, 0.7), inset 0 -1.5px 2px rgba(60, 30, 6, 0.5), 0 0 0 0.5px rgba(40, 14, 4, 0.8), 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
+  /* The Bay Harbor Society: a glass slide from Dexter's box: cold clear glass on the card, its ground edges catching the
+     light, one drop of blood smeared on it between the name and the number, a light sliding with the tilt */
+  .thebayharborsociety { color: rgb(10, 10, 10);
+    background: radial-gradient(2px 1.4px at calc(58% - 1.5px) calc(50% - 1px), rgba(255, 255, 255, 0.7), transparent),
+      radial-gradient(7px 4.5px at 58% 50%, rgb(150, 12, 22) 0 55%, rgba(179, 18, 30, 0.9) 75%, rgba(179, 18, 30, 0.25) 92%, transparent),
+      linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.75) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      linear-gradient(180deg, rgba(246, 244, 240, 0.97), rgba(214, 210, 203, 0.95));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85), inset 0 1px 0 rgb(255, 255, 255), inset 0 -1.5px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 4px 12px -6px rgba(0, 0, 0, 0.8); }
   /* CyberSport: dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);

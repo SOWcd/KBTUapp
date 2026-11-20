@@ -38,6 +38,8 @@ import nisTree from '../assets/lanyards/nis-tree.webp';
 import cyberPanther from '../assets/lanyards/cyber-panther.webp';
 // round 20 (.claude/reports/club-lanyards/round20/gen): Dice and Destiny's dragon round its two d20s, cut off their logo's white
 import ddDragon from '../assets/lanyards/dd-dragon.webp';
+// The Bay Harbor Society's drop of blood, as they drew it
+import bhDrop from '../assets/lanyards/bh-drop.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -339,6 +341,10 @@ export const CLUB_LOOKS = {
   // gold; the strip engraved brass (LanyardHolo)
   diceanddestinykbtu: { strap: 'DICE &\nDESTINY', strip: 'DICE AND DESTINY', short: 'DD', bg: ['#2E0808', '#140405', '#060203'], straps: ['#5E0E0B', '#A3191A', '#F0DDB4'],
     holo: ['#D9B46A', '#9C7634', '#341C0A'], ring: 'linear-gradient(135deg, #F0DDB4, #C9A15A 45%, #7A1410)', role: '#E8B867', qr: ['#7A1410', '#2A0806'], plate: ['#3A0E0B', '#120504'], mark: ddDragon },
+  // The Bay Harbor Society (a Dexter fan club): Miami at night, clinical and cold, a drop of blood: black, blood red, light
+  // grey; the strip a glass slide (LanyardHolo)
+  thebayharborsociety: { strap: 'DEXTER', strip: 'FAN CLUB', bg: ['#141416', '#0A0A0A', '#050505'], straps: ['#050505', '#1C1C1E', '#E6E2DA'],
+    holo: ['#F2EFEA', '#CFCAC1', '#0A0A0A'], ring: 'linear-gradient(135deg, #F4F1EB, #9A968F 45%, #B3121E)', role: '#E6E2DA', qr: ['#8E0E17', '#0A0A0A'], plate: ['#1C1C1E', '#0A0A0A'], mark: bhDrop },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh

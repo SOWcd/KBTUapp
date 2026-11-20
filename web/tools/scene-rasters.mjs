@@ -22,7 +22,7 @@ const Q = 0.85, ZS = 1.03;
 const OVERSCAN = { 'scenes/mk-sky-card.svg': 1.04, 'kbtu-rosette.svg': 1.04, 'kbtu-facade.svg': 1.02, 'scenes/ch-shield-card.svg': 1.02, 'scenes/sx-cap-card.svg': 1.02,
   // layers that stand still on the card (no --zs): ClubScene's mid ridge, skyline, windows, ground, hill, flask, Faces'
   // ribbons; SchoolScene's unclassed and wave layers
-  ...Object.fromEntries(['mk-mid', 'spe-ground', 'qa-hill', 'ai-flask', 'fc-neon', 'en-mid', 'cs-mid', 'knl-mid', 'lit-mid', 'tm-mid', 'w3-mid', 'zh-mid', 'cin-mid', 'nis-mid', 'cyb-mid', 'dd-mid'].map((n) => [`scenes/${n}-card.svg`, 1])),
+  ...Object.fromEntries(['mk-mid', 'spe-ground', 'qa-hill', 'ai-flask', 'fc-neon', 'en-mid', 'cs-mid', 'knl-mid', 'lit-mid', 'tm-mid', 'w3-mid', 'zh-mid', 'cin-mid', 'nis-mid', 'cyb-mid', 'dd-mid', 'bh-mid'].map((n) => [`scenes/${n}-card.svg`, 1])),
   ...Object.fromEntries(['geo-strata', 'bs-board', 'law-desk', 'kma-waves'].map((n) => [`schools/${n}-card.svg`, 1])),
   'sower/mid-card.svg': 1 }; // ui/SowerArt's still layer
 
