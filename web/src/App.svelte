@@ -512,7 +512,9 @@
     const ap = p.match(/^apl_(\d+)$/); // the bot: SG answered this appeal: its own view, the answer on top
     if (ap) { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.myAppeal(Number(ap[1])); return; }
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
-    if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer
+    const aq = p.match(/^ask_(\d+)$/); // the bot: a person answered my question: its own view, the answer on top
+    if (aq) { ui.tab = 'profile'; if (session.me?.ask) sheets.myAsk(Number(aq[1])); return; }
+    if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer (old messages)
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
@@ -825,7 +827,14 @@
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
-      void loadCredits(); // People of the app: Profile's row and its screen, ahead of any tap
+      // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
+      // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
+      void loadCredits().then(() => {
+        const v = data.credits?.version, k = `cr.asked.${v}`;
+        if (data.credits?.mine?.consent !== null || data.credits?.mine == null || ui.gate) return;
+        try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
+        sheets.creditAsk();
+      });
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
       for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       for (const k of TABS) loadPage(k).catch(() => {});
