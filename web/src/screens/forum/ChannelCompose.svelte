@@ -155,6 +155,7 @@
   let motion: Animation | undefined;
   let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
   let gone = false, sent = false;
+  let still = $state(false);  // the opening is over: only then the feed behind blurs (a blur under a moving window and the keyboard lags on iPhone)
   const full = () => `inset(0% 0% 0% 0% round ${getComputedStyle(win).borderTopLeftRadius})`;
   const ease = () => getComputedStyle(win).getPropertyValue('--ease').trim();
 
@@ -195,16 +196,23 @@
     // Measure the layout position, never the animated rectangle: otherwise each keyboard resize feeds the motion
     // back into the available height. The inset leaves a little ground between the window and the keyboard.
     const vv = window.visualViewport;
+    // once a frame at most: iOS fires several resizes while the keyboard slides, each a full layout of the window
+    let tick = 0;
     const fit = () => {
-      if (vv && !gone) win.style.setProperty('--room', `${Math.max(0, vv.offsetTop + vv.height - win.offsetTop - 12)}px`);
+      if (tick) return;
+      tick = requestAnimationFrame(() => {
+        tick = 0;
+        if (vv && !gone) win.style.setProperty('--room', `${Math.max(0, vv.offsetTop + vv.height - win.offsetTop - 12)}px`);
+      });
     };
     fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
     const from = calm() ? null : pill();
     motion = win.animate(from ? [from, { transform: 'none', clipPath: full() }]
       : [{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 1 : 300, easing: ease() });
+    motion.onfinish = () => { if (!gone) still = true; };
     const frame = requestAnimationFrame(() => { if (!gone) out = false; });
     return () => {
-      cancelAnimationFrame(frame); motion?.cancel();
+      cancelAnimationFrame(frame); cancelAnimationFrame(tick); motion?.cancel();
       channel.writing--; chrome(); vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit);
       if (!was) bg?.removeAttribute('inert');
     };
@@ -246,7 +254,7 @@
   const key = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } };
 </script>
 
-<div class="scrim" class:out onclick={() => close(overlay.id, true)} role="presentation"></div>
+<div class="scrim" class:out class:still onclick={() => close(overlay.id, true)} role="presentation"></div>
 <div class="cw glass glass-sheet" class:out use:glass bind:this={win} role="dialog" aria-modal="true" aria-label={t('fc.new')}>
   <!-- the pill's own row, the same places: my face, then who it goes out as (the pill's words fade into it), Send -->
   <div class="top">
@@ -306,8 +314,8 @@
 </div>
 
 <style>
-  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim);
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 300ms var(--ease); }
+  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 300ms var(--ease); }
+  .scrim.still { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 300ms var(--ease), backdrop-filter 200ms var(--ease); }
   .scrim.out { opacity: 0; transition-duration: 240ms; }
   /* The rim and softened ground give the window depth. The same full clip at rest keeps interrupted exits
      interpolating smoothly, without an exterior shadow popping in after the reveal. */
