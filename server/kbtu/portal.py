@@ -60,8 +60,8 @@ def page_html(data: bytes) -> str:
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr",
         "path", "circle", "rect", "line", "polyline", "polygon", "use"}
-# a made-up page must not stop or stall the bot (it reads one update at a time): thousands of nested tags blew the
-# recursion in Node.all() and stopped it for everyone (Oct 30). A real page nests far less and has a few thousand tags
+# a made-up page must not stop or stall the bot (it reads one update at a time): thousands of nested tags blow the
+# recursion in Node.all() and stop it for everyone. A real page nests far less and has a few thousand tags
 # and texts; every one the parser meets counts, so a page of nothing but end tags or comments stops early too
 MAX_DEPTH, MAX_PARTS = 200, 100_000
 # and its words (each one is read once per tag above it: 19 MB of text 195 deep took 30 s); an .mht's parts (a real

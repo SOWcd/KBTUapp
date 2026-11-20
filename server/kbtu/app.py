@@ -58,7 +58,7 @@ async def _picture(fn, *args):
 
 THREADS = 16               # see lifespan
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
-NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (the KBTU-password sign-in is gone since Oct 19)
+NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
 
 
 async def read_upload(request: Request, most: int = media.MAX_BYTES) -> bytes:
@@ -88,7 +88,7 @@ class _Route(APIRoute):
 
 async def conn(request: Request) -> AsyncIterator[sqlite3.Connection]:
     # async: taking a kept connection and giving it back are a queue's get and put, so they run on the loop; as a plain
-    # generator FastAPI sent each into the thread pool, two of a request's four thread hops (perf round 4: -9% server CPU
+    # generator FastAPI sends each into the thread pool, two of a request's four thread hops (-9% server CPU
     # per request under load)
     logic.core.CALLER.set({})  # on the loop, so the route's threads share it (viewer fills it in)
     with request.app.state.pool.conn() as con:
@@ -162,7 +162,7 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         full = v.role == "admin" and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
         draft = route == ("POST", "/api/photos") or full and route == ("POST", "/api/videos") \
             or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid
-        # ...and the creator opens that club's whole Studio from Admin (owner, Nov 15): every route of the club and of its
+        # ...and the creator opens that club's whole Studio from Admin: every route of the club and of its
         # events, as its President; never the club's end or hand-over, nor his own joining or tickets (STUDIO_NOT_LENT)
         studio = full and bool(o) and not draft and _studio_route(con, request, route, o["id"])
         if v.role != "admin" or not o or "x-staff-event" in request.headers or not (draft or studio):
@@ -220,8 +220,8 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
                 # role and can_dm from the row as it is now, never from the read above: a demotion or ban (or the bot's
                 # "blocked") landing in between must not be written back.
                 # Only while seen_at is still the one read above: the app's start sends six requests at once, all of
-                # them read the old row before any commits, and each wrote the same row and visit (6 writes per open);
-                # now the first writes, the others find seen_at moved on and write nothing (1 write per open)
+                # them read the old row before any commits, and each would write the same row and visit (6 writes per open);
+                # so the first writes, the others find seen_at moved on and write nothing (1 write per open)
                 if con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?,
                     role = CASE WHEN ? AND banned_at IS NULL THEN 'admin' ELSE role END, can_dm = MAX(can_dm, ?), seen_at = ?
                     WHERE id = ? AND seen_at = ?""", (*fresh, int(env), int(bool(tg.get("allows_write_to_pm"))), t, u["id"], u["seen_at"])).rowcount:
@@ -292,8 +292,7 @@ SubjWrite = Annotated[Viewer, Depends(subj_writer)]
 
 def board_on(cfg, v: Viewer) -> bool:
     """The policy's section 12 is in force for this person (BOARD=1 everyone, BOARD=staff the admins and moderators):
-    the assistant, an event's sign-up questions, the map's flaws. Its old in-app forum is off for good (its code removed):
-    the forum channel replaced it (Nov 1), migration 103 deleted its threads."""
+    the assistant, an event's sign-up questions, the map's flaws."""
     return cfg.board == "all" or cfg.board == "staff" and v.role in ("admin", "moderator")
 
 
@@ -307,8 +306,8 @@ Board = Annotated[Viewer, Depends(board_viewer)]
 
 
 def _eu_only() -> None:
-    """This request's student agreed to an earlier policy, not the one in force. Nobody is asked to accept again (owner,
-    Nov 13: no policy screen at all, until he says), so they write as before, and their text is looked at only on the EU
+    """This request's student agreed to an earlier policy, not the one in force. Nobody is asked to accept again (no
+    policy screen at all), so they still write, and their text is looked at only on the EU
     host (ai.EU_ONLY: what every earlier policy named), never by the other providers the policy in force added."""
     (logic.core.CALLER.get() or {})["eu"] = True
 
@@ -324,7 +323,7 @@ def _ai_eu() -> dict:
 
 def board_writer(request: Request, v: Board, con: Con) -> Viewer:
     """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only). BOARD=staff
-    too (review, Nov 19): with the forum channel on, the assistant's providers are the policy's in force, so a staff
+    too: with the forum channel on, the assistant's providers are the policy's in force, so a staff
     member on an earlier version stays on the EU host as a student would."""
     if earlier_policy(con, request.app.state.policy, v.id):
         _eu_only()
@@ -426,8 +425,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI):
-        # the sync routes' thread pool: anyio's default 40 threads fought over the one GIL (SQLite lets it go on every
-        # call): under load a request cost 24 ms of CPU, 10 with 16 threads, twice the requests a second (perf round 4)
+        # the sync routes' thread pool: anyio's default 40 threads fight over the one GIL (SQLite lets it go on every
+        # call): under load a request costs 24 ms of CPU, 10 with 16 threads, twice the requests a second
         # ponytail: one number for every route; a route that blocks long belongs on its own limiter (_imgs) instead
         anyio.to_thread.current_default_thread_limiter().total_tokens = THREADS
         task = asyncio.create_task(bot.run(cfg)) if cfg.background else None
@@ -443,7 +442,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)  # JSON lists; pictures and video are excluded
 
     def ai_http() -> httpx.AsyncClient:
-        """One client for the AI calls (keep-alive: a new one per request paid DNS and TLS each time)."""
+        """One client for the AI calls (keep-alive: a new one per request pays DNS and TLS each time)."""
         if getattr(app.state, "http", None) is None:
             app.state.http = httpx.AsyncClient()
         return app.state.http
@@ -583,12 +582,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/kbtu/manual")
     def kbtu_manual(con: Con, v: Me, body: dict = Body(...)):
         """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
-        empty, measured Oct 20), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
+        empty), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
         no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
         to the Microsoft one; held by a Microsoft-confirmed one, it's refused and sorted without admins (id_clash)."""
         consent = str(body.get("consentVersion") or "")
         sid = str(body.get("studentId") or "").strip().upper()
-        course = logic.course_of(sid)  # the ID says the year (audit M3: a typed "1" took free first-year seats); None: a year ahead
+        course = logic.course_of(sid)  # the ID says the year (else a typed "1" takes free first-year seats); None: a year ahead
         ms = logic.ms_pending(con, v.id)
         # the account's names when Microsoft has them (ms_link writes them anyway); typed only where it has none
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
@@ -617,7 +616,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not ms:
             raise ApiError("forbidden", "ms_first")
         if STUDENT_ID.fullmatch(ms.get("employeeId") or "") and ms["employeeId"] != sid:
-            raise ApiError("conflict", "sid_mismatch")  # empty at KBTU today (measured Oct 20); kept for the day they fill it
+            raise ApiError("conflict", "sid_mismatch")  # empty at KBTU (measured); kept for the day they fill it
         now = logic.now()
         with db.tx(con):
             if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):
@@ -1339,7 +1338,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/rounds/{rid}/send")
     def round_send(rid: int, con: Con, v: Me, body: dict | None = Body(None)):
-        return casting.send(con, v, rid, (body or {}).get("final", True) is not False)  # no body: the old final send
+        return casting.send(con, v, rid, (body or {}).get("final", True) is not False)  # no body: an older app's final send
 
     @app.get("/api/orgs/{oid}/memo")
     def org_memo(oid: int, con: Con, v: Me, later: bool = False):
@@ -1819,7 +1818,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         lead (llm.chat's): asked first, only where the policy in force applies (never on the EU host alone)."""
         only = _ai_only(assist_only)
         lead = lead if only == ai.ASSIST_PROVIDERS and cfg.assist_lead in ("", "google") else None
-        # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
+        # a bad answer is asked once more (with one provider down, another's one malformed reply would be "busy")
         try:
             async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
                 for last in (False, True):
@@ -1942,11 +1941,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
-            # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod, Nov 16: with
+            # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod: with
             # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
             # call, and the slow ones were the host's, which the race covers)
-            # Google first, for this answer alone (policy section 5, Nov 19), only with this student's own yes
-            # (assistant.GOOGLE_YES) where kri_google allows it; no yes, or its failure: the chain as before
+            # Google first, for this answer alone (policy section 5), only with this student's own yes
+            # (assistant.GOOGLE_YES) where kri_google allows it; no yes, or its failure: the usual chain
             yes = await run_in_threadpool(lambda: kri_google(con, v) and logic.assistant.google_yes(con, v.id))
             text = await eu_ai(con, logic.assistant.with_lang(msgs), max_tokens=700, temperature=0.3, check=logic.assistant.usable, timeout=25,
                                race=True, effort="none", lead=llm.GOOGLE if yes else None,
@@ -1982,7 +1981,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"))
-        # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
+        # a long announcement's form is long (1500 tokens cut it, then no time is left to ask again): room for both
         text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True, effort="none")  # a person waits: a slow first host races another
         return logic.assistant.filled(text, body.get("text"))
 
@@ -2003,7 +2002,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def vol_link(con: Con, v: VolMe, vid: int, body: dict = Body(...)):
         return logic.vol.link(con, v, vid, body)
 
-    # hours come from scans alone: no route enters a shift, its times or a balance (Nov 11); this one takes a shift out or back
+    # hours come from scans alone: no route enters a shift, its times or a balance; this one takes a shift out or back
     @app.patch("/api/vol/shifts/{hid}")
     def vol_edit_shift(con: Con, v: VolMe, hid: int, body: dict = Body(...)):
         return logic.vol.edit_shift(con, v, hid, body)
@@ -2458,7 +2457,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # the photo, else the video's poster (a photo of the same name)
             cover = logic.one(con, """SELECT COALESCE(f.path, x.path) AS path FROM events e LEFT JOIN files f ON f.id = e.cover_file_id
                 LEFT JOIN videos x ON x.id = e.video_id AND x.status = 'ready' WHERE e.id = ? AND COALESCE(f.path, x.path) IS NOT NULL""", ref)
-            # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture
+            # no photo: the event's own poster (its colour and emoji, as in the app)
             photo = f"https://{cfg.domain}/media/{cover['path']}.jpg" if cover else \
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
             # "My link": a member of the event's club shares it with a code of its own (never the friend link's), so who came by it is theirs
@@ -2482,7 +2481,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
-            elif kind in ("rf", "fr"):  # my one invite link (referral and friends, Nov 2; "fr" an older app's): my link code, never my ID nor my badge's secret
+            elif kind in ("rf", "fr"):  # my one invite link (referral and friends; "fr" an older app's): my link code, never my ID nor my badge's secret
                 if not v.student:
                     raise ApiError("need_student")
                 kind, start = "rf", f"r_{logic._qr_code(con, v.id, 'link_code')}"
@@ -2849,7 +2848,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return FileResponse(f, headers={"Cache-Control": "public, max-age=3600"})
         return FileResponse(f, headers={"Cache-Control": "public, max-age=31536000, immutable"})  # named by content hash
 
-    # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405
+    # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answers them 405
     @app.api_route("/{path:path}", methods=["GET", "HEAD"])
     def frontend(path: str, request: Request):
         if path.startswith("api/"):
@@ -2857,15 +2856,15 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         start = request.query_params.get("tgWebAppStartParam")
         if start == "old" and cfg.old_dir:  # t.me/KBTUappBot?startapp=old
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
-        if path == "demo" or path.startswith("demo/"):  # the in-browser demo went: its old links open the app in Telegram
+        if path == "demo" or path.startswith("demo/"):  # the in-browser demo is gone: its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
-            with pool.conn() as con:  # only past the files (every asset took a connection)
+            with pool.conn() as con:  # only past the files (else every asset takes a connection)
                 to = logic.start_by_slug(con, path.strip("/"))
-        if to:  # kbtu.sow.kz/<club>: an Instagram bio's link (A5); or a club's own link to itself, an event, its round
+        if to:  # kbtu.sow.kz/<club>: an Instagram bio's link; or a club's own link to itself, an event, its round
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp={to}", status_code=302)
         return page()  # SPA: the app routes itself
 

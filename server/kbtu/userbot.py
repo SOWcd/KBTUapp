@@ -1,8 +1,8 @@
 """The userbot (PLAN 86 part 2): an old Telegram account, signed in once (tools/userbot_login.py), that joins each org's
 main public channel and mirrors its posts into the org's news (mirror.py has the rules). It runs in the bot's process
 beside the postman (bot.run), never in a request: one account is one point of failure, and Telegram makes it wait
-(FloodWait) when it hurries. TG_API_ID, TG_API_HASH and TG_SESSION in the environment; any missing: off, the app as
-before. It reads the channels it mirrors, and (owner, Nov 14: /all calls everyone) the member list of a group it
+(FloodWait) when it hurries. TG_API_ID, TG_API_HASH and TG_SESSION in the environment; any missing: off, nothing else
+changes. It reads the channels it mirrors, and (/all calls everyone) the member list of a group it
 shares with our bot, once, when the two meet in either order (Mirror.met, on Telegram's join message; Mirror.catch_up
 at sign-in): only the members' Telegram ids are kept, as our bot's own memory of who is in the chat (chatlist.members),
 never names or usernames. Updates from anywhere else are dropped unread, it never writes to anyone, and it keeps
@@ -216,7 +216,7 @@ class Mirror:
             await asyncio.sleep(JOIN_GAP)
 
     async def mute(self, ent) -> None:
-        """Silence a chat it's in for good (owner, Nov 2): the account's phone stays quiet."""
+        """Silence a chat it's in for good: the account's phone stays quiet."""
         from telethon.tl.functions.account import UpdateNotifySettingsRequest
         from telethon.tl.types import InputNotifyPeer, InputPeerNotifySettings
         await self.client(UpdateNotifySettingsRequest(InputNotifyPeer(await self.client.get_input_entity(ent)),
@@ -298,7 +298,7 @@ class Mirror:
 
     async def met(self, ev) -> None:
         """The userbot or our bot joined (or was added to) a group: the pair may have just met, the group listed now,
-        once (owner, Nov 14). No polling: Telegram's own service message is the cue; anyone else's join is dropped."""
+        once. No polling: Telegram's own service message is the cue; anyone else's join is dropped."""
         if not (ev.user_joined or ev.user_added) or not ({self.me, self.bot} & set(ev.user_ids or [])):
             return
         if (ent := await ev.get_chat()) is not None and (chat := self.group_id(ent)) is not None:

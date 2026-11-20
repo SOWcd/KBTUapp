@@ -202,7 +202,7 @@ def _report(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     root = msg.get("message_thread_id") or t.get("message_thread_id")
     res, cid = rules.report(con, msg["from"]["id"], cfg.tgc_chat, t["message_id"], author["id"], _text(t), _link(con, root, t["message_id"]))
-    if res == "ok":  # no cap on reports (owner); a cap on the fresh AI looks one reporter brings about in a day
+    if res == "ok":  # no cap on reports; a cap on the fresh AI looks one reporter brings about in a day
         spawn(_judge(cfg, http, cid, rules.fresh_look(con, msg["from"]["id"])))
 
 
@@ -293,7 +293,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     out, then the bot's first comment under each. The words go escaped (only the signature under them is italic), no
     preview. The bot needs in the channel: post, edit and delete others' messages."""
     F = logic.fchannel
-    pics_dir = Path(cfg.db_path).resolve().parent / "media"  # never `root`: the copies' loop below names its own (Codex review)
+    pics_dir = Path(cfg.db_path).resolve().parent / "media"  # never `root`: the copies' loop below names its own
     media.drop(pics_dir, F.pics_gone(con))  # photos whose rows left (deleted, swept, never posted): off the disk, the feature on or off
     if not cfg.forum_channel:
         return
@@ -342,7 +342,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             continue
         # no buttons on the post: a channel post with an inline keyboard loses Telegram's "Comments" bar (the way back
         # into the app is the bot's first comment, below). The words first, the signature under them like a quote's
-        # (owner, Nov 2: Telegram can't right-align; italic and the dash come closest); both escaped, never markup
+        # (Telegram can't right-align; italic and the dash come closest); both escaped, never markup
         text = f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>"
         r = await _send_photos(cfg, http, text, jpgs) if jpgs else await _call(cfg, http, "sendMessage", {
             "chat_id": cfg.forum_channel, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}})
@@ -413,7 +413,7 @@ async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
 
 
 # the author's messages about one comment, each said only while it's still true: "under review" while a moderator hasn't
-# decided, then the verdict; the verdict edits the first message in place (owner, Nov 1), so the chat holds one
+# decided, then the verdict; the verdict edits the first message in place, so the chat holds one
 AUTHOR = {"tgc_removed": "status IN ('deleting', 'deleted') AND review = 1",
           "tgc_confirmed": "status IN ('deleting', 'deleted') AND review = 0",
           "tgc_back": "status = 'restored'"}

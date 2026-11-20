@@ -22,19 +22,19 @@ URLS = {
     "cf": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions",
     "munito": "https://api.munito.ai/inference/v1/chat/completions",
     # Munito's EU host: the global one "can run in any region" (docs.munito.ai/gdpr-data-residency); the forum's look
-    # must stay in the EU (privacy policy, section 11). Fewer models there: no deepseek-v4.1 (measured Oct 26)
+    # must stay in the EU (privacy policy, section 11). Fewer models there: no deepseek-v4.1 (measured)
     "munitoeu": "https://api.eu.munito.ai/inference/v1/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
     # APInex (apinex.bond/llms.txt): an OpenAI-compatible reseller; free/* models spend a daily allowance
     # (20M weighted tokens, V4.1 Flash weighs 3) at 15 req/min per account (api/public/subscriptions, /rate-limits)
     "apinex": "https://api.apinex.bond/v1/chat/completions",
-    # Google's OpenAI-compatible endpoint (aistudio.google.com/docs/openai, Nov 19): the key as a Bearer header, never in the URL
+    # Google's OpenAI-compatible endpoint (aistudio.google.com/docs/openai): the key as a Bearer header, never in the URL
     "google": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 }
-# the biggest free limits first (Oct 29): APInex (owner's pick), Munito (rate limits only, no daily cap), Groq (~1K
-# req/day per model), Cloudflare (10k neurons/day for all its models; Nov 13: deepseek-v4-pro, kimi-k2.6 and glm-5.3-flash
-# left the free plan, these three answer on it in 1.2-1.5 s), OpenRouter (50 free req/day)
+# the biggest free limits first: APInex, Munito (rate limits only, no daily cap), Groq (~1K
+# req/day per model), Cloudflare (10k neurons/day for all its models; these three
+# answer on the free plan in 1.2-1.5 s), OpenRouter (50 free req/day)
 CHAIN = ("apinex:free/deepseek-v4.1-flash,munito:deepseek-ai/deepseek-v4.1-flash-1017,munito:zai-org/glm-5.3-flash,"
          "groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b,cf:@cf/qwen/qwen3-30b-a3b-fp8,"
          "cf:@cf/meta/llama-3.3-70b-instruct-fp8-fast,cf:@cf/mistralai/mistral-small-3.1-24b-instruct,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free")
@@ -45,15 +45,15 @@ TIMEOUT = 60
 HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 EFFORT_OK = ("munito", "munitoeu")  # the providers known to take reasoning_effort (chat's effort)
 # Google, the assistant's first try (chat's lead=; app.py: ASSIST_LEAD not off and the student's own yes,
-# assistant.GOOGLE_YES): series 4 only (owner), the one on the free tier. Free tier: often 503 "high demand" (Nov 19:
-# 2 of 3 calls answered), so one quick retry, then the usual chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer than before when Google fails.
-# ponytail: real answers took 3.1 to 6.5 s (Nov 19, effort low, 700 tokens), so 9 s lets them through; a failing Google
-# costs a student up to 9 s more than before, and leaves the chain 21 s of the assistant's 30 s (eu_ai's whole).
+# assistant.GOOGLE_YES): series 4 only, the one on the free tier. Free tier: often 503 "high demand"
+# (2 of 3 calls answered), so one quick retry, then the usual chain; both tries share LEAD_WAIT of wall clock, the most a student waits longer when Google fails.
+# ponytail: real answers took 3.1 to 6.5 s (effort low, 700 tokens), so 9 s lets them through; a failing Google
+# costs a student up to 9 s more than the chain alone, and leaves the chain 21 s of the assistant's 30 s (eu_ai's whole).
 # Lower it once the admin's AI page shows Google's average (ms / ok)
 GOOGLE = "google:gemini-4-hydrogen"
 LEAD_WAIT = 9.0
 LEAD_BACKOFF = 0.4
-# Gemini 4 can't stop thinking and its thinking counts in max_tokens (aistudio.google.com/docs/thinking, Nov 19): any
+# Gemini 4 can't stop thinking and its thinking counts in max_tokens (aistudio.google.com/docs/thinking): any
 # effort asked becomes its lowest level, "low" ("none" and "minimal" are refused there)
 GOOGLE_EFFORT = "low"
 RACE_MOST = 3   # race: links asked at once, at most (each a request on someone's rate limit)
@@ -81,7 +81,7 @@ class Link:
 
 
 _rest: dict[str, float] = {}     # link name -> resting until (this process)
-_turn = itertools.count()        # which key of a provider goes first this time: the keys share the load (owner, Nov 13)
+_turn = itertools.count()        # which key of a provider goes first this time: the keys share the load
 
 
 def links(cfg, chain: str | None = None) -> list[Link]:
@@ -107,8 +107,8 @@ def available(cfg) -> bool:
 
 def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
     """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>): [ok, fail, ms, timed], ms the
-    sum of the timed answers' milliseconds (average = ms / timed; rows from before Nov 19 are [ok, fail]). Its own short
-    connection: a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
+    sum of the timed answers' milliseconds (average = ms / timed; older rows are [ok, fail]). Its own short
+    connection: a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one."""
     if not path:
         return
     from . import db  # here: llm is imported by db's users
@@ -148,9 +148,9 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
-    chain. race: a student waits (owner, Nov 4): the first link, and if it hasn't answered in HEDGE seconds (or failed),
+    chain. race: a student waits: the first link, and if it hasn't answered in HEDGE seconds (or failed),
     another company's at once; the first usable answer wins, then the rest one by one. Busy: none answered; BadAnswers: none usable.
-    effort: Munito's `reasoning_effort` ("none": no thinking first). Measured on prod, Nov 16: an event's announcement sent
+    effort: Munito's `reasoning_effort` ("none": no thinking first). Measured on prod: an event's announcement sent
     both DeepSeek flash models reasoning through all 3500 tokens with no answer (21-37 s each, then the next link); with
     "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one,
     and a 400 rests its link for hours. lead: links ("provider:model,...", outside only= and chain=) asked first, each
@@ -240,13 +240,13 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             return text, link.name
 
     # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
-    # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often)
+    # rather than "busy" for everyone (else the assistant says busy too often)
     order = awake or sorted(pool, key=lambda x: _rest.get(x.name, 0))[:1]
     if race and len(order) > 1:
         firm = lambda x: x.provider.removesuffix("eu")  # noqa: E731  munitoeu and munito: one company's two hosts
         other = next((x for x in order[1:] if firm(x) != firm(order[0])), order[1])  # another company: its own outage
-        # staggered (Nov 15: a 30 s ReadTimeout on the EU host and a resting second held the fill a minute, then the rest
-        # were asked one by one): each HEDGE s without an answer, or at once on a failure, the next link joins, at most
+        # staggered (asked one by one, a 30 s ReadTimeout on the EU host and a resting second can hold the fill a
+        # minute): each HEDGE s without an answer, or at once on a failure, the next link joins, at most
         # RACE_MOST in flight; the usual day is still one call
         waiting = [order[0], other] + [x for x in order if x not in (order[0], other)]
         order, tasks = [], {}
@@ -269,8 +269,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         if text is not None:
             return text, link.name
     if not answered and len(pool) == 1:
-        # one provider alone may take this text (only=EU_ONLY): its single 502 or timeout was "busy" for the student
-        # (the owner, Nov 12). One more try after a breath; a real outage still says busy
+        # one provider alone may take this text (only=EU_ONLY): its single 502 or timeout would be "busy" for the student.
+        # One more try after a breath; a real outage still says busy
         await asyncio.sleep(RETRY_WAIT)
         text = await ask(pool[0])
         if text is not None:

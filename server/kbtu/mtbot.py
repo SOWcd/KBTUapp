@@ -1,4 +1,4 @@
-"""/all's member list (owner, Nov 18: call everyone, as other tag bots do): the Bot API lists no members, but our bot
+"""/all's member list (call everyone, as other tag bots do): the Bot API lists no members, but our bot
 signed in over MTProto (Telethon, with its own token) may read a group's participants. Never the userbot (userbot.py,
 a person's account): a separate client, signed in as the bot. It only ever lists the participants of the chat an /all
 was just typed in, at that moment: connected for that read and disconnected right after (no idle connection, so
@@ -9,7 +9,7 @@ again; never in the database, its backups (backups/ and R2 copy the database fil
 nowhere (a two-minute memory per chat so a lone caller can't make it read Telegram on every message); only Telegram
 ids, the deleted ones and whether members are hidden leave this module.
 TG_API_ID and TG_API_HASH unset, Telethon missing, the sign-in refused or a long FloodWait: no list, one log line,
-/all calls whom the app knows and the bot saw, as before."""
+/all calls whom the app knows and the bot saw."""
 from __future__ import annotations
 
 import asyncio

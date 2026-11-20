@@ -1,4 +1,4 @@
-"""The university's documents for the assistant (owner, Nov 10): handbooks, the academic calendar, curricula, syllabi,
+"""The university's documents for the assistant: handbooks, the academic calendar, curricula, syllabi,
 electives lists. Built once by hand into a SEPARATE SQLite file (DOCS_DB, never the app's database, never the repo: the
 documents and their text stay off GitHub), searched at each question: FTS5 bm25 over trigrams (Russian and Kazakh
 endings match without a stemmer), plus cosine over Cloudflare Workers AI's bge-m3 embeddings when the file has them
@@ -38,7 +38,7 @@ COMMON = 0.2                   # a question's word in more than this share of ch
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _HEAD = re.compile(r"^(?:[Hh]eading ?|[Tt]itle)?[1-3]$|^[Tt]itle$")  # Word's heading styles ("1"-"3" in a Russian Word)
-# personal contacts (the owner: documents go in without them; review, Nov 10). Every mailbox but the university offices'
+# personal contacts (documents go in without them). Every mailbox but the university offices'
 # own (a person's is any other; one cut by a line break counts too), a mobile number with or without +7/8 (70x, 74x-78x;
 # city lines, 71x and 72x, stay), a WhatsApp link, a Telegram handle that isn't the university's or a club's ("kbtu" in
 # it), an IIN, a student ID (with the Cyrillic lookalikes OCR gives)

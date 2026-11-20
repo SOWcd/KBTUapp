@@ -21,8 +21,8 @@
                                 staff, not students (DMP, KBTU's IT testing the app): verified by hand,
                                 they act as students but take no card number and aren't counted in stats; `unlink` takes it back
   .venv/bin/python -m kbtu.admin staff <@username | telegram id>
-                                one already signed in as a student turns staff: its card number is retired (a gap; until Oct 22
-                                the later cards moved down, but that would hand out a deleted account's burnt number)
+                                one already signed in as a student turns staff: its card number is retired (a gap: moving
+                                the later cards down would hand out a deleted account's burnt number)
   .venv/bin/python -m kbtu.admin staff-ok <@username | telegram id>       KBTU staff without a student ID (DMP): their own
                                 Microsoft sign-in, then the policy, makes the staff row with the directory's names (no ID asked;
                                 not if Microsoft calls them a student). staff-ok list | staff-ok revoke <@username | telegram id>
@@ -242,7 +242,7 @@ def main(args: list[str]) -> None:
               f"a President on the sheet made Vice (the club has one in the app) {got['president_as_vice']}")  # counts only
     elif cmd == "checkin" and len(args) in (4, 5) and args[1] == "expect" and args[4:] in ([], ["--only"]):
         # ponytail: a session's expected list from a base64 gzip JSON argument ([{"name", "studentId"}]), for a team
-        # list wanted on the spot (Nov 14, the Senate at the Talent Show); no file reaches the container otherwise
+        # list wanted on the spot; no file reaches the container otherwise
         import base64
         import gzip
         sid, people = int(args[2]), json.loads(gzip.decompress(base64.b64decode(args[3])))
@@ -300,7 +300,7 @@ def main(args: list[str]) -> None:
                 sys.exit(__doc__)
         except ValueError as exc:
             sys.exit(str(exc))
-    elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent (Nov 18)
+    elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
@@ -342,7 +342,7 @@ def main(args: list[str]) -> None:
             sys.exit(f"{slug}: taken")
         create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
-    elif cmd == "rename" and len(args) == 3 and args[2].strip():  # owner, Nov 2: "Moments" without its sparkles
+    elif cmd == "rename" and len(args) == 3 and args[2].strip():  # e.g. "Moments" without its sparkles
         o = one(con, "SELECT id, name FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such club")
         con.execute("UPDATE orgs SET name = ? WHERE id = ?", (args[2].strip(), o["id"]))
         print(f"{args[1]}: {o['name']} -> {args[2].strip()}")
@@ -527,7 +527,7 @@ def main(args: list[str]) -> None:
                           ("posts", "SELECT count(*) FROM posts WHERE hidden_at IS NULL"),
                           ("first KBTU sign-in", f"SELECT date(min(verified_at), 'unixepoch', '+5 hours') FROM students WHERE {real}")):
             print(f"{one(con, sql)[0]!s:>10}  {name}")
-    elif cmd == "achstats":  # levels set by real numbers, not guesses (owner, Oct 30: some need too many, some too few)
+    elif cmd == "achstats":  # levels set by real numbers, not guesses (some need too many, some too few)
         from .logic.profiles import ACHIEVEMENTS, _counts
         counts = [_counts(con, uid) for (uid,) in rows(con, f"SELECT user_id FROM students s WHERE NOT {staff_sql()}")]
         came = [c for c in counts if c["regular"]]
@@ -668,7 +668,7 @@ def main(args: list[str]) -> None:
         except ApiError as exc:  # the code alone: its message may be a field's name, never the event's words
             sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
     elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():
-        # a club that made its offline casting an event (owner, Nov 9): the same words, cover and place as a casting post, from now on.
+        # a club that made its offline casting an event: the same words, cover and place as a casting post, from now on.
         # Silent: a club's own casting tells its followers, this one was never asked to
         import calendar
         from .logic.newsfeed import _casting_input
