@@ -257,3 +257,17 @@ def test_reg_until_closes_sign_up(door_event, monkeypatch):
     assert tuple(con.execute("SELECT reg_until, late_signup FROM events WHERE id = 1").fetchone()) == (starts - 3600, 0)
     with pytest.raises(SystemExit):
         admin.main(["reg-until", "1", datetime.fromtimestamp(starts + 60, timezone.utc).isoformat()])
+
+
+def test_guests_from_a_gz_argument(door_event, monkeypatch, capsys):
+    import base64
+    import gzip
+    c, cfg, con = door_event
+    _student(c, con, 1, "24B030001")
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    monkeypatch.setattr(admin.sys, "stdin", io.StringIO(""))  # the gate passes no stdin
+    data = base64.b64encode(gzip.compress("24B030001,1,,Ivan \u0422\u0401\u0421\u0422\u041e\u0412\n24B030009,0,,Jane Buyer\n".encode())).decode()
+    admin.main(["guests", "1", "--gz", data])
+    assert capsys.readouterr().out == "registered 1, pending 1, offline 0, bad rows 0\n"
+    with pytest.raises(SystemExit):
+        admin.main(["guests", "1", "--gz", "not base64!"])
