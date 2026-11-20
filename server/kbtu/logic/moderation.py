@@ -171,7 +171,7 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
         fchannel.reported(con, tid)
 
 
-EVENT_ALARM = 3  # different people's open reports of an event: the moderators hear at once (owner, Nov 6: it isn't hidden)
+EVENT_ALARM = 3  # different people's open reports of an event: the moderators hear at once (it isn't hidden)
 
 
 def _urgent_event(con, eid: int) -> None:

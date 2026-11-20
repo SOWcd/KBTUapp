@@ -18,7 +18,7 @@ def post_shape(con, v: Viewer, p: sqlite3.Row) -> dict:
 
 
 def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
-    """Posts (types.ts Post), counts and my marks read once for the whole list (News was 900 queries)."""
+    """Posts (types.ts Post), counts and my marks read once for the whole list (per post, News is 900 queries)."""
     if not found:
         return []
     ids = [p["id"] for p in found]
@@ -80,7 +80,7 @@ def posts(con, v: Viewer, scope: str) -> list[dict]:
         elif scope == "all":
             sql += f" AND (featured_until > ? OR {_REACH})"  # a featured post is for everyone
             args += [core.now(), v.id, v.id]
-            # a casting of a club under CLUB_MIN goes by direct link only (owner, Nov 10): its own and its followers still see it
+            # a casting of a club under CLUB_MIN goes by direct link only: its own and its followers still see it
             sql += """ AND (casting_to IS NULL OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
                 OR org_id IN (SELECT org_id FROM org_members WHERE user_id = ?) OR org_id IN (SELECT id FROM orgs o WHERE kind != 'club'
                 OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?))"""
@@ -121,7 +121,7 @@ def _casting_input(c: object) -> tuple[int, int, str]:
 
 def castings(con, v: Viewer) -> list[dict]:
     """The Clubs tab's "Recruiting" strip: castings not over yet, soonest first, the same for every viewer: the strip is how students
-    find a casting, an initiative's too (owner, Nov 9); a club under CLUB_MIN isn't in the registry, so not here either, not even for its own people."""
+    find a casting, an initiative's too; a club under CLUB_MIN isn't in the registry, so not here either, not even for its own people."""
     return post_shapes(con, v, rows(con, f"""SELECT * FROM posts WHERE hidden_at IS NULL AND audience = 'public'
         AND casting_to > ? AND casting_cancelled_at IS NULL
         AND org_id IN (SELECT id FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
@@ -147,7 +147,7 @@ _LINK = re.compile(r"(https?://|www\.|t\.me/)\S+", re.I)
 
 
 def _worded(title: str) -> bool:
-    """A title says something besides a link (owner, Nov 3: a post titled with a bare invite link): links go in the text,
+    """A title says something besides a link (not a bare invite link): links go in the text,
     where the app turns them into a button."""
     return len(re.findall(r"\w", _LINK.sub("", title))) >= 2
 

@@ -1,4 +1,4 @@
-"""A club's report after its own or co-hosted event (owner, Nov 11; REPORTS=1): which of its departments ran it, who of the team was
+"""A club's report after its own or co-hosted event (REPORTS=1): which of its departments ran it, who of the team was
 there (present / late / absent / excused), how many guests came by the club's own count beside what the app knows
 (signed up, checked in), a short note; who filled it first and who edited it last. One report per club on an event:
 the host's and its accepted co-host's (cohosts.py), each about its own team, neither seen by the other club. It lives

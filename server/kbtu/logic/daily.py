@@ -248,7 +248,7 @@ def admin_stats(con, v: Viewer) -> dict:
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, f"SELECT COUNT(*) FROM students s WHERE NOT {core.staff_sql()}")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
-            # the number that matters (owner, Nov 3): students who finished signing up, and how many of them today
+            # the number that matters: students who finished signing up, and how many of them today
             "studentsToday": one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at >= ? AND NOT {core.staff_sql()}", today)[0],
             # Microsoft-confirmed students by the month their account was made (counts only; "" unknown): whether the
             # dates split by intake before MS_AGE_CUTOFF is turned on (core.first_year_free)

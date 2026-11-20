@@ -1,4 +1,4 @@
-"""The subjects' cards (Nov 16): a card per university subject (tools/subjects.py writes SUBJECTS_FILE, never the repo;
+"""The subjects' cards: a card per university subject (tools/subjects.py writes SUBJECTS_FILE, never the repo;
 no file: off) and "looking for people to study it with". Being listed is a find-people request (forum.py) on that
 subject: one per person and subject, until the term's end (a date set when listed, checked when read), its note checked
 by the AI and moderated as any request (held, reports, Admin's queue), reached only by forum.contact's offer that the

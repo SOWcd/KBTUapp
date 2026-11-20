@@ -40,7 +40,7 @@ def ms_link(con, uid: int, who: dict) -> None:
     # the freshmen list's row for this mail (typed at registration, so a classmate's by mistake is possible): mine only
     # when the name matches too. Mine: what my row lacks, the initiation badge, then gone. Not mine: nothing, it stays.
     # Mine, the owner hears (ids only) what to check: another ID than the row's, the row's ID held. Not mine, silence: nothing
-    # was used, and an alert he can't act on is noise (owner, Nov 2)
+    # was used, and an alert he can't act on is noise
     p = one(con, "SELECT * FROM prefill WHERE email = ?", str(who["email"] or "").lower())
     s = one(con, "SELECT first_name, last_name, student_id FROM students WHERE user_id = ?", uid)
     if p:
@@ -73,7 +73,7 @@ SID_SHAPE = re.compile("([0-9O\u041e]{2})([A-NP-Z]{1,2})([0-9O\u041e]{4,7})")  #
 
 
 def norm_sid(raw: object) -> str | None:
-    """A list's student ID as the app writes it, or None: no guessing beyond the fixed table (review 5)."""
+    """A list's student ID as the app writes it, or None: no guessing beyond the fixed table."""
     m = SID_SHAPE.fullmatch("".join(str(raw or "").split()).upper().translate(SID_LOOKS))
     sid = m and m[1].translate(_ZERO) + m[2] + m[3].translate(_ZERO)
     return sid if sid and STUDENT_ID.fullmatch(sid) and isinstance(c := core.course_of(sid), int) and 1 <= c <= 6 else None  # 4 digits: two letters only
@@ -104,7 +104,7 @@ _LAT_WORD = re.compile(f"[{_LAT}]+(?:[-'][{_LAT}]+)*")
 
 def latin_from_ms(profile: dict, middle: str | None = None) -> tuple[dict | None, str]:
     """My name in Latin from Microsoft's displayName, read word by word against its givenName and surname (Cyrillic in
-    KBTU's directory; review latin-names-review.md §1): every word Latin letters only (no login, mail, initial, digits or
+    KBTU's directory): every word Latin letters only (no login, mail, initial, digits or
     note), each word one side's alone, both sides whole; one word more is the middle name only when it is my known one,
     else dropped; two more: nothing. A wrong Latin name would reach the university's lists, a missing one shows blank.
     (columns or None, why)"""
@@ -142,7 +142,7 @@ def _fill_lat(con, uid: int, profile: dict, listed: dict) -> int:
 
 
 def latin_names(con, apply: bool = False) -> Counter:
-    """admin latin-names: the shape of what KBTU's directory gives (counts only, never a value; review §9), and with
+    """admin latin-names: the shape of what KBTU's directory gives (counts only, never a value), and with
     `apply` the backfill of the students linked before the Latin columns, in one transaction (idempotent: empty columns only)."""
     from .. import roster
     n: Counter = Counter()
@@ -222,7 +222,7 @@ def _prefill_sort(got: list[dict]) -> tuple[Counter, dict[str, dict], list[dict]
 
 def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     """The rest of a freshmen list (admin prefill-rest, the same CSV as prefill-import): the rows the main import didn't
-    keep (review prefill-rest-and-claim-review.md A). A confirmed student whose KBTU mail or student ID the row has, and
+    keep. A confirmed student whose KBTU mail or student ID the row has, and
     whose name it is: the badge if they came, nothing else (their profile is theirs: a phone they deleted must not
     come back), nothing stored. Otherwise the row waits in
     prefill_rest for ms_link: a KBTU mail only (else NULL), the ID only when it is valid and the list's one person's,
@@ -323,7 +323,7 @@ def ms_remember(con, uid: int, who: dict) -> None:
                 (f"ms:{uid}", json.dumps({**who, "at": core.now()})))
 
 
-MS_KEEP = 7 * 86400  # a Microsoft sign-in waits a week for the student ID and year (review 3: a day was too short)
+MS_KEEP = 7 * 86400  # a Microsoft sign-in waits a week for the student ID and year (a day is too short)
 
 
 def ms_pending(con, uid: int) -> dict | None:
@@ -370,8 +370,8 @@ def ms_release(con, secret: str) -> None:
 def ms_claim(con, v: Viewer, secret: str) -> bool:
     """The Mini App's own step after the browser: only the Telegram that started the sign-in takes it (ms_apply's bool).
     No secret: my newest sign-in the browser released (ms_release), when the start link didn't bring it. The secret from
-    another Telegram proves the link was forwarded: the hold is gone for good (review, Nov 16: it stayed, and the page's
-    "Doesn't open?" then led the one who signed in to release it to the link's sender)."""
+    another Telegram proves the link was forwarded: the hold is gone for good (were it kept, the page's
+    "Doesn't open?" would lead the one who signed in to release it to the link's sender)."""
     if not secret:  # read first: no write lock for the usual "nothing waits"
         mine = one(con, """SELECT key FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.uid') = ?
             AND json_extract(value, '$.open') = 1 ORDER BY json_extract(value, '$.at') DESC LIMIT 1""", v.id)
@@ -395,7 +395,7 @@ def staff_row(con, uid: int, first: str, last: str, school: str | None = None, c
 
 def staff_ok(con, uid: int, who: dict | None) -> bool:
     """The creator said this account is KBTU staff (kbtu.admin staff-ok), and Microsoft doesn't call it a student: its
-    sign-in asks no student ID. Office membership, roles, audit lines: never a reason (Codex review, Nov 17)."""
+    sign-in asks no student ID. Office membership, roles, audit lines: never a reason."""
     if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid):
         return False
     # ponytail: KBTU's directory field read as is; "student" anywhere in it wins (exact values unmeasured)
@@ -428,8 +428,8 @@ SID_WAIT = 30 * 86400  # how long the one turned away waits to hear the ID is fr
 
 
 def id_clash(con, sid: str, new: int, old: int) -> None:
-    """Someone signed in with Microsoft gave a student ID another student holds (owner, Nov 4: no hand work on IDs;
-    that day two people were one digit apart and the holder had the typo). No admin: the holder is asked to check
+    """Someone signed in with Microsoft gave a student ID another student holds (no hand work on IDs:
+    two people can be one digit apart, the holder with the typo). No admin: the holder is asked to check
     theirs (once per ID), and the newcomer gets a parked message that migration 127's triggers send the moment the ID
     is freed, however (a fix, an unlink, a deleted account); unfreed, it lapses unsent. Three IDs per newcomer, so
     nobody can ping every holder by trying numbers. The rare real dispute (a holder keeping someone else's ID) stays
@@ -493,15 +493,15 @@ def me(con, v: Viewer) -> dict:
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, core.now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
     own = one(con, "SELECT path FROM files WHERE id = ?", u["avatar_file_id"]) if u["avatar_file_id"] else None
-    # the card number at the KBTU sign-in, in the order people came (owner, Oct 22 morning: "I want to see who came
-    # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
+    # the card number at the KBTU sign-in, in the order people came (so one sees who came
+    # 84th); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
     # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
     if s and not core.is_staff(s) and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         if u["card_no"] is None and not u["is_founder"]:
-            with tx(con):  # the number in the order people came: it waits for the lock, once per person (review)
+            with tx(con):  # the number in the order people came: it waits for the lock, once per person
                 first_fifty(con, v.id)
         else:
             db.maybe(con, first_fifty, con, v.id)  # a missing "First 500" repaired (skipped in a burst: the next open)
@@ -585,26 +585,26 @@ FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", 
 
 
 # the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
-# not (owner, Nov 2). The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
+# not. The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
             "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
             "choice", "teentertainmentkbtu", "klubanimeshnikov",
             "kbtumag",  # kbtu.mag: matched by its name (SKINNED)
-            "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu",  # round 10
-            "kbtucinema", "nisalumnikbtuchapter",  # round 17
-            "cybersportkbtu",  # round 18
-            "diceanddestinykbtu")  # round 20
+            "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu",
+            "kbtucinema", "nisalumnikbtuchapter",
+            "cybersportkbtu",
+            "diceanddestinykbtu")
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
-# by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug,
-# Nov 4), as the web's awards.ts lookKey
-# other names a drawn club goes by (owner, Nov 4: kbtu.mag is just "Mag"); as the web's awards.ts ALIASES
+# by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug),
+# as the web's awards.ts lookKey
+# other names a drawn club goes by (kbtu.mag is just "Mag"); as the web's awards.ts ALIASES
 LANYARD_NAMES = ("mag", "kbtumag", "kbtumagazine", "\u043c\u0430\u0433", "\u043a\u0431\u0442\u0443\u043c\u0430\u0433")
 _NAMES = "(" + ", ".join(f"'{x}'" for x in (*LANYARDS, *LANYARD_NAMES)) + ")"
 SKINNED = (f"o.status = 'active' AND (o.slug IN {_LIST} OR o.kind != 'school' AND "
            f"lower(replace(replace(replace(replace(o.name, '.', ''), ' ', ''), '-', ''), '_', '')) IN {_NAMES})")
 
 
-# the schools' lanyards (Nov 2: their official shields and colours): each its own students' alone, by students.school,
+# the schools' lanyards (their official shields and colours): each its own students' alone, by students.school,
 # with no joining; web: awards.ts SCHOOL_LOOKS
 SCHOOL_LANYARDS = ("site", "seogi", "geology", "business", "ise", "kma", "law", "sam", "sce", "smsgt", "sss")
 # how prod's students.school writes a school beyond schools.json's names (the portal's older abbreviations)
@@ -655,7 +655,7 @@ def _skin(con, uid: int) -> int | str | None:
         ORDER BY CASE m.role WHEN 'president' THEN 4 WHEN 'vice' THEN 3 WHEN 'head' THEN 2 ELSE 1 END DESC, m.joined_at DESC LIMIT 1""", uid)
     if r:
         return r[0]
-    # no club with a lanyard: my school's, once I have a school (owner, Nov 2: KBTU's -> my school's -> my club's -> special)
+    # no club with a lanyard: my school's, once I have a school (KBTU's -> my school's -> my club's -> special)
     s = one(con, "SELECT school FROM students WHERE user_id = ?", uid)
     slug = school_slug(s["school"]) if s else None
     o = slug and one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug)
@@ -677,9 +677,9 @@ def _one_off(w: str, ref: set[str]) -> bool:
 
 
 def _skin_ok(con, uid: int, oid: int):
-    """A club's lanyard is its members' alone (owner, Oct 31: it was open to all), a school's its students' alone (Nov 2);
+    """A club's lanyard is its members' alone, a school's its students' alone;
     read on every look, so a pick of a club I'm not in (or left), or of a school no longer mine, falls back by itself
-    (`_skin`). The creator wears any (owner, Nov 2)."""
+    (`_skin`). The creator wears any."""
     if one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", uid):
         return bool(one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND ({SKINNED} OR o.status = 'active' AND o.kind = 'school' AND o.slug IN ("
                         + ", ".join(f"'{x}'" for x in SCHOOL_LANYARDS) + "))", oid))
@@ -715,7 +715,7 @@ class _Taken(ApiError):
 
 def sid_tries(con, uid: int) -> int:
     """Student IDs tried on this account in a day, from Settings or a schedule page (bot._page_sid): one count of 5, or
-    "taken" would tell anyone which IDs are registered (review 6). Read it and add to it under one write lock."""
+    "taken" would tell anyone which IDs are registered. Read it and add to it under one write lock."""
     return one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_try', 'sid_page_taken', 'sid_page_year', 'sid_page_fixed')
         OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", core.now() - 86400)[0]
 
@@ -725,7 +725,7 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
     from the freshmen list, a typo at sign-up, the name in another script); the Latin name the same way, Latin letters
     only, and an empty one filled doesn't spend the once (no displayName to read it from); after that only support, the admin
     (`kbtu.admin fix`: no once, no year rule, no tolerance). The email is never changed: it is the KBTU Microsoft login
-    (ms_link writes it from the token), what ties this row to a real person. Review: .claude/reports/identity-edit-review.md"""
+    (ms_link writes it from the token), what ties this row to a real person."""
     from .. import roster  # imports logic: here, not at the top
     v = " ".join(str(raw or "").split())
     if col == "student_id":
@@ -749,9 +749,9 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
         if v == s[col]:
             return  # nothing changes: the once isn't spent
         # only year 1 earns anything (free seats, first_year_free): an ID that would make me a 1st-year bachelor when I'm
-        # not one is support's (review once-edit 2); any other year, earlier or later, is mine to correct once.
+        # not one is support's; any other year, earlier or later, is mine to correct once.
         # ponytail: deleting the account and joining again starts a fresh row (no year rule at sign-up, `fixed` empty):
-        # a senior can come back a week later with a 1st-year's ID; MS_AGE_CUTOFF on closes it (review once-edit 7)
+        # a senior can come back a week later with a 1st-year's ID; MS_AGE_CUTOFF on closes it
         sid_moves = col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v)
         if sid_moves and not admin and course == 1 and v[2] == "B" and not (s["course"] == 1 and s["student_id"][2:3] == "B"):
             raise ApiError("bad_input", "sid_year")
@@ -765,12 +765,12 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             ref = (ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"])
             # the Latin pair: the other half's Latin, else its Cyrillic (_words reads both scripts as one)
             new = " ".join(v if c == col else s[c] or s[c[:-4] + "_name"] for c in (("first_lat", "last_lat") if col in LAT_COLS else ("first_name", "last_name")))
-            # a word of 4+ letters one letter off KBTU's own is the same word (Ameli/Amelie, Aidos/Aydos: owner, Nov 3)
+            # a word of 4+ letters one letter off KBTU's own is the same word (Ameli/Amelie, Aidos/Aydos)
             if not roster.same_person(new, *ref) or not all(_one_off(w, roster._words(" ".join(ref))) for w in roster._words(new)):
                 raise ApiError("bad_input", "name_far")
         # an ID is free when no student has it and no list keeps it for another mail: the freshmen list (that student's
         # sign-up form would offer it) or a check-in's expected list (its CSV matches by ID: an absent friend would
-        # show as "came", review once-edit 5)
+        # show as "came")
         mail = (s["email"] or "").lower()
         held = col == "student_id" and (one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", v, uid)
                                         or one(con, "SELECT NULL FROM prefill WHERE student_id = ? AND email != ?", v, mail)
@@ -795,15 +795,15 @@ def _spend(con, uid: int, s, col: str, val) -> None:
     if col in s["fixed"].split(","):
         if col not in was or was[col] != val:
             raise ApiError("conflict", "fixed")
-        del was[col]  # the undo used: no flipping back and forth (review once-edit 4)
+        del was[col]  # the undo used: no flipping back and forth
         con.execute("UPDATE students SET once_was = ? WHERE user_id = ?", (json.dumps(was, ensure_ascii=False), uid))
-    elif s[col] is not None:  # the school's undo alone: a course back down was the free-seat trick (review once-edit 3)
+    elif s[col] is not None:  # the school's undo alone: a course back down would be the free-seat trick
         con.execute("UPDATE students SET fixed = ?, once_was = ? WHERE user_id = ?",
                     (",".join(filter(None, [*s["fixed"].split(","), col])), json.dumps({**was, col: s[col]} if col == "school" else was, ensure_ascii=False), uid))
 
 
 def update_me(con, v: Viewer, patch: dict) -> dict:
-    """Settings' save, all or nothing (review once-edit 9): one transaction, so a refused field leaves the others unsaved."""
+    """Settings' save, all or nothing: one transaction, so a refused field leaves the others unsaved."""
     err = None
     held = lambda: con.execute("SELECT student_id FROM students WHERE user_id = ?", (v.id,)).fetchall()  # noqa: E731
     with tx(con):
@@ -817,7 +817,7 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
             if e.holder:
                 id_clash(con, e.sid, v.id, e.holder)
             err = e
-        except ApiError as e:  # a free ID found, then another field refused: undone, and that look-up counts as well (review sid2)
+        except ApiError as e:  # a free ID found, then another field refused: undone, and that look-up counts as well
             looked = [tuple(r) for r in held()] != [tuple(r) for r in was]
             con.execute("ROLLBACK TO patch")
             if looked:
@@ -884,9 +884,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if val is not None and not o and not back:
             raise ApiError("bad_input")
         new = o[0] if o else val if back else None
-        if new is None and s["school"] is not None:  # no clearing (Nov 3: cleared by mistake, the once went with it)
+        if new is None and s["school"] is not None:  # no clearing: cleared by mistake, the once would go with it
             raise ApiError("bad_input")
-        # once, as the ID (review once-edit 4: switched and back, another school's lanyard, chats and CSV lines);
+        # once, as the ID (switched and back: another school's lanyard, chats and CSV lines);
         # filling an empty one is free. The lanyard reads the school live: it follows by itself
         if new != s["school"]:
             _spend(con, v.id, s, "school", new)
@@ -899,14 +899,14 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
             raise ApiError("forbidden")  # the ID is a placeholder
         if lo is None or type(val) is not int or not lo <= val <= 6:
             raise ApiError("bad_input")
-        if val != s["course"]:  # once (review once-edit 3: 2 to pass volunteers_senior, then 1 for a free seat); September's isn't one
+        if val != s["course"]:  # once (else 2 to pass volunteers_senior, then 1 for a free seat); September's isn't one
             _spend(con, v.id, s, "course", val)
         con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (val, core.academic_year(), v.id))
     for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
         if k in patch:
             need_student(v)
             fix_identity(con, v.id, col, patch[k])
-    if "city" in patch:  # Settings → Privacy: mine to set (owner, Nov 3), change or delete; the roster's (PLAN 95) too
+    if "city" in patch:  # Settings → Privacy: mine to set, change or delete; the roster's (PLAN 95) too
         city = patch["city"]
         if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
             raise ApiError("bad_input")
@@ -982,7 +982,7 @@ def _paid_ahead(con, uid: int) -> bool:
 
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
     """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
-    holding my phone, shouldn't cost the awards; the KBTU password asked before shut out whoever no longer has it).
+    holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
     need_student(v)
@@ -1182,7 +1182,7 @@ def _user_fks(con) -> list[tuple[str, str, bool]]:
 
 
 def _placeholder(con) -> int:
-    """The stand-in a deleted account's past leaves with (H2): no name, no Telegram, never seen, a random negative
+    """The stand-in a deleted account's past leaves with: no name, no Telegram, never seen, a random negative
     tg_id (nothing derived from the account, a new one for each deletion). What it holds keeps every count right (who
     came, ratings, casting stages, a friend's "brought N"), and nothing leads back."""
     while True:
@@ -1226,7 +1226,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute(f"UPDATE round_apps SET user_id = :p, answers = '{{}}', source = NULL WHERE user_id = :u AND round_id IN ({done})", me_)
         con.execute(f"""UPDATE round_votes SET user_id = :p, note = '' WHERE user_id = :u
             AND app_id IN (SELECT id FROM round_apps WHERE round_id IN ({done}))""", me_)
-        # what I wrote stays, the person goes (owner, Nov 2: as Telegram and Reddit): comments and the forum channel's live
+        # what I wrote stays, the person goes (as Telegram and Reddit): comments and the forum channel's live
         # posts move to the nameless placeholder, shown as a deleted account; a named post's signature in the channel
         # is rewritten (fch_resign), an anonymous one stays as it was, so nothing tells which posts were one person's
         # my anonymous replies (fchan_replies: no user id, through my posts): sent ones under a post that stays live
@@ -1345,8 +1345,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
 
 
 def class_ends(hm: str) -> str:
-    """When a class really ends: the portal gives the hour's slot ("14:00-15:00"), a class lasts 50 minutes of it
-    (owner, Nov 19): an end on the hour is ten minutes earlier. Any other end is the portal's own."""
+    """When a class really ends: the portal gives the hour's slot ("14:00-15:00"), a class lasts 50 minutes of it:
+    an end on the hour is ten minutes earlier. Any other end is the portal's own."""
     h, m = hm.split(":")
     return f"{int(h) - 1:02d}:50" if m == "00" and int(h) else hm
 
@@ -1363,7 +1363,7 @@ SCHED_LANGS = ("ru", "kk", "en")
 
 
 def _names(saved, guess: bool = True) -> list[dict]:
-    """Each saved class's names by language. A week the bot saved before it kept them (Oct 25-30) has its subject
+    """Each saved class's names by language. A week the bot saved before it kept them has its subject
     alone: with `guess`, in the language its letters tell (portal.guess_lang), the same for the whole week (one page).
     The guess is for showing and matching only, never written: a wrong one would stick."""
     out = [json.loads(c["names"]) if c["names"] else {} for c in saved]
@@ -1433,7 +1433,7 @@ def save_schedule(con, uid: int, lessons: list, lang: str | None = None) -> dict
     """A week from the portal's page (portal.Lesson): the truth about times, rooms and which classes there are, so it
     replaces the student's rows, while each class keeps the names earlier pages in other languages gave it and gets this
     page's (`lang`, by its day names; None: matched as its words' letters tell, with nothing written under a guess).
-    Matched outside the write lock, written in one short transaction (the review, Oct 30: matching held it for seconds);
+    Matched outside the write lock, written in one short transaction (matching can hold it for seconds);
     None when the student is gone meanwhile. What changed, for the bot's answer: the page's language, the week's
     languages before and after, classes added, removed and moved."""
     q = "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins, id"
@@ -1500,7 +1500,7 @@ from .teams import _ordered  # noqa: E402
 from . import gallery  # noqa: E402
 
 
-# "Support & ideas" at the bottom of Me (owner, Nov 6): the creator, then the main admin (Alikhan). A new main admin:
+# "Support & ideas" at the bottom of Me: the creator, then the main admin (Alikhan). A new main admin:
 # this line. Their Telegram usernames are the chat links; the cards are the app's own (photo as everywhere).
 SUPPORT = ("Sowers", "Relson69")
 

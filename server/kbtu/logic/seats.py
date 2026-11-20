@@ -114,7 +114,7 @@ def chat_claim(con, token: str, tg_id: int, chat_id: int) -> sqlite3.Row | None:
     # a group another club's event or any chat of the app's list already holds stays theirs; the same club's earlier
     # event gives its group up to this one
     if core.chat_owners(con, chat_id) - {e["org_id"]} or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]):
-        return None  # a synced chat too (Codex, Nov 14)
+        return None  # a synced chat too
     con.execute("UPDATE events SET chat_id = NULL, chat_link = NULL WHERE chat_id = ? AND id != ?", (chat_id, e["id"]))
     con.execute("UPDATE events SET chat_token = NULL, chat_id = ?, chat_link = NULL WHERE id = ?", (chat_id, e["id"]))
     return e
@@ -135,7 +135,7 @@ def guard_join(con, chat_id: int, tg_id: int) -> str:
     rest ("app") get the app to sign up; a chat the app doesn't know: its admins decide ("queue"; any chat can name us
     its guard, and it mustn't learn who our students are)."""
     ev = chat_join(con, chat_id, tg_id)
-    if ev is not None:  # a ban outranks a ticket (Codex review, Nov 5: a banned attendee was let in)
+    if ev is not None:  # a ban outranks a ticket: else a banned attendee is let in
         return "approve" if ev and not one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg_id) else "decline"
     if not one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND status IN ('live', 'org')", chat_id):
         return "queue"
@@ -184,10 +184,10 @@ def for_me(con, v: Viewer, e: sqlite3.Row, role: str | None) -> bool:
 def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, str, str | None, str]]:
     """Posts to make or fix: (event, caption, the cover's path or None, its signature). bot: our bot's username, for
     the sign-up link in the text. Who may be in the channel: an active official club or KBTU's own office; an
-    initiative's free event while an official club co-hosts it (owner, Nov 4: "Official × Initiative", the post then
+    initiative's free event while an official club co-hosts it ("Official × Initiative": the post then
     hangs on that club, channel_via); a post made before the ✓ went is kept in step. A post that may no longer be
-    there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted (collab-review R2, X2,
-    X3); it comes back with a new yes."""
+    there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted; it comes back with a
+    new yes."""
     out = []
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
@@ -203,7 +203,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
         on = e["h_status"] == "active"
         own = on and (e["h_off"] or e["h_kind"] != "club")
         kept = on and e["channel_msg"] and e["channel_via"] is None
-        vouch = on and e["co_off"] and not e["price"]  # free only (M1)
+        vouch = on and e["co_off"] and not e["price"]  # free only
         if not e["live"] or not (own or kept or vouch):
             # one still to come that may not be there, or a past one that hung on a co-host now gone
             # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
@@ -214,7 +214,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
         via = None if own or kept else e["co_id"]
         if via != e["channel_via"]:
             con.execute("UPDATE events SET channel_via = ? WHERE id = ?", (via, e["id"]))
-        # a co-hosted event names both clubs, the official one first (I3)
+        # a co-hosted event names both clubs, the official one first
         names = [e["org_name"]] + ([e["co_name"]] if e["co_id"] else [])
         if e["co_id"] and e["co_off"] and not e["h_off"]:
             names.reverse()
@@ -292,8 +292,8 @@ def _fold(line: str) -> str:
 
 
 def title_in(row: sqlite3.Row, lang: str | None) -> str:
-    """A title in a reader's language (PLAN 9, deferred then): an event's or a post's translation (ai.py, mirror.py) where
-    there is one, else as typed. For the bot's messages and the calendar, which knew only the source language."""
+    """A title in a reader's language (PLAN 9): an event's or a post's translation (ai.py, mirror.py) where
+    there is one, else as typed. For the bot's messages and the calendar, which otherwise show only the source language."""
     tr = json.loads(row["i18n"]) if "i18n" in row.keys() and row["i18n"] else {}
     return (tr.get(lang) or {}).get("title") or row["title"]
 
@@ -345,7 +345,7 @@ def cal_feed(con, token: str, link) -> str:
     if not u:
         raise ApiError("not_found")
     # what the app would show me now: a club I left or was banned from keeps its team-only events to itself, a club the
-    # admin hid is gone (privacy review: the feed kept telling them)
+    # admin hid is gone (else the feed keeps telling them)
     v = Viewer(u["id"], u["role"], True)
     roles, hidden = _roles(con, v), _hidden_orgs(con)
     evs = [e for e in rows(con, """SELECT e.*, o.name AS org_name FROM registrations r JOIN events e ON e.id = r.event_id JOIN orgs o ON o.id = e.org_id
@@ -419,7 +419,7 @@ def _hidden_orgs(con) -> set[int]:
 
 def sweep_holds(con) -> None:
     """Expired holds give their seats back, and the waitlist moves (a worker does this too). The lock-free look first;
-    under the lock again, so the GETs that saw the same expiry at once don't each promote() it (review 11)."""
+    under the lock again, so the GETs that saw the same expiry at once don't each promote() it."""
     if not one(con, "SELECT 1 FROM registrations WHERE status = 'hold' AND hold_until < ?", core.now()):
         return
     with tx(con):
@@ -435,7 +435,7 @@ def sweep_holds(con) -> None:
 def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
     sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
-    # starts_at's bound makes it an index range, not a scan of every event ever (review 12): a year back, wider than the
+    # starts_at's bound makes it an index range, not a scan of every event ever: a year back, wider than the
     # 31-day cap (organizing.clean_event) so a long event published before the cap still shows while it runs
     sql = "SELECT * FROM events e WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
     args: list = [core.now() - 366 * 86400, NO_END, core.now()]
@@ -469,7 +469,7 @@ def past_events(con, v: Viewer, org: int | None = None, mine: bool = False) -> l
 
 
 def afisha_ok(o: str) -> str:
-    """SQL: the org `o` (its alias) puts its events on the general afisha by itself (owner, Nov 6: no pre-moderation, so
+    """SQL: the org `o` (its alias) puts its events on the general afisha by itself (no pre-moderation, so
     a student initiative's don't): an official club, a school, a council, KBTU's own office, or a student initiative at
     the path's top (clubs.path_top: orgs.top_at)."""
     return f"({o}.official = 1 OR {o}.kind != 'club' OR {o}.top_at IS NOT NULL)"
@@ -506,7 +506,7 @@ def event(con, v: Viewer, eid: int) -> dict:
 
 
 def _ticket_code(con, eid: int) -> str:
-    """4 characters to read out and type at the door, no 0/O or 1/I/L, unique within the event (owner, Nov 8; 6 were
+    """4 characters to read out and type at the door, no 0/O or 1/I/L, unique within the event (6 are
     long to type). ~20 bits is enough: only the event's door staff can check a code, and the scanner shows the holder's
     face. Stored as '<event id>-<code>', so the column's global UNIQUE is per-event uniqueness and the door finds a
     code by (event, code) alone; the API and the QR ('KBTU' + code, the smallest QR there is, §4.4) carry the code."""
@@ -576,7 +576,7 @@ ANSWER_MAX = 200  # one answer to an event's question at sign-up
 # a host club's member's guest seat at its own upcoming public event: a free event's, or a waitlist place anywhere (a
 # paid seat or hold stays: money; a check-in stays: it's history). Migration 135 ran the same rule once over old data.
 # A President's or a Vice's seat stays, and so does a member's whom one of them let in (team_ask).
-# ponytail: clubs whose own people sign up to its events like anyone (owner, Nov 15: CyberSport's members play its
+# ponytail: clubs whose own people sign up to its events like anyone (CyberSport's members play its
 # cups); a per-club switch in Admin if more clubs want it
 GUESTS_OK = frozenset({"cybersportkbtu"})
 
@@ -609,7 +609,7 @@ def refill(con) -> None:
             promote(con, e)
 
 
-# A host club's member comes to its public event as a guest only by its President's or a Vice's yes (owner, Nov 7):
+# A host club's member comes to its public event as a guest only by its President's or a Vice's yes:
 # they ask once per event (team_asks), each President and Vice hears it from the bot and answers on the event's
 # Studio screen. A President or a Vice needs nobody's yes (they'd be answering themselves). Their role, not a right:
 # the app's admin has no path here. ponytail: a yes can't be taken back; a no can be asked again (one ping a day).
@@ -618,7 +618,7 @@ def team_guest(con, e: sqlite3.Row, uid: int) -> bool | None:
     m = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid)
     if not m:
         return None
-    # a team event (a tournament) is the club's members' to play in too (owner, Nov 15: CyberSport's own play its cups)
+    # a team event (a tournament) is the club's members' to play in too (CyberSport's own play its cups)
     if e["team_max"] is not None or one(con, "SELECT slug FROM orgs WHERE id = ?", e["org_id"])["slug"] in GUESTS_OK:
         return True
     return m["role"] in ("president", "vice") or bool(one(
@@ -717,7 +717,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         if r and r["status"] in ("going", "hold", "waitlist"):
             return card(con, v, e)
         if e["visibility"] == "public" and team_guest(con, e, v.id) is False:
-            raise ApiError("forbidden", "team")  # the host club's own people run it, never its guests (owner, Nov 7); co-hosts' may
+            raise ApiError("forbidden", "team")  # the host club's own people run it, never its guests; co-hosts' may
         if e["needs_phone"] and phone is not None:
             if not (phone := kz_phone(phone)):
                 raise ApiError("bad_input", "phone")
@@ -733,7 +733,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         wait = core.now() if status == "waitlist" else None
         if r:
             # signing up again starts a new seat: created_at is its start, so receipts from before it (a removal, a
-            # self-cancel) no longer count for it (organizing.flagged, the attendee list, the card)
+            # self-cancel) don't count for it (organizing.flagged, the attendee list, the card)
             con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, answers = ?, team_want = NULL, updated_at = ?,
                 created_at = ? WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), core.now(), r["id"]))
         else:
@@ -741,7 +741,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
             # ponytail: one HMAC per member of the club; a stored code if a club ever has thousands
             inviter = next((m["user_id"] for m in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND user_id != ?", e["org_id"], v.id)
                             if hmac.compare_digest(ev_ref(m["user_id"]), ref)), None) if isinstance(ref, str) and ref.isascii() else None
-            if inviter is None and isinstance(ref, str):  # an event link shared before Nov 13 carried the link code itself
+            if inviter is None and isinstance(ref, str):  # an older event link carries the link code itself
                 by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.link_code = ? AND u.id != ?",
                          e["org_id"], ref, v.id)
                 inviter = by["user_id"] if by else None
@@ -755,7 +755,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
     return card(con, v, e)
 
 
-RECEIPT_TRIES = 3  # another file in place of a receipt nobody looked at yet: this many times (cloud review)
+RECEIPT_TRIES = 3  # another file in place of a receipt nobody looked at yet: this many times
 
 
 def receipt_open(con, v: Viewer, eid: int) -> None:
@@ -832,8 +832,8 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
 
 
 def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 0) -> str:
-    """The checks (§4.3), the owner's list after the Oct 11 review: the same file or receipt number came before, a
-    smaller sum or a bigger one that isn't a whole number of tickets (his test: a 1 090 receipt for 164 passed), another recipient, a receipt older than the event itself (an old one reused), (nothing readable,
+    """The checks (§4.3): the same file or receipt number came before, a
+    smaller sum or a bigger one that isn't a whole number of tickets (else a 1 090 receipt for 164 passes), another recipient, a receipt older than the event itself (an old one reused), (nothing readable,
     not a Kaspi receipt, is refused before: receipt.NotReceipt). No sender check: parents and friends pay, the organizer just sees the name."""
     got = read or {}
     out = []

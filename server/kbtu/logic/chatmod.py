@@ -1,4 +1,4 @@
-"""A club's group moderated for swearing (owner, Nov 13), as the popular group bots do, but ours and reported in Studio.
+"""A club's group moderated for swearing, as the popular group bots do, but ours and reported in Studio.
 
 Off by default. A linked group's switch (chats.swear) is its club's President's or Vice's; on only when our bot may delete
 and restrict there (app.py asks Telegram). Then the bot (bot._swear) reads each new or edited message's text and caption

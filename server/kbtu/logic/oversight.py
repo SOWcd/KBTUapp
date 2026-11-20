@@ -244,7 +244,7 @@ def set_staff(con, v: Viewer, uid, role) -> dict:
         raise ApiError("bad_input")
     with tx(con):
         u = _touchable(con, v, uid)
-        if not _owner(con, v):  # roles are the creator's alone to give and take, a moderator's too (owner, Nov 3)
+        if not _owner(con, v):  # roles are the creator's alone to give and take, a moderator's too
             raise ApiError("forbidden")
         if u["banned_at"] is not None and role != "user":
             raise ApiError("conflict", "banned")
@@ -292,7 +292,7 @@ def audit(con, v: Viewer) -> list[dict]:
         raise ApiError("forbidden")
     out = []
     found = rows(con, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 200")
-    # the actors and the targets named, each read once for the page: one or two queries per row were up to 400 for 200 rows
+    # the actors and the targets named, each read once for the page: one or two queries per row would be up to 400 for 200 rows
     ids = lambda k: {int(t) for a in found if (x := a["target"].partition(":"))[0] == k and (t := x[2]).isdigit()}  # noqa: E731
     uids = [*({a["actor_id"] for a in found if a["actor_id"]} | ids("user"))]
     people = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({_qs(uids)})", *uids)} if uids else {}
@@ -406,8 +406,8 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
     o = _org(con, oid)
     if not o:
         raise ApiError("not_found")
-    # a row of the team acts by the app's own user id, which never moves to someone else (an @username can: review
-    # Nov 17), and only on someone who is in this club; a hand-typed @username or Telegram ID finds anyone.
+    # a row of the team acts by the app's own user id, which never moves to someone else (an @username can),
+    # and only on someone who is in this club; a hand-typed @username or Telegram ID finds anyone.
     # The look and the change under one write lock: someone removed in between isn't put back by the row's action
     with tx(con):
         uid = body.get("userId")

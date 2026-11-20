@@ -21,7 +21,7 @@ def org_shape(con, v: Viewer, o: sqlite3.Row) -> dict:
 
 
 def org_shapes(con, v: Viewer, found: list[sqlite3.Row], share: bool = False) -> list[dict]:
-    """Clubs (types.ts Org), each count and each of my marks read once for the whole list (Clubs was 560 queries).
+    """Clubs (types.ts Org), each count and each of my marks read once for the whole list (card by card, Clubs is 560 queries).
     share: the list everyone opens takes the part that is the same for all from core.shared()."""
     if not found:
         return []
@@ -144,15 +144,15 @@ def _join_qs(o: sqlite3.Row) -> list[dict]:
             for i, (k, t, opts, req, _) in enumerate(json.loads(o["join_questions"] or "[]"))]
 
 
-CLUB_MIN = 5  # owner, Nov 8: a club of fewer isn't in the registry (official ones too)
+CLUB_MIN = 5  # a club of fewer isn't in the registry (official ones too)
 CLUB_QUIET = 30 * 86400  # no event, post or round this long: "quiet" (_org_parts), folded at the end of Initiatives; new clubs get this long too
 CATEGORIES = ("it", "art", "sport", "business", "science", "volunteer")  # types.ts OrgCategory; the Clubs tab's tiles
 
 
 def listed(con, v: Viewer, small: bool = False) -> list[sqlite3.Row]:
-    """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet (owner,
-    Nov 7-8): off the registry for everyone but its own (the admin too: one interface); its page (org) and its events
-    stay reachable, and search finds it (owner, Nov 9: small=True, every club not hidden). One subquery for all, never per card."""
+    """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet:
+    off the registry for everyone but its own (the admin too: one interface); its page (org) and its events
+    stay reachable, and search finds it (small=True, every club not hidden). One subquery for all, never per card."""
     return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
         AND (kind != 'club' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?)
              OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?)""", v.id, 0 if small else CLUB_MIN)
@@ -175,7 +175,7 @@ def org(con, v: Viewer, oid: int) -> dict:
 
 
 def _contact(con, oid: int) -> str | None:
-    """Whom "Message the club" writes to: the President's @username, else a Vice's (public roles, owner Nov 6; never a
+    """Whom "Message the club" writes to: the President's @username, else a Vice's (public roles; never a
     Head's). None for a club that hides its members. Only to signed-in students (the people list never shows usernames)."""
     r = one(con, """SELECT u.tg_username FROM orgs o JOIN org_members m ON m.org_id = o.id JOIN users u ON u.id = m.user_id
         WHERE o.id = ? AND o.members_hidden = 0 AND m.role IN ('president', 'vice') AND u.tg_username IS NOT NULL
@@ -312,7 +312,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
     if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too; "Club" stays
-        named, acro = org_name(text("name"), club=False)  # the club's own choice (a President's "Cheerleading Club" came back cut)
+        named, acro = org_name(text("name"), club=False)  # the club's own choice (else a President's "Cheerleading Club" comes back cut)
         sets["name"] = named if 2 <= len(text("name")) <= 60 else bad
         if acro and "abbr" not in body:
             sets["abbr"] = acro
@@ -325,7 +325,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             raise ApiError("conflict", "taken")
     if "short" in body:
         sets["short"] = text("short").upper() if 1 <= len(text("short")) <= 2 else bad
-    if "abbr" in body:  # one word, 2-8 letters or digits (no "_", dots or signs: "JCC_KBTU" got in): it sits inline beside a role or a place
+    if "abbr" in body:  # one word, 2-8 letters or digits (no "_", dots or signs, as in "JCC_KBTU"): it sits inline beside a role or a place
         sets["abbr"] = text("abbr") if re.fullmatch(r"[^\W_]{2,8}", text("abbr")) else bad
     if "emoji" in body:
         sets["emoji"] = text("emoji") if re.fullmatch(r"[a-z0-9_]{1,40}", text("emoji")) else bad
@@ -377,7 +377,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
 
 
 def delete_org(con, v: Viewer, oid: int) -> None:
-    """A President's own club made by mistake goes (club presidents, Nov 6: one was stuck as the President of one): only
+    """A President's own club made by mistake goes (else its President is stuck as the President of one): only
     a student club nobody else is in, that never published an event and isn't official; otherwise conflict says why
     (members / events / official). As the admin's hide (oversight.admin_hide_org): hidden, never removed, so the admin
     can bring it back; audit-logged. The President leaves it (role history by its trigger)."""
@@ -404,12 +404,12 @@ def delete_org(con, v: Viewer, oid: int) -> None:
 CLUB_REAPPLY = 30 * 86400   # after a decline, a new application in 30 days
 COVERS = 6                  # the cover palette (OrgLogo.svelte's COVERS)
 LINK = re.compile(r"https://[A-Za-z0-9.-]+\.[a-z]{2,}(/[^\s]*)?")
-# Telegram is not a social (owner, Nov 6): its chats are linked in the club's Chats, and "Message the club" goes to the President
+# Telegram is not a social: its chats are linked in the club's Chats, and "Message the club" goes to the President
 TG_LINK = re.compile(r"https://(?:www\.)?(?:t|telegram)\.(?:me|dog)(?:/|$)", re.I)
 
 
 def shown_links(raw: str) -> list[str]:
-    """The club's stored links as shown: t.me ones saved before Nov 6 stay stored, unseen (an edit drops them)."""
+    """The club's stored links as shown: t.me ones already saved stay stored, unseen (an edit drops them)."""
     return [x for x in json.loads(raw) if not TG_LINK.match(x)]
 
 
@@ -442,7 +442,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
     need_student(v)
     name, short = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper()
     about, why = str(body.get("description") or "").strip(), str(body.get("why") or "").strip() or None
-    # up to 6 social links, the club's own rule (A4); the form before the refactor sends one "link"
+    # up to 6 social links, the club's own rule; an older app's form sends one "link"
     links = body["links"] if "links" in body else [x] if (x := str(body.get("link") or "").strip()) else []
     emoji, cover = str(body.get("emoji") or ""), body.get("cover")
     if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and 10 <= len(about) <= 600 and (why is None or len(why) <= 500)
@@ -512,16 +512,16 @@ def undo_club_refusal(con, v: Viewer, aid: int) -> None:
         log_action(con, v.id, "capp_undo", f"capp:{aid}")
 
 
-# ---------------------------------------------------------------- the Ascent (owner, Nov 6; was the path to the ✓)
+# ---------------------------------------------------------------- the Ascent
 # A student initiative's checklist, any order, each read live when Studio opens (one query, every fact once). It never
-# locks a tool (owner, Nov 6): a checklist and a reward. A collab with an official club puts that event in the afisha
+# locks a tool: a checklist and a reward. A collab with an official club puts that event in the afisha
 # (its co-host's right); the top (every step, and two events with outside guests: _path_guests) gives the full tools of an official club but
 # no ✓ (orgs.top_at, kept once reached; the owner makes its lanyard by hand). The ✓ is DMP's own decision: a club at the
 # top may ask (ask_official), the path never asks for it.
 
 PATH_STEPS = ("profile", "round", "channel", "collab", "top")
 PATH_MEMBERS = 5   # members in the app for a ready profile
-PATH_GUESTS = 5    # outside guests scanned at the door for an own event to count (owner, Nov 10)
+PATH_GUESTS = 5    # outside guests scanned at the door for an own event to count
 PATH_EVENTS = 2    # such events for the top
 PATH_REACH = 10    # different outside guests across those two
 
@@ -545,7 +545,7 @@ def _path_guests(con, oid: int) -> tuple[int, int]:
     """(own events over with PATH_GUESTS outside guests, the most different guests any two of them drew). A guest: scanned
     at the door (not ticked by hand), not the event's creator or helper (Studio's or the QR screen's), never in the club or its co-host before it began
     (current and former members alike: org_history keeps who left; joining after counts). One query for all events.
-    ponytail: no anti-cheat review (owner, Nov 10: proven cheating cancels the top); add a staff undo of top_at when needed.
+    ponytail: no anti-cheat review (proven cheating cancels the top); add a staff undo of top_at when needed.
     Helpers (event_crew, qr_helpers) and co-hosts are read as they are now: one removed after the event counts as a guest;
     keep their history if that gets abused."""
     by: dict[int, set[int]] = {}
@@ -585,7 +585,7 @@ def path_top(con, oid: int) -> bool:
 
 def stories_open(con, o: sqlite3.Row) -> bool:
     """A club may post stories (newsfeed.create_post, the channel mirror): official, not a club, or a student initiative
-    past the Ascent's collab step (owner, Nov 7: an official club vouched for it, it's on the afisha). Old posts stay."""
+    past the Ascent's collab step (an official club vouched for it, it's on the afisha). Old posts stay."""
     return bool(o["official"] or o["kind"] != "club" or o["top_at"]) or _path_steps(con, o["id"])[0]["collab"]
 
 
@@ -635,7 +635,7 @@ def ask_official(con, v: Viewer, oid: int) -> dict | None:
             raise ApiError("rate_limited")
         if not o["top_at"]:
             raise ApiError("bad_input", "steps")
-        # its President already leads an official organization: one post goes first (owner, Nov 9); DMP's own ✓ stays free
+        # its President already leads an official organization: one post goes first; DMP's own ✓ stays free
         if one(con, """SELECT 1 FROM org_members me JOIN org_members m ON m.user_id = me.user_id AND m.role = 'president' JOIN orgs b ON b.id = m.org_id
                 WHERE me.org_id = ? AND me.role = 'president' AND b.official = 1 AND b.status = 'active' AND b.id != ?""", oid, oid):
             raise ApiError("conflict", "president_elsewhere")
@@ -703,7 +703,7 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
                kind: str = "club") -> int:
     """A club or a school, by the admin (the app or the CLI). A school (KBTU's own, a few, made by the
     admin, never by an application) is official from the start and never closes; its President has a club
-    President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>). Recruiting starts closed:
+    President's rights. A slug nobody chose comes from the name (kbtu.sow.kz/<slug>). Recruiting starts closed:
     the club opens it in Studio."""
     abbr = guess_abbr(name)
     name = org_name(name)[0]  # no "KBTU", the short form to abbr
@@ -716,7 +716,7 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     return cur.lastrowid
 
 
-# A5 short links kbtu.sow.kz/<slug>: the name in Latin letters, the app's own paths never
+# short links kbtu.sow.kz/<slug>: the name in Latin letters, the app's own paths never
 # Cyrillic a..ya (U+0430..U+044F) in order, then yo and the Kazakh letters (code points: the code stays ASCII)
 TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i k l m n o p r s t u f h c ch sh sch _ y _ e yu ya".split())),
     0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
@@ -740,7 +740,7 @@ def slug_for(con, name: str, oid: int | None = None) -> str:
 
 
 def name_slugs(con) -> None:
-    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once (every start renamed
+    """At start: the clubs made before short links got club<N>; they take their names' slugs, once (every start would rename
     a club<N> its President chose)."""
     if one(con, "SELECT 1 FROM meta WHERE key = 'slugs_named'"):
         return
@@ -774,7 +774,7 @@ _SEP = r"[\s\-\u2013\u2014|:,.]"
 _HEAD = re.compile(rf"^{_KB}(?:['\u2019]s)?\b{_SEP}*", re.I)
 # "... in KBTU", "... at KBTU", "... \u0432 / \u043f\u0440\u0438 \u041a\u0411\u0422\u0423": the little word goes too
 _TAIL = re.compile(rf"(?:\s+(?:in|at|of|\u0432|\u043f\u0440\u0438))?{_SEP}*\(?\b{_KB}(?:\s+chapter)?\)?$", re.I)
-# no "Club" either, the Clubs tab says it (owner, Nov 2): "Chess Club", Kazakh "\u0428\u0430\u0445\u043c\u0430\u0442 \u043a\u043b\u0443\u0431\u044b", Russian
+# no "Club" either, the Clubs tab says it: "Chess Club", Kazakh "\u0428\u0430\u0445\u043c\u0430\u0442 \u043a\u043b\u0443\u0431\u044b", Russian
 # \u041a\u043b\u0443\u0431 \u00abX\u00bb. A Russian "\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u0443\u0431" or "\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432" keeps it: an adjective or a genitive alone isn't a name
 _CLUB_TAIL = re.compile(rf"{_SEP}+(?:club|\u043a\u043b\u0443\u0431\u044b)$", re.I)
 _CLUB_QUOTED = re.compile(r"^(?:club|\u043a\u043b\u0443\u0431)\s*[\u00ab\"\u201c\u201e'](.+)[\u00bb\"\u201d']$", re.I)
@@ -824,7 +824,7 @@ def _looks_ok(name: str) -> None:
         raise ApiError("bad_input", "name")
 
 
-# what a name may not carry (owner, Nov 3): "Club" as a word ("\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432" can't be cut to a genitive, so it's refused), and
+# what a name may not carry: "Club" as a word ("\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432" can't be cut to a genitive, so it's refused), and
 # emoji (the logo is the picture; they break lists and initials)
 _CLUB_WORD = re.compile(r"(?<![^\W_])(?:club|\u043a\u043b\u0443\u0431(?:\u044b|\u0430|\u0443)?)(?![^\W_])", re.I)
 
@@ -849,7 +849,7 @@ def _plain(name: str) -> None:
 
 
 def strip_emoji_names(con) -> None:
-    """Once (Nov 6): names from before the rule lose their emoji ("Chess larpers\U0001f976" -> "Chess larpers"; letters
+    """Once: names from before the rule lose their emoji ("Chess larpers\U0001f976" -> "Chess larpers"; letters
     like \u00f3 stay), the slug kept, audit-logged, and the club's President told how (the club's look has an emoji)."""
     if one(con, "SELECT 1 FROM meta WHERE key = 'emoji_names'"):  # done: no write lock every bot round
         return
@@ -876,12 +876,12 @@ def _rename_ok(con, oid: int | None, name: str) -> None:
     rename neither gains nor loses one. Names already there stay till they're changed."""
     _looks_ok(name)
     _plain(name)
-    if _PAIR.search(unicodedata.normalize("NFKC", name)):  # "JCC × Crystal" would pose as a collab's signature in the channel (collab-review I1)
+    if _PAIR.search(unicodedata.normalize("NFKC", name)):  # "JCC × Crystal" would pose as a collab's signature in the channel
         raise ApiError("bad_input", "name")
     skel = _skeleton(name)
     if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id IS NOT ?", oid)):
         raise ApiError("conflict", "taken")
-    if oid is None or not _org(con, oid)["official"]:  # an initiative can't wear an official club's name or abbr (I2)
+    if oid is None or not _org(con, oid)["official"]:  # an initiative can't wear an official club's name or abbr
         words = [_skeleton(w) for w in re.split(r"[\W_]+", name) if w]
         runs = {"".join(words[i:j]) for i in range(len(words)) for j in range(i + 1, len(words) + 1)}
         for o in rows(con, "SELECT name, abbr FROM orgs WHERE official = 1 AND status = 'active' AND id IS NOT ?", oid):
@@ -904,12 +904,12 @@ def guess_abbr(name: str) -> str:
 
 def fill_abbrs(con) -> None:
     """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays.
-    (The one-time "Club" cut of the old names ran with 20c7f1b's deploys; run at every start it cut a club's own
-    "Club" from its rename again, review 3.)"""
+    (No "Club" cut here: run at every start it would cut a club's own
+    "Club" from its rename again.)"""
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
             con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
-        # one typed before today's rule (letters and digits, no KBTU: "JCC_KBTU", owner Nov 13) loses what breaks it
+        # one typed before the rule (letters and digits, no KBTU: "JCC_KBTU") loses what breaks it
         for o in rows(con, "SELECT id, name, abbr FROM orgs WHERE abbr IS NOT NULL"):
             if re.fullmatch(r"[^\W_]{2,8}", o["abbr"]) and not re.search("kbt[uy]", _skeleton(o["abbr"])):
                 continue
@@ -1004,7 +1004,7 @@ def _official(con, oid: int, level: str) -> int | None:
     return r[0] if r else None
 
 
-SCHOOLS_VERSION = "3"  # 2: the short names (SITE, ISE, KMA), owner Oct 14; 3: SEPI's Russian short name fixed (a student, Nov 3)
+SCHOOLS_VERSION = "3"  # 2: the short names (SITE, ISE, KMA); 3: SEPI's Russian short name fixed
 SCHOOLS = json.loads((Path(__file__).parent.with_name("i18n") / "schools.json").read_text(encoding="utf-8"))
 
 

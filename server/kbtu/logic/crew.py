@@ -1,4 +1,4 @@
-"""An event's temporary door helpers (owner, Nov 4; .claude/reports/collab-review.md H1-H6): a President or Vice of a
+"""An event's temporary door helpers: a President or Vice of a
 club running the event (the host, or its accepted co-host) lets a KBTU student help at this one event's door, a friend
 from another club say. "scan": the scanner only, tickets and badges of people already going, no list. "door": the
 door as a Member works it (the list of short names, by name, typed guests). At most 3 an event. The right lives while
@@ -29,7 +29,7 @@ def _open(e: sqlite3.Row) -> bool:
 def kind(con, v: Viewer, e: sqlite3.Row) -> str | None:
     """My helper's right at this event, if it still holds: its club still runs it, neither club banned me since."""
     if not v.student or not _open(e) or e["visibility"] != "public" or e["meeting"] or e["guest_host"]:
-        return None  # made team-only or a partner's since: the team's own door (adversarial review 1)
+        return None  # made team-only or a partner's since: the team's own door
     r = con.execute(f"""SELECT kind FROM event_crew WHERE event_id = :e AND user_id = :u AND org_id IN ({_RUNNING})
         AND NOT EXISTS (SELECT 1 FROM org_bans WHERE user_id = :u AND org_id IN ({_RUNNING}))""", {"e": e["id"], "u": v.id}).fetchone()
     if r:
@@ -73,7 +73,7 @@ def view(con, v: Viewer, e: sqlite3.Row) -> list[dict] | None:
         return None
     named = [{"person": person_ref(p), "kind": p["kind"], "org": p["org_id"]} for p in rows(con, f"""SELECT {PERSON_COLS}, c.kind, c.org_id
         FROM event_crew c JOIN users u ON u.id = c.user_id LEFT JOIN students s ON s.user_id = u.id WHERE c.event_id = ? ORDER BY c.created_at""", e["id"])]
-    # and whom the helper's QR let in (checkin.py qr_helpers): the scanner, until Finish; one list of helpers (owner, Nov 14)
+    # and whom the helper's QR let in (checkin.py qr_helpers): the scanner, until Finish; one list of helpers
     seen = {x["person"]["id"] for x in named}
     return named + [{"person": person_ref(p), "kind": "qr", "org": e["org_id"]} for p in rows(con, f"""SELECT {PERSON_COLS} FROM qr_helpers h
         JOIN qr_sessions q ON q.id = h.session_id AND q.event_id = ? AND q.ended_at IS NULL JOIN users u ON u.id = h.user_id

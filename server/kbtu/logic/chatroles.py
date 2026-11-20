@@ -1,4 +1,4 @@
-"""Studio → Chats → "Roles and admins" (owner, Nov 13): where a club's roles in the app and the admins of its linked group
+"""Studio → Chats → "Roles and admins": where a club's roles in the app and the admins of its linked group
 drift apart. Read-only: asked of Telegram when the sheet opens (the bot's own status, the group's admins, then each of the
 club's people with a role who isn't one of them, at most ASK_CAP a request) and kept per worker for FRESH. Nothing stored,
 nothing changed in Telegram. The client gets app names (and app ids of the club's own people), never a Telegram id; the

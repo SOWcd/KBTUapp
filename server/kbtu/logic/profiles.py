@@ -51,14 +51,14 @@ def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
 
 
 ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
-    ("regular", "trophy_3d", (5, 15, 30, 50), False),  # "streak" (weeks in a row) is off the list: owner, Nov 13 (its counting stays, _streak)
+    ("regular", "trophy_3d", (5, 15, 30, 50), False),  # "streak" (weeks in a row) is off the list (its counting stays, _streak)
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
     ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
-    ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal (owner, Nov 1)
+    ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
-    ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU (9 levels since Nov 2)
+    ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
     ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
@@ -66,15 +66,15 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("supporter", "fire_3d", (1,), False),  # "Fuel": a new Stars gift (stars.paid), or the creator by hand; others see it only on the showcase
     ("club_founder", "rocket_3d", (1,), False),  # founded a club (official or at the Ascent's top): by hand in Admin, the club on the grant's note
 ]
-# Couch critic (awards plan, Nov 3): the forum channel's posts I commented under, each once (critic()). Off until the
+# Couch critic: the forum channel's posts I commented under, each once (critic()). Off until the
 # privacy policy says the bot's record of my comments (its section on forum channel posts) also counts toward my award:
 # CRITIC_ON = True then, with the policy's new consent version. A level is raised by the comment itself (fchannel.commented).
 CRITIC = ("critic", "couch_and_lamp_3d", (1, 5, 25, 100, 250, 500, 1000), False)
 CRITIC_ON = False
 if CRITIC_ON:
     ACHIEVEMENTS.append(CRITIC)
-# "Attendance required" (DMP's general meetings, one level a meeting, by the QR its giver shows): hidden (owner, Nov 10:
-# not needed yet, the name reads as an order); DMP_ON = True brings it back everywhere (profile, Admin, the auto grant)
+# "Attendance required" (DMP's general meetings, one level a meeting, by the QR its giver shows): hidden
+# (not needed yet, the name reads as an order); DMP_ON = True brings it back everywhere (profile, Admin, the auto grant)
 DMP = ("dmp", "spiral_calendar_3d", (1, 3, 5, 10), False)
 DMP_ON = False
 if DMP_ON:
@@ -99,7 +99,7 @@ def _counts(con, uid: int) -> dict[str, int]:
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
     seasons = [_season_start(t) for t in times]  # the best semester counts: every semester is a new chance
     # a partner's week has nothing to check in at. Only weeks from my first check-in's on count (_streak): an index
-    # range from that week's Monday, O(my weeks' events), not every event ever under the door's write lock (review 7)
+    # range from that week's Monday, O(my weeks' events), not every event ever under the door's write lock
     busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
         AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
     streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
@@ -148,8 +148,8 @@ def sync_levels(con) -> None:
     """Levels already reached, recorded once the achievements change (a new one, a new level): counts never stop at the
     top, so a level added later is reached by whoever already did it. At start, under the migration
     lock (db.init), only when the list differs from the last run. No bot message. A new achievement's levels get the
-    app's unlock moment; new levels of one that was there already come quietly (Nov 2: "Recruiter" went from 4 levels to
-    9, a burst of moments for what was done weeks ago): a stored level is a place in the list, so it moves to the level
+    app's unlock moment; new levels of one that was there already come quietly (else "Recruiter" going from 4 levels to
+    9 is a burst of moments for what was done weeks ago): a stored level is a place in the list, so it moves to the level
     of the same need first."""
     mark = json.dumps([[code, needs] for code, _, needs, _ in ACHIEVEMENTS])
     last, filled = (one(con, "SELECT value FROM meta WHERE key = ?", k) for k in ("achievements", "achievements_filled"))
@@ -183,17 +183,17 @@ def sync_levels(con) -> None:
     put("achievements_filled")
 
 
-# A badge with variants (owner, Nov 2): one award on the profile and in the count, the medal of my variant; each variant
+# A badge with variants: one award on the profile and in the count, the medal of my variant; each variant
 # is its own grant code underneath (levels, the bot's card, take-back stay per variant). The highest variant first.
 BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
 GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
-CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter")  # about the creator himself (owner, Nov 3), and Fuel: he alone gives them
+CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter")  # about the creator himself, and Fuel: he alone gives them
 PRIVATE = ("supporter",)  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
-# art being redone (owner, Nov 11); delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
+# art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
 # locked medal on a profile): a holder keeps it on the shelf, Admin's person page still gives both, Stars still give Fuel
 CATALOG_HIDDEN = ("supporter", "club_founder")
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
@@ -313,13 +313,13 @@ def use_grant_link(con, v: Viewer, token: str, qr: bool = False) -> dict:
     return {"code": r["code"]}
 
 
-# Admin → Awards → Show QR (owner, Nov 6): the giver's phone shows a big code the hall scans with its cameras, faster
+# Admin → Awards → Show QR: the giver's phone shows a big code the hall scans with its cameras, faster
 # than scanning each card. Underneath: a grant link with no cap (once per person, logged and undone as one), qr = 1,
 # for QR_LIFE at most, closed when the giver closes the screen (revoke_link). The code is t.me/…?startapp=bq_<token>_
 # <slot>_<sig>, a new one every QR_SLOT s, taken QR_OK s after its slot ended: a photo of it goes stale within a minute.
 QR_KEY = b""      # app.py: from the server's token key, the same on every worker
 QR_SLOT = 20
-QR_OK = 60        # a cold Telegram start on crowded wifi (checkin.py: 60 s was tight there)
+QR_OK = 60        # a cold Telegram start on crowded wifi (checkin.py: 60 s is tight there)
 QR_LIFE = 30 * 60
 QR_LEASE = 15     # each poll of the screen renews this: the screen gone (killed, offline), its code stops this soon after
 QR_TRIES = 10     # bad or stale codes one person may send in 10 min, then 'rate_limited'
@@ -517,7 +517,7 @@ def awards_of(con, v: Viewer, uid: object) -> dict:
 
 
 def badge_sessions(con, v: Viewer) -> list[dict]:
-    """The owner's batch grant (it was on /show's sheet): check-in sessions, newest first, with how many were counted."""
+    """The owner's batch grant: check-in sessions, newest first, with how many were counted."""
     if not _owner(con, v):
         raise ApiError("forbidden")
     return [{"id": r["id"], "title": r["title"], "at": r["started_at"] or r["created_at"], "done": r["done"]} for r in rows(con, """
@@ -525,13 +525,13 @@ def badge_sessions(con, v: Viewer) -> list[dict]:
         FROM qr_sessions q ORDER BY q.id DESC LIMIT 20""")]
 
 
-FIRST_N = 500  # cards 1-500; the code stays "first50": it was 50 until launch day, a pilot club alone could have taken them all
+FIRST_N = 500  # cards 1-500 under the code "first50", as stored; at 50 a pilot club alone could take them all
 
 
 def card_no(con, uid: int) -> None:
     """A student's number on the card (§4.4): the order of first KBTU sign-in, kept for good, so a deleted account never
     frees it. The Creator's card shows 00000 and takes no number, staff none at all: the numbers count students."""
-    # the last number given lives in meta: MAX + 1 alone gave the last card's number again once its account was purged
+    # the last number given lives in meta: MAX + 1 alone gives the last card's number again once its account is purged
     n = con.execute(f"""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
             (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last'))
         WHERE id = ? AND card_no IS NULL AND is_founder = 0
@@ -553,13 +553,13 @@ def first_fifty(con, uid: int) -> None:
     con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'first50', 1, ?)
         ON CONFLICT (user_id, code) DO UPDATE SET level = MAX(level, 1), reached_at = excluded.reached_at""", (uid, core.now()))
     # no bot push: the app shows it the same minute (the lanyard's drop on the first Profile open), a DM on top of the
-    # first run was one window too many (onboarding plan, Oct 31)
+    # first run is one window too many
 
 
 def anthem_heard(con, v: Viewer) -> list[dict]:
     """The anthem heard start to finish without skipping: the app knows (the sheet tracks skips) and says so at the song's
     end; once per student, again is a no-op. Celebrated in the app only (it is open right then), no bot message."""
-    # ponytail: the app's word is trusted (owner, Nov 2: an award for fun, kept light); a server-side play token if it is ever farmed
+    # ponytail: the app's word is trusted (an award for fun, kept light); a server-side play token if it is ever farmed
     need_student(v)
     with tx(con):
         if not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'anthem'", v.id):
@@ -588,7 +588,7 @@ def seen_unlock(con, v: Viewer, code: object, level: object) -> None:
 def achievements(con, uid: int) -> list[dict]:
     """Mine, each level with its rarity: the share of students who have reached it. Rarity comes from the levels everyone
     reached (achievement_levels: an earned level stays), one query; counting every student's check-ins for every
-    profile view was thousands of queries once a few hundred students had signed in (load test)."""
+    profile view is thousands of queries once a few hundred students sign in."""
     mine = _counts(con, uid)
     total, at_level, badges = _rarity(con)
     out = []
@@ -607,10 +607,10 @@ _RARITY: list = [0.0, None]  # (until, what _rarity read): the same for every pr
 
 def _rarity(con) -> tuple[int, dict, dict]:
     """How many students reached each level, out of how many, and each badge's share (any of its variants). Global and
-    slow to move: a minute stale is fine, and it was a GROUP BY over every level on every profile view (load review)."""
+    slow to move: a minute stale is fine, and else it is a GROUP BY over every level on every profile view."""
     if _RARITY[0] > time.monotonic():
         return _RARITY[1]
-    # out of students only: staff take no card and no "First 500", counted they made it "95%"
+    # out of students only: staff take no card and no "First 500", counted, they make it "95%"
     total = max(1, one(con, f"SELECT COUNT(*) FROM students s WHERE NOT {core.staff_sql()}")[0])
     at_level = {(r[0], r[1]): r[2] for r in rows(con, f"""SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
         JOIN students s ON s.user_id = l.user_id WHERE NOT {core.staff_sql()} GROUP BY l.code, l.level""") if r[0] not in PRIVATE}
@@ -634,7 +634,7 @@ def _fold(out: list[dict], badges: dict[str, float]) -> list[dict]:
     return [by[a["code"]] for a in out if a["code"] not in BADGE_OF or a["code"] in BADGES]
 
 
-PROFILES_A_DAY = 200  # strangers' profiles a day (audit M2): browsing needs a few dozen, a scrape needs thousands
+PROFILES_A_DAY = 200  # strangers' profiles a day: browsing needs a few dozen, a scrape needs thousands
 
 
 def _stranger_view(con, v: Viewer, uid: int) -> None:
@@ -650,7 +650,7 @@ def _stranger_view(con, v: Viewer, uid: int) -> None:
 
 
 def person(con, v: Viewer, uid: int) -> dict:
-    """A profile (§4.12). Friends and clubmates see it all; anyone else (audit M2) the card, the bio and achievements
+    """A profile (§4.12). Friends and clubmates see it all; anyone else the card, the bio and achievements
     (the "team" medal says only "some club", accepted), but not the clubs, past roles, event badges or a club's badge
     that came by itself (where someone goes can say more than they chose to show: a
     support group, a faith club) and at most PROFILES_A_DAY of them, so the student body can't be scraped by id."""
@@ -669,7 +669,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     if not close:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
-    picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # an old "init26f" is the badge now
+    picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # a variant picked on its own ("init26f") shows as its badge
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
@@ -695,7 +695,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         FROM org_history h JOIN orgs o ON o.id = h.org_id
         WHERE h.user_id = ? AND h.until IS NOT NULL AND h.until - h.since >= 86400 AND o.status = 'active'
         ORDER BY h.until DESC LIMIT 20""", v.id, uid) if close else []
-    # the badges' clubs and every logo in two reads: one org and one logo per badge was ~2 queries a badge on each profile view
+    # the badges' clubs and every logo in two reads: one org and one logo per badge is ~2 queries a badge on each profile view
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in earned))
     logos = core._by_id(con, "files", (o["logo_file_id"] for o in [*hosts.values(), *clubs, *past]))
     badges = [{"eventId": e["id"], "title": e["badge_name"], "org": org_ref(con, hosts[e["org_id"]], logos), "emoji": e["emoji"] or "party_popper_3d",
@@ -726,7 +726,7 @@ def person(con, v: Viewer, uid: int) -> dict:
 
 # ---------------------------------------------------------------- friends (§4.7)
 
-FRIEND_ASKS_A_DAY = 500  # no limit for a person (owner, Nov 2: 20 a day stopped the initiation crowd); only a script hits it
+FRIEND_ASKS_A_DAY = 500  # no limit for a person (20 a day stops an initiation crowd); only a script hits it
 REASK_AFTER = 30 * 86400    # a declined request looks pending to the asker this long, then they may ask again
 
 
@@ -768,7 +768,7 @@ def friends(con, v: Viewer) -> dict:
     those who let friends see it; the card lists them)."""
     need_student(v)
     cols = PERSON_COLS + ", s.course, s.school"
-    # closest first, not by the alphabet (owner, Nov 2): the events we both went to, the clubs we share (a club weighs two
+    # closest first, not by the alphabet: the events we both went to, the clubs we share (a club weighs two
     # events), then the newest friends
     mine = [_friend_row(p, p["since"]) for p in rows(con, f"""SELECT {cols}, f.created_at AS since FROM friendships f
         JOIN users u ON u.id = CASE WHEN f.a = ? THEN f.b ELSE f.a END JOIN students s ON s.user_id = u.id
@@ -835,7 +835,7 @@ def ask_friend(con, v: Viewer, uid: int) -> dict:
     elif state == "none":
         if not _can_friend(con, uid):
             raise ApiError("closed")
-        _stranger_view(con, v, uid)  # a person opened the profile already (free); a script walking ids meets the 200 a day (review)
+        _stranger_view(con, v, uid)  # a person opened the profile already (free); a script walking ids meets the 200 a day
         if one(con, "SELECT COUNT(*) FROM friend_requests WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
             raise ApiError("rate_limited")
         with tx(con):
@@ -861,7 +861,7 @@ def answer_friend(con, v: Viewer, uid: int, accept: bool) -> dict:
 
 def take_back_request(con, v: Viewer, uid: int) -> None:
     """Cancel my waiting request. A quietly declined one looks the same to me, so it goes from my list the same way
-    (it came back on the next load, which also told me I was declined: a student's report, Nov 11); its row stays,
+    (else it comes back on the next load, which also tells me I was declined); its row stays,
     hidden, and still holds the 30 days."""
     need_student(v)
     con.execute("DELETE FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", (v.id, uid))
@@ -884,7 +884,7 @@ def _inviter(con, code: object) -> sqlite3.Row:
 
 
 def link_card(con, v: Viewer, code: object) -> dict:
-    """My one invite link opened (owner, Nov 2: the referral link and the friend link are one): whose it is and where we
+    """My one invite link opened (the referral link and the friend link are one): whose it is and where we
     stand ('self' on my own). Adds nobody. Guests too: the inviter posted it, and the bot's card already shows their
     name; the 50-bit code can't be walked."""
     p = _inviter(con, code)

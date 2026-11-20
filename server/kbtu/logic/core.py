@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt (§4.3)
 log = logging.getLogger("kbtu.logic")
 NO_END = 3 * 3600       # an event without an end counts as 3 h long
-DOOR_AUTO = 30 * 60     # the door (check-in) opens by itself 30 min before the start (owner, Nov 7) …
+DOOR_AUTO = 30 * 60     # the door (check-in) opens by itself 30 min before the start …
 DOOR_EARLY = 4 * 3600   # … or earlier, from 4 h before, when the club's President or a Vice opens it (organizing.open_door) …
 DOOR_LATE = 6 * 3600    # … and, without an end, closes 6 h after the start
 RANK = {"member": 1, "head": 2, "vice": 3, "president": 4}
@@ -30,7 +30,7 @@ OWN_FROM = {"reports": "vice"}
 LEVEL_RIGHTS = {lv: frozenset(r for r, need in RIGHTS.items() if RANK[OWN_FROM.get(r, need)] <= RANK[lv]) for lv in RANK}
 PROFILE_QR = re.compile(r"\bu_(\d+)_([A-Z2-7]{10})\b")  # a badge QR: …?startapp=u_<id>_<code> (§4.4)
 TWO_GIS = re.compile(r"^https://(?:[a-z]+\.)?2gis\.(?:kz|ru|com)/", re.I)
-# An online event's meeting link (owner, Nov 19): a button every student sees, so a trust boundary. The well-known meeting
+# An online event's meeting link: a button every student sees, so a trust boundary. The well-known meeting
 # hosts below are the only ones the AI or the finder may fill in; an organizer typing it by hand may use any https host
 # (the page shows the host). ASCII only: an IDN host shows as xn--, never as a look-alike.
 MEET_HOSTS = (r"(?:meet\.google\.com|(?:[a-z0-9-]+\.)*zoom\.us|teams\.microsoft\.com|teams\.live\.com|(?:[a-z0-9-]+\.)*webex\.com"
@@ -144,7 +144,7 @@ def next_id(con, table: str) -> int:
 
 def chat_owners(con, tg_chat: int) -> set[int]:
     """The clubs holding a Telegram chat by any of its three ways: a sync link, a card on the page, an event's group.
-    Every claim checks them all: another club's chat stays theirs (Codex review, Nov 14)."""
+    Every claim checks them all: another club's chat stays theirs."""
     return {r[0] for r in rows(con, """SELECT org_id FROM chat_sync WHERE chat_id = ?1
         UNION SELECT org_id FROM chats WHERE tg_chat_id = ?1 AND org_id IS NOT NULL
         UNION SELECT org_id FROM events WHERE chat_id = ?1 AND org_id IS NOT NULL""", tg_chat)}
@@ -290,7 +290,7 @@ def _rights_from(role: str, rights: str | None) -> frozenset[str]:
 
 
 def club_rights(role: str, rights: str | None, o) -> frozenset[str]:
-    """_rights_from in that club: memos to DMP are a recognised club's alone (official, or the Ascent's top; owner, Nov 11:
+    """_rights_from in that club: memos to DMP are a recognised club's alone (official, or the Ascent's top:
     a club DMP has not accepted yet may not write to it as an organization)."""
     r = _rights_from(role, rights)
     return r if o["official"] or o["top_at"] else r - {"memo"}
@@ -346,27 +346,27 @@ def _roles(con, v: Viewer) -> dict[int, str]:
 
 
 def short_name(p: sqlite3.Row) -> str:
-    """"Alikhan S" for students (§3; no dot, owner Nov 2), the Telegram first name otherwise."""
+    """"Alikhan S" for students (§3; no dot), the Telegram first name otherwise."""
     if p["first_name"]:
         return f"{p['first_name']} {p['last_name'][:1] if p['last_name'] else ''}".strip()
     return p["tg_first_name"] or GONE["ru"]  # Telegram never has an empty first name: a deleted account's
 
 
-# a deleted account's name where its posts and comments stay (owner, Nov 2: content stays, the person goes)
+# a deleted account's name where its posts and comments stay: content stays, the person goes
 GONE = {"ru": "\u0423\u0434\u0430\u043b\u0451\u043d\u043d\u044b\u0439 \u0430\u043a\u043a\u0430\u0443\u043d\u0442",
         "kk": "\u0416\u043e\u0439\u044b\u043b\u0493\u0430\u043d \u0430\u043a\u043a\u0430\u0443\u043d\u0442", "en": "Deleted account"}
 
 
 def shown_name(p: sqlite3.Row) -> str:
-    """The name lists, cards and feeds show: the nickname when there is one. A nick is a display name, not a mask (owner,
-    Nov 2): the profile shows the real short name too (person_ref's `realName`)."""
+    """The name lists, cards and feeds show: the nickname when there is one. A nick is a display name, not a mask:
+    the profile shows the real short name too (person_ref's `realName`)."""
     return p["nick"] or short_name(p)
 
 
 def name_i18n(p) -> dict:
     """The short name in the English UI: the Latin one where KBTU's directory, the freshmen list or the student gave it
     (the client's localize() swaps it in, `name` unless a nick stands there, and `realName`); no Latin name: as in every
-    language. ponytail: never a generated transliteration (latin-names-review.md: a spelling is personal); a display-only
+    language. ponytail: never a generated transliteration (a spelling is personal); a display-only
     one needs its own title-cased table."""
     if "first_lat" not in p.keys() or not p["first_lat"]:
         return {}
@@ -387,7 +387,7 @@ CALLER: ContextVar[dict | None] = ContextVar("caller", default=None)
 
 
 def person_ref(p: sqlite3.Row) -> dict:
-    # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
+    # the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
     # a nick never hides the name from students (§4, §8); anyone else sees the nick alone (link_card's rule)
     real = p["nick"] and (CALLER.get() or {}).get("student") is not False
@@ -473,12 +473,12 @@ def course_day(con) -> None:
 
 
 # MS_AGE_CUTOFF (env, "MM-DD", e.g. "06-01"; app.py sets it): a free 1st-year seat also needs a KBTU Microsoft
-# account made on or after that day of the academic year's first calendar year (audit finding 2): KBTU makes the
+# account made on or after that day of the academic year's first calendar year: KBTU makes the
 # intake's accounts the summer before year one, so a senior who types a 1st-year's ID is years older. None (unset,
 # the default): recorded only, never refused, until Admin's "accounts by month" (daily.admin_stats) shows the real
 # dates split by intake (a bulk migration could give every account one date). Graph's createdDateTime is UTC ISO
 # ("2025-07-14T09:30:00Z"): compared as text; Almaty's 5 hours at midnight don't matter. Unknown (no Microsoft
-# sign-in, one before Graph gave it, or Graph left it out): the course alone, as before; ms_link stores the whole
+# sign-in, one before Graph gave it, or Graph left it out): the course alone; ms_link stores the whole
 # profile again at every sign-in, so the date arrives with the next one.
 MS_AGE_CUTOFF: str | None = None
 
@@ -540,7 +540,7 @@ SHARED_TTL = 15
 
 def shared(kind: str, found: list[sqlite3.Row], build) -> dict[int, dict]:
     """The viewer-independent part of each row's shape (build(rows) -> {id: part}), kept per worker SHARED_TTL seconds
-    (load review: ~100 ms CPU per app open). Keyed by the whole row: an edit of it is seen at once, in every worker;
+    (~100 ms CPU per app open otherwise). Keyed by the whole row: an edit of it is seen at once, in every worker;
     what is counted around it (seats taken, an org's logo) may lag up to SHARED_TTL. Only rows the viewer may see are
     passed in: who sees what is decided per request, before this, never cached."""
     t, out, miss = time.monotonic(), {}, []
@@ -562,7 +562,7 @@ def shared(kind: str, found: list[sqlite3.Row], build) -> dict[int, dict]:
 
 def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[dict]:
     """Event cards (types.ts EventCard). A list asks each thing once for all its events: card by card, the Afisha of a
-    few hundred events was 1200 queries and the slowest call of the app's start (load test). share: the lists everyone
+    few hundred events is 1200 queries and the slowest call of the app's start. share: the lists everyone
     opens (Afisha) take the part that is the same for all from shared(); a single card is always read fresh."""
     if not evs:
         return []
@@ -669,7 +669,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
             **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head), "teams": evteams.view(con, v, e, head),
             **santa.view(con, v, e, head),
             "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
-            # no video, no query (most events): `id = NULL` matches nothing, but it was still asked on every sheet opened
+            # no video, no query (most events): `id = NULL` matches nothing, yet it would still be asked on every sheet opened
             "wideVideo": video_shape(x) if e["wide_video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)
             **({"video": video_shape(x)} if head and e["video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["video_id"])) else {})}
