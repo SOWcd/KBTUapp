@@ -1,27 +1,23 @@
 <script lang="ts">
-  // A person's lines in "People of the app": what shipped, in our words, each with a small quiet mark of its kind.
-  import Lightbulb from '@lucide/svelte/icons/lightbulb';
-  import Bug from '@lucide/svelte/icons/bug';
-  import CodeXml from '@lucide/svelte/icons/code-xml';
-  import type { CreditItem } from '../lib/api';
+  // A person's lines in "People of the app": what shipped, in our words, each under a quiet label of its kind.
+  //   by  who signs a nameless line ("Student"), after the kind
+  //   under  the kind the block's own label already names (the idea's author under "Idea"): such lines go without theirs
+  import type { CreditItem, CreditKind } from '../lib/api';
   import { lineOf } from '../lib/credits';
   import { t } from '../lib/i18n/index.svelte';
 
-  let { items, center = false }: { items: CreditItem[]; center?: boolean } = $props();
-  const MARK = { idea: Lightbulb, find: Bug, code: CodeXml } as const;
+  let { items, by, under }: { items: CreditItem[]; by?: string; under?: CreditKind } = $props();
 </script>
 
-<span class="ln" class:center role="list">
+<span class="ln" role="list">
   {#each items as i, n (n)}
-    {@const Mark = MARK[i.kind]}
-    <span class="li" role="listitem"><span class="mk" role="img" aria-label={t(`cr.kind.${i.kind}`)}><Mark size={14} strokeWidth={2} /></span><span>{lineOf(i)}</span></span>
+    <span class="li" role="listitem">{#if i.kind !== under}<span class="k">{t(`cr.kind.${i.kind}`)}{#if by}{` · ${by}`}{/if}</span>{/if}<span>{lineOf(i)}</span></span>
   {/each}
 </span>
 
 <style>
   /* spans: the lines sit inside a row that is one button */
-  .ln { display: flex; flex-direction: column; gap: 5px; }
-  .li { display: flex; gap: 7px; font: 450 var(--fs-body)/1.3 var(--font-text); letter-spacing: -0.008em; color: var(--text-2); overflow-wrap: anywhere; }
-  .mk { flex: none; display: inline-flex; height: 1.3em; align-items: center; color: var(--text-3); }
-  .center { align-items: center; }
+  .ln { display: flex; flex-direction: column; gap: 10px; }
+  .li { display: flex; flex-direction: column; gap: 3px; font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; color: var(--text); overflow-wrap: anywhere; }
+  .k { font: 600 var(--fs-micro)/1.3 var(--font-text); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
 </style>
