@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from .migrations import MIGRATIONS  # in migrations.py since issue #21 (db.MIGRATIONS keeps working)
+from .migrations import MIGRATIONS  # Re-export for callers that import db.MIGRATIONS.
 
 SCHEMA = (Path(__file__).with_name("schema.sql")).read_text(encoding="utf-8")
 
@@ -23,7 +23,7 @@ def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=5)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
-    con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core
+    con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")  # Give concurrent writes time to acquire the lock.
     con.execute("PRAGMA secure_delete = ON")  # deleted rows' text doesn't linger in free pages (H2)
     con.execute("PRAGMA synchronous = NORMAL")  # with WAL: no corruption on a crash, fsync only at checkpoints
     # reads straight from the OS page cache, shared by every worker and pooled connection, instead of each copying

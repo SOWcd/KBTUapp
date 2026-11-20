@@ -526,7 +526,7 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
     return teams_list(con, v, eid)
 
 
-# ------------------------------------------------------------ asking those signed up before signing up meant agreeing
+# ------------------------------------------------------------ consent requests for registrations without consent
 
 def consent_ask(con, dry: bool = False) -> int:
     """`python -m kbtu.admin team-consent-ask [--dry]`: everyone signed up to a coming team event without the teams

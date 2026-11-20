@@ -161,7 +161,7 @@ def registry_export(con, v: Viewer) -> list[sqlite3.Row]:
 
 
 
-# ---------------------------------------------------------------- admin: clubs and their teams (pilot, SPEC §2)
+# ---------------------------------------------------------------- admin: clubs and their teams
 
 def _admin(v: Viewer) -> None:
     if v.role != "admin":

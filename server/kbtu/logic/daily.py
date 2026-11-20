@@ -235,7 +235,7 @@ def stats_day(con) -> None:
     from .. import checkin  # imports logic: here, not at the top
     checkin.sweep(con)  # check-ins left running (the organizers' list sweeps too, as it's read)
     chatsync.night(con)  # linked clubs: their members against their chats again (updates missed while down)
-    roles_backfill(con)  # club roles from before the typed-once title: a batch a night into the translator's queue
+    roles_backfill(con)  # Batch titles without a source language so they don't flood the translation queue.
 
 
 def admin_stats(con, v: Viewer) -> dict:

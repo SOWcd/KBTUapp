@@ -11,7 +11,7 @@ from ..db import tx
 from .core import ApiError, Viewer, one, organizes, rows
 
 
-# ------------------------------------------------------------ translations (ai.py, PLAN 9)
+# ------------------------------------------------------------ translations (ai.py)
 # The postman's translator takes one text at a time: an upcoming public event (never drafts, team-only ones or
 # meetings: only what anyone may read goes to Cloudflare, as the privacy policy says), else an active club's
 # description, else a public channel's mirrored post that got no translation from the channel itself (mirror.py) in

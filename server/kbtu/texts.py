@@ -26,7 +26,7 @@ SHARE_EVENT = {
 
 
 # Invites shared from the app (no bare links in chats — a line of text and our bot's button under it)
-SHARE_REFER = {  # my one invite link (Nov 2): a tap on its landing makes us friends; a newcomer counts for me once signed in
+SHARE_REFER = {  # Use one invite link so it can connect existing students and credit new sign-ins.
     "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья!\n\n👀 Смотри, кто куда идёт\n🎟 Все события и клубы", "🤝 Добавить в друзья"),
     "kk": ("Дос бол", "👋 <b>{name}</b> сені досқа шақырады!\n\n👀 Кім қайда баратынын көр\n🎟 Барлық іс-шаралар мен клубтар", "🤝 Досқа қосу"),
     "en": ("Be my friend", "👋 <b>{name}</b> wants to be friends!\n\n👀 See who's going where\n🎟 All events and clubs", "🤝 Add friend"),
@@ -124,7 +124,7 @@ CAL_PAGE = {  # (title, text, subscribe: Apple's button, Google's, copy the addr
 
 # The assistant's help card (logic/assistant.py): shown under the answer when the model (or, with no model, the keyword
 # backstop) sees a student in distress. A fixed template, never model-written, so a model's mistake can't drop the
-# numbers (review, Oct 31: safe messaging, no diagnosis, no promise of contact; 1303 first, it's 24/7).
+# numbers. Put the 24-hour service first and avoid diagnoses or promises of contact.
 HELP_CARD = {
     "ru": "Похоже, тебе сейчас очень тяжело. Мне жаль, что так.\nЯ всего лишь бот, но есть люди, которые выслушают прямо сейчас — бесплатно и анонимно:\n"
           "1303 — психологическая помощь в Алматы, круглосуточно\n150 — телефон доверия для молодёжи, можно и написать в чат\n"
@@ -358,7 +358,7 @@ BOT = {
         "sched_other": ("🔒 Это расписание другого студента: имя на странице не совпадает с твоим. Загрузить можно только своё.", None),
         "sid_page_clash": ("🪪 Номер студенческого на странице расписания занят другим аккаунтом. Смотри журнал: sid_page_taken.", None),
         "sched_big": ("Файл слишком большой — сохрани только страницу расписания.", None),
-        # the page sent again (Oct 30): its language, then what changed in the week (counts only)
+        # Report counts only so the bot need not echo the schedule.
         "sched_same": ("🗓 Это тот же язык — {language}.", None),
         "sched_added": ("🗓 Добавлен язык: {language}. Языки расписания: {languages}.", None),
         "sched_nochange": ("В неделе ничего не изменилось.", None),
@@ -379,7 +379,7 @@ BOT = {
         "id_clash": ("🪪 Номер студенческого <b>{sid}</b> указали двое:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — вошёл сейчас\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — был раньше\nСпроси обоих. Отдать номер: unlink у второго, первый вводит номер заново.", None),
         "probation_passed": ("🎉 Испытательный срок в <b>{org}</b> пройден — ты полноправный участник!", "Открыть клуб"),
         "removal_ask": ("🙋 {by} просит убрать <b>{name}</b> из {org}{ban}. Реши в приложении.", "Открыть команду"),
-        # the forum channel's comments (tgc.py): strangers get the formal you (not our users yet), as the owner wrote it
+        # Use the formal form of address for commenters unfamiliar with the app.
         "tgc_warn": ("Комментировать могут только студенты, зарегистрированные в KBTU App. Ваш комментарий сохранён на 1 час — зарегистрируйтесь, и он будет ждать вас в приложении.", "Зарегистрироваться"),
         "tgc_warn_plain": ("Комментировать могут только студенты, зарегистрированные в KBTU App.", "Зарегистрироваться"),
         "tgc_report_ok": ("🛡 Жалоба принята, модераторы посмотрят комментарий. Кто пожаловался, никто не узнает.", None),
@@ -1054,20 +1054,18 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 
-# ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" and a year of StudEx's
-# real memos: in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
-# one email to youth_policy@kbtu.kz, sent on Wednesday 9:00-18:00 from the sender's KBTU address.
+# DMP takes one Russian memo per week with numbered requests and a three-language signature.
+# Send it from the sender's KBTU address on Wednesday between 09:00 and 18:00.
 MEMO_TO = "youth_policy@kbtu.kz"
 WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
 MEMO_SIDES = {"tole": "Толе би", "kazybek": "Казыбек би", "abylai": "Абылай хана"}
 
-# ---- Memo v2 (PLAN stage 2): one memo for the week, the events' requests grouped under each event, numbered through,
-# the sender's signature once in kk, ru and en.
+# Group requests by event so DMP can review them in one memo with one signature block per language.
 MEMO2_TO = "Департаменту по Молодежной Политике"
 MEMO2_TITLE = ("Служебная записка", "Комплексная служебная записка")  # one event / two or more
 MEMO2_INTRO = ("Студенческая организация «{org}» планирует проведение мероприятия {events}. В связи с этим просим Вас:",
                "Студенческая организация «{org}» планирует проведение мероприятий: {events}. В связи с этим просим Вас:")
-MEMO2_EVENT = "«{title}» {day} г."                       # in the intro, joined by ", "; day = '20 октября 2026'
+MEMO2_EVENT = "«{title}» {day} г."                       # The day value omits the year suffix because the template supplies it.
 MEMO2_FOR = {"event": "В целях проведения мероприятия «{title}» ({when}) просим Вас:",
              "meeting": "В целях проведения собрания «{title}» ({when}) просим Вас:"}  # only with two or more events
 MEMO2_SIGN = {"kk": ("Ізгі құрметпен,", "«{org}» студенттік ұйымының {pos}"),
@@ -1083,17 +1081,16 @@ MEMO2_POS = {"president": {"kk": "президенті", "ru": "Президен
              "member": {"kk": "мүшесі", "ru": "Член", "en": "Member"}}
 MEMO2_POS_WORDS = {"secretary": ("secretar", "секретар", "хатшы"), "vice": ("vice", "вице"), "president": ("president", "президент"),
                    "manager": ("manager", "менеджер"), "head": ("head", "руковод", "жетекші", "басшы")}  # checked in this order
-# new and changed requests
-MEMO2_ROOM_EXTRA = {"projector": "проектором", "board": "доской"}  # "... с проектором и доской вместимостью N человек"
-MEMO2_DORM = "Разрешить проведение мероприятия в студенческом общежитии KBTU Jastar City"  # + "\nЛокация: ..." if given
-MEMO2_DORM_SIDES = {"turgut": "Тургут Озала", "karimov": "Ислама Каримова"}  # the dorm's gates, "со стороны улицы ..."
+MEMO2_ROOM_EXTRA = {"projector": "проектором", "board": "доской"}  # Use the instrumental case after the room's "with" phrase.
+MEMO2_DORM = "Разрешить проведение мероприятия в студенческом общежитии KBTU Jastar City"
+MEMO2_DORM_SIDES = {"turgut": "Тургут Озала", "karimov": "Ислама Каримова"}  # Use the genitive case after the wording for the dorm entrance.
 MEMO2_GUESTS_DORM = "Разрешить вход гостям (по списку) в студенческое общежитие KBTU Jastar City со стороны улицы {side}:"
 MEMO2_PROVIDE = {"jbl": "колонку JBL PartyBox", "tables": "столы: {n} шт.", "chairs": "стулья: {n} шт.", "mixer": "микшер",
-                 "cooler": "кулер и стаканы: {n} шт."}   # "Предоставить: a; b; c." then the event's date, time and place
+                 "cooler": "кулер и стаканы: {n} шт."}   # Items share a single request line before the date, time and place.
 MEMO2_PROVIDE_HEAD = "Предоставить: {items}."
 MEMO2_QUIET = "Студенты проинструктированы, мешать проведению занятий не будут."  # after a request with the speaker
-MEMO2_DENSITY = ("70-100", "110-150", "200-250")   # "Плотность бумаги: {d} г/м2"
-MEMO2_FILM = "Разрешить съёмку в студии КБТУ:"     # then "Дата:", "Время:", "Примечание:" as the other requests
+MEMO2_DENSITY = ("70-100", "110-150", "200-250")
+MEMO2_FILM = "Разрешить съёмку в студии КБТУ:"
 MEMO2_BLANK = "Студенческая организация «{org}» просит Вас:"  # the memo with nothing from the events: the sender writes it
 MEMO2_DATES = "Даты: {dates}"
 def channel_post(title: str, org: str, starts: int, ends: int | None, place: str, price: int | None, cancelled: bool,
@@ -1114,24 +1111,23 @@ def channel_post(title: str, org: str, starts: int, ends: int | None, place: str
     lines = [f"❌ <b><s>{name}</s></b>" if cancelled else f"<b>{name}</b>", html.escape(org), "", f"🗓 {day} · {at}",
              *([f"📍 {html.escape(re.sub(r'(?i)^(?:room|rm\.?|ауд(?:\.|итория)?|каб(?:\.|инет)?)\s*(?=\d)', '', place))}"] if place else []),  # "Room 222": 222
              "🎟 " + (f"{price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else "Free"),
-             # the sign-up as a line of its own (owner, Nov 11: the title as a link read as greyed-out text and the lone
-             # emoji square looked odd); still no button: Telegram hides a post's comments under one
+             # Use a separate line so the sign-up link is easy to spot.
+             # Telegram hides comments on posts with buttons, so link from the text.
              *(["", f'<a href="{html.escape(link)}">KBTU App →</a>'] if link and not cancelled else [])]
     return "\n".join(lines)
 
 
-CHANNEL_BUTTON = "📝 KBTU App"  # no language (owner, Nov 4), as the post
+CHANNEL_BUTTON = "📝 KBTU App"  # Use the app name so the label works in all three languages.
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
 CHANNEL_RULES = ("🤝 Балағатсыз, спамсыз, жарнамасыз.\n"
                  "💬 Без хамства, спама и рекламы.\n"
-                 "✌️ No insults, spam or ads.")  # owner, Nov 3: one standard, each language one line on a phone
-# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the same rules (owner, Nov 3: one
-# standard for both channels), and a button to that post in the app
+                 "✌️ No insults, spam or ads.")  # Keep each language to one short line for phones.
+# Use the same rules in both channel discussion groups so students see one standard.
 FORUM_RULES = CHANNEL_RULES
 FORUM_BUTTON = "📱 Открыть · Ашу · Open"  # as CHANNEL_BUTTON: ru · kk · en
 FCH_REPLY_SIGN = "🎭 Автор поста"  # the anonymous author's replies in the group (tgc._replies); a Telegram name with it is deleted (tgc.posing)
-FCH_REPLY_NICK = "🎭 {nick}"  # the same, under a post that has a nick (owner, Nov 3): the post's own
-# an anonymous post's nick (fchannel.pick_nick, owner Nov 3), as the channel signs it: an adjective (masculine,
+FCH_REPLY_NICK = "🎭 {nick}"  # Reuse the post's nickname so readers can identify its anonymous author in the thread.
+# An anonymous post's nick (fchannel.pick_nick) uses an adjective (masculine,
 # feminine, neuter) agreeing with the noun's gender (0 m, 1 f, 2 n). Stored as indexes: APPEND-ONLY, never reorder or
 # change a meaning (it renames every post). The app's three languages: web/src/lib/i18n/nicks.ts, the same order
 NICK_ADJ = [
@@ -1167,7 +1163,7 @@ def nick(a: int, n: int) -> str:
 # an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."
-CHAT_NO_RIGHTS = "Мне нужны права админа «Пригласительные ссылки». Дай их и нажми «Создать чат» в приложении ещё раз."                      # promo over several days: "13, 14, 15 октября и 3 ноября 2026 г."
+CHAT_NO_RIGHTS = "Мне нужны права админа «Пригласительные ссылки». Дай их и нажми «Создать чат» в приложении ещё раз."
 
 
 def memo_day(ts: int) -> str:
@@ -1221,7 +1217,7 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
     None), off (an off-campus place: no room to book there), seats."""
     start, end = e["starts_at"], e["ends_at"] or e["starts_at"] + 3 * 3600
     when, hours = memo_day(start), f"{_hm(start)}-{_hm(end)}"
-    if end - start > 86400:  # an event of several days (a casting, 2-12 Nov): its days, the hours as the club set them
+    if end - start > 86400:  # Keep the entered hours for multi-day events so the memo shows the club's requested times.
         when = f"{when} – {memo_day(end)}"
     place = e["place"] or "уточняется"
     asks: list[str] = []

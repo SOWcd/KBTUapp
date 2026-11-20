@@ -172,7 +172,7 @@ class Mirror:
         from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
         from telethon.tl.types import Channel, PeerChannel
         skip: dict[str, float] = {}
-        try:  # what it joined before muting existed, or by hand
+        try:  # Mute unmuted dialogs too so joining outside the sync cannot leave notifications enabled.
             async for d in self.client.iter_dialogs():
                 ns = getattr(d.dialog, "notify_settings", None)
                 if (d.is_group or d.is_channel) and not (ns and ns.mute_until and ns.mute_until.timestamp() > time.time()):

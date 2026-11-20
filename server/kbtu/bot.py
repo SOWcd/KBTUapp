@@ -65,11 +65,9 @@ TAG_MAX = 300               # people one /all calls at most: 60 messages, about 
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
 
 
-# Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
-# loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
-# rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
-# the packs, first wins (NewsEmoji, made for bots; the older pack fills what it lacks; Telegram's own
-# RestrictedEmoji, ~1000, last, only for what the others lack)
+# A bot whose owner has Telegram Premium can use custom emoji. If Telegram rejects them but accepts
+# the plain version, disable the pack so subsequent messages send on the first try.
+# Use the bot pack first and the others to fill gaps.
 EMOJI_PACKS = ("NewsEmoji", "AnimatedAsianEmoji", "RestrictedEmoji")
 _custom: dict[str, str] = {}   # plain emoji (no variation selector) -> custom_emoji_id
 _custom_re: re.Pattern | None = None
@@ -182,7 +180,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "sid_free":  # sf:<student id>, parked for the one turned away; woken when it's freed (migration 127)
         free = not one(con, "SELECT 1 FROM students WHERE student_id = ?", ref[1])
         return (*texts.bot_message(lang, kind, sid=ref[1]), "me") if free else None
-    if kind == "id_clash":  # old rows only (the holder is asked instead; they expire in 30 days)  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
+    if kind == "id_clash":  # Render queued clash alerts until they expire so pending notices can still reach admins.
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
         if not all(who):
@@ -219,7 +217,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "contact_ask":  # ct:<contact>[:<token>]: someone offers help or wants to get in touch; Accept shares both contacts
         tok = ref[2] if len(ref) > 2 else None  # the offer's own: a reused id never shows (or answers) another's
         if not tok and (old := one(con, "SELECT id FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token IS NULL", int(ref[1]), m["user_id"])):
-            tok = secrets.token_hex(4)  # an offer an old worker wrote without one (a rolling deploy): its card carries a fresh token
+            tok = secrets.token_hex(4)  # Give tokenless offers a token so the card can identify the exact offer.
             con.execute("UPDATE contacts SET token = ? WHERE id = ?", (tok, old["id"]))
         c = tok and one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", int(ref[1]), m["user_id"], tok)
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
@@ -544,7 +542,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if via and not one(con, """SELECT 1 FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
             WHERE x.event_id = ? AND x.org_id = ? AND x.status = 'accepted' AND o.status = 'active'""", e["id"], via):
         return None
-    # a rejected receipt's reason (seats.review_receipt's code, never words); none (an old client): the old text
+    # Use the generic template if the payload has no recognized rejection reason.
     why = texts.pick(texts.REJECT_WHY, lang).get(json.loads(m["payload"] or "{}").get("why")) if kind == "receipt_rejected" else None
     if why:
         kind = "receipt_rejected_why"
@@ -897,7 +895,7 @@ def _offsite_run(db_path: str, home: Path, date: str, jobs: list) -> None:
 def _chores(cfg: Config, con) -> None:
     """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
     hold the API worker's event loop, /healthz included."""
-    logic.strip_emoji_names(con)  # once (meta): org names from before the no-emoji rule
+    logic.strip_emoji_names(con)  # Normalize stored names once so the displayed names follow the club naming rules.
     logic.stats.week(con)  # Monday morning: the week's usage numbers to the creator
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
@@ -1014,7 +1012,7 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
     arg = words[1] if len(words) == 2 and words[0] == "/start" and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", words[1]) else ""
     if words[:1] == ["/exit"]:
         arg = "exit"
-    if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "suggest a chat": Telegram's own chat picker (PLAN item 45)
+    if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "Suggest a chat" uses Telegram's own chat picker.
         return _chat_picker(con, cfg, msg)
     # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
@@ -1393,7 +1391,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         say = " ".join(words[:-1] if last else words[1:]).rstrip(",")[:TAG_SAY]  # their own words beside the command, in this very chat
         tgc.spawn(_tag_all(cfg, http, chat["id"], to, who, say, msg["message_id"], sender.get("language_code")), f"all:{chat['id']}")
         return
-    if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
+    if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" deep link identifies the club.
         sender = int((msg.get("from") or {}).get("id") or 0)
         # only the group's own admin links it (whoever added the bot as an admin is one), as for an event's chat
         me = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChatMember", json={"chat_id": chat["id"], "user_id": sender})).json()

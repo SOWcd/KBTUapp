@@ -418,7 +418,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
         logic.fill_abbrs(con)
-        logic.refill(con)  # migration 135's freed seats to the waitlists
+        logic.refill(con)  # Fill waitlist places made available by startup migrations.
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once
     db.init(cfg.db_path, after=after)
@@ -549,7 +549,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def keep_me(con: Con, v: Me):
         return logic.keep_me(con, v)
 
-    # ------------------------------------------------------------ admin: clubs and their teams (pilot)
+    # ------------------------------------------------------------ admin: clubs and their teams
 
     @app.get("/api/admin/orgs")
     def admin_orgs(con: Con, v: Me):
@@ -616,7 +616,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not ms:
             raise ApiError("forbidden", "ms_first")
         if STUDENT_ID.fullmatch(ms.get("employeeId") or "") and ms["employeeId"] != sid:
-            raise ApiError("conflict", "sid_mismatch")  # empty at KBTU (measured); kept for the day they fill it
+            raise ApiError("conflict", "sid_mismatch")  # Check the directory ID when KBTU supplies it.
         now = logic.now()
         with db.tx(con):
             if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):
@@ -786,7 +786,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.ms_claim(con, v, str(body.get("claim") or ""))
         return {"ok": True}
 
-    # ------------------------------------------------------------ the clubs' rosters (PLAN 95, roster.py)
+    # ------------------------------------------------------------ the clubs' rosters (roster.py)
 
     @app.post("/api/roster/seen", status_code=204)
     def roster_seen(con: Con, v: Me):
@@ -1026,7 +1026,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def lent_studio(oid: int, con: Con, v: Me):
         return logic.lent_studio(con, v, oid)
 
-    # ------------------------------------------------------------ an org's own chats (PLAN 86)
+    # ------------------------------------------------------------ an org's own chats
 
     @app.get("/api/orgs/{oid}/chats")
     def org_chats(oid: int, con: Con, v: Me):
@@ -1941,9 +1941,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
                 msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
-            # no thinking first, room for a cited answer, a second key after llm.HEDGE s (measured on prod: with
-            # thinking 3 answers of 16 were cut at 500 tokens and asked again; without it 8 of 8 whole, 0.6-2 s on a usual
-            # call, and the slow ones were the host's, which the race covers)
+            # Disable reasoning so the token budget goes to the cited answer.
+            # Hedge slow responses with a second key after llm.HEDGE seconds.
             # Google first, for this answer alone (policy section 5), only with this student's own yes
             # (assistant.GOOGLE_YES) where kri_google allows it; no yes, or its failure: the usual chain
             yes = await run_in_threadpool(lambda: kri_google(con, v) and logic.assistant.google_yes(con, v.id))
@@ -2856,7 +2855,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         start = request.query_params.get("tgWebAppStartParam")
         if start == "old" and cfg.old_dir:  # t.me/KBTUappBot?startapp=old
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
-        if path == "demo" or path.startswith("demo/"):  # the in-browser demo is gone: its old links open the app in Telegram
+        if path == "demo" or path.startswith("demo/"):  # Send bookmarks to the browser demo to the app in Telegram.
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f

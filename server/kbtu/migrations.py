@@ -33,17 +33,16 @@ _CHAT_SEEN = """CREATE TABLE chat_seen (
 
 MIGRATIONS: list[tuple[int, str]] = [
     (2, "ALTER TABLE files ADD COLUMN color TEXT;"),   # a photo's average colour: the event sheet's tint
-    # a club's socials (Instagram, TikTok, YouTube, Telegram, a site), shown on its sheet; the old single link moves in
+    # Store socials by platform so the club's sheet can display each link.
     (3, "ALTER TABLE orgs ADD COLUMN links TEXT NOT NULL DEFAULT '[]'; UPDATE orgs SET links = json_array(link) WHERE link IS NOT NULL;"),
-    # join applications (§4.5): the club opens or closes them in Studio (closed by default since 66); the "recruiting until" date goes
+    # Keep recruitment open or closed at the club's discretion in Studio.
     (4, "ALTER TABLE orgs ADD COLUMN recruiting INTEGER NOT NULL DEFAULT 1; UPDATE orgs SET recruiting = 0 WHERE kind IN ('school','office','app');"
         " ALTER TABLE orgs DROP COLUMN recruiting_until;"),
     # the badge QR (§4.4): a random code per student, so nobody can make a QR from a user id;
     # walk_in marks a registration made at the door with that QR
     (5, "ALTER TABLE users ADD COLUMN qr_code TEXT; CREATE UNIQUE INDEX users_qr ON users(qr_code);"
         " ALTER TABLE registrations ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0;"),
-    # the point of the cover every frame keeps in view, "x,y" from 0 to 1 (Oct 4: one photo fills a tall Feed slide,
-    # the wide sheet and a square thumbnail, so the organizer marks what matters instead of one crop)
+    # Store a normalized focal point so tall, wide and square cover crops keep the same subject in view.
     (6, "ALTER TABLE events ADD COLUMN cover_focus TEXT;"),
     # checked in by name at the door (no QR: a dead phone), shown "by hand" to the organizer and in the CSV
     (7, "ALTER TABLE registrations ADD COLUMN checkin_manual INTEGER NOT NULL DEFAULT 0;"),
@@ -82,8 +81,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (13, """ALTER TABLE events ADD COLUMN reg_until INTEGER;
     ALTER TABLE events ADD COLUMN free_first INTEGER CHECK (free_first > 0);
     ALTER TABLE registrations ADD COLUMN free INTEGER NOT NULL DEFAULT 0;"""),
-    # Team 2.0 (SPEC §2b): a club's own roles (a name and colour on one of the levels), tags (groups of
-    # people), probation with strikes, removal by request (a Head asks, the President or Vice decide), club bans
+    # Store club-specific role names, colors and tags so club structure can vary without changing access levels.
+    # Removal requests let a Head propose removal while leaving the decision to the President or a Vice.
     (14, """CREATE TABLE org_roles (
         id INTEGER PRIMARY KEY,
         org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -152,9 +151,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # avatar_tg is the "Photo from Telegram" switch, off once I upload my own (it goes in users.avatar_file_id)
     (16, """ALTER TABLE users ADD COLUMN nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24);
     ALTER TABLE users ADD COLUMN avatar_tg INTEGER NOT NULL DEFAULT 1;"""),
-    # wrong KBTU passwords per account (§4.1: 5 in 15 min) in the database, so every worker process counts the same ones;
-    # two partial indexes the load test asked for: expired holds (swept before every Afisha) and "Life of the
-    # party" (friends someone brought), each a scan of all registrations without one
+    # Store wrong-password attempts so every worker applies the same five-attempt limit.
+    # The partial indexes keep expired-hold and referral lookups from scanning all registrations.
     (17, """CREATE TABLE login_fails (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         at INTEGER NOT NULL
@@ -162,9 +160,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX login_fails_by_user ON login_fails(user_id, at);
     CREATE INDEX regs_holds ON registrations(hold_until) WHERE status = 'hold';
     CREATE INDEX regs_by_inviter ON registrations(invited_by) WHERE invited_by IS NOT NULL;"""),
-    # no KBTU session is kept since Oct 7 (§4.1): the stored ones were ended at Keycloak, the table goes
+    # Drop stored KBTU sessions to meet the retention rule in policy section 4.1.
     (18, "DROP TABLE IF EXISTS portal_sessions;"),
-    # Studio part 2 "Meetings" (owner's go; SPEC §2b): a team-only event the whole club (or one tag) is expected at;
+    # A team-only event lets a club record attendance for the whole team or one tag.
     # "Can't make it" says why (registrations.note); a missed meeting's strike names it, one per meeting per person
     (19, """ALTER TABLE events ADD COLUMN meeting INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE events ADD COLUMN meeting_tag INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
@@ -175,11 +173,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     (20, "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"),
     (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea' (SPEC §1)
     (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's (SPEC §2)
-    # what the club asks DMP for in its weekly memo (PLAN "Memo in one tap"): JSON, the editor's "For the memo" block
+    # what the club asks DMP for in its weekly memo: JSON, the editor's "For the memo" block
     (23, "ALTER TABLE events ADD COLUMN memo TEXT;"),
-    # the in-app room booking demo goes (owner's yes): DMP books rooms by memo (§4.12c)
+    # DMP books rooms by memo (SPEC §4.12c).
     (24, "DROP TABLE IF EXISTS room_requests;"),
-    # casting (PLAN "Casting"): a club's recruitment round, its departments (the club's tags) and own questions, the
+    # casting: a club's recruitment round, its departments (the club's tags) and own questions, the
     # applications (what the student picked and answered; the rest is their KBTU profile) and the team's votes
     (25, """CREATE TABLE rounds (
         id INTEGER PRIMARY KEY,
@@ -270,17 +268,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE reports2 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id);
     ALTER TABLE events ADD COLUMN album_open INTEGER NOT NULL DEFAULT 1;"""),
-    # memo v2 (PLAN stage 2): the sender's signature fixed once (JSON: nameEn, kk, ru, en), which events went to DMP,
-    # who opened the week's memo last; the right "memo" (the secretary's), given to every club role that runs the team
+    # Store the sender's signature so the club can reuse it across weekly memos.
+    # Give the memo permission to roles that manage the club's team.
     (29, """ALTER TABLE org_members ADD COLUMN memo_sign TEXT;
     ALTER TABLE events ADD COLUMN memo_sent_at INTEGER;
     ALTER TABLE events ADD COLUMN memo_sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE orgs ADD COLUMN memo_opened_at INTEGER;
     ALTER TABLE orgs ADD COLUMN memo_opened_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     UPDATE org_roles SET rights = rights || ',memo' WHERE ',' || rights || ',' LIKE '%,team,%';"""),
-    # comment replies (PLAN "Comment replies"): the comment answered, quoted above the reply; its author hears it
+    # comment replies: the comment answered, quoted above the reply; its author hears it
     (30, "ALTER TABLE comments ADD COLUMN reply_to INTEGER REFERENCES comments(id) ON DELETE SET NULL;"),
-    # the admin's stats (PLAN "Admin stats"): one row a day from users.seen_at, counts only, no per-person log
+    # the admin's stats: one row a day from users.seen_at, counts only, no per-person log
     (31, """CREATE TABLE stats_days (
         day INTEGER PRIMARY KEY,                -- days since 1970-01-01 in Almaty
         active INTEGER NOT NULL,                -- people who opened the app that day
@@ -305,8 +303,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     UPDATE users SET skin_pick = 'org' WHERE skin_org IS NOT NULL;"""),
     # "delete my account" waits a week (a change of heart shouldn't cost the awards): when it goes
     (35, "ALTER TABLE users ADD COLUMN delete_at INTEGER;"),
-    # "First 500" for the cards 1-500 that never got it ("95%" with fewer than 500 people): the pilot
-    # signed in while it was "First 50", and a card handed out by /me skipped the award; quietly, no notification
+    # Backfill missing First 500 grants by card number without sending award notifications.
     (36, """INSERT INTO achievement_grants (user_id, code, note, created_at)
         SELECT u.id, 'first50', 'backfill', CAST(strftime('%s', 'now') AS INTEGER) FROM users u JOIN students s ON s.user_id = u.id
         WHERE s.consent_version != 'staff' AND (u.is_founder = 1 OR u.card_no <= 500)
@@ -314,8 +311,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     INSERT INTO achievement_levels (user_id, code, level, reached_at, seen)
         SELECT g.user_id, 'first50', 1, g.created_at, 1 FROM achievement_grants g WHERE g.code = 'first50' AND g.note = 'backfill' AND true
         ON CONFLICT (user_id, code) DO UPDATE SET level = MAX(level, 1);"""),
-    # the chats directory takes each chat's avatar (and title, members) from its t.me page (owner, Oct 14: "why doesn't
-    # it take the channel's own picture"); a topics group is a group with forum = 1 (Telegram draws it as a squircle)
+    # Use Telegram metadata so directory cards match the chats. Keep the topics flag so the UI can distinguish them.
     (37, "ALTER TABLE chats ADD COLUMN photo TEXT; ALTER TABLE chats ADD COLUMN forum INTEGER NOT NULL DEFAULT 0;"),
     # a club's name and description in Kazakh and English (JSON {"kk": {"name", "description"}, "en": ...}); the base
     # columns are Russian. Filled for KBTU's schools from kbtu.edu.kz (logic.seed_schools)
@@ -349,7 +345,6 @@ MIGRATIONS: list[tuple[int, str]] = [
       SELECT id, 'Head', '#3B6BFF', 'head', 1, CAST(strftime('%s', 'now') AS INTEGER) FROM orgs WHERE id NOT IN (SELECT org_id FROM org_roles WHERE fixed = 1 AND level = 'head');
     UPDATE org_members SET role_id = (SELECT r.id FROM org_roles r WHERE r.org_id = org_members.org_id AND r.fixed = 1 AND r.level = org_members.role)
       WHERE role_id IS NULL AND role IN ('vice', 'head');"""),
-    # unused since Oct 15 (requests without an event became the memo's templates); kept, migrations only append
     (41, "ALTER TABLE events ADD COLUMN memo_only INTEGER NOT NULL DEFAULT 0;"),
     # volunteers: how many an event needs (NULL: none), maybe not year 1; applications the organizer decides
     (42, """ALTER TABLE events ADD COLUMN volunteers INTEGER;
@@ -378,8 +373,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # typed in by the student while the portal is out of reach: replaced by the portal's data on their
     # first real sign-in; until then their student ID is only their word
     (46, "ALTER TABLE students ADD COLUMN manual INTEGER NOT NULL DEFAULT 0;"),
-    # who was where and when (a club leader, Oct 16: "ex-head of X, Oct 25 - May 26"; owner: recorded by itself, never
-    # typed in). Triggers on org_members, so every way in, up, down and out is caught, now and in code written later
+    # Track club role history with triggers so every membership write records joins, leaves and role changes.
     (47, """CREATE TABLE org_history (
       id      INTEGER PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -402,25 +396,22 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;"""),
     # an event's talk lives under its channel post in Telegram: the link to the bot's first comment there
     (48, "ALTER TABLE events ADD COLUMN channel_link TEXT;"),
-    # the KBTU-password sign-in is gone: its wrong-password counter with it
+    # The password counter can be dropped because Microsoft handles authentication.
     (49, "DROP TABLE IF EXISTS login_fails;"),
     # the KBTU Microsoft account a student signed in with (msauth.py): one account, one student
     (50, """ALTER TABLE students ADD COLUMN ms_oid TEXT;
         CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;"""),
-    # everything Microsoft gives about the student, as it came (owner, Oct 20: "keep all we get, it's free"; the way
-    # from typing it in to signing up by itself)
+    # Store the Microsoft profile as returned so sign-in can use the directory fields to prefill the student record.
     (51, "ALTER TABLE students ADD COLUMN ms_profile TEXT;"),
-    # a chat any student suggests through the bot waits for the admins (PLAN item 45); added_by is who
+    # Mark student suggestions as pending so they stay out of the directory until an admin approves them.
     (52, "ALTER TABLE chats ADD COLUMN status TEXT NOT NULL DEFAULT 'live';"),
-    # departments (PLAN item 47): a tag marked as a department, one per person; a club's latest casting
-    # round names its real ones (older rounds may hold tags that were never departments)
+    # Use tags from the latest casting round to identify departments because older rounds may refer to other tags.
     (53, """ALTER TABLE org_tags ADD COLUMN department INTEGER NOT NULL DEFAULT 0;
         UPDATE org_tags SET department = 1 WHERE id IN (SELECT d.tag_id FROM round_departments d JOIN rounds r ON r.id = d.round_id
             WHERE r.id = (SELECT MAX(x.id) FROM rounds x WHERE x.org_id = r.org_id));"""),
-    # a member link may put the newcomer straight into a department (PLAN 47: one who came by link landed in none)
+    # Carry the department on the member link so a newcomer can be placed without a second Studio action.
     (54, "ALTER TABLE org_invites ADD COLUMN dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;"),
-    # an event's photos after the cover, swiped sideways (PLAN 33; event_photos is the guests' album), and a horizontal
-    # video behind the event's sheet (PLAN 32): an upload says which slot it is for, so it is compressed for it
+    # Record the media slot on upload because the carousel and sheet background need different compression.
     (55, """CREATE TABLE event_slides (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       pos      INTEGER NOT NULL,
@@ -429,7 +420,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     ALTER TABLE events ADD COLUMN wide_video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL;
     ALTER TABLE videos ADD COLUMN wide INTEGER NOT NULL DEFAULT 0;"""),
-    # texts in three languages by AI (PLAN 9, ai.py): i18n holds the other two languages, lang the source's (NULL: to
+    # texts in three languages by AI: i18n holds the other two languages, lang the source's (NULL: to
     # translate), ai_tries the failed calls since the last edit; schools have official translations (schools.json)
     (56, """ALTER TABLE events ADD COLUMN i18n TEXT;
     ALTER TABLE events ADD COLUMN lang TEXT;
@@ -444,13 +435,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (day, user_id)
     ) WITHOUT ROWID;"""),
-    # audit M3: since the portal sign-in closed (Oct 19, 00:00 Almaty) the year was typed in; it becomes the student
-    # ID's (logic.course_of). The portal's own years stay: a repeater's ID is older than their year.
+    # Derive the year from the ID only for self-reported records. A repeater's portal year can differ from the ID's intake.
     (58, """UPDATE students SET course = MAX(1, MIN(6, CAST(strftime('%Y', 'now', '+5 hours') AS INTEGER)
         - (CAST(strftime('%m', 'now', '+5 hours') AS INTEGER) < 9) - (2000 + CAST(substr(student_id, 1, 2) AS INTEGER)) + 1))
       WHERE consent_at >= 1792350000 AND student_id GLOB '[0-9][0-9][A-Z]*' AND consent_version NOT IN ('staff', 'admin');"""),
-    # card numbers at sign-in again: who signed in the night before, when a number waited for a first real
-    # step, gets theirs now in the order they came, after every number given so far (burnt ones stay burnt)
+    # Assign missing card numbers in sign-in order after the highest number issued so numbers are never reused.
     (59, """UPDATE users SET card_no = r.base + r.n FROM (SELECT s.user_id,
             ROW_NUMBER() OVER (ORDER BY s.verified_at, s.user_id) AS n,
             MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
@@ -460,16 +449,11 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE r.user_id = users.id;
       INSERT INTO meta (key, value) SELECT 'card_last', MAX(card_no) FROM users WHERE card_no IS NOT NULL HAVING MAX(card_no) IS NOT NULL
         ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));"""),
-    # club strikes are gone (never used, a lot of code for nothing); probation stays as a label
     (60, "DROP TABLE strikes; DELETE FROM bot_outbox WHERE kind = 'strike';"),
-    # until now the sign-in demoted every admin missing from ADMIN_TG_IDS; it no longer does (roles are given in the
-    # app), so a stale admin row from before must not wake up as an admin: those in the env get it back at sign-in
+    # Reset non-founder admin roles to prevent stale privileges. Accounts in ADMIN_TG_IDS regain the role at sign-in.
     (61, "UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0;"),  # the owner never loses it
-    # the year of study moves on every September 1 (logic.course_day): course_year is the academic year a course was
-    # last right for: the one it was written in (synced_at, as course_day's fallback), or the ID's own for an August ID
-    # of the coming intake. Then the years migration 58 read from the ID (typed-in rows, up to 6) stop at the degree's
-    # last (bachelor 4, master 2): rows written since the portal closed (Oct 19; the typed-in sign-up
-    # sets synced_at, ms_link then clears manual); the portal's own are never touched
+    # Store the academic year for which the course is valid so it can advance each September 1.
+    # Cap courses inferred from self-reported IDs at the length of the degree and preserve portal-verified years.
     (62, """ALTER TABLE students ADD COLUMN course_year INTEGER;
     UPDATE students SET course_year = MAX(CAST(strftime('%Y', synced_at, 'unixepoch', '+5 hours') AS INTEGER)
         - (CAST(strftime('%m', synced_at, 'unixepoch', '+5 hours') AS INTEGER) < 9),
@@ -478,7 +462,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     UPDATE students SET course = CASE substr(student_id, 3, 1) WHEN 'B' THEN 4 ELSE 2 END
       WHERE synced_at >= 1792350000 AND consent_version NOT IN ('staff', 'admin')
         AND ((student_id GLOB '[0-9][0-9]B*' AND course > 4) OR (student_id GLOB '[0-9][0-9]M*' AND course > 2));"""),
-    # audit M2: strangers' profiles opened per day (logic._stranger_view); kept two days at most, no foreign keys
+    # Track daily stranger-profile opens for rate limits (logic._stranger_view). Keep them at most two days.
     # (delete_me clears a person's rows both ways)
     (63, """CREATE TABLE profile_views (
       day       INTEGER NOT NULL,   -- Almaty day number
@@ -490,9 +474,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # decided, the same person may report it again (it may have changed, or come back)
     (64, """DROP INDEX one_report;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
-    # A4: a club application is a name, a description and up to 6 social links, no "why" essay: the
-    # table again with links (JSON, the club's own rule) and why optional (old rows keep theirs). A19: the walk-ins at
-    # the door without the app, by the full name they typed; linked when one confirms with Microsoft (logic.ms_link)
+    # Keep existing application answers when rebuilding for social links.
+    # Store unclaimed walk-ins so they can count after Microsoft verifies a matching student (logic.ms_link).
     (65, """CREATE TABLE club_applications_new (
       id          INTEGER PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -526,8 +509,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
     ) STRICT;
     CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;"""),
-    # recruiting is the club's own switch in Studio now: closed everywhere until a club opens it (owner, Oct 24: the list
-    # of open clubs was every club); a round (Literature club's) shows on its own
+    # Default recruitment to closed so the list shows only clubs that opt in. Casting rounds can appear independently.
     (66, "UPDATE orgs SET recruiting = 0;"),
     # 53/68: a club's members are public unless the club hides the list (a support group, a faith club)
     (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
@@ -542,20 +524,20 @@ MIGRATIONS: list[tuple[int, str]] = [
         CHECK ((kind = 'event') = (event_id IS NOT NULL))
     ) STRICT;
     CREATE INDEX short_links_by_org ON short_links(org_id);"""),
-    # PLAN 71: an event asks for the phone at sign-up (no up-front "My data" step); a phone already kept stays
+    # Ask for a phone number only at events that need one and reuse the saved number at later sign-ups.
     (69, "ALTER TABLE events ADD COLUMN needs_phone INTEGER NOT NULL DEFAULT 0;"),
-    # a club's short name where a long one won't fit: its Vice+ or DMP set it; the clubs made before
-    # take their initials at start (logic.fill_abbrs: SQLite can't uppercase Cyrillic); a school's comes from schools.json
+    # Keep abbreviations for surfaces where the full name will not fit. logic.fill_abbrs supplies missing initials
+    # because SQLite cannot uppercase Cyrillic.
     (70, "ALTER TABLE orgs ADD COLUMN abbr TEXT;"),
-    # PLAN 86: a club's or school's own Telegram chats on its page: chats.org_id says whose a chat
-    # is, main = its one channel with the Subscribe button (later the mirror's source), about = the chat's own line; one
+    # Chats on a club's or school's page need an org_id to identify the club that manages them.
+    # main = its one channel with the Subscribe button and the mirror source. about = the chat description. A chat
     # linked only from Studio waits as status 'org', out of the shared catalog
     (71, """ALTER TABLE chats ADD COLUMN org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
     ALTER TABLE chats ADD COLUMN main INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE chats ADD COLUMN about TEXT;
     CREATE INDEX chats_by_org ON chats(org_id);
     CREATE UNIQUE INDEX chats_main ON chats(org_id) WHERE main = 1;"""),
-    # PLAN 86 part 2: an org's main public channel mirrored into its news by the userbot (userbot.py, mirror.py).
+    # Mirror a club's main public channel into its news (userbot.py, mirror.py).
     # chats.mirror: the club's switch in Studio; tg_channels: the channels the userbot joined itself (it leaves only
     # those), with the last post it took; a mirrored post knows its channel post (tg_url, views, Telegram's reaction
     # counts as JSON, a video or file only as a link) and every message it was made of (an album is one post)
@@ -589,11 +571,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE posts ADD COLUMN tr_by TEXT;
     ALTER TABLE posts ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE tg_post_msgs ADD COLUMN lang TEXT;"""),
-    # PLAN 95: the clubs' rosters from DMP's Student Union sheet, each row waiting for its student:
+    # Keep imported club roster rows separate until the student's identity can be checked.
     # joined at once when the Telegram username (or e-mail) AND the name match the KBTU account (roster.py), asked when
     # only the username does; claimed_by: "Yes, it's me" anyway, waiting for the club's President (or DMP); rejected_by:
-    # declined by them, kept for the right person. users.city from it (hideable, deletable). A one-off until everyone
-    # has signed up: dropped by hand later
+    # declined by them, kept for the right person. users.city comes from the roster and can be hidden or deleted.
     (74, """CREATE TABLE roster_pending (
         id         INTEGER PRIMARY KEY,
         key        TEXT NOT NULL UNIQUE,              -- the sheet's row, so a second load adds nothing
@@ -638,7 +619,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         at        INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX takedowns_by_target ON takedowns(target, target_id);"""),
-    # F1 find people (forum, PLAN): a shared skills catalog, requests, contact by double opt-in, blocks, pings
+    # Keep each side's contact decision so sharing can require both students to agree.
     (76, """CREATE TABLE skills (
         id         INTEGER PRIMARY KEY,
         name       TEXT NOT NULL UNIQUE,                  -- normalised: lowercase, single spaces
@@ -714,11 +695,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     INSERT INTO skills (name, approved, created_at, used_at) SELECT value, 1, CAST(strftime('%s', 'now') AS INTEGER),
         CAST(strftime('%s', 'now') AS INTEGER) FROM json_each('["ios", "android", "web", "backend", "ml", "data", "ui design", "graphic design", "3d", "photo", "video", "editing", "texts", "translation", "smm", "music", "events"]');"""),
-    # referrals (PLAN): who brought me, by their invite link (r_<badge code>); the first link wins.
-    # 77, not 76: 76 is the forum (sower4d/forum-people), to be merged first
+    # referrals: who brought me, by their invite link (r_<badge code>); the first link wins.
     (77, """ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;"""),
-    # our copy of the Telegram photo (bot._userpics): t.me took ~1 s per open; src = the t.me URL it was made from
+    # Cache Telegram photos so opening a profile does not wait on t.me. src identifies the cached source URL.
     (78, """ALTER TABLE users ADD COLUMN tg_photo_path TEXT;
     ALTER TABLE users ADD COLUMN tg_photo_src TEXT;"""),
     # check-in by a QR on a big screen (checkin.py): a session (its PIN hashed), the scans, the organizers' expected list
@@ -750,8 +730,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (session_id, email)
     ) STRICT;
     CREATE INDEX qr_expected_by_email ON qr_expected(email);"""),
-    # a partner's event a club posts (Oct 29, the Incubator's Halloween party): "With <host>" under the club, a link out
-    # (external_url) instead of tickets, no ping to followers, out of the club's numbers and achievements
+    # Show a partner's event with the partner's name and external link so it does not issue app tickets or count as the club's own.
     (80, "ALTER TABLE events ADD COLUMN guest_host TEXT;"),
     # /show paired from an organizer's phone instead of a PIN (checkin.py): a session belongs to a club, a screen is
     # its pairing code + the hash of a secret only that browser holds
@@ -768,8 +747,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # scans are that event's check-ins
     (82, """ALTER TABLE qr_sessions ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX qr_sessions_by_event ON qr_sessions(event_id) WHERE event_id IS NOT NULL;"""),
-    # the student forum (logic/threads.py, Oct 30): threads, replies, "I'm in"; anonymous ones keep their author for
-    # the admin's audited reveal only. Reports learn 'thread' and 'reply' (the table rebuilt: a CHECK can't be altered)
+    # Store an anonymous thread author solely for the admin's audited reveal.
+    # Rebuild the reports table because SQLite cannot alter its target CHECK.
     (83, """CREATE TABLE threads (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -822,11 +801,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     (84, "ALTER TABLE users ADD COLUMN n_forum INTEGER NOT NULL DEFAULT 1;"),
     # /show's pairing codes per address (its hash): one address can't take every free code and lock all screens out
     (85, "ALTER TABLE qr_screens ADD COLUMN ip TEXT; CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;"),
-    # an event's own questions at sign-up (Oct 30, an organizer's ask): JSON [{label, kind text|choice, options, required}];
+    # Keep event-specific questions as JSON [{label, kind text|choice, options, required}].
     # the answers on the registration, JSON [{q, a}] (the question's words as they were), wiped 30 days after the event
     (86, "ALTER TABLE events ADD COLUMN questions TEXT; ALTER TABLE registrations ADD COLUMN answers TEXT;"),
-    # "something's wrong here" on the map (owner, Oct 29: marking the map's flaws in the app, not by screenshots): the
-    # map version and floor, the spot (the sheet's fraction and the 2023 plan's units), a line of text
+    # Store the map version, floor and coordinates so staff can locate a reported flaw without a screenshot.
     (87, """CREATE TABLE map_flaws (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -844,17 +822,15 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX assist_uses_by_user ON assist_uses(user_id, at);"""),
-    # the check-in's way out (owner, Oct 30: who left and when, for the initiation's volunteers): the session's phase,
-    # 'in' or 'out', and the last time each person scanned out
+    # Track the check-in phase and last exit scan so attendance can show who left and when.
     (89, "ALTER TABLE qr_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')); ALTER TABLE qr_marks ADD COLUMN left_at INTEGER;"),
-    # links (r_, ev_) get their own code: they're posted in chats, and the badge's secret was in them (review, Oct 30). The
-    # links already out keep working (they carry today's code, now the link code); every badge gets a new secret
+    # Give published links a separate code so sharing a link never reveals the badge secret.
+    # Preserve existing links by retaining their codes for links and issuing fresh badge secrets.
     (90, """ALTER TABLE users ADD COLUMN link_code TEXT;
     UPDATE users SET link_code = qr_code, qr_code = NULL WHERE qr_code IS NOT NULL;
     CREATE UNIQUE INDEX users_link ON users(link_code);"""),
-    # the assistant's campus facts, kept current by the admin and moderators (owner, Oct 30: the list in the code is likely
-    # outdated). A room as the plan writes it, or `location` in words; one dean's office per school. Seeded from that list:
-    # its English names (the Russian and Kazakh unknown), never checked (verified_at NULL); the codes are the map's spots
+    # Keep campus facts editable by moderators so they can correct stale locations without a deploy.
+    # Seed the known English names with verified_at NULL so unverified entries remain identifiable.
     (91, """CREATE TABLE campus_places (
       id          INTEGER PRIMARY KEY,
       kind        TEXT NOT NULL CHECK (kind IN ('place', 'dean', 'office')),
@@ -888,7 +864,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         ('dean', 'marine', 'Kazakhstan Maritime Academy', '255', NULL, 'KMA'));"""),
     # a club role's name in Kazakh and English (`name` stays the required one, the fallback)
     (92, "ALTER TABLE org_roles ADD COLUMN name_kk TEXT; ALTER TABLE org_roles ADD COLUMN name_en TEXT;"),
-    # the assistant's feedback (review, Oct 31), none of it tied to a person: the model's short topic of a question it
+    # Keep assistant feedback anonymous. Store the model's short topic for a question it
     # couldn't answer and the thumbs up/down on an answer (with its topic); a question and answer a student chose to send
     # after a thumbs down (all by UTC day, 30 days: assistant.sweep); how many times a week the helplines were shown
     (93, """CREATE TABLE assist_marks (
@@ -914,7 +890,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       day   INTEGER NOT NULL,
       kind  TEXT NOT NULL CHECK (kind IN ('up', 'down', 'sent'))
     ) STRICT;"""),
-    # the freshmen list of the Oct 31 2026 initiation (admin prefill-import), keyed by the KBTU email: shown only to
+    # Key imported freshmen rows by KBTU email so each row is shown only to
     # that student in their own sign-up form, gone when they link (account.ms_link) or delete the account
     (95, """CREATE TABLE prefill (
       email       TEXT PRIMARY KEY,
@@ -930,7 +906,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # middle_name, comma-separated); the old values are in audit_log (identity_fix). Gone with the row
     (96, "ALTER TABLE students ADD COLUMN fixed TEXT NOT NULL DEFAULT '';"),
     # the name in Latin as KBTU's directory (Microsoft's displayName, account.latin_from_ms) or the freshmen list spells it,
-    # or as the student typed it in My data; never generated (review latin-names-review.md). The English UI and the exports
+    # or as the student typed it in My data. Use a known spelling in English UI and exports
     (97, """ALTER TABLE students ADD COLUMN last_lat TEXT; ALTER TABLE students ADD COLUMN first_lat TEXT;
     ALTER TABLE students ADD COLUMN middle_lat TEXT;"""),
     # the rest of that freshmen list (admin prefill-rest): rows the main import couldn't key by one KBTU mail and one ID.
@@ -1001,10 +977,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL,
       by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL
     ) STRICT;"""),
-    # the clause of the terms' section 3 a removed Telegram comment broke (tgcomments.RULES); rule stays for old rows
+    # Store the terms clause with a removed comment so the verdict can give the reason.
     (101, """ALTER TABLE tgc_comments ADD COLUMN clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other'));
     UPDATE tgc_comments SET clause = CASE rule WHEN 'spam' THEN 'spam' WHEN 'other' THEN 'other' ELSE 'abuse' END WHERE rule IS NOT NULL;"""),
-    # the forum channel (FORUM_CHANNEL, logic/fchannel.py, Nov 1): a student's post, published by the bot after the AI's
+    # the forum channel (FORUM_CHANNEL, logic/fchannel.py): a student's post, published by the bot after the AI's
     # or a moderator's yes; the author kept for the owner's audited reveal while the post exists. tg_unpost: channel
     # messages to take down, no foreign key and nothing personal, so a deleted account's posts still leave the channel
     (102, """CREATE TABLE fchan_posts (
@@ -1024,12 +1000,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       why    TEXT NOT NULL CHECK (why IN ('author', 'moderator')),
       at     INTEGER NOT NULL
     ) STRICT;"""),
-    # the old student forum (threads.py) is replaced by the channel (owner, Nov 1: clean it up): its threads, replies,
-    # "I'm in" marks, reports and the bot's unsent notes about them go
+    # Clear unused in-app forum data so retired threads, reactions, reports and unsent notices are no longer retained.
     (103, """DELETE FROM thread_joins; DELETE FROM thread_replies; DELETE FROM threads;
     DELETE FROM reports WHERE target IN ('thread', 'reply');
     DELETE FROM bot_outbox WHERE kind = 'thread_reply';"""),
-    # (cloud review, Nov 1) a replaced receipt's fingerprint: the duplicate check still sees it, and it counts toward the
+    # a replaced receipt's fingerprint: the duplicate check still sees it, and it counts toward the
     # replacements' cap (seats.RECEIPT_TRIES); its picture leaves the disk. tgc_undel: a deleted account's comments
     # still to come out of the discussion group (deleting, or in the moderators' queue): ids only, nothing personal
     (104, """CREATE TABLE IF NOT EXISTS receipt_replaced (
@@ -1047,10 +1022,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL,
       PRIMARY KEY (chat_id, msg_id)
     ) STRICT;"""),
-    # (Nov 2) the bot's first comment under a forum channel post (the rules, a button to the post in the app): the
-    # channel message it was written under, once per message (the posts already out had their button: none for them),
-    # and its id in the group, the Forum tab's link into the comments. comments: the students' comments the bot saw
-    # under the post (Telegram's Bot API has no count), for the tab's Comments row
+    # Track the first bot comment per channel message to avoid duplicate rules and give the app a link into the thread.
+    # Count the student comments the bot sees because the Bot API has no comment count.
     (105, """ALTER TABLE fchan_posts ADD COLUMN rules_for INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN rules_msg INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN comments INTEGER NOT NULL DEFAULT 0;
@@ -1062,10 +1035,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     -- now only the group's own channel's copies were mapped (tgcpost:), and that was the forum channel
     INSERT OR IGNORE INTO meta (key, value) SELECT 'fchcopy:' || substr(value, instr(value, ' ') + 1), substr(key, 9)
       FROM meta WHERE key LIKE 'tgcpost:%';"""),
-    # (Nov 2) the chats directory by what a chat is for (owner: study, reviews, admission, schools and courses, clubs,
-    # hobbies and fun); the AI sorts each chat by its public title and description (logic/chatlist.py sort_next), staff
-    # correct it in Admin. section NULL: not sorted yet; section_ai 1: the AI's, no one checked; section_try: the last
-    # time the AI was asked (a failed ask waits an hour)
+    # Group the directory by what each chat is for so students can browse by purpose.
+    # The AI classifies public titles and descriptions. Keep its decision marked until staff check it and delay failed retries an hour.
     (106, """ALTER TABLE chats ADD COLUMN section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun'));
     ALTER TABLE chats ADD COLUMN section_ai INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE chats ADD COLUMN section_try INTEGER;
@@ -1076,7 +1047,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (chat_id, user_id)
     ) STRICT;
     INSERT INTO chat_asks (chat_id, user_id) SELECT id, added_by FROM chats WHERE status = 'pending' AND added_by IS NOT NULL;"""),
-    # (Nov 2) a forum post's card mirrors Telegram: the faces of the app's students who commented (one row per comment
+    # a forum post's card mirrors Telegram: the faces of the app's students who commented (one row per comment
     # the bot saw, by its id in the discussion group: a comment seen twice counts once) and the channel post's
     # reactions (Telegram's message_reaction_count, as {"👍": 3, "custom:<id>": 1}). A comment taken out of Telegram
     # (a report's deletion) leaves the count and the faces, and comes back with a moderator's "keep": the trigger
@@ -1100,22 +1071,21 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
     END;"""),
-    # (Nov 2) a round's own "what's next" (casting audit: "come in person, 3-12 Nov, Kazybek bi, 1st floor"), the club's
-    # words shown in the app under the steps like its description; the bot keeps its template
+    # Keep club-written next steps in the app so recruitment instructions can vary while bot notifications stay templated.
     (108, "ALTER TABLE rounds ADD COLUMN next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300);"),
-    # (Nov 2) the postman's due query (bot._due) every 2 s walked every failed row: only the waiting ones indexed
+    # Index only waiting messages so bot._due can poll without scanning failed rows.
     (109, "CREATE INDEX IF NOT EXISTS outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;"),
-    # (Nov 2, review 12) my join requests on every club list; the feed's pinned-first order; the Afisha's date range
+    # Index the join-request, pinned-feed and event-date queries that run on list views.
     (110, """CREATE INDEX IF NOT EXISTS join_requests_by_user ON join_requests(user_id);
     CREATE INDEX IF NOT EXISTS posts_feed ON posts(audience, pinned, created_at);
     CREATE INDEX IF NOT EXISTS events_by_start ON events(starts_at);"""),
-    # (Nov 2) a club's member link for the whole team (logic.team_link): many join by it as plain members, 7 days, one per club
+    # a club's member link for the whole team (logic.team_link): many join by it as plain members, 7 days, one per club
     (111, "ALTER TABLE org_invites ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
-    # (Nov 2) a frame drawn over my photo on the lanyard, picked apart from the lanyard itself (logic.FRAMES)
+    # a frame drawn over my photo on the lanyard, picked apart from the lanyard itself (logic.FRAMES)
     (112, "ALTER TABLE users ADD COLUMN frame TEXT;"),
     # the stranger's message his warning was for: the same update again after a restart is not a second comment
     (113, "ALTER TABLE tgc_strangers ADD COLUMN warned_msg INTEGER;"),
-    # (Nov 2) a forum channel post reported from the feed ('fpost', logic/moderation.py): the CHECK takes the new kind.
+    # a forum channel post reported from the feed ('fpost', logic/moderation.py): the CHECK takes the new kind.
     # Rebuilt as 106 did: nothing references reports, so no cascade can reach a child
     (114, """CREATE TABLE reports5 (
         id INTEGER PRIMARY KEY,
@@ -1133,12 +1103,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     DROP TABLE reports;
     ALTER TABLE reports5 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
-    # "Can add me as a friend" (owner, Nov 2): off, nobody can send me a request; friends and waiting requests stay
+    # "Can add me as a friend": off, nobody can send me a request; friends and waiting requests stay
     (115, "ALTER TABLE users ADD COLUMN can_friend INTEGER NOT NULL DEFAULT 1;"),
-    # the school before its one correction ({"school": ...}): going back to it is free, once
-    # (owner, Nov 3: a mis-tap cost the only change and every student wrote to support)
+    # Record the original school so a student can undo an accidental correction without spending another change.
     (116, "ALTER TABLE students ADD COLUMN once_was TEXT NOT NULL DEFAULT '{}';"),
-    # (Nov 3, .claude/reports/anon-reply/review.md) an anonymous post's author answers in its comments through the bot.
+    # an anonymous post's author answers in its comments through the bot.
     # No user_id: the author is reached through the post alone (reveal, account deletion follow it), and the replies go
     # with their post. comment_msg: the comment answered (fchan_comments.msg_id), NULL for the thread. tg_msg as the
     # posts': NULL not sent, 0 on its way, else the bot's message in the group; drop_at: when it leaves the group
@@ -1165,7 +1134,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
     CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
     CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;"""),
-    # Admin → Awards (Nov 3): a grant's batch, undone at once: a scanner run ('s_…'), a link's people ('l_<token>'), a
+    # Admin → Awards: a grant's batch, undone at once: a scanner run ('s_…'), a link's people ('l_<token>'), a
     # check-in session's ('q<sid>_<ts>'); a link's cap of people (NULL: no cap)
     (118, """ALTER TABLE achievement_grants ADD COLUMN batch TEXT;
     CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
@@ -1180,17 +1149,16 @@ MIGRATIONS: list[tuple[int, str]] = [
       UNIQUE (token, user_id)
     ) STRICT;
     CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);"""),
-    # Admin → Inbox (Nov 3): decided() and Undo read a thing's newest line, Done the last 30 days
+    # Admin → Inbox: decided() and Undo read a thing's newest line, Done the last 30 days
     (119, """CREATE INDEX IF NOT EXISTS audit_by_target ON audit_log(target, id);
     CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
-    # late sign-up (Nov 3): a free uncapped public event keeps "Going" open from its start until its end
+    # late sign-up: a free uncapped public event keeps "Going" open from its start until its end
     (120, "ALTER TABLE events ADD COLUMN late_signup INTEGER NOT NULL DEFAULT 0;"),
-    # an anonymous post's random nick (Nov 3, .claude/reports/anon-nicks-review.md): texts.NICK_ADJ / NICK_NOUN indexes,
+    # an anonymous post's random nick: texts.NICK_ADJ / NICK_NOUN indexes,
     # drawn with secrets at the reserve; NULL on posts from before (signed "Anon")
     (121, """ALTER TABLE fchan_posts ADD COLUMN nick_a INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN nick_n INTEGER;"""),
-    # co-hosted events (Nov 3, "Crystal & JCC do an Anime Quiz together"): one other club of the app, invited by the
-    # host, shown once its Vice+ accepts (logic/cohosts.py; events.co_org_id was never written and stays unused).
+    # A host can list one co-host after that club's Vice+ accepts (logic/cohosts.py).
     # A declined row stays, so the same club isn't asked twice for one event; ending one deletes it.
     (122, """CREATE TABLE event_cohosts (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -1204,7 +1172,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';  -- ponytail: one co-host, more later
     CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);"""),
-    # a forum post the AI refused (noise, an ad) that its author sent to a moderator (fchannel.appeal, Nov 4): when, for
+    # a forum post the AI refused (noise, an ad) that its author sent to a moderator (fchannel.appeal): when, for
     # the day's three; explained: the AI's reason for a refusal was asked (once a post or reply: ai.explain); refused: a
     # hash of the refused words (they're wiped), so the appeal and the reason are only ever about the words the AI read
     (123, """ALTER TABLE fchan_posts ADD COLUMN appealed_at INTEGER;
@@ -1212,10 +1180,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE fchan_posts ADD COLUMN explained INTEGER;
     ALTER TABLE fchan_replies ADD COLUMN explained INTEGER;"""),
     # the AI's reason (ai.explain's validated sentence) kept on the row, so a moderator deciding on a held or appealed
-    # post or reply reads why the AI stopped it (owner, Nov 4: the Admin queue's reason line); goes with the row
+    # post or reply reads why the AI stopped it. Delete the reason with the row.
     (124, """ALTER TABLE fchan_posts ADD COLUMN ai_reason TEXT;
     ALTER TABLE fchan_replies ADD COLUMN ai_reason TEXT;"""),
-    # the path to the official ✓ (Nov 4): a student initiative that did the five steps asks the admin (logic/clubs.py,
+    # the path to the official ✓: a student initiative that did the five steps asks the admin (logic/clubs.py,
     # official_path). Who asked and who decided are in the audit log; a no's reason the club reads in Studio
     (125, """CREATE TABLE official_requests (
       id         INTEGER PRIMARY KEY,
@@ -1227,8 +1195,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';
     CREATE INDEX official_requests_by_org ON official_requests(org_id, id);"""),
-    # collabs with an official club (owner, Nov 4; .claude/reports/collab-review.md): an official club's "Don't suggest
-    # again" for an initiative; the co-host whose ✓ put an initiative's event in the channel (NULL: the host's own
+    # Keep an official club's "Don't suggest again" response so an initiative cannot keep asking to co-host.
+    # Track the co-host whose official status permits an initiative's event in the channel (NULL: the host's own
     # right, kept in step after a lost ✓; set: the post goes when that co-host does); an event's temporary door
     # helpers, any KBTU student a running club's President or Vice picks (scan: tickets only; door: the list too); a team-only
     # event for the club's board (everyone Head+, read from roles at use)
@@ -1275,24 +1243,23 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE org_roles ADD COLUMN hand TEXT NOT NULL DEFAULT '';
     ALTER TABLE org_roles ADD COLUMN ai_wait INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE org_roles ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;"""),
-    # always-open recruitment (club presidents, Nov 6): the club's own questions for any-time join requests (JSON, as a
+    # always-open recruitment: the club's own questions for any-time join requests (JSON, as a
     # round's: kind, text, options, required) and each request's answers (JSON [{q, a}], the question's text kept with it)
     (131, "ALTER TABLE orgs ADD COLUMN join_questions TEXT; ALTER TABLE join_requests ADD COLUMN answers TEXT;"),
-    # the Ascent (owner, Nov 6; logic/clubs.py): when a student initiative reached the top, kept once reached (an
+    # the Ascent (logic/clubs.py): when a student initiative reached the top, kept once reached (an
     # official club's tools without the ✓)
     (132, "ALTER TABLE orgs ADD COLUMN top_at INTEGER;"),
-    # recruitment results in parts (club presidents, Nov 6: "I have to close the round to send results"): each
-    # application's own sent_at (told exactly once; a done round's are backfilled), and the round's optional Telegram
-    # group invite (https://t.me/... only), shown in the app to the accepted, never by the bot. 133 is left to another branch.
+    # Track results per applicant so clubs can send them in batches without duplicates. Backfill sent_at for completed rounds.
+    # Keep the optional Telegram invite in the app so only accepted applicants see it.
     (133, """ALTER TABLE round_apps ADD COLUMN sent_at INTEGER;
     ALTER TABLE rounds ADD COLUMN group_link TEXT;
     UPDATE round_apps SET sent_at = (SELECT r.sent_at FROM rounds r WHERE r.id = round_apps.round_id)
         WHERE stage != 'withdrawn' AND round_id IN (SELECT id FROM rounds WHERE status = 'done');"""),
-    # Admin → Awards → Show QR (owner, Nov 6): a grant link shown as a rotating code on the giver's phone (qr = 1),
+    # Admin → Awards → Show QR: a grant link shown as a rotating code on the giver's phone (qr = 1),
     # used only through a fresh signed code (profiles.claim_qr), never by its bare token, and only while the screen
     # keeps renewing its lease (lease_until: a killed or offline screen stops the code within seconds)
     (134, "ALTER TABLE grant_links ADD COLUMN qr INTEGER NOT NULL DEFAULT 0; ALTER TABLE grant_links ADD COLUMN lease_until INTEGER;"),
-    # the host club's own people are never its guests (owner, Nov 7): their seats at its upcoming public events go back
+    # the host club's own people are never its guests: their seats at its upcoming public events go back
     # as seats.joined does (seats.TEAM_SEATS: a free event's, a waitlist place; a paid seat or hold stays), their 2-hour
     # reminders with them; seats.refill moves the waitlists in at the start that follows
     (135, """UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', hold_until = NULL, waitlisted_at = NULL,
@@ -1304,15 +1271,14 @@ MIGRATIONS: list[tuple[int, str]] = [
             AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER));
     DELETE FROM bot_outbox WHERE kind = 'remind_2h' AND sent_at IS NULL AND EXISTS (SELECT 1 FROM registrations r
       WHERE r.user_id = bot_outbox.user_id AND r.cancel_reason = 'removed' AND bot_outbox.ref LIKE 'event:' || r.event_id || ':%');"""),
-    # (Nov 7) the 3rd years' answer under the incubator's elective post (admin announce3): more like it? NULL: never asked
+    # the 3rd years' answer under the incubator's elective post (admin announce3): more like it? NULL: never asked
     (136, "ALTER TABLE users ADD COLUMN announce_ok INTEGER;"),
     # the door opened early by the club's President or a Vice (organizing.open_door); NULL: at T-30 by itself (core.door_at)
-    # deploy: a door the old 3-hour rule already let people through stays open (from T-3h, as it was)
+    # Preserve access for doors already open at migration time so guests can still enter.
     (137, """ALTER TABLE events ADD COLUMN door_open_at INTEGER;
     UPDATE events SET door_open_at = starts_at - 10800 WHERE status = 'published' AND starts_at - 10800 <= CAST(strftime('%s', 'now') AS INTEGER)
       AND CAST(strftime('%s', 'now') AS INTEGER) < starts_at - 1800 AND EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = events.id AND r.checked_in_at IS NOT NULL);"""),
-    # a host club's member asks its President or a Vice to come to its public event as a guest (owner, Nov 7; seats.team_ask):
-    # one row per person per event; 'yes' lets them sign up and keeps their seat from seats.joined
+    # Store approval per member and event so seats.joined can preserve a seat that a President or Vice granted.
     (138, """CREATE TABLE team_asks (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1322,19 +1288,15 @@ MIGRATIONS: list[tuple[int, str]] = [
       decided_at INTEGER,
       PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
-    # guests' photos always on (owner, Nov 8): "Photos from participants" is gone; the column stays, unread
     (139, "UPDATE events SET album_open = 1 WHERE album_open = 0;"),
-    # ticket codes are 4 characters, unique within their event (owner, Nov 8; seats._ticket_code): stored as
-    # '<event id>-<code>', so the column's own UNIQUE (not droppable without a rebuild) keeps them apart per event.
-    # Every ticket gets a new one, the old 6-character codes stop working (owner). OR IGNORE skips a row whose draw
-    # collides in its event; it draws again on the next pass; a row still unset after 8 passes (~never) fails the CHECK
-    # below and with it the whole step
+    # Prefix the four-character ticket code with its event ID so the existing UNIQUE constraint enforces per-event uniqueness.
+    # Retry collisions with OR IGNORE. The status CHECK rolls back the migration if any code remains unset after eight passes.
     (140, "UPDATE registrations SET ticket_code = 'old:' || id;\n" + "\n".join([
         """UPDATE OR IGNORE registrations SET ticket_code = event_id || '-' || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1)
           || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1)
           || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) WHERE ticket_code GLOB 'old:*';"""] * 8)
      + "\nUPDATE registrations SET status = 'unset' WHERE ticket_code GLOB 'old:*';"),
-    # Sunday classes are the portal's online duplicates of the week's (owner, Nov 8): the import drops them, the old ones go
+    # Drop Sunday classes because the portal lists duplicate online copies of weekday classes.
     (141, "DELETE FROM schedule_classes WHERE weekday = 7;"),
     # an offline casting is a marked post (newsfeed.casting_state): come at this time to this place, no sign-up
     (142, """ALTER TABLE posts ADD COLUMN casting_from INTEGER;
@@ -1345,7 +1307,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # a club's interest (the Clubs tab's tiles): it/art/sport/business/science/volunteer, NULL none; checked in clubs.update_org
     (143, "ALTER TABLE orgs ADD COLUMN category TEXT;"),
     # a check-in QR is good only while something shows it: each poll of a /show screen or an organizer's phone renews this
-    # (checkin.mark). NULL: never shown since this column came, so a session running through the deploy isn't cut off
+    # (checkin.mark). NULL lets a session survive a deploy until the next poll establishes its lease.
     (144, "ALTER TABLE qr_sessions ADD COLUMN lease_until INTEGER;"),
     # who an organizer let help run a check-in, by a QR (checkin.hand); help_until: that QR's lease, as lease_until above
     (145, """ALTER TABLE qr_sessions ADD COLUMN help_until INTEGER;
@@ -1483,10 +1445,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TABLE appeal_staff (
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 11) the Gallery (logic/gallery.py): a photo a student posted under their name, of KBTU or of an event they went
+    # the Gallery (logic/gallery.py): a photo a student posted under their name, of KBTU or of an event they went
     # to (that one is in its album too, event_photos).
-    # And a photo's two report reasons ("breaks the rules", "I'm in it and against it"): the CHECK takes them, rebuilt as 114.
-    # renumbered at ship: other branches take 150-152 too
+    # Rebuild the reports table to allow separate reports for rule violations and objection to appearing in a photo.
     (150, """CREATE TABLE gallery_photos (
       file_id    INTEGER PRIMARY KEY REFERENCES files(id),
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1539,7 +1500,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;
     ALTER TABLE member_tags ADD COLUMN sync INTEGER NOT NULL DEFAULT 0;"""),
-    # photos on forum channel posts (fchannel.add_photo, owner Nov 5): a re-encoded upload (no EXIF) under a random name;
+    # Re-encode forum photos and randomize their names so uploads carry neither EXIF nor the original filename.
     # user_id: the uploader while it is on no post (then NULL: the post says whose). A row leaving by any way (the
     # author's delete, the sweep, a cascade) queues its files for the disk (fchpic:<path>, the bot's round drops them).
     # tg_unpost.photo: a photo message, edited to a blank picture when Telegram won't delete it
@@ -1561,13 +1522,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       INSERT OR IGNORE INTO meta (key, value) VALUES ('fchpic:' || OLD.path, '1');
     END;
     ALTER TABLE tg_unpost ADD COLUMN photo INTEGER NOT NULL DEFAULT 0;"""),
-    # the forum UI rework (Nov 10): posted_at, when the channel got the post (the time the app shows everyone: the
-    # writing time told when a held anonymous post was written); the AI's tip and the words it stopped at, kept with its
-    # reason so the author's held post still says them after a reload
+    # Display publication time so a held anonymous post does not reveal when it was written.
+    # Keep the AI tip and excerpt with the reason so the author can see them after a reload.
     (153, """ALTER TABLE fchan_posts ADD COLUMN posted_at INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN ai_fix TEXT;
     ALTER TABLE fchan_posts ADD COLUMN ai_quote TEXT;"""),
-    # the old one-time fr_ friend links: none issued since Nov 2 (one link, r_), the last died on Nov 9
     (154, "DROP TABLE IF EXISTS friend_links;"),
     # a request its sender took back after a quiet decline: out of the sender's list, the 30 days still held (profiles.take_back_request)
     (155, "ALTER TABLE friend_requests ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;"),
@@ -1586,12 +1545,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX vol_hands_live ON vol_hands(session_id) WHERE revoked_at IS NULL;
     CREATE INDEX vol_hands_by_user ON vol_hands(user_id);
     INSERT OR IGNORE INTO meta (key, value) VALUES ('vol_resolve_from', CAST(strftime('%s', 'now') AS TEXT));"""),
-    # (Nov 11) one shared gallery: a photo of no event says what it is about (logic/gallery.py TOPICS). A photo of no
-    # event already lives in gallery_photos (event_id NULL), so a nullable column is all it takes: no new table, no
-    # rebuild. NULL: an event's photo, or one posted before topics (read as "other").
-    # 157: 155 is the friends branch's, 156 the volunteers' (it lands first; until then the numbers have a gap).
+    # Use a nullable topic on gallery_photos so standalone photos can be categorized without a table rebuild.
+    # An uncategorized standalone photo reads as Other.
     (157, "ALTER TABLE gallery_photos ADD COLUMN topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other'));"),
-    # (Nov 11) a club's report after its event (logic/evreports.py, REPORTS=1): which department ran it (a tag marked
+    # a club's report after its event (logic/evreports.py, REPORTS=1): which department ran it (a tag marked
     # department, the club's own), the guests counted by hand, a note; who filled it first and who edited it last.
     # report_marks: a team member's attendance at it, one status each. A Vice's role with its own toggles gets the new
     # "reports" right, as a Vice without them has it (core.OWN_FROM); again on a replay, it isn't added twice.
@@ -1611,13 +1568,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (event_id, user_id)) STRICT;
     CREATE INDEX report_marks_by_user ON report_marks(user_id);
     UPDATE org_roles SET rights = rights || ',reports' WHERE level = 'vice' AND rights IS NOT NULL AND ',' || rights || ',' NOT LIKE '%,reports,%';"""),
-    # (Nov 12) event reports' own consent (evreports.CONSENT, as appeal_consents): one per person, for every club; no
+    # event reports' own consent (evreports.CONSENT, as appeal_consents): one per person, for every club; no
     # row, no report of mine and no mark of me
     (159, """CREATE TABLE report_consents (
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 12) a report per club: the host and its accepted co-host each write their own (evreports.py). 158's tables
+    # a report per club: the host and its accepted co-host each write their own (evreports.py). 158's tables
     # are keyed by the event alone and SQLite can't change a primary key, so new ones keyed by (event, club); 158's rows
     # move over as the host's reports, then its two tables go (nothing else references them; the marks, their only
     # child, are dropped first, so nothing cascades).
@@ -1647,7 +1604,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       SELECT k.event_id, e.org_id, k.user_id, k.status FROM report_marks k JOIN events e ON e.id = k.event_id;
     DROP TABLE report_marks;
     DROP TABLE event_reports;"""),
-    # (Nov 12) team events (logic/evteams.py): a free event's teams of team_min..team_max people (NULL: not a team
+    # team events (logic/evteams.py): a free event's teams of team_min..team_max people (NULL: not a team
     # event). A team is its name (unique in the event by name_key: NFKC, casefolded), its invite token and the "find us
     # teammates" switch; its roster is its members in the order they came (the row id), the first one its captain, so a captain who leaves hands over by itself. A member
     # is a 'going' registration: any way out of the event (cancelled, deleted with the account) takes them out of the
@@ -1685,12 +1642,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 13) an album in the order its photos were taken: the time from the upload's EXIF (media.taken; the one fact
+    # an album in the order its photos were taken: the time from the upload's EXIF (media.taken; the one fact
     # kept of it), unix seconds with the camera's sub-seconds; NULL (no EXIF, or uploaded before): its upload time
     (162, "ALTER TABLE files ADD COLUMN taken_at REAL;"),
     # a check-in marked by hand from the student's badge QR (checkin.badge): who marked it
     (163, "ALTER TABLE qr_marks ADD COLUMN marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
-    # (Nov 13) a club's group moderated for swearing (logic/chatmod.py): chats.swear is its switch, off by default. A hit
+    # a club's group moderated for swearing (logic/chatmod.py): chats.swear is its switch, off by default. A hit
     # is a row: the chat, the person's Telegram id (and app id when known), the matched stem of our own list (never the
     # message), when, its warning number (1..3), whether it muted. Nothing for clean messages; 90 days (daily).
     # chats.swear_miss: the bot's rights it lacks there ("delete", "ban", comma-joined; NULL: none), the filter paused.
@@ -1708,15 +1665,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
     CREATE INDEX swear_hits_by_user ON swear_hits(user_id);
     CREATE INDEX chats_by_tg ON chats(tg_chat_id);"""),
-    # (Nov 13) /all calls who the bot saw in a club's chat too (Telegram gives bots no member list): Telegram ids
+    # /all calls who the bot saw in a club's chat too (Telegram gives bots no member list): Telegram ids
     # alone, no names or words, with the club that held the chat then; forgotten on leaving, with the chat, as soon
     # as another club or none holds it (triggers: every way a link changes), and 180 days after they were last seen
     (165, _CHAT_SEEN),
-    # (Nov 13) a club's team marked at one of its events (checkin.crew): a club session tied to the event, apart from
+    # a club's team marked at one of its events (checkin.crew): a club session tied to the event, apart from
     # its guests' session (event_id); one per event; the event deleted, the attendance stays
     (166, """ALTER TABLE qr_sessions ADD COLUMN crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;"""),
-    # (Nov 13) "Solved by your appeals" (appeals.solved): SG's public lines, what students raised and what changed. No
+    # "Solved by your appeals" (appeals.solved): SG's public lines, what students raised and what changed. No
     # link to any appeal by design; who wrote it for the audit only (never sent), emptied when that account goes.
     # gone_at: deleted, still undoable for a day (appeals.forget)
     (167, """CREATE TABLE appeal_solved (
@@ -1727,9 +1684,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       gone_at INTEGER) STRICT;"""),
-    # (Nov 13) a school's own event only for its students (seats._visible): the school's slug, NULL for everyone
+    # a school's own event only for its students (seats._visible): the school's slug, NULL for everyone
     (168, "ALTER TABLE events ADD COLUMN school TEXT;"),
-    # (Nov 14) a chat our bot was made admin in, no club holding it, remembered for the one who did it (Telegram's
+    # a chat our bot was made admin in, no club holding it, remembered for the one who did it (Telegram's
     # action performer) for ten minutes: Studio → Chats lists it to him to link (logic/chatlist.py bot_admin, claim_wait)
     (169, """CREATE TABLE chat_waits (
       id INTEGER PRIMARY KEY,
@@ -1740,14 +1697,14 @@ MIGRATIONS: list[tuple[int, str]] = [
       until INTEGER NOT NULL,
       UNIQUE (user_id, chat_id)) STRICT;
     CREATE INDEX chat_waits_by_chat ON chat_waits(chat_id);"""),
-    # /all in a chat no club holds (owner, Nov 14): whom the bot saw there, Telegram ids only (chat_seen without a club)
+    # /all in a chat no club holds: whom the bot saw there, Telegram ids only (chat_seen without a club)
     (170, """CREATE TABLE chat_seen_free (
       chat_id INTEGER NOT NULL,
       tg_id INTEGER NOT NULL,
       seen_at INTEGER NOT NULL,
       PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;"""),
-    # (Nov 14, the Mark screen) whom an event's door records: guests, its team, or both (NULL: both, the team routed by
-    # membership, as before; checkin._team). The Talent Show (34) marked its team only (it was TEAM_DOOR in the code).
+    # whom an event's door records: guests, its team, or both (NULL: both, the team routed by
+    # membership in checkin._team). Preserve team-only check-in for event 34.
     # qr_hand_marks: a team list's row with no account marked by hand (who: 'r<roster_pending id>' or 'x<qr_expected email>');
     # a member's hand mark is a qr_marks row with marked_by
     (171, """ALTER TABLE events ADD COLUMN door_audience TEXT CHECK (door_audience IN ('guests', 'team', 'both'));
@@ -1758,7 +1715,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       marked_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
       at         INTEGER NOT NULL,
       PRIMARY KEY (session_id, who)) STRICT;"""),
-    # (Nov 14, review) a hand mark is told apart from a scan and a badge by itself, not by who marked (marked_by goes
+    # a hand mark is told apart from a scan and a badge by itself, not by who marked (marked_by goes
     # NULL with the marker's account): 1 the row is the hand mark's, 2 a scan waiting for its sign-up completed by hand.
     # A team list's hand mark with no account goes with its row (a roster row joined or deleted, an expected row of a
     # deleted account: the key carries the mail)
@@ -1769,7 +1726,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
       DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.email;
     END;"""),
-    # (Nov 15) the help desk beside SG's (logic/appeals.py, ASK): questions KRI couldn't answer, handed to a person; its
+    # the help desk beside SG's (logic/appeals.py, ASK): questions KRI couldn't answer, handed to a person; its
     # own people and its own consent (appeal_consents holds one version a person: a table of its own, not a row there)
     (173, """ALTER TABLE appeals ADD COLUMN desk TEXT NOT NULL DEFAULT 'sg' CHECK (desk IN ('sg', 'help'));
     CREATE TABLE help_staff (
@@ -1779,16 +1736,16 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 15, review) each desk its own day's count: three questions to a person never block an appeal to SG
+    # each desk its own day's count: three questions to a person never block an appeal to SG
     (174, """ALTER TABLE appeal_sends ADD COLUMN desk TEXT NOT NULL DEFAULT 'sg';"""),
-    # (Nov 15) paid team events (evteams.py): an event's cap on the number of teams (NULL: no cap); a paid seat on hold
+    # paid team events (evteams.py): an event's cap on the number of teams (NULL: no cap); a paid seat on hold
     # keeps the invite token it came by until the receipt is in (then joined if there's room), '-' once it missed
     (175, """ALTER TABLE events ADD COLUMN team_cap INTEGER;
     ALTER TABLE registrations ADD COLUMN team_want TEXT;
     CREATE TRIGGER event_team_want_done AFTER INSERT ON event_team_members BEGIN
       UPDATE registrations SET team_want = NULL WHERE event_id = NEW.event_id AND user_id = NEW.user_id AND team_want IS NOT NULL;
     END;"""),
-    # the tree of a club's groups (logic/chattree.py, owner Nov 16): where its Vice+ placed a group the sync doesn't hold;
+    # the tree of a club's groups (logic/chattree.py): where its Vice+ placed a group the sync doesn't hold;
     # a label only (never a sync link), counted while the group is still that club's
     (176, """CREATE TABLE chat_place (
       chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
@@ -1797,11 +1754,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       tag_id INTEGER REFERENCES org_tags(id) ON DELETE CASCADE,
       at INTEGER NOT NULL,
       CHECK ((place = 'dept') = (tag_id IS NOT NULL))) STRICT;"""),
-    # (Nov 16) the subjects' cards (logic/subjects.py): "looking for people to study it with" is a find-people request
+    # the subjects' cards (logic/subjects.py): "looking for people to study it with" is a find-people request
     # on a subject (its card's id), one per person and subject; the requests' moderation, contact and expiry as they are
-    # and an offer's token (forum.contact): a bot button or message carries it, so a deleted offer's reused id never
-    # answers another (an old Accept naming Bob shared Ann's Telegram with Doug, review Nov 16); old rows get one too, so
-    # every button without one stops working
+    # Give each offer a token so a button cannot reveal a student's Telegram handle through a reused offer ID.
+    # Assign tokens to stored offers as well so tokenless buttons cannot act on them.
     (177, """ALTER TABLE asks ADD COLUMN subject TEXT;
     CREATE UNIQUE INDEX asks_subject ON asks(subject, user_id) WHERE subject IS NOT NULL;
     ALTER TABLE contacts ADD COLUMN token TEXT;
@@ -1823,18 +1779,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     -- not allowed): their high-water marks from here on
     INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:asks', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM asks;
     INSERT OR REPLACE INTO meta (key, value) SELECT 'seq:contacts', CAST(COALESCE(MAX(id), 0) AS TEXT) FROM contacts;"""),
-    # (Nov 17) the creator's word that this Telegram account is KBTU staff (an office's own: DMP), never a student
+    # the creator's word that this Telegram account is KBTU staff (an office's own: DMP), never a student
     # (kbtu.admin staff-ok): its Microsoft sign-in asks no student ID (account.staff_ok); nothing in the app grants it
     (178, """CREATE TABLE IF NOT EXISTS staff_ok (  -- IF NOT EXISTS: tests rewind user_version to rerun older ones
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       granted_at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 17) an open interview window ("just come between 2 and 6", a club lead): one slot for the whole span and
-    # everyone at once. round_slots' CHECKs cap a slot at 180 minutes and 50 people and can't be altered, so the real
+    # An open interview slot admits everyone during its time window. round_slots' CHECKs cap a slot at
+    # 180 minutes and 50 people and cannot be altered, so the real
     # span lives here and the slot's row keeps the caps as stand-ins (casting._mins, _cap)
     (179, """CREATE TABLE IF NOT EXISTS round_wide (  -- IF NOT EXISTS: tests rewind user_version
       slot_id INTEGER PRIMARY KEY REFERENCES round_slots(id) ON DELETE CASCADE,
       minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 840)) STRICT;"""),
-    # (Nov 17) events found in a club's channel (logic/autoev.py): each mirrored post looked at once, the draft it made
+    # events found in a club's channel (logic/autoev.py): each mirrored post looked at once, the draft it made
     (180, """CREATE TABLE IF NOT EXISTS auto_events (  -- IF NOT EXISTS: tests rewind user_version
       post_id  INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
       org_id   INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1842,7 +1798,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       at       INTEGER NOT NULL) STRICT;
     CREATE INDEX IF NOT EXISTS auto_events_org ON auto_events(org_id, at);
     CREATE INDEX IF NOT EXISTS auto_events_event ON auto_events(event_id);"""),
-    # (Nov 17) Secret Santa on an event (logic/santa.py): the editor's switch and when it was drawn; who plays, their
+    # Secret Santa on an event (logic/santa.py): the editor's switch and when it was drawn; who plays, their
     # wishlist (kept here, not in registrations.answers: the organizers read those) and, after the draw, whom they give
     # to. gives_to has no row of its own on purpose: a pair is read through its giver alone.
     (181, """CREATE TABLE IF NOT EXISTS santa_events (  -- IF NOT EXISTS: tests rewind user_version
@@ -1865,7 +1821,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
       DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
     END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
-    # (Nov 18) KBTU Awards: the nominations a club won at the university's yearly ceremony, on its card (clubs.awards)
+    # KBTU Awards: the nominations a club won at the university's yearly ceremony, on its card (clubs.awards)
     (182, """CREATE TABLE IF NOT EXISTS org_awards (  -- IF NOT EXISTS: tests rewind user_version
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       year INTEGER NOT NULL,
@@ -1878,7 +1834,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       title TEXT,
       pages TEXT NOT NULL,
       created_at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 18) Secret Santa, round 2 (logic/santa.py): the game's settings beside its row (the gift budget; the wishlists'
+    # Secret Santa (logic/santa.py): the game's settings beside its row (the gift budget; the wishlists'
     # deadline is the event's own reg_until) and the bot round's marks, so each timed step runs once: `checked` the
     # deadline already acted on (a moved one re-arms itself), `soon` the eve-of-deadline reminder, `eve` and `late` the
     # gifts day each was sent for (a moved day re-arms them), `nudged_at` the organizer's last "remind those not in yet".
@@ -1929,7 +1885,7 @@ MIGRATIONS: list[tuple[int, str]] = [
           AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
         ORDER BY p.user_id;
     END;""" for name, op, when in (("upd", "UPDATE OF status, user_id", " AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)"), ("del", "DELETE", "")))),
-    # (Nov 18) the people of the app (logic/credits.py): whose idea, find or code shipped, one line each in our words.
+    # the people of the app (logic/credits.py): whose idea, find or code shipped, one line each in our words.
     # tg_id: no account needed; NULL once the account is deleted (the line stays, nameless). credit_consents: the
     # feature's own consent, every answer a row (who, when, yes or no, to which text), the latest counts
     (185, """CREATE TABLE IF NOT EXISTS credits (  -- IF NOT EXISTS: tests rewind user_version
@@ -1949,9 +1905,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       version TEXT NOT NULL,  -- the consent text it answered
       at INTEGER NOT NULL) STRICT;
     CREATE INDEX IF NOT EXISTS credit_consents_user ON credit_consents (user_id, id);"""),
-    # (Nov 18) the drafts found in channels so far take their post's picture as their cover, as new ones do (autoev.cover:
-    # the same rules, its own event_cover row over the same stored picture; rows only, the files on disk are shared).
-    # Run again it finds nothing left to do
+    # Give unedited channel drafts a cover by sharing the source image on disk.
+    # Keep a separate event_cover row so the source post and draft retain their own file references.
     (186, """INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
     SELECT f.sha256, 'event_cover', f.mime, f.bytes, f.width, f.height, f.path, NULL, CAST(strftime('%s', 'now') AS INTEGER), f.color
     FROM files f WHERE f.id IN (SELECT p.photo_file_id FROM auto_events a
@@ -1967,20 +1922,20 @@ MIGRATIONS: list[tuple[int, str]] = [
     (187, """CREATE TABLE IF NOT EXISTS receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
       receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
     ) STRICT;"""),
-    # an online event (owner, Nov 19): NULL not online; '' online, no link yet; else its meeting link (core.online_url)
+    # an online event: NULL not online; '' online, no link yet; else its meeting link (core.online_url)
     (188, "ALTER TABLE events ADD COLUMN online TEXT;"),
-    # (Nov 19) the assistant's own yes to Google answering first (assistant.GOOGLE_YES, as team_consents): no row, never
+    # the assistant's own yes to Google answering first (assistant.GOOGLE_YES, as team_consents): no row, never
     # Google; a withdrawal deletes the row
     (189, """CREATE TABLE IF NOT EXISTS kri_consents (  -- IF NOT EXISTS: tests rewind user_version
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;"""),
-    # (Nov 19, review) the yes goes with the student row, whatever removes it (deleting the account, the operator's
+    # the yes goes with the student row, whatever removes it (deleting the account, the operator's
     # unlink, a staff row taken back): a later sign-in never finds an old yes waiting
     (190, """CREATE TRIGGER IF NOT EXISTS kri_consents_student_gone AFTER DELETE ON students BEGIN
       DELETE FROM kri_consents WHERE user_id = OLD.user_id;
     END;"""),
-    # (Nov 19) a credit by a GitHub login (credits.py): a pull request's author, the line never tied to an account
+    # a credit by a GitHub login (credits.py): a pull request's author, the line never tied to an account
     # (tg_id NULL); the login is public already, so the line is shown under it
     (191, "ALTER TABLE credits ADD COLUMN gh TEXT;"),
     # users by lower(tg_username): account.support() on every /api/me and the @handle lookups (oversight, profiles, vol)

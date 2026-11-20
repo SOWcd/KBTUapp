@@ -668,8 +668,7 @@ def main(args: list[str]) -> None:
         except ApiError as exc:  # the code alone: its message may be a field's name, never the event's words
             sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
     elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():
-        # a club that made its offline casting an event: the same words, cover and place as a casting post, from now on.
-        # Silent: a club's own casting tells its followers, this one was never asked to
+        # Reuse the casting post text, cover and place for its event without sending a follower notification.
         import calendar
         from .logic.newsfeed import _casting_input
         e = one(con, "SELECT * FROM events WHERE id = ?", int(args[2]))

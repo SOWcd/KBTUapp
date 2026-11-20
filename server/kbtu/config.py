@@ -20,7 +20,7 @@ class Config:
     bot_username: str = "KBTUappBot"
     events_channel: str = ""    # where public events are posted (@KBTUevents on prod); empty: nowhere
     admins: frozenset[int] = frozenset()  # Telegram IDs that get the platform admin role
-    old_dir: str | None = None  # the old prototype at /old/, kept for the pitch (dev: tmp-serve/)
+    old_dir: str | None = None  # Serve /old/ for the pitch when its files are configured.
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
     cf_ai_token: str = field(default="", repr=False)
@@ -39,7 +39,7 @@ class Config:
     # MS_AGE_CUTOFF=MM-DD (e.g. 06-01): free 1st-year seats only for a Microsoft account made on or after that day of
     # the academic year's first calendar year (logic/core.py first_year_free); empty: the date is only recorded
     ms_age_cutoff: str = ""
-    # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
+    # The userbot (userbot.py) mirrors an org's main channel into its news. It needs a StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
     tg_api_hash: str = field(default="", repr=False)
@@ -126,7 +126,7 @@ def load() -> Config:
         web_dist=env.get("WEB_DIST", str(ROOT / "web" / "dist")),
         domain=env.get("DOMAIN", "kbtu.sow.kz"),
         bot_username=env.get("BOT_USERNAME", "KBTUappBot"),
-        events_channel=env.get("NEWS_CHANNEL") or env.get("EVENTS_CHANNEL") or "@KBTUevents",  # the old name still works
+        events_channel=env.get("NEWS_CHANNEL") or env.get("EVENTS_CHANNEL") or "@KBTUevents",  # Accept EVENTS_CHANNEL so existing deployments can keep their configuration.
         admins=frozenset(int(x) for x in env.get("ADMIN_TG_IDS", "").replace(",", " ").split()),
         old_dir=env.get("OLD_DIR") or None,
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
@@ -135,7 +135,7 @@ def load() -> Config:
         forum=env.get("FORUM", "0") == "1",
         forum_founder=env.get("FORUM", "0") == "founder",
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
-        tgc_chat=int((env.get("FORUM_GROUP") or env.get("TG_COMMENTS_CHAT") or "").strip() or 0),  # the old name still works
+        tgc_chat=int((env.get("FORUM_GROUP") or env.get("TG_COMMENTS_CHAT") or "").strip() or 0),  # Accept TG_COMMENTS_CHAT so existing deployments can keep their configuration.
         forum_channel=int(env.get("FORUM_CHANNEL", "").strip() or 0),
         ms_age_cutoff=_month_day(env.get("MS_AGE_CUTOFF", "").strip()),
         tg_api_id=env.get("TG_API_ID", "").strip(),

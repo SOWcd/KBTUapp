@@ -478,7 +478,7 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
     if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
-        db.maybe(con, roster.match, con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below; skipped in a burst
+        db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
@@ -496,7 +496,7 @@ def me(con, v: Viewer) -> dict:
     # the card number at the KBTU sign-in, in the order people came (so one sees who came
     # 84th); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
-    # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
+    # Grant the award on open if a qualifying card number already exists without its grant.
     if s and not core.is_staff(s) and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
@@ -911,7 +911,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if k in patch:
             need_student(v)
             fix_identity(con, v.id, col, patch[k])
-    if "city" in patch:  # Settings → Privacy: mine to set, change or delete; the roster's (PLAN 95) too
+    if "city" in patch:  # Settings → Privacy also covers data supplied by a club roster.
         city = patch["city"]
         if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
             raise ApiError("bad_input")
@@ -1265,8 +1265,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        # PLAN 95: a list row I said was mine goes with me where the list has my verified mail, and a reload skips it (as after
-        # roster.join); a claim is only my word otherwise (a typo'd username), so that row goes back to the club for the right person
+        # Delete a claimed roster row and prevent reimport only if its email is verified. Release an unverified
+        # claim so a typo in the roster cannot keep the row from its owner.
         for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
                 RETURNING key""", v.id, v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
@@ -1305,7 +1305,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))
-        credits.gone(con, tg)  # what the app got from me stays in "People of the app", signed "Student": no id left on it  # those from before the app knew me
+        credits.gone(con, tg)  # Keep the contribution while removing its link to the deleted account.
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")

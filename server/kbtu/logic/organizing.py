@@ -232,7 +232,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
-          and (ends is None or starts < ends <= starts + 31 * 86400)  # days, not years: a casting runs 2-12 Nov; the door stays open the whole span
+          and (ends is None or starts < ends <= starts + 31 * 86400)  # Cap the span in days because the door stays open for the whole event.
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
           and re.fullmatch(r"#[0-9a-fA-F]{6}", color) and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and visibility in (None, "public", "members", *(("leaders",) if oversee else ()))
           and leaders in (None, "president", "vice", "head") and (not meeting or visibility == "members" and seats is None)
@@ -241,7 +241,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         raise ApiError("bad_input")
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
             "emoji": emoji, "color": color, "seats": seats, "reg_until": None if late else reg_until, "late_signup": int(late), "first_year": int(bool(i.get("firstYear"))),
-            "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
+            "needs_phone": int(i.get("needsPhone") is True),  # Keep the phone number so the next event can use it at sign-up.
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
             "meeting": int(meeting), "meeting_tag": tag, "for_board": int(board), "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
@@ -486,7 +486,7 @@ def _log_full(con, v: Viewer, oid: int, eid: int, body: dict) -> None:
         log_action(con, v.id, "staff_full", f"org:{oid}", json.dumps({"event": eid, **got}, ensure_ascii=False))
 
 
-SLIDES = 9   # photos after the cover (PLAN 33): ten in all, as an Instagram or TikTok photo post
+SLIDES = 9   # Limit the carousel to ten photos including the cover.
 
 
 def _slides(con, v: Viewer, body: dict, e: sqlite3.Row, cover: int | None) -> None:
@@ -883,7 +883,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
 
 
 REVEALS_A_DAY, REVEAL_AFTER = 40, 7 * 86400
-ASK_DELAY = 90  # an ask waits this long in the queue: during a deploy an old postman (no org_ask template) is gone by then
+ASK_DELAY = 90  # Delay delivery so bot workers have time to pick up the notification template during a deploy.
 _REACH = ("attendee_contact", "attendee_ask")  # the audit log's lines for both, counted together against the cap
 
 
@@ -1332,8 +1332,7 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
         con.execute("DELETE FROM door_guests WHERE event_id = ? AND user_id = ?", (eid, uid))
 
 
-# A walk-in at the door without the app typed their own first and last name on the organiser's phone; a student with
-# that name confirming with Microsoft later counts as came.
+# Match a stored walk-in to an account only after Microsoft verifies the student's name.
 
 
 def _norm_name(s: str) -> str:
@@ -1344,7 +1343,7 @@ def _norm_name(s: str) -> str:
 GUEST_DAYS = 30 * 86400  # a walk-in's name waits this long for its student, then goes
 
 
-# ponytail: nothing adds door_guests rows since Nov 14; link_door_guests, GUEST_DAYS and _norm_name can go after Dec 14
+# ponytail: remove link_door_guests, GUEST_DAYS and _norm_name once all pending walk-ins pass the 30-day limit.
 def link_door_guests(con, uid: int) -> None:
     """A student confirmed by Microsoft (their names are KBTU's): a walk-in of the last 30 days with their full name was
     them, only if no other student has that name (two Aruzhan Serikovas and nobody can
