@@ -112,17 +112,25 @@ STUDIO_NOT_LENT = frozenset({("DELETE", "/api/orgs/{oid}"), ("POST", "/api/orgs/
                              ("POST", "/api/events/{eid}/seats"), ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"),
                              ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
 STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
+MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 
 
-def _studio_route(con, request: Request, route: tuple[str, str], org: int) -> bool:
-    """A route of this club's Studio: the club's own (/api/orgs/{oid}...) or one of its events' (/api/events/{eid}...)."""
-    p = request.path_params
+def _staff_event_id(con, request: Request, route: tuple[str, str]) -> str:
+    if route == ("PUT", MATCH_SCORE_ROUTE):
+        mid = request.path_params["mid"]
+        if mid.isascii() and mid.isdigit() and len(mid) <= 19 and (eid := logic.evmatches.match_event(con, int(mid))):
+            return str(eid)
+        return ""
+    return str(request.path_params.get("eid", ""))
+
+
+def _studio_route(con, request: Request, route: tuple[str, str], org: int, eid: str) -> bool:
+    """A route of this club's Studio: the club's own or one of its events'."""
     if route in STUDIO_NOT_LENT:
         return False
     if route[1].startswith("/api/orgs/{oid}"):
-        return str(p.get("oid")) == str(org)
-    eid = str(p.get("eid", ""))
-    return route[1].startswith("/api/events/{eid}") and eid.isascii() and eid.isdigit() and len(eid) < 12 \
+        return str(request.path_params.get("oid")) == str(org)
+    return (route[1].startswith("/api/events/{eid}") or route == ("PUT", MATCH_SCORE_ROUTE)) and eid.isascii() and eid.isdigit() and len(eid) < 12 \
         and logic.one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ?", int(eid), org) is not None
 
 
@@ -153,36 +161,38 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         # the find-people forum's own requests surface for its people alone (FORUM, forum_viewer's rule): forum.may_touch_ask
         caller["asks_all"] = cfg.forum and v.role in ("admin", "moderator") or cfg.forum_founder and bool(
             logic.one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", v.id))
-    if (oid := request.headers.get("x-staff-org")) is not None:
+    oid = request.headers.get("x-staff-org")
+    staff_eid = request.headers.get("x-staff-event")
+    if oid is None and staff_eid is None:
+        yield v
+        return
+    route = (request.method, request.scope["route"].path)
+    eid = _staff_event_id(con, request, route) if v.role == "admin" else ""
+    if oid is not None:
         # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
         # without a role in it, and may fill it from the club's announcement (the AI, nothing stored). Only these routes; the draft is then run through X-Staff-Event like any other
         o = logic.one(con, "SELECT id FROM orgs WHERE id = ? AND status = 'active'", int(oid)) if oid.isascii() and oid.isdigit() and len(oid) < 12 else None
-        route = (request.method, request.scope["route"].path)
         # the creator alone acts as the club's President there (core.can, lent_full), so his video uploads too
         full = v.role == "admin" and bool(logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0])
         draft = route == ("POST", "/api/photos") or full and route == ("POST", "/api/videos") \
             or route in (("POST", "/api/orgs/{oid}/events"), ("POST", "/api/orgs/{oid}/events/fill")) and str(request.path_params.get("oid")) == oid
         # ...and the creator opens that club's whole Studio from Admin: every route of the club and of its
         # events, as its President; never the club's end or hand-over, nor his own joining or tickets (STUDIO_NOT_LENT)
-        studio = full and bool(o) and not draft and _studio_route(con, request, route, o["id"])
-        if v.role != "admin" or not o or "x-staff-event" in request.headers or not (draft or studio):
+        studio = full and bool(o) and not draft and _studio_route(con, request, route, o["id"], eid)
+        if v.role != "admin" or not o or staff_eid is not None or not (draft or studio):
             raise ApiError("forbidden", "staff")
         v = Viewer(v.id, v.role, v.student, staff_org=o["id"], lent_full=full, **(_lent_role(con, request, o["id"]) if full else {}))
         yield v
         if route[1] in ("/api/photos", "/api/videos"):  # reached only when the upload was kept; the draft itself: logic.staff_create_event
             logic.log_action(con, v.id, "staff_photo" if route[1] == "/api/photos" else "staff_video", f"org:{oid}")
         elif studio and route not in STUDIO_QUIET:  # every write and every read but the club's and its events' cards
-            eid = request.path_params.get("eid")
             logic.log_action(con, v.id, "staff_studio", f"org:{oid}", json.dumps({"do": f"{route[0]} {route[1]}", **({"event": int(eid)} if eid else {}),
                                                                                   **({"as": request.headers["x-staff-role"]} if v.lent_role != "president" else {})}))
         return
-    if (eid := request.headers.get("x-staff-event")) is None:
-        yield v
-        return
     # Admin → an event: the app's admin acts as its organizers (logic.can, STAFF_RIGHTS), only on that event's own
     # routes and only for this request; anyone else sending it, or on another route, is refused
-    e = logic.one(con, "SELECT org_id, created_by FROM events WHERE id = ?", int(eid)) if eid.isascii() and eid.isdigit() and len(eid) < 12 else None
-    if v.role != "admin" or not e or str(request.path_params.get("eid")) != eid:
+    e = logic.one(con, "SELECT org_id, created_by FROM events WHERE id = ?", int(eid)) if eid == staff_eid and eid.isascii() and eid.isdigit() and len(eid) < 12 else None
+    if not e:
         raise ApiError("forbidden", "staff")
     # the creator runs any event from Admin as its club's President would (core.can, core.role_in), to test it before
     # it goes live; every other admin keeps STAFF_RIGHTS. The one place this is decided
@@ -981,6 +991,40 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/teams/people/{uid}/remind")
     def teams_remind(eid: int, uid: int, con: Con, v: Me):
         return logic.evteams.remind(con, v, eid, uid)
+
+    @app.get("/api/events/{eid}/groups")
+    def event_groups(eid: int, con: Con, v: Me):
+        return logic.evgroups.board(con, v, eid)
+
+    @app.post("/api/events/{eid}/groups")
+    def draw_groups(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evgroups.draw(con, v, eid, body)
+
+    @app.put("/api/events/{eid}/groups/{gid}/teams")
+    def move_group_teams(eid: int, gid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evgroups.move(con, v, eid, gid, body)
+
+    @app.put(MATCH_SCORE_ROUTE)
+    async def score_match(mid: int, request: Request, con: Con, v: Me, body: dict | None = Body(None)):
+        if body is None and not await request.body():
+            raise ApiError("bad_input")
+        return await run_in_threadpool(logic.evmatches.score, con, v, mid, body)
+
+    @app.delete("/api/events/{eid}/groups", status_code=204)
+    def remove_groups(eid: int, con: Con, v: Me):
+        logic.evgroups.remove(con, v, eid)
+
+    @app.get("/api/events/{eid}/bracket")
+    def event_bracket(eid: int, con: Con, v: Me):
+        return logic.evbracket.board(con, v, eid)
+
+    @app.post("/api/events/{eid}/bracket")
+    def draw_bracket(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evbracket.draw(con, v, eid, body)
+
+    @app.put("/api/events/{eid}/bracket/swap")
+    def swap_bracket_teams(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.evbracket.swap(con, v, eid, body)
 
     @app.get("/api/events/{eid}/people/{uid}/contact")
     def attendee_contact(eid: int, uid: int, con: Con, v: Me, response: Response):

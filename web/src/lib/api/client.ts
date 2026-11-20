@@ -1,6 +1,7 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
 import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, OwnTr, RejectWhy } from './types';
+import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -27,10 +28,10 @@ export const staffEvents = new Set<Id>();
  *  events (`events`) goes as its President, or as the role he views it as (`role`, X-Staff-Role). */
 export const staffOrg = { id: 0 as Id, full: false, role: 'president', events: new Set<Id>() };
 const orgHead = (): Record<string, string> => ({ 'X-Staff-Org': String(staffOrg.id), ...(staffOrg.full && staffOrg.role !== 'president' ? { 'X-Staff-Role': staffOrg.role } : {}) });
-const staffOf = (method: string, path: string): Record<string, string> => {
+const staffOf = (method: string, path: string, event?: Id): Record<string, string> => {
   const o = staffOrg.id;
   if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
-  const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
+  const id = event === undefined ? /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1] : String(event);
   if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
   // his own on an event (a ticket, receipt, comment, team, save, rating...) stays his: the server never lends those (STUDIO_NOT_LENT)
   if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id)
@@ -38,13 +39,13 @@ const staffOf = (method: string, path: string): Record<string, string> => {
   return {};
 };
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   let r: Response;
   const raw = body instanceof Blob; // a file goes as the body itself (POST /api/photos)
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(method, path), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
       // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
@@ -337,6 +338,14 @@ export const server = {
   teams: (id: Id): Promise<TeamsBoard> => call('GET', `/events/${id}/teams`),
   teamsForm: (id: Id, all = false): Promise<TeamsBoard> => call('POST', `/events/${id}/teams/form`, all ? { all } : {}), // all: short teams not looking for people too
   teamsMove: (id: Id, user: Id, team: Id | null): Promise<TeamsBoard> => call('PUT', `/events/${id}/teams/people/${user}`, { team }),
+  eventGroups: (id: Id): Promise<EventGroups> => call('GET', `/events/${id}/groups`),
+  drawGroups: (id: Id, size: number, advance = 2): Promise<EventGroups> => call('POST', `/events/${id}/groups`, { size, advance }),
+  moveGroupTeams: (id: Id, group: Id, team_ids: Id[]): Promise<EventGroups> => call('PUT', `/events/${id}/groups/${group}/teams`, { team_ids }),
+  scoreMatch: (event: Id, match: Id, score: MatchScore | null): Promise<EventMatch | BracketMatch> => call('PUT', `/matches/${match}`, score, event),
+  removeGroups: (id: Id): Promise<void> => call('DELETE', `/events/${id}/groups`),
+  eventBracket: (id: Id): Promise<EventBracket> => call('GET', `/events/${id}/bracket`),
+  drawBracket: (id: Id, seed: BracketSeed): Promise<EventBracket> => call('POST', `/events/${id}/bracket`, { seed }),
+  swapBracketTeams: (id: Id, a: Id, b: Id): Promise<EventBracket> => call('PUT', `/events/${id}/bracket/swap`, { a, b }),
   // one attendee's @username, asked on a tap (never in the list): the host's organizer, audited and capped
   attendeeContact: (id: Id, user: Id): Promise<{ username: string | null; asked?: boolean }> => call('GET', `/events/${id}/people/${user}/contact`),
   // none: the bot asks them to write to the organizer (a template, his Telegram on its button), once
