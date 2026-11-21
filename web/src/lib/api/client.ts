@@ -219,7 +219,7 @@ export const server = {
   takeBackRequest: (user: Id): Promise<void> => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user: Id): Promise<void> => call('DELETE', `/friends/${user}`),
   linkCard: (code: string): Promise<LinkCard> => call('GET', `/invite/${code}`), // whose invite link it is (adds nobody; guests too)
-  addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
+  addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
 
   // Studio (own org, SPEC §6): Member+ reads and scans, Head+ creates, edits and sees attendees
@@ -401,7 +401,6 @@ export const server = {
   setComments: (kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread> => call('PATCH', `/${kind}s/${id}/comments`, { on }), // the club's Head+
   deleteComment: (id: Id): Promise<void> => call('DELETE', `/comments/${id}`), // mine, or as the club's Head+
   report: (target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', id: Id, reason: ReportReason, note?: string): Promise<void> => call('POST', '/reports', { target, id, reason, note }), // → the moderators' queue
-  reports: (): Promise<ReportItem[]> => call('GET', '/admin/reports'), // admin
   // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
   forumMe: (): Promise<ForumMe> => call('GET', '/forum/me'),
   setForumMe: (patch: Partial<{ skills: Id[]; open: boolean; pings: boolean }>): Promise<ForumMe> => call('PUT', '/forum/me', patch),
@@ -430,6 +429,9 @@ export const server = {
   refer: (code: string): Promise<void> => call('POST', '/referral', { code }), // opened by someone's invite link
   channelRevealed: (): Promise<{ revealed: number; next: number | null /* when I may post again (the pace); null: now */ }> => call('GET', '/forum-posts/revealed'), // how many anonymous authors were ever revealed (a count)
   channelFeed: (before?: number): Promise<import('./types').ChannelFeedPost[]> => call('GET', `/forum-posts/feed${before ? `?before=${before}` : ''}`), // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
+  channelVisit: (): Promise<import('./types').ChannelVisit> => call('GET', '/forum-posts/visit'),
+  markChannelSeen: (msg: number): Promise<void> => call('PUT', '/forum-posts/visit', { msg }),
+  setChannelHeart: (id: Id, hearted: boolean): Promise<import('./types').ChannelHeart> => call('PUT', `/forum-posts/${id}/heart`, { hearted }),
   newChannelPost: (body: string, anon: boolean, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos }), // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
   uploadChannelPhoto: (file: Blob): Promise<Media & { id: Id }> => call('POST', '/forum-posts/photos', file), // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
   appealChannelPost: (id: Id, body: string, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', `/forum-posts/${id}/appeal`, { body, photos }), // refused by the AI: to a moderator (3 a day), the words given back

@@ -16,7 +16,7 @@ from .core import (NAME, STUDENT_ID, ApiError, DOOR_AUTO, DOOR_EARLY, DOOR_LATE,
     need_student, now, one, org_ref, organizes, overseer, person_ref, photo, rights_of, role_in, rows, short_name,
     shown_name, taken)  # noqa: F401
 from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _ics_text, _receipt_flags,
-    _receipt_slot, _remind, _ticket_code, _vevent, _visible, _volunteers_view, add_receipt, add_seats, cal_feed,
+    _receipt_slot, _remind, _ticket_code, _vevent, _visible, _volunteers_view, add_receipt, add_seats, cal_feed, calendar_owner,
     cal_token, reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event, guard_join, guard_read, guard_token,
     event_ics, events, ics_sig, notify, notify_staff, STAFF_KINDS, past_events, promote, receipt_open, receipt_path, register, remove_seats, review_receipt,
     joined, refill, signup_open, team_ask, team_asks, team_decide, team_guest, team_unask, set_saved, sweep_holds, title_in, unregister, volunteer_apply, volunteer_decide, volunteer_leave,
@@ -24,7 +24,7 @@ from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _
 from .queues import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note, _video,
     ai_failed, ai_next, ai_note, ai_save, ai_state, my_video, new_video, next_video, stale_videos, video_done,
     video_shape, video_uploaded)  # noqa: F401
-from .account import (CONSENT, agreed, ai_on, policy, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, LANYARDS, SCHOOL_LANYARDS, school_slug, _DEL_GONE,
+from .account import (CONSENT, agreed, ai_on, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, LANYARDS, SCHOOL_LANYARDS, school_slug, _DEL_GONE,
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     replay_deletions, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me, lent_studio, me, ms_apply, ms_check, ms_claim, ms_hold, ms_link, ms_pending, ms_release, ms_remember, ms_sweep,
@@ -32,7 +32,7 @@ from .account import (CONSENT, agreed, ai_on, policy, DELETE_WAIT, DELETION_LOG_
 from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, REAPPLY, RESERVED,
     SCHOOLS, SCHOOLS_VERSION, SHORT, SLUG, TRANSLIT, _HEAD, _KB, _SEP, _TAIL, _acronym, _club_app, _keep_name,
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,
-    club_applications, create_org, decide_club_application, delete_org, PATH_STEPS, path_top, ask_official, decide_official, official_path, official_requests, undo_official, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
+    club_applications, create_org, decide_club_application, delete_org, PATH_STEPS, ask_official, decide_official, official_path, official_requests, undo_official, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
     listed, people, seed_schools, shown_links, slug_for, start_by_slug, strip_emoji_names, no_emoji, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, cancel_casting, casting_state, castings, create_post, feature, hide_post, post_shape, post_shapes, posts,
@@ -72,7 +72,7 @@ from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, normalize_ro
     TEAM_LINK_TTL, members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off, assign_role, team_setup, transfer, unban, update_member, set_dept)  # noqa: F401
 from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_AT, KEEP, MY_SKILLS, NAME_MAX,
     NEW_SKILLS_A_DAY, OPEN_ASKS, PING_DAY, PING_TOP, PING_WEEK, PUBLIC_AT, REPORTER_AGE, SEARCHES_AN_HOUR, STALE,
-    TITLE_MAX, _FINDABLE, _UNBLOCKED, _ask_shape, _card, _enough_at, _holders, _matches, _now, _ping, _skill,
+    TITLE_MAX, _FINDABLE, _UNBLOCKED, _ask_shape, _enough_at, _holders, _matches, _now, _ping, _skill,
     _skills_of, add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401

@@ -3,8 +3,10 @@ it was written; no commenters' faces under an anonymous post; my held post's why
 pace says when I may post again; a refusal gives the photos back for Edit or the appeal."""
 from __future__ import annotations
 
+import pytest
+
 from kbtu import db
-from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
+from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_fchannel import setup, tick
 from test_fchannel_photos import TG, upload
 
@@ -67,4 +69,74 @@ def test_refusal_gives_photos_back(env, monkeypatch):
     # the appeal names it again
     p = c.post(f"/api/forum-posts/{pid}/appeal", headers=tma(1), json={"body": "Selling my old calculator cheap", "photos": [ph["id"]]}).json()
     assert p["status"] == "held" and con.execute("SELECT post_id FROM fchan_photos WHERE id = ?", (ph["id"],)).fetchone()[0] == pid
+    con.close()
+
+
+@pytest.mark.parametrize("anon", [False, True])
+def test_hearts_are_private_and_erased(env, monkeypatch, anon):
+    c, cfg, _, _ = setup(env, monkeypatch)
+    a, b, guest, staff = tma(1), tma(2), tma(3), tma(4)
+    login(c, 1, "ann")
+    bob = login(c, 2, "bob")
+    moderator = login(c, 4, "moderator")
+    pid = c.post("/api/forum-posts", headers=a, json={"body": "Studying in the library", "anon": anon}).json()["id"]
+    url = f"/api/forum-posts/{pid}/heart"
+
+    def heart(headers, picked):
+        return c.put(url, headers=headers, json={"hearted": picked})
+
+    def card(headers):
+        return c.get("/api/forum-posts/feed", headers=headers).json()[0]
+
+    con = db.connect(cfg.db_path)
+    assert heart(b, True).status_code == 404  # approved, still waiting for the bot
+    con.execute("""UPDATE fchan_posts SET tg_msg = 50, reactions = '{"x":7}' WHERE id = ?""", (pid,))
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (moderator["id"],))
+    outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
+    assert heart(guest, True).status_code == 401
+    assert heart(b, "false").status_code == 400
+    viewers = (a, b, guest, staff)
+    before = [card(viewer) for viewer in viewers]
+    for _ in range(2):
+        assert heart(b, True).json() == {"hearts": 1, "hearted": True}
+    for viewer, original in zip(viewers, before):
+        assert original["reactions"] == [{"emoji": "x", "n": 7}]
+        assert card(viewer) == original | {"hearts": 1, "hearted": viewer == b}
+    assert heart(a, True).json() == {"hearts": 2, "hearted": True}
+    for _ in range(2):
+        assert heart(a, False).json() == {"hearts": 1, "hearted": False}
+    con.execute("UPDATE fchan_posts SET status = 'hidden' WHERE id = ?", (pid,))
+    assert heart(b, False).status_code == 404
+    con.execute("UPDATE fchan_posts SET status = 'live' WHERE id = ?", (pid,))
+    assert c.put("/api/forum-posts/visit", headers=b, json={"msg": 50}).status_code == 204
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox
+    delete_now(c, cfg, b)
+    assert con.execute("SELECT forum_seen_msg FROM users WHERE id = ?", (bob["id"],)).fetchone()[0] == 0
+    assert card(a)["hearts"] == 0
+    assert heart(a, True).status_code == 200
+    assert c.delete(f"/api/forum-posts/{pid}", headers=a).status_code == 204
+    assert not con.execute("SELECT 1 FROM fchan_hearts").fetchone()
+    con.close()
+
+
+def test_visit_uses_publication_order_and_only_advances_for_me(env, monkeypatch):
+    c, cfg, _, _ = setup(env, monkeypatch)
+    a, b = tma(1), tma(2)
+    uid = login(c, 1, "ann")["id"]
+    con = db.connect(cfg.db_path)
+    con.executemany("""INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at)
+        VALUES (?, 'A synthetic post', 0, ?, ?, 1)""", [(uid, "held", None), (uid, "live", 80), (uid, "hidden", 90)])
+    url = "/api/forum-posts/visit"
+    def visit(headers):
+        return c.get(url, headers=headers).json()
+    def seen(msg):
+        return c.put(url, headers=b, json={"msg": msg}).status_code
+    c.get("/api/forum-posts/feed", headers=b)  # a prefetch is not a visit
+    assert visit(b) == {"latest": 80, "seen": 0}
+    assert seen(90) == 404 and seen(True) == 400
+    assert seen(80) == 204
+    con.execute("UPDATE fchan_posts SET status = 'live', tg_msg = 100 WHERE status = 'held'")
+    assert visit(b) == {"latest": 100, "seen": 80}
+    assert seen(100) == seen(80) == 204  # an older tab finishes later
+    assert visit(b)["seen"] == 100 and visit(a)["seen"] == 0
     con.close()

@@ -2102,4 +2102,15 @@ MIGRATIONS: list[tuple[int, str]] = [
         OR EXISTS (SELECT 1 FROM vol_people p WHERE p.id = vol_ties.vol_id AND p.user_id IS NOT NULL AND p.user_id != vol_ties.user_id);
     UPDATE vol_people SET user_id = NULL WHERE (id, user_id) IN (SELECT vol_id, user_id FROM vol_unconfirmed);
     DROP TABLE vol_unconfirmed;"""),
+    (205, """CREATE TABLE fchan_hearts (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
+    CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
+    ALTER TABLE users ADD COLUMN forum_seen_msg INTEGER NOT NULL DEFAULT 0;"""),
+    (207, """CREATE INDEX IF NOT EXISTS qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
+    CREATE INDEX IF NOT EXISTS reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS saved_by_event ON saved_events(event_id);"""),
 ]

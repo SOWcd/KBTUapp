@@ -341,13 +341,18 @@ def reset_cal_token(con, v: Viewer) -> None:
     con.execute("UPDATE users SET cal_token = NULL WHERE id = ?", (v.id,))
 
 
-def cal_feed(con, token: str, link) -> str:
-    """Everything I go to, from a month ago on: the phone's calendar refreshes it on its own (hourly asked), so a new
-    registration shows up and a cancelled one goes; a cancelled event stays, struck through."""
+def calendar_owner(con, token: str) -> sqlite3.Row:
     u = one(con, """SELECT u.id, u.lang, u.role FROM users u JOIN students s ON s.user_id = u.id
         WHERE u.cal_token = ? AND s.manual = 0 AND u.banned_at IS NULL""", token) if token else None
     if not u:
         raise ApiError("not_found")
+    return u
+
+
+def cal_feed(con, token: str, link) -> str:
+    """Everything I go to, from a month ago on: the phone's calendar refreshes it on its own (hourly asked), so a new
+    registration shows up and a cancelled one goes; a cancelled event stays, struck through."""
+    u = calendar_owner(con, token)
     # what the app would show me now: a club I left or was banned from keeps its team-only events to itself, a club the
     # admin hid is gone (else the feed keeps telling them)
     v = Viewer(u["id"], u["role"], True)
@@ -480,7 +485,7 @@ def past_events(con, v: Viewer, org: int | None = None, mine: bool = False) -> l
 def afisha_ok(o: str) -> str:
     """SQL: the org `o` (its alias) puts its events on the general afisha by itself (no pre-moderation, so
     a student initiative's don't): an official club, a school, a council, KBTU's own office, or a student initiative at
-    the path's top (clubs.path_top: orgs.top_at)."""
+    the path's top (orgs.top_at)."""
     return f"({o}.official = 1 OR {o}.kind != 'club' OR {o}.top_at IS NOT NULL)"
 
 
@@ -575,10 +580,10 @@ def promote(con, e: sqlite3.Row) -> None:
         return  # a cancelled or finished event hands out no seats (a hold to pay for nothing)
     if one(con, "SELECT 1 FROM santa_events WHERE event_id = ? AND drawn_at IS NOT NULL", e["id"]):
         return  # Secret Santa is drawn: nobody new comes in, they would have no Santa (santa.py)
-    while e["seats"] is None or taken(con, e["id"]) < e["seats"]:
-        nxt = one(con, "SELECT * FROM registrations WHERE event_id = ? AND status = 'waitlist' ORDER BY waitlisted_at, id LIMIT 1", e["id"])
-        if not nxt:
-            return
+    places = -1 if e["seats"] is None else max(0, e["seats"] - taken(con, e["id"]))
+    waiting = rows(con, """SELECT id, user_id FROM registrations WHERE event_id = ? AND status = 'waitlist'
+        ORDER BY waitlisted_at, id LIMIT ?""", e["id"], places)
+    for nxt in waiting:
         pay = bool(e["price"]) and not _free_seat(con, e, nxt["user_id"])
         if pay:
             con.execute("UPDATE registrations SET status = 'hold', hold_until = ?, waitlisted_at = NULL, updated_at = ? WHERE id = ?", (core.now() + HOLD, core.now(), nxt["id"]))

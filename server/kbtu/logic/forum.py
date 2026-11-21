@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import secrets
 import unicodedata
 
 from ..db import tx
 
-from .core import (ApiError, PERSON, Viewer, course_of, log_action, need_student, one, person_ref, rows, short_name)
+from .core import (ApiError, PERSON_COLS, Viewer, _qs, course_of, log_action, need_student, one, person_ref, rows, short_name)
 
 
 PUBLIC_AT = 3            # a skill someone made shows in everyone's suggestions once this many people have it (or a moderator approves)
@@ -39,7 +40,7 @@ def _holders(con, sid: int) -> int:
 
 
 def _skill(con, s) -> dict:
-    n = _holders(con, s["id"])
+    n = s["n"] if "n" in s.keys() else _holders(con, s["id"])
     return {"id": s["id"], "name": s["name"], "people": n, "public": bool(s["approved"]) or n >= PUBLIC_AT}
 
 
@@ -82,9 +83,17 @@ def add_skill(con, v: Viewer, name: str) -> dict:
     return _skill(con, one(con, "SELECT * FROM skills WHERE id = ?", sid))
 
 
+def _skills_by(con, table: str, col: str, ids: list[int]) -> dict[int, list[dict]]:
+    skills = {}
+    if ids:
+        for rid, sid, name in rows(con, f"""SELECT t.{col}, s.id, s.name FROM {table} t JOIN skills s ON s.id = t.skill_id
+                WHERE t.{col} IN ({_qs(ids)}) ORDER BY s.name""", *ids):  # table and column from this module only
+            skills.setdefault(rid, []).append({"id": sid, "name": name})
+    return skills
+
+
 def _skills_of(con, table: str, col: str, rid: int) -> list[dict]:
-    return [{"id": s["id"], "name": s["name"]} for s in rows(con, f"""SELECT s.id, s.name FROM {table} t JOIN skills s ON s.id = t.skill_id
-        WHERE t.{col} = ? ORDER BY s.name""", rid)]  # table and column from this module only
+    return _skills_by(con, table, col, [rid]).get(rid, [])
 
 
 def my_forum(con, v: Viewer) -> dict:
@@ -175,22 +184,17 @@ def _matches(con, me: int, skill_ids: list[int], skip: int) -> list[int]:
         GROUP BY u.id ORDER BY COUNT(*) DESC, u.seen_at DESC""", {"me": me, "skip": skip}).fetchall()]
 
 
-def _card(con, uid: int) -> dict:
-    return _cards(con, [uid])[uid]
-
-
-def _cards(con, uids: list[int]) -> dict[int, dict]:
+def _cards(con, uids: list[int], *, with_skills: bool = True) -> dict[int, dict]:
     """People as the forum shows them before any contact: the short name, year of study and skills. No @username.
     One read per fact for the whole list."""
     ids = list(set(uids))
-    q = ",".join("?" * len(ids))
-    skills: dict[int, list[dict]] = {}
-    for r in rows(con, f"""SELECT t.user_id, s.id, s.name FROM user_skills t JOIN skills s ON s.id = t.skill_id
-            WHERE t.user_id IN ({q}) ORDER BY s.name""", *ids):
-        skills.setdefault(r["user_id"], []).append({"id": r["id"], "name": r["name"]})
-    sid = dict(rows(con, f"SELECT user_id, student_id FROM students WHERE user_id IN ({q})", *ids))
-    return {p["id"]: {"person": person_ref(p), "name": short_name(p), "course": course_of(sid[p["id"]]) if p["id"] in sid else None,
-                      "skills": skills.get(p["id"], [])} for p in rows(con, PERSON + f" WHERE u.id IN ({q})", *ids)}
+    if not ids:
+        return {}
+    skills = _skills_by(con, "user_skills", "user_id", ids) if with_skills else {}
+    people = rows(con, f"""SELECT {PERSON_COLS}, s.student_id FROM users u LEFT JOIN students s ON s.user_id = u.id
+        WHERE u.id IN ({_qs(ids)})""", *ids)
+    return {p["id"]: {"person": person_ref(p), "name": short_name(p), "course": course_of(p["student_id"]),
+                      "skills": skills.get(p["id"], [])} for p in people}
 
 
 def search_people(con, v: Viewer, skill: object = None, q: object = None) -> list[dict]:
@@ -214,21 +218,41 @@ def search_people(con, v: Viewer, skill: object = None, q: object = None) -> lis
 
 # ---- requests
 
-def _ask_shape(con, v: Viewer, a) -> dict:
-    mine = a["user_id"] == v.id
-    sk = _skills_of(con, "ask_skills", "ask_id", a["id"])
-    out = {"id": a["id"], "kind": a["kind"], "title": a["title"], "body": a["body"], "skills": sk, "createdAt": a["created_at"],
-           "expiresAt": a["expires_at"], "mine": mine, "author": _card(con, a["user_id"]) | {"skills": []},
-           "matches": len(_matches(con, v.id, [s["id"] for s in sk], a["user_id"]))}
-    if mine:  # how it stands, and who offered to help (by the card only, until I accept)
-        offers = rows(con, "SELECT * FROM contacts WHERE ask_id = ? AND status != 'declined' ORDER BY id DESC", a["id"])
-        cards = _cards(con, [c["from_id"] for c in offers])
-        out |= {"status": a["status"], "why": a["why"], "found": a["found"],
-                "offers": [{"id": c["id"], "status": c["status"], **cards[c["from_id"]]} for c in offers]}
-    else:
-        c = one(con, "SELECT status FROM contacts WHERE ask_id = ? AND from_id = ?", a["id"], v.id)
-        out["offered"] = c["status"] if c else None
+def _ask_shapes(con, v: Viewer, found) -> list[dict]:
+    if not found:
+        return []
+    ids = [a["id"] for a in found]
+    authors = _cards(con, [a["user_id"] for a in found], with_skills=False)
+    skills = _skills_by(con, "ask_skills", "ask_id", ids)
+    # The same pool as _matches: a person with two of the requested skills still counts once.
+    matches = dict(con.execute(f"""SELECT a.id, COUNT(DISTINCT u.id) FROM asks a
+        JOIN ask_skills s ON s.ask_id = a.id JOIN user_skills k ON k.skill_id = s.skill_id JOIN users u ON u.id = k.user_id
+        WHERE a.id IN (SELECT value FROM json_each(:ids)) AND u.id != a.user_id AND {_FINDABLE} AND {_UNBLOCKED.format(u='u.id')}
+        GROUP BY a.id""", {"ids": json.dumps(ids), "me": v.id})) if skills else {}
+
+    own = [a["id"] for a in found if a["user_id"] == v.id]
+    incoming = rows(con, f"""SELECT ask_id, from_id, id, status FROM contacts WHERE ask_id IN ({_qs(own)})
+        AND status != 'declined' ORDER BY id DESC""", *own) if own else []
+    cards = _cards(con, [c["from_id"] for c in incoming])
+    offers = {}
+    for c in incoming:
+        offers.setdefault(c["ask_id"], []).append({"id": c["id"], "status": c["status"], **cards[c["from_id"]]})
+    others = [a["id"] for a in found if a["user_id"] != v.id]
+    offered = dict(rows(con, f"SELECT ask_id, status FROM contacts WHERE from_id = ? AND ask_id IN ({_qs(others)})",
+                        v.id, *others)) if others else {}
+
+    out = []
+    for a in found:
+        aid, mine = a["id"], a["user_id"] == v.id
+        details = {"status": a["status"], "why": a["why"], "found": a["found"], "offers": offers.get(aid, [])} if mine else {"offered": offered.get(aid)}
+        out.append({"id": aid, "kind": a["kind"], "title": a["title"], "body": a["body"], "skills": skills.get(aid, []),
+                    "createdAt": a["created_at"], "expiresAt": a["expires_at"], "mine": mine, "author": authors[a["user_id"]],
+                    "matches": matches.get(aid, 0), **details})
     return out
+
+
+def _ask_shape(con, v: Viewer, a) -> dict:
+    return _ask_shapes(con, v, [a])[0]
 
 
 def asks(con, v: Viewer, skill: object = None) -> list[dict]:
@@ -239,7 +263,7 @@ def asks(con, v: Viewer, skill: object = None) -> list[dict]:
             AND {_UNBLOCKED.format(u='a.user_id')} AND a.id NOT IN (SELECT target_id FROM reports WHERE target = 'ask'
                 AND reporter_id = :me AND status = 'open'))) AND a.subject IS NULL {by}
         ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": _now(), "me": v.id, "skill": skill}).fetchall()
-    return [_ask_shape(con, v, a) for a in found]
+    return _ask_shapes(con, v, found)
 
 
 def create_ask(con, v: Viewer, body: dict, verdict: bool | None) -> dict:

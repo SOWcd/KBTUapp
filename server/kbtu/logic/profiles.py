@@ -8,6 +8,7 @@ import re
 import secrets
 import sqlite3
 import time
+from collections import Counter
 
 from ..db import tx
 
@@ -93,23 +94,26 @@ def _counts(con, uid: int) -> dict[str, int]:
     times = attended(con, uid)
     grants = dict(rows(con, "SELECT code, COUNT(*) FROM achievement_grants WHERE user_id = ? GROUP BY code", uid))
     first_in = one(con, """SELECT COUNT(*) FROM registrations r WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND r.checked_in_at =
-        (SELECT MIN(x.checked_in_at) FROM registrations x WHERE x.event_id = r.event_id)""", uid)[0]
+        (SELECT MIN(x.checked_in_at) FROM registrations x WHERE x.event_id = r.event_id AND x.checked_in_at IS NOT NULL)""", uid)[0]
     soul = one(con, "SELECT COUNT(*) FROM registrations WHERE invited_by = ? AND checked_in_at IS NOT NULL AND checked_in_by IS NOT ?", uid, uid)[0]  # not by my own door scan
     referral = brought(con, uid)
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
-    seasons = [_season_start(t) for t in times]  # the best semester counts: every semester is a new chance
-    # a partner's week has nothing to check in at. Only weeks from my first check-in's on count (_streak): an index
-    # range from that week's Monday, O(my weeks' events), not every event ever under the door's write lock
-    busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
-        AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
-    streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
-    return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
-            "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
-            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
-            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
-            "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
-            "critic": critic(con, uid) if CRITIC_ON else 0}
+    seasons = Counter(map(_season_start, times))  # the best semester counts
+    counts = {
+        "regular": len(times), "first_in": first_in, "soul": soul, "team": team,
+        "season": max(seasons.values(), default=0), "first50": grants.get("first50", 0),
+        "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
+        "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
+        "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
+        "critic": critic(con, uid) if CRITIC_ON else 0,
+    }
+    if any(a[0] == "streak" for a in ACHIEVEMENTS):
+        # Only public event weeks since the first check-in can affect the streak.
+        busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
+            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
+        counts["streak"], counts["streak_now"] = _streak({_week(t) for t in times}, busy, _week(core.now()))
+    return counts
 
 
 def brought(con, uid: int) -> int:
@@ -720,7 +724,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
         "master": (s["student_id"] or "")[2:3] == "M",  # a master's 1st year isn't a bachelor's (the ID's letter)
         "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # Honor profile visibility for fields supplied by a club roster.
-        "attended": len(attended(con, uid)),
+        "attended": next(a["count"] for a in ach if a["code"] == "regular"),
         "clubs": [{"org": org_ref(con, m, logos), "role": m["role"] if m["mine"] else None, **(core.titled(m) if m["mine"] else {"title": None})} for m in clubs],
         "past": [{"org": org_ref(con, h, logos), "role": h["role"] if h["mine"] else None, "since": h["since"], "until": h["until"]} for h in past],
         "showcase": [a for c in picked for a in ach if a["code"] == c and a["level"] > 0],
@@ -905,7 +909,7 @@ def link_card(con, v: Viewer, code: object) -> dict:
     name; the 50-bit code can't be walked."""
     p = _inviter(con, code)
     state = "self" if p["id"] == v.id else friendship(con, v.id, p["id"]) if v.student else "none"
-    return {"person": person_ref(p), "friendship": state}  # a guest: the nick alone (person_ref)
+    return {"person": person_ref(p), "friendship": state, "registered": v.student}  # the viewer when the link opened
 
 
 def add_by_link(con, v: Viewer, code: object) -> dict:
@@ -916,18 +920,18 @@ def add_by_link(con, v: Viewer, code: object) -> dict:
     if p["id"] == v.id:
         raise ApiError("bad_input")
     out = {"person": person_ref(p)}
-    if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
-           v.id, p["id"], core.now() - REASK_AFTER):
-        return {**out, "friendship": "requested"}
-    if friendship(con, v.id, p["id"]) == "friends":
-        return {**out, "friendship": "friends"}
-    # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
-    if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
-        raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans
     with tx(con):
+        if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
+               v.id, p["id"], core.now() - REASK_AFTER):
+            return {**out, "friendship": "requested", "created": False}
+        if friendship(con, v.id, p["id"]) == "friends":
+            return {**out, "friendship": "friends", "created": False}
+        # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
+        if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
+            raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans
         _befriend(con, v.id, p["id"])
         notify(con, p["id"], "friend_new", f"fn:{v.id}:{core.now() // 86400}")
-    return {**out, "friendship": "friends"}
+    return {**out, "friendship": "friends", "created": True}
 
 
 def friend_joined(con, v: Viewer, since: int) -> dict:

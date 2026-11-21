@@ -80,9 +80,11 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; 
 /** Why the AI refused or held my post or reply, in its own words (server ai.explain): quote an exact piece of my text
  *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
 export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
+export interface ChannelHeart { hearts: number; hearted: boolean }
+export interface ChannelVisit { seen: number; latest: number }
 /** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
-export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; nick: Nick; sign: string; mine: boolean
+export interface ChannelFeedPost extends ChannelHeart { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; nick: Nick; sign: string; mine: boolean
   person: PersonRef | null /* a signed post's author; never on an anonymous one */; comments: number /* the students' comments the bot saw */; thread: number | null /* the bot's first comment in the group: the comments link */
   /** the newest commenters (app students who agreed to it), newest first, for students only (a guest: []): a face, no
    *  id, no name (name: one letter, the photo's fallback) */
@@ -823,7 +825,7 @@ export type Friendship = PersonCard['friendship'];
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
-export interface LinkCard { person: PersonRef; friendship: Friendship | 'self' }
+export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
 
 
 /** One application to volunteer, as the organizer sees it: full name and course, like applications to a club. */

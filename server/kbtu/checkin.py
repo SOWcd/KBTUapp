@@ -275,32 +275,33 @@ def _row(con, key: bytes | None, s) -> dict:
             now() - SCREEN_SEEN, now() - SCREEN_IDLE, s["id"])
     # screens: polling now; paired: "disconnect" still has something to cut; vol: the volunteers ledger's session (its door: GET /api/vol/meets/<id>/door)
     return {**_state(con, key, s), "screens": c[0], "paired": c[1], "vol": bool(one(con, "SELECT 1 FROM vol_meets WHERE session_id = ?", s["id"])),
-            "came": one(con, f"SELECT COUNT(*) FROM qr_expected x WHERE x.session_id = ? AND {_CAME}", s["id"])[0]}
+            "came": one(con, f"SELECT COUNT(*) FROM qr_expected x WHERE x.session_id = ?1 AND {_CAME}", s["id"])[0]}
 
 
-# an expected row (x) whose person counted: matched by mail, else by student ID (as the CSV)
-_CAME = """EXISTS (SELECT 1 FROM qr_marks m JOIN students st ON st.user_id = m.user_id WHERE m.session_id = x.session_id
-    AND m.done_at IS NOT NULL AND st.manual = 0 AND (lower(st.email) = x.email OR (st.student_id = x.student_id
-        AND expected_name(x.full_name, st.ms_oid, st.ms_profile, st.manual, st.first_name, st.last_name))))"""
-
-
-def absent(con, v: Viewer, sid: int) -> list[str]:
-    """Who of the expected list hasn't come (yet): names only, for the host (as the CSV)."""
-    _mine(con, v, sid, cohost=False)
-    return [r[0] for r in rows(con, f"SELECT full_name FROM qr_expected x WHERE x.session_id = ? AND NOT {_CAME} ORDER BY full_name", sid)]
+# Read marked emails once for the session. An ID fallback can look up the unique student ID directly.
+_CAME = """(x.email IN (
+    SELECT lower(st.email) FROM qr_marks m JOIN students st ON st.user_id = m.user_id
+    WHERE m.session_id = ?1 AND m.done_at IS NOT NULL AND st.manual = 0 AND st.email IS NOT NULL
+) OR EXISTS (
+    SELECT 1 FROM students st JOIN qr_marks m ON m.user_id = st.user_id AND m.session_id = ?1
+    WHERE st.student_id = x.student_id AND m.done_at IS NOT NULL AND st.manual = 0
+        AND expected_name(x.full_name, st.ms_oid, st.ms_profile, st.manual, st.first_name, st.last_name)
+))"""
 
 
 def people(con, v: Viewer, sid: int) -> dict:
     """The organizer's three lists (someone taken into the club but not yet in the app scans and is
     marked, the organizer sees he isn't a member): who of the list came, who came not on it, who of it hasn't come.
-    Names only, for absent's people (the CSV has the rest)."""
+    Names only (the CSV has the rest)."""
     _mine(con, v, sid, cohost=False)
-    came = [r[0] for r in rows(con, f"SELECT full_name FROM qr_expected x WHERE x.session_id = ? AND {_CAME} ORDER BY full_name", sid)]
+    came, missing = [], []
+    for name, matched in rows(con, f"SELECT full_name, {_CAME} FROM qr_expected x WHERE x.session_id = ?1 ORDER BY full_name", sid):
+        (came if matched else missing).append(name)
     other = [" ".join(n for n in (r["last_name"], r["first_name"]) if n) or logic.short_name(r) for r in rows(con, logic.PERSON + """ JOIN qr_marks m ON m.user_id = u.id AND m.session_id = ? AND m.done_at IS NOT NULL
         WHERE NOT EXISTS (SELECT 1 FROM qr_expected x WHERE x.session_id = m.session_id
         AND s.manual = 0 AND (lower(s.email) = x.email OR (s.student_id = x.student_id
         AND expected_name(x.full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))) ORDER BY m.done_at""", sid)]
-    return {"came": came, "other": other, "absent": absent(con, v, sid)}
+    return {"came": came, "other": other, "absent": missing}
 
 
 def sessions(con, key: bytes, v: Viewer) -> list[dict]:

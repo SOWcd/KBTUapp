@@ -578,15 +578,13 @@ def _path_steps(con, oid: int) -> tuple[dict[str, bool], dict]:
     return out, f
 
 
-def path_top(con, oid: int) -> bool:
-    """A student initiative at the top: an official club's tools, no ✓; its events reach the afisha (seats.afisha_ok)."""
-    return bool(one(con, "SELECT top_at IS NOT NULL FROM orgs WHERE id = ?", oid)[0])
-
-
 def stories_open(con, o: sqlite3.Row) -> bool:
     """A club may post stories (newsfeed.create_post, the channel mirror): official, not a club, or a student initiative
     past the Ascent's collab step (an official club vouched for it, it's on the afisha). Old posts stay."""
-    return bool(o["official"] or o["kind"] != "club" or o["top_at"]) or _path_steps(con, o["id"])[0]["collab"]
+    if o["official"] or o["kind"] != "club" or o["top_at"]:
+        return True
+    facts = _path_facts(con, o["id"])
+    return facts["top_at"] is not None or bool(facts["collab"])
 
 
 def _reached_top(con, oid: int) -> None:

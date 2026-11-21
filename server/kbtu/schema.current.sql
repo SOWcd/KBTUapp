@@ -455,6 +455,11 @@ CREATE TABLE fchan_comments (
       at      INTEGER NOT NULL,
       gone    INTEGER NOT NULL DEFAULT 0
     ) STRICT;
+CREATE TABLE fchan_hearts (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
 CREATE TABLE fchan_photos (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -1210,7 +1215,7 @@ CREATE TABLE users (
   ban_reason      TEXT,
   created_at      INTEGER NOT NULL,
   seen_at         INTEGER NOT NULL
-, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER) STRICT;
+, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE videos (
       id         INTEGER PRIMARY KEY,
       owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1372,6 +1377,7 @@ CREATE UNIQUE INDEX events_chat_token ON events(chat_token) WHERE chat_token IS 
 CREATE INDEX events_upcoming ON events(status, starts_at);
 CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
 CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
+CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
 CREATE INDEX fchan_photos_by_msg ON fchan_photos(msg) WHERE msg > 0;
 CREATE INDEX fchan_photos_by_post ON fchan_photos(post_id, n);
 CREATE INDEX fchan_photos_by_user ON fchan_photos(user_id);
@@ -1408,6 +1414,7 @@ CREATE INDEX qr_expected_by_email ON qr_expected(email);
 CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
 CREATE INDEX qr_screens_by_session ON qr_screens(session_id);
+CREATE INDEX qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
 CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;
 CREATE UNIQUE INDEX qr_sessions_by_event ON qr_sessions(event_id) WHERE event_id IS NOT NULL;
 CREATE INDEX receipt_replaced_by_no ON receipt_replaced(receipt_no) WHERE receipt_no IS NOT NULL;
@@ -1415,6 +1422,8 @@ CREATE INDEX receipt_replaced_by_reg ON receipt_replaced(registration_id);
 CREATE INDEX receipt_replaced_by_sha ON receipt_replaced(sha256);
 CREATE INDEX receipts_by_no ON receipts(receipt_no);
 CREATE INDEX receipts_by_reg ON receipts(registration_id);
+CREATE INDEX reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
+CREATE INDEX registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
 CREATE INDEX regs_by_event ON registrations(event_id, status);
 CREATE INDEX regs_by_inviter ON registrations(invited_by) WHERE invited_by IS NOT NULL;
 CREATE INDEX regs_by_user ON registrations(user_id, status);
@@ -1431,6 +1440,7 @@ CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
 CREATE INDEX santa_people_to ON santa_people (gives_to);
 CREATE INDEX santa_people_user ON santa_people (user_id);
+CREATE INDEX saved_by_event ON saved_events(event_id);
 CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
 CREATE INDEX short_links_by_org ON short_links(org_id);
 CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;

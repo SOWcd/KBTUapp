@@ -6761,12 +6761,10 @@ def test_forum_moderator_queue(env):
 
 def test_one_policy_whatever_the_flags(env):
     """One policy, one consent version: no switch changes the version asked or the page served."""
-    import dataclasses, itertools
+    import dataclasses
     c, cfg = env
     login(c, 90, "stu")
-    for forum, board, tgc_chat, fch, chs, vol, apl in itertools.product((False, True), ("", "staff", "all"), (0, -1001), (0, -1002), (False, True), ("", "x"), ("", "1", "staff")):
-        on = dataclasses.replace(cfg, forum=forum, board=board, tgc_chat=tgc_chat, forum_channel=fch, chat_sync=chs, volunteers=vol, appeals=apl)
-        assert logic.policy(on) == logic.CONSENT == "2026-11-unified1"
+    assert c.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT == "2026-11-unified1"
     on = TestClient(server.create(dataclasses.replace(cfg, forum=True, board="all", appeals="1")))
     assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT
     for doc in ("privacy", "terms"):
@@ -6784,14 +6782,14 @@ def test_old_versions_asked_again_marks_not(env):
         con.execute("UPDATE students SET consent_version = ?", (old,))
         me = c.get("/api/me", headers=tma(90)).json()
         assert me["student"]["consent"] == old != me["consentNow"] == logic.CONSENT          # the app's gate: these differ
-        assert not logic.agreed(con.execute("SELECT consent_version FROM students").fetchone(), cfg)
+        assert not logic.agreed(con.execute("SELECT consent_version FROM students").fetchone())
         assert c.post("/api/me/consent", headers=tma(90), json={"version": old}).status_code == 400
     assert c.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).json()["student"]["consent"] == logic.CONSENT
-    assert logic.agreed(con.execute("SELECT consent_version FROM students").fetchone(), cfg)
+    assert logic.agreed(con.execute("SELECT consent_version FROM students").fetchone())
     for mark in ("staff", "admin"):  # the app's gate skips these two (App.svelte)
         con.execute("UPDATE students SET consent_version = ?", (mark,))
         assert c.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).json()["student"]["consent"] == mark
-    assert logic.agreed({"consent_version": "admin"}, cfg)
+    assert logic.agreed({"consent_version": "admin"})
     con.close()
 
 
@@ -6882,30 +6880,39 @@ def test_invite_link_adds_friend(env):
     code = ann["referrals"]["code"]
     card = c.get(f"/api/invite/{code}", headers=B).json()
     assert card["person"]["id"] == ann["id"] and card["friendship"] == "none"
+    assert card["registered"] is True
     c.post("/api/referral", headers=B, json={"code": code})
     assert c.get(f"/api/users/{ann['id']}", headers=B).json()["friendship"] == "none"          # opening adds nobody
     assert c.get(f"/api/invite/{code}", headers=A).json()["friendship"] == "self"
     assert c.post(f"/api/invite/{code}", headers=A).status_code == 400                         # my own link
     assert c.get("/api/invite/AAAAAAAAAA", headers=B).status_code == 404
     since = int(time.time()) - 5
-    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # one tap
+    added = c.post(f"/api/invite/{code}", headers=B).json()
+    assert added["friendship"] == "friends" and added["created"] is True
+    assert c.get("/api/me", headers=A).json()["referrals"]["count"] == 0                       # Bob was registered already
     assert c.get(f"/api/users/{bob['id']}", headers=A).json()["friendship"] == "friends"
     assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == "friend_new"
     assert c.get(f"/api/friends/joined?since={since}", headers=A).json()["usedBy"]["id"] == bob["id"]  # her QR sheet celebrates
     assert c.get(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"
-    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # already: nothing new
+    again = c.post(f"/api/invite/{code}", headers=B).json()
+    assert again["friendship"] == "friends" and again["created"] is False
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == 1
     # a guest sees whose link it is; the tap needs the KBTU sign-in; their referral is noted as before
-    assert c.get(f"/api/invite/{code}", headers=tma(202)).json()["friendship"] == "none"
+    guest = c.get(f"/api/invite/{code}", headers=tma(202)).json()
+    assert guest["friendship"] == "none" and guest["registered"] is False
     assert c.post(f"/api/invite/{code}", headers=tma(202)).json()["error"] == "need_student"
     assert c.post("/api/referral", headers=tma(202), json={"code": code}).status_code == 204
     assert con.execute("SELECT referred_by FROM users WHERE tg_id = 202").fetchone()[0] == ann["id"]
+    login(c, 202, "eve")
+    assert c.post(f"/api/invite/{code}", headers=tma(202)).json()["created"] is True
+    assert c.get("/api/me", headers=A).json()["referrals"]["count"] == 1
     # a request Ann quietly declined holds: her link doesn't get around it
     cat = login(c, 203, "cat")
     C = tma(203, "Cat")
     c.post("/api/friends/requests", headers=C, json={"userId": ann["id"]})
     c.post(f"/api/friends/requests/{cat['id']}/decline", headers=A)
-    assert c.post(f"/api/invite/{code}", headers=C).json()["friendship"] == "requested"
+    declined = c.post(f"/api/invite/{code}", headers=C).json()
+    assert declined["friendship"] == "requested" and declined["created"] is False
     assert c.get(f"/api/users/{ann['id']}", headers=C).json()["friendship"] == "requested"
     # the day's limit: a stranger can't collect posted links for friends' full names
     now = int(time.time())

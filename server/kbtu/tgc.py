@@ -30,17 +30,19 @@ _tasks: set[asyncio.Task] = set()
 _last: dict[str, asyncio.Task] = {}
 
 
-def spawn(coro, chain: str = "tgc") -> None:
-    """A slow job beside the ears, one after another on its chain: two event-post copies in a batch must not both
-    comment ("events"), and the comments' AI looks ("tgc") never hold up an event post's first comment."""
-    prev = _last.get(chain)
-    prev = prev if prev and not prev.done() else None
-
-    async def run():
-        if prev:
+def spawn(coro, chain: str | None = "tgc") -> None:
+    """Run beside the poller. Named chains preserve order for moderation and event copies.
+    Independent jobs such as group video replies start immediately."""
+    prev = _last.get(chain) if chain is not None else None
+    if prev and not prev.done():
+        async def run():
             await asyncio.gather(prev, return_exceptions=True)
-        await coro
-    _last[chain] = t = asyncio.get_running_loop().create_task(run())
+            await coro
+        t = asyncio.create_task(run())
+    else:
+        t = asyncio.create_task(coro)
+    if chain is not None:
+        _last[chain] = t
     _tasks.add(t)
     t.add_done_callback(_tasks.discard)
 
@@ -219,7 +221,7 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = T
             # commenter() doesn't ask for the policy in force: an author not yet on it gets the EU host alone
             s = one(con, """SELECT s.consent_version FROM tgc_comments c JOIN students s ON s.user_id = c.author_id
                 WHERE c.id = ?""", cid)
-            only = ai.PUBLIC_PROVIDERS if logic.agreed(s, cfg) else ai.EU_ONLY
+            only = ai.PUBLIC_PROVIDERS if logic.agreed(s) else ai.EU_ONLY
             verdict, rule = await ai.screen_comment(cfg, http, body, con, only=only)
             rules.look(con, cid, body, verdict)
         else:

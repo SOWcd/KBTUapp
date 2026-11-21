@@ -163,8 +163,12 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     pics = _photos(con, [p["id"] for p in ps])
     pids = [p["id"] for p in ps if p["comments"]]
     newest = {r["post_id"]: r["m"] for r in rows(con, f"SELECT post_id, MAX(msg_id) m FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(pids))}) GROUP BY post_id", *pids)}
+    live = [p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0]
+    hearts = {r["post_id"]: r for r in rows(con, f"""SELECT post_id, COUNT(*) n, MAX(user_id = ?) picked
+        FROM fchan_hearts WHERE post_id IN ({','.join('?' * len(live))}) GROUP BY post_id""", v.id, *live)}
     out = []
     for p in ps:
+        heart = hearts.get(p["id"])
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         # at: when it went out (posted_at), never when it was written: a held anonymous post's writing time is the
         # author's moment in the app; mine not out yet: when I wrote it
@@ -173,6 +177,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              "mine": p["user_id"] == v.id, "photos": pics.get(p["id"], []),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
              "comments": p["comments"], "thread": (newest.get(p["id"]) or p["rules_msg"]) if p["tg_msg"] else None,
+             "hearts": heart["n"] if heart else 0, "hearted": bool(heart and heart["picked"]),
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day
@@ -182,6 +187,36 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              # is anonymous, or the AI's own words (reason, its tip, the piece it stopped at) once it gave them
              **({"review": _review(p)} if p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check" else {})})
     return out
+
+
+def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
+    need_student(v)
+    if not isinstance(picked, bool) or not 0 < pid < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
+            raise ApiError("need_student")
+        if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid):
+            raise ApiError("not_found")
+        if picked:
+            con.execute("INSERT INTO fchan_hearts (post_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (pid, v.id))
+        else:
+            con.execute("DELETE FROM fchan_hearts WHERE post_id = ? AND user_id = ?", (pid, v.id))
+        return {"hearts": one(con, "SELECT COUNT(*) FROM fchan_hearts WHERE post_id = ?", pid)[0], "hearted": picked}
+
+
+def visit(con, v: Viewer) -> dict:
+    return dict(one(con, """SELECT forum_seen_msg AS seen, (SELECT COALESCE(MAX(tg_msg), 0) FROM fchan_posts
+        WHERE status = 'live' AND tg_msg > 0) AS latest FROM users WHERE id = ?""", v.id))
+
+
+def mark_seen(con, v: Viewer, msg: int) -> None:
+    if type(msg) is not int or not 0 < msg < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM fchan_posts WHERE status = 'live' AND tg_msg = ?", msg):
+            raise ApiError("not_found")
+        con.execute("UPDATE users SET forum_seen_msg = MAX(forum_seen_msg, ?) WHERE id = ?", (msg, v.id))
 
 
 def _review(p) -> dict:
@@ -533,6 +568,7 @@ def delete(con, v: Viewer, pid: int) -> None:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status != 'gone'", pid, v.id)
         if not p:
             raise ApiError("not_found")
+        con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
         _unpost(con, p, "author")
         _post_off(con, pid)
         con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
