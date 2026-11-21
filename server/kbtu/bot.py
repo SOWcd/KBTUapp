@@ -151,7 +151,16 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
-    if kind in ("fch_reply_answer", "fch_reply_gone"):  # fa:<reply>:<hour> / fg:<reply>, to the post's author (through the post): its card
+    if kind == "fch_comments":
+        post = one(con, """SELECT p.id FROM fchan_posts p JOIN users u ON u.id = p.user_id
+            WHERE p.id = ? AND p.user_id = ? AND p.status = 'live' AND p.tg_msg > 0
+              AND u.tg_id = ? AND u.tg_id > 0 AND u.can_dm = 1 AND u.banned_at IS NULL AND u.n_forum_comments = 1""",
+            int(ref[1]), m["user_id"], m["tg_id"])
+        template = "fch_reply_answer" if json.loads(m["payload"]).get("answer") else kind
+        return (*texts.bot_message(lang, template), f"fp_{post['id']}") if post else None
+    if kind == "fch_reply_answer":  # a retiring bot queued this after migration 203 folded pending answers into fch_comments
+        return None
+    if kind == "fch_reply_gone":  # fg:<reply>, to the post's author (through the post): its card
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
         return (*texts.bot_message(lang, kind), f"fp_{r['id']}") if r else None
@@ -939,20 +948,26 @@ def _due(con) -> list:
 
 
 def _mark(con, m, sent: bool, error: str | None = None) -> None:
-    con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ?", (now() if sent else None, error, m["id"]))
+    # Deleting a post or account can retire this row while Telegram answers. SQLite can reuse its numeric id.
+    con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ? AND user_id = ? AND kind = ? AND ref = ?",
+                (now() if sent else None, error, m["id"], m["user_id"], m["kind"], m["ref"]))
 
 
-def _take(con, m):
+def _take(con, m, forum_channel: bool):
     """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why)."""
     # take it first: during a deploy the old and the new container run side by side for a few seconds, and
     # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
-    if not con.execute("UPDATE bot_outbox SET send_after = ? WHERE id = ? AND send_after = ? AND sent_at IS NULL AND error IS NULL",
-                       (now() + LEASE, m["id"], m["send_after"])).rowcount:
+    lease = logic.fchannel.COMMENT_GAP if m["kind"] == "fch_comments" else LEASE  # Telegram may receive a send whose answer is lost
+    if not con.execute("""UPDATE bot_outbox SET send_after = ? WHERE id = ? AND user_id = ? AND kind = ? AND ref = ?
+                       AND send_after = ? AND sent_at IS NULL AND error IS NULL""",
+                       (now() + lease, m["id"], m["user_id"], m["kind"], m["ref"], m["send_after"])).rowcount:
         return None
     if not m["can_dm"]:
         return _mark(con, m, False, "no_dm")
     if m["banned_at"]:  # banned: the bot stops writing
         return _mark(con, m, False, "banned")
+    if m["kind"] == "fch_comments" and not forum_channel:
+        return _mark(con, m, False, "gone")
     msg = _render(con, m)
     if msg is None:
         _mark(con, m, False, "gone")
@@ -984,7 +999,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
-            msg = await anyio.to_thread.run_sync(_take, con, m)
+            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
             if msg is None:
                 continue
             text, button, start = msg

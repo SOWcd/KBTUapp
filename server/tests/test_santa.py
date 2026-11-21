@@ -645,7 +645,8 @@ def test_migration_on_the_live_shape(env, tmp_path, before_door_migration):
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
-    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 203
+    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
+    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
     con.executescript("ALTER TABLE events DROP COLUMN online; ALTER TABLE credits DROP COLUMN gh; DROP TABLE santa_games; DROP TRIGGER santa_moved_upd; DROP TRIGGER santa_moved_del; PRAGMA user_version = 183;")
     t = int(time.time())
     con.execute("INSERT INTO users (id, tg_id, tg_first_name, lang, can_dm, created_at, seen_at, qr_code) VALUES (1, 501, 'P', 'ru', 1, 0, 0, 'Q1')")

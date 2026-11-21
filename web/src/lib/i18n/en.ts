@@ -2195,6 +2195,8 @@ const en: Dict = {
   'set.remindHint': "2 hours before, “How was it?” after, and answers to your questions",
   'set.newEvents': "New events",
   'set.newEventsHint': "From clubs you follow",
+  'set.forumComments': "Comments on my forum posts",
+  'set.forumCommentsHint': "At most once every 3 hours for each post",
   'set.always': "Important messages always come: event changes, cancellations and updates, a freed-up seat, clubs' answers to your applications, friends' invitations.",
   'set.portal': "What we keep about you as a student",
   'set.portalText': "The name, student ID and year you typed in (and, for those who signed in before 19 October, what came from the KBTU portal then: school, programme, email, phone, timetable). Delete it all in Settings → \"Privacy\" → \"Delete account\".",

@@ -289,7 +289,7 @@ def test_reply_send_missing_and_lost(env, monkeypatch):
 
 def test_reply_report_answer_and_posing(env, monkeypatch):
     w = world(env, monkeypatch)
-    t = clock(monkeypatch)
+    w.con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (w.ann["id"],))
     mod = login(w.c, 3, "mod")
     w.con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
     r = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "My anonymous answer"}).json()
@@ -303,13 +303,15 @@ def test_reply_report_answer_and_posing(env, monkeypatch):
     assert w.con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'tgc_report_ok' AND ref = ?", (w.bob["id"], f"rr:{r['id']}")).fetchone()
     assert w.c.post(f"/api/forum-replies/{r['id']}/mod", headers=tma(3), json={"ok": True}).status_code == 204  # kept: reports cleared
     assert w.c.get("/api/forum-posts/mod", headers=tma(3)).json()["replies"]["live"][0]["reports"] == 0
-    # an answer to the bot's reply: its author hears (a template with a button to the post), once an hour
+    # The first eligible comment answers the bot's reply. Its specific template uses the post's shared cooldown.
     gate(w.cfg, w.tg, w.con, note(71, 2, to=msg, bot=True, text="who are you?"), note(72, 2, to=msg, bot=True, text="hello?"))
-    rows = w.con.execute("SELECT user_id, ref FROM bot_outbox WHERE kind = 'fch_reply_answer'").fetchall()
-    assert [tuple(x) for x in rows] == [(w.ann["id"], f"fa:{r['id']}:{t[0] // 3600}")]
     from kbtu import bot
-    m = w.con.execute("SELECT *, 'ru' AS lang FROM bot_outbox WHERE kind = 'fch_reply_answer'").fetchone()
-    assert bot._render(w.con, m) == (*texts.bot_message("ru", "fch_reply_answer"), f"fp_{w.pid}")
+    m, = [m for m in bot._due(w.con) if m["kind"] == "fch_comments"]
+    assert m["user_id"] == w.ann["id"] and m["ref"] == f"fc:{w.pid}"
+    assert bot._take(w.con, m, True) == (*texts.bot_message("ru", "fch_reply_answer"), f"fp_{w.pid}")
+    bot._mark(w.con, m, True)
+    gate(w.cfg, w.tg, w.con, note(79, 2))
+    assert not [m for m in bot._due(w.con) if m["kind"] == "fch_comments"]
     # posing as the mark: the mark's words in the name (case, Latin look-alikes, invisible characters, with or without
     # the mask) or as the text's own signature line: deleted; the mask alone in a name, or the words inside a sentence, stay
     w.tg.calls.clear()
