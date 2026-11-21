@@ -411,10 +411,11 @@ def test_tokenless_offers_never_answer(subj):
     assert bot._render(con, {"kind": "contact_ok", "ref": f"co:{cid}:to", "lang": "en", "user_id": p["bob"]}) is None
 
 
-def test_migration_gives_old_offers_tokens(env):  # noqa: F811
+def test_migration_gives_old_offers_tokens(env, before_door_migration):  # noqa: F811
     c, cfg = env
     a, b = login(c, 1, "ann")["id"], login(c, 2, "bob")["id"]
     con = db.connect(cfg.db_path)
+    before_door_migration(con)
     con.execute("DROP INDEX asks_subject")
     con.execute("ALTER TABLE asks DROP COLUMN subject")
     con.execute("ALTER TABLE contacts DROP COLUMN token")

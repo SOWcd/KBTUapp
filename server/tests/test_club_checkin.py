@@ -118,7 +118,8 @@ def test_who_is_expected_and_who_is_absent(env):
     assert c.get(f"/api/screens/{sid}/people", headers=tma(9)).json()["absent"] == ["Testov Bob", "Testov Dana"]
     assert c.get(f"/api/screens/{sid}/people", headers=tma(1)).status_code == 403
     csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text
-    assert "came (not on the list)" in csv and "absent,Testov Bob" in csv and "bob@kbtu.kz" not in csv   # the team never sees mails
+    assert "came (not on the list)" in csv and "absent,Testov Bob" in csv and "bob@kbtu.kz" not in csv
+    assert "ann@kbtu.kz" not in csv  # scanned club members have the same mail protection as absentees
     con.close()
 
 

@@ -13,11 +13,39 @@ def dmp_on(monkeypatch):
     monkeypatch.setattr(profiles, "ACHIEVEMENTS", [*profiles.ACHIEVEMENTS, profiles.DMP])
 
 
+@pytest.fixture
+def media_dns(monkeypatch):
+    """Media transport tests resolve their synthetic hosts locally and send only to MockTransport."""
+    from kbtu import download
+    async def addresses(host):
+        return ["93.184.216.34"]
+    monkeypatch.setattr(download, "_addresses", addresses)
+
+
 @pytest.fixture(autouse=True)
 def no_receipt_audit(monkeypatch):
     """A clean receipt's random spot-check (seats._audit, 1 in 5) is off; its own tests switch it on."""
     from kbtu.logic import seats
     monkeypatch.setattr(seats, "_audit", lambda: False)
+
+
+@pytest.fixture
+def before_door_migration():
+    """Restore the old door schema for tests that replay historical migrations on a populated database."""
+    def rewind(con):
+        con.executescript("""DROP TABLE door_misses;
+            DROP TABLE retired_tickets;
+            DROP TRIGGER signup_phone_changed;
+            DROP TRIGGER signup_phone_unlinked;
+            ALTER TABLE registrations DROP COLUMN phone_shared;
+            DROP TRIGGER qr_hand_expected_gone;
+            DROP TRIGGER qr_expected_key;
+            DROP INDEX qr_expected_door_key;
+            ALTER TABLE qr_expected DROP COLUMN door_key;
+            CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
+                DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.email;
+            END;""")
+    return rewind
 
 
 @pytest.fixture(scope="session")

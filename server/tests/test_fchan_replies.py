@@ -422,3 +422,27 @@ def test_reply_other_not_found_keeps_reply(env, monkeypatch):
     w.tg.say["sendMessage"] = (400, "Bad Request: chat not found")
     tick(w.cfg, w.tg, w.con)
     assert w.con.execute("SELECT status, tg_msg FROM fchan_replies WHERE id = ?", (rid,)).fetchone()[:] == ("live", None)
+
+
+def test_erased_screening_reservation_stays_spent(env, monkeypatch):
+    w = world(env, monkeypatch)
+    ann, bob = (logic.Viewer(p["id"], "user", True) for p in (w.ann, w.bob))
+    forum = logic.fchannel
+    post, _ = forum.reserve(w.con, ann, {"body": "Ideas for this week"})
+    reply, _ = forum.reply_reserve(w.con, ann, w.pid, {"body": "What about Monday?"})
+    logic.delete_me(w.con, ann)
+    replacement, _ = forum.reserve(w.con, bob, {"body": "Lunch at the cafeteria", "anon": True})
+    assert replacement > post
+    with pytest.raises(logic.ApiError, match="not_found"):
+        forum.settle(w.con, ann, post, "ok")
+    with pytest.raises(logic.ApiError, match="not_found"):
+        forum.settle(w.con, ann, replacement, "ok")
+    assert w.con.execute("SELECT status FROM fchan_posts WHERE id = ?", (replacement,)).fetchone()[0] == "held"
+    w.con.execute("UPDATE fchan_posts SET status = 'live', tg_msg = 999 WHERE id = ?", (replacement,))
+    w.con.execute("INSERT INTO meta (key, value) VALUES ('fchcopy:999', '998')")
+    second, _ = forum.reply_reserve(w.con, bob, replacement, {"body": "We will be there"})
+    assert second > reply
+    for uid, pid, rid in ((ann, w.pid, reply), (ann, replacement, second), (bob, w.pid, second)):
+        with pytest.raises(logic.ApiError, match="not_found"):
+            forum.reply_settle(w.con, uid, pid, rid, "ok")
+    assert w.con.execute("SELECT status FROM fchan_replies WHERE id = ?", (second,)).fetchone()[0] == "held"

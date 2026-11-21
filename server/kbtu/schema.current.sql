@@ -299,6 +299,13 @@ CREATE TABLE door_guests (
       created_at INTEGER NOT NULL,
       user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
     ) STRICT;
+CREATE TABLE door_misses (
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        misses INTEGER NOT NULL,
+        last_at INTEGER NOT NULL,
+        PRIMARY KEY (event_id, user_id)
+    ) STRICT;
 CREATE TABLE ev_group_teams (
       group_id INTEGER NOT NULL REFERENCES ev_groups(id) ON DELETE CASCADE,
       team_id INTEGER NOT NULL UNIQUE REFERENCES event_teams(id) ON DELETE CASCADE,
@@ -732,7 +739,7 @@ CREATE TABLE qr_expected (
       course     INTEGER,
       phone      TEXT,
       tg         TEXT,
-      extra      TEXT NOT NULL DEFAULT '{}',
+      extra      TEXT NOT NULL DEFAULT '{}', door_key TEXT,
       PRIMARY KEY (session_id, email)
     ) STRICT;
 CREATE TABLE qr_hand_marks (
@@ -813,7 +820,7 @@ CREATE TABLE registrations (
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   checked_in_at INTEGER,
-  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT,
+  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0,
   UNIQUE (event_id, user_id)
 ) STRICT;
 CREATE TABLE removal_requests (
@@ -843,6 +850,10 @@ CREATE TABLE "reports" (
         created_at INTEGER NOT NULL,
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
+    ) STRICT;
+CREATE TABLE retired_tickets (
+        ticket_code TEXT PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE
     ) STRICT;
 CREATE TABLE roster_pending (
         id         INTEGER PRIMARY KEY,
@@ -1394,6 +1405,7 @@ CREATE INDEX posts_recent ON posts(audience, created_at);
 CREATE INDEX prefill_rest_email ON prefill_rest(email);
 CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);
+CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
 CREATE INDEX qr_screens_by_session ON qr_screens(session_id);
 CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;
@@ -1410,6 +1422,7 @@ CREATE INDEX regs_holds ON registrations(hold_until) WHERE status = 'hold';
 CREATE UNIQUE INDEX one_removal_ask ON removal_requests(org_id, user_id) WHERE status = 'pending';
 CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
 CREATE INDEX reports_by_target ON reports (target, target_id);
+CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
 CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
 CREATE INDEX roster_by_tg ON roster_pending(tg);
@@ -1529,8 +1542,11 @@ CREATE TRIGGER history_role AFTER UPDATE OF role ON org_members WHEN OLD.role !=
 CREATE TRIGGER vol_access_gone AFTER DELETE ON org_members BEGIN
       DELETE FROM vol_access WHERE org_id = OLD.org_id AND user_id = OLD.user_id;
     END;
+CREATE TRIGGER qr_expected_key AFTER INSERT ON qr_expected WHEN new.door_key IS NULL BEGIN
+        UPDATE qr_expected SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
 CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
-      DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.email;
+        DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.door_key;
     END;
 CREATE TRIGGER event_team_reg_gone AFTER DELETE ON registrations BEGIN
       DELETE FROM event_team_members WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
@@ -1593,6 +1609,12 @@ CREATE TRIGGER sid_freed_fix AFTER UPDATE OF student_id ON students WHEN OLD.stu
 CREATE TRIGGER sid_freed_gone AFTER DELETE ON students
     BEGIN
       UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
+    END;
+CREATE TRIGGER signup_phone_changed AFTER UPDATE OF phone ON students WHEN old.phone IS NOT new.phone BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
+    END;
+CREATE TRIGGER signup_phone_unlinked AFTER DELETE ON students BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
     END;
 CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
       WHEN (NEW.status IN ('deleting', 'deleted', 'restored')) != (OLD.status IN ('deleting', 'deleted', 'restored'))

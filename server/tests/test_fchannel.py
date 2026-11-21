@@ -403,7 +403,7 @@ def test_post_account_deletion_keeps_posts(env, monkeypatch):
     con.close()
 
 
-def test_old_board_cleaned_up(env):
+def test_old_board_cleaned_up(env, before_door_migration):
     """Migration 103: the old in-app forum's threads, replies, marks, reports and notes go (owner, Nov 1)."""
     c, cfg = env
     ann = login(c, 1, "ann")
@@ -412,6 +412,7 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    before_door_migration(con)
     con.execute("DROP INDEX asks_subject")  # 177's
     con.execute("ALTER TABLE asks DROP COLUMN subject")
     con.execute("ALTER TABLE contacts DROP COLUMN token")

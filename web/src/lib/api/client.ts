@@ -32,10 +32,11 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   const o = staffOrg.id;
   if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = event === undefined ? /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1] : String(event);
+  // A personal action always uses the student's own authority, even while Admin has the event open.
+  if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish)(?:[/?]|$)/.test(path)) return {};
   if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
-  // his own on an event (a ticket, receipt, comment, team, save, rating...) stays his: the server never lends those (STUDIO_NOT_LENT)
   if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id)
-    && !/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|seats|decline|rating|invites)(?:[/?]|$)/.test(path))) return orgHead();
+    && path !== `/events/${id}/seats`)) return orgHead();
   return {};
 };
 

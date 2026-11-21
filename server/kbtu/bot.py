@@ -27,7 +27,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
+from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
 from .config import Config
 from .logic import now, one, rows
 from .logic.account import _Taken
@@ -366,7 +366,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             JOIN reg_age a ON a.registration_id = r.id WHERE e.id = ? AND e.age_check = 1 AND e.status = 'published'
             AND e.hidden_at IS NULL AND r.user_id = ? AND r.status = 'going' AND r.checked_in_at IS NOT NULL AND a.adult = 0""",
                 int(ref[1]), m["user_id"])
-        return (*texts.bot_message(lang, kind), f"ev_{e['id']}") if e and now() < logic.end_of(e) else None
+        return (*texts.bot_message(lang, kind), f"ev_{e['id']}") if e and now() < logic.end_of(e) and not logic.door_shut(e, now()) else None
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
         e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))
@@ -425,13 +425,13 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return None
         return (*texts.bot_message(lang, kind, name=logic.shown_name(p), **ev(e)), f"ev_{e['id']}")
     if kind == "round_open":  # ro:<round>, to a club's followers who aren't in it; gone once it stops taking applications
-        r = one(con, "SELECT r.*, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.status = 'open' AND r.closes_at > ?", int(ref[1]), logic.now())
+        r = one(con, "SELECT r.*, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id AND o.status = 'active' WHERE r.id = ? AND r.status = 'open' AND r.closes_at > ?", int(ref[1]), logic.now())
         if not r or one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, org=r["name"], until=texts.when(r["closes_at"], lang)), f"rc_{r['org_id']}")
     if kind in ("round_interview", "round_iv_nudge", "round_iv_remind"):  # iv: / ivn: / ivr:<application>[:<slot>:<when>]
         a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
-            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+            JOIN orgs o ON o.id = r.org_id AND o.status = 'active' WHERE a.id = ?""", int(ref[1]))
         if not a or a["stage"] == "withdrawn" or a["rstatus"] == "done" or a["sent_at"]:  # their result went out
             return None
         if kind == "round_iv_nudge" and a["slot_id"]:  # picked a time already
@@ -445,7 +445,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, org=a["name"]), f"iv_{a['org_id']}")
     if kind == "round_place":  # ivp:<application>:<slot>:<n>, casting.set_place: that slot as it is now; quiet once decided, over, booked elsewhere, full or edited back
         a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
-            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+            JOIN orgs o ON o.id = r.org_id AND o.status = 'active' WHERE a.id = ?""", int(ref[1]))
         s = a and a["stage"] == "next" and a["rstatus"] != "done" and not a["sent_at"] and casting.place_slot(con, a, int(ref[2]))
         if not s or s["place"] == json.loads(m["payload"] or "{}").get("was"):
             return None
@@ -453,7 +453,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                                    place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
     if kind == "round_call":  # ivc:<application>:<slot>:<start>, casting.call_slot: "come over" while the window is on; quiet once decided, came or over
         a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
-            JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
+            JOIN orgs o ON o.id = r.org_id AND o.status = 'active' WHERE a.id = ?""", int(ref[1]))
         s = a and a["rstatus"] != "done" and one(con, f"""SELECT s.*, {casting._ENDS} AS ends, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide
             FROM round_slots s WHERE s.id = ? AND s.round_id = ? AND s.starts_at = ?""", int(ref[2]), a["round_id"], int(ref[3]))
         if not casting.call_holds(a, s):
@@ -462,7 +462,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                                    place=texts.place_or_tba(s["place"], lang)), f"iv_{a['org_id']}")
     if kind in ("round_yes", "round_no"):  # ry: / rn:<application>, the results, to each applicant
         a = one(con, """SELECT a.*, r.org_id, r.decline_text, r.group_link, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
-            JOIN orgs o ON o.id = r.org_id LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))
+            JOIN orgs o ON o.id = r.org_id AND o.status = 'active' LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))
         if not a:
             return None
         if kind == "round_yes":
@@ -501,8 +501,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, org=o["name"]), f"cl_{ref[1]}") if o else None
     if kind == "removal_ask":  # rm:<request>, to each President/Vice who outranks the person; gone once decided
         q = one(con, "SELECT q.*, o.name AS org FROM removal_requests q JOIN orgs o ON o.id = q.org_id WHERE q.id = ? AND q.status = 'pending'", int(ref[1]))
-        p = one(con, logic.PERSON + " WHERE u.id = ?", q["user_id"]) if q else None
-        if not q or not p:
+        if not q or m["user_id"] not in logic.teams.removal_leaders(con, q["org_id"], q["user_id"], q["by_id"]):
+            return None
+        p = one(con, logic.PERSON + " WHERE u.id = ?", q["user_id"])
+        if not p:
             return None
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
@@ -667,12 +669,12 @@ async def _userpics(cfg: Config, http: httpx.AsyncClient, con, n: int = 5) -> No
         old_path = u["tg_photo_path"]
         path = None
         try:
-            r = await http.get(u["tg_photo_url"], follow_redirects=True, timeout=15)
-            if r.status_code == 200:
-                if old_path and Path(old_path).name == hashlib.sha256(r.content).hexdigest() and (root / f"{old_path}.t.webp").is_file():
+            data = await download.fetch(http, u["tg_photo_url"], download.TELEGRAM_PAGE + download.TELEGRAM_FILES, media.MAX_BYTES)
+            if data:
+                if old_path and Path(old_path).name == hashlib.sha256(data).hexdigest() and (root / f"{old_path}.t.webp").is_file():
                     path = old_path  # keep unchanged copies on disk without rewriting them
                 else:
-                    path = (await asyncio.to_thread(media.save, r.content, root))["path"]
+                    path = (await asyncio.to_thread(media.save, data, root))["path"]
         except (httpx.HTTPError, media.BadImage, OSError) as exc:
             log.warning("userpic: %s", type(exc).__name__)
         if path is None and u["tg_photo_src"] == u["tg_photo_url"]:
@@ -1277,6 +1279,11 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     f = _file(msg) or {}
     if int(f.get("file_size") or 0) > media.MAX_BYTES:
         return say("receipt_bad")
+    viewer = logic.Viewer(u["id"], u["role"], True)
+    try:
+        logic.receipt_open(con, viewer, eid)
+    except logic.ApiError as exc:
+        return say("receipt_wait" if exc.code == "rate_limited" else "receipt_none")
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getFile", params={"file_id": f.get("file_id")})
         path = r.json()["result"]["file_path"]
@@ -1289,7 +1296,7 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
         return say("receipt_bad")
     root = Path(cfg.db_path).resolve().parent / "receipts"
     try:
-        c, gone = logic.add_receipt(con, logic.Viewer(u["id"], u["role"], True), eid, saved, read, via="bot")
+        c, gone = logic.add_receipt(con, viewer, eid, saved, read, via="bot")
     except logic.ApiError:  # the hold ran out while the file was read: the picture goes, unless a row has the same one
         media.drop(root, [] if one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
         return say("receipt_none")
@@ -1388,9 +1395,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         if chat["id"] == cfg.tgc_chat or (msg.get("reply_to_message") or {}).get("is_automatic_forward"):
             return
         who = int(sender.get("id") or 0)
-        # anyone in the chat calls, not only role holders and admins: Telegram is asked
-        # once the run starts (_tag_all; a message alone proves nothing where guests may write). The app's banned
-        # never call (silence).
+        # _tag_all also verifies the caller's Telegram membership and authority before reading the roster.
         if logic.chatlist.banned(con, who):
             return
         if not logic.chatlist.student(con, who):  # no account in the app: told so, nobody is called
@@ -1601,14 +1606,18 @@ async def _tag_all(cfg: Config, http: httpx.AsyncClient, chat: int, to: int, who
         if not (status in ("creator", "administrator", "member") or status == "restricted" and st.get("is_member")):
             quiet = True
             return
-        t1 = time.monotonic()
-        roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
-        # where a slow /all spends its time: durations only, no chat and no person
-        log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
-        # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
-        live = roster.ids if roster and (not roster.hidden or status in ("creator", "administrator")) else []
+        admin = status in ("creator", "administrator")
         con = db.connect(cfg.db_path)
         try:
+            if not logic.chatlist.may_call(con, chat, who, admin):
+                quiet = True
+                return
+            t1 = time.monotonic()
+            roster = await mtbot.members(cfg, chat, TAG_MAX)  # read no further than the cap: a 10 000 group costs 300 ids
+            # where a slow /all spends its time: durations only, no chat and no person
+            log.warning("tag all: caller %.1f s, members %.1f s (%s)", t1 - t0, time.monotonic() - t1, "list" if roster else "no list")
+            # members hidden in the chat: the bot never shows a roster the caller couldn't see (its admins can)
+            live = roster.ids if roster and (not roster.hidden or admin) else []
             people = [t for t in logic.tag_all(con, chat, who, live) if not roster or t not in roster.skip]  # deleted, bots
         finally:
             con.close()

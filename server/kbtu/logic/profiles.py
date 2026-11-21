@@ -664,7 +664,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
                                v.id, uid) is not None
     state = "none" if uid == v.id else friendship(con, v.id, uid)
-    close = uid == v.id or link is not None or team or v.role in ("admin", "moderator")  # the team: reports need it all
+    close = uid == v.id or link is not None or team
     if not close:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event

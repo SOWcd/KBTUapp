@@ -38,10 +38,10 @@ def _fresh(monkeypatch):
 
 def _tikwm(answer: dict | None = None, file: bytes = VIDEO, status: int = 200) -> httpx.AsyncClient:
     """tikwm.com and TikTok's file server (a photo's file is its name)."""
-    answer = answer if answer is not None else {"code": 0, "data": {"play": "https://cdn.example/v.mp4", "size": len(file), "duration": 14}}
+    answer = answer if answer is not None else {"code": 0, "data": {"play": "https://v1.tiktokcdn.com/v.mp4", "size": len(file), "duration": 14}}
 
     def handle(req: httpx.Request) -> httpx.Response:
-        if req.url.host == "www.tikwm.com":
+        if req.headers["Host"] == "www.tikwm.com":
             assert req.method == "POST" and dict(httpx.QueryParams(req.content.decode())) == {"url": URL}  # the link alone
             return httpx.Response(status, json=answer)
         if req.url.path.startswith("/p/"):
@@ -82,21 +82,22 @@ def test_room():
     assert tiktok.room(-1, 1061)  # a minute later
 
 
-def test_fetch():
+def test_fetch(media_dns):
     assert _fetch(_tikwm()) == tiktok.Media(VIDEO, 14, [])
     assert _fetch(_tikwm({"code": -1, "msg": "Url parsing is failed!"})) is None  # private or deleted
     assert _fetch(_tikwm(status=503)) is None
-    assert _fetch(_tikwm({"code": 0, "data": {"play": "http://cdn.example/v.mp4"}})) is None  # https only
-    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://cdn.example/v.mp4", "size": tiktok.MAX_BYTES + 1}})) is None
+    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://outside.example/file.mp4"}})) is None
+    assert _fetch(_tikwm({"code": 0, "data": {"play": "http://v1.tiktokcdn.com/v.mp4"}})) is None  # https only
+    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/v.mp4", "size": tiktok.MAX_BYTES + 1}})) is None
     big = b"x" * (tiktok.MAX_BYTES + 1)
-    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://cdn.example/v.mp4"}}, file=big)) is None  # no size said: counted
+    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/v.mp4"}}, file=big)) is None  # no size said: counted
     # a slideshow: its photos in order (its "play" is the music), ten at most, a missing one skipped, none: nothing
-    pics = [f"https://cdn.example/p/{i}.jpg" for i in range(12)]
-    got = _fetch(_tikwm({"code": 0, "data": {"play": "https://cdn.example/a.mp3", "images": pics}}))
+    pics = [f"https://v1.tiktokcdn.com/p/{i}.jpg" for i in range(12)]
+    got = _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/a.mp3", "images": pics}}))
     assert got.video is None and got.photos == [f"/p/{i}.jpg".encode() for i in range(tiktok.ALBUM)]
-    got = _fetch(_tikwm({"code": 0, "data": {"images": ["https://cdn.example/p/gone.jpg", "https://cdn.example/p/1.jpg"]}}))
+    got = _fetch(_tikwm({"code": 0, "data": {"images": ["https://v1.tiktokcdn.com/p/gone.jpg", "https://v1.tiktokcdn.com/p/1.jpg"]}}))
     assert got.photos == [b"/p/1.jpg"]
-    assert _fetch(_tikwm({"code": 0, "data": {"images": ["https://cdn.example/p/gone.jpg"]}})) is None
+    assert _fetch(_tikwm({"code": 0, "data": {"images": ["https://v1.tiktokcdn.com/p/gone.jpg"]}})) is None
 
 
 class _Resp:

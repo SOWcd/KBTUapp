@@ -174,3 +174,17 @@ def test_creator_runs_any_clubs_event_as_its_president(env):
     con.execute("UPDATE events SET starts_at = strftime('%s') - 60 WHERE id = 1")
     assert r.get("/api/events/1/report", headers=_as(60)).status_code == 403
     assert r.patch("/api/events/1/report", headers=_as(60), json={"note": "x"}).status_code == 403
+
+
+def test_event_staff_headers_cannot_lend_a_personal_seat(env):
+    c, con, ids = _full_setup(env)
+    con.execute("UPDATE events SET visibility = 'members' WHERE id = 1")
+    con.execute("UPDATE events SET school = 'sam' WHERE id = 2")
+    con.execute("UPDATE events SET seats = 5 WHERE id = 1")
+    assert c.post("/api/events/1/seats", headers=_as(60), json={"add": 1}).status_code == 200
+    for tg, eid in ((60, 1), (65, 2)):
+        path = f"/api/events/{eid}/registration"
+        for headers in (_as(tg, eid), _org(tg, eid)):
+            assert c.post(path, headers=headers, json={}).status_code == 403
+        assert not con.execute("SELECT 1 FROM registrations WHERE event_id = ? AND user_id IN (?, ?)",
+                               (eid, ids["boss"], ids["adm"])).fetchone()

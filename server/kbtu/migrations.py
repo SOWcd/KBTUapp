@@ -2056,4 +2056,50 @@ MIGRATIONS: list[tuple[int, str]] = [
     (202, """CREATE TABLE IF NOT EXISTS appeal_ai_consents (
       user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
       version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;"""),
+    (203, """ALTER TABLE registrations ADD COLUMN phone_shared INTEGER NOT NULL DEFAULT 0;
+    CREATE TRIGGER signup_phone_changed AFTER UPDATE OF phone ON students WHEN old.phone IS NOT new.phone BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
+    END;
+    CREATE TRIGGER signup_phone_unlinked AFTER DELETE ON students BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
+    END;
+    CREATE TABLE retired_tickets (
+        ticket_code TEXT PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE
+    ) STRICT;
+    CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
+    CREATE TABLE door_misses (
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        misses INTEGER NOT NULL,
+        last_at INTEGER NOT NULL,
+        PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+    ALTER TABLE qr_expected ADD COLUMN door_key TEXT;
+    UPDATE qr_expected SET door_key = lower(hex(randomblob(16)));
+    CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
+    CREATE TRIGGER qr_expected_key AFTER INSERT ON qr_expected WHEN new.door_key IS NULL BEGIN
+        UPDATE qr_expected SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
+    UPDATE qr_hand_marks AS h SET who = 'x' || (SELECT x.door_key FROM qr_expected x
+        WHERE x.session_id = h.session_id AND 'x' || x.email = h.who)
+        WHERE EXISTS (SELECT 1 FROM qr_expected x WHERE x.session_id = h.session_id AND 'x' || x.email = h.who);
+    DROP TRIGGER qr_hand_expected_gone;
+    CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
+        DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.door_key;
+    END;"""),
+    (204, """-- Release username-only legacy links without a corroborated name. A later manual confirmation wins.
+    CREATE TEMP TABLE vol_unconfirmed (vol_id INTEGER, user_id INTEGER, PRIMARY KEY (vol_id, user_id));
+    INSERT INTO vol_unconfirmed
+    SELECT t.vol_id, t.user_id FROM vol_ties t JOIN vol_people p ON p.id = t.vol_id
+    LEFT JOIN students s ON s.user_id = t.user_id
+    WHERE NOT expected_name(p.name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name) AND (
+        SELECT json_extract(a.data, '$.auto') FROM audit_log a
+        WHERE a.action = 'vol_link' AND a.target = 'user:' || t.user_id AND json_extract(a.data, '$.vol') = t.vol_id
+        ORDER BY a.id DESC LIMIT 1
+    ) = 'tg';
+    DELETE FROM vol_ties WHERE (vol_id, user_id) IN (SELECT vol_id, user_id FROM vol_unconfirmed)
+        OR EXISTS (SELECT 1 FROM vol_people p WHERE p.id = vol_ties.vol_id AND p.user_id IS NOT NULL AND p.user_id != vol_ties.user_id);
+    UPDATE vol_people SET user_id = NULL WHERE (id, user_id) IN (SELECT vol_id, user_id FROM vol_unconfirmed);
+    DROP TABLE vol_unconfirmed;"""),
 ]

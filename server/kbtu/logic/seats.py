@@ -107,17 +107,19 @@ def chat_start(con, v: Viewer, eid: int) -> str:
 
 def chat_claim(con, token: str, tg_id: int, chat_id: int) -> sqlite3.Row | None:
     """The bot's /start ec_<token> in a group from someone who may run the event: the event, its token spent; else None."""
-    e = one(con, "SELECT * FROM events WHERE chat_token = ?", token)
-    u = one(con, "SELECT id, role FROM users WHERE tg_id = ?", tg_id)
-    if not e or not u or not can(con, Viewer(u["id"], u["role"], True), e["org_id"], "events"):
-        return None
-    # a group another club's event or any chat of the app's list already holds stays theirs; the same club's earlier
-    # event gives its group up to this one
-    if core.chat_owners(con, chat_id) - {e["org_id"]} or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]):
-        return None  # a synced chat too
-    con.execute("UPDATE events SET chat_id = NULL, chat_link = NULL WHERE chat_id = ? AND id != ?", (chat_id, e["id"]))
-    con.execute("UPDATE events SET chat_token = NULL, chat_id = ?, chat_link = NULL WHERE id = ?", (chat_id, e["id"]))
-    return e
+    with tx(con):
+        e = one(con, "SELECT * FROM events WHERE chat_token = ?", token)
+        u = one(con, """SELECT u.id, u.role FROM users u JOIN students s ON s.user_id = u.id
+            WHERE u.tg_id = ? AND u.banned_at IS NULL AND s.manual = 0""", tg_id)
+        if not e or not u or not can(con, Viewer(u["id"], u["role"], True), e["org_id"], "events"):
+            return None
+        # a group another club's event or any chat of the app's list already holds stays theirs; the same club's earlier
+        # event gives its group up to this one
+        if core.chat_owners(con, chat_id) - {e["org_id"]} or one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id IS NOT ?", chat_id, e["org_id"]):
+            return None  # a synced chat too
+        con.execute("UPDATE events SET chat_id = NULL, chat_link = NULL WHERE chat_id = ? AND id != ?", (chat_id, e["id"]))
+        con.execute("UPDATE events SET chat_token = NULL, chat_id = ?, chat_link = NULL WHERE id = ?", (chat_id, e["id"]))
+        return e
 
 
 def chat_join(con, chat_id: int, tg_id: int) -> bool | None:
@@ -315,9 +317,9 @@ def _calendar(lines: list[str], *head: str) -> str:
 
 
 def event_ics(con, eid: int, link: str) -> str:
-    # a school's own event: no viewer here, so none (cal_feed, which knows its reader, has it)
+    # Shared links have no viewer. Restricted events use the personal feed.
     e = one(con, """SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published'
-        AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL""", eid)
+        AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL AND e.visibility = 'public'""", eid)
     if not e or not e["starts_at"]:
         raise ApiError("not_found")
     return _calendar(_vevent(e, link))
@@ -342,7 +344,8 @@ def reset_cal_token(con, v: Viewer) -> None:
 def cal_feed(con, token: str, link) -> str:
     """Everything I go to, from a month ago on: the phone's calendar refreshes it on its own (hourly asked), so a new
     registration shows up and a cancelled one goes; a cancelled event stays, struck through."""
-    u = one(con, "SELECT u.id, u.lang, u.role FROM users u JOIN students s ON s.user_id = u.id WHERE u.cal_token = ?", token) if token else None
+    u = one(con, """SELECT u.id, u.lang, u.role FROM users u JOIN students s ON s.user_id = u.id
+        WHERE u.cal_token = ? AND s.manual = 0 AND u.banned_at IS NULL""", token) if token else None
     if not u:
         raise ApiError("not_found")
     # what the app would show me now: a club I left or was banned from keeps its team-only events to itself, a club the
@@ -518,8 +521,18 @@ def _ticket_code(con, eid: int) -> str:
     code by (event, code) alone; the API and the QR ('KBTU' + code, the smallest QR there is, §4.4) carry the code."""
     while True:
         c = f"{eid}-" + "".join(secrets.choice("23456789ABCDEFGHJKMNPQRSTUVWXYZ") for _ in range(4))
-        if not one(con, "SELECT 1 FROM registrations WHERE ticket_code = ?", c):
+        if not one(con, """SELECT 1 FROM registrations WHERE ticket_code = ?
+                UNION ALL SELECT 1 FROM retired_tickets WHERE ticket_code = ?""", c, c):
             return c
+
+
+def renew_cancelled_ticket(con, eid: int, r: sqlite3.Row) -> None:
+    """A reissued seat starts with a fresh credential and no attendance or phone from the old seat."""
+    if r["status"] == "cancelled":
+        con.execute("INSERT INTO retired_tickets (ticket_code, event_id) SELECT ticket_code, event_id FROM registrations WHERE id = ?", (r["id"],))
+        con.execute("""UPDATE registrations SET ticket_code = ?, phone_shared = 0, checked_in_at = NULL,
+            checked_in_by = NULL, checkin_manual = 0, walk_in = 0 WHERE id = ?""", (_ticket_code(con, eid), r["id"]))
+        con.execute("DELETE FROM reg_age WHERE registration_id = ?", (r["id"],))
 
 
 def notify(con, uid: int, kind: str, ref: str, payload: str = "{}", after: int | None = None) -> None:
@@ -742,10 +755,11 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         hold = core.now() + HOLD if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
+            renew_cancelled_ticket(con, eid, r)
             # signing up again starts a new seat: created_at is its start, so receipts from before it (a removal, a
             # self-cancel) don't count for it (organizing.flagged, the attendee list, the card)
             con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, answers = ?, team_want = NULL, updated_at = ?,
-                created_at = ? WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), core.now(), r["id"]))
+                created_at = ?, phone_shared = ? WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), core.now(), bool(e["needs_phone"]), r["id"]))
         else:
             # someone already in keeps whoever was first (this branch is new rows only); never myself
             # ponytail: one HMAC per member of the club; a stored code if a club ever has thousands
@@ -758,8 +772,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
             if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None
-            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, answers, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con, eid), hold, wait, inviter, int(free), given, core.now(), core.now()))
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, answers, created_at, updated_at, phone_shared)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con, eid), hold, wait, inviter, int(free), given, core.now(), core.now(), bool(e["needs_phone"])))
         if status == "going":
             _remind(con, v.id, e)
     return card(con, v, e)
@@ -773,7 +787,9 @@ def receipt_open(con, v: Viewer, eid: int) -> None:
     nobody looked at yet (§4.3)."""
     need_student(v)
     sweep_holds(con)
-    _receipt_slot(con, v, eid)
+    with tx(con):
+        _receipt_slot(con, v, eid)
+        core.upload_attempt(con, v, "receipt")
 
 
 def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, sqlite3.Row | None]:
@@ -956,6 +972,7 @@ def seat_by_hand(con, uid: int, eid: int) -> str:
         if r and r["status"] == "going":
             return "already going"
         if r:
+            renew_cancelled_ticket(con, eid, r)
             con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL,
                 updated_at = ? WHERE id = ?""", (core.now(), r["id"]))
             rid = r["id"]

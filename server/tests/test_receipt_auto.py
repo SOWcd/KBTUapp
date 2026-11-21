@@ -268,12 +268,13 @@ def test_deleted_human_reviewer_does_not_become_app(paid, monkeypatch):
     assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
 
 
-def test_migration_does_not_backfill_old_receipts(paid, monkeypatch):
+def test_migration_does_not_backfill_old_receipts(paid, monkeypatch, before_door_migration):
     c, con, eid, (tg, _, _), now = paid
     _go(c, eid, tg)
     row = _send(paid, monkeypatch, tg, None)
     # A legacy human review whose reviewer was deleted is indistinguishable in the old columns.
     con.execute("UPDATE receipts SET reviewed_at = ? WHERE id = ?", (now, row["id"]))
+    before_door_migration(con)
     con.execute("DROP TABLE receipt_auto_checks")
     con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
     con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's

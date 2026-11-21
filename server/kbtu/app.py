@@ -20,6 +20,7 @@ import sqlite3
 import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated, Any
 
 import anyio
@@ -100,17 +101,18 @@ Con = Annotated[sqlite3.Connection, Depends(conn)]
 
 # the creator's whole Studio of a club (app.viewer, X-Staff-Org): what it never lends (the club's end, its hand-over,
 # his own joining, following, tickets and receipts: those are his as himself), and the reads its log leaves out
-STUDIO_NOT_LENT = frozenset({("DELETE", "/api/orgs/{oid}"), ("POST", "/api/orgs/{oid}/transfer"), ("POST", "/api/orgs/{oid}/join-requests"),
-                             ("DELETE", "/api/orgs/{oid}/join-requests/mine"), ("PUT", "/api/orgs/{oid}/subscription"), ("DELETE", "/api/orgs/{oid}/subscription"),
-                             ("POST", "/api/events/{eid}/receipt"), ("POST", "/api/events/{eid}/registration"), ("DELETE", "/api/events/{eid}/registration"),
-                             # his own on an event, as any student: saved, a team of his, volunteering, a seat, a rating, a friend invited
-                             ("PUT", "/api/events/{eid}/saved"), ("DELETE", "/api/events/{eid}/saved"),
-                             ("POST", "/api/events/{eid}/team"), ("DELETE", "/api/events/{eid}/team"), ("PATCH", "/api/events/{eid}/team"),
-                             ("POST", "/api/events/{eid}/team/join"), ("POST", "/api/events/{eid}/team/link"), ("DELETE", "/api/events/{eid}/team/members/{uid}"),
-                             ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
-                             ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
-                             ("POST", "/api/events/{eid}/seats"), ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"),
-                             ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
+STUDIO_NOT_LENT = frozenset({("DELETE", "/api/orgs/{oid}"), ("POST", "/api/orgs/{oid}/transfer"),
+                             ("POST", "/api/orgs/{oid}/join-requests"), ("DELETE", "/api/orgs/{oid}/join-requests/mine"),
+                             ("PUT", "/api/orgs/{oid}/subscription"), ("DELETE", "/api/orgs/{oid}/subscription"),
+                             ("POST", "/api/events/{eid}/seats")})
+PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST", "/api/events/{eid}/registration"), ("DELETE", "/api/events/{eid}/registration"),
+                                   ("PUT", "/api/events/{eid}/saved"), ("DELETE", "/api/events/{eid}/saved"),
+                                   ("POST", "/api/events/{eid}/team"), ("DELETE", "/api/events/{eid}/team"), ("PATCH", "/api/events/{eid}/team"),
+                                   ("POST", "/api/events/{eid}/team/join"), ("POST", "/api/events/{eid}/team/link"), ("DELETE", "/api/events/{eid}/team/members/{uid}"),
+                                   ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
+                                   ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
+                                   ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/santa/wish"),
+                                   ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
 STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
 MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 
@@ -126,8 +128,6 @@ def _staff_event_id(con, request: Request, route: tuple[str, str]) -> str:
 
 def _studio_route(con, request: Request, route: tuple[str, str], org: int, eid: str) -> bool:
     """A route of this club's Studio: the club's own or one of its events'."""
-    if route in STUDIO_NOT_LENT:
-        return False
     if route[1].startswith("/api/orgs/{oid}"):
         return str(request.path_params.get("oid")) == str(org)
     return (route[1].startswith("/api/events/{eid}") or route == ("PUT", MATCH_SCORE_ROUTE)) and eid.isascii() and eid.isdigit() and len(eid) < 12 \
@@ -167,6 +167,8 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         yield v
         return
     route = (request.method, request.scope["route"].path)
+    if route in PERSONAL_EVENT_ROUTES or oid is not None and route in STUDIO_NOT_LENT:
+        raise ApiError("forbidden", "staff")
     eid = _staff_event_id(con, request, route) if v.role == "admin" else ""
     if oid is not None:
         # Admin → "an event for a club": the app's admin (never a moderator) makes a club's draft and uploads its cover
@@ -335,15 +337,15 @@ def board_writer(request: Request, v: Board, con: Con) -> Viewer:
     """Writing on the forum, asking the assistant: someone on an earlier policy is not refused (_eu_only). BOARD=staff
     too: with the forum channel on, the assistant's providers are the policy's in force, so a staff
     member on an earlier version stays on the EU host as a student would."""
-    if earlier_policy(con, request.app.state.policy, v.id):
+    if not current_ai_policy(con, request.app.state.policy, v.id):
         _eu_only()
     return v
 
 
-def earlier_policy(con, policy: str, uid: int) -> bool:
-    """This person's student row agreed to an earlier policy than the one in force (staff's own rows never)."""
+def current_ai_policy(con, policy: str, uid: int) -> bool:
+    """Whether the text author may use every provider named by the current policy."""
     s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", uid)
-    return bool(s) and not logic.account.on_policy(s[0], policy) and s[0] not in ("staff", "admin")
+    return bool(s) and (logic.account.on_policy(s[0], policy) or s[0] in ("staff", "admin"))
 
 
 BoardWrite = Annotated[Viewer, Depends(board_writer)]
@@ -513,7 +515,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         (off: the operator's kill switch), the assistant open to them, the policy that names Google in force (ai_on) and
         agreed to by them (an earlier version stays on the EU host, board_writer). eu_ai checks the host list again."""
         return bool(cfg.gemini_key) and cfg.assist_lead in ("", "google") and ai_on and bool(v.student) \
-            and board_on(app.state.cfg, v) and not earlier_policy(con, app.state.policy, v.id)
+            and board_on(app.state.cfg, v) and current_ai_policy(con, app.state.policy, v.id)
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
@@ -1268,8 +1270,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/users/{uid}")
     def person(uid: int, con: Con, v: Me):
         out = logic.person(con, v, uid)
-        if cfg.forum and v.role in ("admin", "moderator"):  # the forum's skills, where its people can see them
-            out["forum"] = logic.my_forum(con, logic.Viewer(uid, "user", True))
+        if cfg.forum and v.role in ("admin", "moderator") and (profile := logic.forum.public_profile(con, v, uid)):
+            out["forum"] = profile
         return out
 
     # ------------------------------------------------------------ Studio
@@ -1756,8 +1758,23 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         if not logic.organizes(con, v):  # before the work, not only after it
             raise ApiError("forbidden")
-        saved = await _picture(media.save, data, photos)
-        return await run_in_threadpool(logic.add_photo, con, v, saved)  # a write: its lock wait off the event loop
+        await run_in_threadpool(logic.core.upload_attempt, con, v, "cover")
+        with TemporaryDirectory(dir=photos.parent) as staged:
+            saved = await _picture(media.save, data, Path(staged))
+
+            def keep() -> dict:
+                with db.tx(con):
+                    cover = logic.add_photo(con, v, saved)
+                    gone = logic.account.trim_covers(con, v.id, cover["id"])
+                    src, dst = Path(staged) / saved["path"], photos / saved["path"]
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    for variant in src.parent.glob(f"{src.name}.*"):
+                        variant.replace(dst.parent / variant.name)
+                if gone:
+                    with db.tx(con):
+                        media.drop(photos, [path for path in gone if logic.photo_free(con, path)])
+                return cover
+            return await run_in_threadpool(keep)
 
     # an event's video (video.py): the size first, then the file in pieces at their offsets, then "done"; a piece sent
     # again after a lost answer is told where the file stands instead of being added twice
@@ -1772,24 +1789,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         x = logic.my_video(con, v, vid)
         if x["status"] != "uploading":
             raise ApiError("conflict")
-        f = uploads / str(vid)
-        have = f.stat().st_size if f.exists() else 0
-        if at != have:
-            return {"at": have}
-        data = bytearray()
-        async for chunk in request.stream():
-            data += chunk
-            if len(data) > 2 * video.PIECE or have + len(data) > x["size"]:
-                raise ApiError("bad_input", "too_big")
-        uploads.mkdir(exist_ok=True)
-        with f.open("ab") as out:
-            out.write(data)
-        return {"at": have + len(data)}
+        path = uploads / str(vid)
+        data = await read_upload(request, min(2 * video.PIECE, x["size"]))
+        return await run_in_threadpool(logic.queues.video_part, con, v, vid, path, at, data)
 
     @app.post("/api/videos/{vid}/done")
     def video_done(vid: int, con: Con, v: Me):
-        f = uploads / str(vid)
-        return logic.video_uploaded(con, v, vid, f.stat().st_size if f.exists() else 0)
+        return logic.video_uploaded(con, v, vid, uploads / str(vid))
 
     @app.get("/api/videos/{vid}")
     def video_state(vid: int, con: Con, v: Me):
@@ -1804,7 +1810,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/me/photo")
     async def upload_my_photo(request: Request, con: Con, v: Me):
         data = await read_upload(request)
-        logic.need_student(v)  # before the work, not only after it
+        logic.need_student(v)
+        await run_in_threadpool(logic.core.upload_attempt, con, v, "avatar")
         saved = await _picture(media.save, data, photos)
 
         def done() -> dict:
@@ -1865,7 +1872,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
                 return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ?", body["id"])
         a = await run_in_threadpool(file_it)
-        if a and await screen(f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
+        if a and await screen(con, a["user_id"], f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
             await run_in_threadpool(lambda: logic.hide_ask(con, body["id"], "reports", made=(a["user_id"], a["created_at"])))
 
     async def eu_ai(con, msgs: list[dict], whole: float = 30, lead: str | None = None, **kw) -> str:
@@ -1974,7 +1981,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         Cloudflare for the assistant's questions (ai_on) and the docs file has vectors to compare it with; 3 s at most in
         all, else None: the words' search alone."""
         ix = logic.assistant.DOCS
-        if cfg.docs != "hybrid" or not ai_on or "cf" not in assist_only or not (cfg.cf_account_id and cfg.cf_ai_token) \
+        if cfg.docs != "hybrid" or "cf" not in _ai_only(assist_only) or not (cfg.cf_account_id and cfg.cf_ai_token) \
                 or not ix or not await run_in_threadpool(ix.ready) or not ix.vectors:
             return None
         try:
@@ -2530,7 +2537,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 # a badge's variant: its own card, "Get it"; for many, "pass it on"
                 kind = ("gb" if uses == 1 else "gm") if code in logic.BADGE_OF else "gl"
             elif kind == "rc":  # a club's open recruitment round (casting.py): anyone may pass it on
-                r = logic.one(con, "SELECT r.closes_at, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.org_id = ? AND r.status = 'open' AND r.closes_at > ?",
+                r = logic.one(con, "SELECT r.closes_at, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.org_id = ? AND o.status = 'active' AND r.status = 'open' AND r.closes_at > ?",
                               ref, logic.now())
                 if not r:
                     raise ApiError("closed")
@@ -2587,8 +2594,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ the forum: F1 find people (logic/forum.py)
 
-    async def screen(text: str) -> bool | None:
-        return await ai.screen(cfg, ai_http(), text, only=screen_only)
+    async def screen(con, author: int, text: str) -> bool | None:
+        # Reports can resubmit someone else's words. Only their own agreement covers those words.
+        current = current_ai_policy(con, app.state.policy, author)
+        return await ai.screen(cfg, ai_http(), text, only=screen_only if current else ai.EU_ONLY)
 
     @app.get("/api/forum/me")
     def forum_me(con: Con, v: Forum):
@@ -2609,7 +2618,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         found = logic.skill_lookup(con, v, body.get("name"), body.get("force") is True)
         if "name" not in found:
             return found
-        if await screen(found["name"]) is False:
+        if await screen(con, v.id, found["name"]) is False:
             raise ApiError("bad_input", "ai")
         return {"skill": await run_in_threadpool(logic.add_skill, con, v, found["name"])}
 
@@ -2623,7 +2632,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum/asks")
     async def forum_new_ask(con: Con, v: Forum, body: dict = Body(...)):
-        verdict = await screen(f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
+        verdict = await screen(con, v.id, f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
         return await run_in_threadpool(logic.create_ask, con, v, body, verdict)
 
     # ------------------------------------------------------------ the forum channel (logic/fchannel.py): posts from the app
@@ -2643,8 +2652,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
-        pid = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked
-        verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0], **_ai_eu())
+        pid, text = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked
+        verdict = await ai.screen_post(cfg, ai_http(), text, **_ai_eu())
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
             raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
@@ -2715,9 +2724,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum-posts/{pid}/replies")
     async def fchan_reply(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
-        rid = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
-        verdict = await ai.screen_reply(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_replies WHERE id = ?", rid)[0], **_ai_eu())
-        return await run_in_threadpool(F.reply_settle, con, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
+        rid, text = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
+        verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
+        return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
 
     @app.delete("/api/forum-replies/{rid}", status_code=204)
     def fchan_reply_drop(rid: int, con: Con, v: FChan):
@@ -2788,7 +2797,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def subject_join(sid: str, con: Con, v: SubjWrite, body: dict = Body(default={})):
         note = logic.subjects.note_of(body)
         s = await run_in_threadpool(logic.subjects.reserve, con, v, cfg.subjects_file, sid)  # a real subject, the hour's count taken
-        verdict = await screen(note) if note else True  # only then the AI; no answer: held for a moderator
+        verdict = await screen(con, v.id, note) if note else True  # only then the AI; no answer: held for a moderator
         return await run_in_threadpool(logic.subjects.join, con, v, cfg.subjects_file, s, note, verdict)
 
     @app.delete("/api/subjects/{sid}/me", status_code=204)

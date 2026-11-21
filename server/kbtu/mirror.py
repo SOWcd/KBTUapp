@@ -350,7 +350,7 @@ _THUMB = re.compile(r"tgme_widget_message_video_thumb\"[^>]*?background-image:ur
 VIDEO_TTL, VIDEO_PER_MIN, PAGE_MAX = 300, 20, 256 * 1024
 # ponytail: per-worker memory (each uvicorn worker resolves on its own, a per-user limit is per worker); fine at our
 # size, a shared table if it ever matters
-_videos: dict[int, tuple[float, dict]] = {}
+_videos: dict[str, tuple[float, dict]] = {}
 _asks: dict[int, list[float]] = {}
 
 
@@ -381,14 +381,19 @@ def _asked(uid: int, t: float) -> None:
     _asks[uid] = [*recent, t]
 
 
+def _video_url(con, pid: int) -> str | None:
+    p = one(con, """SELECT p.tg_url FROM posts p JOIN orgs o ON o.id = p.org_id
+        WHERE p.id = ? AND p.tg_media = 'video' AND p.hidden_at IS NULL AND o.status != 'hidden'""", pid)
+    return video_page(p[0]) if p else None
+
+
 async def video(con, uid: int, pid: int, http: httpx.AsyncClient) -> dict:
-    """A mirrored video post's playable file: {src, poster}. not_found: no such video post, or Telegram didn't give one."""
-    p = one(con, "SELECT tg_url, tg_media FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
-    url = video_page(p["tg_url"]) if p and p["tg_media"] == "video" else None
+    """A visible mirrored video's playable file and poster."""
+    url = _video_url(con, pid)
     if not url:
         raise ApiError("not_found")
     t = time.monotonic()
-    if (hit := _videos.get(pid)) and hit[0] > t:
+    if (hit := _videos.get(url)) and hit[0] > t:
         return hit[1]
     _asked(uid, t)
     try:
@@ -402,9 +407,9 @@ async def video(con, uid: int, pid: int, http: httpx.AsyncClient) -> dict:
     except httpx.HTTPError:
         ok = False
     found = parse_video(page.decode("utf-8", "replace")) if ok else None
-    if not found:
+    if not found or _video_url(con, pid) != url:
         raise ApiError("not_found")
     if len(_videos) > 500:
         _videos.clear()  # stale tokens only; the next taps fetch again
-    _videos[pid] = (t + VIDEO_TTL, found)
+    _videos[url] = (t + VIDEO_TTL, found)
     return found

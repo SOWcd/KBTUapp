@@ -153,7 +153,7 @@ export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'p
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }
 /** A club meeting's person for its Head+ (§2b): the answer ("no" with why), whether they came. */
 export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none'; note: string | null; came: boolean;
-  probation: boolean }
+  probation?: boolean }
 
 /** "Bring a friend": a friend and where they stand with the event (going only if they show where they go). */
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
@@ -786,7 +786,7 @@ export interface DoneRow { id: Id; action: string; target: string /* the audit's
 export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }
 
 export interface PersonCard extends PersonRef {
-  forum?: ForumMe;              // their skills and "open to projects", for those who see the forum
+  forum?: Pick<ForumMe, 'skills' | 'open'>;              // their skills and "open to projects", for those who see the forum
   no: number | null;            // the card number (as Me.no)
   course: number | null;
   master?: boolean; // the course is a master's year

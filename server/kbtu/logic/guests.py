@@ -56,6 +56,7 @@ def _ticket(con, eid: int, uid: int, adult: int | None) -> None:
     else:
         rid = r["id"]
         if r["status"] != "going":
+            seats.renew_cancelled_ticket(con, eid, r)
             con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL,
                 hold_until = NULL, waitlisted_at = NULL, updated_at = ? WHERE id = ?""", (t, rid))
     if adult is not None:
@@ -138,6 +139,13 @@ def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int
                 if r["user_id"] not in matched:
                     seats._seat_out(con, r, "removed")
     return registered, pending, offline, bad
+
+
+def erase_pending(con, uid: int) -> None:
+    for g in rows(con, """SELECT g.*, s.last_name, s.last_lat FROM students s JOIN event_guests g ON g.student_id = s.student_id
+            WHERE s.user_id = ? AND s.manual = 0""", uid):
+        if _proves_surname(g["surname_hash"], g["event_id"], g["student_id"], _surnames(g)):
+            con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))
 
 
 def claim(con, uid: int) -> None:

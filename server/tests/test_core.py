@@ -1416,6 +1416,11 @@ def test_calendar_file(env):
     con.execute("UPDATE events SET place = '', online = 'https://zoom.us/j/123?pwd=secret' WHERE id = 1")
     r = c.get(link)
     assert "LOCATION:Online" in r.text and "DESCRIPTION:IT Club\\, KBTU\\nhttps://t.me/" in r.text and "zoom" not in r.text
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (ali["id"],))
+    for audience in ("members", "leaders"):
+        con.execute("UPDATE events SET visibility = ? WHERE id = 1", (audience,))
+        assert c.get(link).status_code == 404
+        assert c.get("/api/events/1", headers=A).json()["my"]["ics"] is None
     assert c.get(link.replace("events/1/", "events/2/")).status_code == 404               # the signature is per event
     assert c.get("/api/events/1/ics").status_code == 404
     assert c.get("/api/events/1/ics?k=%C3%A9").status_code == 404                             # non-ASCII: refused, not a 500
@@ -1849,6 +1854,12 @@ def test_calendar_feed(env):
     assert "<x-y>" not in calpage.render("d", '"><x-y>', "en", "") and {len(x) for x in texts.CAL_PAGE.values()} == {6}  # all escaped
     assert "@media (prefers-reduced-motion:reduce){*,::after{animation:none!important;transition:none!important}" in calpage.CSS  # no motion asked: none
     assert c.get("/cal/nobody.ics").status_code == 404 and c.get("/cal/nobody").status_code == 404
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ali["id"],))
+    assert c.get(f"/cal/{token}.ics").status_code == c.get(f"/cal/{token}").status_code == 404
+    con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ali["id"],))
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (ali["id"],))
+    assert c.get(f"/cal/{token}.ics").status_code == 404
+    con.execute("UPDATE students SET manual = 0 WHERE user_id = ?", (ali["id"],))
     # a leaked address can be reset: the old one is dead at once, the next tap makes another
     old = c.post("/api/me/calendar", headers=A).json()["page"].rsplit("/", 1)[1]
     assert c.delete("/api/me/calendar", headers=A).status_code == 204
@@ -2016,7 +2027,14 @@ def test_chats_directory(env, monkeypatch):
     assert add(title="Talk", url="https://t.me/talk", kind="forum").json()["kind"] == "forum"
     assert add(url="https://t.me/nameless").status_code == 400                                 # no title anywhere
     mine = add(title="SITE 2nd year", url="https://t.me/+AbCdEf123", school="SITE", course=2).json()
-    add(title="SITE 4th year", url="https://t.me/+Zz9", school="SITE", course=4)
+    add(title="SITE 4th year", url="https://t.me/+Zz901234", school="SITE", course=4)
+    old = add(title="Legacy invite", url="https://t.me/joinchat/MixedCase12").json()
+    assert old["url"] == "https://t.me/+MixedCase12"
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE chats SET url = 'https://t.me/joinchat/MixedCase12' WHERE id = ?", (old["id"],))
+    guest = c.get("/api/chats", headers=tma(62)).json()
+    assert all(x["id"] != old["id"] for x in guest["forYou"] + guest["all"])
+    con.execute("DELETE FROM chats WHERE id = ?", (old["id"],))
     got = c.get("/api/chats", headers=A).json()
     assert [x["id"] for x in got["forYou"]] == [mine["id"], everyone["id"], got["forYou"][2]["id"]] and len(got["all"]) == 4
     assert c.post(f"/api/chats/{mine['id']}/opened", headers=A).status_code == 204
@@ -2451,7 +2469,8 @@ def test_meetings(env):
     assert c.get(f"/api/events/{ev['id']}/meeting", headers=M2).status_code == 403                  # Head+ only
     ans = {a["person"]["id"]: a for a in c.get(f"/api/events/{ev['id']}/meeting", headers=H).json()}
     assert (ans[mem["id"]]["answer"], ans[mem["id"]]["note"]) == ("no", "Exam at 6") and ans[mem2["id"]]["answer"] == "yes"
-    assert ans[pres["id"]]["answer"] == "none"
+    assert ans[pres["id"]]["answer"] == "none" and "probation" not in ans[pres["id"]]
+    assert ans[mem["id"]]["probation"] and not ans[head["id"]]["probation"]
     door = {d["person"]["id"] for d in c.get(f"/api/events/{ev['id']}/door", headers=H).json()}
     assert door == {pres["id"], head["id"], mem["id"], mem2["id"]}                                    # everyone expected
     # it happens: mem said no but came; mem2 said yes and didn't; the door lets mem in by name
@@ -2859,6 +2878,7 @@ def test_deadline_and_free_first(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'head', 0 FROM users WHERE tg_id = 21")
     con.execute("UPDATE students SET course = 1, student_id = printf('%02dB%07d', ?, user_id) WHERE user_id IN (SELECT id FROM users WHERE tg_id IN (10, 11, 13))",
                 (INTAKE % 100,))  # ann, bob, dan: this year's intake (the ID says the year, audit M3)
+    con.execute("UPDATE students SET ms_oid = 'oid' || user_id, ms_profile = json_object('employeeId', student_id)")
     # migration 58 (M3): a year typed in since the portal closed becomes the ID's; the portal's own stays (a repeater)
     con.execute("UPDATE students SET course = 1, consent_at = 1792350000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 12)")
     con.execute("UPDATE students SET course = 1, consent_at = 1792000000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 13)")
@@ -2913,11 +2933,7 @@ def test_deadline_and_free_first(env):
 
 
 def test_free_first_needs_a_new_ms_account(env):
-    """Audit finding 2: with MS_AGE_CUTOFF=06-01 a free 1st-year seat also needs the Microsoft account made on or after
-    June 1 of the academic year (KBTU makes the intake's accounts that summer); an older one pays like anyone, keeping
-    everything else; an unknown date (no ms_profile, or none in it) keeps the course alone. Unset (the default): the
-    date is only recorded, nobody is refused. The event sheet's "Go free" says the same; Admin's stats count the
-    confirmed students by account month (counts only), to check the dates before turning it on."""
+    """A typed number alone never earns a free seat. A configured intake date can corroborate the course."""
     c, cfg = env
     for uid, name in ((20, "pres"), (10, "old"), (11, "new"), (12, "unk"), (13, "nodate")):
         login(c, uid, name)
@@ -2932,19 +2948,19 @@ def test_free_first_needs_a_new_ms_account(env):
         con.execute("UPDATE students SET manual = 0, ms_oid = ?, ms_profile = ? WHERE user_id = (SELECT id FROM users WHERE tg_id = ?)",
                     (f"oid{tg}", prof and json.dumps(prof), tg))
     me = lambda: [c.get("/api/me", headers=tma(t)).json()["student"]["freeFirst"] for t in (10, 11, 12, 13)]  # noqa: E731
-    assert me() == [True] * 4                                                              # off: recorded only
+    assert me() == [False] * 4  # no configured intake date or corroborated directory ID
     with pytest.raises(SystemExit):
         config._month_day("6-1")
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}), ms_age_cutoff=config._month_day("06-01"))))
     st = c.get("/api/admin/stats", headers=tma(20)).json()
     assert (st["msCutoff"], st["msMonths"][f"{INTAKE}-05"], st["msMonths"][f"{INTAKE}-06"], st["msMonths"][""] >= 2) == ("06-01", 1, 1, True)
-    assert me() == [False, True, True, True]
+    assert me() == [False, True, False, False]
     start = int(time.time()) + 7200
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Gala", "place": "Hall", "startsAt": start, "emoji": "laptop_3d",
                  "color": "#3B6BFF", "seats": 10, "price": 2000, "payToName": "Alikhan S.", "payPhone": "87071234567", "freeFirst": 5}).json()["id"]
     c.post(f"/api/events/{eid}/publish", headers=tma(20))
     got = [c.post(f"/api/events/{eid}/registration", headers=tma(t), json={}).json()["my"] for t in (10, 11, 12, 13)]
-    assert [(m["status"], m["free"]) for m in got] == [("hold", False), ("going", True), ("going", True), ("going", True)]
+    assert [(m["status"], m["free"]) for m in got] == [("hold", False), ("going", True), ("hold", False), ("hold", False)]
     logic.core.MS_AGE_CUTOFF = None  # a module global (app.py sets it): not into the next test
 
 
@@ -3120,6 +3136,11 @@ def test_team_two(env):
     assert (q["by"]["id"], q["ban"], q["note"]) == (uid[22], True, "spam")
     ask = con.execute("SELECT ref, user_id FROM bot_outbox WHERE kind = 'removal_ask' AND ref = ?", (f"rm:{q['id']}",)).fetchone()
     assert "and ban them" in bot._render(con, {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": ask[1]})[0]
+    notice = {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": uid[21]}
+    assert bot._render(con, notice)
+    con.execute("UPDATE org_members SET role = 'member' WHERE org_id = 1 AND user_id = ?", (uid[21],))
+    assert bot._render(con, notice) is None
+    con.execute("UPDATE org_members SET role = 'vice' WHERE org_id = 1 AND user_id = ?", (uid[21],))
     assert c.post(f"/api/removals/{q['id']}", headers=tma(22), json={"approve": True}).status_code == 403
     c.post(f"/api/removals/{q['id']}", headers=tma(20), json={"approve": False})
     assert member(20, 12)["role"] == "member"                                                         # kept
@@ -4833,7 +4854,7 @@ def test_app_team(env):
 def test_profile_privacy(env, monkeypatch):
     """Audit M2: a stranger sees the card, bio and achievements but not clubs, past roles, event badges or a club's
     badge that came by itself, and at most PROFILES_A_DAY profiles a day (the same one again is free); friends,
-    clubmates and moderators see it all and are never counted."""
+    clubmates see it all and are never counted."""
     c, cfg = env
     ann, bob, cat, dan, eve = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"), (14, "eve")))
     con = db.connect(cfg.db_path)
@@ -4849,7 +4870,7 @@ def test_profile_privacy(env, monkeypatch):
     con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (min(ann, bob), max(ann, bob)))
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (eve,))
     full = lambda tg: c.get(f"/api/users/{ann}", headers=tma(tg)).json()  # noqa: E731
-    for tg in (10, 11, 12, 14):  # herself, a friend, a clubmate, a moderator
+    for tg in (10, 11, 12):  # herself, a friend, a clubmate
         p = full(tg)
         assert {m["org"]["id"] for m in p["clubs"]} == {1, 2} and [h["org"]["id"] for h in p["past"]] == [3] and "limited" not in p
         assert [b["eventId"] for b in p["awards"]["badges"]] == [9] and p["shelf"] == ["b9"] and p["skin"] == 2
@@ -4865,10 +4886,12 @@ def test_profile_privacy(env, monkeypatch):
     con.execute("INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'first_in', 1, 1000)", (ann,))
     assert all(a["at"] is None for a in full(13)["awards"]["achievements"])                            # a level's date names a check-in
     assert any(a["at"] for a in full(11)["awards"]["achievements"])
-    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (eve,))
-    assert "limited" not in full(14)                                                                   # an admin sees it all, uncounted
+    for role in ("moderator", "admin"):
+        con.execute("UPDATE users SET role = ? WHERE id = ?", (role, eve))
+        staff = full(14)
+        assert staff["limited"] and not staff["clubs"] and not staff["past"] and not staff["awards"]["badges"]
     assert c.get("/api/users/999999", headers=tma(13)).status_code == 404                             # nobody there: not counted
-    assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(dan, ann)]  # only the stranger counts
+    assert set(map(tuple, con.execute("SELECT viewer_id, user_id FROM profile_views"))) == {(dan, ann), (eve, ann)}
     monkeypatch.setattr(logic.profiles, "PROFILES_A_DAY", 2)
     assert c.get(f"/api/users/{ann}", headers=tma(13)).status_code == 200                              # the same one again: free
     assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
@@ -5377,6 +5400,8 @@ def test_channel_video_own_player(env, monkeypatch):
 
     def telegram(request: httpx.Request) -> httpx.Response:
         asked.append(str(request.url))
+        if request.url.path == "/mic_news/446":
+            con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 1")
         if request.url.path == "/mic_news/444":
             return httpx.Response(200, text='<video src="https://evil.example/file/v.mp4">')  # not Telegram's CDN
         if request.url.path == "/mic_news/445":
@@ -5390,6 +5415,9 @@ def test_channel_video_own_player(env, monkeypatch):
     assert c.get("/api/posts/1/video", headers=H).json() == {"src": "https://cdn1.telesco.pe/file/v.mp4?token=a&b=2",
                                                              "poster": "https://cdn4.telesco.pe/file/p.jpg?a=1"}
     assert c.get("/api/posts/1/video", headers=H).status_code == 200 and asked == ["https://t.me/mic_news/442?embed=1"]  # cached
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 1")
+    assert c.get("/api/posts/1/video", headers=H).status_code == 404 and len(asked) == 1
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 1")
     for pid in (2, 3, 99):                                                                  # a file, not t.me, no such post
         assert c.get(f"/api/posts/{pid}/video", headers=H).status_code == 404
     assert c.get("/api/posts/4/video", headers=H).status_code == 404 and len(asked) == 2      # only a CDN file plays
@@ -5399,6 +5427,11 @@ def test_channel_video_own_player(env, monkeypatch):
     assert mirror.parse_video("<p>Telegram changed the page</p>") is None
     monkeypatch.setattr(mirror, "VIDEO_PER_MIN", 3)
     assert c.get("/api/posts/4/video", headers=H).status_code == 429                         # a user's taps, a minute
+    monkeypatch.setattr(mirror, "VIDEO_PER_MIN", 20)
+    con.execute("UPDATE posts SET tg_url = 'https://t.me/mic_news/446' WHERE id = 1")
+    assert c.get("/api/posts/1/video", headers=H).status_code == 404
+    assert asked[-1] == "https://t.me/mic_news/446?embed=1"
+
 
 
 def test_userbot_reads_telethon_messages(env):
@@ -6444,7 +6477,7 @@ def test_chat_avatars_on_disk(env, monkeypatch):
     assert tuple(row)[:3] == ("Jam News", "Every Friday", 77) and row[3] not in (first, second) and on_disk(row[3]) and not on_disk(second)
 
 
-def test_paths_no_test_ran(env):
+def test_paths_no_test_ran(env, media_dns):
     """What a trace of the whole suite showed no test running: a round's settings changed while it's live and an
     application taken back; a friend request taken back; a volunteer leaving; past events (a hidden club's left out);
     a club tag deleted; the roster's e-mails; a chat's t.me page read."""
@@ -6510,7 +6543,7 @@ def test_paths_no_test_ran(env):
     page = ('<meta property="og:title" content="Chess &amp; Co"><meta property="og:description" content="Fridays at 6">'
             '<meta property="og:image" content="https://cdn4.telesco.pe/file/abc.jpg"><div class="tgme_page_extra">1 204 subscribers</div>')
     def handler(r):
-        return httpx.Response(200, content=b"IMG") if "telesco.pe" in str(r.url) else httpx.Response(200, text=page)
+        return httpx.Response(200, content=b"IMG") if "telesco.pe" in r.headers["Host"] else httpx.Response(200, text=page)
     async def peek(text=None):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler if text is None else (lambda r: httpx.Response(200, text=text)))) as http:
             return await media.chat_peek(http, "https://t.me/chess_co")
@@ -6563,6 +6596,9 @@ def test_forum_find_people(env, monkeypatch):
     con.execute("INSERT INTO user_skills (user_id, skill_id) VALUES (?, ?)", (guest, web["id"]))
     logic.set_my_forum(con, mod, {"open": True, "pings": True})
     found = {x["person"]["id"] for x in logic.search_people(con, stu, web["id"])}
+    profile = c.get(f"/api/users/{people['bob'].id}", headers=M).json()["forum"]
+    assert profile == {"skills": [{"id": web["id"], "name": "web"}], "open": True}
+    assert "forum" not in c.get(f"/api/users/{people['cat'].id}", headers=M).json()
     want = {people[n].id for n in ("bob", "eve", "fay", "gus", "hal", "ivy", "jon")}
     assert found == want                                                                             # not cat, dmp, the guest, the moderator
 
@@ -6628,8 +6664,13 @@ def test_forum_find_people(env, monkeypatch):
     con.execute("UPDATE users SET created_at = created_at - 15 * 86400")
     monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=None))
     assert rep(hs[0]) == 204 and logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"  # no AI: a moderator's
-    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
-    assert rep(hs[1]) == 204
+    con.execute("UPDATE students SET consent_version = ? WHERE user_id != ?", (c.app.state.policy, mod.id))
+    screened = []
+    async def rescreen(*args, only):
+        screened.append(only)
+        return False
+    monkeypatch.setattr(ai, "screen", rescreen)
+    assert rep(hs[1]) == 204 and screened == [ai.EU_ONLY]
     assert tuple(con.execute("SELECT status, why FROM asks WHERE id = ?", (ask["id"],)).fetchone()) == ("hidden", "reports")
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (mod.id,)).fetchone()  # the author is told
 
@@ -7010,7 +7051,7 @@ def test_forum_founder_only(env):
     assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT
 
 
-def test_userpic_copy(env):
+def test_userpic_copy(env, media_dns):
     """The Telegram photo is served from /media once the bot copied it; a new t.me photo goes back to t.me until its
     own copy, and the old copy leaves the disk."""
     import asyncio
@@ -7047,7 +7088,7 @@ def test_userpic_copy(env):
     assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()
 
 
-def test_userpic_refetch(env, monkeypatch):
+def test_userpic_refetch(env, monkeypatch, media_dns):
     import io
     import httpx
     from PIL import Image
@@ -7162,7 +7203,7 @@ def test_qr_checkin_edges(env, monkeypatch):
     c, cfg = env
     login(c, 1, "ann")
     con = db.connect(cfg.db_path)
-    sid = checkin.new(con, "Initiation", [{"email": "ann.home@gmail.com", "name": "=HYPERLINK(1)", "studentId": "24Bann",
+    sid = checkin.new(con, "Initiation", [{"email": "ann.home@gmail.com", "name": "=Ann Testov", "studentId": "24Bann",
                                             "phone": "+7 (700) 000-00-00"}], _club_runs(c, con, 9, "dana"))
     k = _paired(c, 9)
     p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
@@ -7176,7 +7217,7 @@ def test_qr_checkin_edges(env, monkeypatch):
     import csv
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
     assert [r[0] for r in rows_[1:]] == ["came", "scanned, not signed in", "scanned, not signed in"]   # by ID: not absent
-    assert (rows_[1][1], rows_[1][10]) == ("'=HYPERLINK(1)", "'+7 (700) 000-00-00")     # no formulas in Excel
+    assert (rows_[1][1], rows_[1][10]) == ("'=Ann Testov", "'+7 (700) 000-00-00")     # no formulas in Excel
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 200       # had a mark: may come back
     uid2, uid4 = (c.get("/api/me", headers=tma(u)).json()["id"] for u in (2, 4))
     logic.ms_remember(con, uid2, {"oid": "oid-2", "email": "two@kbtu.kz", "first": "Two", "last": "Person", "employeeId": "", "profile": {}})
@@ -8319,3 +8360,17 @@ def test_memo_is_a_recognised_clubs_alone(env):
     assert c.post("/api/orgs/2/events", headers=tma(20), json=ev).json()["memo"] == {"room": {"any": True}}
     assert c.get(f"/api/orgs/1/memo?week={monday}", headers=tma(20)).status_code == 403
     assert c.get(f"/api/orgs/2/memo?week={monday}", headers=tma(20)).status_code == 200
+
+
+def test_erasure_removes_all_microsoft_claims_for_owner(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, bob = (login(c, tg, name)["id"] for tg, name in ((91, "ann"), (92, "bob")))
+    who = {"oid": "directory-account", "email": "test@example.org", "first": "Test", "last": "Account"}
+    tokens = [logic.ms_hold(con, ann, who) for _ in range(2)]
+    logic.ms_release(con, tokens[0])
+    other = logic.ms_hold(con, bob, who)
+    logic.delete_me(con, logic.Viewer(ann, "user", True))
+    for token in ("", *tokens):
+        assert c.post("/api/ms/claim", headers=tma(91), json={"claim": token}).status_code == 403
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key GLOB 'ms_claim:*'")] == [f"ms_claim:{other}"]

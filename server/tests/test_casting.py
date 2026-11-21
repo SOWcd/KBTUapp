@@ -177,3 +177,15 @@ def test_followers_outside_the_club_hear_it_once(env, monkeypatch):
     c.patch(f"/api/posts/{pid}", headers=tma(PRES), json={"casting": {"from": T0 + 2 * HOUR, "to": T0 + 4 * HOUR, "place": "Hall"}})
     sent = [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'casting_open'")]
     assert sent == [c.ids[STUDENT]]
+
+
+def test_hidden_club_round_closes_public_paths(env, monkeypatch):
+    c, con, _, oid = _setup(env, monkeypatch)
+    r = c.post(f"/api/orgs/{oid}/round", headers=tma(PRES),
+               json={"title": "Fall", "closesAt": casting.now() + 24 * HOUR, "departments": []}).json()
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = ?", (oid,))
+    h = tma(STUDENT)
+    assert c.get(f"/api/orgs/{oid}/round", headers=h).json() is None
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=h, json={"departments": []}).status_code == 404
+    assert c.post("/api/share", headers=h, json={"kind": "rc", "id": oid}).json()["error"] == "closed"
+    assert not con.execute("SELECT 1 FROM round_apps").fetchone()

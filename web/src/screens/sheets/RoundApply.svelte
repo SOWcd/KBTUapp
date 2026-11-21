@@ -6,6 +6,9 @@
   // holds one, results) with the club's own "what's next" under them, before and after sending. One department or none:
   // nothing to pick. Opened from the
   // club's sheet, the Join page, a shared card or the bot (rc_<club>).
+  import { onMount, untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
+  import { accountDraft } from '../../lib/draft';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Circle from '@lucide/svelte/icons/circle';
   import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
@@ -45,23 +48,27 @@
   let leaving = false;
   let busy = $state(false);
   let tried = $state(false);
-  const key = () => `kb-round-${r?.id}`;
+  const owner = untrack(() => session.me?.tg.id);
+  let draft: ReturnType<typeof accountDraft> | undefined;
 
-  $effect(() => {
+  onMount(() => {
     api.round(org).then((x) => {
       if (!x) { gone = true; return; }
+      draft = accountDraft(`kb-round-${x.id}`, owner);
       r = x;
       if (x.departments.length === 1) picks = [x.departments[0].tagId];  // one department: nothing to pick
       if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
-      try { const d = JSON.parse(localStorage.getItem(key()) ?? 'null'); if (d) { picks = d.picks ?? []; answers = d.answers ?? {}; } } catch { /* blocked */ }
+      try { const d = JSON.parse(draft.read() ?? 'null'); if (d) { picks = d.picks ?? []; answers = d.answers ?? {}; } } catch { /* blocked */ }
     }).catch(() => { gone = true; });
+    api.org(org).then((x) => (contact = x.contact ?? null)).catch(() => {});
   });
   // the draft, as it's typed
-  $effect(() => {
-    const draft = JSON.stringify({ picks, answers });
+  function keepDraft() {
+    const value = JSON.stringify({ picks, answers });
     if (!r || sent) return;
-    try { localStorage.setItem(key(), draft); } catch { /* blocked */ }
-  });
+    draft?.save(value);
+  }
+  $effect(keepDraft);
 
   function pick(id: Id) {
     haptic.select();
@@ -86,7 +93,7 @@
     try {
       r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
       if (!sent) count('do.casting');
-      try { localStorage.removeItem(key()); } catch { /* blocked */ }
+      draft?.save(null);
       const first = !sent;
       sent = true; editing = false; saved = sending;
       haptic.ok();
@@ -101,15 +108,18 @@
   // the interview (invited after screening): the times with room, mine on top; another time any time before it starts
   let slots = $state<RoundSlot[]>([]);
   let picking = $state(false);
-  $effect(() => { if (r?.mine?.invited) api.roundSlots(r.id).then((x) => (slots = x)).catch(() => {}); });
+  function loadSlots() {
+    if (r?.mine?.invited) api.roundSlots(r.id).then((x) => (slots = x)).catch(() => {});
+  }
+  $effect(loadSlots);
   // a day's times by place, in time order: which place goes with which time
   const byPlace = (list: RoundSlot[]) => {
-    const by = new Map<string, RoundSlot[]>();
+    const by = new SvelteMap<string, RoundSlot[]>();
     for (const s of list) { const k = placeOf(s.place); by.set(k, [...(by.get(k) ?? []), s]); }
     return [...by.entries()];
   };
   const days = $derived.by(() => {
-    const by = new Map<string, RoundSlot[]>();
+    const by = new SvelteMap<string, RoundSlot[]>();
     for (const s of slots) { const k = dayMonth(s.startsAt); by.set(k, [...(by.get(k) ?? []), s]); }
     return [...by.entries()];
   });
@@ -126,7 +136,6 @@
   }
   // no time fits: "Message the club" (its President's DM, lib/clubdm), fetched ahead so the tap opens it at once
   let contact = $state<string | null>(null);
-  $effect(() => { api.org(org).then((x) => (contact = x.contact ?? null)).catch(() => {}); });
   function nothingFits() {
     if (contact && club) openLink(clubDm(contact, club, session.me?.memberships ?? [])); else say(t('cast.ivWrite'), 'raising_hands_3d_default');
   }
@@ -209,7 +218,7 @@
           {@const n = picks.indexOf(d.tagId)}
           <Row title={d.name} subtitle={d.about || undefined} accessory="check" checked={n >= 0} onclick={() => pick(d.tagId)}>
             <!-- the department's colour, and the wish's place when there are several -->
-            {#snippet lead()}<span class="mark" class:on={n >= 0} style="--c:{d.color}">{#if n >= 0 && r!.picks > 1}{n + 1}{/if}</span>{/snippet}
+            {#snippet lead()}<span class={['mark', { on: n >= 0 }]} style="--c:{d.color}">{#if n >= 0 && r!.picks > 1}{n + 1}{/if}</span>{/snippet}
           </Row>
         {/each}
       </Group>

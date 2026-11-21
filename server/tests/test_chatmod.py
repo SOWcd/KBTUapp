@@ -356,7 +356,7 @@ def test_cleanup_and_account_deletion(env, monkeypatch):
 
 
 def test_all_in_a_chat_no_club_holds(env, monkeypatch):
-    """Anyone calls there too; nobody known and no member list: "nobody to call" once under the command, then both go."""
+    """Only the group admin calls; nobody known and no member list: "nobody to call" once under the command, then both go."""
     c, cfg = env
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
     monkeypatch.setattr(bot, "_denied", {})

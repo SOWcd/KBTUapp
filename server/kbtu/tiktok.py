@@ -4,6 +4,7 @@ The bot holds the finished upload in memory and a failed download leaves the cha
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import subprocess
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 import httpx
+
+from . import download
 
 API = "https://www.tikwm.com/api/"
 LINK = re.compile(
@@ -122,21 +125,6 @@ def _download(match: re.Match) -> Media | None:
         return Media(path.read_bytes(), int(duration), [], "video.mp4")
 
 
-async def _get(http: httpx.AsyncClient, url: str, cap: int) -> bytes | None:
-    """A file from TikTok's servers into memory; None past `cap` (a "size" that said less, or none) or on an error."""
-    if not url.startswith("https://"):
-        return None
-    out = bytearray()
-    async with http.stream("GET", url, timeout=TIMEOUT, follow_redirects=True) as r:
-        if r.status_code != 200:
-            return None
-        async for chunk in r.aiter_bytes():
-            out += chunk
-            if len(out) > cap:
-                return None
-    return bytes(out)
-
-
 async def fetch(http: httpx.AsyncClient, url: str) -> Media | None:
     """What a link holds, ready to send; None when there is nothing to send."""
     match = LINK.match(url)
@@ -144,17 +132,23 @@ async def fetch(http: httpx.AsyncClient, url: str) -> Media | None:
         return None
     if not match["tiktok"]:
         return await asyncio.to_thread(_download, match)
-    r = await http.post(API, data={"url": match[0]}, timeout=TIMEOUT)
-    if r.status_code != 200:
+    raw = await download.fetch(http, API, ("www.tikwm.com",), 1024 * 1024, form={"url": match[0]})
+    if not raw:
         return None
-    body = r.json()
+    body = json.loads(raw)
     data = body.get("data") if isinstance(body, dict) and body.get("code") == 0 else None
     if not isinstance(data, dict):
         return None
     if images := data.get("images"):  # a slideshow: its "play" is only the music
-        photos = [p for u in images[:ALBUM] if isinstance(u, str) and (p := await _get(http, u, PHOTO_BYTES))]
-        return Media(None, 0, photos) if photos and sum(map(len, photos)) <= MAX_BYTES else None
+        photos, total = [], 0
+        for u in images[:ALBUM]:
+            if isinstance(u, str) and (p := await download.fetch(http, u, download.TIKTOK_FILES, PHOTO_BYTES)):
+                total += len(p)
+                if total > MAX_BYTES:
+                    return None
+                photos.append(p)
+        return Media(None, 0, photos) if photos else None
     if int(data.get("size") or 0) > MAX_BYTES:
         return None
-    video = await _get(http, str(data.get("play") or ""), MAX_BYTES)
+    video = await download.fetch(http, str(data.get("play") or ""), download.TIKTOK_FILES, MAX_BYTES)
     return Media(video, int(data.get("duration") or 0), []) if video else None

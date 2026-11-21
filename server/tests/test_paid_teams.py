@@ -162,6 +162,13 @@ def test_free_team_event_cant_turn_paid_with_sign_ups(env):
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), "teamMin": 2, "teamMax": 4, **PAID}).json()["price"] == 2000
 
 
+def _first_year(con, tg):
+    uid = _uid(con, tg)
+    student_id = f"{logic.academic_year() % 100:02d}B{uid:07d}"
+    con.execute("""UPDATE students SET course = 1, student_id = ?, ms_oid = 'oid' || user_id,
+                   ms_profile = json_object('employeeId', ?) WHERE user_id = ?""", (student_id, student_id, uid))
+
+
 def test_free_first_year_seat_counts_as_paid(env):
     """A 1st-year free seat (the club gave it): in a team and placed by Form teams, with no receipt."""
     c, cfg = env
@@ -169,8 +176,8 @@ def test_free_first_year_seat_counts_as_paid(env):
     con.execute("UPDATE users SET lang = 'en' WHERE tg_id = 20")
     eid = _event(c, **PAID, freeFirst=5, teamMin=2, teamMax=2)
     a, b = _people(c, 2)
-    con.execute("UPDATE students SET course = 1 WHERE user_id IN (?, ?)", (_uid(con, a), _uid(con, b)))
     for tg in (a, b):
+        _first_year(con, tg)
         assert _go(c, eid, tg).json()["my"]["status"] == "going"
     r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
     assert r["placed"] == 2 and r["unchecked"] == []
@@ -276,7 +283,7 @@ def test_review_old_receipt_spares_a_free_ticket(env):
     _pay(c, eid, a)
     old = _rid(con, eid, a)
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
-    con.execute("UPDATE students SET course = 1 WHERE user_id = ?", (_uid(con, a),))
+    _first_year(con, a)
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**_base(c, eid), **CS2, "freeFirst": 5}).status_code == 200
     assert _go(c, eid, a).json()["my"]["status"] == "going"
     assert _team(c, eid, a, "Vision").status_code == 200

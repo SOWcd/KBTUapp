@@ -16,6 +16,12 @@ from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Vi
 
 # ---------------------------------------------------------------- the club's own team (SPEC §2: the rank rule)
 
+def probation_field(v: Viewer, mine: str | None, people: bool, p) -> dict:
+    if p["id"] == v.id or people and mine and RANK[mine] > RANK[p["role"]]:
+        return {"probation": bool(p["probation"])}
+    return {}
+
+
 def team(con, v: Viewer, oid: int) -> list[dict]:
     """The full roster for the club's own team (§3): full names and @usernames, highest role first, with the club's own
     role name and the tags (§2b). Probation: for the club's Head+ and the person. Vice+ also see who
@@ -39,7 +45,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
                     "quiet": vice and (p["seen"] or p["joined_at"]) < core.now() - QUIET_FOR,
                     **({"brought": p["brought"]} if head else {}),  # Head+: who came by their link in these 60 days (a member's KPI)
                     # theirs, and Head+ strictly above them (the rank rule: else a Head sees the Vice's)
-                    **({"probation": bool(p["probation"])} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
+                    **probation_field(v, mine, head, p)}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
 
 
@@ -489,16 +495,25 @@ def set_dept(con, actor: int | None, oid: int, uid: int, tag: int, on: bool, syn
     return bool(n)
 
 
+def removal_leaders(con, oid: int, uid: int, by: int | None) -> list[int]:
+    """Current leaders entitled to hear the request and decide it."""
+    members = rows(con, """SELECT m.user_id, m.role, r.rights, target.role AS target_role FROM org_members m
+        JOIN students s ON s.user_id = m.user_id AND s.manual = 0
+        JOIN users u ON u.id = m.user_id AND u.banned_at IS NULL
+        LEFT JOIN org_roles r ON r.id = m.role_id
+        JOIN org_members target ON target.org_id = m.org_id AND target.user_id = ?
+        WHERE m.org_id = ? AND m.role IN ('vice', 'president') AND m.user_id IS NOT ?""", uid, oid, by)
+    return [m["user_id"] for m in members if RANK[m["role"]] > RANK[m["target_role"]] and "team" in _rights_from(m["role"], m["rights"])]
+
+
 def _ask_removal(con, oid: int, uid: int, by: int | None, ban: bool, note: str) -> None:
     """A removal request (one open per person; a second ask joins it, a ban asked for sticks), and a bot message to
     every President and Vice who outranks the person."""
     con.execute("""INSERT INTO removal_requests (org_id, user_id, by_id, ban, note, created_at) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (org_id, user_id) WHERE status = 'pending' DO UPDATE SET ban = max(ban, excluded.ban)""", (oid, uid, by, int(ban), note, core.now()))
     rid = one(con, "SELECT id FROM removal_requests WHERE org_id = ? AND user_id = ? AND status = 'pending'", oid, uid)["id"]
-    theirs = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)["role"]
-    for m in rows(con, "SELECT user_id, role FROM org_members WHERE org_id = ? AND role IN ('vice', 'president') AND user_id != ?", oid, by or 0):
-        if RANK[m["role"]] > RANK[theirs]:
-            notify(con, m["user_id"], "removal_ask", f"rm:{rid}")
+    for leader in removal_leaders(con, oid, uid, by):
+        notify(con, leader, "removal_ask", f"rm:{rid}")
 
 
 def remove(con, v: Viewer, oid: int, uid: int, body: dict) -> dict:

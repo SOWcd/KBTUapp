@@ -44,6 +44,12 @@ def test_event_chat_claim_guards(env, monkeypatch):
     con = db.connect(cfg.db_path)
     _, e1, t1 = _club_event(c, con, 20, "Chess")
     _, e2, t2 = _club_event(c, con, 30, "Go")
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 20")
+    assert logic.chat_claim(con, t1, 20, -100) is None
+    con.execute("UPDATE users SET banned_at = NULL WHERE tg_id = 20")
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = (SELECT id FROM users WHERE tg_id = 20)")
+    assert logic.chat_claim(con, t1, 20, -100) is None
+    con.execute("UPDATE students SET manual = 0 WHERE user_id = (SELECT id FROM users WHERE tg_id = 20)")
     assert logic.chat_claim(con, t1, 20, -100)["id"] == e1
     assert logic.chat_claim(con, t2, 30, -100) is None                     # another club's group stays theirs
     assert con.execute("SELECT chat_id FROM events WHERE id = ?", (e1,)).fetchone()[0] == -100

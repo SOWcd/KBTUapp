@@ -942,16 +942,26 @@ def _drop_photo(con, fid: int | None) -> list[str]:
     return [] if one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else [f["path"]]
 
 
+_FILE_REFS = (("users", "avatar_file_id"), ("orgs", "logo_file_id"), ("events", "cover_file_id"),
+              ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
+              ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"))
+_FILE_USED = " UNION ALL ".join(f"SELECT 1 FROM {table} WHERE {col} = {{fid}}" for table, col in _FILE_REFS)
+UNUSED_COVERS = 20  # room for an editor's unsaved cover and slides
+
+
 def _drop_unused(con, fid: int | None) -> list[str]:
-    """_drop_photo for a file nothing shows any more (no avatar, logo, cover, receipt, album, post or slide names it);
-    one still shown is left alone."""
-    if fid and con.execute("""SELECT 1 FROM users WHERE avatar_file_id = :f UNION ALL SELECT 1 FROM orgs WHERE logo_file_id = :f
-            UNION ALL SELECT 1 FROM events WHERE cover_file_id = :f UNION ALL SELECT 1 FROM receipts WHERE file_id = :f
-            UNION ALL SELECT 1 FROM event_photos WHERE file_id = :f UNION ALL SELECT 1 FROM posts WHERE photo_file_id = :f
-            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f UNION ALL SELECT 1 FROM takedowns WHERE file_id = :f
-            UNION ALL SELECT 1 FROM gallery_photos WHERE file_id = :f""", {"f": fid}).fetchone():
+    """_drop_photo for a file nothing shows any more."""
+    if fid and con.execute(_FILE_USED.format(fid=":f"), {"f": fid}).fetchone():
         return []
     return _drop_photo(con, fid)
+
+
+def trim_covers(con, uid: int, keep: int) -> list[str]:
+    """After a cover upload, retire only the oldest unreferenced uploads, preserving the one just requested."""
+    used = _FILE_USED.format(fid="f.id")
+    stale = rows(con, f"""SELECT f.id FROM files f WHERE f.owner_id = ? AND f.kind = 'event_cover'
+        AND NOT EXISTS ({used}) ORDER BY f.id = ? DESC, f.id DESC LIMIT -1 OFFSET ?""", uid, keep, UNUSED_COVERS)
+    return [p for row in stale for p in _drop_photo(con, row[0]) if chatlist.photo_free(con, p)]
 
 
 def set_photo(con, v: Viewer, saved: dict) -> list[str]:
@@ -1243,7 +1253,7 @@ _DEL_GONE = {
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("qr_marks", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
-    ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
+    ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"), ("door_misses", "user_id"),
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
@@ -1309,7 +1319,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM receipt_replaced WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
         # Ended registrations move to an anonymous account, so their age marks need explicit deletion.
         con.execute("DELETE FROM reg_age WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
-        con.execute("DELETE FROM event_guests WHERE student_id = (SELECT student_id FROM students WHERE user_id = ? AND manual = 0)", (v.id,))
+        from . import guests
+        guests.erase_pending(con, v.id)
         receipts = [p for f in paid + [r[0] for r in rows(con, "SELECT id FROM files WHERE owner_id = ? AND kind = 'receipt'", v.id)]
                     for p in _drop_unused(con, f)]
         # future seats first, so the waitlist moves: directly, an event he can no longer see (hidden, members-only) too
@@ -1321,7 +1332,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         pid = _placeholder(con)
         me_.update(p=pid, end=NO_END, now=core.now())
         for rid, eid in con.execute(f"SELECT id, event_id FROM registrations WHERE user_id = :u AND status = 'going' AND event_id IN ({ended})", me_).fetchall():
-            con.execute("UPDATE registrations SET user_id = ?, note = NULL, answers = NULL, team_want = NULL, ticket_code = ? WHERE id = ?", (pid, _ticket_code(con, eid), rid))
+            con.execute("UPDATE registrations SET user_id = ?, note = NULL, answers = NULL, team_want = NULL, phone_shared = 0, ticket_code = ? WHERE id = ?", (pid, _ticket_code(con, eid), rid))
         con.execute("UPDATE event_ratings SET user_id = :p, comment = '' WHERE user_id = :u", me_)
         con.execute(f"UPDATE volunteers SET user_id = :p, note = '' WHERE user_id = :u AND event_id IN ({ended})", me_)
         done = "SELECT id FROM rounds WHERE status = 'done'"
@@ -1408,7 +1419,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")
         from . import vol
-        vol.gone(con, v.id)  # every volunteers-ledger record ever linked to me, unlinked since or not
+        vol.gone(con, v.id)  # my volunteers-ledger records, including ones unlinked since
         santa.gone(con, v.id)  # Secret Santa: my Santa gives to my person instead
         fks = _user_fks(con)
         # my appeals to SG, their words and answers with them (their author links go in the loop below)
@@ -1423,8 +1434,11 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE map_graph SET updated_by = NULL WHERE updated_by = ?", (v.id,))  # no foreign key there
         con.execute("DELETE FROM profile_views WHERE viewer_id = ? OR user_id = ?", (v.id, v.id))  # no foreign keys either
         con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
+        con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
+            AND json_extract(value, '$.uid') = ?""", (v.id,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"upload:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fchup:{v.id}:%",))  # this hour's count of my forum photo uploads
         con.execute("DELETE FROM meta WHERE key LIKE 'rclaim:%' AND value = ?", (str(v.id),))  # a roster claim that let me in
         # the admins' "two people gave this student ID" messages carry my name and email

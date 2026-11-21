@@ -246,7 +246,14 @@ def _top(raw: str | None) -> list[dict]:
     return [{"emoji": k, "n": n} for k, n in sorted(got.items(), key=lambda kv: -kv[1])[:3]]
 
 
-def reserve(con, v: Viewer, body: dict) -> int:
+def _next_id(con, table: str) -> int:
+    """Keep the last reservation even when erasure deletes the highest row during screening."""
+    return one(con, f"""INSERT INTO meta (key, value) VALUES (?, (SELECT COALESCE(MAX(id), 0) + 1 FROM {table}))
+        ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(meta.value AS INTEGER) + 1, CAST(excluded.value AS INTEGER))
+        RETURNING CAST(value AS INTEGER)""", f"last:{table}")[0]
+
+
+def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
     """A new post, held ('check') before the AI is asked, the pace counted in the same transaction (posts
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""
     need_student(v)
@@ -269,10 +276,11 @@ def reserve(con, v: Viewer, body: dict) -> int:
             raise ApiError("bad_input", "duplicate")
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         a, n = pick_nick(con) if anon else (None, None)
-        pid = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
-                          (v.id, text, int(anon), _now(), sign, a, n)).lastrowid
+        pid = _next_id(con, "fchan_posts")
+        con.execute("INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
+                    (pid, v.id, text, int(anon), _now(), sign, a, n))
         _attach(con, v.id, pid, pics)
-        return pid
+        return pid, text
 
 
 def _pics(body: dict) -> list[int]:
@@ -398,8 +406,10 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
     (named or not: an accusation goes out under the bot's name), a 'flag' or no answer wait for a moderator, and so does
     anything past the hour's cap."""
     with tx(con):
-        p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'held' AND why = 'check'", pid)
-        if p:
+        p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ?", pid, v.id)
+        if not p:
+            raise ApiError("not_found")
+        if p["status"] == "held" and p["why"] == "check":
             if verdict in ("noise", "ad"):  # no message in it, or an ad: refused, its author told (the route), the words wiped
                 con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL, refused = ? WHERE id = ?",
                             (verdict, _refused(pid, p["body"]), pid))
@@ -414,7 +424,7 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
             else:
                 status, why = "held", {"person": "person", "flag": "ai"}.get(verdict or "", "check")
             con.execute("UPDATE fchan_posts SET status = ?, why = ? WHERE id = ?", (status, why, pid))
-    return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
+        return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
 
 
 def _refused(pid: int, text: str) -> str:
@@ -952,7 +962,7 @@ def replies(con, v: Viewer, pid: int) -> list[dict]:
     return [_reply_shape(r) for r in rows(con, "SELECT * FROM fchan_replies WHERE post_id = ? AND status != 'gone' OR post_id = ? AND why = 'missing' ORDER BY id DESC LIMIT 30", pid, pid)]
 
 
-def reply_reserve(con, v: Viewer, pid: int, body: dict) -> int:
+def reply_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
     """A reply, held ('check') before the AI looks, the caps counted in the same transaction: REPLY_GAP apart (all my
     posts), the day's cap under a post (REPLIES_MORE; deleting one buys nothing back). The comment by its link: under
     this post's message, a student's comment the bot saw (fchan_comments) and still up."""
@@ -972,8 +982,10 @@ def reply_reserve(con, v: Viewer, pid: int, body: dict) -> int:
             raise ApiError("rate_limited", "replies")
         if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND created_at > ?", pid, _now() - 86400)[0] >= reply_cap(con, p):
             raise ApiError("rate_limited", "replies")
-        return con.execute("INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)",
-                           (pid, comment, text, _now())).lastrowid
+        rid = _next_id(con, "fchan_replies")
+        con.execute("INSERT INTO fchan_replies (id, post_id, comment_msg, body, status, why, created_at) VALUES (?, ?, ?, ?, 'held', 'check', ?)",
+                    (rid, pid, comment, text, _now()))
+        return rid, text
 
 
 def reply_cap(con, p) -> int:
@@ -984,15 +996,18 @@ def reply_cap(con, p) -> int:
                        WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE
 
 
-def reply_settle(con, rid: int, verdict: str | None) -> dict:
+def reply_settle(con, v: Viewer, pid: int, rid: int, verdict: str | None) -> dict:
     """The AI's word (ai.screen_reply): 'ok' goes out; 'person', 'flag' or no answer wait for a moderator."""
     with tx(con):
+        if not one(con, """SELECT 1 FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+                WHERE r.id = ? AND p.id = ? AND p.user_id = ?""", rid, pid, v.id):
+            raise ApiError("not_found")
         if verdict == "ok":
             con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'", (_now(), rid))
         else:
             con.execute("UPDATE fchan_replies SET why = ? WHERE id = ? AND status = 'held' AND why = 'check'",
                         ({"person": "person", "flag": "ai"}.get(verdict or "", "check"), rid))
-    return _reply_shape(one(con, "SELECT * FROM fchan_replies WHERE id = ?", rid))
+        return _reply_shape(one(con, "SELECT * FROM fchan_replies WHERE id = ?", rid))
 
 
 def _drop(con, r, why: str, status: str = "gone", delay: int = 0) -> None:

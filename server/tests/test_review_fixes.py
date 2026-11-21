@@ -35,7 +35,12 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     aid = ali["id"]
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("INSERT INTO events (id, org_id, title, guest_list, created_at, updated_at) VALUES (1, 1, 'Guest list', 1, 0, 0)")
-    con.execute("INSERT INTO event_guests (event_id, student_id) VALUES (1, '24Bali'), (1, '24Bbob')")
+    from kbtu.logic import guests
+    con.execute("INSERT INTO event_guests (event_id, student_id, surname_hash) VALUES (1, '24Bali', ?), (1, '24Bbob', NULL)",
+                (guests._surname_hash(1, "24Bali", "testov"),))
+    con.execute("INSERT INTO events (id, org_id, title, guest_list, created_at, updated_at) VALUES (2, 1, 'Other list', 1, 0, 0)")
+    con.execute("INSERT INTO event_guests (event_id, student_id, adult, surname_hash) VALUES (2, '24Bali', 0, ?)",
+                (guests._surname_hash(2, "24Bali", "other"),))
     mail = con.execute("SELECT lower(email) FROM students WHERE user_id = ?", (aid,)).fetchone()[0]
     for key, claimed, rejected, email in (("claimed", aid, None, mail), ("my_word", aid, None, None), ("turned_down", None, aid, None), ("someone", None, None, None)):
         con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, rejected_by, created_at)
@@ -52,7 +57,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, 'join_request', ?, 0, 1)", (bob, f"jr:{aid}:999:1"))  # a club's number, not mine
     con.execute("UPDATE users SET announce_ok = 1 WHERE id = ?", (aid,))
     delete_now(c, cfg, tma(21, "Ali"))
-    assert [r[0] for r in con.execute("SELECT student_id FROM event_guests")] == ["24Bbob"]
+    assert [tuple(r) for r in con.execute("SELECT student_id, adult FROM event_guests ORDER BY event_id")] == [("24Bbob", None), ("24Bali", 0)]
     assert con.execute("SELECT announce_ok FROM users WHERE id = ?", (aid,)).fetchone()[0] is None
     assert [r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE user_id = ?", (bob,))] == [f"jr:{aid}:999:1"]
     # who made the link leaves the line, the line stays

@@ -98,7 +98,8 @@ def _edit(con, v: Viewer, vid: int, what: str, ref: int | None, old, new, reason
 # ------------------------------------------------------------ the roster and its sessions
 
 def _tie(con, vid: int, uid: int) -> None:
-    """Every account a record was ever linked to: deleting that account deletes the record, unlinked since or not."""
+    """Keep its last known owner for erasure, even after an unlink. A corrected owner replaces that tie."""
+    con.execute("DELETE FROM vol_ties WHERE vol_id = ? AND user_id != ?", (vid, uid))
     con.execute("INSERT OR IGNORE INTO vol_ties (vol_id, user_id) VALUES (?, ?)", (vid, uid))
 
 
@@ -115,7 +116,6 @@ def _attach(con, by: int | None, org: int, vid: int, uid: int) -> None:
         con.execute("UPDATE vol_misses SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
         con.execute("UPDATE vol_edits SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))
         con.execute("UPDATE vol_keys SET vol_id = ? WHERE vol_id = ?", (vid, y["id"]))  # its import keys stay as aliases
-        con.execute("UPDATE vol_ties SET vol_id = ? WHERE vol_id = ? AND user_id NOT IN (SELECT user_id FROM vol_ties WHERE vol_id = ?)", (vid, y["id"], vid))
         con.execute("INSERT OR IGNORE INTO vol_expected (session_id, vol_id) SELECT session_id, ? FROM vol_expected WHERE vol_id = ?", (vid, y["id"]))
         con.execute("UPDATE vol_people SET raw = ?, balance = balance + ?, name = CASE WHEN name = '' THEN ? ELSE name END, tg = COALESCE(tg, ?) WHERE id = ?",
                     (json.dumps(raw, ensure_ascii=False), y["balance"], y["name"], y["tg"], vid))
@@ -124,31 +124,23 @@ def _attach(con, by: int | None, org: int, vid: int, uid: int) -> None:
                     (vid, y["id"], json.dumps({"balance": y["balance"]}), by, now()))
     con.execute("UPDATE vol_people SET user_id = ? WHERE id = ?", (uid, vid))
     _tie(con, vid, uid)
-    log_action(con, by, "vol_link", f"user:{uid}", json.dumps({"vol": vid, **({} if by else {"auto": "tg"})}))
-
-
-def _by_tg(con, org: int, uid: int) -> int | None:
-    """The one unlinked record of the import whose Telegram username is this member's current one (none, or two: None).
-    ponytail: a username is trusted as Telegram holds it now; a swapped username links the wrong record (the President
-    unlinks it); upgrade: ask the member to confirm."""
-    r = rows(con, """SELECT p.id FROM vol_people p JOIN users u ON u.id = ? AND lower(u.tg_username) = p.tg
-        WHERE p.org_id = ? AND p.user_id IS NULL AND p.tg IS NOT NULL""", uid, org)
-    return r[0][0] if len(r) == 1 else None
+    log_action(con, by, "vol_link", f"user:{uid}", json.dumps({"vol": vid, **({} if by else {"auto": "name_tg"})}))
 
 
 def autolink(con, org: int) -> int:
-    """Every member of the club, a verified student with no record yet, and an unlinked import record by their Telegram
-    username: linked. The admin's command, run by hand (an unlink by the President stays: nothing links again by itself);
-    never a merge (a member with a record of their own is the President's to link). The count.
-    ponytail: a wrong link the President undoes keeps its vol_ties row (deleting that account still takes the record);
-    upgrade: drop the tie on an unlink of an auto link with nothing done under it."""
+    """Link unambiguous import records when both the Telegram username and the verified name agree."""
     n = 0
     with tx(con):
-        for (uid,) in rows(con, """SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id AND s.manual = 0
-                WHERE m.org_id = ?""", org):
-            vid = _by_tg(con, org, uid)
-            if vid and not one(con, "SELECT 1 FROM vol_people WHERE org_id = ? AND user_id = ?", org, uid):
-                _attach(con, None, org, vid, uid)
+        candidates = rows(con, """SELECT p.id, u.id AS uid,
+                expected_name(p.name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name) AS name_matches,
+                COUNT(*) OVER (PARTITION BY u.id) AS records, COUNT(*) OVER (PARTITION BY p.id) AS members
+            FROM org_members m JOIN students s ON s.user_id = m.user_id AND s.manual = 0
+            JOIN users u ON u.id = m.user_id AND u.banned_at IS NULL
+            JOIN vol_people p ON p.org_id = m.org_id AND p.user_id IS NULL AND p.tg = lower(u.tg_username)
+            WHERE m.org_id = ? AND NOT EXISTS (SELECT 1 FROM vol_people own WHERE own.org_id = m.org_id AND own.user_id = u.id)""", org)
+        for r in candidates:
+            if r["records"] == r["members"] == 1 and r["name_matches"]:
+                _attach(con, None, org, r["id"], r["uid"])
                 n += 1
     return n
 
@@ -621,9 +613,9 @@ def link(con, v: Viewer, vid: int, body: dict) -> dict:
     another row of the import), merges into this one: its shifts, misses and columns move here. ponytail: a merge isn't
     split back by unlinking; the edits log keeps what moved."""
     org = _need_pres(con, v)
-    p = _person(con, org, vid)
     uid = body.get("user")
     with tx(con):
+        p = _person(con, org, vid)
         if uid is None:
             if p["user_id"]:
                 con.execute("UPDATE vol_people SET user_id = NULL WHERE id = ?", (vid,))

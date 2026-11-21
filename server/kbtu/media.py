@@ -18,6 +18,8 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
+from . import download
+
 MAX_BYTES = 15 * 1024 * 1024
 MAX_PIXELS = 50_000_000          # what a header may claim (Pillow refuses past twice this, warns between): a 48 MP iPhone JPEG, read smaller below (draft)
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
@@ -165,9 +167,11 @@ async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
     bytes, members. Empty fields when the page has none or Telegram is unreachable; the caller keeps what it had."""
     out: dict = {"title": None, "image": None, "members": None, "about": None, "ok": False}
     try:
-        r = await http.get(url, follow_redirects=True)
-        out["ok"] = r.status_code == 200  # False: Telegram didn't answer (a timeout, a 429), not "no such chat"
-        page = r.text
+        raw = await download.fetch(http, url, download.TELEGRAM_PAGE, 512 * 1024)
+        if raw is None:
+            return out
+        out["ok"] = True
+        page = raw.decode("utf-8", "replace")
         og = {k: html.unescape(v) for k, v in _OG.findall(page)}
         out["title"] = og.get("title") or None
         # the chat's own line; Telegram's stock "You can view and join ... right away" when it has none
@@ -178,9 +182,7 @@ async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
         img = og.get("image", "")
         # Telegram's own placeholder (a chat without a picture) is its logo from telegram.org: not an avatar
         if re.match(r"https://[a-z0-9.-]+\.(?:telesco\.pe|cdn-telegram\.org)/file/", img):
-            r = await http.get(img)
-            if r.status_code == 200 and len(r.content) <= MAX_BYTES:
-                out["image"] = r.content
+            out["image"] = await download.fetch(http, img, download.TELEGRAM_FILES, MAX_BYTES)
     except (httpx.HTTPError, ValueError):
         pass
     return out
