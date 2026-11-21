@@ -24,7 +24,7 @@
   import { type Membership, type OrgCategory, type OrgRef } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { byWeight, clubSub, hit, nextByOrg, roundDue, waitsDmp } from '../../lib/clubs';
-  import { byRank, canLeave, opensStudio, roleLabel } from '../../lib/perms';
+  import { byRank, canLeave, roleLabel } from '../../lib/perms';
   import Row from '../../ui/Row.svelte';
   import { nameOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
@@ -48,7 +48,7 @@
   type Mine = { org: OrgRef; role: string; membership: Membership; sub: string | undefined };
   const mine = $derived<Mine[]>([...(session.me?.memberships ?? [])].sort(byRank).map((m) => ({ org: m.org, role: roleLabel(m), membership: m, sub: next.get(m.org.id) })));
   const followed = $derived(clubsOnly.filter((o) => o.subscribed && !memberOf.has(o.id)).sort(byWeight));
-  const openMine = (x: Mine) => { haptic.tap(); if (opensStudio(x.membership)) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const openMine = (x: Mine) => { haptic.tap(); sheets.studio(x.org.id); };  // my club: its Studio, whatever my role (owner, Nov 21); the catalog opens the card
   const hold = (x: Mine) => (el: HTMLElement) => menu(el, [{ label: t('clubs.open'), onselect: () => openMine(x) }, { label: t('clubs.leave'), destructive: true, onselect: () => void leaveClub(x.membership) }]);
   const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: [x.role, x.sub].filter(Boolean).join(' · ') }))); };
 
