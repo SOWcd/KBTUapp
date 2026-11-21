@@ -73,6 +73,10 @@
   const teamCame = $derived(team ? team.rows.filter((r) => r.at).length : 0);
   // let in by the helper's QR, or named for the scanner only: the QR and the camera, said so plainly (no lists)
   const scanOnly = $derived(qr && detail?.myCrew === 'scan');
+  // 18+ at the door (age_check): no self check-in by the rotating QR, it would skip the ID; the entrance QR opens
+  // the ticket, the scanner reads it and asks 18+ (owner, Nov 21)
+  const aged18 = $derived(!!e?.ageCheck);
+  $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
   // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
   let extra = $state<number | null>(null);
   $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
@@ -208,7 +212,7 @@
 
   <div class="body scroll">
     {#if qr}
-      <div class="sw"><Segmented items={[{ value: 'qr', label: 'QR' }, { value: 'scan', label: t('studio.scanner') }, ...(aud !== 'team' ? [{ value: 'entry' as const, label: t('mk.entry') }] : [])]} bind:value={mode} onchange={toMode} /></div>
+      <div class="sw"><Segmented items={[...(aged18 ? [] : [{ value: 'qr' as const, label: 'QR' }]), { value: 'scan' as const, label: t('studio.scanner') }, ...(aud !== 'team' ? [{ value: 'entry' as const, label: t('mk.entry') }] : [])]} bind:value={mode} onchange={toMode} /></div>
       {#if mode === 'entry'}
         <!-- the entrance's QR (owner, Nov 21): a guest's own camera opens the app on their ticket (tk_: no ticket -> the event, its sign-in) -->
         <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={QR_TONE} /></div><p class="t-foot">{t('mk.entryHint')}</p></div>
@@ -294,7 +298,7 @@
       <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
     {/if}
 
-    {#if names || (qr && (mode === 'qr' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
+    {#if names || (qr && (mode !== 'scan' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
         {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>

@@ -291,7 +291,7 @@
         <!-- one we co-host: its door is our event team's alone (cohosts.py), our plain members don't work it -->
         <!-- the door screen: one QR for guests and the team alike (the server sorts, checkin._team; the scanner a switch inside it) -->
         {#if qrDay}<Button kind="primary" size="l" full onclick={() => (next.guestHost ? sheets.screens(undefined, undefined, undefined, undefined, next.id) : registration(next, true, session.me?.vol?.org))}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('mk.title')}</Button>
-        {:else if !next.guestHost && (ours(next) || staff)}<Button kind="primary" size="l" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={19} />{/snippet}{t('studio.scanner')}</Button>{/if}
+        {:else if !next.guestHost && (ours(next) || staff)}<Button kind="primary" size="l" full onclick={() => registration(next, false, session.me?.vol?.org)}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('mk.title')}</Button>{/if}<!-- every member at the door: the same Mark screen (QR, entrance, scanner, the list), owner Nov 21 -->
       </div>
     {/if}
 
