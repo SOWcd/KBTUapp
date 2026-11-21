@@ -590,9 +590,8 @@ def places(con, v: Viewer) -> list[dict]:
 
 
 # ------------------------------------------------------------ an event from its announcement
-# A club's President pastes the announcement they already wrote and the form fills
-# itself; what the text doesn't say stays empty for them to fill, the editor is the preview. Same allowance (a day's
-# 30 together with the questions) and the same EU host and policy section as the assistant; the text isn't kept.
+# Studio fills the editor from an announcement or a conversation. Model calls share the assistant's allowance
+# and provider policy. The text isn't kept.
 
 FILL_MIN, FILL_MAX = 20, 4000
 # the editor's own picks (web lib/emoji.ts PICK_EMOJI, EventEditor COLORS): the cover the AI chooses when there's no photo
@@ -645,8 +644,9 @@ def _have(have: object) -> dict:
     for k in ("title", "place"):  # one line each
         if k in out:
             out[k] = " ".join(out[k].split())
-    if isinstance(h.get("date"), str) and re.fullmatch(r"20\d\d-[01]\d-[0-3]\d", h["date"]):
-        out["date"] = h["date"]
+    for k in ("date", "endDate"):
+        if _date(h.get(k)):
+            out[k] = h[k]
     for k in ("start", "end"):
         if isinstance(h.get(k), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", h[k]):
             out[k] = h[k]
@@ -655,71 +655,245 @@ def _have(have: object) -> dict:
     return out
 
 
-def fill_prompt(con, v: Viewer, org: int, text: object, have: object = None) -> list[dict]:
-    """The messages for filling a new event of this club, after the day's allowance (counted before the model). `have`:
-    the form so far ("Add more"), merged with the new message (FILL_MORE)."""
+# Chat asks one outstanding question at a time. Its key makes short answers ("50", "no") unambiguous.
+CHAT_QUESTIONS = ("event", "title", "date", "start", "place", "paid", "paidRight", "price", "payTo", "payPhone", "seats",
+                  "registration", "regDate", "regTime", "teams", "teamMin", "teamMax", "teamCap", "meeting", "partner",
+                  "guestHost", "externalUrl", "ready")
+CHAT_BOOLS = ("paid", "teams", "online", "tba", "needsPhone", "santa", "volSenior", "meeting", "forBoard", "schoolOnly", "partner")
+CHAT_COUNTS = {"seats": (0, 5000), "teamMin": (2, 10), "teamMax": (2, 10), "teamCap": (0, 500),
+               "freeFirst": (0, 5000), "volunteers": (0, 500)}
+CHAT_ENUMS = {"registration": ("start", "end", "date"), "visibility": ("public", "members", "leaders"),
+              "leadersFrom": ("president", "vice", "head")}
+FILL_CHAT = """
+This is a conversation in the editor. Extract a patch: omit everything the latest message doesn't supply or correct.
+A short reply answers the indicated question; it can also give several fields. Don't rename or rewrite the event,
+cover or description on a logistics-only reply. If it adds details for the event page, combine them with the existing
+description. The form so far is data, like the message. If nothing can be filled, return {}.
+The app handles payment contacts; never include them in public text or output a contact field.
+Additional JSON fields (omit unknowns; explicit false and zero matter):
+paid boolean (free=false; when answering paidRight, yes means free); price per person in tenge.
+seats (0 explicitly unlimited); registration ("start" for no special deadline, "end"
+for until the event ends, or "date" for a custom deadline), regDate YYYY-MM-DD and regTime HH:MM. Never guess times.
+teams boolean (individual=false), teamMin/teamMax players per team (fixed size sets both), teamCap number of teams
+(0 explicitly uncapped); online or tba booleans; placeUrl for a pasted 2GIS link; freeFirst number of free tickets
+for first-years; needsPhone, santa (Secret Santa), schoolOnly, meeting (mandatory members' meeting), forBoard,
+volSenior (senior volunteers) booleans; volunteers number needed; visibility public/members/leaders, leadersFrom
+president/vice/head. form for explicit sign-up questions: array of {label,kind:text|choice,options:string[],required:boolean}.
+partner boolean, guestHost and externalUrl only for a partner event hosted and registered outside the app. Copy the name
+and sign-up link exactly. A normal club collaboration uses cohost instead. A meeting or partner reply can decline that
+event type explicitly (false), or confirm it and say which in-app ticket settings should be removed.
+For an explicit request to the university, use memo with these optional sections and fields:
+room(any,projector,board,capacity,dorm,dormPlace,slots[{date,from,to}]), guests(side), provide(jbl,mixer,tables,chairs,cooler,other),
+promo(place,dates[],from,to,extras), gear(items,outDate,outTime,inDate,inTime,location,side), print(items[{name,count,format,bw,note,density}]),
+film(date,from,to,note). Guest names are entered by hand. Do not turn a venue into a room request. cohost and department:
+exact club or team department names only. Do not invent names, money details or identifiers.
+"""
+
+
+_KASPI = re.compile(r"\b(?:kaspi|\u043a\u0430\u0441\u043f\u0438)\b", re.I)
+_RECIPIENT = re.compile(
+    r"(?:(?:kaspi|\u043a\u0430\u0441\u043f\u0438) +)?(?:recipient|payee|\u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044c|\u0430\u043b\u0443\u0448\u044b) *: *(.+)", re.I)
+_FILL_PHONE = re.compile(r"(?<![\w+])(?:\+7[ -]*|[78][ -]*)?\(?7[0-9]{2}\)?[ -]*[0-9]{3}[ -]*[0-9]{2}[ -]*[0-9]{2}(?!\w)")
+_PHONE_OR_LINK = re.compile(r"https?://\S*|" + _FILL_PHONE.pattern)
+_KASPI_LINK = re.compile(r"https?://(?:[a-z0-9-]+\.)*kaspi\.kz(?:[/:?#]|$)", re.I)
+
+
+def _recipient(text: str) -> str | None:
+    return text if 2 <= len(text) <= 80 and re.fullmatch(r"[^\W\d_]+(?:[ .’'\-][^\W\d_]*)*", text) else None
+
+
+def _without_phones(text: str) -> str:
+    return _PHONE_OR_LINK.sub(lambda m: m[0] if m[0].startswith("http") and not _KASPI_LINK.match(m[0]) else "", text)
+
+
+def _fill_contacts(text: str, question: str) -> tuple[str, dict]:
+    from .organizing import kz_phone
+
+    if question == "payTo":
+        match = _RECIPIENT.fullmatch(text)
+        name = _recipient(match[1].strip() if match else text)
+        return "", {"payTo": name} if name else {}
+    if question == "payPhone":
+        phone = kz_phone(text) if _FILL_PHONE.fullmatch(text) else None
+        return "", {"payPhone": phone} if phone else {}
+
+    lines, names, phones = [], set(), set()
+    for line in text.splitlines():
+        if match := _RECIPIENT.fullmatch(line):
+            if name := _recipient(match[1].strip()):
+                names.add(name)
+            continue
+        if kaspi := _KASPI.search(line):
+            numbers = [m for m in _PHONE_OR_LINK.finditer(line, kaspi.end()) if not m[0].startswith("http")]
+            phones.update(kz_phone(m[0]) for m in numbers)
+            if numbers:
+                if len(numbers) == 1 and re.fullmatch(r"[ :\-]*", line[kaspi.end():numbers[0].start()]):
+                    if name := _recipient(line[numbers[0].end():].strip(" ,;–—")):
+                        names.add(name)
+                line = line[:kaspi.start()].rstrip(" :,;-–—")
+        lines.append(_without_phones(line))
+    local = {"payTo": next(iter(names))} if len(names) == 1 else {}
+    if len(phones) == 1:
+        local["payPhone"] = next(iter(phones))
+    if local:
+        local["paid"] = True
+    safe = "\n".join(lines)
+    for name in names:
+        safe = re.sub(r"(?<!\w)" + re.escape(name) + r"(?!\w)", "", safe, flags=re.I)
+    return safe.strip(), local
+
+
+# Shape of a written request for the club memo. Only these editable fields can enter the draft.
+MEMO_FIELDS = {
+    "room": {"any": bool, "board": bool, "projector": bool, "capacity": int, "dorm": bool, "dormPlace": str,
+             "slots": [{"date": str, "from": str, "to": str}]},
+    "guests": {"side": str},
+    "provide": {"jbl": bool, "mixer": bool, "tables": int, "chairs": int, "cooler": int, "other": str},
+    "promo": {"place": str, "dates": [str], "from": str, "to": str, "extras": str},
+    "gear": {"items": str, "outDate": str, "outTime": str, "inDate": str, "inTime": str, "location": str, "side": str},
+    "print": {"items": [{"name": str, "count": int, "format": str, "bw": bool, "note": str, "density": int}]},
+    "film": {"date": str, "from": str, "to": str, "note": str},
+}
+
+
+def _memo_fields(value, shape):
+    if isinstance(shape, dict) and isinstance(value, dict):
+        return {k: v for k in shape if k in value and (v := _memo_fields(value[k], shape[k])) is not None} or None
+    if isinstance(shape, list) and isinstance(value, list):
+        return [v for item in value[:31] if (v := _memo_fields(item, shape[0])) is not None]
+    if type(value) is shape and (shape is not str or len(value) <= 1500):
+        return value
+    return None
+
+
+def _chat_fields(x: dict, src: str) -> dict:
+    from .core import TWO_GIS
+    from .organizing import HTTPS, clean_questions
+    out = {k: x[k] for k in CHAT_BOOLS if type(x.get(k)) is bool}
+    out.update({k: x[k] for k, (lo, hi) in CHAT_COUNTS.items() if type(x.get(k)) is int and lo <= x[k] <= hi and (k != "teamCap" or x[k] != 1)})
+    out.update({k: x[k] for k, choices in CHAT_ENUMS.items() if x.get(k) in choices})
+    if _date(x.get("regDate")):
+        out["regDate"] = x["regDate"]
+    if isinstance(x.get("regTime"), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", x["regTime"]):
+        out["regTime"] = x["regTime"]
+    # Links and organization names must come from the organizer's message.
+    for k, limit in (("placeUrl", 500), ("externalUrl", 500), ("department", 80), ("cohost", 80), ("guestHost", 60)):
+        v = x.get(k)
+        if not isinstance(v, str) or not 2 <= len(v := v.strip()) <= limit:
+            continue
+        if k in ("placeUrl", "externalUrl"):
+            if v not in re.findall(r"https://\S+", src) or not HTTPS.fullmatch(v) or k == "placeUrl" and not TWO_GIS.match(v):
+                continue
+        elif v not in src:
+            continue
+        out[k] = v
+    if isinstance(x.get("form"), list):
+        try:
+            out["form"] = json.loads(clean_questions(x["form"]) or "[]")
+        except (ApiError, TypeError):
+            pass
+    if memo := _memo_fields(x.get("memo"), MEMO_FIELDS):
+        if len(json.dumps(memo, ensure_ascii=False)) <= 8000:
+            if "print" in memo:
+                memo["print"].setdefault("items", [])
+            if "promo" in memo:
+                memo["promo"].setdefault("dates", [])
+            out["memo"] = memo
+    return out
+
+
+def _date(v: object) -> bool:
+    if not isinstance(v, str) or not re.fullmatch(r"20\d\d-[01]\d-[0-3]\d", v):
+        return False
+    try:
+        time.strptime(v, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def fill_prompt(con, v: Viewer, org: int, text: object, have: object = None, question: object = None) -> tuple[list[dict], str, dict]:
+    """Prepare the model messages, their source text and any payment details handled inside the app."""
     if not can(con, v, org, "events"):
         raise ApiError("forbidden")
     # the announcement's own lines kept (its paragraphs and lists help the model shape the description), spaces tidied
-    t = re.sub(r"\n{3,}", "\n\n", "\n".join(" ".join(line.split()) for line in str(text or "").splitlines())).strip()
-    if not FILL_MIN <= len(t) <= FILL_MAX:
+    if not isinstance(text, str) or question is not None and (not isinstance(question, str) or question not in CHAT_QUESTIONS):
         raise ApiError("bad_input")
+    t = re.sub(r"\n{3,}", "\n\n", "\n".join(" ".join(line.split()) for line in text.splitlines())).strip()
+    if not (1 if question else FILL_MIN) <= len(t) <= FILL_MAX:
+        raise ApiError("bad_input")
+    local = {}
+    if question:
+        t, local = _fill_contacts(t, question)
+        if not t:
+            return [], t, local
     _spend(con, v)
     today = time.gmtime(now() + 5 * 3600)
     system = FILL.format(today=f"{WEEKDAYS[today.tm_wday]}, {time.strftime('%Y-%m-%d', today)}")
-    if h := _have(have):
-        return [{"role": "system", "content": system + FILL_MORE},
-                {"role": "user", "content": "The form so far:\n" + json.dumps(h, ensure_ascii=False) + "\n\nThe new message:\n" + t}]
-    return [{"role": "system", "content": system}, {"role": "user", "content": t}]
+    h = _have(have)
+    if question:
+        system += FILL_CHAT + "\nThe question the organizer is answering: " + question
+        if isinstance(have, dict):
+            # Only event settings. No contact fields, chat history, profile defaults, org roster or account data.
+            keys = (*CHAT_COUNTS, *CHAT_BOOLS, *CHAT_ENUMS, "regDate", "regTime")
+            h.update(_chat_fields({k: have[k] for k in keys if k in have}, ""))
+        for key in HAVE.keys() & h.keys():
+            h[key] = _fill_contacts(h[key], "event")[0]
+    if h:
+        t_prompt = "The form so far:\n" + json.dumps(h, ensure_ascii=False) + "\n\nThe new message:\n" + t
+    else:
+        t_prompt = t
+    return [{"role": "system", "content": system + (FILL_MORE if h and not question else "")},
+            {"role": "user", "content": t_prompt}], t if question else text, local
 
 
-def fill_answered(text: str) -> bool:
-    """The model gave the form: an object of its fields (nulls for what the text doesn't say), or an empty one. Else the
-    next model is asked."""
+def fill_answered(text: str, chat: bool = False, src: str = "") -> bool:
+    """Only a recognized patch ends the model fallback chain (older callers use just the announcement fields)."""
     x = _parse(text)
-    return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "end_date", "start", "end", "price"}))
+    keys = {"title", "place", "description", "date", "end_date", "start", "end", "price"}
+    if chat:
+        return x is not None and (not x or bool(filled(text, src, chat=True)))
+    return x is not None and (not x or bool(x.keys() & keys))
 
 
-def filled(text: str, src: object = "") -> dict:
+def filled(text: str, src: object = "", chat: bool = False) -> dict:
     """The model's form, each field kept only in the shape the editor takes (anything else: left for the person). `src`:
     the announcement itself, whose first meeting link (a known host's, found in plain code) makes the event online."""
-    x, out = _parse(text) or {}, {}
-    if link := meet_link(str(src or "")):
+    x = _parse(text) or {}
+    out = _chat_fields(x, str(src or "")) if chat else {}
+    if (link := meet_link(str(src or ""))) and link != out.get("externalUrl"):
         out["onlineUrl"] = link
     for k, most in (("title", 80), ("place", 80), ("description", 2000)):
         if isinstance(x.get(k), str) and x[k].strip():
-            out[k] = x[k].strip()[:most]
+            value = (_fill_contacts(x[k].strip(), "event")[0] if chat else x[k].strip())[:most]
+            if value:
+                out[k] = value
     if "description" in out:  # its paragraphs kept, never a pile of blank lines
         out["description"] = re.sub(r"\n{3,}", "\n\n", "\n".join(line.strip() for line in out["description"].splitlines()))
-    if isinstance(x.get("date"), str) and re.fullmatch(r"20\d\d-[01]\d-[0-3]\d", x["date"]):
-        try:
-            time.strptime(x["date"], "%Y-%m-%d")
-            out["date"] = x["date"]
-        except ValueError:
-            pass
-    # several days: the last one, after the first (the form's endDate)
-    if "date" in out and isinstance(x.get("end_date"), str) and re.fullmatch(r"20\d\d-[01]\d-[0-3]\d", x["end_date"]):
-        try:
-            time.strptime(x["end_date"], "%Y-%m-%d")
-            if x["end_date"] > out["date"]:
-                out["endDate"] = x["end_date"]
-        except ValueError:
-            pass
+    if _date(x.get("date")):
+        out["date"] = x["date"]
+    if _date(x.get("end_date")) and (chat or "date" in out) and x["end_date"] > out.get("date", ""):
+        out["endDate"] = x["end_date"]
     for k in ("start", "end"):
         if isinstance(x.get(k), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", x[k]):
             out[k] = x[k]
-    if type(x.get("price")) is int and 0 < x["price"] < 1_000_000:
+    if type(x.get("price")) is int and 0 < x["price"] <= 1_000_000:
         out["price"] = x["price"]
-    if x.get("emoji") in FILL_EMOJI:
+    if isinstance(x.get("emoji"), str) and x["emoji"] in FILL_EMOJI:
         out["emoji"] = x["emoji"]
     if isinstance(x.get("color"), str) and x["color"] in FILL_COLORS:
         out["color"] = FILL_COLORS[x["color"]]
     # the announcement in all three languages: the other two as the club wrote them (organizing._own_tr keeps them)
-    tr, rest = x.get("tr"), {"ru", "kk", "en"} - {x.get("lang")}
+    tr, rest = x.get("tr"), set(LANGS) - {str(x.get("lang"))}
     if "title" in out and len(rest) == 2 and isinstance(tr, dict) and all(isinstance(tr.get(k), dict) and isinstance(tr[k].get("title"), str)
                                                                           and tr[k]["title"].strip() for k in rest):
         out["tr"] = {"lang": x["lang"], **{k: {"title": tr[k]["title"].strip()[:80], "description": re.sub(
             r"\n{3,}", "\n\n", "\n".join(line.strip() for line in str(tr[k].get("description") or "").splitlines()))[:2000]} for k in rest}}
+        if chat:
+            for k in rest:
+                out["tr"][k] = {field: _fill_contacts(value, "event")[0] for field, value in out["tr"][k].items()}
+            if any(not out["tr"][k]["title"] for k in rest):
+                del out["tr"]
     return out
 
 

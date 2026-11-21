@@ -2072,10 +2072,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # a new event filled from its announcement (logic/assistant.py, below the assistant): the same switch, host and allowance
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
-        msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"))
+        msgs, source, local = logic.assistant.fill_prompt(con, v, oid, body.get("text"), body.get("have"), body.get("question"))
+        if not msgs:
+            return local
+        chat = body.get("question") is not None
         # a long announcement's form is long (1500 tokens cut it, then no time is left to ask again): room for both
-        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30, race=True, effort="none")  # a person waits: a slow first host races another
-        return logic.assistant.filled(text, body.get("text"))
+        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=lambda answer: logic.assistant.fill_answered(answer, chat, source), timeout=30, race=True, effort="none")  # a person waits: a slow first host races another
+        patch = logic.assistant.filled(text, source, chat=chat)
+        return {**local, **patch}
 
     # the volunteers ledger of one club (logic/vol.py, VOLUNTEERS): its President and whom she grants; each volunteer their own
     @app.get("/api/vol")
