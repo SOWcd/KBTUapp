@@ -538,6 +538,7 @@ def test_old_board_cleaned_up(env, before_door_migration):
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200
+    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 203
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
@@ -587,7 +588,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}  # no user id
+        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}  # no user id
         assert "review" not in p or p["mine"]                                                    # why mine waits: to me alone
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
@@ -598,7 +599,7 @@ def test_post_feed(env, monkeypatch):
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "human")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "nick": nick, "sign": texts.nick(*nick), "person": None, "mine": False,
-            "faces": [], "reactions": [], "photos": []}
+            "faces": [], "reactions": [], "hearts": 0, "hearted": False, "photos": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
@@ -899,7 +900,7 @@ def test_post_discussed(env, monkeypatch):
     con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
     assert busy in hot()
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}
     assert row["anon"] and row["person"] is None and row["hot"] is True
     con.close()
 

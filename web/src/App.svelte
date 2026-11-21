@@ -11,7 +11,7 @@
   import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
-  import { channel, loadChannel } from './lib/state/channel.svelte';
+  import { channel, channelUnread, loadChannel, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
@@ -305,10 +305,12 @@
   // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
   $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
+  const forumViewer = $derived(session.boardKnown && session.channel ? session.me?.id : null);
+  $effect(() => { if (forumViewer) return watchChannelVisit(); });
   // a role changes a tab's content, never its name
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
   const TAB_DOT: Record<Tab, () => boolean> = {
-    afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
+    afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => ui.tab !== 'forum' && channelUnread(), club: () => false,
     profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.inbox ?? 0) > 0,
   };
   /** A club of mine: the Clubs tab with its Studio pushed over it. */

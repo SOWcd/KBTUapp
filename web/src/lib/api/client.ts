@@ -430,6 +430,9 @@ export const server = {
   refer: (code: string): Promise<void> => call('POST', '/referral', { code }), // opened by someone's invite link
   channelRevealed: (): Promise<{ revealed: number; next: number | null /* when I may post again (the pace); null: now */ }> => call('GET', '/forum-posts/revealed'), // how many anonymous authors were ever revealed (a count)
   channelFeed: (before?: number): Promise<import('./types').ChannelFeedPost[]> => call('GET', `/forum-posts/feed${before ? `?before=${before}` : ''}`), // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
+  channelVisit: (): Promise<import('./types').ChannelVisit> => call('GET', '/forum-posts/visit'),
+  markChannelSeen: (msg: number): Promise<void> => call('PUT', '/forum-posts/visit', { msg }),
+  setChannelHeart: (id: Id, hearted: boolean): Promise<import('./types').ChannelHeart> => call('PUT', `/forum-posts/${id}/heart`, { hearted }),
   newChannelPost: (body: string, anon: boolean, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos }), // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
   uploadChannelPhoto: (file: Blob): Promise<Media & { id: Id }> => call('POST', '/forum-posts/photos', file), // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
   appealChannelPost: (id: Id, body: string, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', `/forum-posts/${id}/appeal`, { body, photos }), // refused by the AI: to a moderator (3 a day), the words given back
