@@ -36,7 +36,9 @@
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
   import { haptic, openLink, on } from '../../lib/tg';
   import { menu } from '../../ui/menu';
+  import { onMount } from 'svelte';
   import { photoItems } from './mine';
+  import { notificationSettings } from './notificationSettings';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import ThemeGlyph, { glyph } from './ThemeGlyph.svelte';
@@ -46,7 +48,7 @@
   let { editing = false, onlanyard }: { editing?: boolean; onlanyard: () => void } = $props();
   const me = $derived(session.me);
   const s = $derived(me?.settings);
-  const bells = $derived(s ? [s.nRemind, s.nNewEvents].filter(Boolean).length : 0);
+  const bells = $derived(notificationSettings.filter(([key]) => s?.[key]).length);
   const wornName = $derived(lookData().wornName);
   // my photo's menu at my photo on the lanyard (Me); About me has the same at its row
   export function photoMenu(at: Element, align?: 'start' | 'end') { if (me) menu(at, photoItems(), align); }
@@ -96,7 +98,7 @@
   async function dropWeek() {
     if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
   }
-  $effect(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
+  onMount(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
   // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
   // no "added" within a few seconds -> say where to allow it, never a button that seems to do nothing
   let homeWait: ReturnType<typeof setTimeout> | undefined;
@@ -122,14 +124,14 @@
       <Group>
         <Row icon={User} title={t('set.aboutMe')} value={[st.firstName, st.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('me'); }} />
         <Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />
-        <Row icon={Bell} title={t('me.notifications')} value={bells === 2 ? t('set.on') : bells ? `${bells}/2` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
+        <Row icon={Bell} title={t('me.notifications')} value={bells === notificationSettings.length ? t('set.on') : bells ? `${bells}/${notificationSettings.length}` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
       </Group>
     </div>
   {:else}
     <div class="spacer"></div>
   {/if}
 
-  <div data-unit class="sec" class:first={!me?.student}>
+  <div data-unit class={['sec', { first: !me?.student }]}>
     <Group caption={t('set.app')}>
       <Row icon={Languages} title={t('me.guestLang')} value={LANG_FULL[i18n.lang]} menu={LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))} />
       <Row icon={ThemeGlyph} title={t('me.guestTheme')} value={t(`theme.${theme.current}`)} menu={(['dark', 'light'] as const).map((x) => ({ label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, glyph.el) }))} />

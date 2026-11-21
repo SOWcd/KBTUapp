@@ -263,6 +263,7 @@ export interface Settings {
   theme: 'light' | 'dark' | null;
   nRemind: boolean;
   nNewEvents: boolean;
+  nForumComments: boolean;
   nFriends: boolean;
   showGoing: boolean;
   canFriend: boolean;           // others may send me a friend request

@@ -12,6 +12,8 @@ export const session = $state({ me: null as Me | null, ready: false, failed: fal
   donate: '', support: [] as NonNullable<Me['support']> });
 
 import { clearCache } from './cache';
+// Optimistic Settings switches survive a refresh that started before the PATCH finished.
+export const pendingSwitches: Record<string, boolean> = {};
 function banned(d: Record<string, unknown>) {
   session.banned = { reason: (d.reason as string | null) ?? null, contact: (d.contact as string | null) ?? null };
   clearCache(); // the next launch doesn't show the old app first
@@ -20,8 +22,13 @@ if (typeof window !== 'undefined') addEventListener('kb:banned', (e) => banned((
 
 /** quiet: a background refresh; a failure leaves the screens as they are (no error page while coming back on a poor network). */
 export async function loadMe(quiet = false): Promise<void> {
+  const settingsAtStart = session.me?.settings;
   try {
-    session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.channel = !!session.me.forumChannel; session.boardKnown = true; session.tgComment = !!session.me.tgComment; session.donate = session.me.donate ?? ''; session.support = session.me.support ?? [];
+    const next = await api.me();
+    if (session.me && session.me.id === next.id) {
+      next.settings = { ...(session.me.settings === settingsAtStart ? next.settings : session.me.settings), ...pendingSwitches };
+    }
+    session.me = next; session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.channel = !!session.me.forumChannel; session.boardKnown = true; session.tgComment = !!session.me.tgComment; session.donate = session.me.donate ?? ''; session.support = session.me.support ?? [];
     if (session.me.avatar) new Image().src = session.me.avatar; // the profile tab opens with its photo in place
   } catch (x) {
     if (!quiet) session.failed = true;

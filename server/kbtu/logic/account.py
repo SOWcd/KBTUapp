@@ -21,7 +21,7 @@ from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON,
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
-            "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year",
+            "nForumComments": "n_forum_comments", "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year",
             "canFriend": "can_friend"}
 
 
@@ -924,6 +924,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets["city_hidden"] = int(patch["cityHidden"])
     if sets:
         con.execute(f"UPDATE users SET {', '.join(c + ' = ?' for c in sets)} WHERE id = ?", (*sets.values(), v.id))
+    if sets.get("n_forum_comments") == 0:
+        con.execute("""UPDATE bot_outbox SET error = 'muted' WHERE user_id = ? AND kind = 'fch_comments'
+            AND sent_at IS NULL AND error IS NULL""", (v.id,))
     if "nRemind" in patch:  # the switch acts at once on reminders already queued: off drops them, on arms the upcoming ones
         con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND sent_at IS NULL", (v.id,))
         for e in rows(con, "SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.status = 'going'", v.id):
