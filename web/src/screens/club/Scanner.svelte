@@ -413,7 +413,7 @@
   .entry .plate { width: min(78vw, 300px); aspect-ratio: 1; padding: 14px; border-radius: var(--r-l); background: white; }
   .entry p { text-align: center; }
   .pend { display: grid; gap: 8px; }
-  .pend .ok { color: var(--ok, #3ecf8e); text-align: center; }
+  .pend .ok { color: var(--success-text); text-align: center; }
   .pend .ages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
   .extra span { flex: 1; color: var(--text-2); }
