@@ -77,7 +77,8 @@
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
-  import { marked, merge, missing, type Differs, type Marked } from '../../lib/eventFill';
+  import EventChat from './EventChat.svelte';
+  import { marked, merge, missing, type ChatFill, type Differs, type Marked } from '../../lib/eventFill';
   import { linkFill, ONLINE_LINK } from '../../lib/meet';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
@@ -139,8 +140,12 @@
   let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
   const dirty = $derived(!!fillLeft.trim() || touched && JSON.stringify(f) !== base);
   const live = $derived(!!saved && saved.status !== 'draft');
+  let step = $state<'chat' | 'form'>(untrack(() => !id && !staff && session.board ? 'chat' : 'form'));
+  let draft = $state<ChatFill>({});
+  let chatDirty = $state(false);
   $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); overlay.icon = live ? PencilLine : CalendarPlus; }); // the capsule's title (SPEC §8.2)
-  $effect(() => { overlay.tint = shade(f.color); }); // the sheets it opens (Ask, the AI's fill) take its colour
+  const tint = $derived(shade(step === 'chat' ? draft.color ?? f.color : f.color));
+  $effect(() => { overlay.tint = tint; }); // the sheets it opens take its colour
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 
@@ -152,7 +157,20 @@
   const deptOnly = $derived(inDept && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
   // "For whom": any team-only event, required or not; picking a department doesn't make it required
   let tagsRead = $state(false);
-  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDepts = s.myDepts ?? []; inDept = !!s.inDept; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDepts[0] ?? null; }).catch(() => {});
+  let loadingTags: Promise<void> | undefined;
+  const readTags = () => loadingTags ??= api.teamSetup(org).then((s) => {
+    const first = !tagsRead;
+    tags = s.tags;
+    ownDepts = s.myDepts ?? [];
+    inDept = !!s.inDept;
+    tagsRead = true;
+    if (first && !saved) {
+      const department = draft.department?.toLowerCase();
+      const tag = tags.find(g => g.name.toLowerCase() === department && (!deptOnly || ownDepts.includes(g.id)));
+      f.meetingTag = tag?.id ?? (deptOnly ? ownDepts[0] ?? null : null);
+      if (deptOnly) f.forBoard = false;
+    }
+  }).catch(() => {}).finally(() => { loadingTags = undefined; });
   $effect(() => { if (f.teamOnly && !tagsRead) readTags(); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
@@ -367,17 +385,18 @@
   }
   // Back, ✕ or a swipe: leave at once, or ask first when something would be lost
   let asking = false;
+  function discard(yes: boolean) {
+    asking = false;
+    if (yes) { discardText(); base = JSON.stringify(f); chatDirty = false; close(overlay.id); }
+  }
   $effect(() => {
     if (!overlay.closing) return;
     if (pick) { overlay.closing = false; pick = ''; return; } // an open panel goes first (one Back)
-    if (!dirty) { leave(); return; }
+    if (!dirty && !(step === 'chat' && chatDirty)) { leave(); return; }
     overlay.closing = false;
     if (asking) return;
     asking = true;
-    sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('ed.stay'), danger: true }).then((yes) => {
-      asking = false;
-      if (yes) { discardText(); base = JSON.stringify(f); close(overlay.id); }
-    });
+    sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('ed.stay'), danger: true }).then(discard);
   });
 
   // "Only for <school>" (server organizing._school_only): a school's own org alone; sent once touched, else kept
@@ -423,11 +442,28 @@
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
     if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
-    // teams off on an event that has some: they break up (the server lets them go)
-    if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: t('ed.teamsOffAsk'), text: t('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
     const sentAt = textDraft.stamp();
     busy = kind;
     try {
+      // Resolve member access before saving and ask before dropping a requested restriction.
+      if (fromChat && f.teamOnly && !tagsRead) {
+        await readTags();
+        if (!tagsRead) { say(t('common.error'), 'warning_3d'); return; }
+      }
+      const tag = tags.find(g => g.id === f.meetingTag);
+      if (draft.paid && (!f.paid || !tickets || !canPrice)
+        || draft.visibility === 'leaders' && !f.leaders || draft.visibility === 'members' && !f.teamOnly
+        || draft.forBoard && !f.forBoard || draft.schoolOnly && !schoolOnly
+        || draft.department && (f.forBoard || tag?.name.toLowerCase() !== draft.department.toLowerCase())
+        || draft.cohost && !coWant && !saved || draft.partner && !f.partner) {
+        const actual = [audienceVal, tickets && priceVal, f.partner && f.host, draft.cohost && t('co.invite') + ' · ' + coVal].filter(Boolean).join(' · ');
+        if (!await sheets.ask({ title: t('ed.chatReview'), text: actual, ok: t('common.save'), cancel: t('common.cancel') })) return;
+      }
+      // teams off on an event that has some: they break up (the server lets them go)
+      if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: t('ed.teamsOffAsk'), text: t('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
+      if (kind === 'draft' && fromChat && tickets && f.paid && !await sheets.ask({
+        title: t('ed.chatReview'), text: [priceVal, f.payTo, f.payPhone].join(' · '), ok: t('ed.saveDraft'), cancel: t('common.cancel'),
+      })) return;
       const first = !saved;
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
       if (first && staff) staffEvents.add(e.id); // from here on it is run as Admin runs any event
@@ -458,7 +494,6 @@
   let filling = $state(false);
   // a new event starts with the announcement (the fill existed, nobody found it): a paste screen first,
   // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
-  let step = $state<'paste' | 'form'>(untrack(() => !id && session.board ? 'paste' : 'form'));
   const textFields = ['title', 'description', 'place'] as const;
   type TextField = typeof textFields[number];
   type TextDraft = { fields: Partial<Record<TextField, { before: string; value: string }>>; announcement: string };
@@ -493,6 +528,7 @@
 
   let ai = $state<Marked[]>([]);
   let fromAi = $state(false);
+  let fromChat = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
   const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
   // "Add more": with something in the form, a second message merges into it (lib/eventFill merge);
@@ -507,21 +543,19 @@
   }
   async function fillFromText() {
     const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000, value: fillLeft });
-    if (text) await runFill(text, false);
+    if (text) await runFill(text);
   }
-  let run = 0; // the latest fill: one gone on by hand (or left) is dropped when it answers
-  async function runFill(text: string, first: boolean) {
-    const me = ++run;
+  async function runFill(text: string) {
     fillLeft = text;
     touch(); filling = true;
     try {
-      const adding = !first && more;
+      const adding = more;
       const now = { title: f.title, date: f.date, endDate: f.endDate, start: f.start, end: f.end, place: f.tba || f.online ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
       const dflt = { date: blank.date, start: blank.start };
       // the form so far, as data (the server bounds it): a default the organiser never set isn't sent
       const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
       const { onlineUrl, ...x } = await api.eventFill(org, text, have);
-      if (me !== run || gone) return;
+      if (gone) return;
       // a meeting link in the text (found in plain code): it fills an empty form; "Add more" over another link or a
       // place already set only lists it for a tap, as any filled field said otherwise
       const link = linkFill(onlineUrl, adding, f);
@@ -541,9 +575,6 @@
         return;
       }
       const { price, emoji, color, tr, ...rest } = x; // the server sends only the fields it found, named as the form's
-      // from the paste screen a date or time it didn't find stays empty (not next week's default): listed on top, and
-      // the form's own rule stops a publish without them
-      if (first && Object.keys(x).length) { f.date = rest.date ?? ''; f.start = rest.start ?? ''; f.endDate = rest.endDate ?? ''; }
       Object.assign(f, rest);
       ownTr = tr && { tr, title: f.title.trim(), description: f.description.trim() };
       if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
@@ -552,13 +583,45 @@
       if (got) { haptic.ok(); fillLeft = ''; ai = marked(x, canPrice); fromAi = true; } else haptic.error();
       say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
     } catch (e) {
-      if (me !== run || gone) return;
+      if (gone) return;
       haptic.error();
       const c = e instanceof ApiErr ? e.code : '';
       say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
-    } finally { if (me === run) { filling = false; step = 'form'; } }
+    } finally { filling = false; }
   }
-  function byHand() { haptic.tap(); run++; filling = false; step = 'form'; }
+  // Both ways out of chat hydrate this same editor. Publishing then takes its usual checks and save path.
+  function byHand() {
+    haptic.tap();
+    const d = draft;
+    if (Object.keys(d).length) {
+      touch();
+      Object.assign(f, {
+        title: d.title ?? '', description: d.description ?? '', date: d.date ?? '', start: d.start ?? '',
+        end: d.end ?? '', endDate: d.endDate ?? '', emoji: d.emoji ?? f.emoji, color: d.color ?? f.color,
+        place: d.place ?? '', placeUrl: d.placeUrl ?? '', online: !!d.online, onlineUrl: d.onlineUrl ?? '', tba: !!d.tba,
+        paid: canPrice && !!d.paid, price: canPrice && d.price ? String(d.price) : '', payTo: canPrice ? d.payTo ?? '' : '',
+        payPhone: canPrice ? d.payPhone ?? '' : '', freeFirst: canPrice && d.freeFirst ? String(d.freeFirst) : '',
+        seats: d.seats ? String(d.seats) : '', deadline: d.registration === 'date', late: d.registration === 'end',
+        regDate: d.regDate ?? '', regTime: d.regTime ?? '', teams: !!d.teams, teamMin: d.teamMin ? String(d.teamMin) : '',
+        teamMax: d.teamMax ? String(d.teamMax) : '', teamCap: d.teamCap ? String(d.teamCap) : '',
+        needsPhone: !!d.needsPhone, santa: !!d.santa, vol: !plain && !!d.volunteers, volN: String(d.volunteers ?? 5),
+        volSenior: !plain && !!d.volSenior, teamOnly: !plain && d.visibility === 'members', leaders: !plain && oversee && d.visibility === 'leaders',
+        leadersFrom: d.leadersFrom ?? 'president', meeting: !plain && !!d.meeting, forBoard: !plain && !!d.forBoard,
+        partner: canPartner && !!d.partner, host: canPartner ? d.guestHost ?? '' : '', link: canPartner ? d.externalUrl ?? '' : '',
+        form: (d.form ?? []).map(q => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
+      });
+      if (school) schoolOnly = d.schoolOnly;
+      if (d.memo && full && (!asStaff || lent)) f.memo = $state.snapshot(d.memo);
+      if (d.cohost && coOk) {
+        const name = d.cohost.toLowerCase();
+        const clubs = data.orgs.filter(o => o.kind === 'club' && o.id !== org && [o.name, o.short, o.abbr].some(v => v?.toLowerCase() === name));
+        if (clubs.length === 1) coWant = clubs[0];
+      }
+      ownTr = d.tr && { tr: d.tr, title: f.title.trim(), description: f.description.trim() };
+      ai = marked(d, canPrice); fromAi = true; fromChat = true;
+    }
+    step = 'form';
+  }
   // a missing one tapped: its picker, or the place's panel
   function jump(k: 'date' | 'time' | 'place') {
     haptic.tap();
@@ -622,6 +685,8 @@
   const endDay = $derived(f.endDate ? fromInputs(f.endDate, '12:00') : endTs != null ? endTs : Number.isFinite(dayTs) ? dayTs : null);
   const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
   const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
+  const audienceVal = $derived([whoVal, f.teamOnly && (f.forBoard ? t('ed.meetingBoard') : tags.find(g => g.id === f.meetingTag)?.name),
+    schoolOnly && school && t('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
   const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;
   const memoN = $derived(Object.keys(f.memo).length);
   const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
@@ -669,7 +734,10 @@
   }
   // Publish/Save: the check first; nothing found goes straight on
   function publish() {
-    if (found.length) { open('check'); return; }
+    if (fromChat && Object.values(err).some(Boolean)) {
+      tried = true; haptic.error(); return;
+    }
+    if (found.length || fromChat) { open('check'); return; }
     void submit(live ? 'save' : 'publish');
   }
 
@@ -705,25 +773,16 @@
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" bind:this={panel} style:--tint={shade(f.color)} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+<div class="panel" bind:this={panel} style:--tint={tint} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event (Luma): its colour, the cover blurred over it, the page's ground on top for contrast -->
   <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
     {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
 
-  {#if step === 'paste'}
-  <!-- the first step of a new event: its announcement, or by hand -->
-  <div class="body paste">
-    <h2 class="pt">{t('ed.pasteTitle')}</h2>
-    <p class="hint">{t('ed.fillSub')}</p>
-    <!-- svelte-ignore a11y_autofocus -->
-    <textarea class="ann" bind:value={fillLeft} maxlength="4000" placeholder={t('ed.fillPh')} aria-label={t('ed.pasteTitle')} autofocus></textarea>
-    <div class="foot">
-      <Button kind="filled" size="l" full loading={filling} disabled={fillLeft.trim().length < 20} onclick={() => runFill(fillLeft, true)}>{#snippet icon()}<Sparkles size={18} />{/snippet}{t('ed.fillGo')}</Button>
-      <Button kind="plain" full onclick={byHand}>{t('ed.byHand')}</Button>
-    </div>
-  </div>
+  {#if step === 'chat'}
+    <EventChat {org} bind:draft bind:dirty={chatDirty} {canPrice} emoji={blank.emoji} color={blank.color}
+      onhand={byHand} onpublish={() => { byHand(); publish(); }} />
   {:else}
   <div class="body scroll">
     <button class="art" class:busy={uploading} onclick={() => open('cover')} aria-label={t('ed.cover')}>
@@ -822,7 +881,7 @@
       {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
       {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
       {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
-      {#if canPartner && !isMeeting && saved?.guestHost}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
+      {#if canPartner && !isMeeting && (saved?.guestHost || draft.partner)}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
       {#if full && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
     </Group>
@@ -1048,6 +1107,23 @@
           <MemoAsksForm bind:memo={f.memo} seats={f.seats} date={f.date} flat />
 
         {:else if pick === 'check'}
+          {#if fromChat}
+            <Group>
+              <Row title={t('ex.who')} value={audienceVal} />
+              {#if tickets}
+                <Row title={t('ex.price')} value={priceVal} />
+                {#if f.paid}
+                  <Row title={t('ed.payTo')} value={f.payTo} />
+                  <Row title={t('ed.payPhone')} value={f.payPhone} accessory="chevron" onclick={() => open('price')} />
+                {/if}
+                <Row title={t('ed.seats')} value={seatsN ? String(seatsN) : t('ex.unlimited')} />
+                <Row title={t('ex.regUntil')} value={regVal} />
+              {:else if f.partner}
+                <Row title={t('ed.partnerHost')} value={f.host} />
+                <Row title={t('ed.partnerLink')} value={f.link} accessory="chevron" onclick={() => open('partner')} />
+              {/if}
+            </Group>
+          {/if}
           {#if found.length}
             <p class="sum">{tn('ex.found', found.length)}</p>
             {#each found as x (x.id)}
@@ -1095,11 +1171,6 @@
   /* the AI filled it: a quiet accent ring and dot until the organiser touches it */
   .ai:not(.bad) { box-shadow: inset 0 0 0 1px var(--accent-text); }
   .pill.ai::after { content: ''; position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .paste { gap: var(--s-2); }
-  .pt { margin: var(--s-4) var(--s-4) 0; font: 700 var(--fs-t1)/1.2 var(--font-display); letter-spacing: -0.02em; }
-  .ann { width: 100%; min-height: 40vh; resize: none; margin-top: var(--s-2); padding: var(--s-4); border-radius: var(--r-l); background: var(--pill); color: var(--text);
-    font: 450 var(--fs-body)/1.45 var(--font-text); }
-  .ann::placeholder { color: var(--text-3); }
   .miss { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
   .miss > span { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .miss .hint { flex-basis: 100%; margin: 0; }

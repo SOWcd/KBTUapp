@@ -46,6 +46,7 @@
   import { sheets, openMapFrom, takeIris, peekIris } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { conversation, rememberConversation, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import ChatMessage from './ChatMessage.svelte';
   import { answer } from '../../lib/answer';
   import { power } from '../../lib/state/power.svelte';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
@@ -299,16 +300,12 @@
     {/if}
     {#each chat.turns as m, i (i)}
       {#if m.role === 'user'}
-        <!-- my words in a bubble on the right, KRI's plain on the ground (bespoke content: no ui/ part draws a message) -->
-        <div class="mine" class:new={i >= born}><p class="selectable">{m.text}</p></div>
+        <ChatMessage mine text={m.text} fresh={i >= born} />
       {:else if m.text}
         {@const p = answer(m.text)}
         <div class="ans" class:new={i >= born} class:err={m.err != null} class:left={i === left}>
           {#if i === top}<i class="orb" aria-hidden="true"></i>{/if}
-          <!-- the answer itself first and stronger, a fact a line under it, an emoji in its own gutter -->
-          <div class="say selectable" class:one={p.lines.length === 1}>
-            {#each p.lines as l, k (k)}<p style:--i={k}>{#if l.e}<span class="em">{l.e}</span>{/if}<span>{l.t}</span></p>{/each}
-          </div>
+          <ChatMessage lines={p.lines} fresh={i >= born} />
           {#if (m.mark && !m.care) || p.source}
             <!-- the source and 👍/👎 on one line, right under the words they are about -->
             <div class="meta" style:--i={p.lines.length}>
@@ -434,29 +431,17 @@
   .eg button:active { transform: scale(0.96); }
   .eg button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
-  .mine { align-self: flex-end; max-width: 86%; margin-top: var(--s-2); padding: 9px 14px; border-radius: var(--r-l); background: var(--accent-soft); transform-origin: 100% 100%; }
-  .mine:first-child { margin-top: 0; }
-  .mine p, .help p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .mine.new { animation: sent 340ms var(--ease-spring) backwards; }
-  @keyframes sent { from { opacity: 0; transform: translateY(18px) scale(0.94); } }
-
+  .help p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
   .ans { display: flex; flex-direction: column; padding: 0 var(--s-1); }
   .ans > .orb { margin: 2px 0 var(--s-2); }
   /* where the word "thinking" stood beside it: it stays in its place and the lines come down from under it */
   .new > .orb { animation: still 420ms var(--ease-bounce) backwards; }
   @keyframes still { from { transform: scale(0.82); } }
-  .new .say p, .new .meta, .new .acts, .help.new { animation: down 460ms var(--ease) calc(80ms + var(--i, 0) * 70ms) backwards; }
+  .new .meta, .new .acts, .help.new { animation: down 460ms var(--ease) calc(80ms + var(--i, 0) * 70ms) backwards; }
   /* the light has gone to the next answer: this one rises into its room (30 px: the light and its margins) */
   .ans.left { animation: rise 360ms var(--ease) backwards; }
   @keyframes rise { from { transform: translateY(30px); } }
-  .say { display: flex; flex-direction: column; gap: 7px; }
-  .say p { display: flex; gap: 8px; font: 450 var(--fs-body)/1.42 var(--font-text); letter-spacing: -0.008em; overflow-wrap: anywhere; }
-  .say p > span:last-child { flex: 1; min-width: 0; }
-  .say p:first-child { font: 600 var(--fs-row)/1.3 var(--font-text); letter-spacing: -0.014em; }
-  .say.one p { font-weight: 450; line-height: 1.38; }
-  .say p + p:nth-child(2) { margin-top: 3px; }
-  .em { flex: none; width: 20px; text-align: center; }
-  .err .say p { color: var(--text-2); }
+  .err { color: var(--text-2); }
   .meta { display: flex; align-items: center; min-height: 36px; margin: 2px -6px 0 0; --plain-ink: var(--text-3); }
   .meta :global(.btn[aria-pressed='true']) { color: var(--accent-text); opacity: 1; }
   .src { flex: 1; min-width: 0; padding-right: var(--s-2); font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); overflow-wrap: anywhere; }

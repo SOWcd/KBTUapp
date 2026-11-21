@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marked, merge, missing } from './eventFill';
+import { marked, merge, missing, nextQuestion, updateDraft, type ChatFill } from './eventFill';
 
 describe('the announcement fill', () => {
   it('marks the rows it filled', () => {
@@ -21,4 +21,24 @@ describe('the announcement fill', () => {
     expect(merge(now, { start: '19:00' }, { start: '18:00' }).set).toEqual({ start: '19:00' });
     expect(merge(now, { endDate: '2026-11-21' }).set).toEqual({ endDate: '2026-11-21' }); // a second day
   });
+});
+
+it('keeps unknown decisions distinct from explicit defaults throughout the chat', () => {
+  let d: ChatFill = { title: 'Quiz', start: '19:00', date: '2027-02-01', place: 'Hall' };
+  const turns = [
+    ['paid', { paid: true }], ['price', { price: 500 }], ['payTo', { payTo: 'Test Recipient' }], ['payPhone', { payPhone: '+77000000000' }],
+    ['seats', { seats: 0 }], ['registration', { registration: 'date' }], ['regDate', { regDate: '2027-01-31' }],
+    ['regTime', { regTime: '18:00' }], ['teams', { teams: true }], ['teamMin', { teamMin: 2 }], ['teamMax', { teamMax: 4 }], ['teamCap', { teamCap: 0 }],
+  ] as const;
+  for (const [question, patch] of turns) {
+    expect(nextQuestion(d, true)).toBe(question);
+    d = updateDraft(d, patch);
+  }
+  expect(nextQuestion(d, true)).toBe('ready');
+  expect(nextQuestion(d, false)).toBe('paidRight');
+  expect(nextQuestion(updateDraft(d, { meeting: true }), true)).toBe('meeting');
+  d = updateDraft(d, { paid: false, registration: 'start', teams: false, tba: true });
+  expect(d).toMatchObject({ paid: false, teams: false, tba: true, seats: 0 });
+  for (const key of ['price', 'payPhone', 'payTo', 'teamMax', 'regDate', 'place']) expect(d).not.toHaveProperty(key);
+  expect(nextQuestion(d, true)).toBe('ready');
 });
