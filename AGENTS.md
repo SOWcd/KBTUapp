@@ -19,13 +19,13 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
 | Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` nightly jobs; `stats` anonymous usage counters; `credits` the people of the app, its own consent) |
-| Schema | `server/kbtu/schema.sql` + append-only `MIGRATIONS` in `server/kbtu/migrations.py` |
+| Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
 | QR check-in, `/show` | `server/kbtu/checkin.py`, `web/src/screens/Screen.svelte` |
 | Web entry, tabs, sheets | `web/src/App.svelte`, `web/src/lib/state/ui.svelte.ts`, `web/src/lib/state/sheets.ts` |
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
-| UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it) |
+| UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; grep the key prefix and edit by anchor in all three |
 | Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
 
 ## Run and check
@@ -62,17 +62,9 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
-- **The bot** sends templates with a button into the app, never a user's words. Two exceptions: a student's own post
-  to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
-  links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
-  take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
-  reply in its comments the same way (`fchan_replies`): plain text, its own AI check, signed
-  with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
-  taken down from Admin. In a group, `/all` (anyone Telegram says is in the chat and who has a student's account in the app may call, never in a channel's discussion group; it mentions the app's list, whom the bot saw and the chat's members it lists over MTProto as itself, `kbtu/mtbot.py`, kept nowhere, a hidden roster only for an admin's call; their words never become a mention or a link) repeats the caller's own words over each five mentions, in the very chat they wrote them (escaped, short). And a user's own text going back to them alone: a channel comment a moderator restored
-  (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
-  A share card of a forum post live in the channel (`/api/share` kind `fp`, inline mode) quotes its first 160 characters,
-  escaped, never a signature; inline offers only my own signed posts. A card already sent stays in its chat after a
-  take-down, as a forward of the channel's post would.
+- **The bot** sends templates with a button into the app, never a user's words. The few exceptions (forum channel posts and
+  replies, `/all`, restored comments, share cards, group video replies) are listed in `server/kbtu/BOT_WORDS.md`: read
+  it before touching bot.py, fchannel.py, tgcomments.py or tiktok.py.
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own
@@ -86,20 +78,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Security reviews**: features that touch money, check-in, anonymity or personal data get an adversarial review
   (a second agent trying to break them) before they ship.
 
-## Feature switches (server env)
+## Feature switches
 
-- `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
-- `BOARD=1`: the assistant, sign-up questions, the map's flaws for every student; `BOARD=staff`: admins and
-  moderators only. Its old in-app forum is off for good.
-- `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
-- `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`).
-  `FORUM_GROUP`: its discussion group.
-- `DOCS=1`: the assistant answers from the university's documents (`kbtu/docs.py`, a separate file at `DOCS_DB`, default
-  next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
-  embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
-- `TIKTOK=1` enables captionless group replies to TikTok, YouTube Shorts, youtu.be videos under three minutes, and Instagram reels and video posts (`kbtu/tiktok.py`). TikTok's plain H.264 file or photo album comes through tikwm.com. For YouTube and Instagram, yt-dlp downloads the source video in a temporary directory, up to 720p and under 50 MB. Failures are silent. All sources share `CHAT_CAP` per chat per minute and skip bots, stale messages, banned users and the forum discussion group.
-- `REPORTS=1`: clubs' event reports in Studio (`logic/evreports.py`: the team's attendance marks); off until its clause in the privacy policy (Codex's).
-- `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
-- `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
-- No switch changes the policy or the consent version.
-- `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
+Server env switches (`FORUM`, `BOARD`, `DOCS`, `REPORTS`, `TIKTOK`, `FORUM_CHANNEL`, ...): README.md "Feature switches".
+No switch changes the policy or the consent version.
