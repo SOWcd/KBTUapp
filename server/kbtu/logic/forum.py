@@ -9,6 +9,7 @@ import unicodedata
 
 from ..db import tx
 
+from . import notifications
 from .core import (ApiError, PERSON_COLS, Viewer, _qs, course_of, log_action, need_student, one, person_ref, rows, short_name)
 
 
@@ -117,11 +118,13 @@ def set_my_forum(con, v: Viewer, body: dict) -> dict:
             con.execute("DELETE FROM user_skills WHERE user_id = ?", (v.id,))
             con.executemany("INSERT INTO user_skills (user_id, skill_id) VALUES (?, ?)", [(v.id, i) for i in ids])
             con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(_now(), i) for i in ids])
-        for key, col in (("open", "open_projects"), ("pings", "ask_pings")):
-            if key in body:
-                if not isinstance(body[key], bool):
-                    raise ApiError("bad_input")
-                con.execute(f"UPDATE users SET {col} = ? WHERE id = ?", (int(body[key]), v.id))  # col from the pair above
+        for key in ("open", "pings"):
+            if key in body and not isinstance(body[key], bool):
+                raise ApiError("bad_input")
+        if "open" in body:
+            con.execute("UPDATE users SET open_projects = ? WHERE id = ?", (int(body["open"]), v.id))
+        if "pings" in body:
+            notifications.set_preference(con, v.id, "nProjectPings", body["pings"])
     return my_forum(con, v)
 
 

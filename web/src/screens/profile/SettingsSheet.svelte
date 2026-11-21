@@ -1,8 +1,3 @@
-<script lang="ts" module>
-  // A tap after closing and reopening Settings still waits for the previous save.
-  let chain: Promise<void> = Promise.resolve();
-</script>
-
 <script lang="ts">
   // A page pushed in from the right (ui/Pane) from the settings under my lanyard (Me), the phone's own way: the
   // notification switches with a footnote under each; About me (my data, each its own row: the name a page deeper,
@@ -25,7 +20,7 @@
   import { schoolOf, shortOf, schoolShort } from '../../lib/short';
   import { CITIES, cityName } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
-  import { session, loadMe, pendingSwitches as want } from '../../lib/state/session.svelte';
+  import { session, loadMe, saveSwitch } from '../../lib/state/session.svelte';
   import { onMount } from 'svelte';
   import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -33,7 +28,7 @@
   import { inner } from '../../lib/perms';
   import { t, i18n, type Key } from '../../lib/i18n/index.svelte';
   import Star from '@lucide/svelte/icons/star';
-  import { canStars, haptic, openInvoice, openLink } from '../../lib/tg';
+  import { canStars, haptic, on, openInvoice, openLink } from '../../lib/tg';
   import Emoji from '../../ui/Emoji.svelte';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
@@ -45,9 +40,6 @@
   import { answerCredits } from '../../lib/credits';
   import { setReportConsent } from '../../lib/reports';
   import { setKriGoogle } from '../../lib/kriGoogle';
-  // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice)
-  onMount(() => void loadMe());
-
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
   type Kind = 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
@@ -58,24 +50,19 @@
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
+  onMount(() => {
+    void loadMe();  // my current club memberships and switches
+    if (kind === 'notify') return on('activated', () => void loadMe(true));
+  });
+
   // a switch saves at once and puts itself back if the server says no
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
-  // one request at a time, and a choice the server hasn't confirmed yet stays on top of any answer
   let undo = $state(0); // the reports' consent switch, redrawn as it was after a "no" in its question
-  function set(k: (typeof notificationSettings)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
-    if (!me) return;
+  async function set(k: (typeof notificationSettings)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
     haptic.tap();
-    me.settings[k] = on;
-    want[k] = on;
-    chain = chain.then(async () => {
-      if (want[k] !== on) return; // tapped again meanwhile: that tap sends the latest
-      try {
-        const r = await api.updateMe({ [k]: on });
-        if (want[k] === on) delete want[k];
-        session.me = { ...r, settings: { ...r.settings, ...want } };
-        if (!quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
-      } catch { if (want[k] === on) { delete want[k]; if (session.me) session.me.settings[k] = !on; } say(t('common.error'), 'warning_3d'); } // only this switch goes back
-    });
+    try {
+      if (await saveSwitch(k, on) && !quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's

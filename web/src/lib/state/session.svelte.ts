@@ -1,6 +1,6 @@
 // Who is looking: the account from /api/me. Guests browse; any action goes through asStudent(),
 // which opens the KBTU sign-in sheet and runs the action by itself after sign-in (SPEC §2).
-import { api, ApiErr, type Me } from '../api';
+import { api, ApiErr, type Me, type Settings } from '../api';
 import { CONSENT_VERSION } from '../legal';
 import { tg } from '../tg';
 import { clearCache } from './cache';
@@ -15,7 +15,39 @@ export const session = $state({ me: null as Me | null, ready: false, verified: f
   donate: '', support: [] as NonNullable<Me['support']> });
 
 // Optimistic Settings switches survive a refresh that started before the PATCH finished.
-export const pendingSwitches: Record<string, boolean> = {};
+const pendingSwitches: Partial<Record<SwitchKey, boolean>> = {};
+const savedSwitches: Partial<Record<SwitchKey, boolean>> = {};
+type SwitchKey = Exclude<keyof Settings, 'lang' | 'theme'>;
+let saveQueue: Promise<unknown> = Promise.resolve();
+
+/** Apply the switch immediately and keep the latest choice visible during refreshes and saves. */
+export function saveSwitch(key: SwitchKey, on: boolean): Promise<boolean> {
+  if (!session.me) return Promise.resolve(false);
+  savedSwitches[key] ??= session.me.settings[key];
+  session.me.settings[key] = on;
+  pendingSwitches[key] = on;
+  const save = saveQueue.then(async () => {
+    if (pendingSwitches[key] !== on) return false;
+    try {
+      const next = await api.updateMe({ [key]: on });
+      if (pendingSwitches[key] === on) {
+        delete pendingSwitches[key];
+        delete savedSwitches[key];
+      } else savedSwitches[key] = next.settings[key];
+      session.me = { ...next, settings: { ...next.settings, ...pendingSwitches } };
+      return true;
+    } catch (error) {
+      if (pendingSwitches[key] === on) {
+        delete pendingSwitches[key];
+        if (session.me) session.me.settings[key] = savedSwitches[key] ?? !on;
+        delete savedSwitches[key];
+      }
+      throw error;
+    }
+  });
+  saveQueue = save.catch(() => {});
+  return save;
+}
 
 const authAt = Number(new URLSearchParams(tg.initData).get('auth_date')) || 0;
 export function forgetRecovery(auth?: number): void {

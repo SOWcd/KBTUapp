@@ -16,13 +16,13 @@ from .. import media, portal
 from .. import db
 from ..db import tx
 
+from . import notifications
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
 
-SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
-            "nForumComments": "n_forum_comments", "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year",
-            "canFriend": "can_friend"}
+SETTINGS = {"lang": "lang", "theme": "theme", "nDoor": "n_door", "showGoing": "show_going", "hideFirstYear": "hide_first_year",
+            "canFriend": "can_friend", **{k: col for k, (col, _) in notifications.CATEGORIES.items()}}
 
 
 def ms_link(con, uid: int, who: dict) -> None:
@@ -841,6 +841,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
     for k, col in SETTINGS.items():
         if k not in patch:
             continue
+        if k in notifications.CATEGORIES:
+            notifications.set_preference(con, v.id, k, bool(patch[k]))
+            continue
         val = patch[k]
         if k == "lang" and val not in ("ru", "kk", "en") or k == "theme" and val not in ("light", "dark", None):
             raise ApiError("bad_input")
@@ -924,13 +927,6 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets["city_hidden"] = int(patch["cityHidden"])
     if sets:
         con.execute(f"UPDATE users SET {', '.join(c + ' = ?' for c in sets)} WHERE id = ?", (*sets.values(), v.id))
-    if sets.get("n_forum_comments") == 0:
-        con.execute("""UPDATE bot_outbox SET error = 'muted' WHERE user_id = ? AND kind = 'fch_comments'
-            AND sent_at IS NULL AND error IS NULL""", (v.id,))
-    if "nRemind" in patch:  # the switch acts at once on reminders already queued: off drops them, on arms the upcoming ones
-        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND sent_at IS NULL", (v.id,))
-        for e in rows(con, "SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.status = 'going'", v.id):
-            _remind(con, v.id, e)
 
 
 def _drop_photo(con, fid: int | None) -> list[str]:
@@ -1372,7 +1368,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
-            role = 'user', is_founder = 0, forum_seen_msg = 0 WHERE id = ?""", (v.id,))  # a burnt number isn't given again
+            role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         # Delete a claimed roster row and prevent reimport only if its email is verified. Release an unverified
         # claim so a typo in the roster cannot keep the row from its owner.
         for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
@@ -1611,7 +1607,7 @@ from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
-from .seats import _remind, _ticket_code, ev_ref, joined, notify, promote  # noqa: E402
+from .seats import _ticket_code, ev_ref, joined, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402
 from . import gallery  # noqa: E402
 

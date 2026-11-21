@@ -2136,4 +2136,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the organizers' team names on the door's list (search a team, tick it at once): a list row's and an app guest's
     (212, """ALTER TABLE event_guests ADD COLUMN team TEXT CHECK (team IS NULL OR length(team) <= 80);
     ALTER TABLE registrations ADD COLUMN door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80);"""),
+    (213, """ALTER TABLE users ADD COLUMN n_broadcasts INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE users ADD COLUMN n_digests INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE users ADD COLUMN n_door INTEGER NOT NULL DEFAULT 1;
+    UPDATE users SET n_door = n_remind;
+    ALTER TABLE users ADD COLUMN notification_undo TEXT NOT NULL DEFAULT '{}';
+    CREATE TABLE notification_days (
+      day INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      sent INTEGER NOT NULL DEFAULT 0,
+      useful INTEGER NOT NULL DEFAULT 0,
+      turned_off INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (day, category)
+    ) STRICT;"""),
 ]

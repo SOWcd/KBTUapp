@@ -87,9 +87,11 @@ def test_opens_by_itself_at_t30(env):
     m = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'door_open'").fetchone()
     text, _, start = bot._render(con, m)
     assert "Case" in text and start == f"tk_{eid}"         # a template with a button to the ticket
-    con.execute("UPDATE users SET n_remind = 0 WHERE id = ?", (_uid(con, 10),))
-    assert bot._render(con, m) is None                     # reminders off: quiet
-    con.execute("UPDATE users SET n_remind = 1 WHERE id = ?", (_uid(con, 10),))
+    assert c.patch("/api/me", headers=tma(10), json={"nRemind": False}).status_code == 200
+    assert bot._render(con, m) is not None                 # optional reminders are a separate switch
+    assert c.patch("/api/me", headers=tma(10), json={"nDoor": False}).status_code == 200
+    assert bot._render(con, m) is None
+    assert c.patch("/api/me", headers=tma(10), json={"nDoor": True}).status_code == 200
     assert _scan(c, eid, con, 10) == "ok"
     assert bot._render(con, m) is None                     # in already by the time it goes
     # moved: event_changed tells, not a second door message
