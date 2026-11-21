@@ -825,11 +825,14 @@ STARS_REFUSED = {"ru": "Не получилось. Попробуйте ещё �
 
 
 RECEIPT_WHY = {
-    "ru": {"duplicate": "этот чек уже присылали", "unreadable": "не похоже на чек Kaspi", "amount_short": "сумма меньше цены",
+    "ru": {"ocr_unavailable": "распознавание чеков недоступно, организатору нужно проверить платёж",
+           "duplicate": "этот чек уже присылали", "unreadable": "не похоже на чек Kaspi", "amount_short": "сумма меньше цены",
            "amount_over": "сумма не совпадает с ценой", "recipient_mismatch": "другой получатель", "too_early": "чек старше самого события"},
-    "kk": {"duplicate": "бұл чекті бұрын жіберген", "unreadable": "Kaspi чегіне ұқсамайды", "amount_short": "сома бағадан аз",
+    "kk": {"ocr_unavailable": "чекті автоматты түрде оқу қолжетімсіз, төлемді ұйымдастырушы тексеруі керек",
+           "duplicate": "бұл чекті бұрын жіберген", "unreadable": "Kaspi чегіне ұқсамайды", "amount_short": "сома бағадан аз",
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
-    "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
+    "en": {"ocr_unavailable": "automatic receipt reading is unavailable, an organizer needs to check the payment",
+           "duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
 }
 

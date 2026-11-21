@@ -110,12 +110,29 @@ def test_flagless_mismatch_is_not_clean(paid, monkeypatch, change):
     assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
 
 
-def test_ocr_absent_is_not_clean(paid, monkeypatch):
-    c, _, eid, (tg, _, _), _ = paid
+def test_ocr_outage_requires_manual_approval_at_the_door(paid, monkeypatch):
+    c, con, eid, (tg, _, _), now = paid
     _go(c, eid, tg)
     row = _send(paid, monkeypatch, tg, None)
-    assert row["flags"] == "partial"
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (now, eid))
+    checkin = lambda: c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"userId": _uid(con, tg)}).json()
+    assert checkin()["result"] == "flagged"
+    assert row["flags"] == "ocr_unavailable"
     _unchecked(paid, tg, row)
+    assert c.post(f"/api/receipts/{row['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
+    assert checkin()["result"] == "ok"
+
+
+def test_legacy_unread_receipt_requires_review(paid, monkeypatch):
+    c, con, eid, (a, b, _), now = paid
+    for tg in (a, b):
+        _go(c, eid, tg)
+    unread = _send(paid, monkeypatch, a, None)
+    partial = _send(paid, monkeypatch, b, {**_fields(now), "recipient": None}, 241)
+    con.execute("UPDATE receipts SET flags = 'partial' WHERE id = ?", (unread["id"],))
+    con.executescript(dict(db.MIGRATIONS)[201])
+    assert logic.organizing.flagged(con, unread["registration_id"])
+    assert not logic.organizing.flagged(con, partial["registration_id"])
 
 
 def test_empty_ocr_result_is_not_clean(paid, monkeypatch):

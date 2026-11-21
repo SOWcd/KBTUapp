@@ -2051,4 +2051,6 @@ MIGRATIONS: list[tuple[int, str]] = [
     -- A legacy erasure could clear the only record of redemption. Retire ambiguous live links once.
     UPDATE org_invites SET revoked_at = unixepoch() WHERE multi = 0 AND consumed = 0 AND revoked_at IS NULL
       AND expires_at > unixepoch() AND created_at <= (SELECT MAX(at) FROM audit_log WHERE action = 'delete_my_data');"""),
+    (201, """UPDATE receipts SET flags = 'ocr_unavailable' WHERE flags IN ('', 'partial')
+        AND amount IS NULL AND receipt_no IS NULL AND reviewed_at IS NULL AND status = 'accepted';"""),
 ]

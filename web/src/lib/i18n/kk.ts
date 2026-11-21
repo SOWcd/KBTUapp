@@ -1570,6 +1570,7 @@ const kk: Dict = {
   'rc.flag.amount_over': "Сома бағаға сай емес",
   'rc.flag.recipient_mismatch': "Чекте басқа алушы: {name}",
   'rc.flag.too_early': "Іс-шара жасалмай тұрып төленген",
+  'rc.flag.ocr_unavailable': "Чекті автоматты түрде оқу қолжетімсіз. Төлемді ұйымдастырушы тексеруі керек.",
   'rc.flag.unreadable': "Оқылмады: бұл Kaspi чегі емес сияқты",
   'rc.flag.spot': "Іріктеп тексеру",
   'rc.flag.partial': "Толық оқылмады",

@@ -1570,6 +1570,7 @@ const en: Dict = {
   'rc.flag.amount_over': "The sum doesn't match the price",
   'rc.flag.recipient_mismatch': "Another recipient on the receipt: {name}",
   'rc.flag.too_early': "Payment predates event creation",
+  'rc.flag.ocr_unavailable': "Automatic receipt reading is unavailable. An organizer needs to check the payment.",
   'rc.flag.unreadable': "Couldn't read it: doesn't look like a Kaspi receipt",
   'rc.flag.spot': "Spot check",
   'rc.flag.partial': "Could not be read fully",

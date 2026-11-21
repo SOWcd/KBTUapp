@@ -2690,7 +2690,7 @@ def test_paid_events(env):
 
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     rid = att[0]["receipt"]["id"]
-    assert att[0]["receipt"]["flags"] == ["partial"] and att[1]["receipt"] is None  # nothing read: a person looks, no warning
+    assert att[0]["receipt"]["flags"] == ["ocr_unavailable"] and att[1]["receipt"] is None
     img = c.get(f"/api/receipts/{rid}/image", headers=tma(21))
     assert img.headers["content-type"] == "image/webp" and "no-store" in img.headers["cache-control"]
     assert c.get(f"/api/receipts/{rid}/image", headers=tma(10)).status_code == 200                     # the sender
@@ -2707,7 +2707,7 @@ def test_paid_events(env):
 
     ticket = c.post(f"/api/events/{eid}/receipt", headers=tma(11), content=shot.getvalue()).json()["my"]["ticketCode"]
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
-    assert att[0]["receipt"]["flags"] == ["duplicate"] and not att[0]["receipt"]["reviewed"]
+    assert att[0]["receipt"]["flags"] == ["duplicate", "ocr_unavailable"] and not att[0]["receipt"]["reviewed"]
     assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
     held = c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket}).json()      # warned before admission
     assert held["result"] == "flagged" and held["came"] == 0

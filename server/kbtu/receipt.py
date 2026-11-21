@@ -62,7 +62,7 @@ class NotReceipt(Exception):
 
 def take(data: bytes, root: Path) -> tuple[dict, dict | None]:
     """Reads the picture and, if it is a receipt, stores it privately under root (like a photo): (saved, fields).
-    Anything else is refused before it is written (NotReceipt); without OCR every picture passes."""
+    Anything else is refused before it is written (NotReceipt); without OCR the organizer must check the saved picture."""
     im = picture(data)
     got = read(im)
     if got is not None and not got.get("amount") and not got.get("no"):
@@ -71,7 +71,7 @@ def take(data: bytes, root: Path) -> tuple[dict, dict | None]:
 
 
 def read(im: Image.Image) -> dict | None:
-    """The receipt's fields, {} when nothing could be read, None when OCR isn't there to run (no flags then).
+    """The receipt's fields, {} when nothing could be read, None when OCR could not run.
     Page segmentation 3 (automatic): of 26 variants (3 real receipts as PDF, phone screenshot and 727 px, JPEG q70,
     dark; a made-up one at 5 sizes) it read every field of 25, mode 4 of 23 (it dropped the big sum at some sizes),
     mode 6 missed the sum outright. Without the sum or the number (the two checks that matter), one more pass at 2/3
