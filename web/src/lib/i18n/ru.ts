@@ -3341,6 +3341,7 @@ const ru = {
   'mk.letInOk': "{id} впущен",
   'mk.letInNo': "Нет в списке: проверь номер и фамилию",
   'mk.guestList': "Список гостей",
+  'mk.markTeam': "Отметить всю команду ({n})",
   'mk.helper': "Помощник",
   'age.adult': "18+",
   'age.minor': "Младше 18",

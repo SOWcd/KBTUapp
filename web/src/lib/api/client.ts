@@ -378,7 +378,7 @@ export const server = {
   checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),
   /** an age_check event's door (server organizing.mark_age): a ticket holder 18+ or not, after a look at the ID */
-  doorPending: (id: Id): Promise<{ pending: number; pendingCame: number; list?: { key: string; name: string; adult: boolean | null; came: boolean; at?: number | null }[] }> => call('GET', `/events/${id}/door-pending`),
+  doorPending: (id: Id): Promise<{ pending: number; pendingCame: number; list?: { key: string; name: string; adult: boolean | null; came: boolean; at?: number | null; team?: string | null }[] }> => call('GET', `/events/${id}/door-pending`),
   letIn: (id: Id, studentId: string, surname: string, adult?: boolean): Promise<{ already: boolean; adult: boolean | null; pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending`, { studentId, surname, adult }), // a list buyer not in the app, by hand
   tickPending: (id: Id, key: string, came = true, adult?: boolean): Promise<{ pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending/tick`, { key, came, adult }),
   doorExtra: (id: Id, step?: 1 | -1): Promise<{ extra: number }> => step ? call('POST', `/events/${id}/door-extra`, { step }) : call('GET', `/events/${id}/door-extra`), // outsiders let in without the app: a bare count

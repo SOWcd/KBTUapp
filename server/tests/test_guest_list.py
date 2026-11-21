@@ -339,3 +339,12 @@ def test_ticket_by_username_without_sign_in(door_event):
     assert code and not con.execute("SELECT 1 FROM event_guests WHERE event_id = 1 AND username = 'guestnick'").fetchone()
     r = c.post("/api/events/1/checkin", headers=tma(9), json={"code": code[0].split("-")[1]}).json()
     assert r["result"] == "ok", r
+
+
+def test_door_teams(door_event):
+    """The sheet's team names: on list rows and on app guests' tickets, served on the door's lists."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    guests.door_names(con, 1, ["24B030001,Jane Testov,1,,Owls", ",Out Sider,,,Owls"])
+    got = c.get("/api/events/1/door-pending", headers=tma(9)).json()["list"]
+    assert {x["team"] for x in got} == {"Owls"}
