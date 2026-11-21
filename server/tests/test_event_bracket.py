@@ -120,7 +120,7 @@ def test_bracket_stage_replacement_and_rights(club):
     [group] = _draw(c, groups_path)
     old = group["matches"][0]["id"]
     assert _score(c, old).status_code == 200
-    assert c.post(path, headers=ORGANIZER, json={"seed": "random"}).status_code == 409
+    assert c.post(path, headers=ORGANIZER, json={"seed": [teams["One"], teams["Two"]]}).status_code == 409  # a hand seed over played groups
     assert _score(c, old, None).status_code == 200
     result = c.post(path, headers=ORGANIZER, json={"seed": "random"})
     assert result.status_code == 200, result.text
@@ -155,3 +155,23 @@ def test_bracket_team_removal_keeps_fixtures_and_scores(club):
     assert matches[first["id"]]["away"] is None and matches[first["id"]]["home_score"] == 1
     assert first["away"] not in {team["id"] for team in updated["teams"]}
     assert matches[first["next_lose"]]["home"] is None
+
+
+def test_playoff_from_finished_groups(club):
+    """Group stage played out: the draw seeds the playoff from each group's advancing teams (A1-B2, B1-A2), groups stay."""
+    c, eid, groups_path, teams = _seed(club, [f"T{i}" for i in range(8)])
+    path = f"/api/events/{eid}/bracket"
+    groups = c.post(groups_path, headers=ORGANIZER, json={"size": 4, "advance": 2}).json()["groups"]
+    first = groups[0]["matches"][0]["id"]
+    assert _score(c, first).status_code == 200
+    assert c.post(path, headers=ORGANIZER, json={"seed": "random"}).json()["message"] == "groups_unfinished"
+    for g in groups:
+        for m in g["matches"]:
+            assert _score(c, m["id"], (2, 1)).status_code == 200
+    board = c.post(path, headers=ORGANIZER, json={"seed": "random"})
+    assert board.status_code == 200, board.text
+    standings = {g["id"]: [t["team_id"] for t in g["standings"] if t["advance"]] for g in c.get(groups_path, headers=VIEWER).json()["groups"]}
+    a, b = list(standings.values())
+    opening = {frozenset((m["home"], m["away"])) for m in board.json()["upper"][0]["matches"]}
+    assert opening == {frozenset((a[0], b[1])), frozenset((b[0], a[1]))}
+    assert len(c.get(groups_path, headers=VIEWER).json()["groups"]) == 2

@@ -5,7 +5,7 @@ import random
 from collections import defaultdict
 
 from ..db import tx
-from . import evmatches, evteams
+from . import evgroups, evmatches, evteams
 from .core import ApiError, Viewer, rows
 from .seats import _event
 
@@ -55,6 +55,8 @@ def draw(con, v: Viewer, eid: int, body: dict) -> dict:
         raise ApiError("bad_input")
     with tx(con):
         evteams.staff_event(con, v, eid)
+        if seed == "random" and rows(con, "SELECT 1 FROM ev_matches WHERE event_id = ? AND stage = 'group' AND home_score IS NOT NULL LIMIT 1", eid):
+            return _from_groups(con, eid)  # after a group stage: its playoff, never a fresh random draw over it
         evmatches.unscored(con, eid)
         teams = [t[0] for t in rows(con, "SELECT id FROM event_teams WHERE event_id = ? ORDER BY id", eid)]
         if len(teams) < 2:
@@ -69,6 +71,23 @@ def draw(con, v: Viewer, eid: int, body: dict) -> dict:
         evmatches.remove_bracket(con, eid)
         _fixtures(con, eid, teams)
         return _board(con, eid)
+
+
+def _from_groups(con, eid: int) -> dict:
+    """The playoff from a finished group stage: who advances from each group, seeded rank first then group order
+    (A1, B1, A2, B2: the opening pairs A1-B2 and B1-A2, never two of one group); the groups and their scores stay."""
+    if rows(con, "SELECT 1 FROM ev_matches WHERE event_id = ? AND stage != 'group' AND home_score IS NOT NULL LIMIT 1", eid):
+        raise ApiError("conflict", "bracket_scored")
+    if rows(con, "SELECT 1 FROM ev_matches WHERE event_id = ? AND stage = 'group' AND home_score IS NULL LIMIT 1", eid):
+        raise ApiError("conflict", "groups_unfinished")
+    groups = evgroups._board(con, eid)["groups"]
+    ranked = [[t["team_id"] for t in g["standings"] if t["advance"]] for g in groups]
+    teams = [g[rank] for rank in range(max(map(len, ranked), default=0)) for g in ranked if rank < len(g)]
+    if len(teams) < 2:
+        raise ApiError("bad_input", "bracket_teams")
+    evmatches.remove_bracket(con, eid)
+    _fixtures(con, eid, teams)
+    return _board(con, eid)
 
 
 def swap(con, v: Viewer, eid: int, body: dict) -> dict:

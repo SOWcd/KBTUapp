@@ -3469,6 +3469,7 @@ const en: Dict = {
   'gr.toGroup': "To group {name}",
   'gr.moveHint': "Tap a team to move it to another group.",
   'gr.scoreHint': "Tap a match to enter its score. Once a score is in, the groups are fixed.",
+  'br.groupsLeft': "Finish every group match first",
   'gr.scored': "Scores are in: the groups are fixed",
   'gr.clear': "Clear",
   'gr.remove': "Remove the group stage",
