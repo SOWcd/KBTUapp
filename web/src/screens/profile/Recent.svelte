@@ -1,29 +1,16 @@
 <script lang="ts">
   // Where I've been in the last 30 days, in Awards (the "N events" number opens it; My events page gone):
   // in the week after one, its faces ask how it was, one tap rates it here.
-  import { api, type EventCard } from '../../lib/api';
   import { FACES } from '../../lib/faces';
-  import { burst } from '../../ui/burst';
-  import { say } from '../../lib/state/ui.svelte';
+  import { data, canAskRating, ratingBusy, rateFromPrompt } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { relDay, nowTs } from '../../lib/time';
-  import { haptic } from '../../lib/tg';
+  import { relDay } from '../../lib/time';
   import EventRow from '../../ui/EventRow.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import Button from '../../ui/Button.svelte';
   import Section from '../../ui/Section.svelte';
 
-  let recent = $state<EventCard[]>([]);
-  $effect(() => { api.pastEvents().then((l) => (recent = l.filter((e) => e.my?.checkedInAt && e.startsAt > nowTs() - 30 * 86400).slice(0, 5))).catch(() => {}); });
-  const askable = (e: EventCard) => { const end = e.endsAt ?? e.startsAt + 3 * 3600, now = nowTs(); return e.my?.rating == null && end <= now && now <= end + 7 * 86400; };
-  async function rate(e: EventCard, score: number) {
-    haptic.select();
-    try {
-      await api.rate(e.id, score);
-      recent = recent.map((x) => (x.id === e.id && x.my ? { ...x, my: { ...x.my, rating: score } } : x));
-      haptic.ok(); burst(); say(t('rate.thanks'), 'sparkles_3d');
-    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
+  const recent = $derived((data.myPast ?? data.past.filter((e) => e.my?.checkedInAt != null)).slice(0, 5));
 </script>
 
 {#if recent.length}
@@ -32,8 +19,8 @@
     {#each recent as e (e.id)}
       <div class="past">
         <EventRow {e} showDate dateLine={relDay(e.startsAt)} />
-        {#if askable(e)}
-          <div class="ask"><b>{t('rate.ask')}</b><span class="faces">{#each FACES as f, i (i)}<Button kind="secondary" size="m" full round label={String(i + 1)} onclick={() => rate(e, i + 1)}>{#snippet icon()}<Emoji name={f} size={28} />{/snippet}</Button>{/each}</span></div>
+        {#if canAskRating(e) && !ratingBusy.has(e.id)}
+          <div class="ask"><b>{t('rate.ask')}</b><span class="faces">{#each FACES as f, i (i)}<Button kind="secondary" size="m" full round label={t('rate.score', { n: i + 1 })} onclick={() => void rateFromPrompt(e.id, i + 1)}>{#snippet icon()}<Emoji name={f} size={28} />{/snippet}</Button>{/each}</span></div>
         {/if}
       </div>
     {/each}

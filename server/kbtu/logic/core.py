@@ -604,7 +604,8 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
                   "receiptFlags": [x for x in c["flags"].split(",") if x and x not in ("spot", "partial")] if c and c["status"] == "accepted" and c["reviewed_at"] is None else [],
                   "free": bool(reg["free"]),
                   "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" and e["visibility"] == "public" and not e["school"] else None,
-                  "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}
+                  "rating": rated.get(e["id"]) if reg["checked_in_at"] is not None else None,
+                  "ratingDismissed": bool(reg["rating_dismissed"]), "note": reg["note"]}
         out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], []),
                     **({"teamAsk": a} if (a := asks.get(e["id"])) else {})})
     return out

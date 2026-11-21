@@ -466,14 +466,19 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
 PAST_DAYS = 30  # the Afisha's "Past" reaches back a month
 
 
-def past_events(con, v: Viewer, org: int | None = None, mine: bool = False) -> list[dict]:
+def past_events(con, v: Viewer, org: int | None = None, mine: bool = False, attended: bool = False) -> list[dict]:
     """The afisha's past events of the last PAST_DAYS (Afisha's "Past": what happened on campus, mine marked by the
     card's `my`), or a club's latest few (its page's "Recent": its own and the ones it co-hosts), or mine: the ones I
-    was signed up for or came to."""
+    was signed up for or came to. Attended: only my recent check-ins, including events off the Afisha."""
     where, args, n = (f"{on_afisha()} AND COALESCE(ends_at, starts_at + ?) > ?", [*on_afisha_args(v), NO_END, core.now() - PAST_DAYS * 86400], 50) \
         if org is None else ("""(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))""", [org, org], 6)
-    if mine:
+    if attended:
+        if not v.student:
+            return []
+        where, args, n = ("""id IN (SELECT event_id FROM registrations WHERE user_id = ? AND checked_in_at IS NOT NULL)
+                          AND COALESCE(ends_at, starts_at + ?) > ?""", [v.id, NO_END, core.now() - PAST_DAYS * 86400], -1)
+    elif mine:
         where, args, n = ("id IN (SELECT event_id FROM registrations WHERE user_id = ? AND (status = 'going' OR checked_in_at IS NOT NULL))",
                           [v.id if v.student else 0], 50)
     found = rows(con, f"""SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?

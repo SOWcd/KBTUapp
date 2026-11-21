@@ -111,7 +111,8 @@ PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST
                                    ("POST", "/api/events/{eid}/team/join"), ("POST", "/api/events/{eid}/team/link"), ("DELETE", "/api/events/{eid}/team/members/{uid}"),
                                    ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
                                    ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
-                                   ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/santa/wish"),
+                                   ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/rating/dismiss"),
+                                   ("PUT", "/api/events/{eid}/santa/wish"),
                                    ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites"),
                                    # his own application to a round and his own interview booking
                                    ("POST", "/api/rounds/{rid}/apply"), ("DELETE", "/api/rounds/{rid}/apply"), ("POST", "/api/rounds/{rid}/book")})
@@ -849,8 +850,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.events(con, v, frm, to, org)
 
     @app.get("/api/events/past")
-    def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False):
-        return logic.past_events(con, v, org, mine)
+    def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False, attended: bool = False):
+        return logic.past_events(con, v, org, mine, attended)
 
     @app.get("/api/gallery")
     def gallery(con: Con, v: Me, before: int | None = Query(None, ge=0, lt=1 << 62), limit: int = Query(logic.gallery.PAGE, ge=1, le=logic.gallery.PAGE),
@@ -1626,6 +1627,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/events/{eid}/rating")
     def rate_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.rate_event(con, v, eid, body.get("score"), body.get("comment"))
+
+    @app.put("/api/events/{eid}/rating/dismiss", status_code=204)
+    def dismiss_event_rating(eid: int, con: Con, v: Me):
+        logic.organizing.dismiss_rating(con, v, eid)
 
     @app.post("/api/events/{eid}/updates")
     def post_update(eid: int, con: Con, v: Me, body: dict = Body(...)):

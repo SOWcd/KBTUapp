@@ -59,7 +59,7 @@
   import { meetHost } from '../../lib/meet';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -267,14 +267,20 @@
   let note = $state('');
   let noted = $state(false);
   let rating = $state(false); // rated before: one quiet line until tapped to change (the full faces again)
+  let ratingSaving = false;
   async function rateIt(score: number, comment?: string) {
+    if (ratingSaving) return;
+    ratingSaving = true;
     const was = rated;
     rated = score; rating = true; haptic.select();
     try {
-      detail = await api.rate(id, score, comment);
+      const fresh = await saveEventRating(id, score, comment);
+      if (!fresh) { rated = was; return; }
+      detail = fresh;
       if (comment) { noted = true; haptic.ok(); say(t('rate.saved'), 'sparkles_3d'); }
       else say(phrase('say.rated'), FACES[score - 1]);
     } catch { rated = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { ratingSaving = false; }
   }
   // ---- the guests' album: who came adds photos (several at once, one upload after another); a mosaic of the first ----
   const photos = $derived(detail?.photos ?? []);

@@ -82,6 +82,8 @@ def test_past_is_the_last_month_for_everyone_mine_marked(env):
     assert [e["id"] for e in c.get("/api/events/past", headers=tma(OTHER)).json()] == [went, missed, came]  # for everyone
     assert all(e["my"] is None for e in c.get("/api/events/past", headers=tma(OTHER)).json())
     assert {e["id"] for e in c.get("/api/events/past?mine=1", headers=tma(SIGNED)).json()} == {went, came, old}
+    assert [e["id"] for e in c.get("/api/events/past?attended=1", headers=tma(SIGNED)).json()] == [came]
+    assert c.get("/api/events/past?attended=1", headers=tma(OTHER)).json() == []
     assert old in {e["id"] for e in c.get(f"/api/events/past?org={off}", headers=tma(OTHER)).json()}
 
 

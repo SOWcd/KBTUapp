@@ -69,6 +69,15 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     last = {r["org_id"]: r for r in rows(con, f"""SELECT org_id, id, title, i18n, MAX(starts_at) AS starts_at FROM events
         WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL AND visibility = 'public' AND school IS NULL AND starts_at > ?
         AND COALESCE(ends_at, starts_at + ?) <= ? GROUP BY org_id""", *ids, core.now() - 30 * 86400, core.NO_END, core.now())}
+    # Publish only a club-wide average. Wait until voting closes so a viewer cannot watch individual votes change it.
+    from .organizing import RATE_FOR, RATE_SHOW
+    ratings = dict(rows(con, f"""SELECT org_id, ROUND(1.0 * SUM(points) / SUM(votes), 1) FROM (
+        SELECT e.org_id, SUM(r.score) AS points, COUNT(*) AS votes
+        FROM events e JOIN event_ratings r ON r.event_id = e.id
+        WHERE e.org_id IN ({q}) AND e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public'
+          AND e.school IS NULL AND r.public_after < ? AND COALESCE(e.ends_at, e.starts_at + ?) < ?
+        GROUP BY e.id HAVING COUNT(*) >= ?
+        ) GROUP BY org_id""", *ids, core.now(), core.NO_END, core.now() - RATE_FOR, RATE_SHOW))
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
     # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)
     live = {r["org_id"]: r for r in rows(con, f"SELECT id, org_id, closes_at FROM rounds WHERE org_id IN ({q}) AND status = 'open' AND closes_at > ?", *ids, core.now())}
@@ -99,6 +108,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         "quiet": o["kind"] == "club" and not o["official"] and o["created_at"] <= cut
         and not (events.get(o["id"]) or posts.get(o["id"]) or o["id"] in rounds),
         "rank": members.get(o["id"], 0) + 5 * events.get(o["id"], 0) + 2 * posts.get(o["id"], 0),  # Popular's order
+        "eventRating": ratings.get(o["id"]) if o["status"] == "active" and o["kind"] in ("club", "school") else None,
     } for o in found}
 
 

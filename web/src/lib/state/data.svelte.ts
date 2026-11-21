@@ -1,6 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import type { MyRegistration } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -26,6 +27,7 @@ export const data = $state({
   opened: [] as EventCard[],
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": every Afisha event of the last month, mine marked by `my`, newest first (with the Afisha)
+  myPast: null as EventCard[] | null, // my recent check-ins, including events outside the Afisha
   credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
@@ -267,16 +269,28 @@ export function phrase(key: Key, vars?: Record<string, string | number>): string
 }
 
 let taps = 0; // a write while the lists reload: the older answer must not undo it on screen (bumped when it starts and when it ends)
+let ratingTaps = 0; // ratings and dismissals also update the past lists
+let myPastSeq = 0;
 /** Runs a write on a list's item; a list asked before it started or finished is older than it. */
 async function writing(f: () => Promise<void>): Promise<void> { taps++; try { await f(); } finally { taps++; } }
+
+export async function loadMyPast(): Promise<void> {
+  const seq = ++myPastSeq, ratedAt = ratingTaps;
+  try {
+    const past = await api.attendedEvents();
+    if (seq === myPastSeq && ratedAt === ratingTaps) data.myPast = past;
+  } catch { /* the last copy stays */ }
+}
+
 export async function loadAfisha(): Promise<void> {
   loadChats();
+  void loadMyPast();
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
-    const at = taps;
+    const at = taps, ratedAt = ratingTaps;
     const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(), api.castings()]);
     if (castings.status === 'fulfilled') data.castings = castings.value;
-    if (past.status === 'fulfilled') data.past = past.value;
+    if (past.status === 'fulfilled' && ratedAt === ratingTaps) data.past = past.value;
     if (events.status === 'fulfilled' && at === taps) data.events = events.value;
     if (orgs.status === 'fulfilled' && at === taps) { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
@@ -420,6 +434,53 @@ export function put(card: EventCard): void {
     const i = list.findIndex((e) => e.id === card.id);
     if (i >= 0) list[i] = card;
   }
+}
+
+export const ratingBusy = new SvelteSet<Id>();
+
+export function canAskRating(e: EventCard, now = nowTs()): boolean {
+  const end = e.endsAt ?? e.startsAt + 3 * 3600;
+  return e.status === 'published' && e.my?.checkedInAt != null && e.my.rating == null && !e.my.ratingDismissed
+    && end <= now && now <= end + 7 * 86400;
+}
+
+function ratingWritten(id: Id, patch: Partial<Pick<MyRegistration, 'rating' | 'ratingDismissed'>>): void {
+  taps++; ratingTaps++;
+  ahead.delete(id);
+  for (const list of [data.events, data.past, data.myPast ?? [], data.opened]) {
+    const my = list.find((e) => e.id === id)?.my;
+    if (my) Object.assign(my, patch);
+  }
+}
+
+export async function saveEventRating(id: Id, score: number, comment?: string): Promise<EventFull | undefined> {
+  if (ratingBusy.has(id)) return;
+  ratingBusy.add(id);
+  try {
+    const fresh = await api.rate(id, score, comment);
+    ratingWritten(id, { rating: fresh.myRating });
+    return fresh;
+  } finally { ratingBusy.delete(id); }
+}
+
+export async function rateFromPrompt(id: Id, score: number): Promise<void> {
+  haptic.select();
+  try {
+    if (await saveEventRating(id, score)) {
+      haptic.ok(); burst(); say(t('rate.thanks'), 'sparkles_3d');
+    }
+  } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+}
+
+export async function dismissEventRating(id: Id): Promise<void> {
+  if (ratingBusy.has(id)) return;
+  ratingBusy.add(id);
+  haptic.tap();
+  try {
+    await api.dismissRating(id);
+    ratingWritten(id, { ratingDismissed: true });
+  } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  finally { ratingBusy.delete(id); }
 }
 
 export function errorText(e: unknown): string {

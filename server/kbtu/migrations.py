@@ -2149,4 +2149,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       turned_off INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (day, category)
     ) STRICT;"""),
+    (214, """ALTER TABLE registrations ADD COLUMN rating_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (rating_dismissed IN (0, 1));
+    ALTER TABLE event_ratings ADD COLUMN public_after INTEGER;
+    -- A legacy vote qualifies only when the event has stayed public and unchanged since the vote.
+    UPDATE event_ratings AS r SET public_after = (
+        SELECT COALESCE(e.ends_at, e.starts_at + 10800) + 604800 FROM events e WHERE e.id = r.event_id
+        AND e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.school IS NULL
+        AND e.updated_at < r.created_at AND COALESCE(e.ends_at, e.starts_at + 10800) <= r.created_at
+    );"""),
 ]

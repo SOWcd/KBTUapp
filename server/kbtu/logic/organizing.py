@@ -1117,13 +1117,18 @@ RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
 RATE_SHOW = 3          # the club sees the ratings from this many on, so a small club can't tell who wrote what
 
 
+def _rating_open(e: sqlite3.Row) -> bool:
+    end = end_of(e)
+    return end <= core.now() <= end + RATE_FOR
+
+
 def _rating_view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
     """What the event sheet shows about ratings: mine (and whether I may still give one: checked in, ended, within 7
     days), and for the club's Head+ the anonymous summary — average, the five counts, the comments, no names; under
     RATE_SHOW of them, only how many."""
     mine = one(con, "SELECT score FROM event_ratings WHERE event_id = ? AND user_id = ?", e["id"], v.id) if v.student else None
     came = v.student and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id)
-    out = {"myRating": mine["score"] if mine else None, "canRate": bool(came) and end_of(e) <= core.now() <= end_of(e) + RATE_FOR, "ratings": None}
+    out = {"myRating": mine["score"] if mine else None, "canRate": bool(came) and _rating_open(e), "ratings": None}
     if head:
         rs = rows(con, "SELECT score, comment, created_at FROM event_ratings WHERE event_id = ? ORDER BY created_at DESC", e["id"])
         if 0 < len(rs) < RATE_SHOW:  # so few the club could tell who wrote what: the count alone
@@ -1139,16 +1144,32 @@ def rate_event(con, v: Viewer, eid: int, score: object, comment: object) -> dict
     """One tap after the event: only those checked in, from the end until 7 days later;
     changing one's mind is fine. Anonymous to the club."""
     need_student(v)
-    e = _event(con, v, eid)
     if not isinstance(score, int) or isinstance(score, bool) or not 1 <= score <= 5:
         raise ApiError("bad_input")
     text = str(comment or "").strip()[:300]
-    if not _rating_view(con, v, e, False)["canRate"]:
-        raise ApiError("forbidden")
-    con.execute("""INSERT INTO event_ratings (event_id, user_id, score, comment, created_at) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT (event_id, user_id) DO UPDATE SET score = excluded.score, comment = excluded.comment, created_at = excluded.created_at""",
-                (eid, v.id, score, text, core.now()))
+    with tx(con):
+        e = _event(con, v, eid)
+        if not _rating_view(con, v, e, False)["canRate"]:
+            raise ApiError("forbidden")
+        public_after = end_of(e) + RATE_FOR if e["status"] == "published" and not e["hidden_at"] and e["visibility"] == "public" and not e["school"] else None
+        # MAX keeps NULL for a private vote and never moves a vote's original publication deadline earlier.
+        con.execute("""INSERT INTO event_ratings (event_id, user_id, score, comment, created_at, public_after) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (event_id, user_id) DO UPDATE SET score = excluded.score, comment = excluded.comment,
+            created_at = excluded.created_at, public_after = MAX(event_ratings.public_after, excluded.public_after)""",
+                    (eid, v.id, score, text, core.now(), public_after))
     return full(con, v, e)
+
+
+def dismiss_rating(con, v: Viewer, eid: int) -> None:
+    """Quiet the in-app prompt across devices. The event's rating form still works."""
+    need_student(v)
+    with tx(con):
+        e = _event(con, v, eid)
+        if e["status"] != "published" or e["hidden_at"] or not _rating_open(e):
+            raise ApiError("forbidden")
+        if not con.execute("""UPDATE registrations SET rating_dismissed = 1
+            WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL""", (eid, v.id)).rowcount:
+            raise ApiError("forbidden")
 
 
 def _ask_rating(con, uid: int, e: sqlite3.Row) -> None:
