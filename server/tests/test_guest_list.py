@@ -275,3 +275,18 @@ def test_guests_from_a_gz_argument(door_event, monkeypatch, capsys):
     assert capsys.readouterr().out == "registered 1, pending 1, offline 0, bad rows 0\n"
     with pytest.raises(SystemExit):
         admin.main(["guests", "1", "--gz", "not base64!"])
+
+
+def test_door_extra_counts_outsiders_anonymously(door_event):
+    """Outsiders let in without the app: one bare count per event, +1/-1 by the door, never below zero, nobody named."""
+    c, cfg, con = door_event
+    base, door = "/api/events/1/door-extra", tma(9)
+    assert c.get(base, headers=door).json() == {"extra": 0}
+    assert c.post(base, headers=door, json={"step": 1}).json() == {"extra": 1}
+    assert c.post(base, headers=door, json={"step": 1}).json() == {"extra": 2}
+    assert c.post(base, headers=door, json={"step": -1}).json() == {"extra": 1}
+    assert c.post(base, headers=door, json={"step": 5}).status_code == 400
+    stranger = _student(c, con, 1, "24B030001")
+    assert c.post(base, headers=tma(1), json={"step": 1}).status_code == 403 and stranger
+    c.post(base, headers=door, json={"step": -1}); c.post(base, headers=door, json={"step": -1})
+    assert c.get(base, headers=door).json() == {"extra": 0}
