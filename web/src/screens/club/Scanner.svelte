@@ -15,12 +15,10 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import Plus from '@lucide/svelte/icons/plus';
   import Qr from '../../ui/Qr.svelte';
   import { QR_TONE, QR_LOOK, skinOf } from '../../lib/awards';
   import LookMark from '../../ui/LookMark.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import Minus from '@lucide/svelte/icons/minus';
   import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -82,14 +80,6 @@
   $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
   // list buyers not in the app yet (guest list): ticked by name in the guest list (People, guestsOnly)
   let pend = $state<{ pending: number; pendingCame: number } | null>(null);
-  // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
-  let extra = $state<number | null>(null);
-  $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
-  function stepExtra(step: 1 | -1) {
-    if (extra == null || (step < 0 && extra === 0)) return;
-    haptic.tap(); extra += step;
-    api.doorExtra(id, step).then((x) => (extra = x.extra)).catch(() => { extra = Math.max(0, (extra ?? 0) - step); say(t('common.error'), 'warning_3d'); });
-  }
   function recount() {
     if (detail?.myCrew === 'scan') return;
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
@@ -289,13 +279,6 @@
         <Button kind="primary" size="l" full onclick={() => { haptic.tap(); sheets.doorPeople(id, () => { recount(); if (e?.guestList) api.doorPending(id).then((x) => (pend = x)).catch(() => {}); }, true); }}>{#snippet icon()}<UsersRound size={19} />{/snippet}{t('mk.guestList')}</Button>
         {#if pend && pend.pending}<p class="t-foot">{t('mk.pending', { n: pend.pendingCame, m: pend.pending })}</p>{/if}
       {/if}
-      {#if extra != null && aud !== 'team'}
-        <div class="extra">
-          <span>{t('mk.extra')} · <b>{extra}</b></span>
-          <Button kind="secondary" size="s" round label="−1" disabled={!extra} onclick={() => stepExtra(-1)}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
-          <Button kind="secondary" size="s" round label="+1" onclick={() => stepExtra(1)}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
-        </div>
-      {/if}
       {#if scanOnly}<p class="t-foot only">{t('mk.scanOnly')}</p>{/if}
       <div class="quiet">
         {#if lists}<Button kind="secondary" size="m" onclick={openPeople}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('mk.people')}</Button>{/if}
@@ -393,6 +376,4 @@
   .entry { display: grid; justify-items: center; gap: 10px; }
   .entry .plate { width: min(78vw, 300px); aspect-ratio: 1; padding: 14px; border-radius: var(--r-l); background: white; }
   .entry p { text-align: center; }
-  .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
-  .extra span { flex: 1; color: var(--text-2); }
 </style>
