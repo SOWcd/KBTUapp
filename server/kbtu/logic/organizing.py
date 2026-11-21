@@ -986,29 +986,28 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
     return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
 
 
-def screen_came(con, eid: int, uid: int, t: int) -> bool:
+def screen_came(con, eid: int, uid: int, t: int) -> dict:
     """A counted scan of an event's big-screen QR (checkin.py): that person came, as the door scanner would say. A ticket
     they hold is checked in; a free public event registers them on the spot (walk_in); a paid one needs a ticket and a
-    team-only one counts its members only, a leaders' meeting only those already on its list (the scan still shows in
-    the session's own list), except the DMP office's: whoever is invited comes in, and someone in the hall who isn't
+    team-only one counts its members only, a leaders' meeting only those already on its list, except the DMP office's: whoever is invited comes in, and someone in the hall who isn't
     counts by the scan alone (no registration: it would hand them the event). Only within the door's window (as the scanner): a session started days off counts no one,
-    nor does a hidden or a partner's event. True: they count as came (now or before)."""
+    nor does a hidden or a partner's event. Duplicate and flagged tickets are reported to the door."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or e["status"] != "published" or e["hidden_at"] or e["guest_host"] \
             or door_shut(e, t):
-        return False
+        return {"done": False}
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r or r["status"] != "going":
         if e["guest_list"]:
-            return False
+            return {"done": False}
         dmp = e["visibility"] == "leaders" and one(con, "SELECT 1 FROM orgs WHERE id = ? AND slug = 'dmp'", e["org_id"])
         if dmp and not _visible(con, Viewer(uid, "user", True), e):
-            return True
+            return {"done": True}
         if r and r["status"] == "cancelled" and r["cancel_reason"] == "removed":
-            return False  # the organizers took them off: back only by signing up again
+            return {"done": False}  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp \
                 or e["visibility"] == "members" and not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
-            return False
+            return {"done": False}
         if r:
             con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                         (t, r["id"]))
@@ -1016,11 +1015,12 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
             con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
                         (eid, uid, _ticket_code(con, eid), t, t))
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
-    if not r["checked_in_at"]:
-        if not e["guest_list"] and e["price"] and flagged(con, r["id"]):  # a flagged receipt goes by the scanner
-            return False
-        _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
-    return True
+    if r["checked_in_at"] is not None:
+        return {"done": False, "already": r["checked_in_at"]}
+    if not e["guest_list"] and e["price"] and flagged(con, r["id"]):
+        return {"done": False, "flagged": True}
+    _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
+    return {"done": True}
 
 
 def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
