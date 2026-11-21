@@ -8,6 +8,7 @@
   import { api, ApiErr, type Ask, type Contact, type ForumCard, type ForumMe, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { saveSwitch, session } from '../../lib/state/session.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -46,8 +47,12 @@
   $effect(() => { if (focus && list.length) setTimeout(() => document.getElementById(`ask-${focus}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300); });
 
   const fail = (e: unknown) => { haptic.error(); say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'fo.slow' : 'common.error'), 'pleading_face_3d'); };
-  async function setMe(patch: { open?: boolean; pings?: boolean }) {
-    try { me = await api.setForumMe(patch); haptic.tap(); } catch (e) { fail(e); }
+  async function setOpen(open: boolean) {
+    try { me = await api.setForumMe({ open }); haptic.tap(); } catch (e) { fail(e); }
+  }
+  async function setPings(on: boolean) {
+    haptic.tap();
+    try { await saveSwitch('nProjectPings', on); } catch (e) { fail(e); }
   }
   async function help(a: Ask) {
     try { await api.offer({ ask: a.id }); haptic.ok(); a.offered = 'pending'; say(t('fo.offerSay'), 'raising_hands_3d_default'); } catch (e) { fail(e); }
@@ -87,11 +92,11 @@
     </Group>
     <!-- each switch's note is its group's footnote, never a line in the row -->
     <Group footnote={t('fo.openNote')}>
-      <Row title={t('fo.open')} accessory="switch" checked={me?.open ?? false} onchange={(on) => setMe({ open: on })} />
+      <Row title={t('fo.open')} accessory="switch" checked={me?.open ?? false} onchange={setOpen} />
     </Group>
     {#if me?.open}
       <Group footnote={t('fo.pingsNote')}>
-        <Row title={t('fo.pings')} accessory="switch" checked={me.pings} onchange={(on) => setMe({ pings: on })} />
+        <Row title={t('fo.pings')} accessory="switch" checked={session.me?.settings.nProjectPings ?? me.pings} onchange={setPings} />
       </Group>
     {/if}
 

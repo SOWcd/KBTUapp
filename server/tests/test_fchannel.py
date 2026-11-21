@@ -990,8 +990,11 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
     postman(cfg, tg)
     text, button = texts.bot_message("en", "fch_comments")
     sent = [body for body in tg.of("sendMessage") if body["text"] == text]
-    assert [(b["chat_id"], b["reply_markup"]["inline_keyboard"]) for b in sent] == [
+    assert [(b["chat_id"], b["reply_markup"]["inline_keyboard"][:1]) for b in sent] == [
         (411, [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]) for pid in posts]
+    for b in sent:
+        _, feedback = b["reply_markup"]["inline_keyboard"]
+        assert [k["text"] for k in feedback] == [texts.bot_message("en", f"feedback_{action}")[0] for action in ("useful", "off")]
     assert all("Private commenter words" not in str(b) for b in sent)
     t += 10799
     hear(cfg, tg, comment(64))

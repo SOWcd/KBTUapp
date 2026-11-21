@@ -30,9 +30,21 @@ def no_receipt_audit(monkeypatch):
 
 
 @pytest.fixture
-def before_door_migration():
+def before_notification_migration():
+    def rewind(con):
+        con.executescript("""DROP TABLE notification_days;
+            ALTER TABLE users DROP COLUMN notification_undo;
+            ALTER TABLE users DROP COLUMN n_door;
+            ALTER TABLE users DROP COLUMN n_digests;
+            ALTER TABLE users DROP COLUMN n_broadcasts;""")
+    return rewind
+
+
+@pytest.fixture
+def before_door_migration(before_notification_migration):
     """Restore the old door schema for tests that replay historical migrations on a populated database."""
     def rewind(con):
+        before_notification_migration(con)
         con.executescript("""DROP TABLE door_misses;
             DROP TABLE retired_tickets;
             DROP TRIGGER signup_phone_changed;

@@ -6682,7 +6682,7 @@ def test_forum_find_people(env, monkeypatch):
 
 def test_forum_bot_cards(env, monkeypatch):
     """The forum's cards in the bot: an offer with Accept / Decline (only the asked side's tap counts), a ping with a
-    stop button that turns the pings off, and the keyboard the postman sends."""
+    link to the request, and support for the stop button on older pings."""
     c, cfg = env
     con = db.connect(cfg.db_path)
     a, b = (logic.Viewer(login(c, uid, n)["id"], "user", True) for uid, n in ((90, "ann"), (91, "ben")))
@@ -6690,9 +6690,9 @@ def test_forum_bot_cards(env, monkeypatch):
     logic.set_my_forum(con, b, {"skills": [web], "open": True, "pings": True})
     ask = logic.create_ask(con, a, {"kind": "project", "title": "A site", "skills": [web]}, True)
     row = lambda kind: {**dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone()), "lang": "en"}  # noqa: E731
-    text, _, keys = bot._render(con, row("ask_match"))
+    text, button, start = bot._render(con, row("ask_match"))
     assert text == texts.bot_message("en", "ask_match", skill="web")[0] and "A site" not in text   # their words stay in the app
-    assert keys[0][0]["start"] == f"fa_{ask['id']}" and keys[1][0]["callback_data"] == "ps:0"
+    assert button == texts.bot_message("en", "ask_match", skill="web")[1] and start == f"fa_{ask['id']}"
     logic.contact(con, b, aid=ask["id"])
     text, _, keys = bot._render(con, row("contact_ask"))
     cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()

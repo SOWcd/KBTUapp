@@ -7,6 +7,7 @@ import re
 from .. import receipt, texts
 from ..db import tx
 
+from . import notifications
 from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, evdel, one, rows, shown_name
 
 
@@ -227,6 +228,7 @@ def stats_day(con) -> None:
                  one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at < ? AND NOT {core.staff_sql()}", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
+    notifications.forget(con)
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
     con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words
@@ -273,6 +275,7 @@ def admin_stats(con, v: Viewer) -> dict:
                 FROM students s WHERE manual = 0 AND ms_oid IS NOT NULL AND NOT {core.staff_sql()} GROUP BY 1 ORDER BY 1""")},
             "msCutoff": core.MS_AGE_CUTOFF,
             "ai": ai_state(con), "today": one(con, "SELECT COUNT(*) FROM visits WHERE day = ?", day_of(t))[0],
+            "notificationCounts": notifications.summary(con, t),
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}
                      for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}
 

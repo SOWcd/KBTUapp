@@ -27,7 +27,8 @@
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { open, type Overlay } from '../../lib/state/ui.svelte';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { fmtNum, i18n, t } from '../../lib/i18n/index.svelte';
+  import { notificationSettings } from '../profile/notificationSettings';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import SearchField from '../../ui/SearchField.svelte';
@@ -51,6 +52,8 @@
   staffOnly(() => overlay, 'staff');
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
+  const percent = $derived(new Intl.NumberFormat(i18n.lang, { style: 'percent', maximumFractionDigits: 1 }));
+  const rate = (count: number, sent: number) => sent ? percent.format(count / sent) : '—';
   untrack(() => { if (admin) { void loadAdminOrgs(); void loadInbox(true); } }); // fresh on every opening; what the app holds shows meanwhile
 
   // ---- the search: organizations and awards on the first key (held already), people and events a beat after the last
@@ -169,6 +172,18 @@
       <!-- the map's flaws: quiet and last (a card on top pulled from moderation) -->
       {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>
+    {#if admin && data.adminStats?.notificationCounts}
+      <Group caption={t('adm.notificationStats')} footnote={t('adm.notificationStats.period')}>
+        {#each data.adminStats.notificationCounts as { category, sent, useful, turnedOff } (category)}
+          {@const label = notificationSettings.find(([key]) => key === category)?.[1]}
+          {#if label}
+            <Row dense title={t(label)} subtitle={t('adm.notificationStats.counts', {
+              sent: fmtNum(sent), useful: fmtNum(useful), usefulRate: rate(useful, sent), off: fmtNum(turnedOff), offRate: rate(turnedOff, sent),
+            })} />
+          {/if}
+        {/each}
+      </Group>
+    {/if}
   </div>
 </Sheet>
 

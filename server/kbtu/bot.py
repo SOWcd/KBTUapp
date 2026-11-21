@@ -21,7 +21,7 @@ import re
 import secrets
 import sqlite3
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from pathlib import Path
 
 import anyio.to_thread
@@ -29,7 +29,7 @@ import httpx
 
 from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
 from .config import Config
-from .logic import now, one, rows
+from .logic import notifications, now, one, rows
 from .logic.account import _Taken
 from .logic.core import ApiError
 
@@ -207,8 +207,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return None
         sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
-        return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
+        return (*texts.bot_message(lang, kind, skill=sk["name"] if sk else ""), f"fa_{a['id']}")
     if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
         # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
         # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
@@ -549,7 +548,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
-    if kind.startswith("door_open") and (not reminders() or not one(  # reminders off, or cancelled or in since it was queued
+    if kind.startswith("door_open") and (not one(con, "SELECT n_door FROM users WHERE id = ?", m["user_id"])[0] or not one(
             con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going' AND checked_in_at IS NULL", e["id"], m["user_id"])):
         return None
     co = one(con, "SELECT o.name FROM event_cohosts x JOIN orgs o ON o.id = x.org_id WHERE x.event_id = ? AND x.status = 'accepted' AND o.status = 'active'",
@@ -966,6 +965,8 @@ def _take(con, m, forum_channel: bool):
         return _mark(con, m, False, "no_dm")
     if m["banned_at"]:  # banned: the bot stops writing
         return _mark(con, m, False, "banned")
+    if (category := notifications.CATEGORY_OF.get(m["kind"])) and not notifications.allowed(con, category, m["user_id"], m["tg_id"]):
+        return _mark(con, m, False, "gone")
     if m["kind"] == "fch_comments" and not forum_channel:
         return _mark(con, m, False, "gone")
     msg = _render(con, m)
@@ -976,7 +977,14 @@ def _take(con, m, forum_channel: bool):
 
 def _answered(con, m, status: int, answer: dict) -> None:
     if answer.get("ok"):
-        _mark(con, m, True)
+        if category := notifications.CATEGORY_OF.get(m["kind"]):
+            with db.tx(con):
+                _mark(con, m, True)
+                result = answer.get("result")
+                sent_at = (result.get("date") if isinstance(result, dict) else None) or now()
+                notifications.delivered(con, category, sent_at)
+        else:
+            _mark(con, m, True)
         tgc.sent(con, m, answer)
     elif status == 403:  # blocked the bot or never started it
         con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (m["user_id"],))
@@ -1015,6 +1023,13 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                                                              if "start" in b else b for b in row] for row in start]}
             elif button:
                 body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
+            if category := notifications.CATEGORY_OF.get(m["kind"]):
+                # The settings may have changed while the worker rendered the card.
+                if not notifications.allowed(con, category, m["user_id"], to):
+                    _mark(con, m, False, "gone")
+                    continue
+                body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
+                    _feedback_buttons(cfg, to, m["lang"], category))
             try:
                 r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
                 if r is None:
@@ -1324,11 +1339,83 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     return say("receipt_ok", f"tk_{eid}", title=title)
 
 
+def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
+    key = f"nf:{action}:{category}:{nonce}"
+    mac = hmac.new(cfg.token_key, f"{key}:{chat}:{mid}".encode(), hashlib.sha256).hexdigest()[:20]
+    return f"{key}:{mac}"
+
+
+def _feedback_buttons(cfg: Config, chat: int, lang: str, category: str) -> list[dict]:
+    nonce = secrets.token_hex(8)
+    return [{"text": texts.bot_message(lang, f"feedback_{action}")[0],
+             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("useful", "off")]
+
+
+# Telegram holds the button state. ponytail: keep the last 512 edits in memory for taps already in
+# Telegram's queue with an older snapshot. Increase the buffer if that backlog ever outgrows it.
+_feedback_edits: OrderedDict[str, set[str]] = OrderedDict()
+
+
+async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg: dict, data: str) -> None:
+    match = re.fullmatch(r"nf:(useful|off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
+    chat = msg.get("chat") or {}
+    tg, mid, sent_at = chat.get("id"), msg.get("message_id"), msg.get("date")
+    if not match or chat.get("type") != "private" or tg != (cq.get("from") or {}).get("id") or not tg or not mid or not sent_at:
+        return
+    action, category, nonce = match.groups()
+    if category not in notifications.CATEGORIES or not hmac.compare_digest(
+            data, _feedback_token(cfg, tg, action, category, nonce, mid if action == "undo" else 0)):
+        return
+    keyboard = (msg.get("reply_markup") or {}).get("inline_keyboard") or []
+    if not keyboard or not any(b.get("callback_data") == data for b in keyboard[-1]):
+        return
+    edits = _feedback_edits.get(nonce, set())
+    if action in edits or (action == "useful" and "off" in edits):
+        return
+    ids = {"chat_id": tg, "message_id": mid}
+    links = keyboard[:-1]
+    undo = _feedback_token(cfg, tg, "undo", category, nonce, mid)
+    card = undo.rsplit(":", 1)[1]
+    if action == "useful":
+        if not await anyio.to_thread.run_sync(notifications.can_mark_useful, con, tg, category, card):
+            return
+        row = [{**b, "text": "✓", "callback_data": "nf:seen"} if b.get("callback_data") == data else b for b in keyboard[-1]]
+        r = await _tg(cfg, http, "editMessageReplyMarkup", {**ids, "reply_markup": {"inline_keyboard": [*links, row]}})
+    else:
+        state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
+        if state is None:
+            return
+        lang, on, can_undo = state
+        original = msg.get("text") or ""
+        if action == "undo":
+            for locale in texts.BOT:
+                off = texts.bot_message(locale, "feedback_disabled")[0]
+                original = "" if original == off else original.removesuffix(f"\n\n{off}")
+        status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
+        edited = f"{original}\n\n{status}" if original else status
+        entities = msg.get("entities") or []
+        if len(edited) > 4096:
+            edited, entities = status, []
+        keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
+        r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
+            "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
+    if r.json().get("ok"):
+        _feedback_edits[nonce] = edits | {action}
+        _feedback_edits.move_to_end(nonce)
+        if len(_feedback_edits) > 512:
+            _feedback_edits.popitem(last=False)
+        if action == "useful":
+            await anyio.to_thread.run_sync(notifications.feedback, con, category, sent_at, "useful")
+
+
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:); and on the forum's
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
+    if data.startswith("nf:"):
+        await _feedback_tap(cfg, http, con, cq, msg, data)
+        return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
@@ -1338,7 +1425,8 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
             con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[5] == "y"), u["id"]))
             said = "announce_yes" if f[5] == "y" else "announce_no"
         elif f[1] == "ps":
-            con.execute("UPDATE users SET ask_pings = 0 WHERE id = ?", (u["id"],))
+            with db.tx(con):
+                notifications.set_preference(con, u["id"], "nProjectPings", False)
             said = "ask_stopped"
         else:
             st = logic.decide_contact(con, u["id"], int(f[2]), f[4] == "y", f[3])  # f[3]: the offer's token
