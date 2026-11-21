@@ -2124,4 +2124,6 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
     CREATE INDEX IF NOT EXISTS reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
     CREATE INDEX IF NOT EXISTS saved_by_event ON saved_events(event_id);"""),
+    # people let in at the door without the app (outsiders, ID checked by eye): a bare count, no one named
+    (208, "ALTER TABLE events ADD COLUMN door_extra INTEGER NOT NULL DEFAULT 0 CHECK (door_extra >= 0);"),
 ]

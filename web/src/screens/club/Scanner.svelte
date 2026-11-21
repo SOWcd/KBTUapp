@@ -15,6 +15,8 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Minus from '@lucide/svelte/icons/minus';
   import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -69,6 +71,14 @@
   const teamCame = $derived(team ? team.rows.filter((r) => r.at).length : 0);
   // let in by the helper's QR, or named for the scanner only: the QR and the camera, said so plainly (no lists)
   const scanOnly = $derived(qr && detail?.myCrew === 'scan');
+  // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
+  let extra = $state<number | null>(null);
+  $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
+  function stepExtra(step: 1 | -1) {
+    if (extra == null || (step < 0 && extra === 0)) return;
+    haptic.tap(); extra += step;
+    api.doorExtra(id, step).then((x) => (extra = x.extra)).catch(() => { extra = Math.max(0, (extra ?? 0) - step); say(t('common.error'), 'warning_3d'); });
+  }
   function recount() {
     if (detail?.myCrew === 'scan') return;
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
@@ -260,6 +270,13 @@
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
+      {#if extra != null && aud !== 'team'}
+        <div class="extra">
+          <span>{t('mk.extra')} · <b>{extra}</b></span>
+          <Button kind="secondary" size="s" round label="−1" disabled={!extra} onclick={() => stepExtra(-1)}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
+          <Button kind="secondary" size="s" round label="+1" onclick={() => stepExtra(1)}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
+        </div>
+      {/if}
       {#if scanOnly}<p class="t-foot only">{t('mk.scanOnly')}</p>{/if}
       <div class="quiet">
         {#if lists}<Button kind="secondary" size="m" onclick={openPeople}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('mk.people')}</Button>{/if}
@@ -354,4 +371,6 @@
   .manual { display: flex; gap: var(--s-2); align-items: flex-end; }
   .manual > :global(:first-child) { flex: 1; min-width: 0; }
   .manual :global(input) { letter-spacing: 0.06em; text-transform: uppercase; }
+  .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
+  .extra span { flex: 1; color: var(--text-2); }
 </style>

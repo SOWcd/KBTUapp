@@ -3309,6 +3309,7 @@ const en: Dict = {
   'ed.teamsOffText': "Every team of this event breaks up; sign-ups stay.",
   'mk.title': "Check-in",
   'mk.people': "People",
+  'mk.extra': "Without the app",
   'mk.helper': "Helper",
   'age.adult': "18+",
   'age.minor': "Under 18",
