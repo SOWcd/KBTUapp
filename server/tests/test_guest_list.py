@@ -326,3 +326,16 @@ def test_door_list_by_name(door_event):
     assert c.post(f"{base}/tick", headers=door, json={"key": "x999"}).status_code == 404
     got = {x["name"]: x for x in c.get(base, headers=door).json()["list"]}
     assert got["Outsider Person"]["came"] is True and got["Outsider Person"]["adult"] is False and got["Outsider Person"]["at"]
+
+
+def test_ticket_by_username_without_sign_in(door_event):
+    """Someone on the list by Telegram username gets the ticket on opening the app, no KBTU sign-in; the door can scan it."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    assert guests.door_names(con, 1, [",Guest Person,,@GuestNick"]) == (0, 1)
+    con.execute("INSERT INTO users (id, tg_id, tg_first_name, tg_username, lang, can_dm, created_at, seen_at, qr_code) VALUES (77, 777, 'G', 'guestnick', 'ru', 1, 0, 0, 'Q77')")
+    guests.claim_username(con, 77)
+    code = con.execute("SELECT ticket_code FROM registrations WHERE event_id = 1 AND user_id = 77 AND status = 'going'").fetchone()
+    assert code and not con.execute("SELECT 1 FROM event_guests WHERE event_id = 1 AND username = 'guestnick'").fetchone()
+    r = c.post("/api/events/1/checkin", headers=tma(9), json={"code": code[0].split("-")[1]}).json()
+    assert r["result"] == "ok", r

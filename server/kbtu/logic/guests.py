@@ -205,7 +205,7 @@ def door_names(con, eid: int, lines) -> tuple[int, int]:
             sid, name = row[0].strip().upper(), " ".join(row[1].split())[:120]
             adult = {"1": 1, "\u0434\u0430": 1, "yes": 1, "0": 0, "\u043d\u0435\u0442": 0, "no": 0}.get((row[2] if len(row) > 2 else "").strip().casefold())
             user = (row[3] if len(row) > 3 else "").strip().lstrip("@").casefold()
-            if sid and con.execute("UPDATE event_guests SET name = ? WHERE event_id = ? AND student_id = ?", (name, eid, sid)).rowcount:
+            if sid and con.execute("UPDATE event_guests SET name = ?, username = ? WHERE event_id = ? AND student_id = ?", (name, user or None, eid, sid)).rowcount:
                 named += 1
                 continue
             if sid and one(con, """SELECT 1 FROM registrations r JOIN students s ON s.user_id = r.user_id
@@ -219,7 +219,7 @@ def door_names(con, eid: int, lines) -> tuple[int, int]:
             if one(con, "SELECT 1 FROM event_guests WHERE event_id = ? AND name = ?", eid, name):
                 continue
             n += 1
-            con.execute("INSERT INTO event_guests (event_id, student_id, adult, name) VALUES (?, ?, ?, ?)", (eid, f"x{n}", adult, name))
+            con.execute("INSERT INTO event_guests (event_id, student_id, adult, name, username) VALUES (?, ?, ?, ?, ?)", (eid, f"x{n}", adult, name, user or None))
             added += 1
     return named, added
 
@@ -239,3 +239,19 @@ def tick(con, eid: int, key: object, t: int, adult: object = None, came: bool = 
     con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND student_id = ?",
                 (int(came), t, None if adult is None else int(adult), eid, key))
     return pending_count(con, eid)
+
+
+def claim_username(con, uid: int) -> None:
+    """Opening the app with a Telegram username on an event's list hands that row's ticket over at once (no KBTU
+    sign-in): the username is Telegram's, one account at a time. Checked in already if the door ticked them."""
+    name = one(con, "SELECT lower(tg_username) FROM users WHERE id = ?", uid)
+    if not name or not name[0]:
+        return
+    with tx(con):
+        for g in rows(con, """SELECT g.* FROM event_guests g JOIN events e ON e.id = g.event_id WHERE g.username = ? AND e.guest_list = 1
+                AND e.status != 'cancelled' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", name[0], core.NO_END, core.now()):
+            _ticket(con, g["event_id"], uid, g["adult"])
+            if g["came_at"]:
+                con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+                    WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+            con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))

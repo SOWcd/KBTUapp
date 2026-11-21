@@ -539,6 +539,7 @@ def test_old_board_cleaned_up(env, before_door_migration):
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200
     if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'event_guests'").fetchone():
+        con.execute("ALTER TABLE event_guests DROP COLUMN username")  # 211's
         con.execute("ALTER TABLE event_guests DROP COLUMN name")  # 210's
         con.execute("ALTER TABLE event_guests DROP COLUMN came_at")  # 209's
     con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's

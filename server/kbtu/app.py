@@ -529,6 +529,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
+        logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
