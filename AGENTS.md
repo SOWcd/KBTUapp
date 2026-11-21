@@ -97,6 +97,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - `DOCS=1`: the assistant answers from the university's documents (`kbtu/docs.py`, a separate file at `DOCS_DB`, default
   next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
   embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
+- `TIKTOK=1`: a TikTok link in any group the bot is in is answered with the video (a photo slideshow: an album of its photos), as a reply under it (`kbtu/tiktok.py`): the plain H.264 file through tikwm.com (only the link goes there), kept nowhere, no words of the bot's own; a failure sends nothing. Never for a bot's message, a stale one, the app's banned or the forum's discussion group; at most `CHAT_CAP` a chat a minute.
 - `REPORTS=1`: clubs' event reports in Studio (`logic/evreports.py`: the team's attendance marks); off until its clause in the privacy policy (Codex's).
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.

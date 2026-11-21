@@ -27,7 +27,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, userbot, video
+from . import ai, casting, db, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
 from .config import Config
 from .logic import now, one, rows
 from .logic.account import _Taken
@@ -1670,6 +1670,34 @@ async def _discussion_bg(cfg: Config, http: httpx.AsyncClient, msg: dict) -> Non
         con.close()
 
 
+async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str) -> None:
+    """A TikTok link answered with its video or its slideshow's photos (tiktok.py), beside the ears (tgc.spawn): a
+    download never holds up the batch. It goes under the link as a reply, with no words of the bot's own; a failure
+    sends nothing."""
+    try:
+        got = await tiktok.fetch(http, url)
+        if not got:
+            return
+        topic = msg.get("message_thread_id") if msg.get("is_topic_message") else None  # a forum's topic, as _swear_act
+        body = {"chat_id": str(msg["chat"]["id"]),
+                "reply_parameters": json.dumps({"message_id": msg["message_id"], "allow_sending_without_reply": True}),
+                **({"message_thread_id": str(topic)} if topic else {})}
+        if got.video:
+            method, files = "sendVideo", {"video": ("tiktok.mp4", got.video, "video/mp4")}
+            body |= {"supports_streaming": "true", **({"duration": str(got.seconds)} if got.seconds else {})}
+        elif len(got.photos) == 1:
+            method, files = "sendPhoto", {"photo": ("tiktok.jpg", got.photos[0], "image/jpeg")}
+        else:  # an album: each photo its own part, named in "media"
+            method = "sendMediaGroup"
+            files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(got.photos)}
+            body["media"] = json.dumps([{"type": "photo", "media": f"attach://p{i}"} for i in range(len(got.photos))])
+        r = await _tg(cfg, http, method, body, files=files)
+        if r.status_code != 200:
+            log.warning("tiktok: %s", str(r.json().get("description"))[:200])
+    except Exception as exc:  # noqa: BLE001 - the network, tikwm's answer changed: the link stays a link
+        log.warning("tiktok: %s", type(exc).__name__)
+
+
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     """The channel's discussion group: Telegram forwards each post there by itself, and the comments are replies to that
     copy. Under an event's post the bot writes the first comment, the rules and "Sign up", and keeps its link for the
@@ -1930,6 +1958,10 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     if _event_copy(cfg, msg):
                         tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
+                        # a TikTok link: its video, one download at a time on its own chain (never ahead of the rest)
+                        if cfg.tiktok and (url := tiktok.link(msg)) and time.time() - int(msg.get("date") or 0) <= FRESH \
+                                and not logic.chatlist.banned(con, int((msg.get("from") or {}).get("id") or 0)) and tiktok.room(msg["chat"]["id"]):
+                            tgc.spawn(_tiktok(cfg, http, msg, url), "tiktok")
                         await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)
