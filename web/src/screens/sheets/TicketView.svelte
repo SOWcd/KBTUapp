@@ -39,6 +39,8 @@
   $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule (SPEC §8.2), dark as the scrim
   const my = $derived(e?.my);
   const valid = $derived(!!e && e.status !== 'cancelled' && my?.status === 'going' && !!my.ticketCode);
+  // no ticket of mine here (the entrance's QR, an old link): the event instead, its sign-up or sign-in
+  $effect(() => { if (e && !valid && !my?.ticketCode) { close(overlay.id); sheets.event(id); } });
   const started = $derived(!!e && e.startsAt <= nowTs());
   const st = $derived(session.me?.student);
   const holder = $derived(st ? `${st.lastName} ${st.firstName}` : session.me?.name ?? '');

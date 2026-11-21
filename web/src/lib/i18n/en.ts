@@ -3310,6 +3310,8 @@ const en: Dict = {
   'mk.title': "Check-in",
   'mk.people': "People",
   'mk.extra': "Without the app",
+  'mk.entry': "Entrance",
+  'mk.entryHint': "Show it to guests: their phone camera opens their ticket",
   'mk.helper': "Helper",
   'age.adult': "18+",
   'age.minor': "Under 18",
