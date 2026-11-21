@@ -194,7 +194,7 @@
   ], 'end'); };
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
   const noUser = $derived(m?.role === 'president' && !!session.me && !session.me.tg.username);
-  const todo = $derived(noUser || coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0);
+  const todo = $derived(noUser || coAsks.length > 0 || claims > 0 || alone || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0);
   // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -308,7 +308,6 @@
         {/each}
         {#if claims}<Row icon={UsersRound} title={t('ro.reqTitle')} count={claims} accessory="chevron" onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)} />{/if}
         {#if alone}<Row icon={Crown} title={t('studio.todoPres')} accessory="chevron" onclick={presMenu} />{/if}
-        {#if fresh}<Row icon={UserPlus} title={t('studio.todoApps')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
         {#if memoDue}<Row icon={Mail} title={t('studio.todoMemo')} subtitle={t('studio.todoMemoBy', { n: nextWeek })} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
         {#if askRecruit}<Row icon={UserPlus} title={t('studio.todoRecruit')} subtitle={t('studio.todoRecruitHint')} accessory="chevron" onclick={openRecruit} />{/if}
         {#each asking as e (e.id)}
