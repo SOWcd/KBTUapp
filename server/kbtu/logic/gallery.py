@@ -125,7 +125,7 @@ def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None) ->
         k = _day_key(v)
         if int((one(con, "SELECT value FROM meta WHERE key = ?", k) or ["0"])[0]) >= A_DAY:
             raise ApiError("rate_limited", "gallery")
-        con.execute("DELETE FROM meta WHERE key LIKE ? AND key != ?", (f"gal:{v.id}:%", k))  # yesterday's count
+        con.execute("DELETE FROM meta WHERE key GLOB ? AND key != ?", (f"gal:{v.id}:*", k))  # yesterday's count
         con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (k,))
 
 
@@ -134,14 +134,10 @@ def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None 
     event, about a topic."""
     with tx(con):
         check(con, v, eid, topic)
-        f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], v.id)
-        fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color, taken_at)
-            VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
-                                                                         saved["path"], v.id, now(), saved["color"], saved.get("taken"))).lastrowid
+        fid = event_photo_file(con, v.id, saved)
         if con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
                        (fid, v.id, eid, now(), topic)).rowcount and eid is not None:  # the same photo again: the one I posted
-            con.execute("""INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by)
-                VALUES (?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM event_photos WHERE event_id = ?), ?)""", (eid, fid, eid, v.id))
+            attach_album_photo(con, eid, fid, v.id)
     f = one(con, """SELECT f.*, g.user_id AS uid, g.user_id AS poster, g.created_at AS posted, g.topic, g.event_id, e.title, e.i18n, s.first_name, s.last_name, u.nick
         FROM gallery_photos g JOIN files f ON f.id = g.file_id LEFT JOIN events e ON e.id = g.event_id
         LEFT JOIN users u ON u.id = g.user_id LEFT JOIN students s ON s.user_id = g.user_id WHERE g.file_id = ?""", fid)
@@ -214,5 +210,5 @@ def mine_gone(con, uid: int) -> list[int]:
 
 
 from .account import _drop_unused  # noqa: E402
-from .organizing import PHOTO_SHOWN, _album_room, _photo_by  # noqa: E402
+from .organizing import PHOTO_SHOWN, _album_room, _photo_by, attach_album_photo, event_photo_file  # noqa: E402
 from .seats import _event, afisha_ok, on_afisha, on_afisha_args  # noqa: E402

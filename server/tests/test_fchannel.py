@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from kbtu import ai, app as server, bot, db, logic, texts, tgc
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
-from test_tgcomments import Telegram
+from test_tgcomments import Telegram, hear, msg, postman
 
 CH = -100444           # the channel
 G = -100777            # its discussion group
@@ -538,6 +538,8 @@ def test_old_board_cleaned_up(env, before_door_migration):
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200
+    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
+    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
@@ -587,7 +589,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}  # no user id
+        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}  # no user id
         assert "review" not in p or p["mine"]                                                    # why mine waits: to me alone
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
@@ -598,7 +600,7 @@ def test_post_feed(env, monkeypatch):
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "human")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "nick": nick, "sign": texts.nick(*nick), "person": None, "mine": False,
-            "faces": [], "reactions": [], "photos": []}
+            "faces": [], "reactions": [], "hearts": 0, "hearted": False, "photos": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
@@ -899,7 +901,7 @@ def test_post_discussed(env, monkeypatch):
     con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
     assert busy in hot()
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human", "photos"}
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}
     assert row["anon"] and row["person"] is None and row["hot"] is True
     con.close()
 
@@ -940,6 +942,84 @@ def test_post_rules_shared():
         assert got == kind, text
     for text, ok in json.loads(pathlib.Path(__file__).with_name("fchannel_rules.json").read_text())["meaningful"]:
         assert logic.fchannel._meaningful(text) == ok, text
+
+
+def test_comments_notify_only_the_author_per_post(env, monkeypatch):
+    c, cfg, _, _ = setup(env, monkeypatch)
+    owner, other = login(c, 411, "ann"), login(c, 522, "bob")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET lang = 'en', can_dm = 1 WHERE id = ?", (owner["id"],))
+    t = (int(time.time()) // 10800 + 1) * 10800 - 2
+    set_clock(monkeypatch, lambda: t)
+    monkeypatch.setattr(bot, "now", lambda: t)
+    tg = Telegram()
+    posts = []
+    for anon, body in [(True, "My anonymous post"), (False, "My signed post")]:
+        p = c.post("/api/forum-posts", headers=tma(411), json={"body": body, "anon": anon}).json()
+        tick(cfg, tg, con)
+        mid = logic.one(con, "SELECT tg_msg FROM fchan_posts WHERE id = ?", p["id"])[0]
+        logic.fchannel.copied(con, mid, 50 + len(posts))
+        posts.append(p["id"])
+    tg.calls.clear()
+
+    def comment(mid, who=522, root=50):
+        return {"message": msg(mid, who, text="Private commenter words", message_thread_id=root)}
+
+    def pending():
+        return [m for m in bot._due(con) if m["kind"] == "fch_comments"]
+
+    first = comment(61)
+    hear(cfg, tg, comment(60, who=411), comment(70, root=88), {"edited_message": first["message"]})
+    assert not pending()
+    hear(cfg, tg, first, first, comment(62, root=51))
+    assert len(pending()) == 2
+    for m in pending():
+        assert m["user_id"] == owner["id"] and m["payload"] == "{}"
+        assert bot._render(con, dict(m) | {"user_id": other["id"]}) is None
+        assert bot._render(con, dict(m) | {"tg_id": 522}) is None
+    # Both posts waited in the queue across a three-hour boundary. One DM each, measured from actual delivery.
+    t += 10801
+    hear(cfg, tg, comment(63))
+    postman(cfg, tg)
+    text, button = texts.bot_message("en", "fch_comments")
+    sent = [body for body in tg.of("sendMessage") if body["text"] == text]
+    assert [(b["chat_id"], b["reply_markup"]["inline_keyboard"]) for b in sent] == [
+        (411, [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]) for pid in posts]
+    assert all("Private commenter words" not in str(b) for b in sent)
+    t += 10799
+    hear(cfg, tg, comment(64))
+    assert not pending()
+    t += 1
+    hear(cfg, tg, first, comment(65, who=411))
+    assert not pending()  # even after the cooldown, replays and my own comments stay quiet
+    nested = comment(66)["message"]
+    del nested["message_thread_id"]
+    nested["reply_to_message"] = first["message"]
+    hear(cfg, tg, {"message": nested})
+    alert, = pending()
+    assert alert["ref"] == f"fc:{posts[0]}"
+
+    assert c.patch("/api/me", headers=tma(411), json={"nForumComments": False}).json()["settings"]["nForumComments"] is False
+    assert bot._render(con, alert) is None and not pending()
+    hear(cfg, tg, comment(67))
+    assert not pending()
+    assert c.patch("/api/me", headers=tma(411), json={"nForumComments": True}).json()["settings"]["nForumComments"] is True
+    assert not pending()
+    hear(cfg, tg, comment(68))
+    alert, = pending()
+    assert c.delete(f"/api/forum-posts/{posts[0]}", headers=tma(411)).status_code == 204
+    assert bot._render(con, alert) is None
+    assert not logic.one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'fch_comments' AND ref = ?", alert["ref"])
+    # Another message reused the retired row id while a postman still held the deleted post's alert.
+    con.execute("INSERT INTO bot_outbox (id, user_id, kind, ref, send_after) VALUES (?, ?, 'delete_soon', 'del:1', ?)",
+                (alert["id"], other["id"], t))
+    assert bot._take(con, alert, True) is None
+    bot._mark(con, alert, True)
+    assert logic.one(con, "SELECT sent_at, send_after FROM bot_outbox WHERE id = ?", alert["id"])[:] == (None, t)
+    delete_now(c, cfg, tma(411))
+    hear(cfg, tg, comment(69, root=51))
+    assert not logic.one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'fch_comments'")
+    con.close()
 
 
 def test_post_author_told(env, monkeypatch):

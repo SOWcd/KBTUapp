@@ -3,6 +3,7 @@
 import { api, ApiErr, type Me } from '../api';
 import { CONSENT_VERSION } from '../legal';
 import { tg } from '../tg';
+import { clearCache } from './cache';
 import { ACCOUNT_KEY, accountRequest, cancelAccountRequests, recovery } from './recovery';
 
 // banned: the platform ban, why and whom to write; the app shows only that; policy: the version in force
@@ -12,6 +13,9 @@ import { ACCOUNT_KEY, accountRequest, cancelAccountRequests, recovery } from './
 export const session = $state({ me: null as Me | null, ready: false, verified: false, revoked: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION, board: false, boardKnown: false, channel: false, tgComment: false,
   // /api/me alone carries these (a PATCH's me doesn't): kept apart so a settings change never drops them
   donate: '', support: [] as NonNullable<Me['support']> });
+
+// Optimistic Settings switches survive a refresh that started before the PATCH finished.
+export const pendingSwitches: Record<string, boolean> = {};
 
 const authAt = Number(new URLSearchParams(tg.initData).get('auth_date')) || 0;
 export function forgetRecovery(auth?: number): void {
@@ -25,6 +29,7 @@ function revoke(auth?: number) {
   session.revoked = true;
 }
 function banned(d: Record<string, unknown>) {
+  clearCache(); // clear the snapshot before dropping the recovery scope
   forgetRecovery();
   cancelAccountRequests();
   session.banned = { reason: (d.reason as string | null) ?? null, contact: (d.contact as string | null) ?? null };
@@ -42,6 +47,7 @@ if (typeof window !== 'undefined') {
 export async function loadMe(quiet = false): Promise<void> {
   if (session.revoked) return;
   const request = accountRequest(), previous = recovery.scope();
+  const settingsAtStart = session.me?.settings;
   try {
     const me = await api.me();
     if (request.aborted) return;
@@ -52,6 +58,9 @@ export async function loadMe(quiet = false): Promise<void> {
       if (!recovery.verify(me.tg.id, me.id, !!me.student, me.no, authAt)) { revoke(); return; }
       if (previous && previous !== recovery.scope()) { revoke(); return; }
       session.verified = true;
+    }
+    if (session.me && session.me.id === me.id) {
+      me.settings = { ...(session.me.settings === settingsAtStart ? me.settings : session.me.settings), ...pendingSwitches };
     }
     session.me = me; session.failed = false; session.banned = null; session.policy = me.consentNow ?? session.policy; session.board = !!me.board; session.channel = !!me.forumChannel; session.boardKnown = true; session.tgComment = !!me.tgComment; session.donate = me.donate ?? ''; session.support = me.support ?? [];
     if (me.avatar) new Image().src = me.avatar; // the profile tab opens with its photo in place

@@ -26,6 +26,7 @@
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import Heart from '@lucide/svelte/icons/heart';
   import Flag from '@lucide/svelte/icons/flag';
   import MessageCircleReply from '@lucide/svelte/icons/message-circle-reply';
   import Share from '@lucide/svelte/icons/share';
@@ -37,8 +38,8 @@
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
-  import { channel, loadChannel, loadOlder, touched } from '../../lib/state/channel.svelte';
-  import { ui, say } from '../../lib/state/ui.svelte';
+  import { channel, loadChannel, loadOlder, markChannelSeen, pendingHearts, toggleHeart, touched } from '../../lib/state/channel.svelte';
+  import { ui, say, overlays } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
@@ -69,24 +70,19 @@
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
   const here = $derived(ui.tab === 'forum');
-  // "New since the last visit": the newest channel post seen, kept in this browser (a convenience: lost storage only
-  // means no line). since: where this visit's line is (0: a first visit, nothing marked); while here, all on screen counts
-  // as seen for the next one
-  const SEEN = 'kb-fc-seen';
-  function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
-  let since = $state(0);
-  // my own anonymous post gets it as anyone's: leaving it out would tell whose it is
-  const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && (!p.mine || p.anon) && !!p.msg;
+  let visibility = $state<DocumentVisibilityState>();
+  const visible = $derived(here && visibility === 'visible' && !overlays.length && !ui.gate && !session.banned);
+  let since = $state<number | null>(null);
+  const fresh = (p: ChannelFeedPost) => !!since && p.status === 'live' && (p.msg ?? 0) > since && (!p.mine || p.anon);
 
-  // what's on screen: the posts already shown (known), the older pages under them, mine; a refresh's others wait for
-  // the pill (or come in by themselves while I'm at the top). known empty: the first look, all of it
-  let known = $state(new Set<number>()), atTop = $state(true), scroller = $state<HTMLElement>();
-  const floor = $derived(known.size ? Math.min(...known) : Infinity);
-  const shown = (p: ChannelFeedPost) => p.id < 0 || p.mine || known.has(p.id) || p.id < floor;
+  // A held post may be published much later. Admit new public messages in channel order, whoever wrote them.
+  let through = $state(0), atTop = $state(true), scroller = $state<HTMLElement>();
+  const latest = $derived(channel.feed?.find((p) => p.status === 'live' && p.msg)?.msg ?? 0);
+  const shown = (p: ChannelFeedPost) => p.status !== 'live' || (p.msg ?? 0) <= through;
   const list = $derived((channel.feed ?? []).filter(shown));
   const waiting = $derived((channel.feed ?? []).filter((p) => !shown(p)).length);
-  const showAll = () => { known = new Set((channel.feed ?? []).map((p) => p.id)); };
-  $effect(() => { if (channel.feed && (atTop || !known.size) && (waiting || !known.size)) untrack(showAll); });
+  const showAll = () => { through = latest; };
+  $effect(() => { if ((atTop || !through) && latest > through) through = latest; });
   function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: PULL, behavior: 'smooth' }); }
   // the pull-down search, over the posts held, by their words only (never a signature: an anonymous post has none to match)
   // ponytail: the loaded pages only; a server search when the channel outgrows them
@@ -96,7 +92,7 @@
 
   // the line stands above the first post seen before, when some new one is above it: "N new", how many
   const cut = $derived.by(() => {
-    const i = list.findIndex((p) => p.id > 0 && p.id <= since), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
+    const i = list.findIndex((p) => p.status === 'live' && !!p.msg && p.msg <= (since ?? 0)), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
     return n ? { id: list[i].id, n } : null;
   });
   // the rows: the posts, and the line a row of its own above its post (inside the post's row it pushed that card down
@@ -113,13 +109,16 @@
     try { await loadOlder(); } catch (e) { fail(e); } finally { older = false; }
   }
 
-  // a visit starts when the tab comes into view: the line between new and seen is where the last one ended
-  // (declared before the effect below that moves the mark: effects run in order)
-  $effect(() => { if (here) untrack(() => { since = readSeen(); void loadChannel().then(seek); }); });
+  $effect(() => { if (here) untrack(() => { void loadChannel().then(seek); }); });
+  // Keep the divider at this visit's starting point. Prefetches, covered tabs and posts behind
+  // the "N new" pill do not advance the server cursor.
+  const top = $derived(matched.find((p) => p.status === 'live' && p.msg)?.msg ?? 0);
   $effect(() => {
-    if (!here) return;
-    const top = Math.max(0, ...(channel.feed ?? []).filter((p) => p.msg).map((p) => p.id));
-    if (top > untrack(readSeen)) try { localStorage.setItem(SEEN, String(top)); } catch { /* private mode: no line next time */ }
+    const visit = channel.visit;
+    if (!here) { since = null; return; }
+    if (!visible || !visit) return;
+    since ??= visit.seen;
+    if (top > visit.seen) untrack(() => { void markChannelSeen(top); });
   });
 
   // fresh while open: back from the background (Telegram's activated, the page shown again) and every 30 s while seen;
@@ -191,6 +190,11 @@
     else compose();
   }
 
+  function heart(p: ChannelFeedPost) {
+    haptic.tap();
+    asStudent(() => { void toggleHeart(p).catch((e) => { fail(e); void loadChannel(); }); });
+  }
+
   function fail(e: unknown) {
     haptic.error();
     say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'fc.slow' : 'common.error'), 'pleading_face_3d');
@@ -224,6 +228,8 @@
   const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
 </script>
 
+<svelte:document bind:visibilityState={visibility} />
+
 <div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < PULL + 40; }}>
   <PullSearch bind:value={q} placeholder={t('fc.search')} />
   <!-- new posts from the refresh while I read further down: a pill, never a jump -->
@@ -254,7 +260,7 @@
         {:else}
         {@const p = r}
         {@const m = p.mine ? mark(p) : null}
-        {@const live = !!p.msg && p.status === 'live'}
+        {@const live = (p.msg ?? 0) > 0 && p.status === 'live'}
         {@const why = p.mine && p.human ? heldWhy(p) : undefined}
         {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
         <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id} data-nav-anchor={live ? `post-${p.id}` : undefined}>
@@ -293,11 +299,18 @@
           <!-- the AI looking: a running bar under the words, not just a word -->
           {#if p.id < 0 || (p.mine && p.status === 'live' && !p.msg)}<div class="chk" role="progressbar" aria-label={t(p.id < 0 ? 'fc.checking' : 'fc.publishing')}><span></span></div>{/if}
           {#if live}
-            <div class="acts">
+            {@const pick = pendingHearts[p.id] ?? p}
+            <div class="feedback">
+              <button class="heart" aria-pressed={pick.hearted} onclick={() => heart(p)}>
+                <Heart size={16} fill={pick.hearted ? 'currentColor' : 'none'} aria-hidden="true" />
+                {t('fc.appHearts')} <span>{pick.hearts}</span>
+              </button>
               <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
               {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
                 {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>{/each}
               </span>{/if}
+            </div>
+            <div class="acts">
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="share"><IconButton kind="plain" size="s" icon={Share} label={t('event.share')} onclick={() => share(p)} /></span>
@@ -433,9 +446,12 @@
   .held .fix { display: flex; gap: 6px; margin-top: var(--s-2); color: var(--text); }
   .held .fix :global(svg) { flex: none; margin-top: 1px; color: var(--warning-text); }
 
-  /* the row under the words: Telegram's reactions on the left (bare counts: they are read-only, a chip promised a tap),
-     the talk's faces and its one button on the right (under the thumb); 36 seen, 44 to the finger */
+  /* The heart and Telegram counts wrap together. Sharing and the discussion stay on their own row. */
   .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; margin-top: var(--s-3); }
+  .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+  .heart { display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 44px; border-radius: var(--r-full);
+    background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1.2 var(--font-text); font-variant-numeric: tabular-nums; }
+  .heart[aria-pressed='true'] { color: var(--danger-text); }
   .rx { flex: none; display: flex; gap: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-body); line-height: 1; }

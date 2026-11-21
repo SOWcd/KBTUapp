@@ -24,6 +24,7 @@ BODY_MAX = 1000
 POSTS_A_GAP, POST_GAP = 2, 10 * 60  # a pace: at most two posts in any ten minutes (no daily cap: nobody reaches one)
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
+COMMENT_GAP = 3 * 3600   # per post, measured from delivery
 UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: Undo inside keeps the message and its comments
 # what Telegram turns into a link or a ping even in plain text, looked for in the text NFKC-normalised (fullwidth
 # letters and dots fold to ASCII; the ideographic dots count as dots): a scheme, www., a domain (Latin or IDN labels,
@@ -163,8 +164,12 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     pics = _photos(con, [p["id"] for p in ps])
     pids = [p["id"] for p in ps if p["comments"]]
     newest = {r["post_id"]: r["m"] for r in rows(con, f"SELECT post_id, MAX(msg_id) m FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(pids))}) GROUP BY post_id", *pids)}
+    live = [p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0]
+    hearts = {r["post_id"]: r for r in rows(con, f"""SELECT post_id, COUNT(*) n, MAX(user_id = ?) picked
+        FROM fchan_hearts WHERE post_id IN ({','.join('?' * len(live))}) GROUP BY post_id""", v.id, *live)}
     out = []
     for p in ps:
+        heart = hearts.get(p["id"])
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         # at: when it went out (posted_at), never when it was written: a held anonymous post's writing time is the
         # author's moment in the app; mine not out yet: when I wrote it
@@ -173,6 +178,7 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              "mine": p["user_id"] == v.id, "photos": pics.get(p["id"], []),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
              "comments": p["comments"], "thread": (newest.get(p["id"]) or p["rules_msg"]) if p["tg_msg"] else None,
+             "hearts": heart["n"] if heart else 0, "hearted": bool(heart and heart["picked"]),
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day
@@ -182,6 +188,36 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              # is anonymous, or the AI's own words (reason, its tip, the piece it stopped at) once it gave them
              **({"review": _review(p)} if p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check" else {})})
     return out
+
+
+def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
+    need_student(v)
+    if not isinstance(picked, bool) or not 0 < pid < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
+            raise ApiError("need_student")
+        if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid):
+            raise ApiError("not_found")
+        if picked:
+            con.execute("INSERT INTO fchan_hearts (post_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (pid, v.id))
+        else:
+            con.execute("DELETE FROM fchan_hearts WHERE post_id = ? AND user_id = ?", (pid, v.id))
+        return {"hearts": one(con, "SELECT COUNT(*) FROM fchan_hearts WHERE post_id = ?", pid)[0], "hearted": picked}
+
+
+def visit(con, v: Viewer) -> dict:
+    return dict(one(con, """SELECT forum_seen_msg AS seen, (SELECT COALESCE(MAX(tg_msg), 0) FROM fchan_posts
+        WHERE status = 'live' AND tg_msg > 0) AS latest FROM users WHERE id = ?""", v.id))
+
+
+def mark_seen(con, v: Viewer, msg: int) -> None:
+    if type(msg) is not int or not 0 < msg < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM fchan_posts WHERE status = 'live' AND tg_msg = ?", msg):
+            raise ApiError("not_found")
+        con.execute("UPDATE users SET forum_seen_msg = MAX(forum_seen_msg, ?) WHERE id = ?", (msg, v.id))
 
 
 def _review(p) -> dict:
@@ -533,6 +569,7 @@ def delete(con, v: Viewer, pid: int) -> None:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status != 'gone'", pid, v.id)
         if not p:
             raise ApiError("not_found")
+        con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
         _unpost(con, p, "author")
         _post_off(con, pid)
         con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
@@ -542,9 +579,10 @@ def delete(con, v: Viewer, pid: int) -> None:
 
 
 def _notes_off(con, pid: int) -> None:
-    """The bot's notes to the author about this post (fch_posted, fch_declined): out of the outbox with it, so no row ties
+    """The bot's notes to the author about this post: out of the outbox with it, so no row ties
     them to a removed post (a sent one's time would match the channel's)."""
-    con.execute("DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined') AND ref IN (?, ?)", (f"fp:{pid}", f"fd:{pid}"))
+    con.execute("DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined', 'fch_comments') AND ref IN (?, ?, ?)",
+                (f"fp:{pid}", f"fd:{pid}", f"fc:{pid}"))
 
 
 def resigns(con) -> list:
@@ -726,7 +764,7 @@ def rules_sent(con, pid: int, msg_id: int) -> None:
     con.execute("DELETE FROM meta WHERE key = ?", (f"fchrules:{pid}",))
 
 
-def commented(con, root: int, msg_id: int, tg: int) -> None:
+def commented(con, root: int, msg_id: int, tg: int, bot_reply: int | None = None) -> None:
     """A student's comment (msg_id in the group) in the thread under this group copy (tgc.gate): counted on the forum
     post it copies, if it is one, once per message (a batch replayed after a restart counts nothing twice), his face
     kept for the card. ponytail: a comment its author deletes in Telegram stays counted (the Bot API never says); a
@@ -734,14 +772,30 @@ def commented(con, root: int, msg_id: int, tg: int) -> None:
     with tx(con):
         p = one(con, """SELECT id FROM fchan_posts WHERE tg_msg > 0 AND tg_msg =
             (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key >= 'fchcopy:' AND key < 'fchcopy;' AND value = ?)""", str(root))
+        answer = one(con, "SELECT post_id AS id FROM fchan_replies WHERE tg_msg = ? AND tg_msg > 0 AND status = 'live'", bot_reply) if bot_reply else None
+        if not p and root == bot_reply:  # Telegram supplied just the parent message, which we sent under this post.
+            p = answer
         u = one(con, "SELECT id FROM users WHERE tg_id = ?", tg)
         # Couch critic: a first comment under a post may raise its level (profiles.CRITIC), told like any level
         before = profiles._levels(con, u["id"]) if p and u and profiles.CRITIC_ON else None
         if p and u and con.execute("INSERT OR IGNORE INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)",
                                    (msg_id, p["id"], u["id"], _now())).rowcount:
             con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE id = ?", (p["id"],))
+            _comment_note(con, p["id"], u["id"], bool(answer and answer["id"] == p["id"]))
             if before is not None:
                 profiles._celebrate(con, u["id"], before)
+
+
+def _comment_note(con, pid: int, commenter: int, answer: bool) -> None:
+    """One private outbox row per post. While delivery is pending, further comments are covered by that row."""
+    t = _now()
+    con.execute("""INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT u.id, 'fch_comments', 'fc:' || p.id, ?, ? FROM fchan_posts p JOIN users u ON u.id = p.user_id
+        WHERE p.id = ? AND p.status = 'live' AND p.tg_msg > 0 AND u.id != ? AND u.n_forum_comments = 1
+          AND u.tg_id > 0 AND u.can_dm = 1 AND u.banned_at IS NULL
+        ON CONFLICT (user_id, kind, ref) DO UPDATE SET payload = excluded.payload, send_after = excluded.send_after,
+          sent_at = NULL, error = NULL WHERE sent_at <= ? OR (error IS NOT NULL AND send_after <= ?)""",
+        ('{"answer":true}' if answer else "{}", t, pid, commenter, t - COMMENT_GAP, t))
 
 
 def reacted(con, upd: dict) -> None:
@@ -768,7 +822,7 @@ def sweep(con) -> None:
     con.execute("DELETE FROM fchan_photos WHERE post_id IS NULL AND created_at < ?", (_now() - PHOTO_FRESH,))  # picked, never posted
     con.execute("DELETE FROM meta WHERE key >= 'fchup:' AND key < 'fchup;' AND CAST(substr(key, length(rtrim(key, '0123456789')) + 1) AS INTEGER) < ?",
                 (_now() // 3600 - 1,))  # the upload counts of past hours
-    con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
+    con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined', 'fch_comments')
         AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
     con.execute("DELETE FROM fchan_replies WHERE status IN ('gone', 'hidden', 'held') AND tg_msg IS NULL AND created_at < ?", (_now() - 30 * 86400,))
@@ -1057,15 +1111,6 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
                 log_action(con, None, "fchan_reply_auto_hide", f"fchanr:{r['id']}")
         notify(con, u["id"], "tgc_report_ok", f"rr:{r['id']}")
     return True
-
-
-def reply_answered(con, msg_id: int, tg: int) -> None:
-    """A student answered the bot's reply in the group (tgc.gate): its author hears, a template with a button to the
-    post, at most once an hour per reply (never their own answer)."""
-    r = one(con, """SELECT r.id, p.id AS pid, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id JOIN users u ON u.id = p.user_id
-        WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live' AND u.tg_id > 0 AND u.tg_id != ?""", msg_id, tg)
-    if r:
-        notify(con, r["user_id"], "fch_reply_answer", f"fa:{r['id']}:{_now() // 3600}")
 
 
 # the bot's side (tgc.post_tick)

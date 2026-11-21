@@ -30,17 +30,19 @@ _tasks: set[asyncio.Task] = set()
 _last: dict[str, asyncio.Task] = {}
 
 
-def spawn(coro, chain: str = "tgc") -> None:
-    """A slow job beside the ears, one after another on its chain: two event-post copies in a batch must not both
-    comment ("events"), and the comments' AI looks ("tgc") never hold up an event post's first comment."""
-    prev = _last.get(chain)
-    prev = prev if prev and not prev.done() else None
-
-    async def run():
-        if prev:
+def spawn(coro, chain: str | None = "tgc") -> None:
+    """Run beside the poller. Named chains preserve order for moderation and event copies.
+    Independent jobs such as group video replies start immediately."""
+    prev = _last.get(chain) if chain is not None else None
+    if prev and not prev.done():
+        async def run():
             await asyncio.gather(prev, return_exceptions=True)
-        await coro
-    _last[chain] = t = asyncio.get_running_loop().create_task(run())
+            await coro
+        t = asyncio.create_task(run())
+    else:
+        t = asyncio.create_task(coro)
+    if chain is not None:
+        _last[chain] = t
     _tasks.add(t)
     t.add_done_callback(_tasks.discard)
 
@@ -121,7 +123,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         return
     if not any(k in msg for k in CONTENT):
         return
-    root = msg.get("message_thread_id") or (msg.get("reply_to_message") or {}).get("message_id")
+    to = msg.get("reply_to_message") or {}
+    root = msg.get("message_thread_id") or to.get("message_thread_id") or to.get("message_id")
     if sender:  # as a channel, or an anonymous admin: nobody to check. The forum channel's own admins may
         linked = (one(con, "SELECT value FROM meta WHERE key = 'tgc_channel'") or [""])[0]
         if str(sender.get("id")) != linked:
@@ -141,10 +144,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             _report(cfg, http, con, msg)
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
-        elif not edit and root:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
-            logic.fchannel.commented(con, root, msg["message_id"], tg)
-            if (to := msg.get("reply_to_message") or {}).get("from", {}).get("is_bot"):  # an answer to the anonymous author's reply
-                logic.fchannel.reply_answered(con, to["message_id"], tg)
+        elif not edit and root and cfg.forum_channel:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
+            logic.fchannel.commented(con, root, msg["message_id"], tg, to.get("message_id") if to.get("from", {}).get("is_bot") else None)
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
@@ -219,7 +220,7 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = T
             # commenter() doesn't ask for the policy in force: an author not yet on it gets the EU host alone
             s = one(con, """SELECT s.consent_version FROM tgc_comments c JOIN students s ON s.user_id = c.author_id
                 WHERE c.id = ?""", cid)
-            only = ai.PUBLIC_PROVIDERS if logic.agreed(s, cfg) else ai.EU_ONLY
+            only = ai.PUBLIC_PROVIDERS if logic.agreed(s) else ai.EU_ONLY
             verdict, rule = await ai.screen_comment(cfg, http, body, con, only=only)
             rules.look(con, cid, body, verdict)
         else:

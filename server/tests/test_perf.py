@@ -78,6 +78,7 @@ def test_assets_go_precompressed(env):
     with c.stream("GET", "/assets/b.js", headers={"Accept-Encoding": "br"}) as br:
         assert br.headers["content-encoding"] == "br" and br.headers["vary"] == "Accept-Encoding"
         assert br.headers["content-type"].startswith("text/javascript") and br.headers["cache-control"].endswith("immutable")
+        assert b"".join(br.iter_raw()) == b"not-really-brotli"
     gz = c.get("/assets/b.js", headers={"Accept-Encoding": "gzip"})
     assert gz.headers["content-encoding"] == "gzip" and gz.content == body  # the client inflates the ready .gz
     plain = c.get("/assets/b.js", headers={"Accept-Encoding": "identity"})
@@ -144,6 +145,9 @@ def test_streak_scans_only_my_weeks(env, monkeypatch):
     every = {logic.profiles._week(r[0]) for r in con.execute("SELECT starts_at FROM events WHERE status = 'published' AND visibility = 'public' AND guest_host IS NULL")}
     want = logic.profiles._streak({logic.profiles._week(t) for t in logic.profiles.attended(con, uid)}, every, logic.profiles._week(logic.core.now()))
     plans = _plans(con, lambda: logic.profiles._counts(con, uid))
+    assert not any("SELECT starts_at FROM events" in s for s, _ in plans)  # dormant award
+    monkeypatch.setattr(logic.profiles, "ACHIEVEMENTS", [*logic.profiles.ACHIEVEMENTS, ("streak", "", (1,), False)])
+    plans = _plans(con, lambda: logic.profiles._counts(con, uid))
     got = logic.profiles._counts(con, uid)
     assert (got["streak"], got["streak_now"]) == want == (2, 2)  # weeks 3 and 6 broke it; the empty weeks since break nothing
     busy = [p for s, p in plans if "SELECT starts_at FROM events" in s]
@@ -159,6 +163,31 @@ def test_expired_holds_promote_once(env, monkeypatch):
     monkeypatch.setattr(logic.seats, "one", lambda *a: (1,))  # the lock-free look saw an expiry another request swept since
     logic.seats.sweep_holds(con)
     assert not calls and not con.in_transaction
+
+
+def test_find_people_reads_a_page_together(env):
+    c, cfg = env
+    me, peer, blocked = [login(c, tg, name)["id"] for tg, name in ((7, "A"), (8, "B"), (9, "C"))]
+    con = db.connect(cfg.db_path)
+    v = logic.Viewer(me, "user", True)
+    with db.tx(con):
+        skills = [r[0] for r in con.execute("SELECT id FROM skills ORDER BY id LIMIT 2")]
+        for uid in (me, peer, blocked):
+            logic.set_my_forum(con, logic.Viewer(uid, "user", True), {"open": True, "skills": skills})
+        logic.block(con, v, blocked)
+        con.executemany("""INSERT INTO asks (id, user_id, kind, title, status, created_at, expires_at)
+            VALUES (?, ?, 'project', 'Project', 'live', 0, ?)""", [(i, me if i == 1 else peer, logic.now() + 3600) for i in range(1, 101)])
+        con.executemany("INSERT INTO ask_skills VALUES (?, ?)", [(i, s) for i in range(1, 101) for s in skills])
+        con.executemany("INSERT INTO contacts (from_id, to_id, ask_id, status, created_at) VALUES (?, ?, ?, ?, 0)",
+                        [(peer, me, 1, "pending"), (blocked, me, 1, "declined"), (me, peer, 2, "declined")])
+    page = logic.asks(con, v)
+    assert [a["id"] for a in page] == [1, *range(100, 1, -1)]
+    assert all(a["matches"] == 1 and a["author"]["skills"] == [] and len(a["skills"]) == 2 for a in page)
+    assert [offer["person"]["id"] for offer in page[0]["offers"]] == [peer]
+    assert all("offers" not in a and a["offered"] is None for a in page[1:-1])
+    assert page[-1]["offered"] == "declined"
+    assert len(_plans(con, lambda: logic.asks(con, v))) <= 8
+    con.close()
 
 
 def test_forum_feed_pages_use_message_index(env):

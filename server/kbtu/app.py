@@ -112,7 +112,13 @@ PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST
                                    ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
                                    ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
                                    ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/santa/wish"),
-                                   ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
+                                   ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites"),
+                                   # his own application to a round and his own interview booking
+                                   ("POST", "/api/rounds/{rid}/apply"), ("DELETE", "/api/rounds/{rid}/apply"), ("POST", "/api/rounds/{rid}/book")})
+# a club's recruitment routes keyed by a round, an application or a slot: the club they belong to
+STUDIO_ROUND_ORG = {"/api/rounds/{rid}": ("rid", "SELECT org_id FROM rounds WHERE id = ?"),
+                    "/api/round-apps/{aid}": ("aid", "SELECT r.org_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE a.id = ?"),
+                    "/api/round-slots/{sid}": ("sid", "SELECT r.org_id FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?")}
 STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
 MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 
@@ -130,6 +136,10 @@ def _studio_route(con, request: Request, route: tuple[str, str], org: int, eid: 
     """A route of this club's Studio: the club's own or one of its events'."""
     if route[1].startswith("/api/orgs/{oid}"):
         return str(request.path_params.get("oid")) == str(org)
+    for prefix, (key, sql) in STUDIO_ROUND_ORG.items():
+        if route[1] == prefix or route[1].startswith(prefix + "/"):
+            x = str(request.path_params.get(key, ""))
+            return x.isascii() and x.isdigit() and len(x) < 12 and (r := logic.one(con, sql, int(x))) is not None and r[0] == org
     return (route[1].startswith("/api/events/{eid}") or route == ("PUT", MATCH_SCORE_ROUTE)) and eid.isascii() and eid.isdigit() and len(eid) < 12 \
         and logic.one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ?", int(eid), org) is not None
 
@@ -471,7 +481,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
-    logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
+    logic.chatsync.POLICY = logic.CONSENT if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
@@ -501,7 +511,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
-    policy = logic.policy(cfg)  # the version in force (logic/account.py)
+    policy = logic.CONSENT  # the version in force (logic/account.py)
     ai_on = logic.ai_on(cfg)
     # off (BOARD=staff, FORUM=founder): the visible policy names the EU host alone, so staff-only AI stays on it
     assist_only = ai.ASSIST_PROVIDERS if ai_on else ai.EU_ONLY
@@ -907,7 +917,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/cal/{token}")
     def calendar_page(token: str, request: Request, con: Con):
         """Opened from the app in the phone's browser: Apple's calendar subscribes at once, the rest through Google (calpage.py)."""
-        logic.cal_feed(con, token, str)  # 404 for a token that isn't (or no longer is) anyone's
+        logic.calendar_owner(con, token)
         lang = next((x for x in ("ru", "kk", "en") if x in request.headers.get("accept-language", "")[:5].lower()), "ru")
         page = calpage.render(cfg.domain, token, lang, request.headers.get("user-agent", ""))
         # the token is in the address: no Referer carries it on
@@ -1394,8 +1404,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.memo(con, v, oid, later)
 
     @app.get("/api/map/graph")
-    def map_graph(con: Con, v: Me):
-        return logic.map_graph(con)
+    def map_graph(v: Me):
+        return logic.map_graph()
 
     @app.get("/api/map/rooms")
     def map_rooms(request: Request, v: Me):
@@ -2649,6 +2659,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/forum-posts/feed")
     def fchan_feed(con: Con, v: FChan, before: int | None = None):
         return F.feed(con, v, before)
+
+    @app.get("/api/forum-posts/visit")
+    def fchan_visit(con: Con, v: FChan):
+        return F.visit(con, v)
+
+    @app.put("/api/forum-posts/visit", status_code=204)
+    def fchan_seen(con: Con, v: FChan, body: dict = Body(...)):
+        F.mark_seen(con, v, body.get("msg"))
+
+    @app.put("/api/forum-posts/{pid}/heart")
+    def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_heart(con, v, pid, body.get("hearted"))
 
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):

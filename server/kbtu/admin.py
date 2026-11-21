@@ -308,7 +308,7 @@ def _chatsync(con, cfg, rest: list[str]) -> None:
     from .logic import account, chatsync
     if not cfg.chat_sync:
         sys.exit("CHAT_SYNC is off")
-    chatsync.POLICY = account.policy(cfg)
+    chatsync.POLICY = account.CONSENT
     sub, ids = rest[:1], [int(x) for x in rest[1:3] if re.fullmatch(r"-?\d+", x)]
     try:
         if sub == ["list"] and len(rest) == 1:

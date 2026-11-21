@@ -132,7 +132,9 @@ def fields(con, days: int, upto: int | None = None) -> dict:
     # uniq.* is per device and day, `visits` per person and day: the share of those active on the days of the window
     seen = upto - min(days, WINDOW)
     active_days = one(con, "SELECT COUNT(*) FROM visits WHERE day >= ? AND day < ?", seen, upto)[0]
-    used = {k: one(con, "SELECT COALESCE(SUM(n), 0) FROM usage_days WHERE key = ? AND day >= ? AND day < ?", f"uniq.{k}", seen, upto)[0] for k in USES}
+    totals = got if days <= WINDOW else dict(rows(con, """SELECT key, SUM(n) FROM usage_days
+        WHERE day >= ? AND day < ? AND key GLOB 'uniq.*' GROUP BY key""", seen, upto))
+    used = {k: totals.get(f"uniq.{k}", 0) for k in USES}
     uses = "\n".join(f"{k} {_pct(used[k], active_days)}" for k in sorted(USES, key=lambda k: -used[k])) if active_days else "—"
     return {**_retention(con, upto), "sessions": spread("sess", SESSIONS), "day_times": spread("time", DAY_TIMES), "uses": uses,
             "days": days, "active": _active(con, upto - days, upto),

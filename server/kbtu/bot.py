@@ -151,7 +151,16 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
-    if kind in ("fch_reply_answer", "fch_reply_gone"):  # fa:<reply>:<hour> / fg:<reply>, to the post's author (through the post): its card
+    if kind == "fch_comments":
+        post = one(con, """SELECT p.id FROM fchan_posts p JOIN users u ON u.id = p.user_id
+            WHERE p.id = ? AND p.user_id = ? AND p.status = 'live' AND p.tg_msg > 0
+              AND u.tg_id = ? AND u.tg_id > 0 AND u.can_dm = 1 AND u.banned_at IS NULL AND u.n_forum_comments = 1""",
+            int(ref[1]), m["user_id"], m["tg_id"])
+        template = "fch_reply_answer" if json.loads(m["payload"]).get("answer") else kind
+        return (*texts.bot_message(lang, template), f"fp_{post['id']}") if post else None
+    if kind == "fch_reply_answer":  # a retiring bot queued this after migration 203 folded pending answers into fch_comments
+        return None
+    if kind == "fch_reply_gone":  # fg:<reply>, to the post's author (through the post): its card
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
         return (*texts.bot_message(lang, kind), f"fp_{r['id']}") if r else None
@@ -939,20 +948,26 @@ def _due(con) -> list:
 
 
 def _mark(con, m, sent: bool, error: str | None = None) -> None:
-    con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ?", (now() if sent else None, error, m["id"]))
+    # Deleting a post or account can retire this row while Telegram answers. SQLite can reuse its numeric id.
+    con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ? AND user_id = ? AND kind = ? AND ref = ?",
+                (now() if sent else None, error, m["id"], m["user_id"], m["kind"], m["ref"]))
 
 
-def _take(con, m):
+def _take(con, m, forum_channel: bool):
     """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why)."""
     # take it first: during a deploy the old and the new container run side by side for a few seconds, and
     # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
-    if not con.execute("UPDATE bot_outbox SET send_after = ? WHERE id = ? AND send_after = ? AND sent_at IS NULL AND error IS NULL",
-                       (now() + LEASE, m["id"], m["send_after"])).rowcount:
+    lease = logic.fchannel.COMMENT_GAP if m["kind"] == "fch_comments" else LEASE  # Telegram may receive a send whose answer is lost
+    if not con.execute("""UPDATE bot_outbox SET send_after = ? WHERE id = ? AND user_id = ? AND kind = ? AND ref = ?
+                       AND send_after = ? AND sent_at IS NULL AND error IS NULL""",
+                       (now() + lease, m["id"], m["user_id"], m["kind"], m["ref"], m["send_after"])).rowcount:
         return None
     if not m["can_dm"]:
         return _mark(con, m, False, "no_dm")
     if m["banned_at"]:  # banned: the bot stops writing
         return _mark(con, m, False, "banned")
+    if m["kind"] == "fch_comments" and not forum_channel:
+        return _mark(con, m, False, "gone")
     msg = _render(con, m)
     if msg is None:
         _mark(con, m, False, "gone")
@@ -984,7 +999,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
-            msg = await anyio.to_thread.run_sync(_take, con, m)
+            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
             if msg is None:
                 continue
             text, button, start = msg
@@ -1466,21 +1481,26 @@ async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lan
             await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": m}, 0)
 
 
-async def _swear(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
-    """A club's group with its swear filter on (logic/chatmod.py): a new or edited message whose text or caption holds a
-    word of swear.py's lists goes, its author warned, the third time muted (_swear_act, beside the ears, a chat's acts
-    one after another). Elsewhere, and for bots, channels and anonymous admins, nothing is read (chat_on: a cached list,
-    no query a message). True: it was such a message (nothing else answers it)."""
+def _swear_hit(con, msg: dict) -> tuple[int, str] | None:
+    """Shared by moderation and early video dispatch so a filtered link gets no reply."""
     chat, sender = msg.get("chat") or {}, msg.get("from") or {}
     if chat.get("type") not in ("group", "supergroup") or not sender.get("id") or sender.get("is_bot") or msg.get("sender_chat") \
             or time.time() - int(msg.get("edit_date") or msg.get("date") or 0) > FRESH or not logic.chatmod.chat_on(con, chat["id"]):
-        return False  # an old one (piled up while the bot was away) is left alone: no warning about yesterday
+        return None
     poll = msg.get("poll") or {}
     text = _own_words(msg.get("text") or "", msg.get("entities")) + "\n" + _own_words(msg.get("caption") or "", msg.get("caption_entities")) \
         + "\n" + "\n".join([poll.get("question") or "", *((o.get("text") or "") for o in poll.get("options") or ())])
     # the cached list may be 30 s behind a switch turned off in another worker: a hit asks the database itself
-    if not (stem := swear.find(text)) or not (cid := logic.chatmod.on_now(con, chat["id"])):
+    if (stem := swear.find(text)) and (cid := logic.chatmod.on_now(con, chat["id"])):
+        return cid, stem
+    return None
+
+
+async def _swear(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
+    if not (hit := _swear_hit(con, msg)):
         return False
+    cid, stem = hit
+    chat, sender = msg["chat"], msg["from"]
     lang = sender.get("language_code")
     topic = msg.get("message_thread_id") if msg.get("is_topic_message") else None  # a forum's topic (General: none; a reply's thread isn't one)
     tgc.spawn(_swear_act(cfg, http, chat["id"], cid, msg["message_id"], sender["id"], stem, lang if lang in ("kk", "en") else "ru", topic),
@@ -1679,32 +1699,149 @@ async def _discussion_bg(cfg: Config, http: httpx.AsyncClient, msg: dict) -> Non
         con.close()
 
 
-async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str) -> None:
-    """A group link answered with its video or its slideshow's photos (tiktok.py), beside the ears (tgc.spawn): a
-    download never holds up the batch. It goes under the link as a reply, with no words of the bot's own; a failure
-    sends nothing."""
+_video_seen: set[int] = set()  # unconfirmed update IDs can appear both in a peek and in the next poll
+_video_uploads = asyncio.Semaphore(2)  # only full transfers hold a slot; cached and URL replies can always start
+_video_log = logging.getLogger("uvicorn.error")  # the runtime's INFO handler
+
+
+def _video_updates(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) -> None:
+    if not cfg.tiktok:
+        return
+    for upd in updates:
+        msg = upd.get("message") or {}
+        chat = msg.get("chat") or {}
+        try:
+            if chat.get("type") not in ("group", "supergroup") or tgc.ours(cfg, upd) or upd["update_id"] in _video_seen:
+                continue
+            if time.time() - int(msg.get("date") or 0) > FRESH or not (url := tiktok.link(msg)):
+                continue
+            _video_seen.add(upd["update_id"])
+            tgc.spawn(_group_video(cfg, http, msg, url, time.monotonic()), chain=None)
+        except Exception as exc:  # one bad update must not delay the others
+            log.warning("group video: %s", type(exc).__name__)
+
+
+async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, started: float) -> None:
+    # The poller's connection may be in use by a receipt or already closed when this task starts.
     try:
-        got = await tiktok.fetch(http, url)
-        if not got:
-            return
-        topic = msg.get("message_thread_id") if msg.get("is_topic_message") else None  # a forum's topic, as _swear_act
-        body = {"chat_id": str(msg["chat"]["id"]),
-                "reply_parameters": json.dumps({"message_id": msg["message_id"], "allow_sending_without_reply": True}),
-                **({"message_thread_id": str(topic)} if topic else {})}
-        if got.video:
-            method, files = "sendVideo", {"video": (got.filename, got.video, "video/mp4")}
-            body |= {"supports_streaming": "true", **({"duration": str(got.seconds)} if got.seconds else {})}
-        elif len(got.photos) == 1:
-            method, files = "sendPhoto", {"photo": ("tiktok.jpg", got.photos[0], "image/jpeg")}
-        else:  # an album: each photo its own part, named in "media"
-            method = "sendMediaGroup"
-            files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(got.photos)}
-            body["media"] = json.dumps([{"type": "photo", "media": f"attach://p{i}"} for i in range(len(got.photos))])
-        r = await _tg(cfg, http, method, body, files=files)
-        if r.status_code != 200:
-            log.warning("group video: Telegram HTTP %s", r.status_code)
-    except Exception as exc:  # noqa: BLE001 - the network or the source failed: the link stays a link
+        con = db.connect(cfg.db_path)
+        try:
+            if _swear_hit(con, msg) or logic.chatlist.banned(con, int((msg.get("from") or {}).get("id") or 0)):
+                return
+        finally:
+            con.close()
+        if tiktok.room(msg["chat"]["id"]):
+            await _tiktok(cfg, http, msg, url, started)
+    except Exception as exc:
         log.warning("group video: %s", type(exc).__name__)
+
+
+async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, started: float | None = None) -> None:
+    started = time.monotonic() if started is None else started
+    chat = {"chat_id": msg["chat"]["id"]}
+    if msg.get("is_topic_message") and msg.get("message_thread_id"):
+        chat["message_thread_id"] = msg["message_thread_id"]
+    api = f"https://api.telegram.org/bot{cfg.bot_token}/"
+
+    async def action():
+        try:
+            await http.post(api + "sendChatAction", json={**chat, "action": "upload_video"}, timeout=4)
+        except httpx.HTTPError:
+            pass
+
+    async def reply():
+        try:
+            route = await _video_reply(http, api, chat, msg["message_id"], url)
+        except Exception as exc:  # the network or the source failed: leave the link alone
+            route = type(exc).__name__
+        _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
+
+    await asyncio.gather(action(), reply())
+
+
+async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, url: str) -> str:
+    reply = {"message_id": mid, "allow_sending_without_reply": True}
+    body = {**chat, "reply_parameters": reply, "supports_streaming": True}
+    form = {**chat, "reply_parameters": json.dumps(reply)}
+    alias = tiktok.key(url)
+
+    async def reuse(k: str) -> str | None:
+        entry = tiktok.cached(k)
+        if not entry:
+            return None
+        file_id, duration = entry
+        if tiktok.LINK.match(url)["short_host"] and duration >= 180:
+            return "unavailable"  # youtu.be has a stricter duration limit than /shorts/
+        r = await http.post(api + "sendVideo", json={**body, "video": file_id}, timeout=60)
+        answer = r.json()
+        if answer.get("error_code", r.status_code) == 400:
+            if tiktok.cached(k) == entry:
+                tiktok.forget(k)
+            return None
+        if not answer.get("ok"):
+            return "refused"
+        tiktok.remember(alias, file_id, duration)
+        return "cache"
+
+    if route := await reuse(alias):
+        return route
+    got = await tiktok.fetch(http, url)
+    if not got:
+        return "unavailable"
+    if isinstance(got, list):
+        async with _video_uploads:
+            return await _video_album(http, api, form, got)
+    if got.key != alias and (route := await reuse(got.key)):
+        return route
+
+    for version in await tiktok.versions(http, got):
+        f = version.video
+        duration = got.duration or f.get("duration") or 0
+        meta = {k: int(v) for k, v in (("duration", duration), ("width", f.get("width")), ("height", f.get("height"))) if v}
+        route = "url"
+        answer = {}
+        if version.direct:
+            # Telegram accepts a remote cover by URL. Custom thumbnails accompany multipart uploads.
+            cover = {"cover": got.cover} if got.cover.startswith("https://") else {}
+            r = await http.post(api + "sendVideo", json={**body, **meta, **cover, "video": f["url"]}, timeout=60)
+            answer = r.json()
+            if not answer.get("ok") and answer.get("error_code", r.status_code) not in (400, 413):
+                return "refused"
+        if not answer.get("ok"):
+            async with _video_uploads:
+                upload = await tiktok.prepare_upload(http, got, version)
+                if not upload:
+                    continue  # e.g. the real size exceeds the estimate: try the next resolution
+                video, thumb, tracks = upload
+                meta = {k: int(tracks[k]) for k in ("duration", "width", "height") if tracks.get(k)}
+                files = {"video": ("video.mp4", video, "video/mp4")}
+                if thumb:
+                    files["thumbnail"] = ("thumbnail.jpg", thumb, "image/jpeg")
+                    meta["thumbnail"] = "attach://thumbnail"
+                r = await http.post(api + "sendVideo", data={**form, **meta, "supports_streaming": "true"}, files=files, timeout=120)
+                answer = r.json()
+                route = "upload"
+        if not answer.get("ok"):
+            return "refused"
+        if file_id := (answer.get("result", {}).get("video") or {}).get("file_id"):
+            for k in (got.key, alias):
+                tiktok.remember(k, file_id, duration)
+        return route
+    return "unavailable"
+
+
+async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str]) -> str:
+    photos = await tiktok.photos(http, urls)
+    if not photos:
+        return "unavailable"
+    if len(photos) == 1:
+        method, files = "sendPhoto", {"photo": ("tiktok.jpg", photos[0], "image/jpeg")}
+    else:
+        method = "sendMediaGroup"
+        files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(photos)}
+        form["media"] = json.dumps([{"type": "photo", "media": f"attach://{k}"} for k in files])
+    r = await http.post(api + method, data=form, files=files, timeout=120)
+    return "photos" if r.json().get("ok") else "refused"
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
@@ -1869,7 +2006,9 @@ async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, don
             # ponytail: getUpdates hands out the first 100 pending updates, so a pre-checkout behind a backlog of 100+ can
             # miss its 10 s and the donor taps again; upgrade: a webhook (a look past the batch would confirm what it hasn't run)
             r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates", params={"offset": offset, "timeout": 0, "allowed_updates": _wanted(cfg)})
-            await _checkouts(cfg, http, r.json().get("result") or [])
+            updates = r.json().get("result") or []
+            _video_updates(cfg, http, updates)
+            await _checkouts(cfg, http, updates)
         except Exception as exc:  # noqa: BLE001 - hear awaits this: nothing here may cost the batch its offset
             log.warning("checkouts: %s", type(exc).__name__)
 
@@ -1888,12 +2027,16 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
         log.warning("ears: %s", str(answer.get("description", r.status_code))[:200])
         await asyncio.sleep(60)
         return offset
-    await _checkouts(cfg, http, answer["result"])  # Stars' pre-checkouts before all else (10 s to answer)
+    batch = answer["result"]
+    if cfg.tiktok:
+        _video_seen.intersection_update(u["update_id"] for u in batch)
+        _video_updates(cfg, http, batch)
+    await _checkouts(cfg, http, batch)  # Stars' pre-checkouts need no database and have 10 s to answer
     con = db.connect(cfg.db_path)
     done = asyncio.Event()
     watch = None
     try:  # the watcher only once connected: finally is what ends it, and a look alive past this round would clash with the next long poll (409)
-        watch = asyncio.create_task(_checkout_watch(cfg, http, offset, done)) if answer["result"] else None
+        watch = asyncio.create_task(_checkout_watch(cfg, http, offset, done)) if batch else None
         # the forum channel's comments first: a stranger's comment is gone before anything slow in the batch runs
         if mine := [u for u in answer["result"] if tgc.ours(cfg, u)]:
             try:
@@ -1967,10 +2110,6 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     if _event_copy(cfg, msg):
                         tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
-                        # One group video download at a time on its own chain.
-                        if cfg.tiktok and (url := tiktok.link(msg)) and time.time() - int(msg.get("date") or 0) <= FRESH \
-                                and not logic.chatlist.banned(con, int((msg.get("from") or {}).get("id") or 0)) and tiktok.room(msg["chat"]["id"]):
-                            tgc.spawn(_tiktok(cfg, http, msg, url), "tiktok")
                         await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)

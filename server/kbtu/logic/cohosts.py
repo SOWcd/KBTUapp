@@ -213,17 +213,10 @@ def tell(con, e: sqlite3.Row, actor: int) -> None:
         return
     if _tell_after(con, {"org_id": x["org_id"], "id": e["id"]}) is not None:
         return
-    told = rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
-            WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", x["org_id"], actor)
-    for (uid,) in told:
-        if not sees_school(con, uid, e):  # a school's own event: only its students hear
-            continue
-        notify(con, uid, "new_event", f"event:{e['id']}", json.dumps({"co": x["org_id"]}))  # the co-host's: checked again at send time (bot._render)
-    # as the host's (publish_event): the week starts when someone heard
-    con.execute(f"INSERT OR {'REPLACE' if told else 'IGNORE'} INTO meta (key, value) VALUES (?, ?)", (f"told:{x['org_id']}", str(core.now()) if told else "0"))
+    tell_followers(con, e, x["org_id"], actor, json.dumps({"co": x["org_id"]}))
 
 
 # the other domains', imported last: they import this one too
 from . import core  # noqa: E402
-from .organizing import _staff_event, _tell_after  # noqa: E402
-from .seats import end_of, notify, sees_school  # noqa: E402
+from .organizing import _staff_event, _tell_after, tell_followers  # noqa: E402
+from .seats import end_of, notify  # noqa: E402

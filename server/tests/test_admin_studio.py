@@ -127,3 +127,18 @@ def test_creator_gives_roles(env):
         assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ids["ali"],)).fetchone()[0] == role
     assert c.patch(url, headers=_org(60), json={"role": "president", "roleId": None}).status_code == 403
     assert c.patch(url, headers=tma(60), json={"role": "head", "roleId": None}).status_code == 403  # no header: nothing lent
+
+
+def test_creator_runs_a_clubs_recruitment(env):
+    """Recruitment routes are keyed by a round, an application or a slot, not the club: lent for its own club only."""
+    c, con, ids = _full_setup(env)
+    con.execute("INSERT INTO rounds (id, org_id, title, closes_at, created_at) VALUES (7, 1, 'r', 9999999999, 1), (8, 2, 'r', 9999999999, 1)")
+    con.execute("INSERT INTO round_slots (id, round_id, starts_at, minutes) VALUES (5, 7, 9999999000, 15), (6, 8, 9999999000, 15)")
+    assert c.get("/api/rounds/7/apps", headers=_org(60)).status_code == 200
+    assert c.get("/api/rounds/7/slots", headers=_org(60)).status_code == 200
+    assert "GET /api/rounds/{rid}/apps" in {d["do"] for _, _, d in _studio(con)}
+    # another club's round or slot, his own application: never
+    assert c.get("/api/rounds/8/apps", headers=_org(60)).status_code == 403
+    assert c.delete("/api/round-slots/6", headers=_org(60)).status_code == 403
+    assert c.post("/api/rounds/7/apply", headers=_org(60), json={}).status_code == 403
+    assert c.get("/api/rounds/7/apps", headers=_org(65)).status_code == 403  # another admin

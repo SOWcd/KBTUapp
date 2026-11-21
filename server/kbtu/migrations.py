@@ -2102,4 +2102,26 @@ MIGRATIONS: list[tuple[int, str]] = [
         OR EXISTS (SELECT 1 FROM vol_people p WHERE p.id = vol_ties.vol_id AND p.user_id IS NOT NULL AND p.user_id != vol_ties.user_id);
     UPDATE vol_people SET user_id = NULL WHERE (id, user_id) IN (SELECT vol_id, user_id FROM vol_unconfirmed);
     DROP TABLE vol_unconfirmed;"""),
+    (205, """CREATE TABLE fchan_hearts (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
+    CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
+    ALTER TABLE users ADD COLUMN forum_seen_msg INTEGER NOT NULL DEFAULT 0;"""),
+    (206, """ALTER TABLE users ADD COLUMN n_forum_comments INTEGER NOT NULL DEFAULT 1;
+    -- Carry pending anonymous-reply alerts and the last three hours of deliveries into the per-post cooldown.
+    INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after, sent_at)
+      SELECT p.user_id, 'fch_comments', 'fc:' || p.id, '{"answer":true}', MAX(b.send_after),
+        MAX(CASE WHEN b.sent_at IS NULL AND b.send_after > unixepoch() THEN unixepoch() ELSE b.sent_at END)
+      FROM bot_outbox b JOIN fchan_replies r ON r.id = CAST(substr(b.ref, 4) AS INTEGER)
+      JOIN fchan_posts p ON p.id = r.post_id AND p.user_id = b.user_id
+      WHERE b.kind = 'fch_reply_answer' AND b.error IS NULL AND p.status = 'live'
+        AND (b.sent_at IS NULL OR b.sent_at > unixepoch() - 10800)
+      GROUP BY p.id;
+    DELETE FROM bot_outbox WHERE kind = 'fch_reply_answer';"""),
+    (207, """CREATE INDEX IF NOT EXISTS qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
+    CREATE INDEX IF NOT EXISTS reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS saved_by_event ON saved_events(event_id);"""),
 ]

@@ -6,8 +6,9 @@ import { t } from '../i18n/index.svelte';
 import { count, type Screen } from '../stats';
 import { queue } from '../moments';
 import { switching } from './theme.svelte';
+import { returnToSheet, type SheetKey } from './sheets';
 
-import { type Place, type Tab } from './navigation';
+import type { Place, Tab } from './navigation';
 export { TABS, type Tab } from './navigation';
 
 export const ui = $state({
@@ -36,7 +37,7 @@ export function goTab(tab: Tab): void {
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
 /** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
  *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
@@ -44,10 +45,17 @@ export interface Overlay { id: number; component: Component<any>; props: Record<
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
-export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, place?: Place): number {
+/** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view. */
+export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null, place?: Place): number {
+  const target = (props as Record<string, unknown>).id;
+  if (key === undefined && (typeof target === 'string' || typeof target === 'number')) key = target;
+  if (key != null) {
+    const existing = returnToSheet(overlays, component, key, close);
+    if (existing != null) return existing;
+  }
   const id = ++seq;
   if (stat) count(stat);
-  overlays.push({ id, component: component as Component<any>, props, closing: false, stat, place });
+  overlays.push({ id, component: component as Component<any>, props, closing: false, stat, key, place });
   return id;
 }
 
