@@ -378,6 +378,8 @@ export const server = {
   checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),
   /** an age_check event's door (server organizing.mark_age): a ticket holder 18+ or not, after a look at the ID */
+  doorPending: (id: Id): Promise<{ pending: number; pendingCame: number }> => call('GET', `/events/${id}/door-pending`),
+  letIn: (id: Id, studentId: string, surname: string, adult?: boolean): Promise<{ already: boolean; adult: boolean | null; pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending`, { studentId, surname, adult }), // a list buyer not in the app, by hand
   doorExtra: (id: Id, step?: 1 | -1): Promise<{ extra: number }> => step ? call('POST', `/events/${id}/door-extra`, { step }) : call('GET', `/events/${id}/door-extra`), // outsiders let in without the app: a bare count
   markAge: (id: Id, user: Id, adult: boolean): Promise<{ adult: boolean }> => call('POST', `/events/${id}/age`, { user_id: user, adult }),
   /** the bot asks the checked-in guests marked under 18 to leave (once in 10 min: rate_limited); count = messaged */

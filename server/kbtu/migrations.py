@@ -2126,4 +2126,6 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS saved_by_event ON saved_events(event_id);"""),
     # people let in at the door without the app (outsiders, ID checked by eye): a bare count, no one named
     (208, "ALTER TABLE events ADD COLUMN door_extra INTEGER NOT NULL DEFAULT 0 CHECK (door_extra >= 0);"),
+    # a ticket buyer not in the app yet, let in by hand at the door (student ID + surname against the list): when
+    (209, "ALTER TABLE event_guests ADD COLUMN came_at INTEGER;"),
 ]

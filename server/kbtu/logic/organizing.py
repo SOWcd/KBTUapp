@@ -1345,6 +1345,30 @@ def door_extra(con, v: Viewer, eid: int, step: object = None) -> dict:
         return {"extra": one(con, "SELECT door_extra FROM events WHERE id = ?", eid)[0]}
 
 
+def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult: object = None) -> dict:
+    """The door lets in a ticket buyer from the organizers' list who isn't in the app (guests.let_in); with `adult`,
+    the 18+ the door saw on their ID. Their ticket comes checked in when they sign in later."""
+    if adult is not None and not isinstance(adult, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+        if not e["guest_list"]:
+            raise ApiError("not_found")
+        t = core.now()
+        if door_shut(e, t):
+            raise ApiError("closed")
+        out = guests.let_in(con, eid, sid, surname, t)
+        if adult is not None and e["age_check"]:
+            guests.set_pending_age(con, eid, str(sid), adult)
+            out["adult"] = adult
+        return out
+
+
+def pending_count(con, v: Viewer, eid: int) -> dict:
+    _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+    return guests.pending_count(con, eid)
+
+
 def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:
     if type(uid) is not int or not 0 < uid < 2**63 or not isinstance(adult, bool):
         raise ApiError("bad_input")

@@ -77,6 +77,21 @@
   // the ticket, the scanner reads it and asks 18+ (owner, Nov 21)
   const aged18 = $derived(!!e?.ageCheck);
   $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
+  // list buyers not in the app yet (guest list): the student ID and surname from their ID card let them in by hand
+  let pend = $state<{ pending: number; pendingCame: number } | null>(null);
+  let pid = $state(''), psur = $state(''), pbusy = $state(false);
+  let plet = $state<{ sid: string; sur: string; adult: boolean | null } | null>(null);
+  $effect(() => { if (qr && !only && e?.guestList) api.doorPending(id).then((x) => (pend = x)).catch(() => {}); });
+  async function letIn(adult?: boolean) {
+    const sid = plet && adult !== undefined ? plet.sid : pid.trim().toUpperCase(), sur = plet && adult !== undefined ? plet.sur : psur.trim();
+    if (!sid || !sur) return;
+    pbusy = true;
+    try {
+      const r = await api.letIn(id, sid, sur, adult);
+      pend = { pending: r.pending, pendingCame: r.pendingCame }; plet = { sid, sur, adult: r.adult }; pid = ''; psur = ''; haptic.ok();
+    } catch (x) { say(x instanceof ApiErr && x.code === 'not_found' ? t('mk.letInNo') : t('common.error'), 'warning_3d'); }
+    pbusy = false;
+  }
   // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
   let extra = $state<number | null>(null);
   $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
@@ -280,6 +295,19 @@
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
+      {#if pend && pend.pending}
+        <section class="pend">
+          <p class="t-foot">{t('mk.pending', { n: pend.pendingCame, m: pend.pending })}</p>
+          <Field label={t('mk.letInId')} bind:value={pid} autocomplete="off" placeholder="24B030001" />
+          <Field label={t('mk.letInSurname')} bind:value={psur} autocomplete="off" />
+          <Button kind="secondary" size="m" full loading={pbusy} disabled={!pid.trim() || !psur.trim()} onclick={() => letIn()}>{t('mk.letIn')}</Button>
+          {#if plet}
+            <p class="ok">{t('mk.letInOk', { id: plet.sid })}{plet.adult === true ? ' · 18+' : plet.adult === false ? ' · ' + t('age.minor') : ''}</p>
+            {#if e?.ageCheck}<div class="ages"><Button kind={plet.adult === true ? 'primary' : 'secondary'} size="m" onclick={() => letIn(true)}>{t('age.adult')}</Button>
+              <Button kind={plet.adult === false ? 'primary' : 'secondary'} destructive={plet.adult === false} size="m" onclick={() => letIn(false)}>{t('age.minor')}</Button></div>{/if}
+          {/if}
+        </section>
+      {/if}
       {#if extra != null && aud !== 'team'}
         <div class="extra">
           <span>{t('mk.extra')} · <b>{extra}</b></span>
@@ -384,6 +412,9 @@
   .entry { display: grid; justify-items: center; gap: 10px; }
   .entry .plate { width: min(78vw, 300px); aspect-ratio: 1; padding: 14px; border-radius: var(--r-l); background: white; }
   .entry p { text-align: center; }
+  .pend { display: grid; gap: 8px; }
+  .pend .ok { color: var(--success-text); text-align: center; }
+  .pend .ages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
   .extra span { flex: 1; color: var(--text-2); }
 </style>
