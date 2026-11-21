@@ -35,6 +35,7 @@
         <span class="txt">
           <b>{me.name}</b>
           {#if mine.idea}<span class="role">{t('cr.idea')}</span>{/if}
+          {#if mine.honor}<span class="role">{t('ach.honor.name')}</span>{/if}
           <CreditLines items={mine.items} />
         </span>
       </div>

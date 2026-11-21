@@ -253,3 +253,95 @@ def test_attendance_counts_once_a_meeting(env, dmp_on):
     card = c.get(f"/api/users/{ann['id']}", headers=tma(62)).json()["awards"]["achievements"]
     assert next(a for a in card if a["code"] == "dmp")["count"] == 2
     assert c.post("/api/share", headers=tma(60), json={"kind": "gl", "code": "dmp", "uses": 1, "days": 1}).status_code == 400  # the hall only
+
+
+def test_honor_medal(env, monkeypatch, capsys):
+    import pytest
+    from kbtu import admin, bot, texts
+    from kbtu.logic import credits
+    from test_core import delete_now
+
+    c, cfg = env
+    con, boss, adm = _staff(c, cfg)
+    uid = login(c, 62, "ann")["id"]
+    body = {"code": "honor", "userId": uid}
+    reason = "For the TikTok bot"
+    def grant(tg, **extra):
+        return c.post("/api/admin/grants", headers=tma(tg), json={**body, **extra})
+
+    def listed():
+        return c.get("/api/credits", headers=tma(61)).json()["people"]
+
+    def medals():
+        card = c.get(f"/api/users/{uid}", headers=tma(61)).json()
+        return [a for a in card["awards"]["achievements"] if a["code"] == "honor"]
+
+    for tg in (61, 62):
+        assert grant(tg).status_code == 403
+    for bad in (9, "two\nlines", "a" * 141):
+        assert grant(60, reason=bad).status_code == 400
+    assert grant(60, reason=reason).status_code == 200
+    assert grant(60).status_code == 409
+    assert c.post("/api/admin/grants/scan", headers=tma(60), json=body).status_code == 400
+    assert c.post("/api/admin/grants/take-back", headers=tma(61), json=body).status_code == 403
+    assert medals()[0]["reason"] == reason and medals()[0]["level"] == 1
+    msg = dict(con.execute("SELECT * FROM bot_outbox WHERE ref = 'ach:honor:1'").fetchone())
+    for lang in ("ru", "kk", "en"):
+        text, button, link = bot._render(con, {**msg, "lang": lang})
+        assert texts.ACH_NAMES[lang]["honor"] in text and reason not in text and button and link == "aw_honor"
+
+    mine = c.get("/api/credits", headers=tma(62)).json()["mine"]
+    assert mine["honor"] and mine["items"] == [] and listed() == []
+    assert credits.asking(con, uid) == 62
+    consent = {"show": True, "rev": mine["rev"], "consent": credits.CONSENT}
+    assert c.put("/api/credits/consent", headers=tma(62), json=consent).status_code == 200
+    assert [(p["person"]["id"], p["honor"]) for p in listed()] == [(uid, True)]
+    cid = credits.add(con, 62, "code", "ru line", "kk line", "en line")
+    credits.ship(con, cid)
+    assert len(listed()) == 1 and len(listed()[0]["items"]) == 1 and reason not in str(listed())
+    c.put("/api/credits/consent", headers=tma(62), json={**consent, "show": False})
+    assert len(listed()) == 1 and listed()[0]["person"] is None and "honor" not in listed()[0]
+    credits.delete(con, cid)
+
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    con.execute("UPDATE users SET tg_username = 'helper' WHERE id = ?", (uid,))
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    with pytest.raises(SystemExit, match="cancelled"):
+        admin.main(["honor-off", "@helper"])
+    assert medals()
+    monkeypatch.setattr("builtins.input", lambda _: "y")
+    admin.main(["honor-off", "@helper"])
+    assert reason in capsys.readouterr().out and not medals()
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'ach:honor:1'").fetchone()
+    admin.main(["honor", "--yes", str(uid), reason])
+    assert medals()[0]["reason"] == reason
+    assert ("achievement_grants", "user_id") in logic._DEL_GONE
+    delete_now(c, cfg, tma(62))
+    assert not con.execute("SELECT 1 FROM achievement_grants WHERE code = 'honor'").fetchone()
+    assert listed() == []
+    con.close()
+
+
+def test_honor_only_consent_after_move_and_unlink(env, monkeypatch):
+    import pytest
+    from kbtu import admin
+    from kbtu.logic import credits
+
+    c, cfg = env
+    con, boss, adm = _staff(c, cfg)
+    uid = login(c, 62, "ann")["id"]
+    c.get("/api/me", headers=tma(63, "Fresh"))
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    admin.main(["honor", "--yes", "62"])
+    admin.main(["move", "62", "63"])
+    with pytest.raises(logic.ApiError) as stale:
+        credits.answer(con, logic.Viewer(uid, "user", True), {"show": True, "rev": None, "consent": credits.CONSENT})
+    assert (stale.value.code, stale.value.message) == ("conflict", "stale")
+    assert not c.get("/api/credits", headers=tma(61)).json()["people"]
+    admin.main(["unlink", "63"])
+    admin.main(["honor-off", "--yes", "63"])
+    assert not con.execute("SELECT 1 FROM achievement_grants WHERE code = 'honor'").fetchone()
+    admin.main(["honor", "--yes", "63"])
+    assert con.execute("SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'honor'", (uid,)).fetchone()
+    assert not c.get("/api/credits", headers=tma(61)).json()["people"]
+    con.close()

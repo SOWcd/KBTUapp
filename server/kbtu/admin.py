@@ -11,6 +11,8 @@
   .venv/bin/python -m kbtu.admin role <@username | telegram id> <slug> <member | head | vice | president | none>
   .venv/bin/python -m kbtu.admin links <slug> [https://… …]                 the club's socials (none = clear), up to 6
   .venv/bin/python -m kbtu.admin founder <@username | telegram id>          the Creator status (one person; card number 00000)
+  .venv/bin/python -m kbtu.admin honor [--yes] <user id | @username> [reason]     give the contribution medal (reason visible on the profile)
+  .venv/bin/python -m kbtu.admin honor-off [--yes] <user id | @username>          take it back; --yes confirms without stdin
   .venv/bin/python -m kbtu.admin mark <@username | telegram id> <idea | none>  the idea author's blue seal (one person)
   .venv/bin/python -m kbtu.admin unlink <@username | telegram id>           the KBTU account off this Telegram (a changed student ID,
                                                                          someone else's sign-in): the next sign-in links afresh
@@ -140,6 +142,7 @@ import hashlib
 import hmac
 import json
 import re
+import shlex
 import sqlite3
 import sys
 import time
@@ -539,6 +542,45 @@ def main(args: list[str]) -> None:
         if not con.execute("UPDATE orgs SET links = ? WHERE slug = ?", (json.dumps(links), args[1])).rowcount:
             sys.exit(f"{args[1]}: no such club")
         print(f"{args[1]}: {len(links)} link(s)")
+    elif cmd in ("honor", "honor-off"):
+        from .logic.profiles import grant, take_back
+        confirmed = args[1:2] == ["--yes"]
+        if confirmed:
+            args = [cmd, *args[2:]]
+        if len(args) < 2 or (cmd == "honor-off" and len(args) != 2):
+            sys.exit("honor <user id or @username> [reason] | honor-off <user id or @username>")
+        who = args[1]
+        if re.fullmatch(r"id:[0-9]+", who):
+            matches = rows(con, "SELECT id FROM users WHERE id = ? AND tg_id > 0", who[3:])
+        elif who.isascii() and who.isdecimal():
+            matches = rows(con, "SELECT id FROM users WHERE (id = ? OR tg_id = ?) AND tg_id > 0", who, who)
+        elif who.startswith("@") and len(who) > 1:
+            matches = rows(con, "SELECT id FROM users WHERE tg_username = ? COLLATE NOCASE AND tg_id > 0", who[1:])
+        else:
+            sys.exit("expected a user id or @username")
+        if len(matches) != 1:
+            sys.exit("no unique match for that account; use id:<app user id> or @username")
+        uid = matches[0]["id"]
+        try:
+            if not confirmed and input(f"{cmd} for app user {uid}? [y/N] ").strip().lower() != "y":
+                sys.exit("cancelled")
+        except EOFError:
+            sys.exit("confirmation required")
+        try:
+            with db.tx(con):
+                owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND banned_at IS NULL AND tg_id > 0")
+                if not owner:
+                    sys.exit("no active creator admin")
+                v = Viewer(owner[0], "admin", True)
+                if cmd == "honor":
+                    grant(con, v, uid, "honor", reason=" ".join(args[2:]))
+                    undo = ["honor-off", f"id:{uid}"]
+                else:
+                    prior = take_back(con, v, uid, "honor")["reason"]
+                    undo = ["honor", f"id:{uid}"] + ([prior] if prior else [])
+            print("Undo with", shlex.join(undo))
+        except ApiError as e:
+            sys.exit(f"refused: {e.code} {e.message}".strip())
     elif cmd == "founder" and len(args) == 2:
         u = _user(con, args[1])
         con.execute("UPDATE users SET is_founder = (id = ?)", (u["id"],))  # one Creator

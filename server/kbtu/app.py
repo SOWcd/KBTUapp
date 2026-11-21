@@ -2268,7 +2268,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/grants")
     def grant(con: Con, v: Me, body: dict = Body(...)):
-        return logic.grant(con, v, body.get("userId"), body.get("code"), body.get("orgId"))
+        return logic.grant(con, v, body.get("userId"), body.get("code"), body.get("orgId"), body.get("reason"))
 
     @app.get("/api/admin/staff")
     def staff(con: Con, v: Me):
