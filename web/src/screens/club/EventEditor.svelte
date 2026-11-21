@@ -60,6 +60,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, studioChanged, phrase } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
+  import { useDraft } from '../../lib/draft';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/clubs';
@@ -135,7 +136,8 @@
   // form as it stands then (capture: before the change lands) as the base
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
-  const dirty = $derived(touched && JSON.stringify(f) !== base);
+  let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
+  const dirty = $derived(!!fillLeft.trim() || touched && JSON.stringify(f) !== base);
   const live = $derived(!!saved && saved.status !== 'draft');
   $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); overlay.icon = live ? PencilLine : CalendarPlus; }); // the capsule's title (SPEC §8.2)
   $effect(() => { overlay.tint = shade(f.color); }); // the sheets it opens (Ask, the AI's fill) take its colour
@@ -351,8 +353,9 @@
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
+        restoreText();
       }).catch(() => { say(t('common.error'), 'warning_3d'); base = JSON.stringify(f); close(overlay.id); });
-    }
+    } else restoreText();
     return hideChrome();
   });
 
@@ -373,7 +376,7 @@
     asking = true;
     sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('ed.stay'), danger: true }).then((yes) => {
       asking = false;
-      if (yes) { base = JSON.stringify(f); close(overlay.id); }
+      if (yes) { discardText(); base = JSON.stringify(f); close(overlay.id); }
     });
   });
 
@@ -422,6 +425,7 @@
     if (busy) return;
     // teams off on an event that has some: they break up (the server lets them go)
     if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: t('ed.teamsOffAsk'), text: t('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
+    const sentAt = textDraft.stamp();
     busy = kind;
     try {
       const first = !saved;
@@ -432,6 +436,7 @@
       const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
       if (pub) e = pub;
       const moved = live && e.taken > 0 && (saved!.startsAt !== e.startsAt || saved!.place !== e.place);
+      discardText(sentAt);
       base = JSON.stringify(f);
       studioChanged();
       haptic.ok();
@@ -451,10 +456,41 @@
   // a new event from the announcement the club already wrote: the AI fills what the text says,
   // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
   let filling = $state(false);
-  let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
   // a new event starts with the announcement (the fill existed, nobody found it): a paste screen first,
   // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
   let step = $state<'paste' | 'form'>(untrack(() => !id && session.board ? 'paste' : 'form'));
+  const textFields = ['title', 'description', 'place'] as const;
+  type TextField = typeof textFields[number];
+  type TextDraft = { fields: Partial<Record<TextField, { before: string; value: string }>>; announcement: string };
+  const textDraft = useDraft<TextDraft>(untrack(() => `kb-editor-${org}-${id ?? 'new'}`));
+  const mayKeepText = $derived(!asStaff && !staffOrg.full && may(mine, 'events'));
+  let textBase = $state<Record<TextField, string> | null>(null);
+
+  function restoreText() {
+    if (!mayKeepText) return;
+    textBase = { title: f.title, description: f.description, place: f.place };
+    const draft = textDraft.read();
+    if (!draft) return;
+    for (const k of textFields) {
+      const field = draft.fields?.[k];
+      // A newer server edit of this field takes precedence. Other unsaved fields still recover.
+      if (field?.before === f[k] && typeof field.value === 'string') { f[k] = field.value; touched = true; }
+    }
+    if (typeof draft.announcement === 'string') fillLeft = draft.announcement;
+    if (touched) step = 'form';
+  }
+  $effect(() => {
+    if (!textBase || !mayKeepText) return;
+    const fields: TextDraft['fields'] = {};
+    for (const k of textFields) if (f[k] !== textBase[k]) fields[k] = { before: textBase[k], value: f[k] };
+    textDraft.track(fillLeft.trim() || Object.keys(fields).length ? { fields, announcement: fillLeft } : null);
+  });
+  function discardText(at?: number) {
+    if (textBase) textDraft.discard(at);
+    textBase = null;
+    fillLeft = '';
+  }
+
   let ai = $state<Marked[]>([]);
   let fromAi = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
@@ -657,6 +693,7 @@
     busy = 'delete';
     try {
       await api.deleteEvent(saved.id);
+      discardText();
       base = JSON.stringify(f);
       studioChanged();
       say(phrase('say.draftDeleted'), 'waving_hand_3d_default');

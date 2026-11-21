@@ -88,7 +88,7 @@
         <div class="mine">
           {#each mine as x (x.org.id)}
             <Card>
-              <button class="mc" onclick={() => openMine(x)} {@attach canLeave(x.membership) && longPress(hold(x))}>
+              <button class="mc" data-nav-anchor={`club-${x.org.id}`} onclick={() => openMine(x)} {@attach canLeave(x.membership) && longPress(hold(x))}>
                 <OrgLogo org={x.org} size={48} />
                 <span class="mine-text"><b>{nameOf(x.org)}</b><small>{x.role}</small>{#if x.sub}<span class="activity ellipsis">{x.sub}</span>{/if}</span>
                 <ChevronRight size={18} />

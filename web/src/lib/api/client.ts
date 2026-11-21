@@ -7,6 +7,7 @@ import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
 import { sheets } from '../state/sheets';
 import { tg } from '../tg';
+import { accountClosed, accountRequest } from '../state/recovery';
 import { i18n } from '../i18n/index.svelte';
 
 // the start's first answers, asked for by index.html with the page: each taken once, in the first seconds, and only when
@@ -40,23 +41,40 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   return {};
 };
 
-async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
-  let r: Response;
+async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id, ordinary = false): Promise<T> {
+  if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
+  const account = accountRequest();
+  let r: Response, data: unknown;
   const raw = body instanceof Blob; // a file goes as the body itself (POST /api/photos)
+  // Use a separate timeout on older webviews that cannot combine abort signals.
+  const timeout = !raw && AbortSignal.timeout?.(100_000);
+  const fallback = timeout && !AbortSignal.any ? new AbortController() : null;
+  const cancel = () => fallback?.abort();
+  if (fallback && timeout) {
+    account.addEventListener('abort', cancel, { once: true });
+    timeout.addEventListener('abort', cancel, { once: true });
+  }
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { Authorization: `tma ${tg.initData}`, ...(!ordinary && staffOf(method, path, staffEvent)), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
       // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
-      signal: raw ? undefined : AbortSignal.timeout?.(100_000),
+      signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
     }));
+    if (r.status !== 204) data = await r.json().catch(() => null);
   } catch {
     throw new ApiErr('unavailable', 'network');
+  } finally {
+    if (fallback && timeout) {
+      account.removeEventListener('abort', cancel);
+      timeout.removeEventListener('abort', cancel);
+    }
   }
+  if (account.aborted || accountClosed()) throw new ApiErr('forbidden', 'init_data');
   if (r.status === 204) return undefined as T;
-  const data = await r.json().catch(() => null);
+  if (r.status === 403 && (data as ApiError | null)?.message === 'init_data') dispatchEvent(new Event('kb:initExpired'));
   // banned mid-session: the app hears it from any call, not only at launch
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
@@ -141,7 +159,7 @@ export const server = {
   postGalleryPhoto: (file: Blob, event?: Id, topic?: GalleryTopic): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ event, topic }), file), // into the Gallery under my name (GalleryPage.post); event: its album too; topic: of no event (one of the two, never both)
   deleteGalleryPhoto: (id: Id): Promise<void> => call('DELETE', `/gallery/${id}`), // mine: from the Gallery and the albums I put it in
   pastEvents: (org?: Id, mine?: boolean): Promise<EventCard[]> => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })), // org: a club's latest few; mine: the ones I was signed up for or came to
-  event: (id: Id): Promise<EventFull> => call('GET', `/events/${id}`),
+  event: (id: Id, view?: 'ordinary'): Promise<EventFull> => call('GET', `/events/${id}`, undefined, undefined, view === 'ordinary'),
   addSeats: (id: Id, add: number): Promise<EventFull> => call('POST', `/events/${id}/seats`, { add }),
   changePlace: (id: Id, place: string): Promise<EventFull> => call('POST', `/events/${id}/place`, { place }), // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
@@ -190,7 +208,7 @@ export const server = {
   adminSetAward: (org: Id, year: number, title: string, on: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/award`, { year, title, on }),
   adminHideOrg: (org: Id, hidden: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/hidden`, { hidden }), // hide, never delete
   adminPresLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/admin/orgs/${org}/president-link`), // the President's one-time link, shown as a QR
-  org: (id: Id): Promise<Org> => call('GET', `/orgs/${id}`),
+  org: (id: Id, view?: 'ordinary'): Promise<Org> => call('GET', `/orgs/${id}`, undefined, undefined, view === 'ordinary'),
   subscribe: (id: Id, on: boolean): Promise<Org> => call(on ? 'PUT' : 'DELETE', `/orgs/${id}/subscription`),
   apply: (org: Id, answers?: Record<string, string | string[]>): Promise<Org> => call('POST', `/orgs/${org}/join-requests`, answers ? { answers } : undefined), // join application (§4.5)
   withdraw: (org: Id): Promise<Org> => call('DELETE', `/orgs/${org}/join-requests/mine`),

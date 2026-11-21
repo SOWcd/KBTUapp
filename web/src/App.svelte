@@ -1,17 +1,19 @@
 <script lang="ts">
   // App shell: the tabs (one scrolling screen each; what used to be their other pages opens as a sheet), the capsule on
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
-  import { onMount, untrack, type Component } from 'svelte';
+  import { onMount, tick, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
-  import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
+  import { ui, TABS, overlays, open, close, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
   import { may } from './lib/perms';
   import { fresh } from './lib/state/assistant.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
   import { CONSENT_VOL } from './lib/legal';
   import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
+  import { recovery } from './lib/state/recovery';
+  import { keepNavigation, launchNavigation, readNavigation, type Navigation, type Place, type ScrollAnchor } from './lib/state/navigation';
   import { readCache, writeCache } from './lib/state/cache';
-  import { channel, channelUnread, loadChannel, watchChannelVisit } from './lib/state/channel.svelte';
+  import { channel, channelUnread, loadChannel, loadOlder, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
@@ -24,7 +26,7 @@
   import { classesLeft } from './lib/classes';
   import { backButton, haptic, inTelegram, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { deskRegistry } from './lib/desk';
-  import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
+  import { api, ApiErr, localize, staffEvents, staffOrg, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
@@ -50,29 +52,35 @@
   // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
   const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
   // (the promise settles once it's open or given up: a queued moment waits for it, lib/moments.ts)
-  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): Promise<void> {
+  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null, place?: Place): Promise<void> {
+    if (session.revoked || session.banned) return Promise.resolve();
     const mine = ++want, got = loaded.get(load);
-    if (got) { open(got.default, props, stat, key); return Promise.resolve(); }
+    if (got) { open(got.default, props, stat, key, place); return Promise.resolve(); }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, place); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
-  sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album }, 'sheet.event', album ? `album:${id}` : id);
+  sheets.event = (id, from, album, verified) => lazy(eventSheet, { id, from, album, verified }, 'sheet.event',
+    album ? `album:${id}` : id,
+    staffEvents.has(id) || staffOrg.full && staffOrg.events.has(id) ? undefined : { kind: 'event', id });
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e }, undefined, `preview:${e.id}`);
   sheets.draftPreview = (id) => void api.event(id).then((e) => sheets.preview({ ...e, status: 'published' }), () => say(t('common.error'), 'warning_3d'));
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
   sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
   sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));
   sheets.person = (id, invite) => lazy(personSheet, { id, invite }, 'sheet.person', invite ? `invite:${id}:${invite.code}` : id);
-  sheets.club = (id) => lazy(clubSheet, { id }, 'sheet.club');
+  sheets.club = (id, verified) => lazy(clubSheet, { id, verified }, 'sheet.club', id,
+    staffOrg.full && staffOrg.id === id ? undefined : { kind: 'club', id });
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id }, 'sheet.ticket');
-  sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
+  const stories = () => import('./screens/sheets/Stories.svelte');
+  sheets.stories = (groups, start, at) => lazy(stories, { groups, start, at });
+  sheets.post = (post) => lazy(stories, { groups: [{ org: post.org, items: [{ post }], unread: !post.read, cast: false }], at: 0, restored: true });
   // named, so its chunk is kept once loaded and opens in the tap's frame (an arrow made here each call never was)
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
@@ -104,8 +112,7 @@
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
   // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
-  // index.html preloads the kept tab's chunk (vite.config.ts preloads(), the same files); otherwise each comes with the
-  // first data, ahead of a tap or a link and of prebuild()
+  // the last tab's chunk is warmed while the first requests run, and the other chunks come with the first data
   const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
     club: () => import('./screens/afisha/Clubs.svelte'),
     profile: () => import('./screens/profile/Me.svelte'),
@@ -138,7 +145,7 @@
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, undefined, id == null ? null : `${org}:${id}:${!!staff}`);
-  sheets.deepLink = (p) => deepLink(p);
+  sheets.deepLink = (p) => { interacted = true; deepLink(p); };
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, undefined, `${id}:${!!names}:${!!qr}`);
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, undefined, `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
@@ -251,7 +258,8 @@
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
   sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
-  sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
+  const adminSheet = () => import('./screens/admin/AdminSheet.svelte');
+  sheets.admin = () => lazy(adminSheet, {});
   sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map'); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => { asked = true; void loadMe(); };
@@ -285,7 +293,8 @@
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
   sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
   sheets.dmpChats = () => lazy(() => import('./screens/dmp/ChatsTree.svelte'), {});
-  sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange }, 'sheet.comments', `${kind}:${id}`);
+  sheets.comments = (kind, id, title, onchange, verified) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'),
+    { kind, id, title, onchange, verified }, 'sheet.comments', `${kind}:${id}`, kind === 'post' ? { kind: 'postComments', id } : undefined);
   sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }, undefined, `${target}:${id}`));
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
@@ -303,7 +312,7 @@
   // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
   $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
-  const forumViewer = $derived(session.boardKnown && session.channel ? session.me?.id : null);
+  const forumViewer = $derived(!session.banned && !session.revoked && session.boardKnown && session.channel ? session.me?.id : null);
   $effect(() => { if (forumViewer) return watchChannelVisit(); });
   // a role changes a tab's content, never its name
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
@@ -343,7 +352,107 @@
     // a tab in its own chunk is drawn unseen once the chunk is in (else the first tap would lay it out)
     if (pageReady(k)) draw(); else loadPage(k).then(draw, draw);
   }
-  $effect(() => { void ui.tab; void ui.club; persistNav(); });
+  const sections: Partial<Record<Tab, HTMLElement>> = {};
+  const scrolls = $state<Partial<Record<Tab, ScrollAnchor>>>({});
+  let recovering = $state(true), interacted = $state(false);
+  let checkpointOwner: string | null = null;
+  let saveNav: ReturnType<typeof keepNavigation>;
+  function scrollOf(tab: Tab) { return sections[tab]?.querySelector<HTMLElement>(':scope > .page.scroll'); }
+  function anchor(node: HTMLElement): ScrollAnchor {
+    const top = Math.max(0, Math.round(node.scrollTop));
+    if (!top) return { top };
+    const box = node.getBoundingClientRect();
+    const y = box.top + Math.min(120, box.height / 2);
+    const item = document.elementsFromPoint(box.left + box.width / 2, y)
+      .map((el) => el.closest<HTMLElement>('[data-nav-anchor]')).find((el) => el && node.contains(el));
+    return item ? { top, item: item.dataset.navAnchor, offset: Math.round(item.getBoundingClientRect().top - box.top) } : { top };
+  }
+  function trackTab(section: HTMLElement, tab: Tab) {
+    sections[tab] = section;
+    const scroll = (ev: Event) => {
+      if (ui.tab === tab && ev.target instanceof HTMLElement && ev.target.parentElement === section && ev.target.matches('.page.scroll')) scrolls[tab] = anchor(ev.target);
+    };
+    section.addEventListener('scroll', scroll, { capture: true, passive: true });
+    return { destroy: () => { delete sections[tab]; section.removeEventListener('scroll', scroll, true); } };
+  }
+  function currentNav() {
+    const active = overlays.filter((o) => !o.closing);
+    const privateView = staffOrg.full || active.some((o) => o.component === loaded.get(adminSheet)?.default);
+    return { tab: ui.tab, club: ui.club, scroll: scrolls[ui.tab] ?? { top: 0 }, sheet: privateView ? null : active.at(-1)?.place ?? null };
+  }
+  function flushNav() {
+    if (!session.verified || session.banned || session.revoked) return;
+    const owner = recovery.scope();
+    if (!owner) return;
+    const nav = currentNav();
+    if (checkpointOwner !== owner) {
+      checkpointOwner = owner;
+      saveNav = keepNavigation(owner, (recovering || interacted ? readNavigation() : null) ?? nav);
+    }
+    if (!recovering || interacted) saveNav(nav);
+  }
+  $effect(flushNav);
+
+  async function recoverPlace(nav: Navigation, owner: string) {
+    const tab = nav.tab === 'forum' && !session.channel ? 'afisha' : nav.tab;
+    ui.tab = tab;
+    ui.club = session.me?.memberships.some((m) => m.org.id === nav.club) ? nav.club : null;
+    const intent = want;
+    const here = () => !interacted && want === intent && ui.tab === tab && recovery.scope() === owner && !gated;
+    const restoreScroll = async () => {
+      if (!nav.scroll.top || tab !== nav.tab) return;
+      if (tab === 'forum') { await channelPage(); await loadChannel(); }
+      else await loadPage(tab);
+      await tick();
+      const node = scrollOf(tab);
+      if (!node || !here()) return;
+      const locate = () => nav.scroll.item && node.querySelector<HTMLElement>(`[data-nav-anchor="${nav.scroll.item}"]`);
+      let item = locate();
+      // The forum retains only its first page across a launch. Bring back enough rows to reach the anchor.
+      for (let page = 0; tab === 'forum' && !item && channel.more && here() && page < 6; page++) {
+        if (node.scrollHeight - node.clientHeight >= nav.scroll.top && !nav.scroll.item) break;
+        if (!(await loadOlder()).length) break;
+        await tick();
+        item = locate();
+      }
+      if (!here()) return;
+      node.scrollTop = item ? node.scrollTop + item.getBoundingClientRect().top - node.getBoundingClientRect().top - (nav.scroll.offset ?? 0) : nav.scroll.top;
+      scrolls[tab] = anchor(node);
+    };
+    const restoreSheet = async () => {
+      const p = nav.sheet;
+      if (!p) return null;
+      if (p.kind === 'event') {
+        const event = await api.event(p.id, 'ordinary');
+        if (event.status === 'draft') return null;
+        return () => {
+          if (!data.events.some((e) => e.id === p.id)) data.opened.push(event);
+          return sheets.event(p.id, null, false, event);
+        };
+      }
+      if (p.kind === 'club') {
+        const listed = data.orgs.find((o) => o.id === p.id) ?? data.small.find((o) => o.id === p.id);
+        if (!listed) return null;
+        const club = await api.org(p.id, 'ordinary');
+        return () => {
+          const { leaders, chats, groupLink, contact, ...card } = club;
+          Object.assign(listed, card);
+          return sheets.club(p.id, club);
+        };
+      }
+      if (p.kind === 'postComments' && session.me?.student) {
+        const thread = await api.comments('post', p.id);
+        return () => sheets.comments('post', p.id, t('cm.title'), undefined, thread);
+      }
+      if (p.kind === 'post' && p.org) {
+        const post = (await api.posts({ org: p.org })).find((x) => x.id === p.id && x.title);
+        if (post) return () => sheets.post(post);
+      }
+      return null;
+    };
+    const [, reopen] = await Promise.all([restoreScroll().catch(() => {}), restoreSheet().catch(() => null)]);
+    if (here()) await reopen?.();
+  }
   $effect(() => { count(`tab.${ui.tab}`); });
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
   let measured = false;
@@ -418,7 +527,14 @@
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
-  $effect(() => { if ((!gated && overlays.some((o) => !o.closing && !o.holdBack)) || backTo.fn) backButton.show(); else backButton.hide(); });
+  $effect(() => {
+    if (!session.banned && !session.revoked && ((!gated && overlays.some((o) => !o.closing && !o.holdBack)) || backTo.fn)) backButton.show();
+    else backButton.hide();
+  });
+  $effect(() => {
+    if (!session.banned && !session.revoked) return;
+    untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
+  });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
@@ -504,7 +620,7 @@
         if (!ok && !session.me?.msPending && !session.me?.student?.ms) { haptic.error(); say(t('common.error'), 'pleading_face_3d'); return; }
         haptic.ok();
         if (ok && session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d');
-        msBack(true);
+        if (ok || session.me?.msPending) msBack(true);
       });
       return;
     }
@@ -689,7 +805,7 @@
   // paint; the JSON is made when the app is idle, and again as it goes to the background.
   // ponytail: a change deep inside a list that bumps no data.kept waits for the next reload or the background; bump it there if one matters
   const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.filter((p) => !p.pending).slice(0, 4), galleryAlbums: data.galleryAlbums.slice(0, 4), galleryPost: data.galleryPost, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
-  const keepable = () => booted && !data.error && !session.failed && !session.banned;
+  const keepable = () => booted && session.verified && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
   // data.kept since) reuses its JSON: a tab's own refresh (friends, my card) re-wrote all 400 events, 60 ms through the
@@ -715,8 +831,9 @@
     keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(() => keep(), { timeout: 3000 }) : keep()), 1000);
   });
   onMount(() => {
-    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(true); } };
+    const away = () => { if (document.hidden) { flushNav(); clearTimeout(keepTimer); keep(true); } };
     document.addEventListener('visibilitychange', away);
+    addEventListener('pagehide', flushNav);
     // back after 30 s or more: the app's data again, quietly (every loader keeps its last copy if it fails). Telegram's
     // events and the page's both land here; the first one back clears leftAt, so one return is one refresh. Not the Gallery:
     // its first page would cut the list of a viewer left open, and it reloads as it opens.
@@ -729,7 +846,7 @@
     const seen = () => (document.hidden ? left() : back());
     document.addEventListener('visibilitychange', seen);
     const offs = [on('deactivated', left), on('activated', back)];
-    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
+    return () => { removeEventListener('pagehide', flushNav); document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
   });
 
   // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
@@ -820,6 +937,13 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !gated && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
+    const touch = () => {
+      if (recovering) want++;
+      interacted = true;
+    };
+    addEventListener('pointerdown', touch, true);
+    addEventListener('wheel', touch, { capture: true, passive: true });
+    addEventListener('keydown', touch, true);
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
@@ -830,65 +954,100 @@
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => {
+    const hint = tg.startParam ? null : readNavigation(recovery, recovery.peek(tg.user?.id));
+    if (hint) void loadPage(hint.tab).catch(() => {});
+    Promise.all([loadMe(), loadAfisha()]).then(async () => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
-      void loadCredits().then(() => {
-        const v = data.credits?.version, k = `cr.asked.${v}`;
-        if (data.credits?.mine?.consent !== null || data.credits?.mine == null || ui.gate) return;
-        try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
-        sheets.creditAsk();
-      });
+      const credits = loadCredits();
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
       for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       for (const k of TABS) loadPage(k).catch(() => {});
-      if (session.banned) return;
-      // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
-      if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
-      // a Microsoft sign-in whose way back opened nothing (/ms.html's "Doesn't open?") and the app was reopened since:
-      // mine, if the browser released one (403 otherwise: one read, no write)
-      if (session.me && !session.me.student?.ms && !session.me.msPending && !tg.startParam?.startsWith('ms_'))
-        void api.msClaim('').then(async () => { await loadMe(); haptic.ok(); if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d'); msBack(true); }, () => {});
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
+      if (session.banned || session.revoked) return;
+      // A Microsoft return without a start parameter can still carry a verified pending claim.
+      let microsoftReturn = !!session.me?.msPending;
+      const owner = recovery.scope();
+      const nav = !gated && !interacted && !overlays.length ? launchNavigation(tg.startParam, microsoftReturn) : null;
+      if (!tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
+        const claim = api.msClaim('').then(async () => {
+          await loadMe();
+          if (session.banned || session.revoked) return false;
+          haptic.ok();
+          if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d');
+          msBack(true);
+          return true;
+        }, () => false);
+        if (nav) microsoftReturn = await claim;
+      }
+      if (session.banned || session.revoked) return;
+      if (owner && nav && owner === recovery.scope() && !microsoftReturn && !gated && !interacted && !overlays.length) {
+        await recoverPlace(nav, owner);
+        if (!interacted) {
+          checkpointOwner = owner;
+          saveNav = keepNavigation(owner, currentNav());
+        }
+      }
+      recovering = false;
+      if (session.banned || session.revoked) return;
+      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) greet();
+      if (tg.startParam) deepLink();
+      else if (session.me?.msPending) msBack();
+      void credits.then(() => {
+        const v = data.credits?.version, k = `cr.asked.${v}`;
+        if (data.credits?.mine?.consent !== null || data.credits?.mine == null || ui.gate) return;
+        try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
+        moment(() => sheets.creditAsk());
+      });
+      setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       // DMP at a computer: its registry, wide, instead of the phone hint (once per launch; Back leaves it for the app)
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
       // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
       moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
-    const tick = setInterval(() => (clock = nowTs()), 30000);
+    const clockTimer = setInterval(() => (clock = nowTs()), 30000);
 
-    return () => { clearInterval(tick); removeEventListener('keydown', esc); };
+    return () => {
+      clearInterval(clockTimer);
+      removeEventListener('keydown', esc);
+      removeEventListener('pointerdown', touch, true);
+      removeEventListener('wheel', touch, true);
+      removeEventListener('keydown', touch, true);
+    };
   });
 </script>
 
 <main class="app">
-  {#each tabs as tab (tab)}
-    <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={!!session.banned || gated}>
-      {#if tab === 'afisha'}
-        {#if built.afisha}<ListPage />{/if}
-      {:else if tab === 'forum'}
-        {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
-      {:else if tab === 'club'}
-        {#if built.club && pages.club}<pages.club />{/if}
-      {:else if built.profile && pages.profile}<pages.profile />{/if}
-    </section>
-  {/each}
+  {#if session.revoked}
+    <div class="banned" role="alert"><p>{t('common.error')}</p></div>
+  {:else if !session.banned}
+    {#each tabs as tab (tab)}
+      <section class="tab" use:trackTab={tab} class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
+        {#if tab === 'afisha'}
+          {#if built.afisha}<ListPage />{/if}
+        {:else if tab === 'forum'}
+          {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
+        {:else if tab === 'club'}
+          {#if built.club && pages.club}<pages.club />{/if}
+        {:else if built.profile && pages.profile}<pages.profile />{/if}
+      </section>
+    {/each}
 
-  <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
-       the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-  <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
-  <div class="tgfade" aria-hidden="true"></div>
-  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
-  <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
+    <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
+         the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
+    <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+    <div class="tgfade" aria-hidden="true"></div>
+    <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
+    <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
-  {#if gated}
-    {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
-  {:else}
-    <!-- Keep exiting entries mounted until their animation calls removeOverlay. -->
-    {#each overlays as o (o.id)}<o.component {...o.props} overlay={o} />{/each}
+    {#if gated}
+      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
+    {:else}
+      <!-- Keep exiting entries mounted until their animation calls removeOverlay. -->
+      {#each overlays as o (o.id)}<o.component {...o.props} overlay={o} />{/each}
+    {/if}
+    <Toast />
   {/if}
-  <Toast />
   {#if session.banned}
     <div class="banned" role="alertdialog" aria-labelledby="ban-t">
       <span class="bico"><Ban size={34} /></span>

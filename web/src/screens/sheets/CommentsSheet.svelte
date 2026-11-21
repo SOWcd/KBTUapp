@@ -8,8 +8,9 @@
   import X from '@lucide/svelte/icons/x';
   import Reply from '@lucide/svelte/icons/reply';
   import { api, ApiErr, type Comment, type CommentThread, type Id } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
+  import { useDraft } from '../../lib/draft';
   import { sheets } from '../../lib/state/sheets';
   import { data } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -30,10 +31,16 @@
   import Composer from '../../ui/Composer.svelte';
   import { menu as openMenu, type MenuItem } from '../../ui/menu';
 
-  let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
+  let { overlay, kind, id, title, onchange, verified }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void; verified?: CommentThread } = $props();
 
-  let th = $state<CommentThread | null>(null);
-  let draft = $state('');
+  const savedDraft = useDraft<string>(untrack(() => `kb-comment-${kind}-${id}`));
+  const savedText = () => {
+    const value = savedDraft.read();
+    return typeof value === 'string' ? value : '';
+  };
+  let th = $state<CommentThread | null>(untrack(() => verified ?? null));
+  let draft = $state(untrack(() => verified?.on ? savedText() : ''));
+  $effect(() => { if (th?.on) savedDraft.track(draft.trim() ? draft : null); });
   let asClub = $state(false);
   let sending = $state(false);
   let replying = $state<Comment | null>(null); // the comment mine answers
@@ -41,7 +48,9 @@
   let compose = $state<HTMLDivElement>();
 
   $effect(() => {
+    if (verified) return;
     api.comments(kind, id).then((x) => {
+      if (x.on && th === null) draft = savedText();
       th = x;
       // read by the club's Head+: the event leaves Studio's "questions waiting" at once (the server marked it read for me)
       const e = kind === 'event' && x.asOrg ? data.studio[x.asOrg.id]?.find((c) => c.id === id) : null;
@@ -55,15 +64,23 @@
   async function send() {
     const body = draft.trim();
     if (!body || sending) return;
+    const sentAt = savedDraft.stamp();
     sending = true;
     try {
       th = await api.addComment(kind, id, body, asClub, replying?.id);
-      draft = ''; replying = null; haptic.ok(); say(phrase('say.commented'), 'speech_balloon_3d');
+      savedDraft.discard(sentAt);
+      if (draft.trim() === body) draft = '';
+      replying = null; haptic.ok(); say(phrase('say.commented'), 'speech_balloon_3d');
       requestAnimationFrame(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }));
     } catch (e) {
       haptic.error();
       say(e instanceof ApiErr && e.code === 'rate_limited' ? t('cm.tooFast') : e instanceof ApiErr && e.code === 'closed' ? t('cm.off') : t('common.error'), 'warning_3d');
     } finally { sending = false; }
+  }
+  async function discard() {
+    if (!(await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('ed.stay'), danger: true }))) return;
+    savedDraft.discard();
+    close(overlay.id);
   }
   async function remove(c: Comment) {
     if (!(await sheets.ask({ title: t('cm.deleteAsk'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true }))) return;
@@ -130,7 +147,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
+<Sheet {overlay} icon={MessageCircle} tall hold={() => overlay.byUser === true && !!draft.trim()} onhold={discard} title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
   <p class="fs-sub dim sub ellipsis">{title}</p>
 
   {#if th?.canModerate}

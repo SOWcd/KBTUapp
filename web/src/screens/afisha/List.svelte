@@ -286,7 +286,7 @@
     <!-- without a timetable an empty day isn't shown: not a "free day" we can't know (the card above asks for it) -->
     {#if day.items.length || (showClasses && data.schedule.length)}
       {@const [a, b] = head(day.d)}
-      <div class="day">
+      <div class="day" data-nav-anchor={`day-${day.d}`}>
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
       <!-- one timeline: an event's full row, a class's thin one between them -->
       <div class="list">
@@ -296,7 +296,7 @@
           {:else}
             {@const e = it.e}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
-            <div class="row" class:cancelled={e.status === 'cancelled'}>
+            <div class="row" data-nav-anchor={`event-${e.id}`} class:cancelled={e.status === 'cancelled'}>
               <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
               <Poster item={e} size={64} radius={14} dim={e.status === 'cancelled'} />
               <span class="tx">
