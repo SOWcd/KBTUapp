@@ -715,8 +715,9 @@ def test_no_shift_counts_more_than_twelve_hours(zz):
     sid = _meet(c, con, org, team=False, title="Left open")
     p = _door(c, sid)
     assert _scan(c, P, p).status_code == 200 and _scan(c, 3, p).status_code == 200   # she checks herself in with her own QR
-    con.execute("UPDATE vol_shifts SET in_at = in_at - 10 * 86400 WHERE session_id = ?", (sid,))
-    con.execute("UPDATE qr_sessions SET started_at = started_at - 10 * 86400 WHERE id = ?", (sid,))
+    start = int(time.time()) - 10 * 86400  # the opening scans get the full 12 hours from the session's start
+    con.execute("UPDATE vol_shifts SET in_at = ? WHERE session_id = ?", (start, sid))
+    con.execute("UPDATE qr_sessions SET started_at = ? WHERE id = ?", (start, sid))
     assert _scan(c, 4, c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]).status_code == 200   # ten days into it
     assert c.post(f"/api/screens/{sid}/finish", headers=tma(P)).status_code == 200
     for tg in (3, 4):
