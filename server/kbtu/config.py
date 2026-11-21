@@ -72,7 +72,7 @@ class Config:
     # names Cloudflare for the assistant's questions (app.py); empty: off
     docs: str = ""
     docs_db: str = ""
-    # TIKTOK=1: a TikTok link in a group the bot is in is answered with the video (tiktok.py); off: links stay links
+    # TIKTOK=1: answer supported group links with the video (tiktok.py)
     tiktok: bool = False
     # REPORTS=1: clubs' event reports (logic/evreports.py: who of the team came, how many guests); off until the privacy
     # policy names the attendance marks: the routes answer 404 and the app shows nothing of it

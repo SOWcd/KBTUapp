@@ -1,21 +1,26 @@
-"""TikTok links in a group (TIKTOK=1): the bot answers a link with the video itself, so the chat watches it in place
-instead of opening TikTok for each one. The file comes through tikwm.com, which hands out TikTok's own file without the
-watermark; only the link goes there, never who sent it or where. The plain version is taken, H.264: TikTok's HD one is
-HEVC, which Telegram's apps take long to process and some don't play (video.py keeps H.264 for the same reason). Nothing
-is kept: the file lives in memory until it is sent. A photo slideshow (TikTok's photo mode) comes as its photos, an
-album of up to ten (Telegram's most for one album). Anything that fails (a private or deleted video, one over Telegram's
-50 MB, tikwm down) is no answer at all: the link stays a link, the chat gets no error."""
+"""Group video replies (TIKTOK=1). TikTok's plain H.264 file or photo album comes through tikwm.com.
+YouTube and Instagram supply their own media through yt-dlp. Only the link goes to the source.
+The bot holds the finished upload in memory and a failed download leaves the chat alone."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
+import subprocess
+import tempfile
 import time
+from pathlib import Path
 from typing import NamedTuple
 
 import httpx
 
 API = "https://www.tikwm.com/api/"
-# tiktok.com and its short links (vm., vt.: what the app's Share copies)
-LINK = re.compile(r"https?://(?:(?:www|m|vm|vt)\.)?tiktok\.com/[^\s<>\"']+", re.I)
+LINK = re.compile(
+    r"https?://(?:"
+    r"(?P<tiktok>(?:(?:www|m|vm|vt)\.)?tiktok\.com/[^\s<>\"']+)|"
+    r"(?:(?:(?:www|m)\.)?youtube\.com/shorts/|(?P<short_host>(?:www\.)?youtu\.be)/)(?P<youtube>(?a:[\w-]{11}))"
+    r"|(?:www\.)?instagram\.com/(?:reels?|p)/(?P<instagram>(?a:[\w-]+))"
+    r")/?(?=$|[\s?#.,!;:)\]}<>\"'])", re.I)
 MAX_BYTES = 50 * 1024 * 1024  # the most a bot may upload
 PHOTO_BYTES = 10 * 1024 * 1024  # and one photo
 ALBUM = 10                    # photos in one album at most
@@ -26,7 +31,7 @@ _sent: dict[int, list[float]] = {}
 
 
 def link(msg: dict) -> str | None:
-    """The first TikTok link a person wrote (the text or a caption). Never a bot's: another downloader bot answers its
+    """The first supported link a person wrote (the text or a caption). Never a bot's: another downloader bot answers its
     links with a video too, and two such bots would answer each other. Never the channel's own copy of a post in its
     discussion group: the post is the channel's, not a message someone sent to the chat."""
     if (msg.get("from") or {}).get("is_bot") or msg.get("is_automatic_forward"):
@@ -50,6 +55,71 @@ class Media(NamedTuple):
     video: bytes | None   # a video, or None for a slideshow
     seconds: int          # the video's length (0: unknown)
     photos: list[bytes]   # a slideshow's photos, in order
+    filename: str = "tiktok.mp4"
+
+
+def _format(ctx: dict):
+    """Choose one complete source file. yt-dlp supplies formats in ascending quality order."""
+    formats = ctx["formats"]
+    silent = all(f.get("acodec") == "none" for f in formats)
+    candidates = []
+    for f in reversed(formats):
+        if f["protocol"] != "https" or f.get("vcodec") == "none" or (f.get("acodec") == "none" and not silent):
+            continue
+        # A vertical 720p reel is 720x1280.
+        side = min(f.get("width") or float("inf"), f.get("height") or float("inf"))
+        if side <= 720 and (f.get("filesize") or f.get("filesize_approx") or 0) < MAX_BYTES:
+            candidates.append(f)
+    if candidates:
+        yield max(candidates, key=lambda f: (f["ext"] == "mp4", (f.get("vcodec") or "").startswith(("avc", "h264"))))
+
+
+def _limit(progress: dict) -> None:
+    if (progress.get("downloaded_bytes") or 0) >= MAX_BYTES:
+        raise ValueError("video too large")
+
+
+def _download(match: re.Match) -> Media | None:
+    from yt_dlp import YoutubeDL  # loaded on the download thread, only when the feature is used
+    from .video import SAFE_IN
+
+    youtube = match["youtube"]
+    url = f"https://www.youtube.com/watch?v={youtube}" if youtube else f"https://www.instagram.com/p/{match['instagram']}/"
+    with tempfile.TemporaryDirectory() as tmp, YoutubeDL({
+        "allowed_extractors": ["youtube" if youtube else "instagram"], "js_runtimes": {"node": {}},
+        "outtmpl": f"{tmp}/source", "cachedir": False, "noplaylist": True,
+        "logger": logging.Logger("yt-dlp", logging.CRITICAL + 1),  # extractor messages can contain the shared URL
+        "socket_timeout": TIMEOUT, "retries": 1, "format": _format, "max_filesize": MAX_BYTES - 1,
+        "progress_hooks": [_limit], "fixup": "never",
+    }) as dl:
+        info = dl.extract_info(url, download=False, process=False)
+        if not info:
+            return None
+        if not youtube and info.get("_type") == "playlist":
+            # A mixed Instagram carousel may begin with photos. Reply with its first video.
+            info = next((e for e in info["entries"] if e.get("formats")), None)
+            if not info:
+                return None
+            dl.add_default_extra_info(info, dl.get_info_extractor("Instagram"), url)
+        duration = info.get("duration") or 0
+        if info.get("_type", "video") != "video" or info.get("is_live"):
+            return None
+        if youtube and (not 0 < duration <= 180 or (match["short_host"] and duration >= 180)):
+            return None
+        selected = dl.process_ie_result(info)
+        path = Path(tmp, "source")
+        if not path.is_file() or not 0 < path.stat().st_size < MAX_BYTES:
+            return None
+        if selected["ext"] != "mp4":
+            mp4 = Path(tmp, "video.mp4")
+            # Stop oversized encodes beyond the upload cap so the final check also rejects a truncated output.
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", *SAFE_IN, "-i", str(path), "-map", "0:v:0", "-map", "0:a:0?",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-threads", "2", "-movflags", "+faststart",
+                            "-fs", str(MAX_BYTES + 1024 * 1024), str(mp4)], stderr=subprocess.DEVNULL, check=True, timeout=120)
+            if not 0 < mp4.stat().st_size < MAX_BYTES:
+                return None
+            path = mp4
+        return Media(path.read_bytes(), int(duration), [], "video.mp4")
 
 
 async def _get(http: httpx.AsyncClient, url: str, cap: int) -> bytes | None:
@@ -69,7 +139,12 @@ async def _get(http: httpx.AsyncClient, url: str, cap: int) -> bytes | None:
 
 async def fetch(http: httpx.AsyncClient, url: str) -> Media | None:
     """What a link holds, ready to send; None when there is nothing to send."""
-    r = await http.post(API, data={"url": url}, timeout=TIMEOUT)
+    match = LINK.match(url)
+    if not match:
+        return None
+    if not match["tiktok"]:
+        return await asyncio.to_thread(_download, match)
+    r = await http.post(API, data={"url": match[0]}, timeout=TIMEOUT)
     if r.status_code != 200:
         return None
     body = r.json()

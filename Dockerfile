@@ -28,6 +28,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
         curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age; \
     if [ -f /tmp/docker-clean ]; then mv /tmp/docker-clean "$docker_clean"; fi
 WORKDIR /app/server
+# yt-dlp uses Node to resolve YouTube's player challenges.
+COPY --from=web /usr/local/bin/node /usr/local/bin/node
 COPY server/requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 COPY server/kbtu ./kbtu

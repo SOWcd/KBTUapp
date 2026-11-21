@@ -1671,7 +1671,7 @@ async def _discussion_bg(cfg: Config, http: httpx.AsyncClient, msg: dict) -> Non
 
 
 async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str) -> None:
-    """A TikTok link answered with its video or its slideshow's photos (tiktok.py), beside the ears (tgc.spawn): a
+    """A group link answered with its video or its slideshow's photos (tiktok.py), beside the ears (tgc.spawn): a
     download never holds up the batch. It goes under the link as a reply, with no words of the bot's own; a failure
     sends nothing."""
     try:
@@ -1683,7 +1683,7 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str) -> 
                 "reply_parameters": json.dumps({"message_id": msg["message_id"], "allow_sending_without_reply": True}),
                 **({"message_thread_id": str(topic)} if topic else {})}
         if got.video:
-            method, files = "sendVideo", {"video": ("tiktok.mp4", got.video, "video/mp4")}
+            method, files = "sendVideo", {"video": (got.filename, got.video, "video/mp4")}
             body |= {"supports_streaming": "true", **({"duration": str(got.seconds)} if got.seconds else {})}
         elif len(got.photos) == 1:
             method, files = "sendPhoto", {"photo": ("tiktok.jpg", got.photos[0], "image/jpeg")}
@@ -1693,9 +1693,9 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str) -> 
             body["media"] = json.dumps([{"type": "photo", "media": f"attach://p{i}"} for i in range(len(got.photos))])
         r = await _tg(cfg, http, method, body, files=files)
         if r.status_code != 200:
-            log.warning("tiktok: %s", str(r.json().get("description"))[:200])
-    except Exception as exc:  # noqa: BLE001 - the network, tikwm's answer changed: the link stays a link
-        log.warning("tiktok: %s", type(exc).__name__)
+            log.warning("group video: Telegram HTTP %s", r.status_code)
+    except Exception as exc:  # noqa: BLE001 - the network or the source failed: the link stays a link
+        log.warning("group video: %s", type(exc).__name__)
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
@@ -1958,7 +1958,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     if _event_copy(cfg, msg):
                         tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
-                        # a TikTok link: its video, one download at a time on its own chain (never ahead of the rest)
+                        # One group video download at a time on its own chain.
                         if cfg.tiktok and (url := tiktok.link(msg)) and time.time() - int(msg.get("date") or 0) <= FRESH \
                                 and not logic.chatlist.banned(con, int((msg.get("from") or {}).get("id") or 0)) and tiktok.room(msg["chat"]["id"]):
                             tgc.spawn(_tiktok(cfg, http, msg, url), "tiktok")
