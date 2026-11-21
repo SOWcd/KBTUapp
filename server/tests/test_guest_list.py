@@ -167,11 +167,11 @@ def test_guest_signup_and_walk_in_blocked_but_tickets_check_in(door_event):
     assert result["result"] == "ok" and result["adult"] is False
     session = c.post(f"{base}/screen", headers=door).json()["session"]
     param = c.post(f"/api/screens/{session}/start", headers=door).json()["param"]
-    assert c.post("/api/checkin", headers=tma(3), json={"p": param}).json()["done"] is True
-    assert c.post("/api/checkin", headers=tma(4), json={"p": param}).json()["error"] == "guest_list"
+    assert c.post("/api/checkin", headers=tma(3), json={"p": param}).json()["error"] == "forbidden"  # 18+: the scanner, never the room's QR
+    assert c.post("/api/checkin", headers=tma(4), json={"p": param}).json()["error"] == "forbidden"
     assert c.post(f"/api/screens/{session}/badge", headers=door, json={"qr": badge}).json()["error"] == "guest_list"
     assert {tuple(r) for r in con.execute("SELECT user_id, walk_in FROM registrations WHERE checked_in_at IS NOT NULL")} == {
-        (scanned, 0), (named, 0), (shown, 0)}
+        (scanned, 0), (named, 0)}
     assert not con.execute("SELECT 1 FROM qr_marks WHERE user_id = ?", (outsider,)).fetchone()
 
 

@@ -1339,7 +1339,7 @@ def door_extra(con, v: Viewer, eid: int, step: object = None) -> dict:
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
         if step is not None:
-            if e["status"] != "published" or e["hidden_at"] or end_of(e) <= core.now():
+            if e["status"] != "published" or e["hidden_at"] or door_shut(e, core.now()):
                 raise ApiError("closed")
             con.execute("UPDATE events SET door_extra = max(0, door_extra + ?) WHERE id = ?", (step, eid))
         return {"extra": one(con, "SELECT door_extra FROM events WHERE id = ?", eid)[0]}
