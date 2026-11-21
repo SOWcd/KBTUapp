@@ -164,7 +164,9 @@
     if (!r || !('person' in r)) return; // the door checks every ID: its tap always records, whatever the list said
     const was = r.adult ?? null, uid = r.person.id, d = people?.find((x) => x.person.id === uid);
     r.adult = adult; aged = true; if (d) d.adult = adult; // at once; back if the server says no
-    haptic.ok(); say(t(adult ? 'age.adult' : 'age.minor'), adult ? 'sparkles_3d' : 'warning_3d');
+    const name = r.person.name.split(' ').slice(0, 2).join(' ');
+    haptic.ok(); say(`${name} · ${t(adult ? 'age.adult' : 'age.minor')}`, adult ? 'sparkles_3d' : 'warning_3d');
+    if (res === r) res = null; // done: the card goes, the next guest is scanned (owner: a card that stays looks unsaved)
     try { await api.markAge(id, uid, adult); } catch {
       r.adult = was; if (d) d.adult = was;
       haptic.error(); say(t('common.error'), 'warning_3d');
