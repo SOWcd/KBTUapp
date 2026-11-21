@@ -9,7 +9,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { canLeave, opensStudio } from '../../lib/perms';
+  import { canLeave } from '../../lib/perms';
   import { shortOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
   import Pane from '../../ui/Pane.svelte';
@@ -19,7 +19,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
   let { overlay, rows, title }: { overlay: Overlay; rows: { org: OrgRef; role: string | null; sub: string }[]; title?: string } = $props();
-  const open = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role && opensStudio(mine.get(x.org.id))) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const open = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
 
   const mine = $derived(new Map((session.me?.memberships ?? []).map((m) => [m.org.id, m])));
   const shown = $derived(rows.filter((x) => !x.role || mine.has(x.org.id))); // a club I've just left goes at once
