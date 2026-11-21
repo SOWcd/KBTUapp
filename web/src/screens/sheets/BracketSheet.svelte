@@ -46,7 +46,7 @@
 
   const reasons = new Map<string, Key>([
     ['bracket_teams', 'br.needTeams'], ['bracket_dependent_scored', 'br.locked'], ['bracket_tbd', 'br.waiting'],
-    ['bracket_draw', 'br.tie'], ['groups_scored', 'gr.scored'], ['bracket_scored', 'br.started'],
+    ['bracket_draw', 'br.tie'], ['groups_scored', 'gr.scored'], ['groups_unfinished', 'br.groupsLeft'], ['bracket_scored', 'br.started'],
   ]);
   function fail(err: unknown) {
     const message = err instanceof ApiErr ? err.message : '';
