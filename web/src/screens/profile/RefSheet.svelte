@@ -43,7 +43,7 @@
       {#snippet mark()}{#if me}<span class="face"><Avatar person={me} size={48} tappable={false} /></span>{/if}{/snippet}
     </CardBack>
   </div>
-  <p class="cap">{t('ref.qr')}</p>
+  <p class="cap">{t('ref.qr')} {t('ach.referral.how')}</p>
   <div class="acts">
     <Button kind="primary" size="l" full loading={busy} onclick={send}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('fr.send')}</Button>
   </div>

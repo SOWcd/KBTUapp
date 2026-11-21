@@ -465,7 +465,7 @@
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
   // friends (Profile with the Friends sheet: the bot's request message) ----
-  function deepLink(p = tg.startParam) {
+  function deepLink(p = tg.startParam, afterSignIn = false) {
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -560,7 +560,9 @@
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link (Nov 2: the one link): noted for them as a referral,
     if (rf) {                                 // and their card with "Add as a friend" (opening adds nobody); my own: nothing
       void api.refer(rf[1]).catch(() => {});
-      api.linkCard(rf[1]).then((card) => { if (card.friendship !== 'self') sheets.person(card.person.id, { code: rf[1], card }); })
+      api.linkCard(rf[1]).then((card) => {
+        if (card.friendship !== 'self') sheets.person(card.person.id, { code: rf[1], card, alreadyRegistered: card.registered && !afterSignIn });
+      })
         .catch(() => say(t('fr.linkDead'), 'pleading_face_3d'));
       return;
     }
@@ -673,7 +675,7 @@
     // must not sign anyone up)
     const again = () => {
       const p = takeAgain(), go = p?.match(/^go_(\d+)$/);
-      if (!go) { if (p) deepLink(p); return; }
+      if (!go) { if (p) deepLink(p, true); return; }
       const id = Number(go[1]), st = eventById(id)?.my?.status;
       sheets.event(id);
       if (st !== 'going' && st !== 'hold' && st !== 'waitlist') toggleGoing(id, () => sheets.pay(id));

@@ -8,6 +8,7 @@ import type { StoryGroup } from '../posts';
 
 // wait: ms before "ok" can be tapped (a second confirm, so a double tap doesn't go through both)
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number; link?: { label: string; url: string } };
+export type InviteLanding = { code: string; card: LinkCard; alreadyRegistered: boolean };
 
 /** a still copy of the top capsule and its theme wrapper's classes (the map's circle cuts between it and the live one) */
 export type CapCopy = { node: HTMLElement; theme: string };
@@ -68,7 +69,7 @@ export function registration(e: EventCard, runs: boolean, vol?: Id): void {
 
 export const sheets = {
   /** invite: opened by their invite link r_<code> (its landing: "Add as a friend", one tap) */
-  person: (_id: Id, _invite?: { code: string; card: LinkCard }) => {},
+  person: (_id: Id, _invite?: InviteLanding) => {},
   /** my QR full screen (the corner of my badge) */
   myQr: (_link: string, _p: PersonCard) => {},
   /** Admin → Awards → Show QR: the award's rotating code full screen, for the hall's cameras */

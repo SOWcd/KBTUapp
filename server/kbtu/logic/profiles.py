@@ -905,7 +905,7 @@ def link_card(con, v: Viewer, code: object) -> dict:
     name; the 50-bit code can't be walked."""
     p = _inviter(con, code)
     state = "self" if p["id"] == v.id else friendship(con, v.id, p["id"]) if v.student else "none"
-    return {"person": person_ref(p), "friendship": state}  # a guest: the nick alone (person_ref)
+    return {"person": person_ref(p), "friendship": state, "registered": v.student}  # the viewer when the link opened
 
 
 def add_by_link(con, v: Viewer, code: object) -> dict:
@@ -916,18 +916,18 @@ def add_by_link(con, v: Viewer, code: object) -> dict:
     if p["id"] == v.id:
         raise ApiError("bad_input")
     out = {"person": person_ref(p)}
-    if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
-           v.id, p["id"], core.now() - REASK_AFTER):
-        return {**out, "friendship": "requested"}
-    if friendship(con, v.id, p["id"]) == "friends":
-        return {**out, "friendship": "friends"}
-    # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
-    if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
-        raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans
     with tx(con):
+        if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
+               v.id, p["id"], core.now() - REASK_AFTER):
+            return {**out, "friendship": "requested", "created": False}
+        if friendship(con, v.id, p["id"]) == "friends":
+            return {**out, "friendship": "friends", "created": False}
+        # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
+        if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
+            raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans
         _befriend(con, v.id, p["id"])
         notify(con, p["id"], "friend_new", f"fn:{v.id}:{core.now() // 86400}")
-    return {**out, "friendship": "friends"}
+    return {**out, "friendship": "friends", "created": True}
 
 
 def friend_joined(con, v: Viewer, since: int) -> dict:
