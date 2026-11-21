@@ -27,6 +27,7 @@
   import Tag from '../../ui/Tag.svelte';
   import Notice from '../../ui/Notice.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
   import { castingStatus, castingWhen } from '../../lib/posts';
   import { api, translated, type EventCard, type Id, type Org, type Post } from '../../lib/api';
@@ -47,6 +48,7 @@
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
   let fetched = $state<Org | null>(null);
+  let failed = $state(false);
   let fetchedEvents = $state<EventCard[] | null>(null);
   let past = $state<EventCard[] | null>(null); // its latest few that are over (Recent), asked with the page
   // the club's news, every post (the circles on Afisha keep 30 days): newest first here, played oldest first
@@ -59,18 +61,20 @@
   // the afisha already holds the club's upcoming events (the server's list is the same filter): they show at once
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id || e.coHost?.id === id) : null)); // and the ones it co-hosts
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
-  const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
+  const o = $derived(data.orgs.find((x) => x.id === id) ?? data.small.find((x) => x.id === id) ?? fetched);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
   // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
   const tap = (url: string) => { haptic.tap(); openLink(url); };
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
-  $effect(() => {
-    api.org(id).then((x) => (fetched = x)).catch(() => {});
+  function load() {
+    failed = false;
+    api.org(id).then((x) => (fetched = x)).catch(() => (failed = true));
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
     api.pastEvents(id).then((x) => (past = x)).catch(() => (past = []));
     api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});
-  });
+  }
+  $effect(load);
   const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club
   // "Message the club": a DM to its President (or the next with a @username), the draft naming the club (lib/clubdm)
   const contact = $derived(fetched?.contact ?? null);
@@ -201,7 +205,8 @@
         </Section>
       {/if}
     </div>
-  {/if}
+  {:else if failed}<EmptyState onretry={load} />
+  {:else}<Skeleton kind="cards" n={2} />{/if}
 
   {#snippet footer()}
     {#if o && !o.myRole}

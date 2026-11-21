@@ -45,7 +45,7 @@
   import { say, close, goTab, overlays, toTickets, type Overlay, type Tab } from '../../lib/state/ui.svelte';
   import { sheets, openMapFrom, takeIris, peekIris } from '../../lib/state/sheets';
   import { data, eventById } from '../../lib/state/data.svelte';
-  import { chat, fresh, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
+  import { conversation, rememberConversation, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
   import { answer } from '../../lib/answer';
   import { power } from '../../lib/state/power.svelte';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
@@ -68,7 +68,10 @@
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx, focus = false, keyboard, opener }: { overlay: Overlay; ctx?: AskCtx; focus?: boolean; keyboard?: HTMLInputElement | null; opener?: HTMLElement | null } = $props();
   // focus (a fresh one): the keyboard comes up with it, App's stand-in held it from the tap; a conversation to read: down
-  untrack(() => { if (fresh(ctx)) { chat.turns = []; chat.ctx = ctx ?? null; } });
+  const chat = untrack(() => conversation(ctx));
+  $effect(() => {
+    if (!overlay.closing && !overlays.some((o) => o.id > overlay.id && !o.closing)) rememberConversation(chat);
+  });
   let born = $state(untrack(() => chat.turns.length)); // what was said before this opening stands still; only the new comes in
   function retry(i: number) {
     const q = chat.turns[i].q;
@@ -147,7 +150,8 @@
     void a.finished.catch(() => {}).finally(() => { el.remove(); if (back === me) back = null; });
   }
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
-  let draft = $state(untrack(() => keyboard?.value ?? '')), busy = $state(false);
+  let draft = $state(untrack(() => keyboard?.value ?? ''));
+  const busy = $derived(chat.busy);
   let list = $state<HTMLDivElement>();
   // The opening (as Gemini opens): the light in the middle
   // with the colonnade in it, the greeting, one starter under it that keeps changing, all of them low over the field
@@ -192,7 +196,7 @@
     left = glide ? top : -1;
     const history = chat.turns.filter((m) => m.text).slice(-6).map(({ role, text }) => ({ role, text }));
     chat.turns.push({ role: 'user', text: q });
-    draft = ''; busy = true;
+    draft = ''; chat.busy = true;
     try {
       const a = await api.assistant(q, history, chat.ctx ? { kind: chat.ctx.kind, id: chat.ctx.id } : undefined);
       chat.turns.push({ role: 'assistant', ...a, q });
@@ -203,7 +207,7 @@
         q, err: why !== 'rate_limited' && why !== 'forbidden' });
       haptic.error();
       if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
-    } finally { busy = false; }
+    } finally { chat.busy = false; }
   }
   // labels from our own strings and store, never the model's words
   const SET = { school: 'look.school', course: 'pd.course', notify: 'me.notifications' } as const;
@@ -220,7 +224,10 @@
     subjects: BookOpen, post: SquarePen, studio: LayoutDashboard, new_event: CalendarPlus, route: Navigation };
   // an off-campus event's way there: its 2GIS link, or 2GIS's search for its typed address (the event page's own rule)
   const gisOf = (id: number) => { const e = eventById(id); return e && !e.online ? e.placeUrl || addressGis(e.place) : null; };
-  const shown = (a: AssistAction) => a.type !== 'route' || !!gisOf(a.id); // no way there: no button
+  const shown = (a: AssistAction) => {
+    if (a.type === 'club' && chat.ctx?.kind === 'club' && a.id === chat.ctx.id) return false;
+    return a.type !== 'route' || !!gisOf(a.id);
+  };
   const iconOf = (a: AssistAction) => a.type === 'map' && !a.room ? MapIcon : ICON[a.type];
   /** a tab: every sheet over the tabs goes (this one and the card it was asked from), the tab shows (the screens below
    *  are the app's own openers) */
@@ -398,7 +405,7 @@
     background: conic-gradient(from 200deg, var(--accent), var(--tile-teal), var(--accent-2), var(--tile-purple), var(--accent)); }
   .orb::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
     background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 52%), radial-gradient(circle, rgba(8, 10, 40, 0) 52%, rgba(8, 10, 40, 0.3)); }
-  .orb.live::before { animation: turn 7s linear infinite; }
+  .orb.live::before { animation: turn 7s linear infinite; animation-play-state: var(--sheet-loop, running); }
   @keyframes turn { to { transform: rotate(360deg); } }
   .orb.big { width: 84px; height: 84px; }
   .orb.big, .orb.fly { box-shadow: 0 10px 28px -8px rgba(98, 104, 255, 0.6); }
