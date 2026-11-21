@@ -17,7 +17,9 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Plus from '@lucide/svelte/icons/plus';
   import Qr from '../../ui/Qr.svelte';
-  import { QR_TONE } from '../../lib/awards';
+  import { QR_TONE, QR_LOOK, skinOf } from '../../lib/awards';
+  import LookMark from '../../ui/LookMark.svelte';
+  import OrgLogo from '../../ui/OrgLogo.svelte';
   import Minus from '@lucide/svelte/icons/minus';
   import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -76,6 +78,7 @@
   // 18+ at the door (age_check): no self check-in by the rotating QR, it would skip the ID; the entrance QR opens
   // the ticket, the scanner reads it and asks 18+ (owner, Nov 21)
   const aged18 = $derived(!!e?.ageCheck);
+  const eskin = $derived(e?.org ? skinOf(e.org) : undefined); // the entrance QR wears the club's look, as its tickets do
   $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
   // list buyers not in the app yet (guest list): ticked by name in the guest list (People, guestsOnly)
   let pend = $state<{ pending: number; pendingCame: number } | null>(null);
@@ -217,7 +220,7 @@
       <div class="sw"><Segmented items={[...(aged18 ? [] : [{ value: 'qr' as const, label: 'QR' }]), { value: 'scan' as const, label: t('studio.scanner') }, ...(aud !== 'team' ? [{ value: 'entry' as const, label: t('mk.entry') }] : [])]} bind:value={mode} onchange={toMode} /></div>
       {#if mode === 'entry'}
         <!-- the entrance's QR (owner, Nov 21): a guest's own camera opens the app on their ticket (tk_: no ticket -> the event, its sign-in) -->
-        <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={QR_TONE} /></div><p class="t-foot">{t('mk.entryHint')}</p></div>
+        <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={eskin ? QR_LOOK[eskin] : QR_TONE}>{#if eskin}<LookMark look={eskin} />{:else if e?.org}<OrgLogo org={e.org} />{/if}</Qr></div><p class="t-foot">{t('mk.entryHint')}</p></div>
       {/if}
       {#if mode === 'qr'}<button class="qr" aria-label={t('studio.scanner')} onclick={() => { mode = 'scan'; toMode('scan'); }}><EventQr {overlay} event={id} {sess} embed onlast={recount} /></button>{/if}
     {:else if e}
