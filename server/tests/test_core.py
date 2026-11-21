@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import hashlib
 import json
 import logging
 import os
@@ -4609,32 +4610,108 @@ def test_admin_day_and_ai(env):
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
 
 
-def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
-    """H2: a copy restored after a deletion brings the person back; deletions.log (outside the database, the Telegram
-    ID salted) lets `kbtu.admin redelete` delete them again, never someone who signed in again since."""
+def test_deletion_retries_when_the_journal_is_unwritable(env):
     c, cfg = env
-    ali, zhan = login(c, 21, "ali"), login(c, 22, "zhan")
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (uid,))
+    path = Path(cfg.db_path).parent / "deletions.log"
+    path.mkdir()  # simulate a storage failure without relying on OS permissions
+    logic.delete_due(con)
+    assert con.execute("SELECT delete_at FROM users WHERE id = ?", (uid,)).fetchone()[0] == 0
+    assert con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    path.rmdir()
+    logic.delete_due(con)
+    assert path.is_file() and not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+
+
+def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
+    c, cfg = env
+    now = int(time.time()) // 86400 * 86400 + 3600
+    set_clock(monkeypatch, lambda: now)
+    zhan = login(c, 22, "zhan")
+    delete_now(c, cfg, tma(22))
+    login(c, 22, "zhan")  # a new incarnation verified in the very same second
+    ali = login(c, 21, "ali")
     con = db.connect(cfg.db_path)
     home = Path(cfg.db_path).parent
     restored = home / "restored.db"
-    con.execute("VACUUM INTO ?", (str(restored),))                # last night's copy: both still there
-    delete_now(c, cfg, tma(21, "Ali"))
-    delete_now(c, cfg, tma(22, "Zhan"))
-    line = (home / "deletions.log").read_text().splitlines()[0]
-    assert len(line.split()) == 2 and re.fullmatch(r"[0-9a-f]{32}", line.split()[1]) and (home / "deletions.salt").exists()
-    login(c, 22, "zhan")                                           # Zhan came back: a new sign-in after the deletion
-    later = con.execute("SELECT verified_at FROM students WHERE user_id = ?", (zhan["id"],)).fetchone()[0]
+    con.execute("VACUUM INTO ?", (str(restored),))
+    delete_now(c, cfg, tma(21))
+    # Starting on the older file replays only the deletion absent from that snapshot.
+    server.create(dataclasses.replace(cfg, db_path=str(restored)))
     rcon = db.connect(str(restored))
-    rcon.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (later + 10, zhan["id"]))  # as if restored after his return
-    rcon.execute("UPDATE students SET verified_at = 0 WHERE user_id = ?", (ali["id"],))                # signed in long before
-    rcon.close()
+    assert [r[0] for r in rcon.execute("SELECT user_id FROM students")] == [zhan["id"]]
+    assert not rcon.execute("SELECT 1 FROM schedule_classes WHERE user_id = ?", (ali["id"],)).fetchone()
     for k, v in (("BOT_TOKEN", BOT), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
         monkeypatch.setenv(k, v)
     from kbtu import admin
     admin.main(["redelete"])
-    assert capsys.readouterr().out.strip() == "1 deleted again (2 in deletions.log)"
-    rcon = db.connect(str(restored))
-    assert [r[0] for r in rcon.execute("SELECT user_id FROM students")] == [zhan["id"]]
+    assert capsys.readouterr().out.strip() == "0 deleted again (2 in deletions.log)"
+
+
+def test_restore_erases_account_moved_to_another_telegram(env, monkeypatch):
+    from kbtu import admin
+    c, cfg = env
+    student = login(c, 21, "ali")
+    guest = c.get("/api/me", headers=tma(23, "Guest")).json()
+    con = db.connect(cfg.db_path)
+    restored = Path(cfg.db_path).with_name("before-move.db")
+    con.execute("VACUUM INTO ?", (str(restored),))
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    admin.main(["move", "21", "23"])
+    delete_now(c, cfg, tma(23))
+    server.create(dataclasses.replace(cfg, db_path=str(restored)))
+    old = db.connect(str(restored))
+    assert not old.execute("SELECT 1 FROM students WHERE user_id = ?", (student["id"],)).fetchone()
+    assert old.execute("SELECT tg_first_name FROM users WHERE id = ?", (guest["id"],)).fetchone()[0] == "Guest"
+
+
+def test_replay_after_crash_before_erasure_commit(env, monkeypatch):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (uid,))
+    write = logic.account._deletion_log
+
+    def interrupted(*args):
+        write(*args)
+        raise OSError("interrupted before commit")
+
+    monkeypatch.setattr(logic.account, "_deletion_log", interrupted)
+    logic.delete_due(con)
+    assert con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    server.create(cfg)
+    assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    path = Path(cfg.db_path).with_name("deletions.log")
+    path.write_text("")  # a stale journal alongside a database with a recent checkpoint
+    with pytest.raises(RuntimeError, match="latest deletions.log"):
+        server.create(cfg)
+
+
+def test_legacy_deletion_day_requires_evidence(env):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    home = Path(cfg.db_path).parent
+    salt = "a" * 32
+    h = hashlib.sha256(f"{salt}:21".encode()).hexdigest()[:32]
+    day = logic.now() // 86400 * 86400
+    (home / "deletions.salt").write_text(salt)
+    (home / "deletions.log").write_text(f"{day} {h}\n")
+    with pytest.raises(RuntimeError, match="same-day verification"):
+        server.create(cfg)
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (day - 10, uid))
+    snapshot = home / "before-legacy.db"
+    con.execute("VACUUM INTO ?", (str(snapshot),))
+    server.create(cfg)
+    assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    login(c, 21, "ali")
+    delete_now(c, cfg, tma(21))
+    # The same snapshot can predate both a legacy and a new-format erasure of this row.
+    restored = db.connect(str(snapshot))
+    assert logic.replay_deletions(restored) == (1, 2)
+    assert not restored.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
 
 
 def test_forgetting(env, monkeypatch):

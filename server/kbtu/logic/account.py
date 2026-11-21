@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import os
 import re
 import secrets
 from collections import Counter
@@ -11,7 +12,7 @@ from itertools import combinations
 from math import comb
 from pathlib import Path
 
-from .. import portal
+from .. import media, portal
 from .. import db
 from ..db import tx
 
@@ -1086,56 +1087,148 @@ def delete_due(con) -> tuple[list[str], list[str]]:
     """The accounts whose week ran out, deleted; their files to remove from disk, as delete_me's. One that fails is
     logged and tried again next round; the rest go on."""
     gone: tuple[list[str], list[str]] = ([], [])
-    for u in rows(con, "SELECT id, role FROM users WHERE delete_at <= ?", core.now()):
-        if _paid_ahead(con, u["id"]):
-            continue  # waits until that event has passed
-        photos_too = one(con, "SELECT 1 FROM meta WHERE key = ?", f"delphotos:{u['id']}") is not None  # delete_me takes the mark
+    for (uid,) in rows(con, "SELECT id FROM users WHERE delete_at <= ?", core.now()):
         try:
-            receipts, photos = delete_me(con, Viewer(u["id"], u["role"], True))
+            with tx(con):
+                u = one(con, "SELECT role FROM users WHERE id = ? AND delete_at <= ?", uid, core.now())
+                if not u or _paid_ahead(con, uid):
+                    continue
+                photos_too = one(con, "SELECT 1 FROM meta WHERE key = ?", f"delphotos:{uid}") is not None
+                receipts, photos = delete_me(con, Viewer(uid, u["role"], True))
+                # The journal must survive a crash before SQLite can commit the matching checkpoint.
+                _deletion_log(con, uid, photos_too)
         except Exception:
-            log.exception("deleting account %s failed", u["id"])
+            log.exception("deleting account %s failed", uid)
             continue
-        # after it, never before: a failed one that the person then keeps mustn't come back after a restore
-        _deletion_log(con, u["id"], photos_too)
         gone[0].extend(receipts)
         gone[1].extend(photos)
     return gone
 
 
-def _deletion_log(con, uid: int, photos: bool) -> None:
-    """A line per deletion in deletions.log beside the database, outside it: a restored copy brings the deleted
-    back, and `kbtu.admin redelete` runs them again (DEPLOY.md, restore). The Telegram ID only as a salted hash; the
-    salt is a file there too, so a copy from before it still matches."""
-    try:
-        home = Path(one(con, "SELECT file FROM pragma_database_list WHERE name = 'main'")[0]).parent
-        tg = one(con, "SELECT tg_id FROM users WHERE id = ?", uid)[0]
-        with (home / "deletions.log").open("a") as f:  # the day, not the second: the line can't be matched to a placeholder's order
-            f.write(f"{core.now() // 86400 * 86400} {deletion_hash(home, tg)}{' photos' if photos else ''}\n")
-    except OSError:
-        log.exception("deletions.log: account %s not written", uid)
-
-
 DELETION_LOG_DAYS = 40  # longer than any copy lives (R2 ~30 days): an older line can't be needed
 
 
-def _prune_deletion_log(con) -> None:
-    path = Path(one(con, "SELECT file FROM pragma_database_list WHERE name = 'main'")[0]).with_name("deletions.log")
+def _journal(con) -> Path:
+    return Path(one(con, "SELECT file FROM pragma_database_list WHERE name = 'main'")[0]).with_name("deletions.log")
+
+
+def _durable_text(path: Path, value: str) -> None:
+    """The SQLite writer lock serializes writers. Backups can read either complete file during replacement."""
+    tmp = path.with_suffix(".tmp")
+    with tmp.open("w") as f:
+        f.write(value)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)
+    directory = os.open(path.parent, os.O_DIRECTORY)
     try:
-        lines = path.read_text().splitlines()
-    except OSError:
-        return
-    keep = [ln for ln in lines if ln.split()[:1] and ln.split()[0].isdigit() and int(ln.split()[0]) > core.now() - DELETION_LOG_DAYS * 86400]
-    if len(keep) != len(lines):
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text("".join(ln + "\n" for ln in keep))
-        tmp.replace(path)
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
-def deletion_hash(home: Path, tg_id: int) -> str:
-    salt = home / "deletions.salt"
+def _salt(path: Path) -> str:
+    salt = path.with_suffix(".salt")
     if not salt.exists():
-        salt.write_text(secrets.token_hex(16))
-    return hashlib.sha256(f"{salt.read_text().strip()}:{tg_id}".encode()).hexdigest()[:32]
+        if path.exists():
+            raise RuntimeError("restore deletions.salt beside deletions.log before starting")
+        _durable_text(salt, secrets.token_hex(16))
+    value = salt.read_text().strip()
+    if not re.fullmatch("[a-f0-9]{32}", value):
+        raise RuntimeError("invalid deletions.salt")
+    return value
+
+
+def _deletion_hash(salt: str, identity: str) -> str:
+    return hashlib.sha256(f"{salt}:{identity}".encode()).hexdigest()[:32]
+
+
+def _deletion_log(con, uid: int, photos: bool) -> None:
+    path = _journal(con)
+    if not path.exists() and one(con, "SELECT 1 FROM meta WHERE key GLOB 'delreplay:*'"):
+        raise RuntimeError("restore deletions.log before deleting accounts")
+    salt = _salt(path)
+    created = one(con, "SELECT created_at FROM users WHERE id = ?", uid)[0]
+    # Moving an account swaps its Telegram identity but preserves the database row.
+    h = _deletion_hash(salt, f"user:{uid}:{created}")
+    previous = one(con, "SELECT value FROM meta WHERE key = ?", f"delreplay:{h}")
+    day = core.now() // 86400 * 86400
+    # The first new-format generation follows any day-only record. Two deletions in a day still differ.
+    generation = max(day + 1, int(previous[0]) + 1 if previous else 0)
+    old = path.read_text() if path.exists() else ""
+    _durable_text(path, old + f"{day} {h}{' photos' if photos else ''} v2:{generation}:{hashlib.sha256(salt.encode()).hexdigest()[:16]}\n")
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"delreplay:{h}", str(generation)))
+
+
+def _prune_deletion_log(con) -> None:
+    with tx(con):
+        path = _journal(con)
+        if not path.exists():
+            return
+        lines = path.read_text().splitlines()
+        cutoff = core.now() - DELETION_LOG_DAYS * 86400
+        keep = [ln for ln in lines if ln.split()[:1] and ln.split()[0].isdigit() and int(ln.split()[0]) > cutoff]
+        if len(keep) != len(lines):
+            _durable_text(path, "".join(ln + "\n" for ln in keep))
+        con.execute("DELETE FROM meta WHERE key GLOB 'delreplay:*' AND CAST(value AS INTEGER) < ?", (cutoff,))
+
+
+def replay_deletions(con) -> tuple[int, int]:
+    """Replay the journal before serving a snapshot. Each snapshot remembers the erasures it already applied."""
+    path = _journal(con)
+    with tx(con):
+        applied = {key.removeprefix("delreplay:"): int(value) for key, value in
+                   rows(con, "SELECT key, value FROM meta WHERE key GLOB 'delreplay:*'")}
+        if not path.exists():
+            if applied:
+                raise RuntimeError("restore deletions.log beside the database before starting")
+            return 0, 0
+        salt = _salt(path)
+        records = {}
+        latest = {}
+        salt_tag = hashlib.sha256(salt.encode()).hexdigest()[:16]
+        for line in path.read_text().splitlines():
+            m = re.fullmatch(r"([0-9]+) ([0-9a-f]{32})( photos)?(?: v2:([0-9]+):([0-9a-f]{16}))?", line)
+            if not m:
+                raise RuntimeError("invalid deletions.log record")
+            day, h, photos, version, tag = m.groups()
+            if tag and tag != salt_tag:
+                raise RuntimeError("deletions.salt does not match deletions.log")
+            generation = int(version or day)
+            latest[h] = max(generation, latest.get(h, -1))
+            if generation > applied.get(h, -1):
+                records.setdefault(h, []).append((generation, bool(photos), version is None))
+        cutoff = core.now() - DELETION_LOG_DAYS * 86400
+        if any(g // 86400 * 86400 > cutoff and g > latest.get(h, -1) for h, g in applied.items()):
+            raise RuntimeError("restore the latest deletions.log before starting")
+        if not records:
+            return 0, len(latest)
+        files = []
+        for u in rows(con, """SELECT u.id, u.tg_id, u.created_at, u.role, s.verified_at FROM users u
+                LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0"""):
+            # Both journal formats may refer to this row. Apply its earliest outstanding erasure once.
+            legacy_key = _deletion_hash(salt, str(u["tg_id"]))
+            row_key = _deletion_hash(salt, f"user:{u['id']}:{u['created_at']}")
+            for generation, photos, legacy in sorted(records.get(legacy_key, []) + records.get(row_key, [])):
+                if legacy:
+                    verified = u["verified_at"]
+                    if verified is None or verified >= generation + 86400:
+                        continue
+                    if verified >= generation:
+                        raise RuntimeError("same-day verification in a legacy deletion record; reconcile the snapshot before starting")
+                # Use the photo choice for the incarnation present in the snapshot.
+                con.execute("DELETE FROM meta WHERE key = ?", (f"delphotos:{u['id']}",))
+                if photos:
+                    con.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (f"delphotos:{u['id']}",))
+                files.append(delete_me(con, Viewer(u["id"], u["role"], True)))
+                break
+        con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                        ((f"delreplay:{h}", str(latest[h])) for h in records))
+        # All account decisions and SQL succeeded. An unlink failure rolls the checkpoints back for retry.
+        for receipts, pictures in files:
+            media.drop(path.parent / "receipts", receipts)
+            media.drop(path.parent / "media", pictures)
+        return len(files), len(latest)
 
 
 # Every column that points at a person (the foreign keys to users, read from the schema at each deletion) is in one

@@ -129,7 +129,8 @@
   .venv/bin/python -m kbtu.admin chatsync run <chat id> [--apply]   a sweep by the server's bot (resumes after a restart; a
                                 paused link runs again): without --apply a dry run; waits and prints counts only, never names
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
-                                (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
+                                are deleted again. Restore the newest deletions.log and its matching deletions.salt beside
+                                the database, even for a snapshot predating the first deletion. Startup also runs this check.
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
 the audit log. Prints Telegram names only, never the KBTU profile."""
@@ -149,7 +150,7 @@ from pathlib import Path
 from .logic.account import _DEL_GONE, staff_row
 from .logic import credits, guests
 from .logic.core import is_staff, staff_sql
-from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
+from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, replay_deletions, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
 # text that reads backwards)
@@ -331,6 +332,8 @@ def _chatsync(con, cfg, rest: list[str]) -> None:
 
 def main(args: list[str]) -> None:
     cfg = config.load()
+    if args == ["redelete"]:
+        db.init(cfg.db_path)  # the restored file can predate tables that erasure now covers
     con = db.connect(cfg.db_path)
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
@@ -908,33 +911,8 @@ def main(args: list[str]) -> None:
     elif cmd == "chatsync":
         _chatsync(con, cfg, args[1:])
     elif cmd == "redelete":
-        home = Path(config.load().db_path).resolve().parent
-        log = home / "deletions.log"
-        if log.exists() and not (home / "deletions.salt").exists():
-            sys.exit("deletions.salt is missing: copy it back beside the database first (without it nothing matches)")
-        when: dict[str, int] = {}
-        want_photos: set[str] = set()
-        for line in log.read_text().splitlines() if log.exists() else []:
-            f = line.split()
-            if len(f) < 2 or not f[0].isdigit():
-                continue  # a line cut short
-            when[f[1]] = max(when.get(f[1], 0), int(f[0]))
-            if "photos" in f[2:]:
-                want_photos.add(f[1])
-        n = 0
-        for u in rows(con, "SELECT u.id, u.tg_id, u.role, s.verified_at FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0"):
-            h = deletion_hash(home, u["tg_id"])
-            t = when.get(h)
-            if t and u["verified_at"] < t:  # signed in again after the deletion: that's a new account, it stays
-                if h in want_photos:  # "delete my photos too", asked after this copy was made
-                    con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"delphotos:{u['id']}",))
-                receipts, photos = delete_me(con, Viewer(u["id"], u["role"], True))
-                for root, rels in ((home / "receipts", receipts), (home / "media", photos)):
-                    for rel in rels:
-                        for ext in (".webp", ".t.webp", ".jpg"):
-                            (root / f"{rel}{ext}").unlink(missing_ok=True)
-                n += 1
-        print(f"{n} deleted again ({len(when)} in deletions.log)")
+        n, total = replay_deletions(con)
+        print(f"{n} deleted again ({total} in deletions.log)")
     else:
         sys.exit(__doc__)
 
