@@ -15,21 +15,21 @@
 
 <script lang="ts">
   // An appeal to the Student Government (server logic/appeals.py): an optional topic, the words as they are, Anonymous,
-  // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). The draft stays on
-  // this phone only (localStorage), never on the server. My appeals under it. The section's consent: asked once, on the
+  // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). Named drafts stay on
+  // this phone, and anonymous drafts stay in the open form. My appeals under it. The section's consent: asked once, on the
   // first send. AI tips ask separately before sending each draft abroad. The funnel counts taps (lib/stats), never a word.
   // desk 'help': KRI's "Ask a person": the same composer with the question in it (q, editable, sent only on the tap),
   // its own consent, no topics, no AI tips (KRI tried), no Solved feed, no funnel; my questions under it.
   import { onMount, untrack } from 'svelte';
-  import { accountDraft } from '../../lib/draft';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, ApiErr } from '../../lib/api';
   import { data, loadAppeals, loadAsks } from '../../lib/state/data.svelte';
+  import { useDraft } from '../../lib/draft';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { i18n } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { count } from '../../lib/stats';
@@ -46,29 +46,40 @@
   const sg = untrack(() => desk === 'sg');
   const k = (key: 'text' | 'ph' | 'anonOn' | 'anonOff' | 'who' | 'sent' | 'consentT' | 'consentText' | 'mine') => t(sg ? `apl.${key}` : `ask.${key}`);
 
-  const draft = untrack(() => accountDraft(sg ? 'kb-appeal' : 'kb-ask', session.me?.tg.id));
-  type Draft = { text: string; topic: AppealTopic | null; anon: boolean };
-  function readDraft(): Draft {
-    try { const j = JSON.parse(draft.read() || 'null'); if (j && typeof j.text === 'string') return j; } catch { /* blocked */ }
-    return { text: '', topic: null, anon: false };
-  }
-  const first = untrack(() => (q?.trim() ? { text: q.trim(), topic: null, anon: false } : readDraft()));
-  let text = $state(first.text), topic = $state<AppealTopic | null>(first.topic), anon = $state(first.anon);
+  type Draft = { text: string; topic: AppealTopic | null };
+  const draft = useDraft<Draft>(sg ? 'kb-appeal' : 'kb-ask');
+  const stored = draft.read();
+  const kept = typeof stored?.text === 'string'
+    ? { text: stored.text, topic: stored.topic && TOPICS.includes(stored.topic) ? stored.topic : null }
+    : null;
+  draft.track(kept);
+  const first = untrack(() => q?.trim() ? { text: q.trim(), topic: null } : kept ?? { text: '', topic: null });
+  let text = $state(first.text), topic = $state<AppealTopic | null>(first.topic), anon = $state(false);
   let tips = $state<string[]>([]), care = $state<string | null>(null), helping = $state(false), down = $state(false);
   let typed = !!first.text, sending = $state(false);
 
   function saveDraft() {
-    const d: Draft = { text, topic, anon };
-    draft.save(d.text.trim() ? JSON.stringify(d) : null);
+    draft.track(text.trim() && !anon ? { text, topic } : null);
     if (text && !typed) { typed = true; if (sg) count('apl.typed'); }
   }
   $effect(saveDraft);
+  function setAnonymous(on: boolean) {
+    haptic.select();
+    if (on) draft.discard(); // cancel pending writes and erase the named copy immediately
+    anon = on;
+  }
   onMount(() => {
     if (!sg) { void loadAsks(); return; }
     count('apl.open');
     void loadAppeals();
     return () => { if (typed && !sending && text.trim()) count('apl.drop'); };
   });
+
+  async function discard() {
+    if (!(await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('ed.stay'), danger: true }))) return;
+    draft.discard();
+    close(overlay.id);
+  }
 
   /** undefined: agreed before; the version: just agreed; null: said no */
   async function agree(): Promise<string | undefined | null> {
@@ -100,6 +111,7 @@
     if (!body || sending) return;
     const consent = await agree();
     if (consent === null) return;
+    const sentAt = draft.stamp();
     sending = true;
     const key = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
@@ -107,6 +119,7 @@
         : await api.sendAsk({ text: body, anon, key, consent });
       agreed(); if (sg) count('apl.sent');
       setList([a, ...list()]);
+      draft.discard(sentAt);
       if (text.trim() === body) { text = ''; topic = null; } // words typed while it went stay
       tips = []; care = null; down = false; typed = false;
       haptic.ok(); say(k('sent'), 'raising_hands_3d_default');
@@ -117,7 +130,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t(sg ? 'apl.row' : 'ask.button')} icon={sg ? Megaphone : MessageCircleQuestion} full>
+<Sheet {overlay} title={t(sg ? 'apl.row' : 'ask.button')} icon={sg ? Megaphone : MessageCircleQuestion} full hold={() => overlay.byUser === true && !!text.trim()} onhold={discard}>
   <div class="page">
     <Field label={k('text')} placeholder={k('ph')} bind:value={text} multiline rows={5} maxlength={4000} />
     {#if sg}
@@ -128,7 +141,7 @@
       </div>
     {/if}
     <Group footnote={anon ? k('anonOn') : k('anonOff')}>
-      <Row title={t('apl.anon')} accessory="switch" checked={anon} onchange={(on) => { haptic.select(); anon = on; }} />
+      <Row title={t('apl.anon')} accessory="switch" checked={anon} onchange={setAnonymous} />
     </Group>
 
     {#if care}<Notice tone="danger" title={t('apl.careT')}><p class="selectable pre">{care}</p></Notice>{/if}

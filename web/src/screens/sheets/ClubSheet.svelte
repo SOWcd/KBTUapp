@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   // A club, from anywhere its name or logo shows (SPEC §8.3: one sheet for "Subscribe" and "Join"): who they
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
   // club can be written to: a DM to its President (lib/clubdm; in the footer once applications are closed). Its Vice+ change
@@ -44,9 +45,9 @@
   import { clubDm } from '../../lib/clubdm';
   import { session } from '../../lib/state/session.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  let { overlay, id, verified }: { overlay: Overlay; id: Id; verified?: Org } = $props();
 
-  let fetched = $state<Org | null>(null);
+  let fetched = $state<Org | null>(untrack(() => verified ?? null));
   let fetchedEvents = $state<EventCard[] | null>(null);
   let past = $state<EventCard[] | null>(null); // its latest few that are over (Recent), asked with the page
   // the club's news, every post (the circles on Afisha keep 30 days): newest first here, played oldest first
@@ -66,7 +67,7 @@
   const tap = (url: string) => { haptic.tap(); openLink(url); };
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   $effect(() => {
-    api.org(id).then((x) => (fetched = x)).catch(() => {});
+    if (!verified) api.org(id).then((x) => (fetched = x)).catch(() => {});
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
     api.pastEvents(id).then((x) => (past = x)).catch(() => (past = []));
     api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});

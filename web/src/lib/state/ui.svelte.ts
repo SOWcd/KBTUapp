@@ -7,25 +7,12 @@ import { count, type Screen } from '../stats';
 import { queue } from '../moments';
 import { switching } from './theme.svelte';
 
-export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
-// the forum second: the students' everyday place, next to the events
-export const TABS: Tab[] = ['afisha', 'forum', 'club', 'profile'];
-const NAV_KEY = 'kb-nav';
+import { type Place, type Tab } from './navigation';
+export { TABS, type Tab } from './navigation';
 
-// one tab = one scrolling screen (pages side by side in a tab make a grid one gets lost
-// in); the tab and the club picked are kept across launches
-function restore(): { tab: Tab; club: number | null } {
-  try {
-    const v = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (v && TABS.includes(v.tab)) return { tab: v.tab, club: typeof v.club === 'number' ? v.club : null };
-  } catch { /* blocked or corrupted */ }
-  return { tab: 'afisha', club: null };
-}
-
-const start = restore();
 export const ui = $state({
-  tab: start.tab,
-  club: start.club,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
+  tab: 'afisha' as Tab,
+  club: null as number | null,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
   tryOn: null as { id: number; name: string; school?: boolean } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
   look: null as { skin: number | 'sower' | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
@@ -34,11 +21,6 @@ export const ui = $state({
 });
 onShareBusy((on) => (ui.busy = on ? t('invite.making') : '')); // every share card: the tap is answered while the server makes it
 
-export function persistNav(): void {
-  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, club: ui.club })); } catch { /* blocked */ }
-}
-document.addEventListener('visibilitychange', () => { if (document.hidden) persistNav(); });
-
 export function goTab(tab: Tab): void {
   if (ui.tab === tab) return;
   ui.tab = tab;
@@ -46,7 +28,6 @@ export function goTab(tab: Tab): void {
 }
 
 // ---- overlays ----
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 /** `title`: what the capsule says while this overlay is on top (SPEC §8.2); '' = the one below speaks. `theme`: the
  *  capsule's then, when the overlay has one of its own (the map's switch; the dark QR and ticket). `icon`: a small mark
  *  before the title for a full-screen mode (the QR, the map, the scanner, settings). `byUser`: the close came
@@ -59,14 +40,14 @@ export interface Overlay { id: number; component: Component<any>; props: Record<
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
-  stat?: Screen }
+  stat?: Screen; place?: Place }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
-export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen): number {
+export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, place?: Place): number {
   const id = ++seq;
   if (stat) count(stat);
-  overlays.push({ id, component: component as Component<any>, props, closing: false, stat });
+  overlays.push({ id, component: component as Component<any>, props, closing: false, stat, place });
   return id;
 }
 

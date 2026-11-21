@@ -257,7 +257,7 @@
         {@const live = !!p.msg && p.status === 'live'}
         {@const why = p.mine && p.human ? heldWhy(p) : undefined}
         {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
-        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
+        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id} data-nav-anchor={live ? `post-${p.id}` : undefined}>
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
             <span class="rail">

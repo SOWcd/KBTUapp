@@ -6,13 +6,13 @@
   // holds one, results) with the club's own "what's next" under them, before and after sending. One department or none:
   // nothing to pick. Opened from the
   // club's sheet, the Join page, a shared card or the bot (rc_<club>).
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
-  import { accountDraft } from '../../lib/draft';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Circle from '@lucide/svelte/icons/circle';
   import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
   import { clubDm } from '../../lib/clubdm';
+  import { useDraft } from '../../lib/draft';
   import { session } from '../../lib/state/session.svelte';
   import { placeOf } from '../../lib/i18n/index.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -48,27 +48,30 @@
   let leaving = false;
   let busy = $state(false);
   let tried = $state(false);
-  const owner = untrack(() => session.me?.tg.id);
-  let draft: ReturnType<typeof accountDraft> | undefined;
+  const draft = useDraft<{ picks: Id[]; answers: Record<string, string | string[]> }>(() => r ? `kb-round-${r.id}` : null);
 
   onMount(() => {
     api.round(org).then((x) => {
       if (!x) { gone = true; return; }
-      draft = accountDraft(`kb-round-${x.id}`, owner);
       r = x;
       if (x.departments.length === 1) picks = [x.departments[0].tagId];  // one department: nothing to pick
       if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
-      try { const d = JSON.parse(draft.read() ?? 'null'); if (d) { picks = d.picks ?? []; answers = d.answers ?? {}; } } catch { /* blocked */ }
+      const d = draft.read();
+      if (Array.isArray(d?.picks) && d.answers && typeof d.answers === 'object') {
+        picks = d.picks.filter((id) => x.departments.some((dept) => dept.tagId === id));
+        if (x.departments.length === 1) picks = [x.departments[0].tagId];
+        answers = d.answers;
+      }
     }).catch(() => { gone = true; });
     api.org(org).then((x) => (contact = x.contact ?? null)).catch(() => {});
   });
-  // the draft, as it's typed
-  function keepDraft() {
-    const value = JSON.stringify({ picks, answers });
-    if (!r || sent) return;
-    draft?.save(value);
-  }
-  $effect(keepDraft);
+  const hasDraft = $derived.by(() => {
+    if (!r) return false;
+    const hasPicks = r.departments.length > 1 && picks.length > 0;
+    const hasAnswers = Object.values(answers).some((a) => Array.isArray(a) ? a.length > 0 : a.trim());
+    return hasPicks || !!hasAnswers;
+  });
+  $effect(() => { if (r && !sent) draft.track(hasDraft ? { picks, answers } : null); });
 
   function pick(id: Id) {
     haptic.select();
@@ -89,11 +92,12 @@
     tried = true;
     if (!r || !ready) { haptic.error(); return; }
     busy = true;
+    const sentAt = draft.stamp();
     const sending = snap; // what's typed while it goes isn't saved yet
     try {
       r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
       if (!sent) count('do.casting');
-      draft?.save(null);
+      draft.discard(sentAt);
       const first = !sent;
       sent = true; editing = false; saved = sending;
       haptic.ok();
@@ -144,19 +148,18 @@
     try { const d = JSON.parse(saved); picks = d.picks; answers = { ...d.answers }; } catch { /* never */ }
     editing = false; tried = false;
   }
-  // only edits to a sent application ask before closing; an unsent one keeps its draft on the phone
-  const changed = () => !leaving && sent && editing && snap !== saved;
+  const changed = () => !leaving && overlay.byUser === true && (sent ? editing && snap !== saved : hasDraft);
   let asking = false;
   async function askLeave() {
     if (asking) return;
     asking = true;
-    try { if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); } }
+    try { if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) { draft.discard(); leaving = true; close(overlay.id); } }
     finally { asking = false; }
   }
 
   async function withdraw() {
     if (!r || !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('cast.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep'), danger: true }))) return;
-    try { await api.withdrawRound(r.id); haptic.soft(); void loadAfisha(); close(overlay.id); }
+    try { await api.withdrawRound(r.id); draft.discard(); haptic.soft(); void loadAfisha(); close(overlay.id); }
     catch { say(t('common.error'), 'warning_3d'); }
   }
 </script>

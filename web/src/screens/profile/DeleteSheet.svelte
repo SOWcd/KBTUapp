@@ -14,7 +14,7 @@
   import Row from '../../ui/Row.svelte';
   import { api } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { forgetRecovery, session } from '../../lib/state/session.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -36,6 +36,7 @@
     busy = true;
     try {
       const m = await api.deleteMe(photos);
+      forgetRecovery();
       session.me = m;
       haptic.warn();
       close(overlay.id);

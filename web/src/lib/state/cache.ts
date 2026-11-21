@@ -1,31 +1,22 @@
-// The instant re-open (CONTEXT, "Speed"): the last /api/me and the lists stay on the phone, one copy per Telegram account,
-// are shown the moment the app starts and are replaced as soon as the server answers. A week old at most; deleting the
-// account clears it.
+// The instant re-open: show the last lists from this Telegram account while the server answers.
 import type { AlbumPhoto, GalleryAlbum, ClassItem, EventCard, Friends, Me, Org, PersonCard, Post, TeamMember } from '../api';
 import { tg } from '../tg';
+import { DRAFT_AGE, recovery } from './recovery';
 
 export interface Snapshot { me: Me | null; events: EventCard[]; orgs: Org[]; schedule: ClassItem[]; posts: Post[]; castings?: Post[]; friends?: Friends | null; myCard?: PersonCard | null; news?: { casts: Post[]; posts: Post[] } | null;
   gallery?: AlbumPhoto[]; galleryAlbums?: GalleryAlbum[]; galleryPost?: { events: { id: number; title: string }[] } | null; studio?: Record<number, EventCard[]>; team?: Record<number, TeamMember[]> }
-const VERSION = 4, MAX_AGE = 7 * 86400 * 1000;
-const key = () => (tg.user ? `kb-cache-${tg.user.id}` : null);
+const KEY = 'snapshot';
 
 export function readCache(): Snapshot | null {
-  const k = key();
-  if (!k) return null;
-  try {
-    const c = JSON.parse(localStorage.getItem(k) ?? 'null');
-    return c && c.v === VERSION && Date.now() - c.at < MAX_AGE ? (c.data as Snapshot) : null;
-  } catch { return null; }
+  const snap = recovery.read<Snapshot>(recovery.peek(tg.user?.id), KEY, DRAFT_AGE);
+  return snap?.me?.tg.id === tg.user?.id ? snap : null;
 }
 
 /** data: the Snapshot already as JSON (App serializes it anyway to watch for changes) */
 export function writeCache(data: string): void {
-  const k = key();
-  if (!k) return;
-  try { localStorage.setItem(k, `{"v":${VERSION},"at":${Date.now()},"data":${data}}`); } catch { /* storage full or blocked: next time from the network */ }
+  recovery.write(recovery.scope(), KEY, data);
 }
 
 export function clearCache(): void {
-  const k = key();
-  if (k) try { localStorage.removeItem(k); } catch { /* nothing kept */ }
+  recovery.clear(recovery.scope(), KEY);
 }

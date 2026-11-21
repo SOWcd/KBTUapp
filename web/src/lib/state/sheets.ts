@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '../api';
+import type { ClubTag, CommentThread, EventBracket, EventGroups, Org, TeamMember, TeamSetup } from '../api';
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
@@ -75,9 +75,9 @@ export const sheets = {
   badgeQr: (_award: Manual, _code: GrantItem['code']) => {},
   /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
   cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
-  club: (_id: Id) => {},
+  club: (_id: Id, _verified?: Org) => {},
   /** `from`: the tapped poster, which grows into the sheet's header; `album`: its guests' album opened over it (the bot's ph_) */
-  event: (_id: Id, _from?: Element | null, _album?: boolean) => {},
+  event: (_id: Id, _from?: Element | null, _album?: boolean, _verified?: EventFull) => {},
   /** the event sheet for an unsaved editor form: what students will see */
   preview: (_e: EventFull) => {},
   /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
@@ -171,6 +171,8 @@ export const sheets = {
   deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
   /** the server says the policy changed (a refused write): the fresh /api/me raises the gate (ConsentGate) */
   consent: () => {},
+  /** A single verified post from the stories viewer. */
+  post: (_post: Post) => {},
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
   /** a tab's other pages (one tab, one screen): every post (Afisha's "All"), the Feed full screen
@@ -238,7 +240,7 @@ export const sheets = {
   /** DMP's tree of every organisation's groups */
   dmpChats: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
-  comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
+  comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void, _verified?: CommentThread) => {},
   /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */
   report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', _id: Id, _about?: string, _onsent?: () => void) => {},
   /** "Bring a friend" to an event */
