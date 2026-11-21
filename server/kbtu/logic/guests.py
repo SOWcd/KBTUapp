@@ -217,6 +217,8 @@ def door_names(con, eid: int, lines) -> tuple[int, int]:
             if sid and core.STUDENT_ID.fullmatch(sid):
                 continue  # a student ID the import already placed (ticket or pending): never a second row
             if one(con, "SELECT 1 FROM event_guests WHERE event_id = ? AND name = ?", eid, name):
+                if user:  # loaded before usernames were kept: add it now
+                    con.execute("UPDATE event_guests SET username = COALESCE(username, ?) WHERE event_id = ? AND name = ?", (user, eid, name))
                 continue
             n += 1
             con.execute("INSERT INTO event_guests (event_id, student_id, adult, name, username) VALUES (?, ?, ?, ?, ?)", (eid, f"x{n}", adult, name, user or None))
