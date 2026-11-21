@@ -41,7 +41,8 @@ def test_roster_match_ignores_club_ban(env):
     c.get("/api/me", headers=_tg(61, "ali_u"))
     con = _club(cfg, pres["id"])
     con.execute("INSERT INTO org_bans (org_id, user_id, by_id, created_at) VALUES (1, ?, ?, 0)", (ali["id"], pres["id"]))
-    roster.load(con, [_row(full_name="Ali Testov", tg="ali_u", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
+    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    roster.load(con, [_row(full_name="Ali Testov", email="ali@kbtu.kz", tg="ali_u", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
     assert _member(con, ali["id"]) is None, "a banned student joined the club (as a Head) by the roster load"
 
 
@@ -55,8 +56,8 @@ def test_roster_confirm_after_ban(env):
     roster.load(con, [_row(tg="zed_t", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
     ask = c.get("/api/me", headers=_tg(81, "zed_t")).json()["roster"]["ask"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=_tg(81, "zed_t")).status_code == 204
-    assert _member(con, zed["id"]) == "member"
-    assert c.post(f"/api/orgs/1/members/{zed['id']}/remove", headers=tma(80), json={"ban": True}).json() == {"done": True}
+    assert _member(con, zed["id"]) is None
+    con.execute("INSERT INTO org_bans (org_id, user_id, by_id, created_at) VALUES (1, ?, ?, 0)", (zed["id"], pres["id"]))
     req = c.get("/api/roster/requests", headers=tma(80)).json()
     c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": True})
     assert _member(con, zed["id"]) is None, "a banned student came back (as a Head) by a claim confirmed later"
@@ -70,7 +71,8 @@ def test_roster_title_rights_above_role(env):
     c.get("/api/me", headers=_tg(61, "ali_u"))
     con = _club(cfg, pres["id"])
     assert c.post("/api/orgs/1/roles", headers=tma(60), json={"name": "HR", "color": "#112233", "rights": ["team"]}).status_code == 200
-    roster.load(con, [_row(full_name="Ali Testov", tg="ali_u", position="HR", title="HR")], {"S": "it"})
+    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    roster.load(con, [_row(full_name="Ali Testov", email="ali@kbtu.kz", tg="ali_u", position="HR", title="HR")], {"S": "it"})
     assert _member(con, ali["id"]) == "member"
     assert "team" not in logic.rights_of(con, ali["id"], 1), "a Member holds the Vice-level right 'team'"
     assert c.post("/api/orgs/1/team-link", headers=tma(61)).status_code == 403
@@ -125,3 +127,24 @@ def test_roster_claim_race(env, monkeypatch):
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
     left = {u["id"]: _member(con, u["id"]) for u in (zed, bek)}
     assert left == {zed["id"]: None, bek["id"]: None}, f"still in the club after the claim was declined: {left}"
+
+
+def test_roster_requires_verified_email_or_approval(env):
+    c, cfg = env
+    pres, ali = login(c, 60, "pres"), login(c, 61, "ali")
+    con = _club(cfg, pres["id"])
+    c.get("/api/me", headers=_tg(61, "ali_u"))
+    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    # Even people with the same name can hold a username at different times.
+    roster.load(con, [_row(full_name="Ali Testov", tg="ali_u", email="other@kbtu.kz")], {"S": "it"})
+    assert _member(con, ali["id"]) is None
+    rid = roster.asks(con, ali["id"])[0]["id"]
+    sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at) VALUES ('Team', 'pin', 1, 0)").lastrowid
+    con.execute("INSERT INTO qr_hand_marks (session_id, who, at) VALUES (?, ?, 100)", (sid, f"r{rid}"))
+    roster.claim(con, ali["id"], rid)
+    assert _member(con, ali["id"]) is None
+    assert con.execute("SELECT claimed_by FROM roster_pending WHERE id = ?", (rid,)).fetchone()[0] == ali["id"]
+    assert not con.execute("SELECT 1 FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()
+    roster.decide(con, logic.Viewer(pres["id"], "user", True), rid, True)
+    assert tuple(con.execute("SELECT user_id, done_at FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()) == (ali["id"], 100)
+    assert _member(con, ali["id"]) == "member"

@@ -7,14 +7,19 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import time
 import urllib.parse
+
+BOT_TOKEN = re.compile(r"[1-9][0-9]*:[A-Za-z0-9_-]{32,}")
 
 MAX_AGE = 24 * 3600
 
 
 def check_init_data(init_data: str, bot_token: str, now: float | None = None) -> dict | None:
     """The Telegram user from signed initData, or None when the signature or its age is wrong."""
+    if not BOT_TOKEN.fullmatch(bot_token):
+        return None
     pairs = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
     got = pairs.pop("hash", "")
     check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))

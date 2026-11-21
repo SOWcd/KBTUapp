@@ -818,7 +818,7 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
         # so a forgery that beats OCR gets seen. The draw is once per seat: a seat that had any receipt before (replaced,
         # or before a cancel; one row per person and event) is always picked, so neither re-rolls it. Not clean and no
-        # warning either (a field unread, no OCR): 'partial', in "Check receipts" too. Neither is told to the student
+        # warning either (a field unread): 'partial', in "Check receipts" too. Neither is told to the student
         # (my.receiptFlags) nor stops them at the door (organizing.flagged).
         clean = _receipt_clean(con, e, saved["sha256"], read, flags)
         if clean and (_audit() or one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
@@ -858,7 +858,9 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
         # the same minute, sum and payee under another number: a used receipt with its number edited; from another
         # sender (two friends paying together) it's no warning, only not the app's to pass (_receipt_clean: 'partial')
         out.append("duplicate")
-    if read is not None and not (got.get("no") and got.get("amount")):
+    if read is None:
+        out.append("ocr_unavailable")
+    elif not (got.get("no") and got.get("amount")):
         out.append("unreadable")  # no number or sum: the duplicate check couldn't run, the organizer looks
     if got.get("amount") and e["price"] and got["amount"] < e["price"]:
         out.append("amount_short")
@@ -873,7 +875,7 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 
 AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
-PARTIAL = "partial"  # no warning, but not every field could be read (or OCR didn't run): a person looks
+PARTIAL = "partial"  # no warning, but not every field could be read: a person looks
 
 
 def _audit() -> bool:
@@ -901,10 +903,10 @@ def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str)
 
 
 def receipt_path(con, v: Viewer, rid: int) -> str:
-    """A receipt's image is private (§4.3): its sender, the event's Head+ and the admin see it."""
+    """The sender or a verified member of the host club with its events right may open the original."""
     c = one(con, """SELECT f.path, r.user_id, e.org_id FROM receipts c JOIN files f ON f.id = c.file_id
         JOIN registrations r ON r.id = c.registration_id JOIN events e ON e.id = r.event_id WHERE c.id = ?""", rid)
-    if not c or not (c["user_id"] == v.id or v.role == "admin" or can(con, v, c["org_id"], "events")):
+    if not c or not (c["user_id"] == v.id or v.student and "events" in core.rights_of(con, v.id, c["org_id"])):
         raise ApiError("not_found")
     return c["path"]
 

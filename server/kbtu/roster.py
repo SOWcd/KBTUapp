@@ -3,12 +3,8 @@ row waits in roster_pending for its student and stays theirs (the city hidden or
 everyone has signed up: the table is dropped by hand then.
 
 Listed under my Telegram username but not signed in with Microsoft yet: a welcome with the clubs and positions only,
-and the way to sign in. A row is someone's when the Telegram username (or the KBTU e-mail) is theirs AND the sheet's
-name is the name on their KBTU account (same_person: any case, Cyrillic or Latin, Kazakh letters, any order, a
-patronymic more: two words shared): they join at once and hear it in a toast. When only the username matches, they're asked, with the
-club and position only (the sheet's name, phone and city may be someone else's): "Yes, it's me" (a typo, a new
-surname) asks the club's President, or DMP for a club without one, who confirms or declines (declined: the row stays
-for the right person, flagged in DMP's registry). No student removes a row: a wrong one is for support.
+and the way to sign in. A verified university email and matching name identify a student's row. Other candidate rows
+require confirmation by the club President, or DMP when there is no President. No student removes a row: a wrong one is for support.
 
 The file never enters the repo: tools/roster_convert.py turns it into JSON beside it, `admin roster load` loads that."""
 from __future__ import annotations
@@ -174,23 +170,29 @@ def _mine(con, uid: int) -> tuple[sqlite3.Row | None, list[sqlite3.Row]]:
     return s, found
 
 
+def _verified(r, s) -> bool:
+    return bool(r["email"] and r["email"] == (s["email"] or "").lower()
+                and same_person(r["full_name"], s["first_name"], s["last_name"]))
+
+
 def match(con, uid: int) -> list[tuple[int, bool]]:
-    """Every row that is this student's (username or e-mail, and the name): joined now. (org, came in as Vice) each."""
-    s, found = _mine(con, uid)
-    return [(r["org_id"], join(con, uid, r)) for r in found if same_person(r["full_name"], s["first_name"], s["last_name"])]
+    """Join only rows identified by the verified university account."""
+    with tx(con):
+        s, found = _mine(con, uid)
+        return [(r["org_id"], join(con, uid, r)) for r in found if _verified(r, s)]
 
 
 def asks(con, uid: int) -> list[sqlite3.Row]:
-    """Rows with this student's username or e-mail but another name: theirs only if they say so."""
+    """Candidate rows that require the President's or DMP's confirmation."""
     s, found = _mine(con, uid)
-    return [r for r in found if r["claimed_by"] != uid and not same_person(r["full_name"], s["first_name"], s["last_name"])] if s else []
+    return [r for r in found if r["claimed_by"] != uid and not _verified(r, s)]
 
 
 def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = False) -> bool:
     """The row made real; what the app already has wins: a membership held keeps its role, a missing one
     is added (a President on the sheet where the club already has another in the app: Vice), and the position as the
     club role's name, the department, the city, the year and the phone fill only what's empty. Then the row goes.
-    trusted=False (a claim no one has confirmed): never the row's city, year or phone (maybe someone else's).
+    trusted=False (a claim confirmed by a person): never the row's city, year or phone (maybe someone else's).
     promote: a member who claimed an officer's row, now confirmed, takes the row's role. True when a President on the
     sheet came in as Vice."""
     oid = r["org_id"]
@@ -211,7 +213,7 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
             fixed = mine is None or one(con, "SELECT fixed FROM org_roles WHERE id = ?", mine)["fixed"]
             if fixed:  # a role name the club gave in the app stays
                 t = one(con, "SELECT id, level FROM org_roles WHERE org_id = ? AND lower(name) = lower(?)", oid, r["title"][:40])
-                # a club's own role may carry rights: an unchecked claim never takes one, nor anyone one of
+                # a club's own role may carry rights: a claim without a verified match never takes one, nor anyone one of
                 # another level than the row's (else a member's row titled as the club's Vice-level "HR" gets its rights)
                 if t and (not trusted or t["level"] != role):
                     t = None
@@ -244,10 +246,7 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
 
 
 def claim(con, uid: int, rid: int) -> None:
-    """"Yes, it's me" on a row listed under another name (a typo, a new surname): taken at the student's word,
-    never the row's city, year or phone. A member's row: joined, done. An officer's row: joined as a member now;
-    the position waits for whoever confirms (the club's President, or DMP's leads / the Admin sheet for a club without
-    one), who hears it: a claimed "President" never runs a club unchecked."""
+    """Request approval for a candidate row before granting membership or assigning attendance."""
     from .logic import ApiError, notify
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)
     if r is None:
@@ -256,16 +255,9 @@ def claim(con, uid: int, rid: int) -> None:
         raise ApiError("conflict")
     if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
         raise ApiError("forbidden", "banned")
-    if r["role"] == "member":
-        join(con, uid, r, trusted=False)
-        return
     with tx(con):
-        # under the lock: two claims at once, the second finds it taken (else it overwrites the first's, who then stays in)
         if not con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ? AND claimed_by IS NULL", (uid, rid)).rowcount:
             raise ApiError("conflict")
-        if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
-            set_role(con, None, uid, r["org_id"], "member", "roster")
-            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"rclaim:{rid}", str(uid)))  # the claim let me in: a no takes it back
         for (aid,) in _approvers(con, r["org_id"]):
             notify(con, aid, "roster_claim", f"rq:{rid}:{uid}")
 
@@ -311,14 +303,11 @@ def decide(con, v, rid: int, ok: bool) -> None:
         if not r or r["claimed_by"] is None:  # confirmed (the row went) or turned down (unclaimed) a moment ago
             raise decided(con, f"roster:{rid}") if done else ApiError("not_found")
         log_action(con, v.id, "roster_ok" if ok else "roster_no", f"roster:{rid}", json.dumps({"org": org}))
-        came = one(con, "SELECT value FROM meta WHERE key = ?", f"rclaim:{rid}")
-        con.execute("DELETE FROM meta WHERE key = ?", (f"rclaim:{rid}",))
         if ok:
             join(con, r["claimed_by"], r, trusted=False, promote=True)
         else:
             con.execute("UPDATE roster_pending SET rejected_by = claimed_by, claimed_by = NULL WHERE id = ?", (rid,))
-            if came and came[0] == str(r["claimed_by"]) and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role = 'member'", r["org_id"], r["claimed_by"]):
-                set_role(con, v.id, r["claimed_by"], r["org_id"], "none", "roster_decline")  # "not them": out of the club the claim let them in
+
 
 
 def mine(con, uid: int) -> dict | None:

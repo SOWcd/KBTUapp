@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import hashlib
 import json
 import logging
 import os
@@ -19,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from kbtu import ai, calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, tgc, video
 
-BOT = "123:test"
+BOT = "123:" + "test" * 9
 
 
 def delete_now(c, cfg, h: dict) -> None:
@@ -2690,7 +2691,7 @@ def test_paid_events(env):
 
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     rid = att[0]["receipt"]["id"]
-    assert att[0]["receipt"]["flags"] == ["partial"] and att[1]["receipt"] is None  # nothing read: a person looks, no warning
+    assert att[0]["receipt"]["flags"] == ["ocr_unavailable"] and att[1]["receipt"] is None
     img = c.get(f"/api/receipts/{rid}/image", headers=tma(21))
     assert img.headers["content-type"] == "image/webp" and "no-store" in img.headers["cache-control"]
     assert c.get(f"/api/receipts/{rid}/image", headers=tma(10)).status_code == 200                     # the sender
@@ -2707,7 +2708,7 @@ def test_paid_events(env):
 
     ticket = c.post(f"/api/events/{eid}/receipt", headers=tma(11), content=shot.getvalue()).json()["my"]["ticketCode"]
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
-    assert att[0]["receipt"]["flags"] == ["duplicate"] and not att[0]["receipt"]["reviewed"]
+    assert att[0]["receipt"]["flags"] == ["duplicate", "ocr_unavailable"] and not att[0]["receipt"]["reviewed"]
     assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
     held = c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket}).json()      # warned before admission
     assert held["result"] == "flagged" and held["came"] == 0
@@ -4609,32 +4610,108 @@ def test_admin_day_and_ai(env):
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
 
 
-def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
-    """H2: a copy restored after a deletion brings the person back; deletions.log (outside the database, the Telegram
-    ID salted) lets `kbtu.admin redelete` delete them again, never someone who signed in again since."""
+def test_deletion_retries_when_the_journal_is_unwritable(env):
     c, cfg = env
-    ali, zhan = login(c, 21, "ali"), login(c, 22, "zhan")
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (uid,))
+    path = Path(cfg.db_path).parent / "deletions.log"
+    path.mkdir()  # simulate a storage failure without relying on OS permissions
+    logic.delete_due(con)
+    assert con.execute("SELECT delete_at FROM users WHERE id = ?", (uid,)).fetchone()[0] == 0
+    assert con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    path.rmdir()
+    logic.delete_due(con)
+    assert path.is_file() and not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+
+
+def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
+    c, cfg = env
+    now = int(time.time()) // 86400 * 86400 + 3600
+    set_clock(monkeypatch, lambda: now)
+    zhan = login(c, 22, "zhan")
+    delete_now(c, cfg, tma(22))
+    login(c, 22, "zhan")  # a new incarnation verified in the very same second
+    ali = login(c, 21, "ali")
     con = db.connect(cfg.db_path)
     home = Path(cfg.db_path).parent
     restored = home / "restored.db"
-    con.execute("VACUUM INTO ?", (str(restored),))                # last night's copy: both still there
-    delete_now(c, cfg, tma(21, "Ali"))
-    delete_now(c, cfg, tma(22, "Zhan"))
-    line = (home / "deletions.log").read_text().splitlines()[0]
-    assert len(line.split()) == 2 and re.fullmatch(r"[0-9a-f]{32}", line.split()[1]) and (home / "deletions.salt").exists()
-    login(c, 22, "zhan")                                           # Zhan came back: a new sign-in after the deletion
-    later = con.execute("SELECT verified_at FROM students WHERE user_id = ?", (zhan["id"],)).fetchone()[0]
+    con.execute("VACUUM INTO ?", (str(restored),))
+    delete_now(c, cfg, tma(21))
+    # Starting on the older file replays only the deletion absent from that snapshot.
+    server.create(dataclasses.replace(cfg, db_path=str(restored)))
     rcon = db.connect(str(restored))
-    rcon.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (later + 10, zhan["id"]))  # as if restored after his return
-    rcon.execute("UPDATE students SET verified_at = 0 WHERE user_id = ?", (ali["id"],))                # signed in long before
-    rcon.close()
-    for k, v in (("BOT_TOKEN", "1:x"), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
+    assert [r[0] for r in rcon.execute("SELECT user_id FROM students")] == [zhan["id"]]
+    assert not rcon.execute("SELECT 1 FROM schedule_classes WHERE user_id = ?", (ali["id"],)).fetchone()
+    for k, v in (("BOT_TOKEN", BOT), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
         monkeypatch.setenv(k, v)
     from kbtu import admin
     admin.main(["redelete"])
-    assert capsys.readouterr().out.strip() == "1 deleted again (2 in deletions.log)"
-    rcon = db.connect(str(restored))
-    assert [r[0] for r in rcon.execute("SELECT user_id FROM students")] == [zhan["id"]]
+    assert capsys.readouterr().out.strip() == "0 deleted again (2 in deletions.log)"
+
+
+def test_restore_erases_account_moved_to_another_telegram(env, monkeypatch):
+    from kbtu import admin
+    c, cfg = env
+    student = login(c, 21, "ali")
+    guest = c.get("/api/me", headers=tma(23, "Guest")).json()
+    con = db.connect(cfg.db_path)
+    restored = Path(cfg.db_path).with_name("before-move.db")
+    con.execute("VACUUM INTO ?", (str(restored),))
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    admin.main(["move", "21", "23"])
+    delete_now(c, cfg, tma(23))
+    server.create(dataclasses.replace(cfg, db_path=str(restored)))
+    old = db.connect(str(restored))
+    assert not old.execute("SELECT 1 FROM students WHERE user_id = ?", (student["id"],)).fetchone()
+    assert old.execute("SELECT tg_first_name FROM users WHERE id = ?", (guest["id"],)).fetchone()[0] == "Guest"
+
+
+def test_replay_after_crash_before_erasure_commit(env, monkeypatch):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (uid,))
+    write = logic.account._deletion_log
+
+    def interrupted(*args):
+        write(*args)
+        raise OSError("interrupted before commit")
+
+    monkeypatch.setattr(logic.account, "_deletion_log", interrupted)
+    logic.delete_due(con)
+    assert con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    server.create(cfg)
+    assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    path = Path(cfg.db_path).with_name("deletions.log")
+    path.write_text("")  # a stale journal alongside a database with a recent checkpoint
+    with pytest.raises(RuntimeError, match="latest deletions.log"):
+        server.create(cfg)
+
+
+def test_legacy_deletion_day_requires_evidence(env):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    home = Path(cfg.db_path).parent
+    salt = "a" * 32
+    h = hashlib.sha256(f"{salt}:21".encode()).hexdigest()[:32]
+    day = logic.now() // 86400 * 86400
+    (home / "deletions.salt").write_text(salt)
+    (home / "deletions.log").write_text(f"{day} {h}\n")
+    with pytest.raises(RuntimeError, match="same-day verification"):
+        server.create(cfg)
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (day - 10, uid))
+    snapshot = home / "before-legacy.db"
+    con.execute("VACUUM INTO ?", (str(snapshot),))
+    server.create(cfg)
+    assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
+    login(c, 21, "ali")
+    delete_now(c, cfg, tma(21))
+    # The same snapshot can predate both a legacy and a new-format erasure of this row.
+    restored = db.connect(str(snapshot))
+    assert logic.replay_deletions(restored) == (1, 2)
+    assert not restored.execute("SELECT 1 FROM students WHERE user_id = ?", (uid,)).fetchone()
 
 
 def test_forgetting(env, monkeypatch):
@@ -4663,7 +4740,7 @@ def test_forgetting(env, monkeypatch):
 
 def test_db_must_exist(tmp_path, monkeypatch):
     """A locked vault leaves an empty folder: the image's DB_MUST_EXIST=1 stops the app instead of starting it empty"""
-    monkeypatch.setenv("BOT_TOKEN", "1:x")
+    monkeypatch.setenv("BOT_TOKEN", BOT)
     monkeypatch.setenv("TOKEN_KEY", "A" * 43 + "=")
     monkeypatch.setenv("DB_PATH", str(tmp_path / "kbtu.db"))
     monkeypatch.setenv("DB_MUST_EXIST", "1")
@@ -5578,9 +5655,9 @@ def test_roster_name_match():
 
 def test_roster_load_and_join(env):
     """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
-    whose username and name match joins at once (role, position as the club role's name, department, city, year,
+    whose university email and name match joins at once (role, position as the club role's name, department, city, year,
     phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
-    username but another name: asked without the phone or city; "Yes, it's me" joins at once as a member, the position
+    username but another name: asked without the phone or city; "Yes, it's me" requests approval, the claim
     goes to the President, who confirms; the row's city and phone never come with a claim."""
     from kbtu import roster
     c, cfg = env
@@ -5597,7 +5674,8 @@ def test_roster_load_and_join(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": None, "school": "SITE",  # noqa: E731
                        "year": "2", "course": 2, "city": None, "phone": None, "tg": None, "email": None, **k}
-    items = [row(full_name="Testov Ali Made", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
+    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    items = [row(full_name="Testov Ali Made", email="ali@kbtu.kz", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
              row(full_name="Someone Else", tg="bek_t", position="Head of HR", title="Head of HR", role="head", city="Aktau", phone="+77010000001"),
              row(full_name="Not Yet Here", tg="new_one", position="Vice president", role="vice", city="Shymkent"),
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
@@ -5626,8 +5704,8 @@ def test_roster_load_and_join(env):
     ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
     assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()                                         # at his word: a member now, the position waits
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("member", None)] and me["roster"] is None and me["city"] is None
+    me = c.get("/api/me", headers=h(72)).json()                                         # waiting for approval
+    assert not me["memberships"] and me["roster"] is None and me["city"] is None
     assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
     assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
     req = c.get("/api/roster/requests", headers=tma(70)).json()
@@ -5642,7 +5720,7 @@ def test_roster_load_and_join(env):
 
 def test_roster_claim_no_rights(env):
     """A claim at the student's word (review, Nov 2): a member's row never hands over a club role that carries rights;
-    an officer's row lets the claimer in as a member, and a no takes them out again; a waiting claim isn't overwritten."""
+    an officer's row grants no membership while pending; a waiting claim isn't overwritten."""
     from kbtu import roster
     c, cfg = env
     pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
@@ -5657,12 +5735,14 @@ def test_roster_claim_no_rights(env):
     roster.load(con, [row(position="HR", title="HR")], {"Open Mic sheet": "mic"})
     ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
+    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
+    roster.decide(con, logic.Viewer(pres["id"], "user", True), ask[0]["id"], True)
     assert tuple(con.execute("SELECT role, role_id FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()) == ("member", None)
     con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],))
     roster.load(con, [row(full_name="Other Person", position="Head of SMM", title="Head of SMM", role="head")], {"Open Mic sheet": "mic"})
     ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()[0] == "member"
+    assert not con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code in (404, 409)   # claimed: not twice
     req = c.get("/api/roster/requests", headers=tma(80)).json()
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
@@ -5686,7 +5766,8 @@ def test_roster_app_wins(env):
     con.execute("UPDATE students SET phone = '+77010000009', course = 3 WHERE user_id = ?", (ali["id"],))
     row = lambda **k: {"sheet": "S", "position": "President", "title": None, "role": "president", "dept": None, "school": None, "year": "1",  # noqa: E731
                        "course": 1, "city": "Taraz", "phone": "+77010000001", "email": None, **k}
-    got = roster.load(con, [row(full_name="Ali Testov", tg="ali_u", dept="Board"), row(full_name="Bek Testov", tg="bek_u")], {"S": "mic"})
+    con.execute("UPDATE students SET email = lower(first_name) || '@kbtu.kz'")
+    got = roster.load(con, [row(full_name="Ali Testov", email="ali@kbtu.kz", tg="ali_u", dept="Board"), row(full_name="Bek Testov", email="bek@kbtu.kz", tg="bek_u")], {"S": "mic"})
     assert (got["joined"], got["president_as_vice"]) == (2, 1)
     roles = dict(con.execute("SELECT user_id, role FROM org_members WHERE org_id = 1").fetchall())
     assert roles == {pres["id"]: "president", ali["id"]: "vice", bek["id"]: "vice"}            # one President: the app's

@@ -29,7 +29,8 @@ TOPICS = ("study", "dorm", "food", "campus", "events", "money", "other")  # the 
 STATUSES = ("new", "work", "closed")    # Received / In progress / Closed
 MAX = 4000
 A_DAY = 3                               # sent in 24 h; deleting one gives nothing back (appeal_sends)
-CONSENT = "apl1"                        # the privacy policy's appeals section, agreed to on the first send (or AI help)
+CONSENT = "apl1"                        # the privacy policy's appeals section, agreed to on the first send
+AI_CONSENT = "apl-ai1"                  # the separate cross-border draft transfer prompt
 ASK_CONSENT = "ask1"                    # the help desk's own: new recipients read the question (its policy clause)
 # a desk: its consent table and version, its people's table, the answer's bot message kind, the audit's prefix
 DESKS = {"sg": ("appeal_consents", CONSENT, "appeal_staff", "appeal_answer", "appeal"),
@@ -85,8 +86,7 @@ def due(t: int) -> int:
 
 
 def _agree(con, v: Viewer, body: dict, desk: str = "sg") -> None:
-    """The section agreed to once (the staff pilot too: the section promises its own consent); the app sends `consent`
-    with the first send or AI help after asking. Each desk its own."""
+    """Record the desk's consent on the first send, including in the staff pilot."""
     table, version = DESKS[desk][:2]
     if one(con, f"SELECT 1 FROM {table} WHERE user_id = ? AND version = ?", v.id, version):
         return
@@ -96,8 +96,7 @@ def _agree(con, v: Viewer, body: dict, desk: str = "sg") -> None:
 
 
 def agree_given(con, v: Viewer, body: dict) -> None:
-    """The helplines' path (app.py, before every limit): a first consent sent with it is kept too, as the app now
-    counts it given; nothing else is required there."""
+    """Keep an explicit desk consent from an older client on the local helplines path."""
     if v.student and body.get("consent") == CONSENT:
         with tx(con):
             _agree(con, v, body)
@@ -117,14 +116,17 @@ def _shape(a, t: int) -> dict:
 
 
 def help_ok(con, v: Viewer, body: dict) -> str:
-    """Before the AI looks at a draft: a verified student, the section agreed to, the text in limits, the day's AI
-    allowance. A text with signs of crisis never gets here (app.py: the helplines come first, past every limit)."""
+    """Record the opt-in for this draft before it leaves the app. Each new transfer asks again."""
     from .assistant import _spend
     need_student(v)
     text = _text(body.get("text"))
+    if body.get("aiConsent") != AI_CONSENT:
+        raise ApiError("forbidden", "ai_consent")
     with tx(con):
-        _agree(con, v, body)
-    _spend(con, v)
+        if not con.execute("""INSERT OR REPLACE INTO appeal_ai_consents (user_id, version, at)
+                SELECT user_id, ?, ? FROM students WHERE user_id = ? AND manual = 0""", (AI_CONSENT, core.now(), v.id)).rowcount:
+            raise ApiError("forbidden")
+        _spend(con, v)
     return text
 
 

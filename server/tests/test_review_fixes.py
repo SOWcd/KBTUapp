@@ -106,10 +106,10 @@ def test_replaced_receipt(env):
     assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=first).json()["my"]["status"] == "going"
     was = path()
     assert (root / f"{was}.webp").exists()
-    assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_png((0, 0, 250))).json()["my"]["receiptFlags"] == []
+    assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_png((0, 0, 250))).json()["my"]["receiptFlags"] == ["ocr_unavailable"]
     assert not (root / f"{was}.webp").exists() and (root / f"{path()}.webp").exists()          # the replaced one left the disk
     c.post(f"/api/events/{eid}/registration", headers=tma(11), json={})
-    assert c.post(f"/api/events/{eid}/receipt", headers=tma(11), content=first).json()["my"]["receiptFlags"] == ["duplicate"]
+    assert c.post(f"/api/events/{eid}/receipt", headers=tma(11), content=first).json()["my"]["receiptFlags"] == ["duplicate", "ocr_unavailable"]
     for color in ((0, 250, 0), (250, 250, 0)):
         assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_png(color)).status_code == 200
     r = c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_png((0, 250, 250)))

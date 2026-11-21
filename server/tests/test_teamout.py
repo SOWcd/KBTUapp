@@ -253,7 +253,7 @@ def test_removed_person_isnt_walked_back_in(env):
     e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
     code = lambda tg: con.execute("SELECT qr_code FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]  # noqa: E731
     assert logic.organizing._walk_in(con, e, _uid(con, 10), code(10), e["starts_at"]) == "cancelled"
-    assert not logic.organizing.screen_came(con, eid, _uid(con, 10), e["starts_at"])
+    assert not logic.organizing.screen_came(con, eid, _uid(con, 10), e["starts_at"])["done"]
     assert _status(con, eid, 10) == ("cancelled", "removed")
     assert logic.organizing._walk_in(con, e, _uid(con, 11), code(11), e["starts_at"])["status"] == "going"  # as before
 

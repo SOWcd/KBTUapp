@@ -258,7 +258,7 @@ BOT = {
         "receipt_bad": ("😕 Не получилось открыть файл. Пришли чек из Kaspi («Поделиться» → Telegram) или его скриншот.", None),
         "receipt_signin": ("🧾 Чтобы чек засчитался, сначала войди в KBTU App со своим аккаунтом КБТУ.", "🚀 Открыть KBTU App"),
         "join_request": ("🙋 Новая заявка в <b>{org}</b>: {name}", "Открыть заявки"),
-        "roster_claim": ("📋 {name} вошёл(а) в <b>{org}</b> по списку ДМП, но должность там записана на другое имя. Дать её?", "Открыть"),
+        "roster_claim": ("📋 {name} просит подтвердить запись в списке клуба <b>{org}</b>. Это тот же человек?", "Открыть"),
         "join_yes": ("🎉 Тебя приняли в <b>{org}</b>! Добро пожаловать в команду.", "Открыть клуб"),
         "join_no": ("💙 <b>{org}</b> пока не может тебя принять. Загляни в другие клубы — их много.", None),
         "team_ask": ("🙋 {name} из команды просит разрешения прийти гостем на <b>{title}</b>", "Ответить"),
@@ -464,7 +464,7 @@ BOT = {
         "receipt_bad": ("😕 Файлды аша алмадым. Kaspi-дегі чекті («Бөлісу» → Telegram) немесе оның скриншотын жібер.", None),
         "receipt_signin": ("🧾 Чек қабылдануы үшін алдымен KBTU App-қа ҚБТУ аккаунтыңмен кір.", "🚀 KBTU App ашу"),
         "join_request": ("🙋 Жаңа өтінім — <b>{org}</b>: {name}", "Өтінімдерді ашу"),
-        "roster_claim": ("📋 {name} ДМП тізімі бойынша <b>{org}</b> клубына кірді, бірақ лауазым онда басқа атқа жазылған. Лауазымды оған беру керек пе?", "Ашу"),
+        "roster_claim": ("📋 {name} <b>{org}</b> клубының тізіміндегі жазбаны растауды сұрайды. Бұл сол адам ба?", "Ашу"),
         "join_yes": ("🎉 Сен <b>{org}</b> құрамына қабылдандың! Командаға қош келдің.", "Клубты ашу"),
         "join_no": ("💙 <b>{org}</b> әзірге сені қабылдай алмайды. Басқа клубтарды қарап шық — таңдау көп.", None),
         "team_ask": ("🙋 Командадан {name} <b>{title}</b> іс-шарасына қонақ ретінде баруға рұқсат сұрайды", "Жауап беру"),
@@ -664,7 +664,7 @@ BOT = {
         "receipt_bad": ("😕 I couldn't open the file. Send the receipt from Kaspi (“Share” → Telegram) or a screenshot of it.", None),
         "receipt_signin": ("🧾 To count your receipt, first sign in to KBTU App with your KBTU account.", "🚀 Open KBTU App"),
         "join_request": ("🙋 New application to <b>{org}</b>: {name}", "Open applications"),
-        "roster_claim": ("📋 {name} joined <b>{org}</b> by the DMP list, but the position there is under another name. Give it?", "Open"),
+        "roster_claim": ("📋 {name} asks you to confirm their entry on the <b>{org}</b> roster. Is it the same person?", "Open"),
         "join_yes": ("🎉 You're in <b>{org}</b>! Welcome to the team.", "Open the club"),
         "join_no": ("💙 <b>{org}</b> can't take you in right now. Have a look at the other clubs — there are plenty.", None),
         "team_ask": ("🙋 {name} from the team asks to come to <b>{title}</b> as a guest", "Answer"),
@@ -825,11 +825,14 @@ STARS_REFUSED = {"ru": "Не получилось. Попробуйте ещё �
 
 
 RECEIPT_WHY = {
-    "ru": {"duplicate": "этот чек уже присылали", "unreadable": "не похоже на чек Kaspi", "amount_short": "сумма меньше цены",
+    "ru": {"ocr_unavailable": "распознавание чеков недоступно, организатору нужно проверить платёж",
+           "duplicate": "этот чек уже присылали", "unreadable": "не похоже на чек Kaspi", "amount_short": "сумма меньше цены",
            "amount_over": "сумма не совпадает с ценой", "recipient_mismatch": "другой получатель", "too_early": "чек старше самого события"},
-    "kk": {"duplicate": "бұл чекті бұрын жіберген", "unreadable": "Kaspi чегіне ұқсамайды", "amount_short": "сома бағадан аз",
+    "kk": {"ocr_unavailable": "чекті автоматты түрде оқу қолжетімсіз, төлемді ұйымдастырушы тексеруі керек",
+           "duplicate": "бұл чекті бұрын жіберген", "unreadable": "Kaspi чегіне ұқсамайды", "amount_short": "сома бағадан аз",
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
-    "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
+    "en": {"ocr_unavailable": "automatic receipt reading is unavailable, an organizer needs to check the payment",
+           "duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
 }
 

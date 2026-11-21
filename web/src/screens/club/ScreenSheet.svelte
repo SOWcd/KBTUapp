@@ -6,7 +6,7 @@
   // the bottom, each opening the same view. Ways in: Studio (`org`: that club), an event's guests (`event`) or its team
   // (`crew`: made and started on the first tap, then the same one), the capsule (`seed`), a scanned pairing QR (`code`),
   // Profile's row for whom Studio doesn't lead here (a door handed over, the app's admin).
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession, type VolDoor } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -84,24 +84,31 @@
       made = s.session; list = [s];
     } catch (e) { haptic.error(); note = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; }
   }
-  $effect(() => untrack(() => { // once, as the page opens (team() and bind() write what refresh reads)
+  onMount(() => {
     if (code) void bind();
     else if (crew) void team(crew);
     else if (event) api.eventScreen(event).then((s) => (list = [s])).catch(() => { haptic.error(); note = t('common.error'); list = []; });
     else void refresh();
     const id = setInterval(() => { void refresh(); for (const k of Object.keys(doors)) void loadDoor(Number(k)); }, 4000); // the count goes up while people scan; a door of mine: answers given in its sheet
     return () => clearInterval(id);
-  }));
+  });
 
   // finished: the capsule lets go at once, without waiting for the next refresh
-  $effect(() => { const c = session.me?.checkin; if (c && list?.some((x) => x.session === c.session && x.ended)) session.me!.checkin = null; });
+  function releaseFinishedSession() {
+    const c = session.me?.checkin;
+    if (c && list?.some((x) => x.session === c.session && x.ended)) session.me!.checkin = null;
+  }
+  $effect(releaseFinishedSession);
 
   // the volunteers ledger's sessions (s.vol): their door, when it is mine (its President, a Vice, the hand-over link's
   // holder; nobody else gets one): who left without checking out, the link. Read as such a session appears or finishes
   let doors = $state<Record<Id, VolDoor>>({});
   const volKey = $derived((list ?? []).filter((s) => s.vol).map((s) => `${s.session}:${s.ended ?? 0}`).join());
   const loadDoor = (id: Id) => api.volDoor(id).then((x) => (doors[id] = x)).catch(() => { delete doors[id]; });
-  $effect(() => { if (volKey) for (const k of volKey.split(',')) void loadDoor(Number(k.split(':')[0])); });
+  function refreshVolunteerDoors() {
+    if (volKey) for (const k of volKey.split(',')) void loadDoor(Number(k.split(':')[0]));
+  }
+  $effect(refreshVolunteerDoors);
   const waiting = (s: ScreenSession) => doors[s.session]?.unmarked.filter((x) => x.outAt === null).length ?? 0;
   const handed = (s: ScreenSession) => !!doors[s.session] && !doors[s.session].lead; // the link's holder: the door's work, not the list or the screens
 
@@ -177,7 +184,10 @@
     let wrong = '';
     const can = scanQr(t('scr.byHandAim'), (text) => {
       if (!BADGE.test(text)) { if (text !== wrong) { wrong = text; haptic.error(); } return false; }
-      api.screenBadge(s.session, text).then((r) => { haptic.ok(); say(t('scr.marked', { name: r.person }), 'sparkles_3d'); void refresh(); },
+      api.screenBadge(s.session, text).then((r) => {
+        if (!r.done) { haptic.error(); say(t('ci.hNo'), 'warning_3d'); return; }
+        haptic.ok(); say(t('scr.marked', { name: r.person }), 'sparkles_3d'); void refresh();
+      },
         (e) => { haptic.error(); say(t(e instanceof ApiErr ? (e.message === 'already' ? 'scr.already' : e.message === 'flagged' ? 'scr.flagged' : e.code === 'closed' ? 'scr.closed' : e.code === 'not_found' ? 'scan.notFound' : 'common.error') : 'common.error'), 'warning_3d'); });
       return true;
     });
@@ -190,7 +200,11 @@
   let people = $state<Record<Id, Record<Who, string[]>>>({});
   function unfold(w: Who) { haptic.tap(); open = open === w ? null : w; }
   // read as a list opens, and again as new scans count while it's open
-  $effect(() => { const id = curId; void curDone; if (id && open) api.screenPeople(id).then((p) => (people[id] = p)).catch(() => {}); });
+  function refreshPeople() {
+    const id = curId; void curDone;
+    if (id && open) api.screenPeople(id).then((p) => (people[id] = p)).catch(() => {});
+  }
+  $effect(refreshPeople);
 
   // past: finished, or made and never started for a day (nobody will: not "waiting" any more)
   const over = (x: ScreenSession) => !!x.ended || (!x.started && !!x.created && x.created < nowTs() - 86400);
@@ -199,7 +213,8 @@
   let showPast = $state(false);
   const cur = $derived((list ?? []).find((x) => x.session === sel) ?? (made || event ? list?.[0] : live[0]) ?? null);
   const curId = $derived(cur?.session ?? 0), curDone = $derived(cur?.done ?? 0);
-  $effect(() => { void curId; open = null; });
+  function closePeopleOnSessionChange() { void curId; open = null; }
+  $effect(closePeopleOnSessionChange);
   const pastOpen = $derived(!!cur && over(cur) && !made && !event);
 
   async function csv(s: ScreenSession) {

@@ -580,7 +580,6 @@ def helper(con, key: bytes, v: Viewer, p: str, join: bool) -> dict:
 # ------------------------------------------------------------ the student's scan
 
 def mark(con, key: bytes, v: Viewer, p: str) -> dict:
-    uid, student = v.id, v.student
     try:
         _, sid, slot, sig = str(p).split("_")
         sid, slot = int(sid), int(slot)
@@ -588,6 +587,12 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         raise ApiError("bad_input", "qr") from None
     if not _same(_sig(key, f"ci.{sid}.{slot}"), sig):
         raise ApiError("bad_input", "qr")
+    with tx(con):
+        return _mark(con, v, sid, slot)
+
+
+def _mark(con, v: Viewer, sid: int, slot: int) -> dict:
+    uid, student = v.id, v.student
     had = one(con, "SELECT done_at, scanned_at FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     # Give pending scans GRACE seconds to complete after Finish. Check session closure first so a scan
@@ -602,7 +607,7 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         raise ApiError("bad_input", "qr_old")
     if out and not had and s["event_id"] and (r := _team_left(con, s, uid)):  # came in on its team's list (_team): leaves there
         return r
-    if out and not had and not logic.vol.on_shift(con, s, uid):  # (who runs the ledger's door came by marking others in: their check-out counts)
+    if out and not (had and had["done_at"]) and not logic.vol.on_shift(con, s, uid):  # (who runs the ledger's door came by marking others in: their check-out counts)
         # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
         raise ApiError("bad_input", "qr_not_in")
     t = now()
@@ -616,31 +621,28 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
             return r
         if not had and logic.door_shut(e, t) == "not_open":  # a guest before the door: refused before any mark (no count to undo)
             raise ApiError("closed", "not_open", {"at": logic.door_at(e)})
-        r = (e["price"] or e["guest_list"]) and one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], uid)
-        if r and r["checked_in_at"] and not had:  # this ticket came in already (a screenshot at the scanner): the door must see it
-            return {"title": s["title"], "done": False, "left": False, "already": r["checked_in_at"]}
-        if r and not e["guest_list"] and not r["checked_in_at"] and logic.organizing.flagged(con, r["id"]):  # the scanner shows the flag
-            return {"title": s["title"], "done": False, "left": False, "flagged": True}
-    with tx(con):
-        if s["event_id"] and not out:
-            guests.need_ticket(con, s["event_id"], uid)
-        con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
-        if out:  # leaving: the last time counts (out and back in, out again)
-            con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
-        came = student
-        if student:
-            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
-            if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
-                # an old link again: judged at its first scan's moment (a scan before the door opened stays outside it)
-                came = logic.screen_came(con, s["event_id"], uid, t if fresh else had["scanned_at"])
-                if came and fresh:  # never by that old link repeated on a later day (the "had" pass above)
-                    _attendance(con, s, uid, t)
-            if came and fresh:  # the volunteers ledger's club: a shift opens or closes, only by a scan that counted, of a QR just shown
-                logic.vol.on_scan(con, s, uid, t, out)
     title, event = _title_for(con, s, uid, student)
+    if e and not out:
+        guests.need_ticket(con, e["id"], uid)
+        if student:
+            # A delayed sign-in uses the first scan's time, even if the door opened since.
+            result = logic.screen_came(con, e["id"], uid, t if fresh else had["scanned_at"])
+            if not result["done"] and not ("already" in result and had and had["done_at"]):
+                if had and had["done_at"] is None:
+                    con.execute("DELETE FROM qr_marks WHERE session_id = ? AND user_id = ?", (sid, uid))
+                return {"title": title, "event": event, "left": False, **result}
+            if fresh:
+                _attendance(con, s, uid, t)
+    con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
+    if out:
+        con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
+    if student:
+        con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
+        if fresh:
+            logic.vol.on_scan(con, s, uid, t, out)
     # event: the confirmation's cover and the sheet it settles into; again: counted by an earlier scan already
     # team: an event's team session (crew), the app's cue to ask the reports' consent after a first team mark
-    return {"title": title, "done": came, "left": out, "event": event, "again": bool(came and not out and had and had["done_at"]),
+    return {"title": title, "done": student, "left": out, "event": event, "again": bool(student and not out and had and had["done_at"]),
             **({"team": True} if s["crew_event_id"] else {})}
 
 
@@ -721,35 +723,32 @@ def badge(con, v: Viewer, sid: int, raw: object) -> dict:
     """Marked by hand: whoever runs the session scans the badge QR of a student whose own scanner fails (the profile's
     u_<id>_<code>, as the event door reads it: organizing._walk_in). Counted exactly as a scan of the screen's QR, once,
     while the session runs; the badge is the proof (no names typed)."""
-    s = _mine(con, v, sid, door=True)
-    if s["started_at"] is None or s["ended_at"] is not None or _archived(con, s):
-        raise ApiError("closed", "qr")
-    if s["phase"] == "out":  # the QR marks leaving now: a hand mark would count an arrival at the end
-        raise ApiError("closed", "qr_out")
-    m = logic.PROFILE_QR.search(str(raw or ""))
-    uid = m and int(m[1])
-    if not m or uid == v.id or not one(con, "SELECT 1 FROM users u JOIN students st ON st.user_id = u.id AND st.manual = 0 WHERE u.id = ? AND u.qr_code = ? AND u.banned_at IS NULL", uid, m[2]):
-        raise ApiError("not_found", "badge")  # a wrong, foreign, stale (rotated) or own badge
-    t = now()
     with tx(con):
+        s = _mine(con, v, sid, door=True)
+        if s["started_at"] is None or s["ended_at"] is not None or _archived(con, s):
+            raise ApiError("closed", "qr")
+        if s["phase"] == "out":  # the QR marks leaving now: a hand mark would count an arrival at the end
+            raise ApiError("closed", "qr_out")
+        m = logic.PROFILE_QR.search(str(raw or ""))
+        uid = m and int(m[1])
+        if not m or uid == v.id or not one(con, "SELECT 1 FROM users u JOIN students st ON st.user_id = u.id AND st.manual = 0 WHERE u.id = ? AND u.qr_code = ? AND u.banned_at IS NULL", uid, m[2]):
+            raise ApiError("not_found", "badge")  # a wrong, foreign, stale (rotated) or own badge
+        t = now()
         if s["event_id"]:
             guests.need_ticket(con, s["event_id"], uid)
-            r = one(con, """SELECT r.id FROM registrations r JOIN events e ON e.id = r.event_id AND e.guest_list = 0
-                WHERE r.event_id = ? AND r.user_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL""", s["event_id"], uid)
-            if r and logic.organizing.flagged(con, r["id"]):
-                raise ApiError("conflict", "flagged")
+            result = logic.screen_came(con, s["event_id"], uid, t)
+            if "already" in result or result.get("flagged"):
+                raise ApiError("conflict", "already" if "already" in result else "flagged")
+            if not result["done"]:
+                return {"done": False, "person": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", uid))}
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by) VALUES (?, ?, ?, ?)", (sid, uid, t, v.id))
         if not con.execute("UPDATE qr_marks SET done_at = ?, marked_by = COALESCE(marked_by, ?) WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, v.id, sid, uid)).rowcount:
             raise ApiError("conflict", "already")  # counted already (rolls the row above back: none was made)
-        came = True
-        if s["event_id"]:  # an event's own session: that event's check-in too, as mark
-            came = logic.screen_came(con, s["event_id"], uid, t)
-            if came:
-                _attendance(con, s, uid, t)
-        if came:
-            logic.vol.on_scan(con, s, uid, t, False)
+        if s["event_id"]:
+            _attendance(con, s, uid, t)
+        logic.vol.on_scan(con, s, uid, t, False)
         log_action(con, v.id, "checkin_badge", f"user:{uid}", json.dumps({"session": sid}))
-    return {"person": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", uid)), "done": came}
+    return {"person": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", uid)), "done": True}
 
 
 def _title_for(con, s, uid: int, student: bool) -> tuple[str, int | None]:
@@ -781,10 +780,13 @@ def became_student(con, uid: int) -> None:
             WHERE m.user_id = ? AND m.done_at IS NULL AND (s.ended_at IS NULL OR s.ended_at > ?)
             AND (e.guest_list IS NOT 1 OR r.id IS NOT NULL)""", uid, t - GRACE)
         for r in due:
-            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ?", (t, r["id"], uid))
-            # judged at the scan's moment: a sign-in may outlast the QR or the door, and an early scan isn't saved by signing in during the event
-            if r["event_id"] and logic.screen_came(con, r["event_id"], uid, r["scanned_at"]):
+            if r["event_id"]:
+                # Admission is judged at the time of the scan, even if sign-in took longer.
+                if not logic.screen_came(con, r["event_id"], uid, r["scanned_at"])["done"]:
+                    con.execute("DELETE FROM qr_marks WHERE session_id = ? AND user_id = ?", (r["id"], uid))
+                    continue
                 _attendance(con, r, uid, r["scanned_at"])
+            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ?", (t, r["id"], uid))
 
 
 def prefill(con, email: str | None, ms: dict | None = None) -> dict | None:

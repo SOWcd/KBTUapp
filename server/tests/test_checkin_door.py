@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import time
 
-from kbtu import db, logic
+from kbtu import checkin, db, logic
+from test_club_checkin import _badge
 from test_core import _club_runs, env, login, tma  # noqa: F401
 from test_review_checkin import _scan
 from test_vol import zz, _member, _agree, P  # noqa: F401
@@ -212,4 +213,38 @@ def test_plain_member_checks_in_as_a_guest(env):
     q = c.post(f"/api/screens/{sid}/show", headers=tma(8)).json()["param"]                  # Max shows it at the door
     r = c.post("/api/checkin", headers=tma(8), json={"p": q})
     assert r.status_code == 403                                                             # ... but not on himself
+    con.close()
+
+def test_refused_paid_arrivals_do_not_count(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    eid = _ev(con, org, int(time.time()) - 60, price=2000)
+    sid, q = _qr(c, 9, eid)
+    login(c, 1, "ann")
+    bob = login(c, 2, "bob")
+    assert not _scan(c, 1, q["param"]).json()["done"]
+    assert not _badge(c, 9, sid, "u_" + bob["qr"]).json()["done"]
+    assert not _scan(c, 3, q["param"]).json()["done"]
+    cat = login(c, 3, "cat")
+    checkin.became_student(con, cat["id"])
+    show = c.post(f"/api/screens/{sid}/show", headers=tma(9)).json()
+    assert show["done"] == show["pending"] == 0 and show["last"] is None
+    c.post(f"/api/screens/{sid}/out", headers=tma(9))
+    assert _scan(c, 3, q["param"]).json()["message"] == "qr_not_in"
+    con.close()
+
+
+def test_badge_after_ticket_scanner_counts_only_once(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    eid = _ev(con, org, int(time.time()) - 60, price=2000)
+    bob = login(c, 2, "bob")
+    _reg(con, eid, bob["id"], "BBBB")
+    sid, _ = _qr(c, 9, eid)
+    assert c.post(f"/api/events/{eid}/checkin", headers=tma(9), json={"code": "BBBB"}).json()["result"] == "ok"
+    r = _badge(c, 9, sid, "u_" + bob["qr"])
+    assert r.status_code == 409 and r.json()["message"] == "already"
+    assert c.post(f"/api/screens/{sid}/show", headers=tma(9)).json()["done"] == 0
     con.close()

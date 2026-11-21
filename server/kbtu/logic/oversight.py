@@ -206,6 +206,18 @@ STAFF_ROLES = ("user", "moderator", "admin")
 _STAFF = f"SELECT {PERSON_COLS}, u.tg_username, u.role, u.ban_reason FROM users u LEFT JOIN students s ON s.user_id = u.id"
 
 
+def reconcile_erased_admins(con, admins: frozenset[int]) -> None:
+    """Old erasures anonymized appointments but kept the role. Preserve configured and documented grants."""
+    with tx(con):
+        if not core._once(con, "erased_admins_reconciled", "1"):
+            return
+        con.execute(f"""UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0
+            AND tg_id NOT IN ({_qs(admins)})
+            AND EXISTS (SELECT 1 FROM audit_log WHERE target = 'user' AND action = 'delete_my_data')
+            AND (SELECT json_extract(data, '$.to') FROM audit_log WHERE target = 'user:' || users.id
+                AND action = 'staff_role' ORDER BY id DESC LIMIT 1) IS NOT 'admin'""", tuple(admins))
+
+
 def _owner(con, v: Viewer) -> bool:
     return v.role == "admin" and bool(one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)["is_founder"])
 

@@ -2039,4 +2039,21 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS outbox_u18 ON bot_outbox (ref) WHERE kind = 'u18_leave';"""),
     (198, "ALTER TABLE events ADD COLUMN silent_publish INTEGER NOT NULL DEFAULT 0;"),
+    # Earlier pending officer claims provisionally granted membership. Keep the claim for a decision.
+    (199, """DELETE FROM org_members AS m WHERE role = 'member' AND EXISTS (
+      SELECT 1 FROM roster_pending r JOIN meta k ON k.key = 'rclaim:' || r.id
+      WHERE r.org_id = m.org_id AND r.claimed_by = m.user_id AND k.value = CAST(m.user_id AS TEXT))
+      AND (SELECT json_extract(data, '$.by') FROM audit_log WHERE target = 'user:' || m.user_id
+        AND action = 'role_change' AND json_extract(data, '$.org') = m.org_id ORDER BY id DESC LIMIT 1) = 'roster';
+    DELETE FROM meta WHERE key LIKE 'rclaim:%';"""),
+    (200, """ALTER TABLE org_invites ADD COLUMN consumed INTEGER NOT NULL DEFAULT 0;
+    UPDATE org_invites SET consumed = 1 WHERE used_by IS NOT NULL AND multi = 0;
+    -- A legacy erasure could clear the only record of redemption. Retire ambiguous live links once.
+    UPDATE org_invites SET revoked_at = unixepoch() WHERE multi = 0 AND consumed = 0 AND revoked_at IS NULL
+      AND expires_at > unixepoch() AND created_at <= (SELECT MAX(at) FROM audit_log WHERE action = 'delete_my_data');"""),
+    (201, """UPDATE receipts SET flags = 'ocr_unavailable' WHERE flags IN ('', 'partial')
+        AND amount IS NULL AND receipt_no IS NULL AND reviewed_at IS NULL AND status = 'accepted';"""),
+    (202, """CREATE TABLE IF NOT EXISTS appeal_ai_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
+      version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;"""),
 ]

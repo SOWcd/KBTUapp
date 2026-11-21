@@ -536,6 +536,7 @@ def test_old_board_cleaned_up(env):
     con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
+    con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
