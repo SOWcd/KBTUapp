@@ -468,6 +468,15 @@ def main(args: list[str]) -> None:
             notify(con, uid, "seat_removed", f"event:{eid}:{now()}")  # the same template as an organizer's removal
             log_action(con, None, "unseat_by_hand", f"event:{eid}", json.dumps({"user": uid}))
         print("removed")
+    elif cmd == "u18" and len(args) in (2, 3) and args[1].isdigit() and (args[2:] == [] or args[2].isdigit()):
+        # the organizers' "under 18, please leave" to every checked-in minor, now or at a set unix time (the bot sends it then)
+        eid, at = int(args[1]), int(args[2]) if args[2:] else now()
+        with db.tx(con):
+            got = rows(con, """SELECT r.user_id FROM registrations r JOIN reg_age a ON a.registration_id = r.id
+                WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NOT NULL AND a.adult = 0""", eid)
+            for (uid,) in got:
+                notify(con, uid, "u18_leave", f"u18:{eid}:{at}", after=at)
+        print(len(got))
     elif cmd == "round-nudge" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--dry"]):
         from . import casting
         n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))

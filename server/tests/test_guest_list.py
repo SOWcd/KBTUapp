@@ -348,3 +348,17 @@ def test_door_teams(door_event):
     guests.door_names(con, 1, ["24B030001,Jane Testov,1,,Owls", ",Out Sider,,,Owls"])
     got = c.get("/api/events/1/door-pending", headers=tma(9)).json()["list"]
     assert {x["team"] for x in got} == {"Owls"}
+
+
+def test_admin_u18_queues_minors_at_a_time(door_event, monkeypatch, capsys):
+    c, cfg, con = door_event
+    kid, grown = _student(c, con, 1, "24B030001"), _student(c, con, 2, "24B030002")
+    for uid, adult in ((kid, 0), (grown, 1)):
+        rid = con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, checked_in_at, created_at, updated_at)
+            VALUES (1, ?, 'going', ?, 1, 0, 0)""", (uid, f"1-T{uid}")).lastrowid
+        con.execute("INSERT INTO reg_age (registration_id, adult, set_at) VALUES (?, ?, 0)", (rid, adult))
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    at = logic.now() + 1200
+    admin.main(["u18", "1", str(at)])
+    assert capsys.readouterr().out == "1\n"
+    assert [tuple(r) for r in con.execute("SELECT user_id, send_after FROM bot_outbox WHERE kind = 'u18_leave'")] == [(kid, at)]
