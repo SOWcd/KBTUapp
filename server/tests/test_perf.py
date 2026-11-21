@@ -74,9 +74,10 @@ def test_assets_go_precompressed(env):
     js.write_bytes(body)
     js.with_name("b.js.gz").write_bytes(gzip.compress(body))
     js.with_name("b.js.br").write_bytes(b"not-really-brotli")  # its bytes, untouched, tell it apart
-    br = c.get("/assets/b.js", headers={"Accept-Encoding": "br"})
-    assert br.headers["content-encoding"] == "br" and br.headers["vary"] == "Accept-Encoding"
-    assert br.headers["content-type"].startswith("text/javascript") and br.headers["cache-control"].endswith("immutable")
+    # streamed: the fake .br is never decoded (httpx decodes br once a brotli package is installed, yt-dlp brings one)
+    with c.stream("GET", "/assets/b.js", headers={"Accept-Encoding": "br"}) as br:
+        assert br.headers["content-encoding"] == "br" and br.headers["vary"] == "Accept-Encoding"
+        assert br.headers["content-type"].startswith("text/javascript") and br.headers["cache-control"].endswith("immutable")
     gz = c.get("/assets/b.js", headers={"Accept-Encoding": "gzip"})
     assert gz.headers["content-encoding"] == "gzip" and gz.content == body  # the client inflates the ready .gz
     plain = c.get("/assets/b.js", headers={"Accept-Encoding": "identity"})
