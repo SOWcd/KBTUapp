@@ -280,7 +280,7 @@ export const server = {
   appeals: (): Promise<{ items: Appeal[]; solved: Solved[] }> => call('GET', '/appeals'), // solved: the public feed (students: from 3 entries)
   sendAppeal: (a: { text: string; topic: AppealTopic | null; anon: boolean; key: string; consent?: string }): Promise<Appeal> => call('POST', '/appeals', a),
   dropAppeal: (id: Id): Promise<void> => call('DELETE', `/appeals/${id}`),
-  appealHelp: (text: string, lang: string, consent?: string): Promise<AppealHelp> => call('POST', '/appeals/help', { text, lang, consent }),
+  appealHelp: (text: string, lang: string, aiConsent: 'apl-ai1'): Promise<AppealHelp> => call('POST', '/appeals/help', { text, lang, aiConsent }),
   sgQueue: (): Promise<SgQueue> => call('GET', '/sg/appeals'),
   /** the help desk (the same appeals, desk "help"): KRI's question handed to a person; its own consent version */
   myAsks: (): Promise<{ items: Appeal[] }> => call('GET', '/ask'),

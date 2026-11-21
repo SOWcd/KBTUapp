@@ -2053,4 +2053,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       AND expires_at > unixepoch() AND created_at <= (SELECT MAX(at) FROM audit_log WHERE action = 'delete_my_data');"""),
     (201, """UPDATE receipts SET flags = 'ocr_unavailable' WHERE flags IN ('', 'partial')
         AND amount IS NULL AND receipt_no IS NULL AND reviewed_at IS NULL AND status = 'accepted';"""),
+    (202, """CREATE TABLE IF NOT EXISTS appeal_ai_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
+      version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;"""),
 ]

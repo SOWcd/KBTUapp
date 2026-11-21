@@ -175,11 +175,34 @@ def test_account_deletion_covers_it(ap):
     c.post(f"/api/sg/appeals/{a['id']}", headers=tma(SG), json={"answer": "on it"})
     _send(c, SG, "mine as SG")
     uid, sg = _uid(c, ANN), _uid(c, SG)
+    con.execute("INSERT INTO appeal_ai_consents (user_id, version, at) VALUES (?, ?, ?)", (uid, appeals.AI_CONSENT, logic.now()))
     delete_now(c, cfg, tma(ANN))
     delete_now(c, cfg, tma(SG))
-    for t in ("appeals", "appeal_authors", "appeal_sends", "appeal_consents", "appeal_staff"):
+    for t in ("appeals", "appeal_authors", "appeal_sends", "appeal_consents", "appeal_ai_consents", "appeal_staff"):
         assert not con.execute(f"SELECT 1 FROM {t}").fetchone(), t
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id IN (?, ?) AND kind = 'appeal_answer'", (uid, sg)).fetchone()
+
+
+def test_ai_help_needs_a_transfer_opt_in_for_this_draft(ap, monkeypatch):
+    c, _, con = ap
+    assert _send(c, ANN, anon=True).status_code == 200
+    uid = _uid(c, ANN)
+    calls = []
+
+    async def model(cfg_, http, msgs, **kw):
+        calls.append(msgs[-1]["content"])
+        return '{"tips": ["When?"]}', "x"
+
+    monkeypatch.setattr(llm, "chat", model)
+    url = "/api/appeals/help"
+    for consent in ({}, {"consent": appeals.CONSENT}, {"aiConsent": False}, {"aiConsent": True}, {"aiConsent": appeals.CONSENT}):
+        assert c.post(url, headers=tma(ANN), json={"text": SECRET, **consent}).status_code == 403
+    assert not calls
+    assert c.post(url, headers=tma(ANN), json={"text": SECRET, "aiConsent": appeals.AI_CONSENT}).status_code == 200
+    version, at = con.execute("SELECT version, at FROM appeal_ai_consents WHERE user_id = ?", (uid,)).fetchone()
+    assert version == appeals.AI_CONSENT and at > 0
+    assert c.post(url, headers=tma(ANN), json={"text": "next draft"}).status_code == 403
+    assert calls == [SECRET]
 
 
 def test_ai_help_suggests_never_blocks(ap, monkeypatch):
@@ -192,16 +215,17 @@ def test_ai_help_suggests_never_blocks(ap, monkeypatch):
         return json.dumps(said), "x"
     monkeypatch.setattr(llm, "chat", model)
     help_ = lambda text=SECRET, **b: c.post("/api/appeals/help", headers=tma(ANN), json={"text": text, "lang": "en", **b})  # noqa: E731
-    assert help_().status_code == 403                                                # the section first
-    r = help_(consent=appeals.CONSENT).json()
+    assert help_().status_code == 403
+    r = help_(aiConsent=appeals.AI_CONSENT).json()
     assert r == {"tips": said["tips"][:3]}
+    assert not c.get("/api/me", headers=tma(ANN)).json()["appeals"]["consent"]
     said["care"] = True
-    assert help_().json()["help"] == texts.HELP_CARD["en"]
+    assert help_(aiConsent=appeals.AI_CONSENT).json()["help"] == texts.HELP_CARD["en"]
 
     async def down(*a, **k):
         raise llm.Busy()
     monkeypatch.setattr(llm, "chat", down)
-    assert help_().status_code == 503
+    assert help_(aiConsent=appeals.AI_CONSENT).status_code == 503
     assert help_("\u0445\u043e\u0447\u0443 \u0443\u043c\u0435\u0440\u0435\u0442\u044c").json()["care"]   # ru: I want to die: the helplines without the model
     assert _send(c, ANN).status_code == 200                                          # sending works with the AI down
 
@@ -247,7 +271,7 @@ def test_distress_before_any_limit(ap, monkeypatch):
         con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (_uid(c, BEK), logic.now()))
     r = c.post("/api/appeals/help", headers=tma(BEK), json={"text": "I want to die", "lang": "en"})
     assert r.status_code == 200 and r.json()["help"] == texts.HELP_CARD["en"]
-    assert c.post("/api/appeals/help", headers=tma(BEK), json={"text": "where", "lang": "en", "consent": appeals.CONSENT}).status_code == 429
+    assert c.post("/api/appeals/help", headers=tma(BEK), json={"text": "where", "lang": "en", "aiConsent": appeals.AI_CONSENT}).status_code == 429
 
 
 def test_staff_pilot_asks_consent_too(env):

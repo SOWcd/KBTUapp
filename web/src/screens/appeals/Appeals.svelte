@@ -17,7 +17,7 @@
   // An appeal to the Student Government (server logic/appeals.py): an optional topic, the words as they are, Anonymous,
   // "Help me clarify" (2-3 tips from the AI, never a rewrite, never a block), Send (always sends). The draft stays on
   // this phone only (localStorage), never on the server. My appeals under it. The section's consent: asked once, on the
-  // first send or AI help. "Solved by your appeals" under it all: the proof that writing changes things. The funnel counts taps (lib/stats), never a word.
+  // first send. AI tips ask separately before sending each draft abroad. The funnel counts taps (lib/stats), never a word.
   // desk 'help': KRI's "Ask a person": the same composer with the question in it (q, editable, sent only on the tap),
   // its own consent, no topics, no AI tips (KRI tried), no Solved feed, no funnel; my questions under it.
   import { onMount, untrack } from 'svelte';
@@ -56,11 +56,12 @@
   let tips = $state<string[]>([]), care = $state<string | null>(null), helping = $state(false), down = $state(false);
   let typed = !!first.text, sending = $state(false);
 
-  $effect(() => {
+  function saveDraft() {
     const d: Draft = { text, topic, anon };
     try { if (d.text.trim()) localStorage.setItem(DRAFT, JSON.stringify(d)); else localStorage.removeItem(DRAFT); } catch { /* blocked: in memory only */ }
     if (text && !typed) { typed = true; if (sg) count('apl.typed'); }
-  });
+  }
+  $effect(saveDraft);
   onMount(() => {
     if (!sg) { void loadAsks(); return; }
     count('apl.open');
@@ -82,12 +83,12 @@
   async function help() {
     const body = text.trim();
     if (!body) { say(t('apl.helpShort'), 'pleading_face_3d'); return; }
-    const consent = await agree();
-    if (consent === null) return;
+    const yes = await sheets.ask({ title: t('apl.aiConsentT'), text: t('apl.aiConsentText'), ok: t('apl.aiConsentOk'), cancel: t('common.cancel') });
+    if (!yes) return;
     helping = true; down = false; care = null; count('apl.ai');
     try {
-      const r = await api.appealHelp(body, i18n.lang, consent);
-      agreed(); tips = r.tips; care = r.help ?? null;
+      const r = await api.appealHelp(body, i18n.lang, 'apl-ai1');
+      tips = r.tips; care = r.help ?? null;
       haptic.ok();
     } catch { down = true; } finally { helping = false; }
   }
