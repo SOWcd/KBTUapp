@@ -60,3 +60,21 @@ room only), copy it next to the database (`/var/lib/kbtu/rooms.json`) or point `
 ## Contributing
 
 Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+
+## Feature switches
+
+- `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
+- `BOARD=1`: the assistant, sign-up questions, the map's flaws for every student; `BOARD=staff`: admins and
+  moderators only. Its old in-app forum is off for good.
+- `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
+- `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`).
+  `FORUM_GROUP`: its discussion group.
+- `DOCS=1`: the assistant answers from the university's documents (`kbtu/docs.py`, a separate file at `DOCS_DB`, default
+  next to the database; built by hand, README). Production runs `DOCS=1` (no new recipient). `DOCS=hybrid` (the question's
+  embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
+- `TIKTOK=1` enables captionless group replies to TikTok, YouTube Shorts, youtu.be videos under three minutes, and Instagram reels and video posts (`kbtu/tiktok.py`). TikTok's plain H.264 file or photo album comes through tikwm.com. For YouTube and Instagram, yt-dlp downloads the source video in a temporary directory, up to 720p and under 50 MB. Failures are silent. All sources share `CHAT_CAP` per chat per minute and skip bots, stale messages, banned users and the forum discussion group.
+- `REPORTS=1`: clubs' event reports in Studio (`logic/evreports.py`: the team's attendance marks); off until its clause in the privacy policy (Codex's).
+- `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
+- `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
+- No switch changes the policy or the consent version.
+- `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
