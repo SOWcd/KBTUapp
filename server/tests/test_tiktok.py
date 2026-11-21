@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import time
+from collections import OrderedDict
 from pathlib import Path
 
 import httpx
@@ -29,6 +30,8 @@ def _fresh(monkeypatch):
     """The per-worker memories these tests touch start empty and go back as they were: the cap's, the swear filter's,
     and chatlist's "no club holds this chat" (a chat -100 left there would read as unheld in the next test's database)."""
     monkeypatch.setattr(tiktok, "_sent", {})
+    monkeypatch.setattr(tiktok, "_files", OrderedDict())
+    monkeypatch.setattr(bot, "_video_seen", set())
     monkeypatch.setattr(bot, "_swore", {})
     monkeypatch.setattr(logic.chatlist, "_unheld", {})
     logic.chatmod.stale()
@@ -42,7 +45,7 @@ def _tikwm(answer: dict | None = None, file: bytes = VIDEO, status: int = 200) -
 
     def handle(req: httpx.Request) -> httpx.Response:
         if req.headers["Host"] == "www.tikwm.com":
-            assert req.method == "POST" and dict(httpx.QueryParams(req.content.decode())) == {"url": URL}  # the link alone
+            assert req.method == "POST" and dict(httpx.QueryParams(req.content.decode())) == {"url": URL, "hd": "1"}
             return httpx.Response(status, json=answer)
         if req.url.path.startswith("/p/"):
             return httpx.Response(404) if req.url.path.endswith("gone.jpg") else httpx.Response(200, content=req.url.path.encode())
@@ -53,7 +56,10 @@ def _tikwm(answer: dict | None = None, file: bytes = VIDEO, status: int = 200) -
 def _fetch(client):
     async def go():
         async with client:
-            return await tiktok.fetch(client, URL)
+            got = await tiktok.fetch(client, URL)
+            if isinstance(got, list):
+                return await tiktok.photos(client, got) or None
+            return got
     return asyncio.run(go())
 
 
@@ -83,20 +89,18 @@ def test_room():
 
 
 def test_fetch(media_dns):
-    assert _fetch(_tikwm()) == tiktok.Media(VIDEO, 14, [])
+    assert _fetch(_tikwm()).formats[0]["url"] == "https://v1.tiktokcdn.com/v.mp4"
     assert _fetch(_tikwm({"code": -1, "msg": "Url parsing is failed!"})) is None  # private or deleted
     assert _fetch(_tikwm(status=503)) is None
-    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://outside.example/file.mp4"}})) is None
     assert _fetch(_tikwm({"code": 0, "data": {"play": "http://v1.tiktokcdn.com/v.mp4"}})) is None  # https only
     assert _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/v.mp4", "size": tiktok.MAX_BYTES + 1}})) is None
-    big = b"x" * (tiktok.MAX_BYTES + 1)
-    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/v.mp4"}}, file=big)) is None  # no size said: counted
+    assert _fetch(_tikwm({"code": 0, "data": {"play": "https://outside.example/file.mp4"}})) is None
     # a slideshow: its photos in order (its "play" is the music), ten at most, a missing one skipped, none: nothing
     pics = [f"https://v1.tiktokcdn.com/p/{i}.jpg" for i in range(12)]
     got = _fetch(_tikwm({"code": 0, "data": {"play": "https://v1.tiktokcdn.com/a.mp3", "images": pics}}))
-    assert got.video is None and got.photos == [f"/p/{i}.jpg".encode() for i in range(tiktok.ALBUM)]
+    assert got == [f"/p/{i}.jpg".encode() for i in range(tiktok.ALBUM)]
     got = _fetch(_tikwm({"code": 0, "data": {"images": ["https://v1.tiktokcdn.com/p/gone.jpg", "https://v1.tiktokcdn.com/p/1.jpg"]}}))
-    assert got.photos == [b"/p/1.jpg"]
+    assert got == [b"/p/1.jpg"]
     assert _fetch(_tikwm({"code": 0, "data": {"images": ["https://v1.tiktokcdn.com/p/gone.jpg"]}})) is None
 
 
@@ -136,14 +140,22 @@ def _msg(tg, text=f"look {URL}", mid=7, **kw):
     return {"chat": {"id": -100, "type": "supergroup"}, "message_id": mid, "text": text, "date": int(time.time()), "from": {"id": tg}, **kw}
 
 
-def _hear(cfg, monkeypatch, *msgs, fetched=tiktok.Media(VIDEO, 14, [])):
+FORMAT = {"format_id": "clip", "url": "https://v1.tiktokcdn.com/v.mp4", "ext": "mp4", "protocol": "https", "width": 720,
+          "height": 1280, "vcodec": "avc1", "acodec": "aac"}
+CLIP = tiktok.Clip("tt:123", 14, [FORMAT], "https://v1.tiktokcdn.com/cover.jpg")
+
+
+def _hear(cfg, monkeypatch, *msgs, fetched=CLIP):
     asked = []
 
     async def fetch(http, url):
         asked.append(url)
         return fetched
+    async def photos(http, urls):
+        return [url.encode() for url in urls]
     monkeypatch.setattr(tiktok, "fetch", fetch)
-    http = _Http([{"update_id": i + 1, "message": m} for i, m in enumerate(msgs)])
+    monkeypatch.setattr(tiktok, "photos", photos)
+    http = _Http([{"update_id": m["message_id"], "message": m} for m in msgs])
 
     async def go():
         await bot.hear(cfg, http, 0)
@@ -160,15 +172,18 @@ def test_group_gets_the_video(env, monkeypatch):
                         _msg(33, URL, mid=9, is_topic_message=True, message_thread_id=4))
     assert asked == [URL, URL]  # a person without an account too: the chat is everyone's
     (first, files), (second, _) = http.said("sendVideo")
-    assert first["chat_id"] == "-100" and first["duration"] == "14" and "message_thread_id" not in first
-    assert json.loads(first["reply_parameters"]) == {"message_id": 7, "allow_sending_without_reply": True}
-    assert files == {"video": ("tiktok.mp4", VIDEO, "video/mp4")} and "caption" not in first  # no words of the bot's
-    assert second["message_thread_id"] == "4" and json.loads(second["reply_parameters"])["message_id"] == 9
+    assert first["chat_id"] == -100 and first["duration"] == 14 and "message_thread_id" not in first
+    assert first["reply_parameters"] == {"message_id": 7, "allow_sending_without_reply": True}
+    assert first["width"] == 720 and first["height"] == 1280 and first["cover"] == CLIP.cover and first["supports_streaming"]
+    assert http.said("sendChatAction") == [({"chat_id": -100, "action": "upload_video"}, None),
+                                          ({"chat_id": -100, "message_thread_id": 4, "action": "upload_video"}, None)]
+    assert files is None and first["video"] == FORMAT["url"] and "caption" not in first  # no words of the bot's
+    assert second["message_thread_id"] == 4 and second["reply_parameters"]["message_id"] == 9
     # a slideshow: one photo alone, more as an album, each photo its own part
-    http, _ = _hear(cfg, monkeypatch, _msg(31, mid=11), fetched=tiktok.Media(None, 0, [b"a"]))
+    http, _ = _hear(cfg, monkeypatch, _msg(31, mid=11), fetched=["a"])
     ((one_, files),) = http.said("sendPhoto")
     assert files == {"photo": ("tiktok.jpg", b"a", "image/jpeg")} and json.loads(one_["reply_parameters"])["message_id"] == 11
-    http, _ = _hear(cfg, monkeypatch, _msg(31, mid=12), fetched=tiktok.Media(None, 0, [b"a", b"b", b"c"]))
+    http, _ = _hear(cfg, monkeypatch, _msg(31, mid=12), fetched=["a", "b", "c"])
     ((album, files),) = http.said("sendMediaGroup")
     assert json.loads(album["media"]) == [{"type": "photo", "media": f"attach://p{i}"} for i in range(3)]
     assert {k: v[1] for k, v in files.items()} == {"p0": b"a", "p1": b"b", "p2": b"c"} and "caption" not in album
@@ -200,76 +215,163 @@ def test_who_gets_none(env, monkeypatch):
 
 
 def _file_format(name, width=720, height=1280, ext="mp4", **kw):
-    return {"width": width, "height": height, "ext": ext, "url": f"https://cdn.example/{name}.{ext}",
+    return {"width": width, "height": height, "ext": ext, "url": f"https://v1.tiktokcdn.com/{name}.{ext}",
             "format_id": name, "vcodec": "avc1", "acodec": "aac", **kw}
 
 
-def _source(monkeypatch, cfg, link, meta, payload=VIDEO, progress=None):
-    """Real yt-dlp selection and postprocessing with just extraction and the media transfer stubbed."""
+def _source(monkeypatch, cfg, link, meta):
+    """Use the pinned yt-dlp normalizer and format sorter; extraction never transfers a file."""
     from yt_dlp import YoutubeDL
 
-    urls, downloads, dirs = [], [], []
-
+    urls = []
     def extract(dl, url, *, download, process):
-        assert not download and not process and dl.params["cachedir"] is False
+        assert not download and not process and not dl.params["cachedir"]
         urls.append(url)
-        dirs.append(Path(dl.params["outtmpl"]["default"]).parent)
         return {"extractor": "fixture", "id": "clip", "title": "clip", "duration": 14, **meta}
 
-    def transfer(dl, filename, info):
-        downloads.append(info["format_id"])
-        Path(filename).write_bytes(payload)
-        if progress:
-            for hook in dl.params["progress_hooks"]:
-                hook(progress)
-        return True, True
-
     monkeypatch.setattr(YoutubeDL, "extract_info", extract)
-    monkeypatch.setattr(YoutubeDL, "dl", transfer)
     http = _Http()
     msg = _msg(31, link + "?share=tracking")
     asyncio.run(bot._tiktok(cfg, http, msg, tiktok.link(msg)))
-    assert len(dirs) == 1 and not dirs[0].exists()
-    return urls[0], downloads, http.calls
+    return urls[0], http.said("sendVideo")
 
 
 def test_source_formats_and_reply(env, monkeypatch):
     _, cfg = env
-    formats = [_file_format("webm", ext="webm"), _file_format("hevc", vcodec="hevc"),
-               _file_format("h264"), _file_format("hd", 1080, 1920), _file_format("large", filesize=tiktok.MAX_BYTES),
-               _file_format("no-sound", acodec="none"), _file_format("audio", vcodec="none")]
-    url, downloads, calls = _source(monkeypatch, cfg, YT, {"duration": 179.9, "formats": formats})
-    assert url == "https://www.youtube.com/watch?v=aB1234567_-" and downloads == ["h264"]
-    (method, body, files), = calls
-    assert method == "sendVideo" and body["duration"] == "179" and "caption" not in body
-    assert files["video"][1] == VIDEO and json.loads(body["reply_parameters"])["message_id"] == 7
-    # A carousel beginning with a photo. A silent video is legitimate when the source has no audio.
-    entry = {"id": "slide", "title": "slide", "formats": [_file_format("silent", acodec="none")]}
-    url, downloads, calls = _source(monkeypatch, cfg, REEL, {"_type": "playlist", "entries": [{"formats": []}, entry, entry]})
-    assert url == "https://www.instagram.com/p/Re_123-4/" and downloads == ["silent"]
-    assert calls[0][0] == "sendVideo" and "caption" not in calls[0][1]
+    formats = [_file_format("vp9", 2160, 3840, vcodec="vp9"), _file_format("hevc", vcodec="hevc"),
+               _file_format("h264"), _file_format("hd", 1080, 1920), _file_format("large", 2160, 3840, filesize=tiktok.MAX_BYTES + 1),
+               _file_format("opus", 2160, 3840, acodec="opus"), _file_format("no-sound", acodec="none")]
+    url, ((body, files),) = _source(monkeypatch, cfg, YT, {"duration": 179.9, "formats": formats})
+    assert url == "https://www.youtube.com/watch?v=aB1234567_-" and body["video"].endswith("/hd.mp4")
+    assert files is None and body["duration"] == 179 and body["height"] == 1920
+    entry = {"id": "slide", "title": "slide", "duration": 4, "formats": [_file_format("silent", acodec="none")]}
+    url, ((body, _),) = _source(monkeypatch, cfg, REEL, {"_type": "playlist", "entries": [{"formats": []}, entry, entry]})
+    assert url == "https://www.instagram.com/p/Re_123-4/" and body["video"].endswith("/silent.mp4")
 
 
 def test_source_rejections(env, monkeypatch):
     _, cfg = env
     for duration in (None, 0, 180, 181):
-        assert _source(monkeypatch, cfg, YT, {"duration": duration, "formats": [_file_format("video")]})[1:] == ([], [])
-    assert _source(monkeypatch, cfg, SHORT, {"duration": 180, "formats": [_file_format("video")]})[1] == ["video"]
-    for meta in ({"formats": []}, {"is_live": True}, {"formats": [_file_format("hd", 1920, 1080)]}):
-        assert _source(monkeypatch, cfg, REEL, meta)[1:] == ([], [])
-    monkeypatch.setattr(tiktok, "MAX_BYTES", len(VIDEO))
-    meta = {"formats": [_file_format("video")]}
-    assert _source(monkeypatch, cfg, REEL, meta)[1:] == (["video"], [])  # final size check
-    assert _source(monkeypatch, cfg, REEL, meta, b"partial", {"downloaded_bytes": len(VIDEO)})[1:] == (["video"], [])
+        assert not _source(monkeypatch, cfg, YT, {"duration": duration, "formats": [_file_format("video")]})[1]
+    assert _source(monkeypatch, cfg, SHORT, {"duration": 180, "formats": [_file_format("video")]})[1]
+    for meta in ({"formats": []}, {"is_live": True}, {"formats": [_file_format("web", ext="webm", vcodec="vp9")]}):
+        assert not _source(monkeypatch, cfg, REEL, meta)[1]
 
 
-@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
-def test_source_webm_converts_to_mp4(env, monkeypatch):
+@pytest.fixture
+def movies(tmp_path):
+    if not shutil.which("ffmpeg"):
+        pytest.skip("needs ffmpeg")
+    def make(name, size, codec="libx264"):
+        path = tmp_path / (name + ".mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=size=" + size, "-f", "lavfi", "-i",
+                        "sine", "-t", "0.25", "-c:v", codec, "-threads", "1", "-c:a", "aac", str(path)], check=True)
+        return path.read_bytes()
+    return make
+
+
+def test_tikwm_compares_real_track_headers(movies, media_dns):
+    files = {"/sd": movies("sd", "32x48"), "/hd": movies("hd", "64x96")}
+    skip = 128 * 1024
+    files["/hd"] = skip.to_bytes(4, "big") + b"free" + bytes(skip - 8) + files["/hd"]
+    starts = []
+    data = {"id": "123", "play": "https://v1.tiktokcdn.com/sd", "hdplay": "https://v1.tiktokcdn.com/hd"}
+    def handle(req):
+        if req.method == "POST":
+            return httpx.Response(200, json={"code": 0, "data": data})
+        # Range reads only; yt-dlp and Telegram never receive a test network request.
+        start, end = map(int, req.headers["range"][6:].split("-"))
+        starts.append((req.url.path, start))
+        return httpx.Response(206, content=files[req.url.path][start:end + 1])
+    async def choose():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+            clip = await tiktok.fetch(http, URL)
+            return await tiktok.versions(http, clip)
+    assert asyncio.run(choose())[0].video["height"] == 96
+    assert ("/hd", skip) in starts
+    files["/hd"] = movies("other", "64x96", "mpeg4")
+    (sd,) = asyncio.run(choose())
+    assert sd.video["height"] == 48 and sd.video["acodec"] == "aac"
+
+
+def test_tikwm_without_range_support_still_sends_by_url(env, monkeypatch, movies, media_dns):
     _, cfg = env
-    webm = subprocess.check_output(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=size=32x48",
-                                    "-frames:v", "1", "-c:v", "libvpx-vp9", "-f", "webm", "-"])
-    _, downloads, calls = _source(monkeypatch, cfg, REEL, {"formats": [_file_format("web", ext="webm", vcodec="vp9")]}, webm)
-    assert downloads == ["web"] and calls[0][2]["video"][1][4:8] == b"ftyp"
+    payloads = {"/hd": movies("hd", "64x96", "mpeg4"), "/sd": movies("sd", "32x48")}
+    # Put the SD header beyond the initial read, as with a tail-indexed MP4.
+    padding = (70000).to_bytes(4, "big") + b"free" + bytes(69992)
+    payloads["/sd"] = padding + payloads["/sd"]
+    sent, reads = [], []
+
+    def handle(req):
+        if req.url.host == "api.telegram.org":
+            if req.url.path.endswith("/sendVideo"):
+                sent.append(json.loads(req.content))
+            return httpx.Response(200, json={"ok": True})
+        if req.method == "POST":
+            return httpx.Response(200, json={"code": 0, "data": {
+                "hdplay": "https://v1.tiktokcdn.com/hd", "play": "https://v1.tiktokcdn.com/sd"}})
+        if "range" in req.headers:
+            return httpx.Response(416)
+        reads.append(req.url.path)
+        return httpx.Response(200, content=payloads[req.url.path])
+
+    monkeypatch.setattr(tiktok, "upload", lambda *_: pytest.fail("Telegram accepted the URL"))
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+            await bot._tiktok(cfg, http, _msg(31), URL)
+
+    asyncio.run(go())
+    assert [(b["video"], b["width"], b["height"]) for b in sent] == [("https://v1.tiktokcdn.com/sd", 32, 48)]
+    assert sorted(reads) == ["/hd", "/sd"]
+
+
+def test_tikwm_fallback_pins_the_source_and_counts_bytes(monkeypatch, movies, media_dns):
+    payload = movies("fallback", "32x48")
+    def handle(req):
+        assert req.url.host == "93.184.216.34" and req.extensions["sni_hostname"] == "v1.tiktokcdn.com"
+        async def chunks():
+            yield payload[:32]
+            yield payload[32:]
+        return httpx.Response(200, content=chunks())
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+            version = tiktok.Version(FORMAT)
+            video, thumb, tracks = await tiktok.prepare_upload(http, CLIP, version)
+            assert video and thumb and (tracks["width"], tracks["height"]) == (32, 48)
+            monkeypatch.setattr(tiktok, "MAX_BYTES", len(payload) - 1)
+            assert await tiktok.prepare_upload(http, CLIP, version) is None
+    asyncio.run(go())
+
+
+def test_split_tracks_and_thumbnail(env, monkeypatch, movies, tmp_path):
+    from yt_dlp import YoutubeDL
+    from PIL import Image
+    import io
+
+    _, cfg = env
+    hd = _file_format("hd", 1440, 2560, acodec="none")
+    audio = _file_format("sound", vcodec="none", acodec="mp4a.40.2", language_preference=10)
+    dub = {**audio, "format_id": "dub", "language_preference": 5}
+    original = movies("original", "48x64")
+    downloaded = []
+    def transfer(dl, path, info):
+        downloaded.append(info["format_id"])
+        Path(path).write_bytes(original)
+        return True, True
+    monkeypatch.setattr(YoutubeDL, "dl", transfer)
+    _, ((body, files),) = _source(monkeypatch, cfg, SHORT, {"formats": [_file_format("sd"), hd, audio, dub]})
+    assert downloaded == ["hd", "sound"] and body["supports_streaming"] == "true"
+    out = tmp_path / "merged.mp4"
+    out.write_bytes(files["video"][1])
+    assert files["video"][1].index(b"moov") < files["video"][1].index(b"mdat")
+    def hashes(path):
+        return subprocess.check_output(["ffprobe", "-v", "error", "-show_packets", "-show_data_hash", "sha256",
+                                        "-show_entries", "packet=stream_index,data_hash", "-of", "csv", str(path)]).splitlines()
+    assert sorted(hashes(out)) == sorted(hashes(tmp_path / "original.mp4"))
+    thumb = Image.open(io.BytesIO(files["thumbnail"][1]))
+    assert thumb.format == "JPEG" and max(thumb.size) <= 320
 
 
 def test_swear_deleted_gets_none(env, monkeypatch):
@@ -295,7 +397,7 @@ def test_swear_deleted_gets_none(env, monkeypatch):
 
     async def fetch(http, url):
         asked.append(url)
-        return tiktok.Media(VIDEO, 14, [])
+        return CLIP
     monkeypatch.setattr(tiktok, "fetch", fetch)
     http = Rights([{"update_id": 1, "message": _msg(31, f"\u0441\u0443\u043a\u0430 {URL}")}])
 
@@ -304,3 +406,196 @@ def test_swear_deleted_gets_none(env, monkeypatch):
         await _drain()
     asyncio.run(go())
     assert http.said("deleteMessage") and asked == [] and not http.said("sendVideo")
+
+
+@pytest.mark.parametrize("cache_route", ["url", "upload"])
+def test_send_once_then_reuse_across_chats(env, monkeypatch, cache_route, caplog):
+    _, cfg = env
+    attempts, resolved, uploaded = [], [], []
+    async def fetch(http, url):
+        resolved.append(url)
+        return CLIP
+
+    async def upload(http, clip, version):
+        uploaded.append(version)
+        return VIDEO, b"jpeg", {**FORMAT, "duration": 14}
+
+    class Telegram(_Http):
+        async def post(self, url, json=None, data=None, files=None, **_):
+            if url.endswith("/sendChatAction"):
+                raise httpx.ConnectError("action failed")
+            attempts.append((json or data, files))
+            if json and json["video"] == FORMAT["url"] and cache_route == "upload":
+                return _Resp({"ok": False}, 400)
+            return _Resp({"ok": True, "result": {"video": {"file_id": "cached-file"}}})
+
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    monkeypatch.setattr(tiktok, "prepare_upload", upload)
+    caplog.set_level("INFO", logger="uvicorn.error")
+    http = Telegram()
+    for mid, url in enumerate((URL, URL + "?tracking=1", "https://www.tiktok.com/@x/video/123"), start=10):
+        msg = _msg(31, url, mid=mid, chat={"type": "group", "id": -mid})
+        asyncio.run(bot._tiktok(cfg, http, msg, url))
+    assert resolved == [URL] and len(uploaded) == int(cache_route == "upload")
+    if uploaded:
+        body, files = attempts[1]
+        assert body["height"] == 1280 and files["thumbnail"][1] == b"jpeg" and files["video"][1] == VIDEO
+    assert [(b["chat_id"], b["reply_parameters"]["message_id"], b["video"]) for b, _ in attempts[-2:]] == [
+        (-11, 11, "cached-file"), (-12, 12, "cached-file")]
+    assert [line.split()[2] for line in caplog.messages] == [cache_route, "cache", "cache"]
+    assert all(line.startswith("group video ") and float(line.split()[-1][:-1]) >= 0 for line in caplog.messages)
+    assert all(x not in caplog.text for x in (URL, "v1.tiktokcdn.com", "cached-file", "tracking"))
+
+
+def test_lru_and_video_ids(monkeypatch):
+    monkeypatch.setattr(tiktok, "CACHE_SIZE", 2)
+    assert tiktok.key(YT) == tiktok.key(SHORT) != tiktok.key(REEL)
+    assert tiktok.key(REEL) == tiktok.key(REEL.replace("/reel/", "/p/"))
+    tiktok.remember("a", "one", 10)
+    tiktok.remember("b", "two", 20)
+    assert tiktok.cached("a") == ("one", 10)
+    tiktok.remember("c", "three", 30)
+    assert not tiktok.cached("b") and len(tiktok._files) == 2
+
+
+def test_large_video_skips_remote_fetch_and_checks_actual_size(env, monkeypatch):
+    _, cfg = env
+    from yt_dlp import YoutubeDL
+    monkeypatch.setattr(tiktok, "URL_BYTES", 10)
+    monkeypatch.setattr(tiktok, "MAX_BYTES", len(VIDEO) - 1)
+    touched = []
+    def transfer(dl, path, info):
+        touched.append(info["format_id"])
+        Path(path).write_bytes(VIDEO)
+        return True, True
+    monkeypatch.setattr(YoutubeDL, "dl", transfer)
+    hd = _file_format("hd", 1080, 1920, filesize_approx=50)
+    _, ((body, _),) = _source(monkeypatch, cfg, SHORT, {"formats": [hd, _file_format("smaller", filesize=8)]})
+    assert touched == ["hd"] and body["video"].endswith("/smaller.mp4")
+    with pytest.raises(ValueError):
+        tiktok._limit({"downloaded_bytes": len(VIDEO)})
+
+
+def test_timeout_does_not_duplicate_a_reply(env, monkeypatch):
+    _, cfg = env
+    class Telegram(_Http):
+        async def post(self, url, **kw):
+            if url.endswith("/sendVideo"):
+                self.calls.append(("sendVideo", kw["json"], None))
+                raise httpx.ReadTimeout("reply may already have arrived")
+            return await super().post(url, **kw)
+    async def fetch(http, url):
+        return CLIP
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    monkeypatch.setattr(tiktok, "upload", lambda *args: pytest.fail("ambiguous Telegram result"))
+    http = Telegram()
+    asyncio.run(bot._tiktok(cfg, http, _msg(31), URL))
+    assert len(http.said("sendVideo")) == 1 and not tiktok.cached(tiktok.key(URL))
+
+
+def test_checkout_is_answered_even_if_video_admission_cannot_open_db(env, monkeypatch):
+    import sqlite3
+    from test_stars import checkout
+
+    _, cfg = env
+    cfg = dataclasses.replace(cfg, tiktok=True)
+    http = _Http([checkout("video-batch"), {"update_id": 2, "message": _msg(31, SHORT)}])
+
+    def broken(_):
+        raise sqlite3.OperationalError("unavailable")
+
+    monkeypatch.setattr(db, "connect", broken)
+    async def go():
+        with pytest.raises(sqlite3.OperationalError):
+            await bot.hear(cfg, http, 0)
+        await _drain()
+
+    asyncio.run(go())
+    assert http.said("answerPreCheckoutQuery") and not http.said("sendChatAction")
+
+
+def test_links_start_while_earlier_updates_and_other_links_wait(env, monkeypatch):
+    _, cfg = env
+    cfg = dataclasses.replace(cfg, tiktok=True)
+    async def go():
+        ready = asyncio.Event()
+        release = asyncio.Event()
+        started = []
+        async def fetch(http, url):
+            started.append(url)
+            if len(started) == 2:
+                ready.set()
+            await release.wait()
+            return CLIP
+
+        async def group(cfg, http, con, msg):
+            if msg["message_id"] == 1:
+                async with asyncio.timeout(3):
+                    await ready.wait()
+                assert len(http.said("sendChatAction")) == 2
+                release.set()
+
+        monkeypatch.setattr(tiktok, "fetch", fetch)
+        monkeypatch.setattr(bot, "_group", group)
+        updates = [{"update_id": i, "message": _msg(31, url, mid=i)} for i, url in enumerate(("other", SHORT, REEL), 1)]
+        http = _Http(updates)
+        try:
+            assert await bot.hear(cfg, http, 0) == 4
+            assert started == [SHORT, REEL] and release.is_set()
+            # An unconfirmed batch can be delivered twice.
+            http.updates = updates
+            await bot.hear(cfg, http, 0)
+            assert started == [SHORT, REEL]
+        finally:
+            release.set()
+            await _drain()
+    asyncio.run(go())
+
+
+def test_link_arriving_during_a_slow_batch(env, monkeypatch):
+    _, cfg = env
+    cfg = dataclasses.replace(cfg, tiktok=True)
+    monkeypatch.setattr(bot, "PEEK", 0.01)
+    async def go():
+        sent = asyncio.Event()
+        first = {"update_id": 1, "message": _msg(31, "other")}
+        later = {"update_id": 2, "message": _msg(31, SHORT, mid=8)}
+        class Telegram(_Http):
+            async def get(self, url, params, **kw):
+                updates = [first, later] if not params["timeout"] else ([first] if not params["offset"] else [later])
+                return _Resp({"ok": True, "result": updates})
+
+        async def fetch(http, url):
+            sent.set()
+            return CLIP
+
+        async def group(cfg, http, con, msg):
+            if msg is first["message"]:
+                await asyncio.wait_for(sent.wait(), 3)
+
+        monkeypatch.setattr(tiktok, "fetch", fetch)
+        monkeypatch.setattr(bot, "_group", group)
+        http = Telegram()
+        assert await bot.hear(cfg, http, 0) == 2 and sent.is_set()
+        assert await bot.hear(cfg, http, 2) == 3
+        await _drain()
+        assert len(http.said("sendVideo")) == 1
+    asyncio.run(go())
+
+
+def test_stale_file_id_resolves_again_and_respects_short_host_limit(env, monkeypatch):
+    _, cfg = env
+    class Telegram(_Http):
+        async def post(self, url, **kw):
+            r = await super().post(url, **kw)
+            return _Resp({"ok": False}, 400) if kw.get("json", {}).get("video") == "expired" else r
+    async def fetch(http, url):
+        return tiktok.Clip(tiktok.key(SHORT), 180, [FORMAT])
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    http = Telegram()
+    tiktok.remember(tiktok.key(SHORT), "expired", 180)
+    asyncio.run(bot._tiktok(cfg, http, _msg(31, YT), YT))
+    assert not http.said("sendVideo")
+    asyncio.run(bot._tiktok(cfg, http, _msg(31, SHORT), SHORT))
+    assert [b["video"] for b, _ in http.said("sendVideo")] == ["expired", FORMAT["url"]]
+    assert not tiktok.cached(tiktok.key(SHORT))
