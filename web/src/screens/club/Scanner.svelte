@@ -161,7 +161,8 @@
   let aged = $state(false); // marked by a tap on this result (else a mark shown came from the imported list)
   async function setAge(adult: boolean) {
     const r = res;
-    if (!r || !('person' in r) || r.adult === adult) return;
+    if (!r || !('person' in r)) return;
+    if (r.adult === adult) { aged = true; haptic.ok(); say(t(adult ? 'age.adult' : 'age.minor'), 'sparkles_3d'); return; } // the list's 18+ confirmed by the door: said, nothing to send
     const was = r.adult ?? null, uid = r.person.id, d = people?.find((x) => x.person.id === uid);
     r.adult = adult; aged = true; if (d) d.adult = adult; // at once; back if the server says no
     haptic.select();
