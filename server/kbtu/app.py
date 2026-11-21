@@ -1594,6 +1594,22 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input")
         return logic.checkin(con, v, eid, code, body.get("admit") is True)
 
+    @app.get("/api/events/{eid}/door-pending")
+    def door_pending(eid: int, con: Con, v: Me):
+        return logic.organizing.pending_count(con, v, eid)
+
+    @app.post("/api/events/{eid}/door-pending")
+    def door_let_in(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.let_in_pending(con, v, eid, body.get("studentId"), body.get("surname"), body.get("adult"))
+
+    @app.get("/api/events/{eid}/door-extra")
+    def door_extra(eid: int, con: Con, v: Me):
+        return logic.organizing.door_extra(con, v, eid)
+
+    @app.post("/api/events/{eid}/door-extra")
+    def door_extra_step(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.door_extra(con, v, eid, body.get("step"))
+
     @app.post("/api/events/{eid}/age")
     def mark_age(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.organizing.mark_age(con, v, eid, body.get("user_id"), body.get("adult"))

@@ -15,6 +15,10 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Qr from '../../ui/Qr.svelte';
+  import { QR_TONE } from '../../lib/awards';
+  import Minus from '@lucide/svelte/icons/minus';
   import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -42,7 +46,7 @@
   // lists by department, marked by hand: People.svelte) and «Helper» (President/Vice). sess: a helper's session (the
   // QR they were let show, server checkin.qr_helping)
   let { overlay, id, names = false, only = false, qr = false, sess, ondone }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean; qr?: boolean; sess?: Id; ondone?: () => void } = $props();
-  let mode = $state<'scan' | 'qr'>(untrack(() => (qr ? 'qr' : 'scan')));
+  let mode = $state<'scan' | 'qr' | 'entry'>(untrack(() => (qr ? 'qr' : 'scan')));
 
   let detail = $state<EventFull | null>(null);
   // the Mark screen's counts once the event says who I am at its door (a scanner-only helper reads no lists: no 403s)
@@ -69,12 +73,39 @@
   const teamCame = $derived(team ? team.rows.filter((r) => r.at).length : 0);
   // let in by the helper's QR, or named for the scanner only: the QR and the camera, said so plainly (no lists)
   const scanOnly = $derived(qr && detail?.myCrew === 'scan');
+  // 18+ at the door (age_check): no self check-in by the rotating QR, it would skip the ID; the entrance QR opens
+  // the ticket, the scanner reads it and asks 18+ (owner, Nov 21)
+  const aged18 = $derived(!!e?.ageCheck);
+  $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
+  // list buyers not in the app yet (guest list): the student ID and surname from their ID card let them in by hand
+  let pend = $state<{ pending: number; pendingCame: number } | null>(null);
+  let pid = $state(''), psur = $state(''), pbusy = $state(false);
+  let plet = $state<{ sid: string; sur: string; adult: boolean | null } | null>(null);
+  $effect(() => { if (qr && !only && e?.guestList) api.doorPending(id).then((x) => (pend = x)).catch(() => {}); });
+  async function letIn(adult?: boolean) {
+    const sid = plet && adult !== undefined ? plet.sid : pid.trim().toUpperCase(), sur = plet && adult !== undefined ? plet.sur : psur.trim();
+    if (!sid || !sur) return;
+    pbusy = true;
+    try {
+      const r = await api.letIn(id, sid, sur, adult);
+      pend = { pending: r.pending, pendingCame: r.pendingCame }; plet = { sid, sur, adult: r.adult }; pid = ''; psur = ''; haptic.ok();
+    } catch (x) { say(x instanceof ApiErr && x.code === 'not_found' ? t('mk.letInNo') : t('common.error'), 'warning_3d'); }
+    pbusy = false;
+  }
+  // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
+  let extra = $state<number | null>(null);
+  $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
+  function stepExtra(step: 1 | -1) {
+    if (extra == null || (step < 0 && extra === 0)) return;
+    haptic.tap(); extra += step;
+    api.doorExtra(id, step).then((x) => (extra = x.extra)).catch(() => { extra = Math.max(0, (extra ?? 0) - step); say(t('common.error'), 'warning_3d'); });
+  }
   function recount() {
     if (detail?.myCrew === 'scan') return;
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
     api.teamList(id).then((x) => (team = x)).catch(() => {});
   }
-  function toMode(m: 'scan' | 'qr') { haptic.tap(); if (m === 'qr') closeScanner(); else if (live === 'failed' && camera) scan(); }
+  function toMode(m: 'scan' | 'qr' | 'entry') { haptic.tap(); if (m !== 'scan') closeScanner(); else if (live === 'failed' && camera) scan(); }
   function openPeople() { haptic.tap(); sheets.doorPeople(id, recount); }
   // who may let a helper in: the club's President or Vice, or the app's admin (server checkin._hands_over)
   const board = $derived(session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === e?.org.id && (m.role === 'president' || m.role === 'vice')));
@@ -196,7 +227,11 @@
 
   <div class="body scroll">
     {#if qr}
-      <div class="sw"><Segmented items={[{ value: 'qr', label: 'QR' }, { value: 'scan', label: t('studio.scanner') }]} bind:value={mode} onchange={toMode} /></div>
+      <div class="sw"><Segmented items={[...(aged18 ? [] : [{ value: 'qr' as const, label: 'QR' }]), { value: 'scan' as const, label: t('studio.scanner') }, ...(aud !== 'team' ? [{ value: 'entry' as const, label: t('mk.entry') }] : [])]} bind:value={mode} onchange={toMode} /></div>
+      {#if mode === 'entry'}
+        <!-- the entrance's QR (owner, Nov 21): a guest's own camera opens the app on their ticket (tk_: no ticket -> the event, its sign-in) -->
+        <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={QR_TONE} /></div><p class="t-foot">{t('mk.entryHint')}</p></div>
+      {/if}
       {#if mode === 'qr'}<button class="qr" aria-label={t('studio.scanner')} onclick={() => { mode = 'scan'; toMode('scan'); }}><EventQr {overlay} event={id} {sess} embed onlast={recount} /></button>{/if}
     {:else if e}
       <h2 class="t-h3 clamp-2">{e.title}</h2>
@@ -260,6 +295,26 @@
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
+      {#if pend && pend.pending}
+        <section class="pend">
+          <p class="t-foot">{t('mk.pending', { n: pend.pendingCame, m: pend.pending })}</p>
+          <Field label={t('mk.letInId')} bind:value={pid} autocomplete="off" placeholder="24B030001" />
+          <Field label={t('mk.letInSurname')} bind:value={psur} autocomplete="off" />
+          <Button kind="secondary" size="m" full loading={pbusy} disabled={!pid.trim() || !psur.trim()} onclick={() => letIn()}>{t('mk.letIn')}</Button>
+          {#if plet}
+            <p class="ok">{t('mk.letInOk', { id: plet.sid })}{plet.adult === true ? ' · 18+' : plet.adult === false ? ' · ' + t('age.minor') : ''}</p>
+            {#if e?.ageCheck}<div class="ages"><Button kind={plet.adult === true ? 'primary' : 'secondary'} size="m" onclick={() => letIn(true)}>{t('age.adult')}</Button>
+              <Button kind={plet.adult === false ? 'primary' : 'secondary'} destructive={plet.adult === false} size="m" onclick={() => letIn(false)}>{t('age.minor')}</Button></div>{/if}
+          {/if}
+        </section>
+      {/if}
+      {#if extra != null && aud !== 'team'}
+        <div class="extra">
+          <span>{t('mk.extra')} · <b>{extra}</b></span>
+          <Button kind="secondary" size="s" round label="−1" disabled={!extra} onclick={() => stepExtra(-1)}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
+          <Button kind="secondary" size="s" round label="+1" onclick={() => stepExtra(1)}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
+        </div>
+      {/if}
       {#if scanOnly}<p class="t-foot only">{t('mk.scanOnly')}</p>{/if}
       <div class="quiet">
         {#if lists}<Button kind="secondary" size="m" onclick={openPeople}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('mk.people')}</Button>{/if}
@@ -271,7 +326,7 @@
       <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
     {/if}
 
-    {#if names || (qr && (mode === 'qr' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
+    {#if names || (qr && (mode !== 'scan' || aud === 'team'))}{:else}<!-- a team-only door has no tickets -->
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
         {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>
@@ -354,4 +409,12 @@
   .manual { display: flex; gap: var(--s-2); align-items: flex-end; }
   .manual > :global(:first-child) { flex: 1; min-width: 0; }
   .manual :global(input) { letter-spacing: 0.06em; text-transform: uppercase; }
+  .entry { display: grid; justify-items: center; gap: 10px; }
+  .entry .plate { width: min(78vw, 300px); aspect-ratio: 1; padding: 14px; border-radius: var(--r-l); background: white; }
+  .entry p { text-align: center; }
+  .pend { display: grid; gap: 8px; }
+  .pend .ok { color: var(--success-text); text-align: center; }
+  .pend .ages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
+  .extra span { flex: 1; color: var(--text-2); }
 </style>

@@ -167,11 +167,11 @@ def test_guest_signup_and_walk_in_blocked_but_tickets_check_in(door_event):
     assert result["result"] == "ok" and result["adult"] is False
     session = c.post(f"{base}/screen", headers=door).json()["session"]
     param = c.post(f"/api/screens/{session}/start", headers=door).json()["param"]
-    assert c.post("/api/checkin", headers=tma(3), json={"p": param}).json()["done"] is True
-    assert c.post("/api/checkin", headers=tma(4), json={"p": param}).json()["error"] == "guest_list"
+    assert c.post("/api/checkin", headers=tma(3), json={"p": param}).json()["error"] == "forbidden"  # 18+: the scanner, never the room's QR
+    assert c.post("/api/checkin", headers=tma(4), json={"p": param}).json()["error"] == "forbidden"
     assert c.post(f"/api/screens/{session}/badge", headers=door, json={"qr": badge}).json()["error"] == "guest_list"
     assert {tuple(r) for r in con.execute("SELECT user_id, walk_in FROM registrations WHERE checked_in_at IS NOT NULL")} == {
-        (scanned, 0), (named, 0), (shown, 0)}
+        (scanned, 0), (named, 0)}
     assert not con.execute("SELECT 1 FROM qr_marks WHERE user_id = ?", (outsider,)).fetchone()
 
 
@@ -275,3 +275,37 @@ def test_guests_from_a_gz_argument(door_event, monkeypatch, capsys):
     assert capsys.readouterr().out == "registered 1, pending 1, offline 0, bad rows 0\n"
     with pytest.raises(SystemExit):
         admin.main(["guests", "1", "--gz", "not base64!"])
+
+
+def test_door_extra_counts_outsiders_anonymously(door_event):
+    """Outsiders let in without the app: one bare count per event, +1/-1 by the door, never below zero, nobody named."""
+    c, cfg, con = door_event
+    base, door = "/api/events/1/door-extra", tma(9)
+    assert c.get(base, headers=door).json() == {"extra": 0}
+    assert c.post(base, headers=door, json={"step": 1}).json() == {"extra": 1}
+    assert c.post(base, headers=door, json={"step": 1}).json() == {"extra": 2}
+    assert c.post(base, headers=door, json={"step": -1}).json() == {"extra": 1}
+    assert c.post(base, headers=door, json={"step": 5}).status_code == 400
+    stranger = _student(c, con, 1, "24B030001")
+    assert c.post(base, headers=tma(1), json={"step": 1}).status_code == 403 and stranger
+    c.post(base, headers=door, json={"step": -1}); c.post(base, headers=door, json={"step": -1})
+    assert c.get(base, headers=door).json() == {"extra": 0}
+
+
+def test_door_lets_in_a_buyer_not_in_the_app(door_event):
+    """The door types a list buyer's student ID and surname: only a matching surname lets them in; their ticket comes
+    checked in when they sign in; the door sees the count."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov", "24B030002,,,Ivan Petrov"])
+    base, door = "/api/events/1/door-pending", tma(9)
+    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0}
+    assert c.post(base, headers=door, json={"studentId": "24B030001", "surname": "Wrong"}).status_code == 404
+    assert c.post(base, headers=door, json={"studentId": "24B039999", "surname": "Testov"}).status_code == 404
+    r = c.post(base, headers=door, json={"studentId": "24b030001", "surname": "TESTOV"}).json()
+    assert r == {"already": False, "adult": True, "pending": 2, "pendingCame": 1}
+    assert c.post(base, headers=door, json={"studentId": "24B030002", "surname": "Petrov", "adult": False}).json()["adult"] is False
+    assert c.post(base, headers=tma(1), json={"studentId": "24B030002", "surname": "Petrov"}).status_code == 403  # not the door
+    # signing in later: the ticket, already checked in
+    uid = _student(c, con, 1, "24B030001")
+    guests.claim(con, uid)
+    assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0] == 1

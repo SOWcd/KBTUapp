@@ -13,6 +13,7 @@ it('finds the floor of a room, never of an address', () => {
   expect(roomOf('\u0410\u0443\u0434. 305')).toBe('305');  // the number the map circles
   // a letter after the number is another room (251a is not 251), Latin or Cyrillic; a word after it is not a letter
   expect(roomOf('251a')).toBe('251a');
+  expect(roomOf('Room: 372')).toBe('372'); // a colon after the word (owner, Nov 21)
   expect(roomOf('251\u0431')).toBe('251b');
   expect(roomOf('305 \u0438 306')).toBe('305');
   expect(roomOf('305\u043a\u0430\u0431')).toBe('305');

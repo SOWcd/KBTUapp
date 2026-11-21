@@ -641,6 +641,8 @@ def _mark(con, v: Viewer, sid: int, slot: int) -> dict:
     if e and not out and _guests(con, e, sid):
         if not had and (student or e["door_audience"] == "team") and (r := _team(con, v, e, s, t)):  # the club's own team: its team's list, never a guest
             return r
+        if not had and e["age_check"]:  # an 18+ door: a guest's ID is seen at the scanner, never skipped by the room's QR (owner, Nov 21)
+            raise ApiError("forbidden", "age")
         if not had and logic.door_shut(e, t) == "not_open":  # a guest before the door: refused before any mark (no count to undo)
             raise ApiError("closed", "not_open", {"at": logic.door_at(e)})
     title, event = _title_for(con, s, uid, student)
