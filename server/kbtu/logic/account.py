@@ -1031,11 +1031,6 @@ def ai_on(cfg) -> bool:
     return cfg.forum or cfg.board == "all" or bool(cfg.tgc_chat) or bool(cfg.forum_channel)
 
 
-def policy(cfg) -> str:
-    """The policy version in force: the same whatever is switched on (the text describes every built feature)."""
-    return CONSENT
-
-
 CONSENT_VOL = "+vol1"  # with VOLUNTEERS: the ledger's part of the policy, agreed to only by the people it concerns (logic/vol.py concerned)
 
 
@@ -1044,9 +1039,9 @@ def on_policy(version: object, current: str) -> bool:
     return version in (current, current + CONSENT_VOL)
 
 
-def agreed(s, cfg) -> bool:
+def agreed(s) -> bool:
     """This student row is on the policy in force (or an admin's own row)."""
-    return bool(s) and (on_policy(s["consent_version"], policy(cfg)) or s["consent_version"] == "admin")
+    return bool(s) and (on_policy(s["consent_version"], CONSENT) or s["consent_version"] == "admin")
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:

@@ -401,7 +401,6 @@ export const server = {
   setComments: (kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread> => call('PATCH', `/${kind}s/${id}/comments`, { on }), // the club's Head+
   deleteComment: (id: Id): Promise<void> => call('DELETE', `/comments/${id}`), // mine, or as the club's Head+
   report: (target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', id: Id, reason: ReportReason, note?: string): Promise<void> => call('POST', '/reports', { target, id, reason, note }), // → the moderators' queue
-  reports: (): Promise<ReportItem[]> => call('GET', '/admin/reports'), // admin
   // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
   forumMe: (): Promise<ForumMe> => call('GET', '/forum/me'),
   setForumMe: (patch: Partial<{ skills: Id[]; open: boolean; pings: boolean }>): Promise<ForumMe> => call('PUT', '/forum/me', patch),

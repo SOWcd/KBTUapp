@@ -323,7 +323,7 @@ def test_ai_look_only_eu_before_the_new_consent(env, monkeypatch):
         asked.append(only)
         return True, None
     monkeypatch.setattr(tgc.ai, "screen_comment", screen)
-    for i, version in enumerate(("2026-10-v3+tgc1", logic.policy(cfg))):
+    for i, version in enumerate(("2026-10-v3+tgc1", logic.CONSENT)):
         con.execute("UPDATE students SET consent_version = ? WHERE user_id = ?", (version, uid))
         cid = con.execute("INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, created_at) VALUES (?, ?, ?, 20, ?, 0)",
                           (G, 900 + i, uid, f"words {i}")).lastrowid

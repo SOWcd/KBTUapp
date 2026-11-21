@@ -5,6 +5,7 @@ import json
 import re
 import secrets
 import sqlite3
+from functools import cache
 from pathlib import Path
 
 from .. import ai
@@ -684,7 +685,8 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
 MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # Use the graph from Uni-Q's plans so accidental editor saves cannot affect routing.
 
 
-def map_graph(con) -> dict:
+@cache
+def map_graph() -> dict:
     return {**json.loads(MAP_DRAFT.read_text()), "ver": 0}
 
 

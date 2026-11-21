@@ -481,7 +481,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
-    logic.chatsync.POLICY = logic.policy(cfg) if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
+    logic.chatsync.POLICY = logic.CONSENT if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
@@ -511,7 +511,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
-    policy = logic.policy(cfg)  # the version in force (logic/account.py)
+    policy = logic.CONSENT  # the version in force (logic/account.py)
     ai_on = logic.ai_on(cfg)
     # off (BOARD=staff, FORUM=founder): the visible policy names the EU host alone, so staff-only AI stays on it
     assist_only = ai.ASSIST_PROVIDERS if ai_on else ai.EU_ONLY
@@ -917,7 +917,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/cal/{token}")
     def calendar_page(token: str, request: Request, con: Con):
         """Opened from the app in the phone's browser: Apple's calendar subscribes at once, the rest through Google (calpage.py)."""
-        logic.cal_feed(con, token, str)  # 404 for a token that isn't (or no longer is) anyone's
+        logic.calendar_owner(con, token)
         lang = next((x for x in ("ru", "kk", "en") if x in request.headers.get("accept-language", "")[:5].lower()), "ru")
         page = calpage.render(cfg.domain, token, lang, request.headers.get("user-agent", ""))
         # the token is in the address: no Referer carries it on
@@ -1404,8 +1404,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.memo(con, v, oid, later)
 
     @app.get("/api/map/graph")
-    def map_graph(con: Con, v: Me):
-        return logic.map_graph(con)
+    def map_graph(v: Me):
+        return logic.map_graph()
 
     @app.get("/api/map/rooms")
     def map_rooms(request: Request, v: Me):

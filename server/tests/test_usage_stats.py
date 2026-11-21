@@ -169,6 +169,8 @@ def test_digest_shows_length_time_and_uses(env, monkeypatch):
     assert f["sessions"] == "≤30s 0 · ≤1m 0 · ≤3m 3 · ≤5m 0 · ≤10m 0 · ≤20m 0 · 20m+ 1\np50 ≤3m, p75 ≤3m"
     assert f["day_times"].endswith("p50 ≤40m, p75 ≤40m")
     assert f["uses"].split("\n")[:2] == ["do.qr 75%", "sheet.event 25%"]
+    con.execute("INSERT INTO usage_days (day, key, n) VALUES (?, 'uniq.sheet.event', 50)", (last - stats.WINDOW,))
+    assert stats.fields(con, stats.WINDOW + 1, MONDAY)["uses"] == f["uses"]
     assert all(("{%s}" % k) in texts.BOT[lang]["usage_week"][0] for lang in ("ru", "kk", "en") for k in f)
 
 

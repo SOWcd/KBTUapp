@@ -618,14 +618,8 @@ def publish_event(con, v: Viewer, eid: int, *, announce: bool = True) -> dict:
             if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
                 after = _tell_after(con, e)
                 told = after is None
-                for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
-                    WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id) if told else []:
-                    if sees_school(con, r[0], e):  # a school's own event: its followers of other schools don't hear (nor bot._render)
-                        notify(con, r[0], "new_event", f"event:{eid}")
-                    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"told:{e['org_id']}", str(core.now())))
-                # the week starts when someone heard: nobody did, the key still says so (over the fallback to past events)
                 if told:
-                    con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '0')", (f"told:{e['org_id']}",))
+                    tell_followers(con, e, e["org_id"], v.id)
             cohost_tell(con, one(con, "SELECT * FROM events WHERE id = ?", eid), v.id)  # an accepted co-host's followers, by its own week
     out = full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
     # Studio's toast says whether the followers heard, and if not, from when a next event may tell them
@@ -633,6 +627,19 @@ def publish_event(con, v: Viewer, eid: int, *, announce: bool = True) -> dict:
 
 
 TELL_EVERY = 7 * 86400  # a student initiative's followers hear of a new event once a week at most; an official club's of each
+
+
+def tell_followers(con, e, oid: int, actor: int, payload: str = "{}") -> None:
+    subscribers = rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
+        WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", oid, actor)
+    for (uid,) in subscribers:
+        if sees_school(con, uid, e):
+            notify(con, uid, "new_event", f"event:{e['id']}", payload)
+    # The cooldown depends on the subscriber list before school filtering. Zero overrides the historical fallback.
+    if subscribers:
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"told:{oid}", str(core.now())))
+    else:
+        con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '0')", (f"told:{oid}",))
 
 
 def _tell_after(con, e: sqlite3.Row) -> int | None:
@@ -1239,16 +1246,25 @@ def can_add_album_photo(con, v: Viewer, eid: int) -> bool:
     return _album_room(con, v, _event(con, v, eid)) > 0
 
 
+def event_photo_file(con, uid: int, saved: dict) -> int:
+    f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], uid)
+    if f:
+        return f["id"]
+    return con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color, taken_at)
+        VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
+            saved["path"], uid, core.now(), saved["color"], saved.get("taken"))).lastrowid
+
+
+def attach_album_photo(con, eid: int, fid: int, uid: int) -> None:
+    con.execute("""INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by)
+        VALUES (?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM event_photos WHERE event_id = ?), ?)""", (eid, fid, eid, uid))
+
+
 def add_album_photo(con, v: Viewer, eid: int, saved: dict) -> dict:
     e = _event(con, v, eid)
     if _album_room(con, v, e) <= 0:
         raise ApiError("forbidden")
-    f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'event_photo' AND owner_id = ?", saved["sha256"], v.id)
-    fid = f["id"] if f else con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color, taken_at)
-        VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
-                                                                     saved["path"], v.id, core.now(), saved["color"], saved.get("taken"))).lastrowid
-    con.execute("""INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by)
-        VALUES (?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM event_photos WHERE event_id = ?), ?)""", (eid, fid, eid, v.id))
+    attach_album_photo(con, eid, event_photo_file(con, v.id, saved), v.id)
     if one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", eid)[0] == PHOTO_REPORT_AT:  # the album has a story now
         for (uid,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL AND user_id != ?", eid, v.id):
             notify(con, uid, "photo_report", f"ph:{eid}", after=max(core.now(), end_of(e) + 3600))  # once per event (§7)

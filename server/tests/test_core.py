@@ -6761,12 +6761,10 @@ def test_forum_moderator_queue(env):
 
 def test_one_policy_whatever_the_flags(env):
     """One policy, one consent version: no switch changes the version asked or the page served."""
-    import dataclasses, itertools
+    import dataclasses
     c, cfg = env
     login(c, 90, "stu")
-    for forum, board, tgc_chat, fch, chs, vol, apl in itertools.product((False, True), ("", "staff", "all"), (0, -1001), (0, -1002), (False, True), ("", "x"), ("", "1", "staff")):
-        on = dataclasses.replace(cfg, forum=forum, board=board, tgc_chat=tgc_chat, forum_channel=fch, chat_sync=chs, volunteers=vol, appeals=apl)
-        assert logic.policy(on) == logic.CONSENT == "2026-11-unified1"
+    assert c.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT == "2026-11-unified1"
     on = TestClient(server.create(dataclasses.replace(cfg, forum=True, board="all", appeals="1")))
     assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT
     for doc in ("privacy", "terms"):
@@ -6784,14 +6782,14 @@ def test_old_versions_asked_again_marks_not(env):
         con.execute("UPDATE students SET consent_version = ?", (old,))
         me = c.get("/api/me", headers=tma(90)).json()
         assert me["student"]["consent"] == old != me["consentNow"] == logic.CONSENT          # the app's gate: these differ
-        assert not logic.agreed(con.execute("SELECT consent_version FROM students").fetchone(), cfg)
+        assert not logic.agreed(con.execute("SELECT consent_version FROM students").fetchone())
         assert c.post("/api/me/consent", headers=tma(90), json={"version": old}).status_code == 400
     assert c.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).json()["student"]["consent"] == logic.CONSENT
-    assert logic.agreed(con.execute("SELECT consent_version FROM students").fetchone(), cfg)
+    assert logic.agreed(con.execute("SELECT consent_version FROM students").fetchone())
     for mark in ("staff", "admin"):  # the app's gate skips these two (App.svelte)
         con.execute("UPDATE students SET consent_version = ?", (mark,))
         assert c.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).json()["student"]["consent"] == mark
-    assert logic.agreed({"consent_version": "admin"}, cfg)
+    assert logic.agreed({"consent_version": "admin"})
     con.close()
 
 

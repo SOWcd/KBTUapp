@@ -180,7 +180,7 @@ def test_each_level(env):
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_top'").fetchone()[0] == 0  # no founder in this test
     con.execute("DELETE FROM org_members WHERE user_id = ?", (ids[E],))
     assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, True)
-    assert logic.path_top(con, oid) and not logic.path_top(con, other)
+    assert con.execute("SELECT top_at FROM orgs WHERE id = ?", (other,)).fetchone()[0] is None
     assert next(o for o in c.get("/api/orgs", headers=tma(A)).json() if o["id"] == oid)["top"] is True
     # an official club sees no path
     con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (oid,))

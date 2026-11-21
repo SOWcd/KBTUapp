@@ -120,6 +120,22 @@ def test_who_is_expected_and_who_is_absent(env):
     csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text
     assert "came (not on the list)" in csv and "absent,Testov Bob" in csv and "bob@kbtu.kz" not in csv
     assert "ann@kbtu.kz" not in csv  # scanned club members have the same mail protection as absentees
+    # Ann now matches by ID alone, Cat by mail alone. Bob has no ID and no matching mail.
+    con.execute("""UPDATE qr_expected SET student_id = (SELECT student_id FROM students WHERE email = 'ann@kbtu.kz')
+        WHERE session_id = ? AND email = 'ann@kbtu.kz'""", (sid,))
+    _mail(con, 1, None)
+    _mail(con, 3, "CAT@KBTU.KZ")
+    con.execute("INSERT INTO qr_expected (session_id, email, full_name) VALUES (?, 'cat@kbtu.kz', 'Cat')", (sid,))
+    assert c.get(f"/api/screens/{sid}/people", headers=tma(9)).json() == {
+        "came": ["Cat", "Testov Ann"], "other": [], "absent": ["Testov Bob", "Testov Dana"]}
+    con.execute("UPDATE qr_expected SET full_name = 'Another Person' WHERE session_id = ? AND email = 'ann@kbtu.kz'", (sid,))
+    con.execute("UPDATE students SET manual = 1 WHERE email = 'CAT@KBTU.KZ'")
+    people = c.get(f"/api/screens/{sid}/people", headers=tma(9)).json()
+    assert people["came"] == []
+    assert people["absent"] == ["Another Person", "Cat", "Testov Bob", "Testov Dana"]
+    assert sorted(people["other"]) == ["Testov Ann", "Testov Cat"]
+    row = next(x for x in c.get("/api/screens", headers=tma(9)).json() if x["session"] == sid)
+    assert (row["came"], row["done"]) == (0, 2)
     con.close()
 
 

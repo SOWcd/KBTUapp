@@ -86,13 +86,13 @@ def card(con, v: Viewer, path: str, sid: str) -> dict:
     if not s:
         raise ApiError("not_found")
     people = []
-    for p in con.execute(f"""SELECT {PERSON_COLS}, s.course, s.school, a.id AS ask, a.body, c.status AS offered
+    for p in con.execute(f"""SELECT {PERSON_COLS}, s.course, s.school, u.tg_id, u.tg_username, a.id AS ask, a.body, c.status AS offered
             FROM asks a JOIN users u ON u.id = a.user_id LEFT JOIN students s ON s.user_id = u.id
             LEFT JOIN contacts c ON c.ask_id = a.id AND c.from_id = :me AND c.to_id = a.user_id
             WHERE a.subject = :sid AND {_SEEN} ORDER BY a.id DESC LIMIT 200""", {"now": _now(), "me": v.id, "sid": sid}).fetchall():
         people.append({"ask": p["ask"], "person": person_ref(p), "name": short_name(p), "course": p["course"], "school": p["school"],
                        "note": p["body"] or None, "offered": p["offered"],
-                       **({"telegram": telegram_of(con, p["id"])} if p["offered"] == "accepted" else {})})
+                       **({"telegram": _link(p)} if p["offered"] == "accepted" else {})})
     a = one(con, "SELECT * FROM asks WHERE subject = ? AND user_id = ? AND expires_at > ?", sid, v.id, _now())
     held = _held(con, v.id, sid)
     mine = {"note": a["body"], "status": "hidden" if held else a["status"], "why": a["why"], "until": a["expires_at"]} if a else None
@@ -122,7 +122,7 @@ def reserve(con, v: Viewer, path: str, sid: str) -> dict:
         if n >= WRITES_AN_HOUR:
             raise ApiError("rate_limited")
         _may_list(con, v.id, sid)
-        con.execute("DELETE FROM meta WHERE key LIKE ? AND key != ?", (f"subj:{v.id}:%", f"subj:{v.id}:{hour}"))  # my past hours
+        con.execute("DELETE FROM meta WHERE key GLOB ? AND key != ?", (f"subj:{v.id}:*", f"subj:{v.id}:{hour}"))  # my past hours
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"subj:{v.id}:{hour}", str(n + 1)))
     return s
 
@@ -226,6 +226,6 @@ def _now() -> int:
 
 
 from . import core  # noqa: E402
-from .forum import contact, telegram_of  # noqa: E402
+from .forum import _link, contact  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .account import CONSENT, on_policy  # noqa: E402

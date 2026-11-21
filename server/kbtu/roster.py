@@ -194,7 +194,10 @@ def match(con, uid: int) -> list[tuple[int, bool]]:
 
 def asks(con, uid: int) -> list[sqlite3.Row]:
     """Candidate rows that require the President's or DMP's confirmation."""
-    s, found = _mine(con, uid)
+    return _asks_from(uid, *_mine(con, uid))
+
+
+def _asks_from(uid: int, s: sqlite3.Row | None, found: list[sqlite3.Row]) -> list[sqlite3.Row]:
     return [r for r in found if r["claimed_by"] != uid and not _verified(r, s)]
 
 
@@ -323,14 +326,14 @@ def decide(con, v, rid: int, ok: bool) -> None:
 def mine(con, uid: int) -> dict | None:
     """For /api/me. Not signed in with Microsoft yet but listed under my Telegram username: the welcome (the way in), only the clubs and positions, nothing more before Microsoft says who I am. Signed in: the clubs just
     joined (a toast each, until seen) and the rows to ask about (no phone, no city: maybe someone else's)."""
-    s, _ = _mine(con, uid)
+    s, found = _mine(con, uid)
     if not s:
         u = one(con, "SELECT tg_username FROM users WHERE id = ?", uid)
         found = rows(con, """SELECT DISTINCT org_id, title, role FROM roster_pending WHERE tg = lower(?) AND rejected_by IS NULL ORDER BY id""",
                      u["tg_username"] or "") if u and u["tg_username"] else []
         return {"welcome": [{"org": r["org_id"], "title": r["title"], "role": r["role"]} for r in found]} if found else None
     joined = rows(con, "SELECT org_id, title FROM roster_toasts WHERE user_id = ? ORDER BY at", uid)
-    ask = asks(con, uid)
+    ask = _asks_from(uid, s, found)
     if not joined and not ask:
         return None
     return {"joined": [{"org": r["org_id"], "title": r["title"]} for r in joined],

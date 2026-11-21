@@ -2120,4 +2120,8 @@ MIGRATIONS: list[tuple[int, str]] = [
         AND (b.sent_at IS NULL OR b.sent_at > unixepoch() - 10800)
       GROUP BY p.id;
     DELETE FROM bot_outbox WHERE kind = 'fch_reply_answer';"""),
+    (207, """CREATE INDEX IF NOT EXISTS qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
+    CREATE INDEX IF NOT EXISTS reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS saved_by_event ON saved_events(event_id);"""),
 ]
