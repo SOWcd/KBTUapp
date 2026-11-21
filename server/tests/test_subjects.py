@@ -428,6 +428,7 @@ def test_migration_gives_old_offers_tokens(env, before_door_migration):  # noqa:
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
+    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 203
     con.execute("PRAGMA user_version = 176")
     con.close()
     db.init(cfg.db_path)

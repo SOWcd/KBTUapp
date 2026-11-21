@@ -42,7 +42,7 @@
   export function stand(text: string, was: boolean, human = false, photos: Media[] = []): ChannelFeedPost {
     const me = session.me;
     const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : signOf(), mine: true,
-      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false, photos };
+      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos };
     channel.feed = [temp, ...(channel.feed ?? [])];
     return temp;
   }

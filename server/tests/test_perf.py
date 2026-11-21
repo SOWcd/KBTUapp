@@ -78,6 +78,7 @@ def test_assets_go_precompressed(env):
     with c.stream("GET", "/assets/b.js", headers={"Accept-Encoding": "br"}) as br:
         assert br.headers["content-encoding"] == "br" and br.headers["vary"] == "Accept-Encoding"
         assert br.headers["content-type"].startswith("text/javascript") and br.headers["cache-control"].endswith("immutable")
+        assert b"".join(br.iter_raw()) == b"not-really-brotli"
     gz = c.get("/assets/b.js", headers={"Accept-Encoding": "gzip"})
     assert gz.headers["content-encoding"] == "gzip" and gz.content == body  # the client inflates the ready .gz
     plain = c.get("/assets/b.js", headers={"Accept-Encoding": "identity"})

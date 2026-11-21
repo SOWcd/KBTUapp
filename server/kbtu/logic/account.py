@@ -1262,6 +1262,7 @@ _DEL_GONE = {
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
+    ("fchan_hearts", "user_id"),
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
@@ -1373,7 +1374,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
-            role = 'user', is_founder = 0 WHERE id = ?""", (v.id,))  # a burnt number isn't given again
+            role = 'user', is_founder = 0, forum_seen_msg = 0 WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         # Delete a claimed roster row and prevent reimport only if its email is verified. Release an unverified
         # claim so a typo in the roster cannot keep the row from its owner.
         for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
