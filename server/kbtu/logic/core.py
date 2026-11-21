@@ -233,7 +233,7 @@ def at_least(role: str | None, least: str) -> bool:
 
 def overseer(con, v: Viewer) -> bool:
     """DMP Head+ (an org with can_oversee) or the admin."""
-    return v.role == "admin" or (v.student and one(con, """SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id
+    return v.student and (v.role == "admin" or one(con, """SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id
         WHERE m.user_id = ? AND o.can_oversee = 1 AND m.role != 'member'""", v.id) is not None)
 
 

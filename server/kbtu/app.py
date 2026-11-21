@@ -428,6 +428,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
         logic.fill_abbrs(con)
+        logic.oversight.reconcile_erased_admins(con, cfg.admins)
         logic.refill(con)  # Fill waitlist places made available by startup migrations.
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once

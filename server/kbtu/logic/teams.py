@@ -47,6 +47,7 @@ def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.
     """The roster as a file for the club's Vice+: only what the team already sees (policy §4: full
     name, @username, role) plus course and school (every student sees those); no ID, email or phone. The `team` right
     (Vice+, or a role given it). Audited."""
+    need_student(v)
     _may(con, v, oid, "team")
     found = rows(con, f"""SELECT s.last_name, s.first_name, s.last_lat, s.first_lat, u.tg_username, s.course, s.school,
             m.role, m.joined_at, {core.TITLES},

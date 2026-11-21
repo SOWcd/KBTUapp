@@ -876,6 +876,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
 def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
     """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
+    need_student(v)
     e = _staff_event(con, v, eid, "events")
     # the phone only where this event asked for it (else one club's ask reaches every club's list)
     found = rows(con, """SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.student_id, s.course, s.school, s.email,
