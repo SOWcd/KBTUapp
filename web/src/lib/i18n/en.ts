@@ -2338,7 +2338,6 @@ const en: Dict = {
   'chat.ask': "The event's Telegram chat",
   'chat.askText': "Telegram will offer to create a group (or pick yours) and add our bot as its admin. You own the group. Those signed up see an “Event chat” button, and the bot lets only them in.",
   'chat.go': "Next",
-  'studio.todoApps': "New applications to the club",
   'studio.todoMemo': "Next week's memo to DMP",
   'studio.todoMemoBy': "By Wednesday, 18:00 · events: {n}",
   'studio.todoRecruit': "The semester started: open recruitment",
