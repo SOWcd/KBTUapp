@@ -2039,4 +2039,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS outbox_u18 ON bot_outbox (ref) WHERE kind = 'u18_leave';"""),
     (198, "ALTER TABLE events ADD COLUMN silent_publish INTEGER NOT NULL DEFAULT 0;"),
+    # Earlier pending officer claims provisionally granted membership. Keep the claim for a decision.
+    (199, """DELETE FROM org_members AS m WHERE role = 'member' AND EXISTS (
+      SELECT 1 FROM roster_pending r JOIN meta k ON k.key = 'rclaim:' || r.id
+      WHERE r.org_id = m.org_id AND r.claimed_by = m.user_id AND k.value = CAST(m.user_id AS TEXT))
+      AND (SELECT json_extract(data, '$.by') FROM audit_log WHERE target = 'user:' || m.user_id
+        AND action = 'role_change' AND json_extract(data, '$.org') = m.org_id ORDER BY id DESC LIMIT 1) = 'roster';
+    DELETE FROM meta WHERE key LIKE 'rclaim:%';"""),
 ]

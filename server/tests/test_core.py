@@ -5578,9 +5578,9 @@ def test_roster_name_match():
 
 def test_roster_load_and_join(env):
     """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
-    whose username and name match joins at once (role, position as the club role's name, department, city, year,
+    whose university email and name match joins at once (role, position as the club role's name, department, city, year,
     phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
-    username but another name: asked without the phone or city; "Yes, it's me" joins at once as a member, the position
+    username but another name: asked without the phone or city; "Yes, it's me" requests approval, the claim
     goes to the President, who confirms; the row's city and phone never come with a claim."""
     from kbtu import roster
     c, cfg = env
@@ -5597,7 +5597,8 @@ def test_roster_load_and_join(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": None, "school": "SITE",  # noqa: E731
                        "year": "2", "course": 2, "city": None, "phone": None, "tg": None, "email": None, **k}
-    items = [row(full_name="Testov Ali Made", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
+    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    items = [row(full_name="Testov Ali Made", email="ali@kbtu.kz", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
              row(full_name="Someone Else", tg="bek_t", position="Head of HR", title="Head of HR", role="head", city="Aktau", phone="+77010000001"),
              row(full_name="Not Yet Here", tg="new_one", position="Vice president", role="vice", city="Shymkent"),
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
@@ -5626,8 +5627,8 @@ def test_roster_load_and_join(env):
     ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
     assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()                                         # at his word: a member now, the position waits
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("member", None)] and me["roster"] is None and me["city"] is None
+    me = c.get("/api/me", headers=h(72)).json()                                         # waiting for approval
+    assert not me["memberships"] and me["roster"] is None and me["city"] is None
     assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
     assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
     req = c.get("/api/roster/requests", headers=tma(70)).json()
@@ -5642,7 +5643,7 @@ def test_roster_load_and_join(env):
 
 def test_roster_claim_no_rights(env):
     """A claim at the student's word (review, Nov 2): a member's row never hands over a club role that carries rights;
-    an officer's row lets the claimer in as a member, and a no takes them out again; a waiting claim isn't overwritten."""
+    an officer's row grants no membership while pending; a waiting claim isn't overwritten."""
     from kbtu import roster
     c, cfg = env
     pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
@@ -5657,12 +5658,14 @@ def test_roster_claim_no_rights(env):
     roster.load(con, [row(position="HR", title="HR")], {"Open Mic sheet": "mic"})
     ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
+    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
+    roster.decide(con, logic.Viewer(pres["id"], "user", True), ask[0]["id"], True)
     assert tuple(con.execute("SELECT role, role_id FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()) == ("member", None)
     con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],))
     roster.load(con, [row(full_name="Other Person", position="Head of SMM", title="Head of SMM", role="head")], {"Open Mic sheet": "mic"})
     ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()[0] == "member"
+    assert not con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code in (404, 409)   # claimed: not twice
     req = c.get("/api/roster/requests", headers=tma(80)).json()
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
@@ -5686,7 +5689,8 @@ def test_roster_app_wins(env):
     con.execute("UPDATE students SET phone = '+77010000009', course = 3 WHERE user_id = ?", (ali["id"],))
     row = lambda **k: {"sheet": "S", "position": "President", "title": None, "role": "president", "dept": None, "school": None, "year": "1",  # noqa: E731
                        "course": 1, "city": "Taraz", "phone": "+77010000001", "email": None, **k}
-    got = roster.load(con, [row(full_name="Ali Testov", tg="ali_u", dept="Board"), row(full_name="Bek Testov", tg="bek_u")], {"S": "mic"})
+    con.execute("UPDATE students SET email = lower(first_name) || '@kbtu.kz'")
+    got = roster.load(con, [row(full_name="Ali Testov", email="ali@kbtu.kz", tg="ali_u", dept="Board"), row(full_name="Bek Testov", email="bek@kbtu.kz", tg="bek_u")], {"S": "mic"})
     assert (got["joined"], got["president_as_vice"]) == (2, 1)
     roles = dict(con.execute("SELECT user_id, role FROM org_members WHERE org_id = 1").fetchall())
     assert roles == {pres["id"]: "president", ali["id"]: "vice", bek["id"]: "vice"}            # one President: the app's
