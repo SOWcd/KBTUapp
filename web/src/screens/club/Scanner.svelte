@@ -121,6 +121,7 @@
   // ---- no QR (a dead phone): find them among the people going and check in by hand (§4.4) ----
   let byName = $state(untrack(() => names));
   let people = $state<DoorPerson[] | null>(null);
+  const minors = $derived((people ?? []).filter((d) => d.adult === false && d.checkedInAt).length);
   const lists = $derived(!!team || (aud !== 'team' && !!people));
   let who = $state('');
   let undoFor = $state<number | null>(null); // just checked in by hand: "Undo" on the result for a few seconds
@@ -288,7 +289,7 @@
       </div>
     {/if}
 
-    {#if false && e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}<!-- ponytail: hidden by the owner (Nov 21) until venues ask for it; drop `false &&` to bring it back -->
+    {#if minors > 0 && board && e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}<!-- the President's or a Vice's, once someone came marked under 18 (owner, Nov 21) -->
       <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
     {/if}
 
