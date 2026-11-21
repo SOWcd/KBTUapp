@@ -18,12 +18,12 @@
   import Skeleton from '../../ui/Skeleton.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { api, ApiErr, type Friendship, type Id, type LinkCard, type PersonCard } from '../../lib/api';
+  import { api, ApiErr, type Friendship, type Id, type PersonCard } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase, personCard, keepPerson } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
   import { burst } from '../../ui/burst';
-  import { sheets } from '../../lib/state/sheets';
+  import { sheets, type InviteLanding } from '../../lib/state/sheets';
   import { asStudent, session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, monthYear } from '../../lib/time';
@@ -34,7 +34,7 @@
 
   // invite: opened by their invite link (r_<code>, the one link): the landing. A big "Add as a friend" makes
   // friends in one tap, no request (sharing the link was their yes); guests see the card too and sign in at the tap
-  let { overlay, id, invite }: { overlay: Overlay; id: Id; invite?: { code: string; card: LinkCard } } = $props();
+  let { overlay, id, invite }: { overlay: Overlay; id: Id; invite?: InviteLanding } = $props();
 
   // svelte-ignore state_referenced_locally
   const pre = personCard(id); // a sheet is one person for its life
@@ -119,8 +119,11 @@
   // the invite's tap: a guest signs in first (a Microsoft round trip comes back to this landing: `again`); one tap, friends
   function addByLink() {
     if (!invite) return;
-    const { code } = invite;
-    asStudent(() => act(() => api.addByLink(code), asked, 'friends'), 'r_' + code);
+    const { code, alreadyRegistered } = invite;
+    asStudent(() => act(() => api.addByLink(code), (r) => {
+      if (r.created && alreadyRegistered) { haptic.ok(); say(t('ref.alreadyRegistered'), 'partying_face_3d'); }
+      else if (r.created || r.friendship !== 'friends') asked(r);
+    }, 'friends'), 'r_' + code);
   }
   const accept = () => act(() => api.answerFriend(id, true), welcome, 'friends');
   const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }, 'none', true);

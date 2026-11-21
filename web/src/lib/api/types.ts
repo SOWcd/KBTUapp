@@ -823,7 +823,7 @@ export type Friendship = PersonCard['friendship'];
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
-export interface LinkCard { person: PersonRef; friendship: Friendship | 'self' }
+export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
 
 
 /** One application to volunteer, as the organizer sees it: full name and course, like applications to a club. */

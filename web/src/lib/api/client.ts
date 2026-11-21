@@ -219,7 +219,7 @@ export const server = {
   takeBackRequest: (user: Id): Promise<void> => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user: Id): Promise<void> => call('DELETE', `/friends/${user}`),
   linkCard: (code: string): Promise<LinkCard> => call('GET', `/invite/${code}`), // whose invite link it is (adds nobody; guests too)
-  addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
+  addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
 
   // Studio (own org, SPEC §6): Member+ reads and scans, Head+ creates, edits and sees attendees
