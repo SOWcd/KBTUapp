@@ -161,10 +161,10 @@
   let aged = $state(false); // marked by a tap on this result (else a mark shown came from the imported list)
   async function setAge(adult: boolean) {
     const r = res;
-    if (!r || !('person' in r) || r.adult === adult) return;
+    if (!r || !('person' in r)) return; // the door checks every ID: its tap always records, whatever the list said
     const was = r.adult ?? null, uid = r.person.id, d = people?.find((x) => x.person.id === uid);
     r.adult = adult; aged = true; if (d) d.adult = adult; // at once; back if the server says no
-    haptic.select();
+    haptic.ok(); say(t(adult ? 'age.adult' : 'age.minor'), adult ? 'sparkles_3d' : 'warning_3d');
     try { await api.markAge(id, uid, adult); } catch {
       r.adult = was; if (d) d.adult = was;
       haptic.error(); say(t('common.error'), 'warning_3d');
@@ -249,10 +249,10 @@
             {#if res.flagged}<span class="flag"><TriangleAlert size={16} />{t('scan.flagged')}</span>{/if}
             {#if undoFor === res.person.id}<Button kind="secondary" size="s" onclick={undo}>{t('door.undo')}</Button>{/if}
             {#if e?.ageCheck}
-              <span class="more">{t(res.adult != null && !aged ? 'age.listed' : 'age.look')}</span>
+              <span class="more">{t('age.look')}</span>
               <div class="age">
-                <Button kind={res.adult === true ? 'primary' : 'secondary'} size="l" full onclick={() => setAge(true)}>{t('age.adult')}</Button>
-                <Button kind={res.adult === false ? 'primary' : 'secondary'} destructive={res.adult === false} size="l" full onclick={() => setAge(false)}>{t('age.minor')}</Button>
+                <Button kind={aged && res.adult === true ? 'primary' : 'secondary'} size="l" full onclick={() => setAge(true)}>{t('age.adult')}</Button>
+                <Button kind={aged && res.adult === false ? 'primary' : 'secondary'} destructive={aged && res.adult === false} size="l" full onclick={() => setAge(false)}>{t('age.minor')}</Button>
               </div>
             {/if}
           </div>
