@@ -101,21 +101,14 @@
       linear-gradient(180deg, rgb(230, 196, 122), rgb(184, 142, 66) 52%, rgb(138, 100, 42));
     box-shadow: inset 0 0 0 1px rgba(255, 232, 170, 0.75), inset 0 1px 0 rgba(255, 250, 228, 0.7), inset 0 -1.5px 2px rgba(60, 30, 6, 0.5), 0 0 0 0.5px rgba(40, 14, 4, 0.8), 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
   /* The Bay Harbor Society: a slide from Dexter's box. Its frosted label end under the name (matte, a hairline where the
-     clear glass begins), the clear glass cold, a cover slip just past it over one drop of blood smeared thin to the right (in px from the label: clear of
-     the number at 320 px), the ground
+     clear glass begins), the clear glass cold (owner, Nov 21: no blood or cover slip on it), the ground
      edges catching the light, a light sliding with the tilt */
   .thebayharborsociety { color: rgb(10, 10, 10);
-    background: radial-gradient(1.6px 1.1px at 132.4px calc(50% - 0.9px), rgba(255, 236, 238, 0.85), transparent),
-      radial-gradient(6px 4px at 134px 50%, rgb(122, 8, 18) 0 45%, rgb(170, 16, 28) 70%, rgba(179, 18, 30, 0.3) 92%, transparent),
-      linear-gradient(90deg, rgba(150, 12, 22, 0.75), rgba(179, 18, 30, 0.32) 55%, transparent) 138px 50% / 20px 3px no-repeat,
-      linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.7) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.7) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
       repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.025) 0 0.5px, transparent 0.5px 1.5px) 0 0 / 112px 100% no-repeat,
       linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 111.5px, rgba(150, 146, 140, 0.55) 111.5px 112px, transparent 112px),
       linear-gradient(180deg, rgb(238, 241, 243), rgb(214, 218, 221) 55%, rgb(198, 202, 206));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85), inset 0 1px 0 rgb(255, 255, 255), inset 0 -1.5px 2px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 4px 12px -6px rgba(0, 0, 0, 0.8); }
-  /* the cover slip: a thinner square of glass over the blood, its edges a hairline */
-  .thebayharborsociety::before { content: ''; position: absolute; left: 122px; top: 4px; bottom: 4px; width: 38px; pointer-events: none;
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.3), transparent 40%); box-shadow: inset 0 0 0 0.5px rgba(110, 118, 126, 0.28); }
   /* CyberSport: dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);
