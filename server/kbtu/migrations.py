@@ -2046,4 +2046,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       AND (SELECT json_extract(data, '$.by') FROM audit_log WHERE target = 'user:' || m.user_id
         AND action = 'role_change' AND json_extract(data, '$.org') = m.org_id ORDER BY id DESC LIMIT 1) = 'roster';
     DELETE FROM meta WHERE key LIKE 'rclaim:%';"""),
+    (200, """ALTER TABLE org_invites ADD COLUMN consumed INTEGER NOT NULL DEFAULT 0;
+    UPDATE org_invites SET consumed = 1 WHERE used_by IS NOT NULL AND multi = 0;
+    -- A legacy erasure could clear the only record of redemption. Retire ambiguous live links once.
+    UPDATE org_invites SET revoked_at = unixepoch() WHERE multi = 0 AND consumed = 0 AND revoked_at IS NULL
+      AND expires_at > unixepoch() AND created_at <= (SELECT MAX(at) FROM audit_log WHERE action = 'delete_my_data');"""),
 ]
