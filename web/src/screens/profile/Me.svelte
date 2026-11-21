@@ -21,6 +21,7 @@
   import Landmark from '@lucide/svelte/icons/landmark';
   import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import { session, loadMe } from '../../lib/state/session.svelte';
+  import { setReportConsent } from '../../lib/reports';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
   import { say, ui, open, close, removeOverlay, overlays } from '../../lib/state/ui.svelte';
@@ -55,6 +56,7 @@
   // the strip's month under its first week, in the app's language
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   const me = $derived(session.me);
+  const reportLog = $derived(session.reportLog?.owner === me?.id ? session.reportLog?.entries : undefined);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(() => loadMyCard(true)); });
   const shown = $derived(myShown()); // at once from what the app knows (looks.svelte.ts)
@@ -287,7 +289,7 @@
     <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->
     <section class="failed surface" data-away>
       <p class="t-body">{t('common.offline')}</p>
-      <Button kind="secondary" size="m" onclick={() => { haptic.tap(); void loadMe(); }}>{t('me.retry')}</Button>
+      <Button kind="secondary" size="m" onclick={() => { haptic.tap(); void loadMe(false, true); }}>{t('me.retry')}</Button>
     </section>
   {:else if session.ready}
     <section class="guest" data-away>
@@ -328,6 +330,24 @@
     {/if}
   </Group></div>
 
+  {#if me?.reports && (me.student || reportLog?.length) && (!me.reports.consent || reportLog)}
+    <div data-away><Group caption={t('evr.log')}>
+      {#if !me.reports.consent}
+        <Row title={t('evr.mine')} accessory="chevron" onclick={() => setReportConsent(true)} />
+      {:else if reportLog}
+        {#each reportLog as entry (`${entry.event}:${entry.org}`)}
+          <article class="log-entry">
+            <p class="t-body"><b>{dateInput(entry.date)} · {entry.title}</b></p>
+            <p class="t-foot">{entry.club} · {t(`evr.${entry.status}`)}</p>
+            {#if entry.comment}<p class="log-comment">{entry.comment}</p>{/if}
+          </article>
+        {:else}
+          <Row dense title={t('evr.logEmpty')} />
+        {/each}
+      {/if}
+    </Group></div>
+  {/if}
+
   <!-- KBTU's own: its psychologist, the anthem, and the big screen / appeals where they show -->
   <div data-away><Group>
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
@@ -356,6 +376,9 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 16px; }
   .page > :global(*) { flex-shrink: 0; }
+  .log-entry { display: grid; gap: 4px; padding: var(--s-3) var(--s-4); overflow-wrap: anywhere; }
+  .log-entry + .log-entry { border-top: 0.5px solid var(--separator); }
+  .log-comment { font-size: var(--fs-sub); white-space: pre-wrap; }
   /* settings in place: what leaves is gone after the swap; the panels' buttons step aside; no taps while a fade runs */
   .page.set :global([data-away]) { display: none; }
   .shield { display: flex; gap: 8px; }

@@ -1075,6 +1075,29 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 
+TEAM_LOG_HEAD = {
+    "ru": ("Полное имя", "Событие", "Дата", "Отметка", "Комментарий"),
+    "kk": ("Толық аты-жөні", "Іс-шара", "Күні", "Белгі", "Пікір"),
+    "en": ("Full name", "Event", "Date", "Mark", "Comment"),
+}
+TEAM_LOG_MARKS = {
+    "ru": {"present": "Присутствовал", "late": "Опоздал", "absent": "Отсутствовал", "excused": "Уважительная причина"},
+    "kk": {"present": "Қатысты", "late": "Кешікті", "absent": "Қатыспады", "excused": "Себепті"},
+    "en": {"present": "Present", "late": "Late", "absent": "Absent", "excused": "Excused"},
+}
+TEAM_LOG_CAPTION = {"ru": "Журнал команды: {org}", "kk": "Команда журналы: {org}", "en": "Team log: {org}"}
+
+
+def team_log_csv(lang: str, org: str, people) -> tuple[str, bytes, str]:
+    out = io.StringIO()
+    w = csv.writer(out, delimiter=";")
+    w.writerow(TEAM_LOG_HEAD[lang])
+    for name, title, ts, status, comment in people:
+        day = time.strftime("%Y-%m-%d", time.gmtime(ts + 5 * 3600)) if ts is not None else ""  # Almaty
+        w.writerow([_cell(x) for x in (name, title, day, TEAM_LOG_MARKS[lang][status], comment)])
+    return "team-log.csv", ("\ufeff" + out.getvalue()).encode(), TEAM_LOG_CAPTION[lang].format(org=org)[:1000]
+
+
 # DMP takes one Russian memo per week with numbered requests and a three-language signature.
 # Send it from the sender's KBTU address on Wednesday between 09:00 and 18:00.
 MEMO_TO = "youth_policy@kbtu.kz"

@@ -234,7 +234,7 @@ CREATE TABLE club_report_marks (
       event_id INTEGER NOT NULL,
       org_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      status TEXT NOT NULL CHECK (status IN ('present', 'late', 'absent', 'excused')),
+      status TEXT NOT NULL CHECK (status IN ('present', 'late', 'absent', 'excused')), comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300), comment_by INTEGER REFERENCES users(id) ON DELETE SET NULL, comment_at INTEGER, comment_edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL, comment_edited_at INTEGER,
       PRIMARY KEY (event_id, org_id, user_id),
       FOREIGN KEY (event_id, org_id) REFERENCES club_reports(event_id, org_id) ON DELETE CASCADE) STRICT;
 CREATE TABLE club_reports (

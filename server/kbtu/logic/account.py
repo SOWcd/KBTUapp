@@ -1147,20 +1147,22 @@ def _deletion_hash(salt: str, identity: str) -> str:
     return hashlib.sha256(f"{salt}:{identity}".encode()).hexdigest()[:32]
 
 
-def _deletion_log(con, uid: int, photos: bool) -> None:
+def _deletion_log(con, uid: int, photos: bool = False, *, reports: bool = False) -> None:
     path = _journal(con)
     if not path.exists() and one(con, "SELECT 1 FROM meta WHERE key GLOB 'delreplay:*'"):
         raise RuntimeError("restore deletions.log before deleting accounts")
     salt = _salt(path)
     created = one(con, "SELECT created_at FROM users WHERE id = ?", uid)[0]
     # Moving an account swaps its Telegram identity but preserves the database row.
-    h = _deletion_hash(salt, f"user:{uid}:{created}")
+    kind = "reports" if reports else "user"
+    h = _deletion_hash(salt, f"{kind}:{uid}:{created}")
     previous = one(con, "SELECT value FROM meta WHERE key = ?", f"delreplay:{h}")
     day = core.now() // 86400 * 86400
     # The first new-format generation follows any day-only record. Two deletions in a day still differ.
     generation = max(day + 1, int(previous[0]) + 1 if previous else 0)
     old = path.read_text() if path.exists() else ""
-    _durable_text(path, old + f"{day} {h}{' photos' if photos else ''} v2:{generation}:{hashlib.sha256(salt.encode()).hexdigest()[:16]}\n")
+    scope = " reports" if reports else " photos" if photos else ""
+    _durable_text(path, old + f"{day} {h}{scope} v2:{generation}:{hashlib.sha256(salt.encode()).hexdigest()[:16]}\n")
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"delreplay:{h}", str(generation)))
 
 
@@ -1192,28 +1194,36 @@ def replay_deletions(con) -> tuple[int, int]:
         latest = {}
         salt_tag = hashlib.sha256(salt.encode()).hexdigest()[:16]
         for line in path.read_text().splitlines():
-            m = re.fullmatch(r"([0-9]+) ([0-9a-f]{32})( photos)?(?: v2:([0-9]+):([0-9a-f]{16}))?", line)
+            m = re.fullmatch(r"([0-9]+) ([0-9a-f]{32})(?: (photos|reports))?(?: v2:([0-9]+):([0-9a-f]{16}))?", line)
             if not m:
                 raise RuntimeError("invalid deletions.log record")
-            day, h, photos, version, tag = m.groups()
+            day, h, scope, version, tag = m.groups()
+            if scope == "reports" and version is None:
+                raise RuntimeError("invalid report withdrawal in deletions.log")
             if tag and tag != salt_tag:
                 raise RuntimeError("deletions.salt does not match deletions.log")
             generation = int(version or day)
             latest[h] = max(generation, latest.get(h, -1))
             if generation > applied.get(h, -1):
-                records.setdefault(h, []).append((generation, bool(photos), version is None))
+                records.setdefault(h, []).append((generation, scope or "", version is None))
         cutoff = core.now() - DELETION_LOG_DAYS * 86400
         if any(g // 86400 * 86400 > cutoff and g > latest.get(h, -1) for h, g in applied.items()):
             raise RuntimeError("restore the latest deletions.log before starting")
         if not records:
             return 0, len(latest)
         files = []
+        from . import evreports
         for u in rows(con, """SELECT u.id, u.tg_id, u.created_at, u.role, s.verified_at FROM users u
                 LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0"""):
+            reports_key = _deletion_hash(salt, f"reports:{u['id']}:{u['created_at']}")
+            if any(scope == "reports" for _, scope, _ in records.get(reports_key, [])):
+                evreports.erase(con, u["id"])
             # Both journal formats may refer to this row. Apply its earliest outstanding erasure once.
             legacy_key = _deletion_hash(salt, str(u["tg_id"]))
             row_key = _deletion_hash(salt, f"user:{u['id']}:{u['created_at']}")
-            for generation, photos, legacy in sorted(records.get(legacy_key, []) + records.get(row_key, [])):
+            for generation, scope, legacy in sorted(records.get(legacy_key, []) + records.get(row_key, [])):
+                if scope == "reports":
+                    continue
                 if legacy:
                     verified = u["verified_at"]
                     if verified is None or verified >= generation + 86400:
@@ -1222,7 +1232,7 @@ def replay_deletions(con) -> tuple[int, int]:
                         raise RuntimeError("same-day verification in a legacy deletion record; reconcile the snapshot before starting")
                 # Use the photo choice for the incarnation present in the snapshot.
                 con.execute("DELETE FROM meta WHERE key = ?", (f"delphotos:{u['id']}",))
-                if photos:
+                if scope == "photos":
                     con.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (f"delphotos:{u['id']}",))
                 files.append(delete_me(con, Viewer(u["id"], u["role"], True)))
                 break
@@ -1267,7 +1277,7 @@ _DEL_GONE = {
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"), ("vol_hands", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it, a session's door handed to me
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
     ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
-    ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my attendance marks in clubs' event reports (evreports.py), my consent to them; who filled one loses the link
+    ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my marks, their comments and my consent; nullable author and editor links are cleared below
     ("event_team_members", "user_id"), ("team_consents", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next), my consent to teams
     ("subject_holds", "user_id"),  # a moderator's take-down of my listing on a subject (logic/subjects.py)
     ("kri_consents", "user_id"),  # my yes to Google answering the assistant first (assistant.GOOGLE_YES)

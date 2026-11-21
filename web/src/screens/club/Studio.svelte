@@ -53,6 +53,7 @@
   import { ApiErr } from '../../lib/api';
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
+  import { withReportConsent } from '../../lib/reports';
   import { nameOf } from '../../lib/short';
   import { photosFirst } from '../../lib/faces';
   import Avatar from '../../ui/Avatar.svelte';
@@ -164,12 +165,27 @@
   // a club's own events open its organizer's screen; one we co-host opens as a student sees it, with our door tools (cohosts.py)
   const ours = (e: EventCard) => e.org.id === m?.org.id;
   const qrDay = $derived(!!next && today && staff && ours(next) && next.status === 'published');
-  // whoever keeps the club's event reports (an HR role without "events") opens a started one's organizer screen for its report row;
-  // on one we co-host, that screen holds our own report (server evreports.py: one per club)
-  const reports = (e: EventCard) => !!session.me?.reports && may(m, 'reports') && e.status === 'published' && e.startsAt <= nowTs();
+  // Report-only roles go straight from a started event to their club's report.
+  // Organizers can still open it from event management.
+  const canReport = $derived(!asCreator && !!session.me?.reports && may(m, 'reports'));
+  const reports = (e: EventCard) => canReport && e.status === 'published' && e.startsAt <= nowTs();
   const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id)
-    : ours(e) ? ((staff || reports(e)) ? sheets.manage(e.id) : sheets.event(e.id))
+    : !staff && m && reports(e) ? sheets.eventReport(e.id, ours(e) ? undefined : m.org.id)
+    : ours(e) ? (staff ? sheets.manage(e.id) : sheets.event(e.id))
     : m && reports(e) ? sheets.manage(e.id, false, m.org.id) : sheets.event(e.id));
+  let sendingLog = $state(false);
+  async function exportLog() {
+    if (!m || sendingLog) return;
+    const oid = m.org.id;
+    sendingLog = true;
+    try {
+      if (await withReportConsent(() => api.exportTeamLog(oid).then(() => true))) {
+        haptic.ok(); say(t('att.sent'), 'party_popper_3d');
+      }
+    } catch (e) {
+      haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d');
+    } finally { sendingLog = false; }
+  }
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
   const guesting = $derived(events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e))); // our own people asking to come as guests
@@ -359,6 +375,13 @@
       {#if vol?.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
     </Group></div>
 
+    {#if canReport}
+      <section class="report-tools">
+        <h3 class="t-title">{t('evr.consentT')}</h3>
+        <Button kind="secondary" size="s" loading={sendingLog} onclick={exportLog}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('evr.export')}</Button>
+      </section>
+    {/if}
+
     {#if events.length}
       <div class="events">
         <Segmented label={t('studio.upcoming')} items={segs.map(([label, l], i) => ({ value: i, label: label + (l.length ? ' · ' + l.length : '') }))} value={at} onchange={(v) => (seg = v)} />
@@ -414,6 +437,7 @@
   .yn { display: flex; align-items: center; gap: var(--s-2); }
   .cov { width: 30px; height: 30px; border-radius: var(--r-xs); object-fit: cover; }
   .events { display: flex; flex-direction: column; gap: var(--s-3); }
+  .report-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
   .list { display: flex; flex-direction: column; gap: var(--s-2); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

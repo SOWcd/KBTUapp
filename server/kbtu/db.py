@@ -92,13 +92,13 @@ def _init(path: str) -> None:
 
 
 @contextlib.contextmanager
-def tx(con: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    """A write transaction that holds the write lock from the start; inside another one it joins it (the outer one
-    commits or rolls back for both)."""
+def tx(con: sqlite3.Connection, *, write: bool = True) -> Iterator[sqlite3.Connection]:
+    """A transaction with an upfront write lock by default, or a read snapshot with write=False. Inside another
+    transaction it joins that one."""
     if con.in_transaction:
         yield con
         return
-    con.execute("BEGIN IMMEDIATE")
+    con.execute("BEGIN IMMEDIATE" if write else "BEGIN")
     try:
         yield con
     except BaseException:

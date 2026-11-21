@@ -74,8 +74,7 @@ class Config:
     docs_db: str = ""
     # TIKTOK=1: answer supported group links with the video (tiktok.py)
     tiktok: bool = False
-    # REPORTS=1: clubs' event reports (logic/evreports.py: who of the team came, how many guests); off until the privacy
-    # policy names the attendance marks: the routes answer 404 and the app shows nothing of it
+    # REPORTS=1: clubs' event reports and personal attendance logs (logic/evreports.py, privacy policy section 3)
     reports: bool = False
     # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
     rooms_file: str = ""

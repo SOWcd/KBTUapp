@@ -2157,4 +2157,9 @@ MIGRATIONS: list[tuple[int, str]] = [
         AND e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.school IS NULL
         AND e.updated_at < r.created_at AND COALESCE(e.ends_at, e.starts_at + 10800) <= r.created_at
     );"""),
+    (215, """ALTER TABLE club_report_marks ADD COLUMN comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300);
+    ALTER TABLE club_report_marks ADD COLUMN comment_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE club_report_marks ADD COLUMN comment_at INTEGER;
+    ALTER TABLE club_report_marks ADD COLUMN comment_edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE club_report_marks ADD COLUMN comment_edited_at INTEGER;"""),
 ]
