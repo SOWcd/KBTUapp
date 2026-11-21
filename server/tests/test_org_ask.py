@@ -40,6 +40,17 @@ def _review(c, rid, **body):
     return c.post(f"/api/receipts/{rid}/review", headers=tma(20), json=body)
 
 
+def test_receipt_image_requires_sender_or_host_event_right(paid):
+    c, con, eid, _ = paid
+    rid = _seat(c, con, eid, 10)
+    url = f"/api/receipts/{rid}/image"
+    con.execute("UPDATE users SET role = 'admin' WHERE tg_id IN (11, 20)")
+    assert c.get(url, headers=tma(10)).status_code == 200
+    assert c.get(url, headers=tma(20)).status_code == 200
+    assert c.get(url, headers=tma(11)).status_code == 404
+    assert c.get(url, headers={**tma(11), "X-Staff-Event": str(eid)}).status_code == 403
+
+
 def _rejected(con, tg):
     m = con.execute("""SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id
         WHERE b.user_id = ? AND b.kind = 'receipt_rejected'""", (_uid(con, tg),)).fetchone()

@@ -903,10 +903,10 @@ def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str)
 
 
 def receipt_path(con, v: Viewer, rid: int) -> str:
-    """A receipt's image is private (§4.3): its sender, the event's Head+ and the admin see it."""
+    """The sender or a verified member of the host club with its events right may open the original."""
     c = one(con, """SELECT f.path, r.user_id, e.org_id FROM receipts c JOIN files f ON f.id = c.file_id
         JOIN registrations r ON r.id = c.registration_id JOIN events e ON e.id = r.event_id WHERE c.id = ?""", rid)
-    if not c or not (c["user_id"] == v.id or v.role == "admin" or can(con, v, c["org_id"], "events")):
+    if not c or not (c["user_id"] == v.id or v.student and "events" in core.rights_of(con, v.id, c["org_id"])):
         raise ApiError("not_found")
     return c["path"]
 
