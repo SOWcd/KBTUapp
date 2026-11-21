@@ -581,7 +581,7 @@
   const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: coShort(co.org) }) : coShort(co.org));
   const coFound = $derived.by(() => {
     const q = coQ.trim();
-    return data.orgs.filter((o) => o.kind === 'club' && o.id !== org && o.id !== co?.org.id && (!q || hit(o, q))).slice(0, 8);
+    return data.orgs.filter((o) => (o.kind === 'club' || o.kind === 'school') && o.id !== org && o.id !== co?.org.id && (!q || hit(o, q))).slice(0, 8);
   });
   const coSay = (x: unknown) => say(t(x instanceof ApiErr && x.message === 'declined' ? 'co.declinedOnce' : x instanceof ApiErr && x.code === 'rate_limited' ? 'co.limit'
     : x instanceof ApiErr && x.message === 'cohost' ? 'co.bad' : 'common.error'), 'pleading_face_3d');

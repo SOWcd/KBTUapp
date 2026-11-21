@@ -15,10 +15,10 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import Plus from '@lucide/svelte/icons/plus';
   import Qr from '../../ui/Qr.svelte';
-  import { QR_TONE } from '../../lib/awards';
-  import Minus from '@lucide/svelte/icons/minus';
+  import { QR_TONE, QR_LOOK, skinOf } from '../../lib/awards';
+  import LookMark from '../../ui/LookMark.svelte';
+  import OrgLogo from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -76,30 +76,10 @@
   // 18+ at the door (age_check): no self check-in by the rotating QR, it would skip the ID; the entrance QR opens
   // the ticket, the scanner reads it and asks 18+ (owner, Nov 21)
   const aged18 = $derived(!!e?.ageCheck);
+  const eskin = $derived(e?.org ? skinOf(e.org) : undefined); // the entrance QR wears the club's look, as its tickets do
   $effect(() => { if (aged18 && mode === 'qr') untrack(() => { mode = 'entry'; closeScanner(); }); });
-  // list buyers not in the app yet (guest list): the student ID and surname from their ID card let them in by hand
+  // list buyers not in the app yet (guest list): ticked by name in the guest list (People, guestsOnly)
   let pend = $state<{ pending: number; pendingCame: number } | null>(null);
-  let pid = $state(''), psur = $state(''), pbusy = $state(false);
-  let plet = $state<{ sid: string; sur: string; adult: boolean | null } | null>(null);
-  $effect(() => { if (qr && !only && e?.guestList) api.doorPending(id).then((x) => (pend = x)).catch(() => {}); });
-  async function letIn(adult?: boolean) {
-    const sid = plet && adult !== undefined ? plet.sid : pid.trim().toUpperCase(), sur = plet && adult !== undefined ? plet.sur : psur.trim();
-    if (!sid || !sur) return;
-    pbusy = true;
-    try {
-      const r = await api.letIn(id, sid, sur, adult);
-      pend = { pending: r.pending, pendingCame: r.pendingCame }; plet = { sid, sur, adult: r.adult }; pid = ''; psur = ''; haptic.ok();
-    } catch (x) { say(x instanceof ApiErr && x.code === 'not_found' ? t('mk.letInNo') : t('common.error'), 'warning_3d'); }
-    pbusy = false;
-  }
-  // outsiders let in without the app (ID checked by eye): one anonymous count, +1/-1 at once, the server's word after
-  let extra = $state<number | null>(null);
-  $effect(() => { if (qr && !only) api.doorExtra(id).then((x) => (extra = x.extra)).catch(() => {}); });
-  function stepExtra(step: 1 | -1) {
-    if (extra == null || (step < 0 && extra === 0)) return;
-    haptic.tap(); extra += step;
-    api.doorExtra(id, step).then((x) => (extra = x.extra)).catch(() => { extra = Math.max(0, (extra ?? 0) - step); say(t('common.error'), 'warning_3d'); });
-  }
   function recount() {
     if (detail?.myCrew === 'scan') return;
     api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
@@ -141,6 +121,7 @@
   // ---- no QR (a dead phone): find them among the people going and check in by hand (§4.4) ----
   let byName = $state(untrack(() => names));
   let people = $state<DoorPerson[] | null>(null);
+  const minors = $derived((people ?? []).filter((d) => d.adult === false && d.checkedInAt).length);
   const lists = $derived(!!team || (aud !== 'team' && !!people));
   let who = $state('');
   let undoFor = $state<number | null>(null); // just checked in by hand: "Undo" on the result for a few seconds
@@ -181,10 +162,12 @@
   let aged = $state(false); // marked by a tap on this result (else a mark shown came from the imported list)
   async function setAge(adult: boolean) {
     const r = res;
-    if (!r || !('person' in r) || r.adult === adult) return;
+    if (!r || !('person' in r)) return; // the door checks every ID: its tap always records, whatever the list said
     const was = r.adult ?? null, uid = r.person.id, d = people?.find((x) => x.person.id === uid);
     r.adult = adult; aged = true; if (d) d.adult = adult; // at once; back if the server says no
-    haptic.select();
+    const name = r.person.name.split(' ').slice(0, 2).join(' ');
+    haptic.ok(); say(`${name} · ${t(adult ? 'age.adult' : 'age.minor')}`, adult ? 'sparkles_3d' : 'warning_3d');
+    if (res === r) res = null; // done: the card goes, the next guest is scanned (owner: a card that stays looks unsaved)
     try { await api.markAge(id, uid, adult); } catch {
       r.adult = was; if (d) d.adult = was;
       haptic.error(); say(t('common.error'), 'warning_3d');
@@ -230,7 +213,7 @@
       <div class="sw"><Segmented items={[...(aged18 ? [] : [{ value: 'qr' as const, label: 'QR' }]), { value: 'scan' as const, label: t('studio.scanner') }, ...(aud !== 'team' ? [{ value: 'entry' as const, label: t('mk.entry') }] : [])]} bind:value={mode} onchange={toMode} /></div>
       {#if mode === 'entry'}
         <!-- the entrance's QR (owner, Nov 21): a guest's own camera opens the app on their ticket (tk_: no ticket -> the event, its sign-in) -->
-        <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={QR_TONE} /></div><p class="t-foot">{t('mk.entryHint')}</p></div>
+        <div class="entry"><div class="plate"><Qr text={`https://t.me/KBTUappBot?startapp=tk_${id}`} tone={eskin ? QR_LOOK[eskin] : QR_TONE}>{#if eskin}<LookMark look={eskin} />{:else if e?.org}<OrgLogo org={e.org} />{/if}</Qr></div><p class="t-foot">{t('mk.entryHint')}</p></div>
       {/if}
       {#if mode === 'qr'}<button class="qr" aria-label={t('studio.scanner')} onclick={() => { mode = 'scan'; toMode('scan'); }}><EventQr {overlay} event={id} {sess} embed onlast={recount} /></button>{/if}
     {:else if e}
@@ -269,10 +252,10 @@
             {#if res.flagged}<span class="flag"><TriangleAlert size={16} />{t('scan.flagged')}</span>{/if}
             {#if undoFor === res.person.id}<Button kind="secondary" size="s" onclick={undo}>{t('door.undo')}</Button>{/if}
             {#if e?.ageCheck}
-              <span class="more">{t(res.adult != null && !aged ? 'age.listed' : 'age.look')}</span>
+              <span class="more">{t('age.look')}</span>
               <div class="age">
-                <Button kind={res.adult === true ? 'primary' : 'secondary'} size="l" full onclick={() => setAge(true)}>{t('age.adult')}</Button>
-                <Button kind={res.adult === false ? 'primary' : 'secondary'} destructive={res.adult === false} size="l" full onclick={() => setAge(false)}>{t('age.minor')}</Button>
+                <Button kind={aged && res.adult === true ? 'primary' : 'secondary'} size="l" full onclick={() => setAge(true)}>{t('age.adult')}</Button>
+                <Button kind={aged && res.adult === false ? 'primary' : 'secondary'} destructive={aged && res.adult === false} size="l" full onclick={() => setAge(false)}>{t('age.minor')}</Button>
               </div>
             {/if}
           </div>
@@ -295,25 +278,9 @@
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
-      {#if pend && pend.pending}
-        <section class="pend">
-          <p class="t-foot">{t('mk.pending', { n: pend.pendingCame, m: pend.pending })}</p>
-          <Field label={t('mk.letInId')} bind:value={pid} autocomplete="off" placeholder="24B030001" />
-          <Field label={t('mk.letInSurname')} bind:value={psur} autocomplete="off" />
-          <Button kind="secondary" size="m" full loading={pbusy} disabled={!pid.trim() || !psur.trim()} onclick={() => letIn()}>{t('mk.letIn')}</Button>
-          {#if plet}
-            <p class="ok">{t('mk.letInOk', { id: plet.sid })}{plet.adult === true ? ' · 18+' : plet.adult === false ? ' · ' + t('age.minor') : ''}</p>
-            {#if e?.ageCheck}<div class="ages"><Button kind={plet.adult === true ? 'primary' : 'secondary'} size="m" onclick={() => letIn(true)}>{t('age.adult')}</Button>
-              <Button kind={plet.adult === false ? 'primary' : 'secondary'} destructive={plet.adult === false} size="m" onclick={() => letIn(false)}>{t('age.minor')}</Button></div>{/if}
-          {/if}
-        </section>
-      {/if}
-      {#if extra != null && aud !== 'team'}
-        <div class="extra">
-          <span>{t('mk.extra')} · <b>{extra}</b></span>
-          <Button kind="secondary" size="s" round label="−1" disabled={!extra} onclick={() => stepExtra(-1)}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
-          <Button kind="secondary" size="s" round label="+1" onclick={() => stepExtra(1)}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
-        </div>
+      {#if aud !== 'team'}
+        <Button kind="primary" size="l" full onclick={() => { haptic.tap(); sheets.doorPeople(id, () => { recount(); if (e?.guestList) api.doorPending(id).then((x) => (pend = x)).catch(() => {}); }, true); }}>{#snippet icon()}<UsersRound size={19} />{/snippet}{t('mk.guestList')}</Button>
+        {#if pend && pend.pending}<p class="t-foot">{t('mk.pending', { n: pend.pendingCame, m: pend.pending })}</p>{/if}
       {/if}
       {#if scanOnly}<p class="t-foot only">{t('mk.scanOnly')}</p>{/if}
       <div class="quiet">
@@ -322,7 +289,7 @@
       </div>
     {/if}
 
-    {#if e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}
+    {#if minors > 0 && board && e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}<!-- the President's or a Vice's, once someone came marked under 18 (owner, Nov 21) -->
       <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
     {/if}
 
@@ -412,9 +379,4 @@
   .entry { display: grid; justify-items: center; gap: 10px; }
   .entry .plate { width: min(78vw, 300px); aspect-ratio: 1; padding: 14px; border-radius: var(--r-l); background: white; }
   .entry p { text-align: center; }
-  .pend { display: grid; gap: 8px; }
-  .pend .ok { color: var(--success-text); text-align: center; }
-  .pend .ages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .extra { display: flex; align-items: center; gap: 8px; justify-content: center; }
-  .extra span { flex: 1; color: var(--text-2); }
 </style>

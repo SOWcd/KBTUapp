@@ -368,7 +368,7 @@ CREATE TABLE event_guests (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       student_id TEXT NOT NULL,
       adult INTEGER CHECK (adult IN (0, 1)),
-      surname_hash BLOB, came_at INTEGER,
+      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120), username TEXT CHECK (username IS NULL OR length(username) <= 40), team TEXT CHECK (team IS NULL OR length(team) <= 80),
       PRIMARY KEY (event_id, student_id)
     ) STRICT;
 CREATE TABLE event_photos (
@@ -825,7 +825,7 @@ CREATE TABLE registrations (
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   checked_in_at INTEGER,
-  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0,
+  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0, door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80),
   UNIQUE (event_id, user_id)
 ) STRICT;
 CREATE TABLE removal_requests (

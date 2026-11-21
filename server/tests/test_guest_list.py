@@ -298,7 +298,7 @@ def test_door_lets_in_a_buyer_not_in_the_app(door_event):
     c, cfg, con = door_event
     guests.import_csv(con, 1, ["24B030001,1,,Jane Testov", "24B030002,,,Ivan Petrov"])
     base, door = "/api/events/1/door-pending", tma(9)
-    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0}
+    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0, "list": []}
     assert c.post(base, headers=door, json={"studentId": "24B030001", "surname": "Wrong"}).status_code == 404
     assert c.post(base, headers=door, json={"studentId": "24B039999", "surname": "Testov"}).status_code == 404
     r = c.post(base, headers=door, json={"studentId": "24b030001", "surname": "TESTOV"}).json()
@@ -309,3 +309,56 @@ def test_door_lets_in_a_buyer_not_in_the_app(door_event):
     uid = _student(c, con, 1, "24B030001")
     guests.claim(con, uid)
     assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0] == 1
+
+
+def test_door_list_by_name(door_event):
+    """The organizers' sheet names the pending buyers and adds people with no student ID; the door taps a name."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    assert guests.door_names(con, 1, ["24B030001,Jane Testov,1,", ",Outsider Person,\u0434\u0430,@nobody", ",Outsider Person,,"]) == (1, 1)
+    base, door = "/api/events/1/door-pending", tma(9)
+    got = c.get(base, headers=door).json()
+    assert got["pending"] == 2 and {x["name"] for x in got["list"]} == {"Jane Testov", "Outsider Person"}
+    out = next(x for x in got["list"] if x["name"] == "Outsider Person")
+    assert out["adult"] is True and out["came"] is False
+    assert c.post(f"{base}/tick", headers=door, json={"key": out["key"], "adult": False}).json()["pendingCame"] == 1
+    assert c.post(f"{base}/tick", headers=tma(1), json={"key": out["key"]}).status_code == 403
+    assert c.post(f"{base}/tick", headers=door, json={"key": "x999"}).status_code == 404
+    got = {x["name"]: x for x in c.get(base, headers=door).json()["list"]}
+    assert got["Outsider Person"]["came"] is True and got["Outsider Person"]["adult"] is False and got["Outsider Person"]["at"]
+
+
+def test_ticket_by_username_without_sign_in(door_event):
+    """Someone on the list by Telegram username gets the ticket on opening the app, no KBTU sign-in; the door can scan it."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    assert guests.door_names(con, 1, [",Guest Person,,@GuestNick"]) == (0, 1)
+    con.execute("INSERT INTO users (id, tg_id, tg_first_name, tg_username, lang, can_dm, created_at, seen_at, qr_code) VALUES (77, 777, 'G', 'guestnick', 'ru', 1, 0, 0, 'Q77')")
+    guests.claim_username(con, 77)
+    code = con.execute("SELECT ticket_code FROM registrations WHERE event_id = 1 AND user_id = 77 AND status = 'going'").fetchone()
+    assert code and not con.execute("SELECT 1 FROM event_guests WHERE event_id = 1 AND username = 'guestnick'").fetchone()
+    r = c.post("/api/events/1/checkin", headers=tma(9), json={"code": code[0].split("-")[1]}).json()
+    assert r["result"] == "ok", r
+
+
+def test_door_teams(door_event):
+    """The sheet's team names: on list rows and on app guests' tickets, served on the door's lists."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    guests.door_names(con, 1, ["24B030001,Jane Testov,1,,Owls", ",Out Sider,,,Owls"])
+    got = c.get("/api/events/1/door-pending", headers=tma(9)).json()["list"]
+    assert {x["team"] for x in got} == {"Owls"}
+
+
+def test_admin_u18_queues_minors_at_a_time(door_event, monkeypatch, capsys):
+    c, cfg, con = door_event
+    kid, grown = _student(c, con, 1, "24B030001"), _student(c, con, 2, "24B030002")
+    for uid, adult in ((kid, 0), (grown, 1)):
+        rid = con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, checked_in_at, created_at, updated_at)
+            VALUES (1, ?, 'going', ?, 1, 0, 0)""", (uid, f"1-T{uid}")).lastrowid
+        con.execute("INSERT INTO reg_age (registration_id, adult, set_at) VALUES (?, ?, 0)", (rid, adult))
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    at = logic.now() + 1200
+    admin.main(["u18", "1", str(at)])
+    assert capsys.readouterr().out == "1\n"
+    assert [tuple(r) for r in con.execute("SELECT user_id, send_after FROM bot_outbox WHERE kind = 'u18_leave'")] == [(kid, at)]

@@ -157,6 +157,7 @@ def claim(con, uid: int) -> None:
             if not _proves_surname(g["surname_hash"], g["event_id"], g["student_id"], _surnames(g)):
                 continue
             _ticket(con, g["event_id"], uid, g["adult"])
+            con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?", (g["team"], g["event_id"], uid))
             if g["came_at"]:  # let in by hand before signing in: the ticket is a checked-in one
                 con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
                     WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
@@ -191,3 +192,74 @@ def let_in(con, eid: int, sid: object, surname: object, t: int) -> dict:
 
 def set_pending_age(con, eid: int, sid: str, adult: bool) -> None:
     con.execute("UPDATE event_guests SET adult = ? WHERE event_id = ? AND student_id = ? AND came_at IS NOT NULL", (int(adult), eid, sid.strip().upper()))
+
+
+def door_names(con, eid: int, lines) -> tuple[int, int]:
+    """The organizers' sheet (student_id,name,adult,username) gives the door its list by name: a pending buyer's row
+    gets the name; someone with no ticket in the app and no student ID on the list gets a row of their own."""
+    named = added = 0
+    with tx(con):
+        n = one(con, "SELECT COUNT(*) FROM event_guests WHERE event_id = ? AND student_id LIKE 'x%'", eid)[0]
+        for row in csv.reader(lines):
+            if len(row) < 2 or not row[1].strip():
+                continue
+            sid, name = row[0].strip().upper(), " ".join(row[1].split())[:120]
+            adult = {"1": 1, "\u0434\u0430": 1, "yes": 1, "0": 0, "\u043d\u0435\u0442": 0, "no": 0}.get((row[2] if len(row) > 2 else "").strip().casefold())
+            user = (row[3] if len(row) > 3 else "").strip().lstrip("@").casefold()
+            team = " ".join((row[4] if len(row) > 4 else "").split())[:80] or None
+            if sid and con.execute("UPDATE event_guests SET name = ?, username = COALESCE(?, username), team = COALESCE(?, team) WHERE event_id = ? AND student_id = ?",
+                                   (name, user or None, team, eid, sid)).rowcount:
+                named += 1
+                continue
+            reg = (sid and one(con, """SELECT r.id FROM registrations r JOIN students s ON s.user_id = r.user_id
+                    WHERE r.event_id = ? AND s.student_id = ? AND r.status = 'going'""", eid, sid)) or (user and one(con, """SELECT r.id
+                    FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND lower(u.tg_username) = ? AND r.status = 'going'""", eid, user))
+            if reg:
+                if team:
+                    con.execute("UPDATE registrations SET door_team = ? WHERE id = ?", (team, reg[0]))
+                continue
+            if sid and core.STUDENT_ID.fullmatch(sid):
+                continue  # a student ID the import already placed (ticket or pending): never a second row
+            if one(con, "SELECT 1 FROM event_guests WHERE event_id = ? AND name = ?", eid, name):
+                if user or team:  # loaded before usernames and teams were kept: add them now
+                    con.execute("UPDATE event_guests SET username = COALESCE(username, ?), team = COALESCE(?, team) WHERE event_id = ? AND name = ?",
+                                (user or None, team, eid, name))
+                continue
+            n += 1
+            con.execute("INSERT INTO event_guests (event_id, student_id, adult, name, username, team) VALUES (?, ?, ?, ?, ?, ?)", (eid, f"x{n}", adult, name, user or None, team))
+            added += 1
+    return named, added
+
+
+def door_list(con, eid: int) -> list[dict]:
+    return [{"key": r["student_id"], "name": r["name"], "adult": None if r["adult"] is None else bool(r["adult"]), "came": bool(r["came_at"]), "at": r["came_at"], "team": r["team"]}
+            for r in rows(con, "SELECT student_id, name, adult, came_at, team FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
+
+
+def tick(con, eid: int, key: object, t: int, adult: object = None, came: bool = True) -> dict:
+    """The door taps a name on its list: let in (the door saw the ID card), 18+ there if given."""
+    if not isinstance(key, str) or not 0 < len(key) <= 20 or (adult is not None and not isinstance(adult, bool)):
+        raise ApiError("bad_input")
+    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ? AND name IS NOT NULL", eid, key)
+    if not g:
+        raise ApiError("not_found")
+    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND student_id = ?",
+                (int(came), t, None if adult is None else int(adult), eid, key))
+    return pending_count(con, eid)
+
+
+def claim_username(con, uid: int) -> None:
+    """Opening the app with a Telegram username on an event's list hands that row's ticket over at once (no KBTU
+    sign-in): the username is Telegram's, one account at a time. Checked in already if the door ticked them."""
+    name = one(con, "SELECT lower(tg_username) FROM users WHERE id = ?", uid)
+    if not name or not name[0]:
+        return
+    with tx(con):
+        for g in rows(con, """SELECT g.* FROM event_guests g JOIN events e ON e.id = g.event_id WHERE g.username = ? AND e.guest_list = 1
+                AND e.status != 'cancelled' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", name[0], core.NO_END, core.now()):
+            _ticket(con, g["event_id"], uid, g["adult"])
+            con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?", (g["team"], g["event_id"], uid))
+            if g["came_at"]:
+                con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+                    WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+            con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))

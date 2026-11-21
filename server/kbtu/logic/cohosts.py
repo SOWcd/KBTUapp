@@ -1,5 +1,5 @@
 """Co-hosted events (say, "Crystal & JCC do an Anime Quiz together"): the host club (the event's org) invites one
-other club of the app; its Vice+ accepts or declines. Until accepted nothing shows. Accepted, both clubs show on the
+other club or school (faculty) of the app; its Vice+ accepts or declines. Until accepted nothing shows. Accepted, both clubs show on the
 event, it is on both clubs' pages and both clubs' followers hear of it once; the co-host's people with the "events"
 right work the door (the scanner, by name, /show) and see the attendee list without receipts. Everything else
 (editing, price, seats, receipts, cancelling, deleting) stays the host's; the money goes to the host. Either side ends
@@ -84,7 +84,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
             raise ApiError("closed")
         if not _fits(e) or not _free_ok(con, e):
             raise ApiError("bad_input", "cohost")
-        if oid == e["org_id"] or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind = 'club' AND status = 'active'", oid):
+        if oid == e["org_id"] or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind IN ('club', 'school') AND status = 'active'", oid):
             raise ApiError("bad_input")
         if one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND status != 'declined'", eid):
             raise ApiError("conflict", "cohost")  # ponytail: one co-host per event; more later

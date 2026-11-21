@@ -63,6 +63,8 @@
                                 person and event; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
+  .venv/bin/python -m kbtu.admin guest-names <event id> --gz <b64>   the door's list by name (student_id,name,adult,username)
+  .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
@@ -451,6 +453,30 @@ def main(args: list[str]) -> None:
     elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
         from .logic import seats
         print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
+    elif cmd == "guest-names" and len(args) == 2 and args[1].isdigit():  # the door's list by name: student_id,name,adult,username
+        named, added = guests.door_names(con, int(args[1]), gz.decode("utf-8", "replace").splitlines() if gz is not None else sys.stdin)
+        print(f"named {named}, added {added}")
+    elif cmd == "unseat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: an organizer's swap of a guest
+        from .db import tx
+        from .logic import seats
+        uid, eid = _user(con, args[1])["id"], int(args[2])
+        with tx(con):
+            r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'", eid, uid)
+            if not r:
+                raise SystemExit("no seat")
+            seats._seat_out(con, r, "removed")
+            notify(con, uid, "seat_removed", f"event:{eid}:{now()}")  # the same template as an organizer's removal
+            log_action(con, None, "unseat_by_hand", f"event:{eid}", json.dumps({"user": uid}))
+        print("removed")
+    elif cmd == "u18" and len(args) in (2, 3) and args[1].isdigit() and (args[2:] == [] or args[2].isdigit()):
+        # the organizers' "under 18, please leave" to every checked-in minor, now or at a set unix time (the bot sends it then)
+        eid, at = int(args[1]), int(args[2]) if args[2:] else now()
+        with db.tx(con):
+            got = rows(con, """SELECT r.user_id FROM registrations r JOIN reg_age a ON a.registration_id = r.id
+                WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NOT NULL AND a.adult = 0""", eid)
+            for (uid,) in got:
+                notify(con, uid, "u18_leave", f"u18:{eid}:{at}", after=at)
+        print(len(got))
     elif cmd == "round-nudge" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--dry"]):
         from . import casting
         n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))

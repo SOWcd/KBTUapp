@@ -16,15 +16,17 @@
   const bracketScored = $derived(bracket && [bracket.upper, bracket.lower, bracket.final].some((stage) =>
     stage.some((r) => r.matches.some((m) => m.status === 'played'))));
   const groupsVisible = $derived(groups && (groups.groups.length > 0 || (manage && bracket && !bracketScored)));
-  const bracketVisible = $derived(bracket && (bracket.upper.length > 0 || (manageBracket && groups && !groupsScored)));
+  // a finished group stage: its playoff is drawn from the standings (server evbracket._from_groups), both stay
+  const groupsDone = $derived(!!groups?.groups.length && groups.groups.every((g) => g.matches.every((m) => m.home_score !== null)));
+  const bracketVisible = $derived(bracket && (bracket.upper.length > 0 || (manageBracket && groups && (!groupsScored || groupsDone))));
 
   function showGroups(g: EventGroups) {
     groups = g;
-    if (g.groups.length && bracket?.upper.length) bracket = { upper: [], lower: [], final: [], teams: [], winner: null };
+    if (g.groups.length && bracket?.upper.length && !groupsScored) bracket = { upper: [], lower: [], final: [], teams: [], winner: null };
   }
   function showBracket(b: EventBracket) {
     bracket = b;
-    if (b.upper.length && groups?.groups.length) groups = { groups: [] };
+    if (b.upper.length && groups?.groups.length && !groupsScored) groups = { groups: [] };
   }
   async function load() {
     failed = false;

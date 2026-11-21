@@ -1366,7 +1366,16 @@ def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult
 
 def pending_count(con, v: Viewer, eid: int) -> dict:
     _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-    return guests.pending_count(con, eid)
+    return {**guests.pending_count(con, eid), "list": guests.door_list(con, eid)}
+
+
+def tick_pending(con, v: Viewer, eid: int, key: object, adult: object = None, came: object = True) -> dict:
+    """The door taps a name on the organizers' list (guests.tick), within the door's window."""
+    with tx(con):
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+        if door_shut(e, core.now()):
+            raise ApiError("closed")
+        return guests.tick(con, eid, key, core.now(), adult if e["age_check"] else None, came is not False)
 
 
 def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:
@@ -1405,10 +1414,10 @@ def door(con, v: Viewer, eid: int) -> list[dict]:
     """The door list for check-in by name (Member+, like the scanner; §3: a Member sees short names only): who is going,
     the ones still to come first."""
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-    found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual, a.adult FROM registrations r
+    found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual, r.door_team, a.adult FROM registrations r
         JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id LEFT JOIN reg_age a ON a.registration_id = r.id
         WHERE r.event_id = ? AND r.status = 'going'""", eid)
-    out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]),
+    out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "team": p["door_team"],
             **({"adult": None if p["adult"] is None else bool(p["adult"])} if e["age_check"] else {})} for p in found]
     if _team_door(e):  # §2b: everyone expected is on the list, answered or not
         rest = [u for u in _expected(con, e) if u not in {p["id"] for p in found}]

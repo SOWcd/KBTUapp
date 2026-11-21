@@ -665,7 +665,7 @@ export interface AttendeeReceipt {
 }
 /** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
-export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null }
+export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null; team?: string | null }
 /** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
 /** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */
 export interface TeamMember {

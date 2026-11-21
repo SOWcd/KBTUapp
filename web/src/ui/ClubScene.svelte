@@ -32,7 +32,6 @@
   import cybPan from '../assets/lanyards/cyber-pan.webp'; // round 19: their panther in full colour, cut off its badge
   import ddDragon from '../assets/lanyards/dd-dragon.webp'; // round 20: Dice and Destiny's dragon and dice, cut off their logo's white
   import bhWord from '../assets/lanyards/bh-dexter.webp'; // The Bay Harbor Society's DEXTER, their logo as they sent it
-  import bhDrop from '../assets/lanyards/bh-drop.webp';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -154,7 +153,7 @@
          lit windows, a garland of heart lights, a knitted runner. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}
-      {#if look === 'thebayharborsociety'}<i class="bhglow"></i><span class="fig bhd"><img src={bhDrop} alt="" /></span>{/if}
+      {#if look === 'thebayharborsociety'}<i class="bhglow"></i>{/if}
     {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{#if look === 'diceanddestinykbtu'}<i class="flick"></i>{/if}{#if look === 'thebayharborsociety'}<i class="bhglow"></i>{/if}{/if}
   {/if}
   <i class="gloss"></i>
@@ -393,7 +392,6 @@
     background: radial-gradient(closest-side, rgba(226, 48, 58, 0.22), rgba(179, 18, 30, 0.08) 60%, transparent); animation: bhglow 9s ease-in-out infinite alternate; }
   .sc:not(.wide) .bhglow { right: auto; left: 50%; margin-left: -60px; bottom: -15px; }
   @keyframes bhglow { from { opacity: 0.55; } to { opacity: 1; } }
-  .bhd img { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7)); }
   .bw.thebayharborsociety { top: 12px; height: 46px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.75)); }
   .bw.cybersportkbtu { top: 4px; height: 118px; max-width: none; filter: drop-shadow(0 0 14px rgba(214, 58, 240, 0.55)); }
   /* round 19: a holographic foil sheen sliding with the tilt, a neon rim round the card */

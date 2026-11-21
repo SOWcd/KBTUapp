@@ -2128,4 +2128,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     (208, "ALTER TABLE events ADD COLUMN door_extra INTEGER NOT NULL DEFAULT 0 CHECK (door_extra >= 0);"),
     # a ticket buyer not in the app yet, let in by hand at the door (student ID + surname against the list): when
     (209, "ALTER TABLE event_guests ADD COLUMN came_at INTEGER;"),
+    # the door's list by name (privacy policy: the organizer's expected list, its fields seen by the door team, gone
+    # 24 h after the event with the row); people without a student ID get a row of their own ('x' + a number)
+    (210, "ALTER TABLE event_guests ADD COLUMN name TEXT CHECK (name IS NULL OR length(name) <= 120);"),
+    # the list's Telegram username: whoever opens the app with it gets the ticket at once, no KBTU sign-in needed
+    (211, "ALTER TABLE event_guests ADD COLUMN username TEXT CHECK (username IS NULL OR length(username) <= 40);"),
+    # the organizers' team names on the door's list (search a team, tick it at once): a list row's and an app guest's
+    (212, """ALTER TABLE event_guests ADD COLUMN team TEXT CHECK (team IS NULL OR length(team) <= 80);
+    ALTER TABLE registrations ADD COLUMN door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80);"""),
 ]
