@@ -60,9 +60,10 @@ def test_member_gets_no_code_outside_the_door(env):
     eid = _ev(con, org, int(time.time()) - 60)
     _mem(c, con, org, 7, "mia")
     _qr(c, 9, eid)
-    con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) + 86400, int(time.time()) + 90000, eid))
+    starts_at = int(time.time()) + 86400
+    con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (starts_at, starts_at + 3600, eid))
     r = c.post(f"/api/events/{eid}/screen", headers=tma(7))
-    assert r.status_code == 409 and r.json()["message"] == "not_open" and r.json()["at"] == int(time.time()) + 86400 - logic.DOOR_AUTO
+    assert r.status_code == 409 and r.json()["message"] == "not_open" and r.json()["at"] == starts_at - logic.DOOR_AUTO
     assert c.post(f"/api/events/{eid}/screen", headers=tma(9)).json()["param"]              # its organizer: as before
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 9000, int(time.time()) - 60, eid))
     assert c.post(f"/api/events/{eid}/screen", headers=tma(7)).json()["message"] == "closed"

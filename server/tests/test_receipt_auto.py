@@ -283,7 +283,8 @@ def test_migration_does_not_backfill_old_receipts(paid, monkeypatch, before_door
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
-    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 203
+    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
+    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
     con.execute("PRAGMA user_version = 186")
     path = con.execute("PRAGMA database_list").fetchone()[2]
     db.init(path)

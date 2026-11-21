@@ -112,7 +112,13 @@ PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST
                                    ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
                                    ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
                                    ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/santa/wish"),
-                                   ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites")})
+                                   ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites"),
+                                   # his own application to a round and his own interview booking
+                                   ("POST", "/api/rounds/{rid}/apply"), ("DELETE", "/api/rounds/{rid}/apply"), ("POST", "/api/rounds/{rid}/book")})
+# a club's recruitment routes keyed by a round, an application or a slot: the club they belong to
+STUDIO_ROUND_ORG = {"/api/rounds/{rid}": ("rid", "SELECT org_id FROM rounds WHERE id = ?"),
+                    "/api/round-apps/{aid}": ("aid", "SELECT r.org_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE a.id = ?"),
+                    "/api/round-slots/{sid}": ("sid", "SELECT r.org_id FROM round_slots s JOIN rounds r ON r.id = s.round_id WHERE s.id = ?")}
 STUDIO_QUIET = frozenset({("GET", "/api/orgs/{oid}"), ("GET", "/api/events/{eid}"), ("GET", "/api/orgs/{oid}/events"), ("GET", "/api/orgs/{oid}/lent")})
 MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 
@@ -130,6 +136,10 @@ def _studio_route(con, request: Request, route: tuple[str, str], org: int, eid: 
     """A route of this club's Studio: the club's own or one of its events'."""
     if route[1].startswith("/api/orgs/{oid}"):
         return str(request.path_params.get("oid")) == str(org)
+    for prefix, (key, sql) in STUDIO_ROUND_ORG.items():
+        if route[1] == prefix or route[1].startswith(prefix + "/"):
+            x = str(request.path_params.get(key, ""))
+            return x.isascii() and x.isdigit() and len(x) < 12 and (r := logic.one(con, sql, int(x))) is not None and r[0] == org
     return (route[1].startswith("/api/events/{eid}") or route == ("PUT", MATCH_SCORE_ROUTE)) and eid.isascii() and eid.isdigit() and len(eid) < 12 \
         and logic.one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ?", int(eid), org) is not None
 

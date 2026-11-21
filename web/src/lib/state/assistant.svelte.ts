@@ -5,6 +5,17 @@ import type { AssistReply, Id } from '../api';
 export type Turn = { role: 'user' | 'assistant'; text: string } & Partial<Omit<AssistReply, 'text'>> & { q?: string; vote?: 'up' | 'down'; sent?: boolean; err?: boolean /* a failed call that may be tried again */ };
 /** the card "Ask AI" was tapped on: its id goes with each question (the server reads its facts), the title is only shown */
 export type AskCtx = { kind: 'event' | 'club'; id: Id; title: string };
-export const chat = $state<{ turns: Turn[]; ctx: AskCtx | null }>({ turns: [], ctx: null });
+type Conversation = { turns: Turn[]; ctx: AskCtx | null; busy: boolean };
+const chat = $state<{ current: Conversation }>({ current: { turns: [], ctx: null, busy: false } });
 /** opening the assistant from this card (or none) starts a new conversation: none yet, or another card's */
-export const fresh = (ctx?: AskCtx): boolean => !chat.turns.length || chat.ctx?.kind !== ctx?.kind || chat.ctx?.id !== ctx?.id;
+export const fresh = (ctx?: AskCtx): boolean => !chat.current.turns.length || chat.current.ctx?.kind !== ctx?.kind || chat.current.ctx?.id !== ctx?.id;
+
+/** A mounted sheet keeps its own conversation while another one is above it. */
+export function conversation(ctx?: AskCtx): Conversation {
+  if (fresh(ctx)) chat.current = { turns: [], ctx: ctx ?? null, busy: false };
+  return chat.current;
+}
+
+export function rememberConversation(current: Conversation): void {
+  chat.current = current;
+}

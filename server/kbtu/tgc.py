@@ -123,7 +123,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         return
     if not any(k in msg for k in CONTENT):
         return
-    root = msg.get("message_thread_id") or (msg.get("reply_to_message") or {}).get("message_id")
+    to = msg.get("reply_to_message") or {}
+    root = msg.get("message_thread_id") or to.get("message_thread_id") or to.get("message_id")
     if sender:  # as a channel, or an anonymous admin: nobody to check. The forum channel's own admins may
         linked = (one(con, "SELECT value FROM meta WHERE key = 'tgc_channel'") or [""])[0]
         if str(sender.get("id")) != linked:
@@ -143,10 +144,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             _report(cfg, http, con, msg)
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
-        elif not edit and root:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
-            logic.fchannel.commented(con, root, msg["message_id"], tg)
-            if (to := msg.get("reply_to_message") or {}).get("from", {}).get("is_bot"):  # an answer to the anonymous author's reply
-                logic.fchannel.reply_answered(con, to["message_id"], tg)
+        elif not edit and root and cfg.forum_channel:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
+            logic.fchannel.commented(con, root, msg["message_id"], tg, to.get("message_id") if to.get("from", {}).get("is_bot") else None)
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes

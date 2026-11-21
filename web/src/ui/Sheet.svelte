@@ -56,8 +56,7 @@
   let scrolled = $state(false);
   // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
   let rising = $state(tg.platform === 'android');
-  // another overlay over this one: nothing in it moves (its loops, the tilt light, a lanyard's depth and its card). Android
-  // re-blurs the top sheet's backdrop on every change under it: the event sheet over a friend's card shimmered
+  // Keep the covered sheet's lighting still. Entrance animations must finish so their content is visible on Back.
   const under = $derived(overlays.some((o) => o.id > overlay.id && !o.closing));
 
   // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
@@ -70,6 +69,7 @@
   // the first call comes after the browser's own layout and before the first paint: the rise starts there, with the
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
+    if (gone) return;
     const box = panel.getBoundingClientRect(), h = box.height, dh = h - height;
     if (!lift && iris) {
       height = h; lift = irisOpen(panel, iris);
@@ -83,7 +83,7 @@
     }
     height = h;
     if (kbTo) { free = freeAbove(); place(kbNow); } // taller or shorter with the keyboard up: its share of it again
-    if (Math.abs(dh) < 2 || gone || dragging || currentY) return;
+    if (Math.abs(dh) < 2 || dragging || currentY) return;
     panel.animate([{ translate: `0 ${dh}px` }, { translate: '0 0' }], { ...motion(), composite: 'add' });
   }
 
@@ -141,23 +141,28 @@
   function leave(fromY = 0) {
     if (gone) return;
     gone = true;
+    // No first layout yet, so there is nothing on screen to animate out.
+    if (!lift) { removeOverlay(overlay.id); return; }
     // a leaving sheet takes no taps: its buttons are swallowed here, and the scrim's close finds it gone. Was: pointer-events
     // none on the panel and the scrim (a tap went through to what is under), but on iPhone a swipe that starts on a
     // pointer-events: none layer latches the scroll to the document (WebKit bug 222654): Back, a swipe at once within the
     // ~260 ms of the leave, and the tab under it (the Forum, from an author's avatar) stayed frozen until a switch of tab
     panel.addEventListener('click', swallow, true);
-    lift?.cancel();
+    // Back can arrive mid-rise, before the sheet and its scrim have reached their resting positions.
+    const start = lift.playState === 'running' && !iris ? getComputedStyle(panel).transform : `translateY(${fromY}px)`;
+    const dim = getComputedStyle(scrim).opacity;
+    lift.cancel();
     if (shut && iris && !fromY && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       chrome(); chrome = () => {}; // the bar comes back now, its button under the closing circle
       const c = irisShut(panel, iris), ms = c.effect!.getComputedTiming().duration as number;
-      scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-in-out', fill: 'forwards' });
+      scrim.animate([{ opacity: dim }, { opacity: 0 }], { duration: ms, easing: 'ease-in-out', fill: 'forwards' });
       c.onfinish = () => removeOverlay(overlay.id);
       return;
     }
     const h = panel.getBoundingClientRect().height;
-    const a = panel.animate([{ transform: `translate3d(0,${fromY}px,0)` }, { transform: `translate3d(0,${h + 40}px,0)` }],
+    const a = panel.animate([{ transform: start }, { transform: `translateY(${h + 40}px)` }],
       { duration: 260, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
-    scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: 'ease-in', fill: 'forwards' });
+    scrim.animate([{ opacity: dim }, { opacity: 0 }], { duration: 260, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
 
@@ -265,12 +270,13 @@
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     will-change: transform;
   }
-  .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; animation-play-state: paused !important; }
+  .under { --sheet-loop: paused; }
+  .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; }
   .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   /* Android (the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
      person's card opened over the member list): the sheet stays solid there, as under power saving. ponytail: no glass on
      Android sheets; a one-off blurred snapshot behind them is the upgrade */
-  .flat { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: var(--glass-solid); }
+  .flat { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: var(--glass-solid); will-change: auto; }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
   .sheet:focus { outline: none; }
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -300,8 +306,9 @@
   /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom */
   .foot:not(:has(*)) { display: none; }
   .hasfoot .body { --pb: var(--s-4); }
-  .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
-  .full .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
+  /* Keep the moving scroll body free of an extra masked layer on Android. */
+  .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
+  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
     mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
   /* the heading row: the title wraps (a long word at its soft hyphen or the edge), the actions keep their place */
   .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: var(--s-1) 2px var(--s-4); }

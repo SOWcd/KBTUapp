@@ -398,6 +398,7 @@ BOT = {
         "fch_moved": ("Этот пост опубликован в канале заново.", None),
         # an anonymous post's author replying in its comments (fchannel.reply_*, tgc._replies): to the author; the group's template
         "fch_reply_answer": ("💬 Тебе ответили на твой анонимный ответ в комментариях.", "Открыть пост"),
+        "fch_comments": ("💬 Под твоим постом появились новые комментарии.", "Открыть форум"),
         "fch_reply_gone": ("Комментарий, на который ты отвечал(а) анонимно, удалён — ответ не отправлен.", "Открыть пост"),
         # my own post: out in the channel, or declined by a moderator (one fixed reason line; to the author alone)
         "fch_posted": ("🙌 Модератор одобрил твой пост: он вышел в канале форума.", "Открыть пост"),
@@ -601,6 +602,7 @@ BOT = {
         "fch_removed": ("Бұл постты модератор алып тастады.", None),
         "fch_moved": ("Бұл пост арнада қайта жарияланды.", None),
         "fch_reply_answer": ("💬 Пікірлердегі анонимді жауабыңа біреу жауап жазды.", "Постты ашу"),
+        "fch_comments": ("💬 Постыңа жаңа пікірлер жазылды.", "Форумды ашу"),
         "fch_reply_gone": ("Сен анонимді жауап берген пікір өшірілген — жауап жіберілмеді.", "Постты ашу"),
         "fch_posted": ("🙌 Модератор постыңды мақұлдады: ол форум арнасында жарияланды.", "Постты ашу"),
         "fch_declined": ("Модератор постыңды өткізбеді: ол форум ережелеріне сай емес.", "Форумды ашу"),
@@ -802,6 +804,7 @@ BOT = {
         "fch_removed": ("A moderator removed this post.", None),
         "fch_moved": ("This post was published in the channel again.", None),
         "fch_reply_answer": ("💬 Someone answered your anonymous reply in the comments.", "Open the post"),
+        "fch_comments": ("💬 There are new comments on your post.", "Open forum"),
         "fch_reply_gone": ("The comment you replied to anonymously was deleted, so the reply wasn't sent.", "Open the post"),
         "fch_posted": ("🙌 A moderator approved your post: it is out in the forum channel.", "Open the post"),
         "fch_declined": ("A moderator didn't let your post through: it doesn't fit the forum's rules.", "Open the forum"),

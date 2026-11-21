@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  // A tap after closing and reopening Settings still waits for the previous save.
+  let chain: Promise<void> = Promise.resolve();
+</script>
+
 <script lang="ts">
   // A page pushed in from the right (ui/Pane) from the settings under my lanyard (Me), the phone's own way: the
   // notification switches with a footnote under each; About me (my data, each its own row: the name a page deeper,
@@ -20,7 +25,7 @@
   import { schoolOf, shortOf, schoolShort } from '../../lib/short';
   import { CITIES, cityName } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
-  import { session, loadMe } from '../../lib/state/session.svelte';
+  import { session, loadMe, pendingSwitches as want } from '../../lib/state/session.svelte';
   import { onMount } from 'svelte';
   import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -36,6 +41,7 @@
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
+  import { notificationSettings } from './notificationSettings';
   import { answerCredits } from '../../lib/credits';
   import { setReportConsent } from '../../lib/reports';
   import { setKriGoogle } from '../../lib/kriGoogle';
@@ -53,13 +59,10 @@
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
   // a switch saves at once and puts itself back if the server says no
-  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
   // one request at a time, and a choice the server hasn't confirmed yet stays on top of any answer
-  let chain: Promise<void> = Promise.resolve();
   let undo = $state(0); // the reports' consent switch, redrawn as it was after a "no" in its question
-  const want: Record<string, boolean> = {};
-  function set(k: (typeof SWITCHES)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
+  function set(k: (typeof notificationSettings)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
     if (!me) return;
     haptic.tap();
     me.settings[k] = on;
@@ -68,7 +71,7 @@
       if (want[k] !== on) return; // tapped again meanwhile: that tap sends the latest
       try {
         const r = await api.updateMe({ [k]: on });
-        delete want[k];
+        if (want[k] === on) delete want[k];
         session.me = { ...r, settings: { ...r.settings, ...want } };
         if (!quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
       } catch { if (want[k] === on) { delete want[k]; if (session.me) session.me.settings[k] = !on; } say(t('common.error'), 'warning_3d'); } // only this switch goes back
@@ -239,8 +242,8 @@
 
 <Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} bare={kind === 'donate'}>
   {#if kind === 'notify' && me}
-    {#each SWITCHES as [k, title, hint], i (k)}
-      <div class:sw={i > 0}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
+    {#each notificationSettings as [k, title, hint], i (k)}
+      <div class={{ sw: i > 0 }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
     <p class="foot always">{t('set.always')}</p>
   {:else if kind === 'me' && me?.student}
@@ -307,7 +310,7 @@
           onchange={async (on) => { if (!(on ? await sheets.ask({ title: t('kri.gT'), text: t('kri.gText'), ok: t('kri.gOn'), cancel: t('common.cancel') }) && await setKriGoogle(true) : await setKriGoogle(false))) undo++; }} />{/key}{/if}
       </Group></div>
     {/if}
-    <div class:gap={me?.student}><Group>
+    <div class={{ gap: me?.student }}><Group>
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </Group></div>
