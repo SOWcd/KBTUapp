@@ -13,6 +13,7 @@
   import { api, ApiErr, type DoorPerson, type Id, type TeamList } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
   import { time, nowTs } from '../../lib/time';
@@ -107,9 +108,27 @@
     else { const d = guests?.find((y) => y.person.id === x.uid); if (d) { d.checkedInAt = at; d.manual = manual; } }
   }
   const shut = (x: Item) => x.uid == null && !!team && !team.open;
+  // an 18+ door: the guest's age right where they are ticked (the door saw the ID card)
+  const ages = $derived(!!eventById(id)?.ageCheck);
+  const ageItems = (x: Item) => (ages && (x.pend || x.uid != null) ? [
+    { label: t('age.adult'), checked: x.adult === true, onselect: () => void setAge(x, true) },
+    { label: t('age.minor'), checked: x.adult === false, onselect: () => void setAge(x, false) },
+  ] : []);
+  async function setAge(x: Item, adult: boolean) {
+    const was = x.adult;
+    const put = (a: boolean | null | undefined) => {
+      if (x.pend) { const p = pend.find((y) => y.key === x.pend); if (p) p.adult = a ?? null; }
+      else { const d = guests?.find((y) => y.person.id === x.uid); if (d) d.adult = a ?? null; }
+    };
+    put(adult); haptic.ok();
+    try { if (x.pend) await api.tickPending(id, x.pend, true, adult); else await api.markAge(id, x.uid!, adult); }
+    catch (e) { put(was); err(e); }
+  }
   function tap(x: Item, ev: MouseEvent) {
-    if (!x.at) { if (!shut(x)) void mark(x); return; }
-    if (x.manual) { haptic.tap(); menu(ev.currentTarget as Element, [{ label: t('mk.unmark'), destructive: true, onselect: () => void unmark(x) }]); }
+    const el = ev.currentTarget as Element;
+    if (!x.at) { if (!shut(x)) { void mark(x); if (ageItems(x).length) menu(el, ageItems(x)); } return; }
+    const items = [...ageItems(x), ...(x.manual ? [{ label: t('mk.unmark'), destructive: true, onselect: () => void unmark(x) }] : [])];
+    if (items.length) { haptic.tap(); menu(el, items); }
   }
   const sub = (x: Item) => (x.at ? [time(x.at), x.manual && t('mk.byHand')] : [!x.app && t('mk.noApp')]).filter(Boolean).join(' · ') || undefined;
 </script>
