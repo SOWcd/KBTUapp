@@ -264,3 +264,13 @@ def test_deleting_an_account_keeps_the_cohost(env):
     c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO), json={"yes": True})
     delete_now(c, cfg, tma(CO))
     assert [tuple(r) for r in con.execute("SELECT status, invited_by IS NOT NULL, decided_by FROM event_cohosts")] == [("accepted", 1, None)]
+
+
+def test_a_school_can_be_invited(env):
+    # a faculty (e.g. the School of IT) co-hosts a club's screening: its President answers like a club's
+    c, cfg = env
+    con, host, co = _clubs(c, cfg)
+    con.execute("UPDATE orgs SET kind = 'school' WHERE id = ?", (co,))
+    eid = _event(c, host)["id"]
+    assert c.put(f"/api/events/{eid}/cohost", headers=tma(HOST), json={"orgId": co}).status_code == 200
+    assert c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO), json={"yes": True}).status_code == 200
