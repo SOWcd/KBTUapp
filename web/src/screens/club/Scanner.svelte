@@ -286,7 +286,7 @@
       </div>
     {/if}
 
-    {#if e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}
+    {#if false && e?.ageCheck && aud !== 'team' && !only && !scanOnly && !sess}<!-- ponytail: hidden by the owner (Nov 21) until venues ask for it; drop `false &&` to bring it back -->
       <Button kind="secondary" size="m" full loading={notifying} onclick={notifyMinors}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{t('age.notify')}</Button>
     {/if}
 
