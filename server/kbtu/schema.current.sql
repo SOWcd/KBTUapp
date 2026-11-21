@@ -368,7 +368,7 @@ CREATE TABLE event_guests (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       student_id TEXT NOT NULL,
       adult INTEGER CHECK (adult IN (0, 1)),
-      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120),
+      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120), username TEXT CHECK (username IS NULL OR length(username) <= 40),
       PRIMARY KEY (event_id, student_id)
     ) STRICT;
 CREATE TABLE event_photos (

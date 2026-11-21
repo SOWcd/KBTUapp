@@ -2131,4 +2131,6 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the door's list by name (privacy policy: the organizer's expected list, its fields seen by the door team, gone
     # 24 h after the event with the row); people without a student ID get a row of their own ('x' + a number)
     (210, "ALTER TABLE event_guests ADD COLUMN name TEXT CHECK (name IS NULL OR length(name) <= 120);"),
+    # the list's Telegram username: whoever opens the app with it gets the ticket at once, no KBTU sign-in needed
+    (211, "ALTER TABLE event_guests ADD COLUMN username TEXT CHECK (username IS NULL OR length(username) <= 40);"),
 ]
