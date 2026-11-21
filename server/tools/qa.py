@@ -26,7 +26,7 @@ from PIL import Image  # noqa: E402
 
 from kbtu import auth, db, logic, media  # noqa: E402
 
-BOT = "1:qa"
+BOT = "1:" + "qa" * 18
 SERVER = Path(__file__).resolve().parents[1]
 PEOPLE = [(1, 1001, "Dana", "Seitova"), (2, 1002, "Ali", "Nurlanov"), (3, 1003, "Bota", "Askarova")]  # Dana runs the club
 

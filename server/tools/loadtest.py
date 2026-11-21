@@ -32,7 +32,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from kbtu import auth, db  # noqa: E402
 
-BOT = "1:loadtest"
+BOT = "1:" + "loadtest" * 5
 SERVER = Path(__file__).resolve().parents[1]
 SCHOOLS = ["SITE", "BS", "ISE", "SAM", "SMSGT", "KMA", "SEOGI", "SCE"]
 

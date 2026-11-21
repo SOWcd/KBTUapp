@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from kbtu import ai, calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, tgc, video
 
-BOT = "123:test"
+BOT = "123:" + "test" * 9
 
 
 def delete_now(c, cfg, h: dict) -> None:
@@ -4628,7 +4628,7 @@ def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
     rcon.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (later + 10, zhan["id"]))  # as if restored after his return
     rcon.execute("UPDATE students SET verified_at = 0 WHERE user_id = ?", (ali["id"],))                # signed in long before
     rcon.close()
-    for k, v in (("BOT_TOKEN", "1:x"), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
+    for k, v in (("BOT_TOKEN", BOT), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
         monkeypatch.setenv(k, v)
     from kbtu import admin
     admin.main(["redelete"])
@@ -4663,7 +4663,7 @@ def test_forgetting(env, monkeypatch):
 
 def test_db_must_exist(tmp_path, monkeypatch):
     """A locked vault leaves an empty folder: the image's DB_MUST_EXIST=1 stops the app instead of starting it empty"""
-    monkeypatch.setenv("BOT_TOKEN", "1:x")
+    monkeypatch.setenv("BOT_TOKEN", BOT)
     monkeypatch.setenv("TOKEN_KEY", "A" * 43 + "=")
     monkeypatch.setenv("DB_PATH", str(tmp_path / "kbtu.db"))
     monkeypatch.setenv("DB_MUST_EXIST", "1")
