@@ -63,6 +63,7 @@
                                 person and event; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
+  .venv/bin/python -m kbtu.admin guest-names <event id> --gz <b64>   the door's list by name (student_id,name,adult,username)
   .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
@@ -452,6 +453,9 @@ def main(args: list[str]) -> None:
     elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
         from .logic import seats
         print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
+    elif cmd == "guest-names" and len(args) == 2 and args[1].isdigit():  # the door's list by name: student_id,name,adult,username
+        named, added = guests.door_names(con, int(args[1]), gz.decode("utf-8", "replace").splitlines() if gz is not None else sys.stdin)
+        print(f"named {named}, added {added}")
     elif cmd == "unseat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: an organizer's swap of a guest
         from .db import tx
         from .logic import seats

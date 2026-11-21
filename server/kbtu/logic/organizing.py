@@ -1366,7 +1366,16 @@ def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult
 
 def pending_count(con, v: Viewer, eid: int) -> dict:
     _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-    return guests.pending_count(con, eid)
+    return {**guests.pending_count(con, eid), "list": guests.door_list(con, eid)}
+
+
+def tick_pending(con, v: Viewer, eid: int, key: object, adult: object = None, came: object = True) -> dict:
+    """The door taps a name on the organizers' list (guests.tick), within the door's window."""
+    with tx(con):
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+        if door_shut(e, core.now()):
+            raise ApiError("closed")
+        return guests.tick(con, eid, key, core.now(), adult if e["age_check"] else None, came is not False)
 
 
 def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:

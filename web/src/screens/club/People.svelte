@@ -25,21 +25,25 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Tag from '../../ui/Tag.svelte';
 
-  let { overlay, id, onchange }: { overlay: Overlay; id: Id; onchange?: () => void } = $props();
+  let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
   let team = $state<TeamList | null>(null);
   let guests = $state<DoorPerson[] | null>(null);
+  // the organizers' list of buyers not in the app (and people with no student ID): ticked by name
+  let pend = $state<{ key: string; name: string; adult: boolean | null; came: boolean; at?: number | null }[]>([]);
   const load = () => {
-    api.teamList(id).then((l) => (team = l)).catch(() => {});
+    if (!guestsOnly) api.teamList(id).then((l) => (team = l)).catch(() => {});
+    api.doorPending(id).then((x) => (pend = x.list ?? [])).catch(() => {});
     api.door(id).then((l) => (guests = l)).catch(() => {});
   };
   $effect(load);
   const aud = $derived(team?.audience ?? 'both');
 
   // one shape for both lists: a team row (key) or a guest going (uid)
-  type Item = { key: string; uid?: Id; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null };
+  type Item = { key: string; uid?: Id; pend?: string; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null };
   const items = $derived.by<Item[]>(() => [
-    ...(aud !== 'guests' ? (team?.rows ?? []).map((r) => ({ ...r, group: r.group ?? t('mk.noGroup') })) : []),
+    ...pend.map((x) => ({ key: `p:${x.key}`, pend: x.key, name: x.name, group: t('mk.guestsGroup'), at: x.came ? x.at ?? nowTs() : null, manual: true, app: false, adult: x.adult })),
+    ...(aud !== 'guests' && !guestsOnly ? (team?.rows ?? []).map((r) => ({ ...r, group: r.group ?? t('mk.noGroup') })) : []),
     ...(aud !== 'team' ? (guests ?? []).map((d) => ({ key: `g${d.person.id}`, uid: d.person.id, name: d.person.realName, group: t('mk.guestsGroup'),
       at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
   ]);
@@ -69,7 +73,8 @@
     set(x, nowTs(), true); // at once; back if the server says no
     say(t('mk.marked', { name: x.name.split(' ').slice(0, 2).join(' ') }), 'sparkles_3d', () => void unmark(x), undefined, true);
     try {
-      if (x.uid == null) team = await api.teamMark(id, x.key, true);
+      if (x.pend) { await api.tickPending(id, x.pend); const p = pend.find((y) => y.key === x.pend); if (p) p.came = true; }
+      else if (x.uid == null) team = await api.teamMark(id, x.key, true);
       else {
         const r = await api.checkinPerson(id, x.uid, admit);
         if (r.result === 'flagged' || r.result === 'ask_org') { // a receipt nobody checked: nothing recorded (server organizing._held)
@@ -89,6 +94,7 @@
     const was = { at: x.at, manual: x.manual };
     set(x, null, false);
     try {
+      if (x.pend) { await api.tickPending(id, x.pend, false); onchange?.(); return; }
       if (x.uid == null) team = await api.teamMark(id, x.key, false);
       else await api.undoCheckin(id, x.uid);
       haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default', undefined, undefined, true); onchange?.();
@@ -96,6 +102,7 @@
   }
   // the list a row came from, changed in place (the derived items follow)
   function set(x: Item, at: number | null, manual: boolean) {
+    if (x.pend) { const p = pend.find((y) => y.key === x.pend); if (p) { p.came = at != null; p.at = at; } return; }
     if (x.uid == null) { const r = team?.rows.find((y) => y.key === x.key); if (r) { r.at = at; r.manual = manual; } }
     else { const d = guests?.find((y) => y.person.id === x.uid); if (d) { d.checkedInAt = at; d.manual = manual; } }
   }

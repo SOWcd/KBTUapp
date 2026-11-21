@@ -191,3 +191,51 @@ def let_in(con, eid: int, sid: object, surname: object, t: int) -> dict:
 
 def set_pending_age(con, eid: int, sid: str, adult: bool) -> None:
     con.execute("UPDATE event_guests SET adult = ? WHERE event_id = ? AND student_id = ? AND came_at IS NOT NULL", (int(adult), eid, sid.strip().upper()))
+
+
+def door_names(con, eid: int, lines) -> tuple[int, int]:
+    """The organizers' sheet (student_id,name,adult,username) gives the door its list by name: a pending buyer's row
+    gets the name; someone with no ticket in the app and no student ID on the list gets a row of their own."""
+    named = added = 0
+    with tx(con):
+        n = one(con, "SELECT COUNT(*) FROM event_guests WHERE event_id = ? AND student_id LIKE 'x%'", eid)[0]
+        for row in csv.reader(lines):
+            if len(row) < 2 or not row[1].strip():
+                continue
+            sid, name = row[0].strip().upper(), " ".join(row[1].split())[:120]
+            adult = {"1": 1, "\u0434\u0430": 1, "yes": 1, "0": 0, "\u043d\u0435\u0442": 0, "no": 0}.get((row[2] if len(row) > 2 else "").strip().casefold())
+            user = (row[3] if len(row) > 3 else "").strip().lstrip("@").casefold()
+            if sid and con.execute("UPDATE event_guests SET name = ? WHERE event_id = ? AND student_id = ?", (name, eid, sid)).rowcount:
+                named += 1
+                continue
+            if sid and one(con, """SELECT 1 FROM registrations r JOIN students s ON s.user_id = r.user_id
+                    WHERE r.event_id = ? AND s.student_id = ? AND r.status = 'going'""", eid, sid):
+                continue
+            if user and one(con, """SELECT 1 FROM registrations r JOIN users u ON u.id = r.user_id
+                    WHERE r.event_id = ? AND lower(u.tg_username) = ? AND r.status = 'going'""", eid, user):
+                continue
+            if sid and core.STUDENT_ID.fullmatch(sid):
+                continue  # a student ID the import already placed (ticket or pending): never a second row
+            if one(con, "SELECT 1 FROM event_guests WHERE event_id = ? AND name = ?", eid, name):
+                continue
+            n += 1
+            con.execute("INSERT INTO event_guests (event_id, student_id, adult, name) VALUES (?, ?, ?, ?)", (eid, f"x{n}", adult, name))
+            added += 1
+    return named, added
+
+
+def door_list(con, eid: int) -> list[dict]:
+    return [{"key": r["student_id"], "name": r["name"], "adult": None if r["adult"] is None else bool(r["adult"]), "came": bool(r["came_at"]), "at": r["came_at"]}
+            for r in rows(con, "SELECT student_id, name, adult, came_at FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
+
+
+def tick(con, eid: int, key: object, t: int, adult: object = None, came: bool = True) -> dict:
+    """The door taps a name on its list: let in (the door saw the ID card), 18+ there if given."""
+    if not isinstance(key, str) or not 0 < len(key) <= 20 or (adult is not None and not isinstance(adult, bool)):
+        raise ApiError("bad_input")
+    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ? AND name IS NOT NULL", eid, key)
+    if not g:
+        raise ApiError("not_found")
+    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND student_id = ?",
+                (int(came), t, None if adult is None else int(adult), eid, key))
+    return pending_count(con, eid)

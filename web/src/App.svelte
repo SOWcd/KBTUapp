@@ -180,7 +180,7 @@
     return f;
   }
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
-  sheets.doorPeople = (id, onchange) => lazy(() => import('./screens/club/People.svelte'), { id, onchange });
+  sheets.doorPeople = (id, onchange, guestsOnly) => lazy(() => import('./screens/club/People.svelte'), { id, onchange, guestsOnly }, undefined, `${id}:${!!guestsOnly}`);
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   // a helper lands on the same Mark screen as the organizer (owner, Nov 14: helpers didn't know where to go); no scanner of the event: its QR alone
   sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true }, undefined, `session:${sess}`)
