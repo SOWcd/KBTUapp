@@ -10,6 +10,8 @@ import unicodedata
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+from ..db import tx
+
 
 HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt (§4.3)
 log = logging.getLogger("kbtu.logic")
@@ -472,23 +474,17 @@ def course_day(con) -> None:
             con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (min(max(course_cap(r["student_id"]), r["course"]), r["course"] + ay - since), ay, r["user_id"]))
 
 
-# MS_AGE_CUTOFF (env, "MM-DD", e.g. "06-01"; app.py sets it): a free 1st-year seat also needs a KBTU Microsoft
-# account made on or after that day of the academic year's first calendar year: KBTU makes the
-# intake's accounts the summer before year one, so a senior who types a 1st-year's ID is years older. None (unset,
-# the default): recorded only, never refused, until Admin's "accounts by month" (daily.admin_stats) shows the real
-# dates split by intake (a bulk migration could give every account one date). Graph's createdDateTime is UTC ISO
-# ("2025-07-14T09:30:00Z"): compared as text; Almaty's 5 hours at midnight don't matter. Unknown (no Microsoft
-# sign-in, one before Graph gave it, or Graph left it out): the course alone; ms_link stores the whole
-# profile again at every sign-in, so the date arrives with the next one.
+# KBTU may configure an intake date when its account issuance dates reliably distinguish first years.
 MS_AGE_CUTOFF: str | None = None
 
 
 def first_year_free(con, uid: int) -> bool:
-    """Whether this person may take a paid event's free 1st-year seat: a 1st-year bachelor (a B after the year in the
-    ID; masters have no such seats) whose Microsoft account isn't older than this year's intake (MS_AGE_CUTOFF)."""
-    cut = f"{academic_year()}-{MS_AGE_CUTOFF}" if MS_AGE_CUTOFF else None  # None: `>= NULL` is NULL, COALESCE lets in
-    return bool(one(con, """SELECT 1 FROM students WHERE user_id = ? AND course = 1 AND student_id GLOB '[0-9][0-9]B*'
-                            AND COALESCE(json_extract(ms_profile, '$.createdDateTime') >= ?, 1)""", uid, cut))
+    """A first-year bachelor needs directory evidence before a paid seat can be issued for free."""
+    cut = f"{academic_year()}-{MS_AGE_CUTOFF}" if MS_AGE_CUTOFF else None
+    return bool(one(con, """SELECT 1 FROM students WHERE user_id = ? AND manual = 0 AND ms_oid IS NOT NULL
+        AND course = 1 AND student_id GLOB ? AND
+        (upper(json_extract(ms_profile, '$.employeeId')) = student_id OR
+         date(json_extract(ms_profile, '$.createdDateTime')) >= ?)""", uid, f"{academic_year() % 100:02d}B*", cut))
 
 
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
@@ -515,6 +511,23 @@ def _event_cover(con, e: sqlite3.Row, files: dict | None = None) -> dict | None:
     if cover:
         cover["focus"] = [float(c) for c in e["cover_focus"].split(",")] if e["cover_focus"] else None
     return cover
+
+
+UPLOAD_LIMIT = {"receipt": 8, "avatar": 8, "cover": 24}
+UPLOAD_WINDOW = 600
+
+
+def upload_attempt(con, v: Viewer, kind: str) -> None:
+    """Reserve processing before decoding. One small counter per person and kind across workers and transports."""
+    with tx(con):
+        key, t = f"upload:{v.id}:{kind}", now()
+        row = one(con, "SELECT value FROM meta WHERE key = ?", key)
+        start, count = map(int, row[0].split(":")) if row else (t, 0)
+        if t >= start + UPLOAD_WINDOW:
+            start, count = t, 0
+        if count >= UPLOAD_LIMIT[kind]:
+            raise ApiError("rate_limited")
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, f"{start}:{count + 1}"))
 
 
 def add_photo(con, v: Viewer, saved: dict) -> dict:
@@ -590,7 +603,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
                   "holdUntil": reg["hold_until"], "checkedInAt": reg["checked_in_at"], "receipt": c["status"] if (c := receipts.get(reg["id"])) else "none",
                   "receiptFlags": [x for x in c["flags"].split(",") if x and x not in ("spot", "partial")] if c and c["status"] == "accepted" and c["reviewed_at"] is None else [],
                   "free": bool(reg["free"]),
-                  "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" and not e["school"] else None,
+                  "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" and e["visibility"] == "public" and not e["school"] else None,
                   "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}
         out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], []),
                     **({"teamAsk": a} if (a := asks.get(e["id"])) else {})})

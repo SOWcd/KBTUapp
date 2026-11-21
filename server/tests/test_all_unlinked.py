@@ -1,4 +1,4 @@
-"""/all in a chat no club holds (owner, Nov 14): whom the bot saw there (anyone calls since Nov 18)."""
+"""/all in a chat no club holds: a group admin can mention the people the bot saw there."""
 from kbtu import db
 from kbtu.logic import chatlist
 from test_core import env  # noqa: F401  (env: the fixture)

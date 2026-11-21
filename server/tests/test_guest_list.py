@@ -209,6 +209,10 @@ def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     assert c.post(f"{base}/age/notify", headers=door).json() == {"count": 1}
     msg = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'u18_leave'").fetchone(), lang="en")
     assert msg["user_id"] == minor and bot._render(con, msg)[1:] == ("Open the event", "ev_1")
+    con.execute("UPDATE events SET starts_at = starts_at + 86400, ends_at = ends_at + 86400 WHERE id = 1")
+    assert bot._render(con, msg) is None
+    assert c.post(f"{base}/age/notify", headers=door).json()["error"] == "closed"
+    con.execute("UPDATE events SET starts_at = starts_at - 86400, ends_at = ends_at - 86400 WHERE id = 1")
     c.post(f"{base}/age", headers=door, json={"user_id": minor, "adult": True})
     assert bot._render(con, msg) is None
     c.post(f"{base}/age", headers=door, json={"user_id": minor, "adult": False})

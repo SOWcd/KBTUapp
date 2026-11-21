@@ -21,6 +21,7 @@
   // desk 'help': KRI's "Ask a person": the same composer with the question in it (q, editable, sent only on the tap),
   // its own consent, no topics, no AI tips (KRI tried), no Solved feed, no funnel; my questions under it.
   import { onMount, untrack } from 'svelte';
+  import { accountDraft } from '../../lib/draft';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -45,10 +46,10 @@
   const sg = untrack(() => desk === 'sg');
   const k = (key: 'text' | 'ph' | 'anonOn' | 'anonOff' | 'who' | 'sent' | 'consentT' | 'consentText' | 'mine') => t(sg ? `apl.${key}` : `ask.${key}`);
 
-  const DRAFT = sg ? 'kb-appeal' : 'kb-ask';
+  const draft = untrack(() => accountDraft(sg ? 'kb-appeal' : 'kb-ask', session.me?.tg.id));
   type Draft = { text: string; topic: AppealTopic | null; anon: boolean };
   function readDraft(): Draft {
-    try { const j = JSON.parse(localStorage.getItem(DRAFT) || 'null'); if (j && typeof j.text === 'string') return j; } catch { /* blocked */ }
+    try { const j = JSON.parse(draft.read() || 'null'); if (j && typeof j.text === 'string') return j; } catch { /* blocked */ }
     return { text: '', topic: null, anon: false };
   }
   const first = untrack(() => (q?.trim() ? { text: q.trim(), topic: null, anon: false } : readDraft()));
@@ -58,7 +59,7 @@
 
   function saveDraft() {
     const d: Draft = { text, topic, anon };
-    try { if (d.text.trim()) localStorage.setItem(DRAFT, JSON.stringify(d)); else localStorage.removeItem(DRAFT); } catch { /* blocked: in memory only */ }
+    draft.save(d.text.trim() ? JSON.stringify(d) : null);
     if (text && !typed) { typed = true; if (sg) count('apl.typed'); }
   }
   $effect(saveDraft);

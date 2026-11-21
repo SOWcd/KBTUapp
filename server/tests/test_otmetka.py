@@ -156,7 +156,8 @@ def test_review_attacks(env):
 
     # a hidden expected row (the club's own frozen one) can't be marked
     con.execute("""INSERT INTO qr_expected (session_id, email, full_name, extra) VALUES (?, 'hid@kbtu.kz', 'Hidden One', '{"club": 1}')""", (sid,))
-    assert post(9, "xhid@kbtu.kz").status_code == 404
+    hidden_key = con.execute("SELECT door_key FROM qr_expected WHERE email = 'hid@kbtu.kz'").fetchone()[0]
+    assert post(9, "x" + hidden_key).status_code == 404
 
     # undo takes back hand marks only: a badge mark and a scan completed by hand stay
     bob = login(c, 2, "bob")
@@ -195,9 +196,15 @@ def test_an_expected_mail_goes_with_the_account(env):
     zed = login(c, 7, "zed")
     con.execute("UPDATE students SET email = 'zed@kbtu.kz' WHERE user_id = ?", (zed["id"],))
     con.execute("INSERT INTO qr_expected (session_id, email, full_name) VALUES (?, 'zed@kbtu.kz', 'Zed Z')", (sid,))
-    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": "xzed@kbtu.kz"}).status_code == 200
+    helper = login(c, 8, "helper")
+    con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)",
+                (eid, helper["id"], oid))
+    listed = c.get(f"/api/events/{eid}/door-team", headers=tma(8))
+    assert "zed@kbtu.kz" not in listed.text
+    key = next(r["key"] for r in listed.json()["rows"] if r["key"].startswith("x"))
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(8), json={"key": key}).status_code == 200
     delete_now(c, cfg, tma(7))
-    assert not con.execute("SELECT 1 FROM qr_hand_marks WHERE who LIKE '%zed%'").fetchone()
+    assert not con.execute("SELECT 1 FROM qr_hand_marks WHERE who = ?", (key,)).fetchone()
     con.close()
 
 

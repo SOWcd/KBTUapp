@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from pathlib import Path
 
 from .. import video
 from ..db import tx
@@ -137,9 +138,10 @@ def new_video(con, v: Viewer, size, wide: object = False) -> dict:
     if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= video.MAX_BYTES:
         raise ApiError("bad_input", "too_big")
     # unfinished ones wait for the daily sweep: without a cap, uploads could fill the disk the database lives on
-    if one(con, "SELECT COUNT(*) FROM videos WHERE owner_id = ? AND status IN ('uploading', 'queued', 'working')", v.id)[0] >= 2:
-        raise ApiError("rate_limited")
-    vid = con.execute("INSERT INTO videos (owner_id, status, size, created_at, wide) VALUES (?, 'uploading', ?, ?, ?)", (v.id, size, core.now(), int(wide is True))).lastrowid
+    with tx(con):
+        if one(con, "SELECT COUNT(*) FROM videos WHERE owner_id = ? AND status IN ('uploading', 'queued', 'working')", v.id)[0] >= 2:
+            raise ApiError("rate_limited")
+        vid = con.execute("INSERT INTO videos (owner_id, status, size, created_at, wide) VALUES (?, 'uploading', ?, ?, ?)", (v.id, size, core.now(), int(wide is True))).lastrowid
     return {"id": vid, "at": 0}
 
 
@@ -150,13 +152,31 @@ def my_video(con, v: Viewer, vid: int) -> sqlite3.Row:
     return x
 
 
-def video_uploaded(con, v: Viewer, vid: int, have: int) -> dict:
-    """All pieces in: the postman compresses it next."""
-    x = my_video(con, v, vid)
-    if x["status"] != "uploading" or have != x["size"]:
-        raise ApiError("conflict")
-    con.execute("UPDATE videos SET status = 'queued' WHERE id = ?", (vid,))
-    return video_shape(my_video(con, v, vid))
+def video_part(con, v: Viewer, vid: int, path: Path, at: int, data: bytes) -> dict:
+    """Only the append holds the write lock. A simultaneous retry learns the committed offset."""
+    with tx(con):
+        x = my_video(con, v, vid)
+        if x["status"] != "uploading":
+            raise ApiError("conflict")
+        path.parent.mkdir(exist_ok=True)
+        with path.open("ab") as out:
+            have = out.tell()
+            if have != at:
+                return {"at": have}
+            if have + len(data) > x["size"] or len(data) > 2 * video.PIECE:
+                raise ApiError("bad_input", "too_big")
+            out.write(data)
+        return {"at": have + len(data)}
+
+
+def video_uploaded(con, v: Viewer, vid: int, path: Path) -> dict:
+    """Check the final file size under the same write lock as each append."""
+    with tx(con):
+        x = my_video(con, v, vid)
+        if x["status"] != "uploading" or not path.is_file() or path.stat().st_size != x["size"]:
+            raise ApiError("conflict")
+        con.execute("UPDATE videos SET status = 'queued' WHERE id = ?", (vid,))
+        return video_shape(my_video(con, v, vid))
 
 
 def next_video(con) -> sqlite3.Row | None:

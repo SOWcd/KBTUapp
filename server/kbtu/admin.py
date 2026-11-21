@@ -115,7 +115,7 @@
                                 column kept as is, people without an account too. Without --apply a dry run: counts, headers,
                                 problems by row number (never a value). --balance: that column of the hours sheet (hours) is the
                                 starting balance; nothing else is computed. The same file twice adds nothing
-  .venv/bin/python -m kbtu.admin vol autolink       the import's records linked to the club's members by their current Telegram username
+  .venv/bin/python -m kbtu.admin vol autolink       the import's records linked to the club's members by their current Telegram username and verified name
   .venv/bin/python -m kbtu.admin vol batches | vol undo <batch>   the imports; one undone (records used since stay)
   .venv/bin/python -m kbtu.admin appeals grant|revoke <@username | telegram id>   SG's queue of appeals (logic/appeals.py):
                                 a right of its own, never a club role; at once, in the audit log

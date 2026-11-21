@@ -35,7 +35,8 @@ def _live(con, oid: int):
 
 
 def _get(con, rid: int):
-    r = one(con, "SELECT * FROM rounds WHERE id = ?", rid)
+    r = one(con, """SELECT r.* FROM rounds r JOIN orgs o ON o.id = r.org_id
+        WHERE r.id = ? AND o.status = 'active'""", rid)
     if not r:
         raise ApiError("not_found")
     return r
@@ -47,6 +48,8 @@ def _accepting(r) -> bool:
 
 def view(con, v: Viewer, oid: int) -> dict | None:
     """The club's live round: what a student needs to apply (and their own application), plus the counts for the team."""
+    if not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", oid):
+        return None
     r = _live(con, oid)
     team = can(con, v, oid, "casting")
     if not r and not team and v.student:  # the results went out: my "no" with the club's own words, here (the bot never quotes them)
@@ -220,32 +223,33 @@ def apply(con, v: Viewer, rid: int, body: dict) -> dict:
     """A student's application (again: it changes theirs while the round takes them). Departments in order of wish; an
     answer for every required question that applies (a department's own question only if it was picked)."""
     need_student(v)
-    r = _get(con, rid)
-    if not _accepting(r):
-        raise ApiError("closed")
-    if role_in(con, v, r["org_id"]):
-        raise ApiError("conflict", "member")
-    if banned(con, r["org_id"], v.id):
-        raise ApiError("forbidden", "banned")
-    if one(con, "SELECT 1 FROM round_apps WHERE round_id = ? AND user_id = ? AND sent_at IS NOT NULL", rid, v.id):
-        raise ApiError("closed")  # told already: their result stands
-    deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", rid)}
-    try:
-        picked = [int(x) for x in body["departments"]]
-        answers = {str(k): val for k, val in dict(body.get("answers") or {}).items()}
-        source = str(body.get("source") or "club")
-    except (KeyError, TypeError, ValueError):
-        raise ApiError("bad_input")
-    if len(deps) == 1 and not picked:  # one department: nothing to pick
-        picked = list(deps)
-    if not ((1 if deps else 0) <= len(picked) <= (r["picks"] if deps else 0) and len(set(picked)) == len(picked) and set(picked) <= deps) or source not in SOURCES:
-        raise ApiError("bad_input")
-    clean = check_answers([{"id": q["id"], "kind": q["kind"], "options": json.loads(q["options"]) if q["options"] else [], "required": q["required"],
-                            "tag": q["tag_id"]} for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)], answers, picked)
-    con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (round_id, user_id) DO UPDATE SET departments = excluded.departments, answers = excluded.answers, updated_at = excluded.updated_at,
-            stage = CASE WHEN stage = 'withdrawn' THEN 'new' ELSE stage END""",
-                (rid, v.id, json.dumps(picked), json.dumps(clean, ensure_ascii=False), source, now(), now()))
+    with tx(con):
+        r = _get(con, rid)
+        if not _accepting(r):
+            raise ApiError("closed")
+        if role_in(con, v, r["org_id"]):
+            raise ApiError("conflict", "member")
+        if banned(con, r["org_id"], v.id):
+            raise ApiError("forbidden", "banned")
+        if one(con, "SELECT 1 FROM round_apps WHERE round_id = ? AND user_id = ? AND sent_at IS NOT NULL", rid, v.id):
+            raise ApiError("closed")  # told already: their result stands
+        deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", rid)}
+        try:
+            picked = [int(x) for x in body["departments"]]
+            answers = {str(k): val for k, val in dict(body.get("answers") or {}).items()}
+            source = str(body.get("source") or "club")
+        except (KeyError, TypeError, ValueError):
+            raise ApiError("bad_input")
+        if len(deps) == 1 and not picked:  # one department: nothing to pick
+            picked = list(deps)
+        if not ((1 if deps else 0) <= len(picked) <= (r["picks"] if deps else 0) and len(set(picked)) == len(picked) and set(picked) <= deps) or source not in SOURCES:
+            raise ApiError("bad_input")
+        clean = check_answers([{"id": q["id"], "kind": q["kind"], "options": json.loads(q["options"]) if q["options"] else [], "required": q["required"],
+                                "tag": q["tag_id"]} for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)], answers, picked)
+        con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (round_id, user_id) DO UPDATE SET departments = excluded.departments, answers = excluded.answers, updated_at = excluded.updated_at,
+                stage = CASE WHEN stage = 'withdrawn' THEN 'new' ELSE stage END""",
+                    (rid, v.id, json.dumps(picked), json.dumps(clean, ensure_ascii=False), source, now(), now()))
     return view(con, v, r["org_id"])
 
 
@@ -618,11 +622,11 @@ def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     """An invited applicant takes a time (or gives it up: null) while it has room and hasn't started. The bot reminds
     them the evening before (19:00) and an hour before."""
     need_student(v)
-    r = _get(con, rid)
-    if r["status"] == "done":
-        raise ApiError("closed")
     sid = body.get("slotId")
     with tx(con):
+        r = _get(con, rid)
+        if r["status"] == "done":
+            raise ApiError("closed")
         a = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ? AND stage != 'withdrawn'", rid, v.id)
         if not a or not a["invited_at"]:
             raise ApiError("forbidden")

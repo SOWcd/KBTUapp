@@ -631,7 +631,7 @@ def test_eve_follows_the_gifts_day(env):
     assert len(_out(con, "santa_eve")) == 6
 
 
-def test_migration_on_the_live_shape(env, tmp_path):
+def test_migration_on_the_live_shape(env, tmp_path, before_door_migration):
     """Migration 184 on a database at 183 shaped like production's: one running game, undrawn, no deadline, nobody
     in, gifts day Dec 25 (here: in 37 days). It gets a week-before deadline and the next round sends nothing. A game
     whose deadline passed undrawn: its President hears once that it waits for him, and nothing draws."""
@@ -639,6 +639,7 @@ def test_migration_on_the_live_shape(env, tmp_path):
     path = str(tmp_path / "live.db")
     db.init(path)
     con = db.connect(path)
+    before_door_migration(con)
     con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
     con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
         ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")

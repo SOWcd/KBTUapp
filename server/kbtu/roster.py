@@ -51,6 +51,16 @@ def same_person(sheet_name: str | None, first: str, last: str) -> bool:
     return len(_words(sheet_name) & _words(f"{first} {last}")) >= 2
 
 
+def expected_name(sheet, ms_oid, profile, manual, first, last) -> bool:
+    """Corroborate a typed number with directory names, or the former portal's verified names."""
+    if manual is None or manual:
+        return False
+    if ms_oid:
+        ms = json.loads(profile or "{}")
+        first, last = ms.get("givenName"), ms.get("surname")
+    return bool(first and last and same_person(sheet, first, last))
+
+
 # ------------------------------------------------------------ a sheet row, read (tools/roster_convert.py, tests)
 
 PLAIN = {"", "member", "uchastnik", "chlen"}      # latin(): member in English, Russian or the sheets' Russian spelling

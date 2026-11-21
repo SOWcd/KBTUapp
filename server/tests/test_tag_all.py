@@ -1,4 +1,4 @@
-"""/all in a group: anyone in the chat calls (owner, Nov 18); five mentions a message under the caller's: the app's list, the
+"""/all in a group: verified group admins and club role holders call; five mentions a message under the caller's: the app's list, the
 seen ones, then the members Telegram lists to our bot over MTProto (mtbot.members, faked here: no Telethon)."""
 from __future__ import annotations
 
@@ -140,14 +140,18 @@ def test_discussion_group_never_calls(env, monkeypatch):
     _run(forum, con, http, _msg(31, chat=-555),                                      # the forum's group
          _msg(31, reply_to_message={"message_id": 3, "is_automatic_forward": True}))   # a comment under a channel post
     assert http.sent == [] and not bot._tagging and not bot._tagged
-    assert _tagged(_run(forum, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37, 500, 501]   # an ordinary group: as before
+    assert _tagged(_run(forum, con, _Http(admins={31}), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37, 500, 501]   # an ordinary group: as before
 
 
-def test_anyone_in_the_chat_calls(env, monkeypatch):
-    """A plain member calls; someone with no account in the app, or a guest who only opened it, is told to sign up (owner, Nov 19)."""
+def test_call_requires_verification_and_current_group_or_club_authority(env, monkeypatch):
+    """Only authorized callers may start the roster read."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    assert _tagged(_run(cfg, con, _Http(), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
+    reads = []
+    _live(monkeypatch, [], reads)
+    assert not _tagged(_run(cfg, con, _Http(), _msg(31))) and not reads
+    assert not _tagged(_run(cfg, con, _Http(), _msg(20, chat=-555))) and not reads
+    assert _tagged(_run(cfg, con, _Http(admins={31}), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
     bot._tagged.clear()
     http = _Http()
     assert _tagged(_run(cfg, con, http, _msg(800))) == []                     # not in the app: nobody is called, told why
@@ -155,6 +159,9 @@ def test_anyone_in_the_chat_calls(env, monkeypatch):
     login(c, 801, "u801")
     con.execute("DELETE FROM students WHERE user_id = (SELECT id FROM users WHERE tg_id = 801)")  # opened the app, never signed up
     assert _tagged(_run(cfg, con, _Http(), _msg(801))) == []
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = (SELECT id FROM users WHERE tg_id = 21)")
+    assert not _tagged(_run(cfg, con, _Http(admins={21}), _msg(21)))  # verification applies even to a group admin
+
 
 
 def test_live_list_union_order_and_cap(env, monkeypatch):
@@ -184,7 +191,7 @@ def test_caller_not_in_the_chat_and_hidden_members(env, monkeypatch):
     _run(cfg, con, http, _msg(31))
     assert http.sent == [] and not bot._tagged and not bot._tagging
     _live(monkeypatch, [600, 601], hidden=True)
-    assert 600 not in _tagged(_run(cfg, con, _Http(), _msg(31)))
+    assert 600 not in _tagged(_run(cfg, con, _Http(), _msg(20)))
     bot._tagged.clear()
     assert {600, 601} <= set(_tagged(_run(cfg, con, _Http(admins={31}), _msg(31))))
 
@@ -196,7 +203,7 @@ def test_nobody_to_call_answers_once(env, monkeypatch):
     monkeypatch.setattr(bot, "ALL_AGAIN", 300)
     reads = []
     _live(monkeypatch, [20], reads)                                                # alone there
-    http = _Http()
+    http = _Http(admins={20})
 
     async def go():
         for m in (_msg(20, chat=-555), _msg(20, chat=-555, text="@all")):

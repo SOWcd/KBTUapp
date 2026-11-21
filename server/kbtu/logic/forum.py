@@ -157,6 +157,14 @@ _FINDABLE = """u.open_projects = 1 AND u.banned_at IS NULL AND u.role = 'user'
 _UNBLOCKED = "NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.user_id = :me AND b.blocked_id = {u}) OR (b.user_id = {u} AND b.blocked_id = :me))"
 
 
+def public_profile(con, v: Viewer, uid: int) -> dict | None:
+    public = con.execute(f"""SELECT 1 FROM users u WHERE u.id = :id AND {_FINDABLE}
+        AND {_UNBLOCKED.format(u='u.id')}""", {"id": uid, "me": v.id}).fetchone()
+    if public:
+        return {"skills": _skills_of(con, "user_skills", "user_id", uid), "open": True}
+    return None
+
+
 def _matches(con, me: int, skill_ids: list[int], skip: int) -> list[int]:
     """Open-to-projects people with any of these skills, the most shared first, then the most recently seen."""
     if not skill_ids:

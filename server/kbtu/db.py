@@ -21,6 +21,8 @@ BUSY_MS = 15000  # a write's wait for the lock (maybe() waits less)
 
 def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=5)
+    from .roster import expected_name
+    con.create_function("expected_name", 6, expected_name, deterministic=True)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")  # Give concurrent writes time to acquire the lock.

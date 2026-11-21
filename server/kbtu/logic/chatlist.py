@@ -13,9 +13,6 @@ from .core import (ApiError, Viewer, _org, _qs, can, card, log_action, need_stud
 
 # ---------------------------------------------------------------- the chats directory (§4.11)
 
-TG_LINK = re.compile(r"https://t\.me/[A-Za-z0-9_+\-/]{3,80}")
-
-
 def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
     """orgs: org id -> its ref, for the catalog's chip of whose chat it is (PLAN 86)."""
     return {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "url": c["url"], "members": c["members"],
@@ -32,7 +29,7 @@ def chats(con, v: Viewer) -> dict:
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
     live = rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY COALESCE(members, -1) DESC, title")
     orgs = _org_refs(con, {c["org_id"] for c in live if c["org_id"]})
-    everything = [_chat(c, opened, orgs) for c in live if v.student or "/+" not in c["url"]]
+    everything = [_chat(c, opened, orgs) for c in live if v.student or not _closed(c)]
     fits = lambda c: (c["school"] in (None, st["school"])) and (c["course"] in (None, st["course"]))  # noqa: E731
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last
     mine = sorted((c for c in everything if st and fits(c)), key=lambda c: -aim(c))
@@ -70,7 +67,8 @@ def chat_input(v: Viewer, body: dict) -> str:
     title, url, kind = str(body.get("title") or "").strip(), str(body.get("url") or "").strip(), body.get("kind")
     school = str(body.get("school") or "").strip() or None
     course = body.get("course")
-    if not len(title) <= 80 or not TG_LINK.fullmatch(url) or kind not in ("channel", "group", "forum") or (school and len(school) > 40) \
+    url = chat_link(url)
+    if not len(title) <= 80 or not url or kind not in ("channel", "group", "forum") or (school and len(school) > 40) \
             or not (course is None or (isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6)):
         raise ApiError("bad_input")
     return url
@@ -80,20 +78,20 @@ def add_chat(con, v: Viewer, body: dict, peek: dict) -> dict:
     """A chat for the directory (moderators and the admin): a t.me link, a channel, a group or a topics group, for
     everyone or a school and/or a course. The title may be left empty: then the chat's own; peek (its t.me page) brings
     the avatar (a saved photo's path) and the members."""
-    chat_input(v, body)
+    url = chat_input(v, body)
     title = str(body.get("title") or "").strip() or " ".join(str(peek.get("title") or "").split())[:80]
     if len(title) < 2:
         raise ApiError("bad_input")
     kind = body["kind"]
-    if c := one(con, f"SELECT id, url FROM chats WHERE status = 'org' AND ({SAME_CHAT})", body["url"].strip(), body["url"].strip(), None):
-        if "/+" in c["url"]:
+    if c := one(con, f"SELECT id, url FROM chats WHERE status = 'org' AND ({SAME_CHAT})", url, url, None):
+        if _closed(c):
             raise ApiError("conflict", "org")  # a club's closed chat stays off the catalog
         # a club's own channel joins the catalog as that row: still the club's
         con.execute("UPDATE chats SET title = ?, kind = ?, forum = ?, school = ?, course = ?, status = 'live' WHERE id = ?",
                     (title, "channel" if kind == "channel" else "group", int(kind == "forum"), str(body.get("school") or "").strip() or None, body.get("course"), c["id"]))
         return _owned(con, c["id"])
     cid = con.execute("""INSERT INTO chats (title, kind, forum, url, photo, members, school, course, added_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (title, "channel" if kind == "channel" else "group", int(kind == "forum"), body["url"].strip(),
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (title, "channel" if kind == "channel" else "group", int(kind == "forum"), url,
                                                   peek.get("photo"), peek.get("members"), str(body.get("school") or "").strip() or None,
                                                   body.get("course"), v.id, core.now())).lastrowid
     return _owned(con, cid)
@@ -122,7 +120,9 @@ HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-
 
 
 # one chat, whatever the link's case (a public name; an invite hash is case-sensitive) or its Telegram id: url, url, tg_chat_id
-SAME_CHAT = "(rtrim(lower(url), '/') = lower(?) AND url NOT LIKE '%/+%') OR rtrim(url, '/') = ? OR (tg_chat_id IS NOT NULL AND tg_chat_id = ?)"
+SAME_CHAT = """(rtrim(lower(url), '/') = lower(?) AND url NOT LIKE '%/+%' AND url NOT LIKE '%/joinchat/%')
+    OR rtrim(CASE WHEN url LIKE 'https://t.me/joinchat/%' THEN 'https://t.me/+' || substr(url, 23) ELSE url END, '/') = ?
+    OR (tg_chat_id IS NOT NULL AND tg_chat_id = ?)"""
 
 
 def chat_handle(text: str) -> str | None:
@@ -181,7 +181,7 @@ def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
     if c := one(con, f"SELECT status, url FROM chats WHERE {SAME_CHAT}", url, url, tg_chat):
         if c["status"] != "org":
             raise ApiError("conflict", c["status"])  # live | pending
-        if "/+" in c["url"]:
+        if _closed(c):
             raise ApiError("conflict", "org")  # a club's closed chat: on its page already, never in the catalog (its invite link)
     if one(con, "SELECT COUNT(*) FROM chats WHERE added_by = ? AND created_at > ? AND status != 'org'", uid, core.now() - 86400)[0] >= 10:
         raise ApiError("rate_limited")
@@ -338,7 +338,7 @@ ORG_CHATS = 12  # a club's chats on its page at most
 
 
 def _closed(c: sqlite3.Row) -> bool:
-    return "/+" in c["url"]
+    return "/+" in c["url"] or "/joinchat/" in c["url"].lower()
 
 
 def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
@@ -642,11 +642,21 @@ def banned(con, tg: int) -> bool:
 
 def student(con, tg: int) -> bool:
     """Signed up in the app (a student's account, not a guest's first opening): only they may /all."""
-    return bool(one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", tg))
+    return bool(one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ? AND s.manual = 0 AND u.banned_at IS NULL", tg))
+
+
+def may_call(con, chat: int, tg: int, admin: bool) -> bool:
+    """A verified group admin, or a verified officer or assigned role holder of this chat's club."""
+    if admin:
+        return student(con, tg)
+    _, _, oid = _holder(con, chat)
+    return bool(oid and one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id
+        JOIN students s ON s.user_id = u.id AND s.manual = 0 JOIN orgs o ON o.id = m.org_id AND o.status = 'active'
+        WHERE m.org_id = ? AND u.tg_id = ? AND u.banned_at IS NULL AND (m.role != 'member' OR m.role_id IS NOT NULL)""", oid, tg))
 
 
 def tag_all(con, tg_chat: int, tg_from: int, live: list[int] | tuple = ()) -> list[int]:
-    """/all in a group (bot._tag_all; anyone in the chat calls): whom to mention, each once, in this order:
+    """/all in a group (bot._tag_all checks the caller): whom to mention, each once, in this order:
     as far as the app knows (a club's chat: a synced department chat its department, a club chat the club's members, an
     event's chat its going people), then whom the bot saw there (chat_seen; a chat no club holds: chat_seen_free), then
     `live`: the chat's participants Telegram just listed (mtbot.members). Never the caller, Telegram's service accounts or

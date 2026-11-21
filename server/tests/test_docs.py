@@ -293,6 +293,9 @@ def test_question_goes_to_cloudflare_only_with_vectors(env, tmp_path, monkeypatc
     con.close()
     assert h.post("/api/assistant", headers=tma(1), json={"q": "retake rules?"}).status_code == 200
     assert len(sent) == 1 and "/ai/run/@cf/baai/bge-m3" in sent[0]
+    h.app.state.policy = "newer"
+    assert h.post("/api/assistant", headers=tma(1), json={"q": "retake rules?"}).status_code == 200
+    assert len(sent) == 1
 
 
 def _rup_cells(calc: str) -> list[tuple]:
