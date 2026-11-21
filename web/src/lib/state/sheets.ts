@@ -4,7 +4,18 @@ import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
+import type { Overlay } from './ui.svelte';
 import type { StoryGroup } from '../posts';
+
+export type SheetKey = number | string;
+
+/** A closing entry stays mounted for its exit. Return to the live entry without changing its props or scroll. */
+export function returnToSheet(stack: Overlay[], component: Overlay['component'], key: SheetKey, close: (id: number) => void): number | undefined {
+  const at = stack.findIndex((o) => !o.closing && o.component === component && o.key === key);
+  if (at < 0) return;
+  for (const o of stack.slice(at + 1).reverse()) if (!o.closing) close(o.id);
+  return stack[at].id;
+}
 
 // wait: ms before "ok" can be tapped (a second confirm, so a double tap doesn't go through both)
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number; link?: { label: string; url: string } };
