@@ -8,7 +8,7 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import Trophy from '@lucide/svelte/icons/trophy';
+  import TournamentRows from '../sheets/TournamentRows.svelte';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Eye from '@lucide/svelte/icons/eye';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
@@ -393,7 +393,7 @@
             {#if head}
               <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
               {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
-              {#if e.teamMax}<Row icon={Trophy} title={t('gr.title')} accessory="chevron" onclick={() => sheets.groups(id, true)} />{/if}
+              {#if e.teamMax}<TournamentRows {id} manage manageBracket={may(mem, 'events')} />{/if}
               {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
               <!-- one «Helpers»: the door's (server crew.py, its sheet links the volunteers), else the volunteers -->
               <!-- the door's helpers live under the Mark screen's «Helper» (CrewSheet); here the volunteers who asked -->

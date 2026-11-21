@@ -210,7 +210,8 @@
   sheets.teamPick = (title, min, max) => new Promise((done) => lazy(() => import('./screens/sheets/TeamPickSheet.svelte'), { title, min, max, done }));
   sheets.teamInvite = (token) => asStudent(() => lazy(() => import('./screens/sheets/TeamInviteSheet.svelte'), { token }), `et_${token}`);
   sheets.teams = (id) => lazy(() => import('./screens/club/TeamsSheet.svelte'), { id });
-  sheets.groups = (id, manage, seed, onchange) => lazy(() => import('./screens/sheets/GroupsSheet.svelte'), { id, manage, seed, onchange });
+  sheets.bracket = (id, manage, seed, onchange) => lazy(() => import('./screens/sheets/BracketSheet.svelte'), { id, manage, seed, onchange });
+  sheets.groups = (id, manage, seed, onchange, replacesBracket) => lazy(() => import('./screens/sheets/GroupsSheet.svelte'), { id, manage, seed, onchange, replacesBracket });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
   // in a whole application before the server said no)

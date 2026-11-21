@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { ClubTag, EventGroups, TeamMember, TeamSetup } from '../api';
+import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '../api';
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
@@ -260,8 +260,9 @@ export const sheets = {
   teamInvite: (_token: string) => {},
   /** the organizer's teams: every team, those with none, Form teams */
   teams: (_id: Id) => {},
+  bracket: (_id: Id, _manage: boolean, _seed: EventBracket, _onchange: (b: EventBracket) => void) => {},
   /** a team event's group stage: the tables and matches for everyone; manage: the organizers' draw and scores; seed: already loaded; onchange: the opener's copy follows */
-  groups: (_id: Id, _manage?: boolean, _seed?: EventGroups, _onchange?: (g: EventGroups) => void) => {},
+  groups: (_id: Id, _manage?: boolean, _seed?: EventGroups, _onchange?: (g: EventGroups) => void, _replacesBracket?: boolean) => {},
   /** our own t.me link's startapp, opened as if tapped (App.deepLink): a scanner that read one of our QRs */
   deepLink: (_p: string) => {},
 };

@@ -19,7 +19,7 @@
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
 
-  let { overlay, id, manage = false, seed, onchange }: { overlay: Overlay; id: Id; manage?: boolean; seed?: EventGroups; onchange?: (g: EventGroups) => void } = $props();
+  let { overlay, id, manage = false, seed, onchange, replacesBracket = false }: { overlay: Overlay; id: Id; manage?: boolean; seed?: EventGroups; onchange?: (g: EventGroups) => void; replacesBracket?: boolean } = $props();
   // svelte-ignore state_referenced_locally
   let b = $state<EventGroups | null>(seed ?? null);
   // the event sheet's row follows a draw or a removal (the server's word only)
@@ -43,6 +43,7 @@
   async function draw() {
     if (drawing || !b) return;
     if (b.groups.length && !(await sheets.ask({ title: t('gr.redrawAsk'), text: t('gr.redrawText'), ok: t('gr.redraw'), cancel: t('common.cancel') }))) return;
+    if (!b.groups.length && replacesBracket && !(await sheets.ask({ title: t('gr.draw'), text: t('br.replace'), ok: t('gr.draw'), cancel: t('common.cancel') }))) return;
     drawing = true;
     try { put(await api.drawGroups(id, size, Math.min(advance, size))); haptic.ok(); say(t('gr.drawn'), 'party_popper_3d'); } catch (e) { fail(e); }
     finally { drawing = false; }

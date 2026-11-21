@@ -21,7 +21,7 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import Trophy from '@lucide/svelte/icons/trophy';
+  import TournamentRows from './TournamentRows.svelte';
   import Hourglass from '@lucide/svelte/icons/hourglass';
   import Gift from '@lucide/svelte/icons/gift';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -57,7 +57,7 @@
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf, addressGis } from '../../lib/map';
   import { meetHost } from '../../lib/meet';
-  import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventGroups, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
+  import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -120,9 +120,6 @@
     seenSt = now;
   });
   const going = $derived(st === 'going');
-  // a team event's group stage (server evgroups.py): its row once drawn, read below the first screen and handed to its sheet
-  let stage = $state<EventGroups | null>(null);
-  $effect(() => { if (later && !preview && e?.teamMax && !stage) api.eventGroups(id).then((g) => (stage = g)).catch(() => {}); });
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
   // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver (PLAN 32)
@@ -521,7 +518,7 @@
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
     {#if detail?.teams && !preview && !cancelled}<EventTeam {detail} {going} onchange={(d) => (detail = d)} />{/if}
-    {#if stage?.groups.length}<Group><Row icon={Trophy} title={t('gr.title')} value={String(stage.groups.length)} accessory="chevron" onclick={() => sheets.groups(id, head, stage ?? undefined, (g) => (stage = g))} /></Group>{/if}
+    {#if e.teamMax && !preview}<TournamentRows {id} manage={head} standalone />{/if}
 
     <!-- the event's own people: everything they do with it in one group of plain rows, under its own heading -->
     {#if tooled || (head && crew)}
@@ -537,7 +534,6 @@
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
-            {#if e.teamMax && stage && !stage.groups.length}<Row icon={Trophy} title={t('gr.title')} accessory="chevron" onclick={() => sheets.groups(id, true, stage ?? undefined, (g) => (stage = g))} />{/if}
             <!-- full before it starts: more seats right here, the waitlist moves in (§4.2) -->
             {#if e.seats && !cancelled && !started && e.taken >= e.seats}<Row icon={Plus} title={t('seats.addRow')} disabled={adding2}
               menu={[5, 10, 20].map((n) => ({ label: `+${n}`, onselect: () => void addSeats(n) }))} />{/if}
