@@ -290,3 +290,22 @@ def test_door_extra_counts_outsiders_anonymously(door_event):
     assert c.post(base, headers=tma(1), json={"step": 1}).status_code == 403 and stranger
     c.post(base, headers=door, json={"step": -1}); c.post(base, headers=door, json={"step": -1})
     assert c.get(base, headers=door).json() == {"extra": 0}
+
+
+def test_door_lets_in_a_buyer_not_in_the_app(door_event):
+    """The door types a list buyer's student ID and surname: only a matching surname lets them in; their ticket comes
+    checked in when they sign in; the door sees the count."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov", "24B030002,,,Ivan Petrov"])
+    base, door = "/api/events/1/door-pending", tma(9)
+    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0}
+    assert c.post(base, headers=door, json={"studentId": "24B030001", "surname": "Wrong"}).status_code == 404
+    assert c.post(base, headers=door, json={"studentId": "24B039999", "surname": "Testov"}).status_code == 404
+    r = c.post(base, headers=door, json={"studentId": "24b030001", "surname": "TESTOV"}).json()
+    assert r == {"already": False, "adult": True, "pending": 2, "pendingCame": 1}
+    assert c.post(base, headers=door, json={"studentId": "24B030002", "surname": "Petrov", "adult": False}).json()["adult"] is False
+    assert c.post(base, headers=tma(1), json={"studentId": "24B030002", "surname": "Petrov"}).status_code == 403  # not the door
+    # signing in later: the ticket, already checked in
+    uid = _student(c, con, 1, "24B030001")
+    guests.claim(con, uid)
+    assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0] == 1

@@ -157,6 +157,9 @@ def claim(con, uid: int) -> None:
             if not _proves_surname(g["surname_hash"], g["event_id"], g["student_id"], _surnames(g)):
                 continue
             _ticket(con, g["event_id"], uid, g["adult"])
+            if g["came_at"]:  # let in by hand before signing in: the ticket is a checked-in one
+                con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+                    WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
             con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))
 
 
@@ -164,3 +167,27 @@ def need_ticket(con, eid: int, uid: int) -> None:
     if one(con, """SELECT 1 FROM events e WHERE e.id = ? AND e.guest_list = 1 AND NOT EXISTS (
         SELECT 1 FROM registrations r WHERE r.event_id = e.id AND r.user_id = ? AND r.status = 'going')""", eid, uid):
         raise ApiError("guest_list")
+
+
+def pending_count(con, eid: int) -> dict:
+    """The list's buyers not in the app yet: how many, how many let in by hand."""
+    n, came = one(con, "SELECT COUNT(*), COUNT(came_at) FROM event_guests WHERE event_id = ?", eid)
+    return {"pending": n, "pendingCame": came}
+
+
+def let_in(con, eid: int, sid: object, surname: object, t: int) -> dict:
+    """A buyer not in the app: the door types the student ID and the surname from their ID card; only a row whose
+    one-way surname code matches is let in (a guessed ID alone opens nothing). Their 18+ from the list, if any."""
+    if not isinstance(sid, str) or not isinstance(surname, str) or not 0 < len(sid) <= 20 or not 0 < len(surname) <= 80:
+        raise ApiError("bad_input")
+    sid = sid.strip().upper()
+    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ?", eid, sid)
+    if not g or not _proves_surname(g["surname_hash"], eid, sid, _name_words(surname)):
+        raise ApiError("not_found")
+    if not g["came_at"]:
+        con.execute("UPDATE event_guests SET came_at = ? WHERE event_id = ? AND student_id = ?", (t, eid, sid))
+    return {"already": bool(g["came_at"]), "adult": None if g["adult"] is None else bool(g["adult"]), **pending_count(con, eid)}
+
+
+def set_pending_age(con, eid: int, sid: str, adult: bool) -> None:
+    con.execute("UPDATE event_guests SET adult = ? WHERE event_id = ? AND student_id = ? AND came_at IS NOT NULL", (int(adult), eid, sid.strip().upper()))
