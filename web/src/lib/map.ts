@@ -11,7 +11,7 @@ import { KK_SPOTS, EN_SPOTS } from './i18n/spots';
  *  Only a room at the start counts, so a street address ("Abaya 150") never sends anyone to the KBTU map. A letter
  *  right after the number is part of the room: 251a is another room than 251, Cyrillic or Latin.
  *  The escapes are the Russian for auditorium and cabinet (aud, auditoriya, kab, kabinet), kept out of the source as letters. */
-const ROOM = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)\.?\s*\u2116?\s*)?([1-57]\d{2})([a-c\u0430-\u0432](?![a-z\u0430-\u044f]))?(?!\d)/i;
+const ROOM = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)[.:]?\s*\u2116?\s*)?([1-57]\d{2})([a-c\u0430-\u0432](?![a-z\u0430-\u044f]))?(?!\d)/i;
 /** A room as the maps name it: "251A", Cyrillic "251a" → "251a" (the Cyrillic a, b, v, s become Latin) */
 export const normRoom = (s: string): string =>
   s.trim().toLowerCase().replace(/[\u0430\u0431\u0432\u0441]/g, (c) => 'abvc'['\u0430\u0431\u0432\u0441'.indexOf(c)]);
@@ -58,7 +58,7 @@ export const spotOf = (text: string): Spot | null =>
 export const adminZone = (room: string | null | undefined): boolean => !!room && /^(?:46[2-8]|47[1-6]|41[6-8])$/.test(room);
 /** A basement room: 1-99, maybe with a letter, as the whole place, so a
  *  short number in an address ("12 mkr") never counts; a leading zero is dropped ("045" → "45"). */
-const BASEMENT = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)\.?\s*\u2116?\s*)?0?([1-9]\d?[a-g\u0430-\u0433]?)$/i;
+const BASEMENT = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)[.:]?\s*\u2116?\s*)?0?([1-9]\d?[a-g\u0430-\u0433]?)$/i;
 export function roomOf(place: string | null | undefined): string | null {
   if (atBldg2(place) || awayOf(place)) return null; // "312" there is not the main building's 312
   const p = place?.trim() ?? '', m = p.match(ROOM), b = p.match(BASEMENT);
