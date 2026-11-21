@@ -2133,4 +2133,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (210, "ALTER TABLE event_guests ADD COLUMN name TEXT CHECK (name IS NULL OR length(name) <= 120);"),
     # the list's Telegram username: whoever opens the app with it gets the ticket at once, no KBTU sign-in needed
     (211, "ALTER TABLE event_guests ADD COLUMN username TEXT CHECK (username IS NULL OR length(username) <= 40);"),
+    # the organizers' team names on the door's list (search a team, tick it at once): a list row's and an app guest's
+    (212, """ALTER TABLE event_guests ADD COLUMN team TEXT CHECK (team IS NULL OR length(team) <= 80);
+    ALTER TABLE registrations ADD COLUMN door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80);"""),
 ]

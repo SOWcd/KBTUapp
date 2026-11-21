@@ -3319,6 +3319,7 @@ const en: Dict = {
   'mk.letInOk': "{id} let in",
   'mk.letInNo': "Not on the list: check the ID and surname",
   'mk.guestList': "Guest list",
+  'mk.markTeam': "Mark the whole team ({n})",
   'mk.helper': "Helper",
   'age.adult': "18+",
   'age.minor': "Under 18",

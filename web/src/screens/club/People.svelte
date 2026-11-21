@@ -31,7 +31,7 @@
   let team = $state<TeamList | null>(null);
   let guests = $state<DoorPerson[] | null>(null);
   // the organizers' list of buyers not in the app (and people with no student ID): ticked by name
-  let pend = $state<{ key: string; name: string; adult: boolean | null; came: boolean; at?: number | null }[]>([]);
+  let pend = $state<{ key: string; name: string; adult: boolean | null; came: boolean; at?: number | null; team?: string | null }[]>([]);
   const load = () => {
     if (!guestsOnly) api.teamList(id).then((l) => (team = l)).catch(() => {});
     api.doorPending(id).then((x) => (pend = x.list ?? [])).catch(() => {});
@@ -43,9 +43,9 @@
   // one shape for both lists: a team row (key) or a guest going (uid)
   type Item = { key: string; uid?: Id; pend?: string; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null };
   const items = $derived.by<Item[]>(() => [
-    ...pend.map((x) => ({ key: `p:${x.key}`, pend: x.key, name: x.name, group: t('mk.guestsGroup'), at: x.came ? x.at ?? nowTs() : null, manual: true, app: false, adult: x.adult })),
+    ...pend.map((x) => ({ key: `p:${x.key}`, pend: x.key, name: x.name, group: x.team || t('mk.guestsGroup'), at: x.came ? x.at ?? nowTs() : null, manual: true, app: false, adult: x.adult })),
     ...(aud !== 'guests' && !guestsOnly ? (team?.rows ?? []).map((r) => ({ ...r, group: r.group ?? t('mk.noGroup') })) : []),
-    ...(aud !== 'team' ? (guests ?? []).map((d) => ({ key: `g${d.person.id}`, uid: d.person.id, name: d.person.realName, group: t('mk.guestsGroup'),
+    ...(aud !== 'team' ? (guests ?? []).map((d) => ({ key: `g${d.person.id}`, uid: d.person.id, name: d.person.realName, group: d.team || t('mk.guestsGroup'),
       at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
   ]);
   let tab = $state<'not' | 'came' | 'other'>('not');
@@ -145,6 +145,10 @@
     {:else if groups.length}
       {#each groups as [name, g] (name)}
         <Group caption={name} note={t('mk.ofN', { n: g.came, m: g.all })}>
+          {@const rest = g.rows.filter((x) => !x.at && (x.pend || x.uid != null))}
+          {#if rest.length > 1 && g.rows.every((x) => x.pend || x.uid != null) && name !== t('mk.guestsGroup')}
+            <Row dense title={t('mk.markTeam', { n: rest.length })} accessory="chevron" onclick={() => { for (const x of rest) void mark(x); }} />
+          {/if}
           {#each g.rows as x (x.key)}
             <Row dense title={x.name} subtitle={sub(x)} disabled={!x.at && shut(x)} onclick={x.at && !x.manual ? undefined : (ev) => tap(x, ev)}>
               {#snippet detail()}{#if x.adult != null}<span class="tg"><Tag tone={x.adult ? 'neutral' : 'warning'}>{t(x.adult ? 'age.adult' : 'age.u18')}</Tag></span>{/if}<span class="ck" class:on={!!x.at}>{#if x.at}<CircleCheck size={24} />{:else}<Circle size={24} />{/if}</span>{/snippet}
