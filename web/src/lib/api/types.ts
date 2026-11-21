@@ -141,7 +141,7 @@ export type AssistAction = { type: 'map'; room?: string } | { type: 'event' | 'c
   | { type: 'settings'; kind: 'school' | 'course' | 'notify' };
 export interface AssistReply { text: string; actions: AssistAction[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
-export interface GrantItem { id: Id; code: 'bugs' | 'dmp' | 'creator_laugh' | 'creator_found' | 'init26' | 'init26f' | 'init26p' | 'supporter' | 'club_founder'; at: Ts; person: PersonRef }
+export interface GrantItem { id: Id; code: 'bugs' | 'dmp' | 'creator_laugh' | 'creator_found' | 'init26' | 'init26f' | 'init26p' | 'supporter' | 'club_founder' | 'honor'; at: Ts; person: PersonRef }
 export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc' | 'fpost'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc' | 'fpost' | 'gallery'; id: Id; link?: string | null; msg?: number /* fpost: its message in the forum channel */ }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
@@ -244,13 +244,13 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
   people: CreditPerson[];          // newest shipped first, a named person's lines together
   /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
-  mine: { consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; items: CreditItem[] } | null;
+  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; items: CreditItem[] } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
 /** at the door (Member+): the real short name beside a nick */
@@ -752,6 +752,7 @@ export interface Achievement {
   season?: string;              // season medals: '2026-fall'
   at?: Ts | null;               // when its current level was reached (null: before the dates were kept)
   now?: number;                 // the streak only: weeks in a row up to this one (SPEC §4.11)
+  reason?: string;              // The public inscription on a contribution medal
   org?: OrgRef | null;          // Club founder only: the club founded (to those who see someone's clubs)
   /** a badge with variants (the initiation's: guest, volunteer, performer): mine, the highest I hold, its medal in `emoji` */
   variant?: string | null;

@@ -61,11 +61,12 @@ export const MANUAL: Manual[] = [
   // 'dmp' (Attendance required) hidden, as the server's DMP_ON (owner, Nov 10)
   ...BADGES.map((b) => ({ code: b.code, emoji: b.variants[0].emoji, scan: true, variants: b.variants as Manual['variants'] })),
   { code: 'club_founder', emoji: 'rocket_3d', scan: false, one: true }, // given with its club picked
+  { code: 'honor', emoji: 'puzzle_piece_3d', scan: false, creator: true, one: true },
   { code: 'supporter', emoji: 'fire_3d', scan: false, creator: true, one: true }, // Fuel: a Stars gift gives it; by hand the creator alone
 ];
 /** art being redone (owner, Nov 11); empty the list to bring them back. Out of Admin's awards catalog and its search
  *  only (the server's CATALOG_HIDDEN): a person's page in Admin still gives both, a holder keeps the medal */
-const CATALOG_HIDDEN = ['supporter', 'club_founder'];
+const CATALOG_HIDDEN = ['supporter', 'club_founder', 'honor'];
 export const CATALOG: Manual[] = MANUAL.filter((a) => !CATALOG_HIDDEN.includes(a.code));
 /** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
 export const manualMedal = (code: string, emoji: string, held = true): Achievement =>
@@ -86,7 +87,7 @@ export function splitVariants(list: Achievement[]): Achievement[] {
   });
 }
 export const achKey = (a: Achievement): string => a.code + (a.variant ? ':' + a.variant : '');
-export const achHow = (a: Achievement): string => (a.variant ? variantHow(a.code, a.variant) : t(`ach.${a.code}.how` as 'ach.regular.how'));
+export const achHow = (a: Achievement): string => a.reason || (a.variant ? variantHow(a.code, a.variant) : t(`ach.${a.code}.how` as 'ach.regular.how'));
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
@@ -102,7 +103,7 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
 const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
-export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code in MEDAL_ART || a.levels.length > 1;
+export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code === 'honor' || a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
 export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
   const c = coinOf(a);

@@ -79,6 +79,7 @@
             <span class="txt"><span class="lbl">{t('cr.idea')}</span><b class="nm">{p ? realOf(p) : t('cr.student')}</b></span>
             {#if p}<span class="mk"><ChevronRight size={18} /></span>{/if}
           </span>
+          {#if c.idea.honor}<span class="more">{t('ach.honor.name')}</span>{/if}
           {#if c.idea.items.length}<span class="more"><CreditLines items={c.idea.items} under="idea" /></span>{/if}
         </Card></div>
       {/if}
@@ -94,7 +95,8 @@
               {#if p}<Avatar person={p} size={36} tappable={false} /><b class="wn">{p.name}</b><span class="mk"><ChevronRight size={18} /></span>
               {:else if gh}<span class="gh"><GitHubMark size={24} /></span><b class="wn">{gh}</b><span class="mk"><ArrowUpRight size={18} /></span>{/if}
             </span>
-            <CreditLines items={row.items} />
+            {#if row.honor}<span>{t('ach.honor.name')}</span>{/if}
+            {#if row.items.length}<CreditLines items={row.items} />{/if}
           </Card></div>
         {/each}
         {#if anon.length}

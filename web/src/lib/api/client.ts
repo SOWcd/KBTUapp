@@ -479,7 +479,7 @@ export const server = {
   decideOfficial: (id: Id, approve: boolean, reason?: string): Promise<OfficialRequest> => call('POST', `/admin/official-requests/${id}`, { approve, reason: reason ?? '' }), // admin
   feature: (postId: Id, days: number): Promise<Post> => call('POST', '/admin/feature', { postId, days }), // admin: on top of List for everyone; 0 ends it
   /** Admin → Awards: give a person a manual award (the bot sends them its card); undo: ungrant(its id) */
-  giveGrant: (userId: Id, code: GrantItem['code'], orgId?: Id): Promise<GrantItem> => call('POST', '/admin/grants', { userId, code, orgId }), // orgId: Club founder's club
+  giveGrant: (userId: Id, code: GrantItem['code'], orgId?: Id, reason?: string): Promise<GrantItem> => call('POST', '/admin/grants', { userId, code, orgId, reason }), // orgId: Club founder's club
   /** the scanner: a person's card QR is one grant; `run` names this opening of the camera for undoBatch('s_' + run) */
   grantScan: (qr: string, code: GrantItem['code'], run?: string): Promise<GrantItem> => call('POST', '/admin/grants/scan', { qr, code, run }),
   /** undo a scanner run ('s_…'), a link's people ('l_' + token), a check-in session's (screenGrant's batch) */
@@ -495,7 +495,7 @@ export const server = {
   /** undo one of my grants, at any time */
   ungrant: (id: Id): Promise<void> => call('DELETE', `/admin/grants/${id}`),
   /** a manual award back off a person, at any time (a mistake): every grant of it */
-  takeBackGrant: (userId: Id, code: GrantItem['code']): Promise<import('./types').BadgeHolder> => call('POST', '/admin/grants/take-back', { userId, code }),
+  takeBackGrant: (userId: Id, code: GrantItem['code']): Promise<import('./types').BadgeHolder & { reason?: string | null }> => call('POST', '/admin/grants/take-back', { userId, code }),
   useGrantLink: (token: string): Promise<{ code: string }> => call('POST', `/grant-links/${token}`),
   /** Admin → Awards → Show QR: open one for an award, its current code (closing it: revokeLink); a student's scan of it */
   openBadgeQr: (code: GrantItem['code']): Promise<import('./types').BadgeQr> => call('POST', '/admin/badge-qr', { code }),

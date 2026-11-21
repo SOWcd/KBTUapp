@@ -1,5 +1,8 @@
 """The people of the app: the creator, the idea's author, and everyone whose idea, find (a bug) or code is in it.
 
+The honor medal also qualifies a holder for the consent sheet. Only a current yes adds their medal to this list.
+The inscription stays on the profile. Revoking the medal leaves any shipped lines and their consent intact.
+
 A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet)
 or a GitHub login (`gh`: a pull request's author; such a line is never tied to an account, so publishing it ties no
 login to a profile here), a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
@@ -43,7 +46,8 @@ REMIND = "lines are OUR words: gender-neutral, no name, handle, link or identify
 _CAN = "(u.tg_id > 0 AND u.banned_at IS NULL AND s.user_id IS NOT NULL AND s.manual = 0)"
 # the latest answer, joined as k
 _LAST = "LEFT JOIN credit_consents k ON k.id = (SELECT x.id FROM credit_consents x WHERE x.user_id = u.id ORDER BY x.id DESC LIMIT 1)"
-_HAS = "(u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))"
+_HONOR = "EXISTS (SELECT 1 FROM achievement_grants g WHERE g.user_id = u.id AND g.code = 'honor')"
+_HAS = f"((u.is_founder = 0 AND {_HONOR}) OR u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))"
 _COLS = f"{PERSON_COLS}, u.tg_id, u.banned_at, {_CAN} AS can, k.id AS rev, k.show, k.version"
 
 
@@ -53,7 +57,7 @@ def _said(r) -> bool | None:
 
 
 def _state(con, uid: int):
-    return one(con, f"SELECT {_COLS}, {_HAS} AS has FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ?", uid)
+    return one(con, f"SELECT {_COLS}, {_HONOR} AS honor, {_HAS} AS has FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ?", uid)
 
 
 # ------------------------------------------------------------ the list
@@ -80,8 +84,9 @@ def listing(con, v: Viewer) -> dict:
             return listing(con, v)
         finally:
             con.execute("COMMIT")
-    top = rows(con, f"""SELECT {_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
-        WHERE (u.is_founder = 1 OR u.mark = 'idea') AND u.tg_id > 0""")
+    top = rows(con, f"""SELECT {_COLS}, g.created_at AS honored FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
+        LEFT JOIN achievement_grants g ON g.user_id = u.id AND g.code = 'honor'
+        WHERE (u.is_founder = 1 OR u.mark = 'idea' OR g.id IS NOT NULL) AND u.tg_id > 0""")
     founder = next((p for p in top if p["is_founder"]), None)
     idea = next((p for p in top if p["mark"] == "idea" and not p["is_founder"]), None)
     me = _state(con, v.id)
@@ -104,16 +109,24 @@ def listing(con, v: Viewer) -> dict:
         row = people.setdefault(r["whose"] if named else ("gh", gh.lower()) if gh else ("line", r["cid"]),
                                 {"person": person_ref(r) if named else None, "gh": gh, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
         row["items"].append(_item(r))
+    # Only a named holder gets a medal entry. A shipped credit keeps its own anonymity and sort order.
+    for r in top:
+        if r["honored"] is None or not _named(r) or r["is_founder"] or r["mark"] == "idea":
+            continue
+        day = time.strftime("%Y-%m-%d", time.gmtime(r["honored"] + 5 * 3600))
+        row = people.setdefault(r["tg_id"], {"person": person_ref(r), "gh": None, "items": [], "at": (day, _tie(r["id"]))})
+        row["honor"] = True
     is_idea = bool(idea and idea["id"] == v.id)
     said = _said(me)
     return {
         "founder": person_ref(founder) if founder and founder["banned_at"] is None else None,
-        "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items} if idea else None,
-        "people": [{"person": p["person"], "items": p["items"]} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
+        "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items,
+                 **({"honor": True} if _named(idea) and idea["honored"] is not None else {})} if idea else None,
+        "people": [{"person": p["person"], "items": p["items"], **({"honor": True} if p.get("honor") else {})} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
         # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
         # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
-        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items}
-        if me["can"] and (my_items or is_idea or said) else None,
+        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {})}
+        if me["can"] and (my_items or is_idea or said or (me["honor"] and not me["is_founder"])) else None,
         "version": CONSENT,
     }
 
@@ -184,7 +197,8 @@ def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
     con.execute("UPDATE credits SET tg_id = ? WHERE tg_id = ?", (new_tg, old_tg))
     # always a new "no" row where there is anything to answer about: a yes still on its way from the old Telegram names
     # an older answer (or none) and is refused, whatever the last answer was
-    if one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg) or one(con, "SELECT 1 FROM credit_consents WHERE user_id = ?", uid):
+    if (one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid)
+            or one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg) or one(con, "SELECT 1 FROM credit_consents WHERE user_id = ?", uid)):
         con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, 0, ?, ?)", (uid, CONSENT, core.now()))
 
 

@@ -64,6 +64,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
     ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
     ("supporter", "fire_3d", (1,), False),  # "Fuel": a new Stars gift (stars.paid), or the creator by hand; others see it only on the showcase
+    ("honor", "puzzle_piece_3d", (1,), False),
     ("club_founder", "rocket_3d", (1,), False),  # founded a club (official or at the Ascent's top): by hand in Admin, the club on the grant's note
 ]
 # Couch critic: the forum channel's posts I commented under, each once (critic()). Off until the
@@ -107,7 +108,7 @@ def _counts(con, uid: int) -> dict[str, int]:
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
             "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
-            "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0),
+            "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
             "critic": critic(con, uid) if CRITIC_ON else 0}
 
 
@@ -188,14 +189,14 @@ def sync_levels(con) -> None:
 BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
-GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder")  # the manual ones (§4.11); "First 500" is given at verification
+GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
-CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter")  # about the creator himself, and Fuel: he alone gives them
+CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
 PRIVATE = ("supporter",)  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
-ONE_BY_ONE = ("supporter", "club_founder")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
+ONE_BY_ONE = ("supporter", "club_founder", "honor")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 # art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
 # locked medal on a profile): a holder keeps it on the shelf, Admin's person page still gives both, Stars still give Fuel
-CATALOG_HIDDEN = ("supporter", "club_founder")
+CATALOG_HIDDEN = ("supporter", "club_founder", "honor")  # Honor is awarded from the person and shown once earned
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
 LINK_DAYS = (1, 3, 7, 14)
 CARD_WAIT = 45  # a manual award's bot card waits this long, so an Undo stops it before it goes
@@ -219,22 +220,28 @@ def _item(con, gid: int) -> dict:
     return {"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
 
 
-def grant(con, v: Viewer, uid: object, code: object, org: object = None) -> dict:
+def grant(con, v: Viewer, uid: object, code: object, org: object = None, reason: object = None) -> dict:
     """The admin gives a manual award to a person picked in the app: "Bug hunter" one more time, the rest once.
     Celebrated like any new level (the bot's card with a button, the unlock moment); audited. Undo: ungrant(id).
     Club founder names its club (`org`): an official one or one at the Ascent's top; the award stays whatever the club
     does later (a new President, hidden). ponytail: one per person; a founder of two clubs needs a grant per club."""
-    code = _giver(con, v, code)
-    if not isinstance(uid, int) or isinstance(uid, bool) or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
-        raise ApiError("bad_input")
-    note = None
-    if code == "club_founder":
-        if type(org) is not int or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind = 'club' AND (official = 1 OR top_at IS NOT NULL)", org):
-            raise ApiError("bad_input", "club")
-        note = f"org:{org}"
     with tx(con):
+        code = _giver(con, v, code)
+        # A contributor can have an app account before linking (or after unlinking) a student profile.
+        target = "SELECT 1 FROM users WHERE id = ? AND tg_id > 0" if code == "honor" else "SELECT 1 FROM students WHERE user_id = ?"
+        if type(uid) is not int or not one(con, target, uid):
+            raise ApiError("bad_input")
+        note = None
+        if reason is not None:
+            if code != "honor" or not isinstance(reason, str) or len(reason) > 140 or any(not ch.isprintable() for ch in reason):
+                raise ApiError("bad_input", "reason")
+            note = reason.strip() or None
+        if code == "club_founder":
+            if type(org) is not int or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind = 'club' AND (official = 1 OR top_at IS NOT NULL)", org):
+                raise ApiError("bad_input", "club")
+            note = f"org:{org}"
         gid = _grant(con, v.id, uid, code, note=note)
-    return _item(con, gid)
+        return _item(con, gid)
 
 
 def _grant(con, by: int | None, uid: int, code: str, batch: str | None = None, log: bool = True, note: str | None = None) -> int:
@@ -413,13 +420,14 @@ def revoke_link(con, v: Viewer, token: str) -> None:
 def ungrant(con, v: Viewer, gid: int) -> None:
     """Undo one grant: the giver's own (a scan, a tap, a link's use), at any time; the owner any. The level goes back,
     its unsent bot card goes."""
-    _admin(v)
-    owner = _owner(con, v)
-    g = one(con, "SELECT * FROM achievement_grants WHERE id = ? AND code IN ({}) AND (granted_by = ? OR ?)".format(','.join('?' * len(GRANTABLE))),
-            gid, *GRANTABLE, v.id, owner)
-    if not g or (g["code"] in CREATOR_ONLY and not owner):
-        raise ApiError("not_found")
-    _drop_grant(con, v, g)
+    with tx(con):  # a concurrent deletion can make this grant id available again
+        _admin(v)
+        owner = _owner(con, v)
+        g = one(con, "SELECT * FROM achievement_grants WHERE id = ? AND code IN ({}) AND (granted_by = ? OR ?)".format(','.join('?' * len(GRANTABLE))),
+                gid, *GRANTABLE, v.id, owner)
+        if not g or (g["code"] in CREATOR_ONLY and not owner):
+            raise ApiError("not_found")
+        _drop_grant(con, v, g)
 
 
 def undo_batch(con, v: Viewer, batch: object) -> int:
@@ -440,16 +448,19 @@ def undo_batch(con, v: Viewer, batch: object) -> int:
 def take_back(con, v: Viewer, uid: object, code: object) -> dict:
     """The admin takes back a manual award from a person at any time (Bug hunter given to a friend by mistake while
     testing, ten times over): every grant of it, by a person or a link; never the sign-in's "First 500"."""
-    code = _giver(con, v, code)
-    if not isinstance(uid, int) or isinstance(uid, bool):
-        raise ApiError("bad_input")
-    gs = rows(con, "SELECT * FROM achievement_grants WHERE user_id = ? AND code = ? ORDER BY id DESC", uid, code)
-    if not gs:
-        raise ApiError("not_found")
     with tx(con):
+        code = _giver(con, v, code)
+        if not isinstance(uid, int) or isinstance(uid, bool):
+            raise ApiError("bad_input")
+        gs = rows(con, "SELECT * FROM achievement_grants WHERE user_id = ? AND code = ? ORDER BY id DESC", uid, code)
+        if not gs:
+            raise ApiError("not_found")
         for g in gs:
             _drop_grant(con, v, g)
-    return awards_of(con, v, uid)
+        result = awards_of(con, v, uid)
+        if code == "honor":
+            result["reason"] = gs[0]["note"]  # Undo restores the inscription too
+        return result
 
 
 def _drop_grant(con, v: Viewer, g) -> None:
@@ -467,7 +478,7 @@ def _drop_grant(con, v: Viewer, g) -> None:
 
 # ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
-SHOWN = (*CREATOR_ONLY, "bugs", *(("dmp",) if DMP_ON else ()), *BADGES["init26"], "club_founder")  # as the chips go; a badge's highest variant first
+SHOWN = (*CREATOR_ONLY, "bugs", "dmp", *BADGES["init26"], "club_founder")  # as the chips go; a badge's highest variant first
 
 
 def _badge_row(con, p, owner: bool) -> dict:
@@ -509,10 +520,12 @@ def award_people(con, v: Viewer, award: object) -> list[dict]:
 def awards_of(con, v: Viewer, uid: object) -> dict:
     """One person's manual awards for the admin's chips (Admin → People, Awards)."""
     _admin(v)
-    p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + " WHERE u.id = ? AND s.user_id IS NOT NULL", uid) if type(uid) is int else None
+    owner = _owner(con, v)
+    p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) +
+            " WHERE u.id = ? AND (s.user_id IS NOT NULL OR (? AND u.tg_id > 0))", uid, owner) if type(uid) is int else None
     if not p:
         raise ApiError("not_found")
-    return _badge_row(con, p, _owner(con, v))
+    return _badge_row(con, p, owner)
 
 
 def badge_sessions(con, v: Viewer) -> list[dict]:
@@ -673,6 +686,10 @@ def person(con, v: Viewer, uid: int) -> dict:
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
+        if a["code"] == "honor" and a["level"]:
+            g = one(con, "SELECT note FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid)
+            if g and g["note"]:
+                a["reason"] = g["note"]
         if a["code"] == "club_founder" and a["level"] and close:
             o = one(con, "SELECT o.* FROM achievement_grants g JOIN orgs o ON 'org:' || o.id = g.note WHERE g.user_id = ? AND g.code = 'club_founder' ORDER BY g.id DESC", uid)
             a["org"] = org_ref(con, o) if o else None

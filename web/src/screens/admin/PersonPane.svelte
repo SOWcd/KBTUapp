@@ -67,7 +67,7 @@
     </Group>
 
     <Group caption={t('adm.awards')}>
-      <div class="aw"><PersonAwards person={p.person} /></div>
+      <div class="aw">{#key p.person.id}<PersonAwards person={p.person} />{/key}</div>
     </Group>
 
     {#if touchable}
