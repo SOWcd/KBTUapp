@@ -284,6 +284,7 @@ def test_migration_does_not_backfill_old_receipts(paid, monkeypatch, before_door
     con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
     con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
     if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'event_guests'").fetchone():
+        con.execute("ALTER TABLE event_guests DROP COLUMN name")  # 210's
         con.execute("ALTER TABLE event_guests DROP COLUMN came_at")  # 209's
     con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's
     con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's

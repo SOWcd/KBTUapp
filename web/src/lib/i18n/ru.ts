@@ -3340,6 +3340,7 @@ const ru = {
   'mk.letIn': "Впустить по списку",
   'mk.letInOk': "{id} впущен",
   'mk.letInNo': "Нет в списке: проверь номер и фамилию",
+  'mk.guestList': "Список гостей",
   'mk.helper': "Помощник",
   'age.adult': "18+",
   'age.minor': "Младше 18",

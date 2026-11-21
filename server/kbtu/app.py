@@ -1602,6 +1602,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def door_let_in(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.organizing.let_in_pending(con, v, eid, body.get("studentId"), body.get("surname"), body.get("adult"))
 
+    @app.post("/api/events/{eid}/door-pending/tick")
+    def door_tick(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.tick_pending(con, v, eid, body.get("key"), body.get("adult"), body.get("came", True))
+
     @app.get("/api/events/{eid}/door-extra")
     def door_extra(eid: int, con: Con, v: Me):
         return logic.organizing.door_extra(con, v, eid)

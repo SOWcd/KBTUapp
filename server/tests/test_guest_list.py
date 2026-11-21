@@ -298,7 +298,7 @@ def test_door_lets_in_a_buyer_not_in_the_app(door_event):
     c, cfg, con = door_event
     guests.import_csv(con, 1, ["24B030001,1,,Jane Testov", "24B030002,,,Ivan Petrov"])
     base, door = "/api/events/1/door-pending", tma(9)
-    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0}
+    assert c.get(base, headers=door).json() == {"pending": 2, "pendingCame": 0, "list": []}
     assert c.post(base, headers=door, json={"studentId": "24B030001", "surname": "Wrong"}).status_code == 404
     assert c.post(base, headers=door, json={"studentId": "24B039999", "surname": "Testov"}).status_code == 404
     r = c.post(base, headers=door, json={"studentId": "24b030001", "surname": "TESTOV"}).json()
@@ -309,3 +309,20 @@ def test_door_lets_in_a_buyer_not_in_the_app(door_event):
     uid = _student(c, con, 1, "24B030001")
     guests.claim(con, uid)
     assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0] == 1
+
+
+def test_door_list_by_name(door_event):
+    """The organizers' sheet names the pending buyers and adds people with no student ID; the door taps a name."""
+    c, cfg, con = door_event
+    guests.import_csv(con, 1, ["24B030001,1,,Jane Testov"])
+    assert guests.door_names(con, 1, ["24B030001,Jane Testov,1,", ",Outsider Person,\u0434\u0430,@nobody", ",Outsider Person,,"]) == (1, 1)
+    base, door = "/api/events/1/door-pending", tma(9)
+    got = c.get(base, headers=door).json()
+    assert got["pending"] == 2 and {x["name"] for x in got["list"]} == {"Jane Testov", "Outsider Person"}
+    out = next(x for x in got["list"] if x["name"] == "Outsider Person")
+    assert out["adult"] is True and out["came"] is False
+    assert c.post(f"{base}/tick", headers=door, json={"key": out["key"], "adult": False}).json()["pendingCame"] == 1
+    assert c.post(f"{base}/tick", headers=tma(1), json={"key": out["key"]}).status_code == 403
+    assert c.post(f"{base}/tick", headers=door, json={"key": "x999"}).status_code == 404
+    got = {x["name"]: x for x in c.get(base, headers=door).json()["list"]}
+    assert got["Outsider Person"]["came"] is True and got["Outsider Person"]["adult"] is False and got["Outsider Person"]["at"]
