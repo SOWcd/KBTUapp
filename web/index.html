@@ -132,7 +132,11 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
       'font:13px/1.5 ui-monospace,monospace;color:#ff9d8a;background:#07080F;min-height:100vh">' +
       'KBTU App не запустился\n\n' + String(msg).replace(/[<>&]/g, '') + '</pre>';
   }
+  // Browser extensions (Safari's included) run in the page and throw their own errors, e.g. "Invalid call to
+  // runtime.sendMessage(). Tab not found.": not ours, never a reason to cover the app.
+  function foreign(x) { return /-extension:\/\/|runtime\.sendMessage/.test(String(x && (x.stack || x.message) || x || '')); }
   window.addEventListener('error', function (e) {
+    if (foreign(e.filename) || foreign(e.error) || foreign(e.message)) return;
     // telegram-web-app.js comes from another origin: its failures arrive as a bare "Script error."
     // that can't be fixed or told apart from ad-blocker noise. Not worth covering a working app.
     if ((e.message || '') === 'Script error.' && !e.filename) return;
@@ -140,7 +144,7 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
     show((e.message || e.error) + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
   });
   window.addEventListener('unhandledrejection', function (e) {
-    if (window.__kbStarted) return;
+    if (window.__kbStarted || foreign(e.reason)) return;
     show('promise: ' + (e.reason && e.reason.message || e.reason));
   });
   // (the boot screen is no blank screen: under it a slow line gets longer before the page gives up)
