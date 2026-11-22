@@ -16,7 +16,7 @@ export function bootUnder(): DOMRect | null {
   return still() || !from.width ? null : from;
 }
 
-/** gone: its emblem swells and dissolves over the app (a signed-in launch; index.html's .o, under half a second, whatever the intro
+/** gone: the view flies in through its colonnade and it dissolves over the app (a signed-in launch; index.html's .o, under half a second, whatever the intro
  *  was doing: the app never waits for it), or at once when the app already covers it */
 export function bootOut(): void {
   const b = el();

@@ -23,7 +23,6 @@
   try { if (/tgWebAppData=./.test(location.hash) || /"tgWebAppData":"./.test(sessionStorage.getItem('__telegram__initParams') || '')) return; } catch (e) {}
   if (/^\/(show|screen)\/?$/.test(location.pathname)) return;
   try { t = localStorage.getItem('kb-theme'); } catch (e) {}
-  if (/[?&]boot=b(&|$)/.test(location.search)) document.documentElement.dataset.bv = 'b'; // ponytail: two candidate animations (a = default); the owner picks, the other and this line go
   document.documentElement.dataset.boot = t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   // the status bar's colour: this theme's ground, whichever the system's is
   var c = document.documentElement.dataset.boot === 'light' ? '#F3F5FB' : '#07080F', m = document.querySelectorAll('meta[name="theme-color"]');
@@ -33,16 +32,18 @@
 <!-- The boot screen: an emblem on the plain ground. Its still first frame (the ground and the mark) is the home-screen
      app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). The app is
      often up within half a second, so everything is said by then: a halo blooms behind the mark, the legend swings in
-     on its circle, a wave runs along the colonnade (and again every few seconds while a slow line loads).
-     lib/boot.ts hands it over: .o = the emblem swells and dissolves over the app (transitions on #boot and .em, the
-     intro on their children: the two compose, so an app ready at once still gets a whole gesture and never waits);
+     on its circle, light rakes through the colonnade onto the ground, a wave runs along the columns (and again every
+     few seconds while a slow line loads).
+     lib/boot.ts hands it over: .o = the way in: the view flies in between two columns (.em grows thirtyfold about
+     that gap) as the ground dissolves over the app (transitions on #boot and .em, the intro on their children: the two
+     compose, so an app ready at once still gets a whole gesture and never waits);
      .u = under the page as the entrance's ground: its lights wake, the legend goes, and the entrance draws its own mark
      where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on the compositor,
      running while the bundle keeps the main thread busy. -->
 <style id="boot-css">
 html[data-boot]{background:#07080F}
 html[data-boot=light]{background:#F3F5FB}
-#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .32s cubic-bezier(.4,0,.2,1)}
+#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .26s cubic-bezier(.5,0,.8,.6) .14s}
 [data-boot] #boot{display:block}
 [data-boot=light] #boot{color:#0B1433;background:#F3F5FB}
 #boot.u{z-index:auto}
@@ -55,8 +56,8 @@ html[data-boot=light]{background:#F3F5FB}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .32s cubic-bezier(.3,0,.3,1)}
-#boot.o .em{transform:scale(1.24)}
+#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transform-origin:113.25px 109px;transition:transform .4s cubic-bezier(.5,0,.8,.3)}
+#boot.o .em{transform:scale(30)}
 #boot .hl{position:absolute;left:-62px;top:-62px;width:340px;height:340px;background:radial-gradient(closest-side,#3B6BFF,transparent);opacity:.3;transition:opacity .28s;animation:kb-halo .5s cubic-bezier(.2,.8,.2,1) backwards}
 [data-boot=light] #boot .hl{opacity:.2}
 #boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .46s cubic-bezier(.2,.8,.2,1) .04s backwards}
@@ -72,17 +73,9 @@ html[data-boot=light]{background:#F3F5FB}
 #boot .mk i:nth-child(5){left:35.5px;animation-delay:.18s}
 #boot .mk i:nth-child(6){left:46px;animation-delay:.22s}
 #boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
-#boot .ry{display:none}
-/* candidate b, "the portico": no legend; light rakes through the four gaps onto the ground before the building, and
-   the handoff flies in between two columns (.em grows thirtyfold about that gap as the ground dissolves) */
-[data-bv=b] #boot{transition:opacity .26s cubic-bezier(.5,0,.8,.6) .14s}
-[data-bv=b] #boot .lg{display:none}
-[data-bv=b] #boot .em{transform-origin:113.25px 109px;transition:transform .4s cubic-bezier(.5,0,.8,.3)}
-[data-bv=b] #boot.o .em{transform:scale(30)}
-[data-bv=b] #boot .hl{top:-92px;opacity:.36}
-[data-bv=b][data-boot=light] #boot .hl{opacity:.22}
-[data-bv=b] #boot .ry{display:block;position:absolute;left:80px;top:131px;width:56px;height:150px;--r:#AFC3FF;opacity:.6;transform-origin:50% 0;transform:perspective(220px) rotateX(62deg);transition:opacity .28s;animation:kb-rays .5s cubic-bezier(.2,.8,.2,1) .06s backwards}
-[data-bv=b][data-boot=light] #boot .ry{--r:#3B6BFF;opacity:.5}
+/* light rakes through the four gaps onto the ground before the building, under the legend */
+#boot .ry{position:absolute;left:80px;top:131px;width:56px;height:120px;--r:#AFC3FF;opacity:.6;transform-origin:50% 0;transform:perspective(220px) rotateX(62deg);transition:opacity .28s;animation:kb-rays .5s cubic-bezier(.2,.8,.2,1) .06s backwards}
+[data-boot=light] #boot .ry{--r:#3B6BFF;opacity:.5}
 #boot .ry s{position:absolute;top:0;left:10px;width:4.5px;height:100%;background:linear-gradient(var(--r),transparent)}
 #boot .ry s:nth-child(2){left:20.5px}
 #boot .ry s:nth-child(3){left:31px}
@@ -187,5 +180,5 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><div class="hl"></div><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="ry"><s></s><s></s><s></s><s></s></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><div class="hl"></div><div class="ry"><s></s><s></s><s></s><s></s></div><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>
