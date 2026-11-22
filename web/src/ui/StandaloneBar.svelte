@@ -53,17 +53,22 @@
 
 <header class="bar">
   {#if back}
-    <button class="glass glass-pill back" type="button" aria-label={t('web.back')} onclick={backButton.click}><ChevronLeft size={24} /></button>
+    <button class="glass glass-pill back" type="button" aria-label={t('web.back')} onclick={backButton.click}><ChevronLeft size={20} /><span>{t('web.back')}</span></button>
   {/if}
-  <button class="glass glass-pill more" type="button" aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options}><Ellipsis size={22} /></button>
+  <button class="glass glass-pill more" type="button" aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options}><Ellipsis size={20} /></button>
 </header>
 
 <style>
   .bar { position: absolute; inset: max(8px, calc(var(--safe-top) + 4px)) 0 auto; z-index: calc(var(--z-sheet) + 7);
     padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
     display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-  button { position: relative; display: grid; place-items: center; width: var(--tap); height: var(--tap); border-radius: var(--r-full);
-    color: var(--text); pointer-events: auto; }
+  /* Telegram's own header pills (owner, Nov 22: "identical to Telegram"): 30 px tall, centred on the capsule's line;
+     the bar keeps a full tap height so the hit area stays 44 px */
+  .bar { height: var(--tap); }
+  button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
+    padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 15px/1 var(--font-text); pointer-events: auto; }
+  button::after { content: ""; position: absolute; inset: -7px -4px; } /* 44 px to the finger */
+  .back { padding-inline: 6px 12px; }
   .more { margin-inline-start: auto; }
   button:active { transform: scale(.94); }
 </style>
