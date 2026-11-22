@@ -99,7 +99,8 @@
   .mark { width: 76px; height: 76px; flex: none; box-shadow: none; }
   p { max-width: 30ch; }
   .widget { min-height: 40px; max-width: 100%; margin-block: var(--s-2); }
-  .widget :global(iframe) { max-width: 100%; color-scheme: light; } /* else Chromium paints white corners behind the button in dark */
+  /* the widget paints a square box behind its pill (white or black by theme): clip the frame to the pill */
+  .widget :global(iframe) { max-width: 100%; color-scheme: light; border-radius: 22px; }
   .spinner { display: flex; color: var(--text-2); animation: turn 900ms linear infinite; }
   @keyframes turn { to { transform: rotate(1turn); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
