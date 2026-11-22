@@ -31,15 +31,15 @@
   import Composer from '../../ui/Composer.svelte';
   import { menu as openMenu, type MenuItem } from '../../ui/menu';
 
-  let { overlay, kind, id, title, onchange, verified }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void; verified?: CommentThread } = $props();
+  let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
 
   const savedDraft = useDraft<string>(untrack(() => `kb-comment-${kind}-${id}`));
   const savedText = () => {
     const value = savedDraft.read();
     return typeof value === 'string' ? value : '';
   };
-  let th = $state<CommentThread | null>(untrack(() => verified ?? null));
-  let draft = $state(untrack(() => verified?.on ? savedText() : ''));
+  let th = $state<CommentThread | null>(null);
+  let draft = $state('');
   $effect(() => { if (th?.on) savedDraft.track(draft.trim() ? draft : null); });
   let asClub = $state(false);
   let sending = $state(false);
@@ -48,7 +48,6 @@
   let compose = $state<HTMLDivElement>();
 
   $effect(() => {
-    if (verified) return;
     api.comments(kind, id).then((x) => {
       if (x.on && th === null) draft = savedText();
       th = x;

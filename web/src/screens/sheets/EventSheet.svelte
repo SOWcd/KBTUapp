@@ -39,7 +39,7 @@
   import { FACES } from '../../lib/faces';
   import { burst } from '../../ui/burst';
   import { fly } from '../../ui/fly';
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -79,23 +79,19 @@
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
-  let { overlay, id, preview, from, album, verified }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null; album?: boolean; verified?: EventFull } = $props();
+  let { overlay, id, preview, from, album }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null; album?: boolean } = $props();
 
-  let detail = $state<EventFull | null>(untrack(() => verified ?? null));
+  let detail = $state<EventFull | null>(null);
   // a school's own event opened by another school's student (its link): whose it is, nothing else (server seats._event)
   // unset: a verified student with no school known, sent to Settings; the school picked there asks again (the read below)
   let onlyFor = $state(''), unset = $state(false);
-  let initialDetails = true;
   $effect(() => {
     void session.me?.student?.school;
-    const seeded = initialDetails && verified;
-    initialDetails = false;
-    if (seeded) return;
     if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { detail = null; if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
   });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
-  const e = $derived(preview ?? (verified ? data.events.find((e) => e.id === id) ?? data.opened.find((e) => e.id === id) : eventById(id)) ?? detail);
+  const e = $derived(preview ?? eventById(id) ?? detail);
   const gis = $derived(e && !e.online ? e.placeUrl || addressGis(e.place) : null); // online: never a route
   // an online event's link: the row says where it leads, its host always in sight (a typed link may be any https host)
   // the link only from the event just loaded (a card the app holds may carry one since changed or removed); https, a

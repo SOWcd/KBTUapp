@@ -8,12 +8,12 @@ import { queue } from '../moments';
 import { switching } from './theme.svelte';
 import { returnToSheet, type SheetKey } from './sheets';
 
-import type { Place, Tab } from './navigation';
-export { TABS, type Tab } from './navigation';
+export const TABS = ['afisha', 'forum', 'club', 'profile'] as const;
+export type Tab = typeof TABS[number];
 
 export const ui = $state({
   tab: 'afisha' as Tab,
-  club: null as number | null,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
+  club: null as number | null,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one)
   tryOn: null as { id: number; name: string; school?: boolean } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
   look: null as { skin: number | 'sower' | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
@@ -41,12 +41,12 @@ export interface Overlay { id: number; component: Component<any>; props: Record<
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
-  stat?: Screen; place?: Place }
+  stat?: Screen }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
 /** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view. */
-export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null, place?: Place): number {
+export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): number {
   const target = (props as Record<string, unknown>).id;
   if (key === undefined && (typeof target === 'string' || typeof target === 'number')) key = target;
   if (key != null) {
@@ -55,7 +55,7 @@ export function open<P extends Record<string, unknown>>(component: Component<P>,
   }
   const id = ++seq;
   if (stat) count(stat);
-  overlays.push({ id, component: component as Component<any>, props, closing: false, stat, key, place });
+  overlays.push({ id, component: component as Component<any>, props, closing: false, stat, key });
   return id;
 }
 
