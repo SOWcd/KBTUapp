@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import http.cookiejar
 import io
 import itertools
 import json
@@ -12,11 +13,12 @@ import os
 import re
 import signal
 import socket
+import stat
 import subprocess
 import tempfile
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -34,6 +36,8 @@ LINK = re.compile(
     r"(?:(?:(?:www|m)\.)?youtube\.com/shorts/|(?P<short_host>(?:www\.)?youtu\.be)/)(?P<youtube>(?a:[\w-]{11}))"
     # a post, a reel, an IGTV video, also under its author's name (/<name>/p/<code>); never a story or a share link
     r"|(?:www\.)?instagram\.com/(?:(?!stories/|share/)(?a:[\w.]+)/)?(?:reels?|p|tv)/(?P<instagram>(?a:[\w-]+))"
+    # one story (never a highlights reel: a playlist of a hundred): acted on only with INSTAGRAM_COOKIES (link)
+    r"|(?:www\.)?instagram\.com/stories/(?!highlights/)(?P<story_user>(?a:[\w.]{1,30}))/(?P<story>[0-9]{1,30})"
     r")/?(?=$|[\s?#.,!;:)\]}<>\"'])", re.I)
 MAX_BYTES = 50 * 1024 * 1024  # the most a bot may upload
 URL_BYTES = 20 * 1024 * 1024  # the most Telegram fetches by URL itself
@@ -46,6 +50,15 @@ MAX_SECONDS = 180             # the longest yt-dlp source (a Short's limit; an I
 MEDIA_TYPES = ("video/", "audio/", "application/mp4", "application/octet-stream", "binary/octet-stream")
 PHOTO_TYPES = ("image/",)
 log = logging.getLogger("kbtu.tiktok")
+# Instagram stories, and posts Instagram shows only to a signed-in account, through the owner's spare account
+# (README "Instagram stories"). Only the env variable says where its cookies are, read at each call; the path and the
+# cookies never reach a log line, an error, the database or yt-dlp's own cookie file (it would write the jar back).
+COOKIES = "INSTAGRAM_COOKIES"
+COOKIE_BYTES = 256 * 1024              # a cookies file of instagram.com is a few kB; past this it's not one
+SESSION_HOSTS = ("instagram.com",)     # the only hosts a signed-in request may connect to, its cookies' only domain
+SIGNED = "instagram-session"           # the breaker of signed-in extractions: a dead session never rests reels
+SESSION_CAP = 60                       # signed-in extractions an hour, all chats together (the account reads like a person)
+_PLAIN_HEADERS = frozenset(("user-agent", "accept", "accept-language", "sec-fetch-mode", "referer", "origin"))
 # Wall-clock limits, end to end however slowly a source answers (each request step: download.TIMEOUT).
 TIMEOUT = 30                  # seconds for one source request (tikwm, one probe)
 EXTRACT_SECONDS = 60          # one yt-dlp extraction
@@ -72,8 +85,10 @@ def link(msg: dict) -> str | None:
     discussion group: the post is the channel's, not a message someone sent to the chat."""
     if (msg.get("from") or {}).get("is_bot") or msg.get("is_automatic_forward"):
         return None
-    m = LINK.search(str(msg.get("text") or msg.get("caption") or ""))
-    return m.group(0) if m else None
+    for m in LINK.finditer(str(msg.get("text") or msg.get("caption") or "")):
+        if not m["story"] or _cookie_path():  # a story without the cookies: as if it weren't there (no request at all)
+            return m.group(0)
+    return None
 
 
 def room(chat: int, now: float | None = None, *, user: int = 0, video: str = "") -> bool:
@@ -206,12 +221,14 @@ class Clip:
     hosts: tuple[str, ...] = download.TIKTOK_FILES
     source: str = "tikwm"
     down: bool = False  # one of its downloads failed and was counted: the next versions don't count again
+    private: bool = False  # extracted with the session: its files are fetched by us only (_sealed)
 
 
 @dataclass
 class Version:
     video: dict
     audio: dict | None = None
+    private: bool = False  # its clip's: never a URL for Telegram to fetch
 
     @property
     def size(self) -> int:
@@ -221,7 +238,7 @@ class Version:
     def direct(self) -> bool:
         """Telegram may fetch it by URL: one file, its size known (a server's header, not only a listing) and small."""
         f = self.video
-        return (not self.audio and f["protocol"] == "https" and f.get("ext") == "mp4" and 0 < self.size <= URL_BYTES
+        return (not self.private and not self.audio and f["protocol"] == "https" and f.get("ext") == "mp4" and 0 < self.size <= URL_BYTES
                 and bool(f.get("vcodec") and f.get("acodec") and f.get("width") and f.get("height")))
 
 
@@ -260,6 +277,8 @@ def key(url: str) -> str:
         return "yt:" + m["youtube"]
     if m["instagram"]:
         return "ig:" + m["instagram"]
+    if m["story"]:
+        return "igs:" + m["story"]
     parts = urlsplit(url)
     if found := re.fullmatch(r"/@[^/]+/video/(\d+)/?", parts.path):
         return "tt:" + found[1]
@@ -438,10 +457,20 @@ def _downloader(**options):
     })
 
 
-def _extract(match: re.Match) -> Clip | Album | None:
+_SIGN_IN = object()  # _extract's answer: Instagram shows this post only to a signed-in account
+
+
+def _extract(match: re.Match) -> Clip | Album | object | None:
     youtube = match["youtube"]
     if not youtube:
-        return _post(match)
+        try:
+            return _post(match)
+        except Exception as exc:
+            # private, login-only, rate-limited for anonymous readers: the session may see it (not an outage, so not
+            # counted for the anonymous breaker either way). Without the cookies: exactly as before.
+            if _outage(exc) or not _cookie_path():
+                raise
+        return _SIGN_IN
     url = f"https://www.youtube.com/watch?v={youtube}"
     with _downloader(allowed_extractors=["youtube"], format="best*") as dl:
         info = dl.extract_info(url, download=False, process=False)
@@ -465,13 +494,15 @@ def _clip(dl, info: dict, k: str, source: str) -> Clip | None:
     return Clip(k, duration, info.get("formats") or [info], cover, hosts, source)
 
 
-def _post(match: re.Match) -> Clip | Album | None:
+def _post(match: re.Match, cookies: list[http.cookiejar.Cookie] | None = None) -> Clip | Album | None:
     """An Instagram post: a reel or a video post as a Clip; photos, or several items (a carousel), as an Album of its
-    first ALBUM items. A carousel with a single video that can be sent is that video. Each video is checked as a reel."""
+    first ALBUM items. A carousel with a single video that can be sent is that video. Each video is checked as a reel.
+    With `cookies`: as the signed-in account (_signed), its videos _sealed."""
     url = f"https://www.instagram.com/p/{match['instagram']}/"
     k = key(match[0])
     # a photo post has no formats: not an error here (it would count against the source's breaker)
-    with _downloader(allowed_extractors=["instagram"], format="best*", ignore_no_formats_error=True) as dl:
+    options = {"allowed_extractors": ["instagram"], "format": "best*", "ignore_no_formats_error": True}
+    with _signed_in(cookies, **options) if cookies else _downloader(**options) as dl:
         info = dl.extract_info(url, download=False, process=False)
         if not info:
             return None
@@ -491,13 +522,157 @@ def _post(match: re.Match) -> Clip | Album | None:
                     log.debug("group video: an album item failed: %s", type(exc).__name__)
                     clip = None
                 if clip:
-                    items.append(clip)
+                    items.append(_sealed(clip) if cookies else clip)
             elif not entry.get("duration") and (photo := _photo_url(entry)):  # a video without formats is no photo
                 items.append(photo)
         if len(items) == 1 and isinstance(items[0], Clip):
             items[0].key = k
             return items[0]
         return Album(k, items) if items else None
+
+
+_session_uses: deque[float] = deque()  # ponytail: per worker (the bot polls in one), as _sent
+
+
+async def _signed_fetch(match: re.Match) -> Clip | Album | None:
+    """_signed in a thread: only with a readable cookies file and within SESSION_CAP (else None, no request)."""
+    if not _cookie_path():
+        return None
+    now = _clock()
+    while _session_uses and now - _session_uses[0] >= 3600:
+        _session_uses.popleft()
+    if len(_session_uses) >= SESSION_CAP:
+        _tell("the Instagram session's hourly cap is reached; stories and login-only posts wait")
+        return None
+    _session_uses.append(now)
+    return await _threaded(_extractors, EXTRACT_SECONDS, _signed, match, hosts=SESSION_HOSTS, source=SIGNED)
+
+
+def _story(match: re.Match, cookies: list[http.cookiejar.Cookie]) -> Clip | None:
+    """One story's video, as the signed-in account sees it. The pinned yt-dlp lists a story's videos only (a photo
+    story: nothing) and, with noplaylist, returns the linked one alone (None if it is gone)."""
+    url = f"https://www.instagram.com/stories/{match['story_user']}/{match['story']}/"
+    with _signed_in(cookies, allowed_extractors=["instagram:story"], format="best*") as dl:
+        info = dl.extract_info(url, download=False, process=False)
+        clip = _clip(dl, info, key(match[0]), "instagram") if isinstance(info, dict) else None
+    return _sealed(clip) if clip else None
+
+
+def _signed(match: re.Match) -> Clip | Album | None:
+    """A story, or a post only a signed-in account sees, through the owner's spare account. Runs in _threaded with
+    SESSION_HOSTS alone (no connection anywhere else, a redirect neither) under its own breaker (SIGNED). The cookies are
+    read here, at call time, and live only in this thread's yt-dlp jar: no cookie file of yt-dlp's, nothing written
+    back. No readable cookies: None before any request."""
+    cookies = _cookies()
+    if not cookies:
+        return None
+    return _story(match, cookies) if match["story"] else _post(match, cookies)
+
+
+@contextmanager
+def _signed_in(cookies: list[http.cookiejar.Cookie], **options):
+    """A downloader whose jar holds the session's cookies (instagram.com's only, secure only: never sent to a CDN, a
+    redirect elsewhere or over plain HTTP). Never `cookiefile`: yt-dlp would save the jar to it on close (rewriting
+    the owner's file, failing on a read-only mount). Instagram's answers may update the jar: dropped with it."""
+    with _downloader(**options) as dl:
+        jar = dl.cookiejar
+        for cookie in cookies:
+            jar.set_cookie(cookie)
+        try:
+            yield dl
+        finally:
+            # yt-dlp drops the session when Instagram sends the login page; Instagram may also expire it itself
+            if not any(c.name == "sessionid" for c in jar):
+                _tell("the Instagram cookies were signed out; stories wait for new ones (README)")
+            jar.clear()
+
+
+def _sealed(clip: Clip) -> Clip:
+    """A clip found with the session: its files are fetched without it. No cookies of the extraction go with its
+    formats (upload() would load them), no headers but plain ones, no URL handed to Telegram (Version.private), no
+    remote cover."""
+    clip.private, clip.cover = True, ""
+    for f in clip.formats:
+        f.pop("cookies", None)
+        headers = f.get("http_headers") or {}
+        f["http_headers"] = {k: v for k, v in headers.items() if str(k).lower() in _PLAIN_HEADERS}
+    return clip
+
+
+def _cookie_path() -> str:
+    """INSTAGRAM_COOKIES, read at each call: the path if it names a readable file, else "" (stories off)."""
+    path = os.environ.get(COOKIES, "").strip()
+    return path if path and os.path.isfile(path) and os.access(path, os.R_OK) else ""
+
+
+def _cookies() -> list[http.cookiejar.Cookie]:
+    """The session's cookies from the file, read-only and at most COOKIE_BYTES; [] if it can't be read or holds no
+    Instagram session. An error here names the path: dropped where it happens, the log gets a fixed line only."""
+    path = _cookie_path()
+    if not path:
+        return []
+    raw = None
+    try:  # O_NONBLOCK: a FIFO put there never hangs the thread
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC), "rb") as f:
+            if stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                raw = f.read(COOKIE_BYTES + 1)
+    except OSError:
+        pass
+    if raw is None or len(raw) > COOKIE_BYTES:
+        _tell("the Instagram cookies can't be read; stories wait for new ones (README)")
+        return []
+    cookies = _netscape(raw.decode("utf-8", "replace"))
+    if not any(c.name == "sessionid" for c in cookies):
+        _tell("the Instagram cookies hold no session; stories wait for new ones (README)")
+        return []
+    return cookies
+
+
+_NAME = re.compile(r"[!#-+\-.0-9A-Z^-z|~]{1,256}")    # a cookie's name: a token
+_VALUE = re.compile(r"[!-:<-~]{0,4096}")                # its value: printable ASCII but ';' (nothing to break a header)
+_DOMAIN = re.compile(r"\.?(?:[a-z0-9-]{1,63}\.){1,8}[a-z]{2,63}")
+_PATH = re.compile(r"/[!-~]{0,1024}")
+
+
+def _netscape(text: str) -> list[http.cookiejar.Cookie]:
+    """Netscape cookies-file lines (as browsers' exporters write them), instagram.com's only, unexpired, each made
+    secure. Anything else is skipped without a word (a line may hold a value)."""
+    now = time.time()
+    out = []
+    for line in text.split("\n"):  # not splitlines: a value's \v or \x1c would split it into a "line" of its own
+        line = line.removesuffix("\r")
+        http_only = line.startswith("#HttpOnly_")
+        if http_only:
+            line = line[len("#HttpOnly_"):]
+        elif line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != 7:
+            continue
+        domain, _, path, _, expires, name, value = fields
+        domain = domain.lower()
+        if not (_DOMAIN.fullmatch(domain) and download.host_allowed(domain.lstrip("."), SESSION_HOSTS)
+                and _NAME.fullmatch(name) and _VALUE.fullmatch(value) and re.fullmatch(r"[0-9]{1,12}", expires)):
+            continue
+        expiry = int(expires) or None  # 0: a session cookie
+        if expiry is not None and expiry <= now:
+            continue
+        dot = domain.startswith(".")
+        out.append(http.cookiejar.Cookie(
+            0, name, value, None, False, domain, dot, dot, path if _PATH.fullmatch(path) else "/", True, True,
+            expiry, expiry is None, None, None, {"HttpOnly": None} if http_only else {}))
+    return out
+
+
+_told: dict[str, float] = {}
+
+
+def _tell(what: str) -> None:
+    """The owner's hint in the log, once an hour for each: a fixed phrase of ours, never the path or a cookie."""
+    now = _clock()
+    if now - _told.get(what, -math.inf) >= 3600:
+        _told[what] = now
+        log.warning("group video: %s", what)
 
 
 def _photo_url(entry: dict) -> str:
@@ -601,9 +776,12 @@ async def fetch(http: httpx.AsyncClient, url: str) -> Clip | Album | list[str] |
     match = LINK.match(url)
     if not match:
         return None
+    if match["story"]:
+        return await _signed_fetch(match)  # stories need the session; none: no request at all
     if not match["tiktok"]:
-        return await _threaded(_extractors, EXTRACT_SECONDS, _extract, match,
-                               source="youtube" if match["youtube"] else "instagram")
+        got = await _threaded(_extractors, EXTRACT_SECONDS, _extract, match,
+                              source="youtube" if match["youtube"] else "instagram")
+        return await _signed_fetch(match) if got is _SIGN_IN else got
     with _source("tikwm"):
         raw = await download.fetch(http, API, ("www.tikwm.com",), 1024 * 1024, form={"url": match[0], "hd": "1"},
                                    seconds=TIMEOUT)
@@ -761,9 +939,9 @@ async def versions(http, clip: Clip) -> list[Version]:
         if not (f.get("vcodec") or "").startswith(("avc1", "h264")):
             continue
         if f in audio or silent:
-            pairs.append(Version(f))
+            pairs.append(Version(f, private=clip.private))
         else:
-            pairs.extend(Version(f, a) for a in audio if a.get("vcodec") == "none")
+            pairs.extend(Version(f, a, clip.private) for a in audio if a.get("vcodec") == "none")
     def quality(v: Version) -> tuple:
         width, height = v.video.get("width") or 0, v.video.get("height") or 0
         return min(width, height), width * height, v.direct, not v.audio, v.video.get("vbr") or 0
