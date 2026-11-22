@@ -76,12 +76,12 @@
 </header>
 
 <style>
-  .bar { position: absolute; inset: max(8px, calc(var(--safe-top) + 4px)) 0 auto; z-index: calc(var(--z-sheet) + 7);
+  .bar { position: absolute; inset: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)) 0 auto; z-index: calc(var(--z-sheet) + 7);
     padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
     display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
   /* Telegram's own header pills (owner, Nov 22: "identical to Telegram"): 30 px tall, centred on the capsule's line;
      the bar keeps a full tap height (::after belongs to .glass: never a hit-area trick here) */
-  .bar { height: var(--tap); }
+  .bar { height: 38px; } /* the capsule's own top and height (ui/Capsule.svelte): one centre line for all three */
   button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
     padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); pointer-events: auto; }
   /* both faces share one cell, so the pill keeps one width and never jumps */
