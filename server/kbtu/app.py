@@ -516,10 +516,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         anyio.to_thread.current_default_thread_limiter().total_tokens = THREADS
         task = asyncio.create_task(bot.run(cfg)) if cfg.background else None
         yield
-        if task:  # awaited: the bot's children are cancelled and done before the lock file is let go
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+        if task:  # the update and the message under way finish (bot.DRAIN), all done before the lock file is let go
+            bot.stop()
+            try:
+                await asyncio.wait_for(asyncio.shield(task), bot.DRAIN + 2)
+            except TimeoutError:  # stuck past its own deadline: cancelled, as before stop() existed
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         if http := getattr(app.state, "http", None):
             await http.aclose()
 
