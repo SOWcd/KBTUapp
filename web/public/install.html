@@ -334,7 +334,7 @@ li.on::before { background: var(--accent); color: #fff; }
   if (v === 'ios') '440x956@3 430x932@3 428x926@3 420x912@3 414x896@3 414x896@2 402x874@3 393x852@3 390x844@3 375x812@3 375x667@2'.split(' ').forEach(function (s) {
     var m = /(\d+)x(\d+)@(\d)/.exec(s);
     ['dark', 'light'].forEach(function (th) {
-      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + s + '-' + th + '.png';
+      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + m[1] + 'x' + m[2] + '-' + m[3] + 'x-' + th + '.png'; // (tools/splash.mjs's names)
       l.media = '(prefers-color-scheme: ' + th + ') and (device-width: ' + m[1] + 'px) and (device-height: ' + m[2] + 'px) and (-webkit-device-pixel-ratio: ' + m[3] + ') and (orientation: portrait)';
       document.head.appendChild(l);
     });

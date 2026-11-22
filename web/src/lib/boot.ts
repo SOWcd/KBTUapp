@@ -16,12 +16,13 @@ export function bootUnder(): DOMRect | null {
   return still() || !from.width ? null : from;
 }
 
-/** gone: faded away over the app (a signed-in launch), or at once when the app already covers it */
+/** gone: the view flies in through its colonnade and it dissolves over the app (a signed-in launch; index.html's .o, under half a second, whatever the intro
+ *  was doing: the app never waits for it), or at once when the app already covers it */
 export function bootOut(): void {
   const b = el();
   if (!b) return;
   const gone = () => { b.remove(); delete document.documentElement.dataset.boot; }; // (its ground on <html> goes with it: the theme's own from here)
   if (b.classList.contains('u') || still() || !b.offsetWidth) return gone();
   b.classList.add('o');
-  setTimeout(gone, 460);
+  setTimeout(gone, 520);
 }
