@@ -1076,6 +1076,32 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 
+GUEST_LIST_HEAD = {
+    "ru": ("Имя", "Команда", "Пришёл", "Время", "Откуда"),
+    "kk": ("Аты", "Команда", "Келді", "Уақыты", "Қайдан"),
+    "en": ("Name", "Team", "Came", "Time", "From"),
+}
+GUEST_LIST_FROM = {
+    "ru": {"list": "список", "app": "приложение", "walk": "добавлен на входе", "yes": "да", "no": "нет"},
+    "kk": {"list": "тізім", "app": "қосымша", "walk": "кіреберісте қосылды", "yes": "иә", "no": "жоқ"},
+    "en": {"list": "list", "app": "app", "walk": "added at the door", "yes": "yes", "no": "no"},
+}
+GUEST_LIST_CAPTION = {"ru": "Список гостей: {title}", "kk": "Қонақтар тізімі: {title}", "en": "Guest list: {title}"}
+
+
+def guest_list_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
+    """The door's list after the event (organizing.guest_list_export): as attendees_csv, UTF-8 with a BOM and ';'."""
+    lang = lang if lang in GUEST_LIST_HEAD else "ru"
+    out, f = io.StringIO(), GUEST_LIST_FROM[lang]
+    w = csv.writer(out, delimiter=";")
+    w.writerow(GUEST_LIST_HEAD[lang])
+    stamp = lambda ts: time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
+    for p in people:
+        w.writerow([_cell(x) for x in (p["name"], p["team"], f["yes"] if p["at"] else f["no"], stamp(p["at"]),
+                                       f["walk"] if p["walkIn"] else f["app"] if p["app"] else f["list"])])
+    return "guests.csv", ("\ufeff" + out.getvalue()).encode(), GUEST_LIST_CAPTION[lang].format(title=title)[:1000]
+
+
 TEAM_LOG_HEAD = {
     "ru": ("Полное имя", "Событие", "Дата", "Отметка", "Комментарий"),
     "kk": ("Толық аты-жөні", "Іс-шара", "Күні", "Белгі", "Пікір"),

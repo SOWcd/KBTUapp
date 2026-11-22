@@ -2207,4 +2207,6 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE reports7 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     CREATE INDEX reports_by_target ON reports (target, target_id);"""),
+    # a guest added at the door, not on the organizers' list (guests.walk_in): a corrected list never removes it
+    (219, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
 ]

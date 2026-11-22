@@ -10,7 +10,7 @@
   import Circle from '@lucide/svelte/icons/circle';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import { menu } from '../../ui/menu';
-  import { api, ApiErr, type DoorPerson, type Id, type TeamList } from '../../lib/api';
+  import { api, ApiErr, type DoorPerson, type Id, type ListGuest, type TeamList } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
@@ -25,13 +25,16 @@
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Button from '../../ui/Button.svelte';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
   let team = $state<TeamList | null>(null);
   let guests = $state<DoorPerson[] | null>(null);
   // the organizers' list of buyers not in the app (and people with no student ID): ticked by name
-  let pend = $state<{ key: string; name: string; adult: boolean | null; came: boolean; at?: number | null; team?: string | null }[]>([]);
+  let pend = $state<ListGuest[]>([]);
   const load = () => {
     if (!guestsOnly) api.teamList(id).then((l) => (team = l)).catch(() => {});
     api.doorPending(id).then((x) => (pend = x.list ?? [])).catch(() => {});
@@ -41,9 +44,9 @@
   const aud = $derived(team?.audience ?? 'both');
 
   // one shape for both lists: a team row (key) or a guest going (uid)
-  type Item = { key: string; uid?: Id; pend?: string; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null };
+  type Item = { key: string; uid?: Id; pend?: string; name: string; group: string; at: number | null; manual: boolean; app: boolean; adult?: boolean | null; walk?: boolean };
   const items = $derived.by<Item[]>(() => [
-    ...pend.map((x) => ({ key: `p:${x.key}`, pend: x.key, name: x.name, group: x.team || t('mk.guestsGroup'), at: x.came ? x.at ?? nowTs() : null, manual: true, app: false, adult: x.adult })),
+    ...pend.map((x) => ({ key: `p:${x.key}`, pend: x.key, name: x.name, group: x.team || t('mk.guestsGroup'), at: x.came ? x.at ?? nowTs() : null, manual: true, app: false, adult: x.adult, walk: !!x.walkIn })),
     ...(aud !== 'guests' && !guestsOnly ? (team?.rows ?? []).map((r) => ({ ...r, group: r.group ?? t('mk.noGroup') })) : []),
     ...(aud !== 'team' ? (guests ?? []).map((d) => ({ key: `g${d.person.id}`, uid: d.person.id, name: d.person.realName, group: d.team || t('mk.guestsGroup'),
       at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
@@ -130,12 +133,54 @@
     const items = [...ageItems(x), ...(x.manual ? [{ label: t('mk.unmark'), destructive: true, onselect: () => void unmark(x) }] : [])];
     if (items.length) { haptic.tap(); menu(el, items); }
   }
-  const sub = (x: Item) => (x.at ? [time(x.at), x.manual && t('mk.byHand')] : [!x.app && t('mk.noApp')]).filter(Boolean).join(' · ') || undefined;
+  const sub = (x: Item) => (x.at ? [time(x.at), x.walk ? t('gl.walkTag') : x.manual && t('mk.byHand')] : [!x.app && t('mk.noApp')]).filter(Boolean).join(' · ') || undefined;
+
+  // «Add a guest» (server guests.walk_in): someone not on the organizers' list, let in now; on the list at once,
+  // the server's key in place of the made-up one when it answers, gone again if it says no
+  const listed = $derived(!!eventById(id)?.guestList);
+  let adding = $state(false);
+  let newName = $state('');
+  let newTeam = $state('');
+  let newAge = $state<'adult' | 'minor' | ''>('');
+  const canAdd = $derived(newName.trim().length > 1 && (!ages || !!newAge));
+  async function addGuest() {
+    if (!canAdd) return;
+    const name = newName.trim().split(/\s+/).join(' '), team = newTeam.trim() || undefined, adult = ages ? newAge === 'adult' : undefined;
+    const temp = `new${nowTs()}${pend.length}`;
+    pend.push({ key: temp, name, team: team ?? null, adult: adult ?? null, came: true, at: nowTs(), walkIn: true });
+    stay.push(`p:${temp}`);
+    haptic.ok(); say(t('mk.marked', { name }), 'sparkles_3d');
+    newName = ''; newTeam = ''; newAge = ''; adding = false;
+    try {
+      const r = await api.walkIn(id, name, team, adult);
+      const p = pend.find((y) => y.key === temp);
+      if (p) Object.assign(p, { key: r.key, at: r.at, adult: r.adult, team: r.team ?? null });
+      stay.push(`p:${r.key}`);
+      onchange?.();
+    } catch (e) { pend = pend.filter((y) => y.key !== temp); err(e); }
+  }
 </script>
 
 <Sheet {overlay} icon={UsersRound} full title={t('mk.people')}>
   <div class="col">
     <SearchField bind:value={q} placeholder={t('door.search')} />
+    {#if listed}
+      <Group>
+        <Row icon={UserPlus} tone="add" title={t('gl.walkIn')} accessory="disclosure" open={adding} onclick={() => { haptic.tap(); adding = !adding; }} />
+      </Group>
+      {#if adding}
+        <form class="add" onsubmit={(ev) => { ev.preventDefault(); void addGuest(); }}>
+          <Field label={t('gl.col.name')} bind:value={newName} maxlength={120} autocomplete="off" enterkeyhint="next" />
+          <Field label={t('gl.walkTeam')} bind:value={newTeam} maxlength={80} autocomplete="off" enterkeyhint="done" />
+          {#if ages}<!-- asked, never preset: the door looks at the ID card first -->
+            <div class="btns">{#each ['adult', 'minor'] as const as a (a)}
+              <Button kind={newAge === a ? 'primary' : 'secondary'} size="m" full onclick={() => { haptic.tap(); newAge = a; }}>{t(a === 'adult' ? 'age.adult' : 'age.minor')}</Button>
+            {/each}</div>
+          {/if}
+          <Button kind="primary" size="l" full type="submit" disabled={!canAdd}>{t('gl.walkGo')}</Button>
+        </form>
+      {/if}
+    {/if}
     <Segmented items={[{ value: 'not', label: t('mk.notCame') }, { value: 'came', label: t('mk.came') }, ...(aud !== 'guests' ? [{ value: 'other' as const, label: t('mk.other') }] : [])]}
       bind:value={tab} onchange={() => { haptic.tap(); stay = []; }} />
     {#if tab === 'other'}
@@ -166,4 +211,5 @@
   .tg + .ck { margin-left: var(--s-2); }
   .ck.on { color: var(--accent); }
   .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }
+  .add { display: flex; flex-direction: column; gap: var(--s-3); }
 </style>
