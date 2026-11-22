@@ -14,6 +14,6 @@ A share card of a forum post live in the channel (`/api/share` kind `fp`, inline
 escaped, never a signature; inline offers only my own signed posts. A card already sent stays in its chat after a
 take-down, as a forward of the channel's post would.
 
-Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself (`TIKTOK=1`, `kbtu/tiktok.py`), no caption, no words of the bot's own.
+Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself, or the post's photos and videos as one album (`TIKTOK=1`, `kbtu/tiktok.py`), no caption, no words of the bot's own.
 
 The CSV exports use template captions and go to the requester's private chat with the bot. Attendee exports may contain sign-up answers. Team log exports include attendance comments for people with current report consent and require the club's `reports` right.
