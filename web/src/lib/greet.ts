@@ -76,6 +76,9 @@ export function opened(now: number): void {
   put('kb-open', now);
 }
 
+/** This phone has opened the app before this launch (asked after `opened`). */
+export const returning = (): boolean => !!prevOpen;
+
 /** pickHi with the launch before this one and the last greeting kept on the phone. */
 export function hiNow(now: number, name: string, next: Next | null, time: (ts: number) => string): Hi | null {
   opened(now);
