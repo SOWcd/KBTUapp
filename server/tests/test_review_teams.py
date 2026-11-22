@@ -180,3 +180,14 @@ def test_roster_reload_fills_only_whats_empty(env):
     phone, city = con.execute("SELECT s.phone, u.city FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ?", (ali["id"],)).fetchone()
     assert phone and phone.endswith("7012345678") or phone == "+77012345678", phone
     assert city == "Shymkent"  # theirs stays
+
+
+def test_roster_row_for_a_seat_already_held_goes_without_a_claim(env):
+    """The club's President in the app, the sheet naming them by username only: no 'is this you' and no claim."""
+    c, cfg = env
+    pres = login(c, 66, "pres")
+    c.get("/api/me", headers=_tg(66, "boss_u"))
+    con = _club(cfg, pres["id"])
+    roster.load(con, [_row(full_name="Someone Else", tg="boss_u", position="President")], {"S": "it"})
+    assert not con.execute("SELECT 1 FROM roster_pending").fetchone()
+    assert _member(con, pres["id"]) == "president"
