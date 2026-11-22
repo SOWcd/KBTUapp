@@ -1,7 +1,6 @@
 <script lang="ts">
-  // The Forum tab (the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
-  // newest first and nothing else (a pinned "popular" block put old posts first; a post being discussed
-  // says so in place). Liquid Glass (flat cards read as old iOS): a still, soft light behind the feed, each post a clear
+  // The Forum tab has a personalized order and the public channel's order. Liquid Glass: a still,
+  // soft light behind the feed, each post a clear
   // pane over it (a translucent body, a lit rim, no blur: fifty live blurs would cook an old iPhone), the composer and
   // the side doors real glass (base.css .glass-pill, Button's glass). Each post a card: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
@@ -38,7 +37,8 @@
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
-  import { channel, loadChannel, loadOlder, markChannelSeen, pendingHearts, toggleHeart, touched } from '../../lib/state/channel.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import { channel, loadChannel, loadOlder, markChannelSeen, pendingHearts, refreshChannel, removeChannelPost, selectChannelOrder, toggleHeart, touched } from '../../lib/state/channel.svelte';
   import { ui, say, overlays } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -77,10 +77,15 @@
 
   // A held post may be published much later. Admit new public messages in channel order, whoever wrote them.
   let through = $state(0), atTop = $state(true), scroller = $state<HTMLElement>();
-  const latest = $derived(channel.feed?.find((p) => p.status === 'live' && p.msg)?.msg ?? 0);
+  let focusedPost = $state<ChannelFeedPost | null>(null);
+  let focusRequest = 0;
+  const feed = $derived(focusedPost && !channel.feed?.some((p) => p.id === focusedPost?.id)
+    ? [focusedPost, ...(channel.feed ?? [])] : (channel.feed ?? []));
+  const latestMsg = (posts: ChannelFeedPost[]) => posts.reduce((max, p) => p.status === 'live' ? Math.max(max, p.msg ?? 0) : max, 0);
+  const latest = $derived(latestMsg(feed));
   const shown = (p: ChannelFeedPost) => p.status !== 'live' || (p.msg ?? 0) <= through;
-  const list = $derived((channel.feed ?? []).filter(shown));
-  const waiting = $derived((channel.feed ?? []).filter((p) => !shown(p)).length);
+  const list = $derived(feed.filter(shown));
+  const waiting = $derived(feed.filter((p) => !shown(p)).length);
   const showAll = () => { through = latest; };
   $effect(() => { if ((atTop || !through) && latest > through) through = latest; });
   function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: PULL, behavior: 'smooth' }); }
@@ -92,6 +97,7 @@
 
   // the line stands above the first post seen before, when some new one is above it: "N new", how many
   const cut = $derived.by(() => {
+    if (channel.order !== 'new' || focusedPost) return null;
     const i = list.findIndex((p) => p.status === 'live' && !!p.msg && p.msg <= (since ?? 0)), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
     return n ? { id: list[i].id, n } : null;
   });
@@ -109,10 +115,11 @@
     try { await loadOlder(); } catch (e) { fail(e); } finally { older = false; }
   }
 
-  $effect(() => { if (here) untrack(() => { void loadChannel().then(seek); }); });
+  $effect(() => { if (here) untrack(() => { void refreshChannel(); }); });
+  $effect(() => { if (here && channel.focus != null) untrack(() => { void seek(); }); });
   // Keep the divider at this visit's starting point. Prefetches, covered tabs and posts behind
   // the "N new" pill do not advance the server cursor.
-  const top = $derived(matched.find((p) => p.status === 'live' && p.msg)?.msg ?? 0);
+  const top = $derived(latestMsg(matched));
   $effect(() => {
     const visit = channel.visit;
     if (!here) { since = null; return; }
@@ -125,24 +132,44 @@
   // a new post fades in at the top, the rest glide down (flip)
   $effect(() => {
     if (!here) return;
-    const pull = () => { if (!document.hidden) void loadChannel(); };
+    const pull = () => {
+      if (document.hidden) return;
+      void loadChannel();
+      const id = focusedPost?.id;
+      if (id == null) return;
+      const request = ++focusRequest;
+      void api.channelPost(id).then((post) => {
+        if (request === focusRequest && focusedPost?.id === id) focusedPost = post;
+      }).catch((e) => {
+        if (request === focusRequest && focusedPost?.id === id && e instanceof ApiErr && e.code === 'not_found') focusedPost = null;
+      });
+    };
     const every = setInterval(pull, 30_000);
     document.addEventListener('visibilitychange', pull);
     const off = on('activated', pull);
     return () => { clearInterval(every); document.removeEventListener('visibilitychange', pull); off(); };
   });
 
-  // the bot's "Open in the app" (startapp=fp_<id>): once the feed is fresh, that post opened in full, scrolled to the
-  // middle and lit for a moment; one not in the feed (deleted, taken down): the tab and a quiet word, unless it may
-  // simply be older than the pages held
+  // A shared post can sit anywhere in the ranked feed. Open it directly if its page isn't loaded.
   let lit = $state<number | null>(null);
   async function seek() {
     const id = channel.focus;
     if (id == null) return;
     channel.focus = null;
+    const request = ++focusRequest;
+    focusedPost = null;
     if (!channel.feed?.some((p) => p.id === id)) {
-      if (!channel.more || id > Math.min(...channel.feed!.filter((p) => p.id > 0).map((p) => p.id))) say(t('fc.gone'), 'thinking_face_3d');
-      return;
+      try {
+        const post = await api.channelPost(id);
+        if (request !== focusRequest || !here) return;
+        focusedPost = post;
+      } catch (e) {
+        if (request === focusRequest && here) {
+          if (e instanceof ApiErr && e.code === 'not_found') say(t('fc.gone'), 'thinking_face_3d');
+          else fail(e);
+        }
+        return;
+      }
     }
     showAll(); open[id] = true;
     await tick();
@@ -202,9 +229,11 @@
 
   async function drop(p: ChannelFeedPost) {
     if (!(await sheets.ask({ title: t('fc.deleteAsk'), text: t('fc.deleteText'), ok: t('fc.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    const before = channel.feed;
-    channel.feed = (channel.feed ?? []).filter((x) => x.id !== p.id); haptic.ok(); touched();
-    try { await api.deleteChannelPost(p.id); } catch (e) { channel.feed = before; fail(e); }
+    const undo = removeChannelPost(p.id), focused = focusedPost;
+    if (focusedPost?.id === p.id) focusedPost = null;
+    haptic.ok();
+    try { await api.deleteChannelPost(p.id); touched(); }
+    catch (e) { undo(); if (focused?.id === p.id && !focusedPost) focusedPost = focused; fail(e); }
   }
 
   // every post in the channel: ⋯, the same on every card. Someone else's: Report (into the admin's queue, whose it is
@@ -251,7 +280,12 @@
     </div>
   {/if}
 
-  {#if channel.feed?.length}
+  <div class="order">
+    <Segmented items={[{ value: 'for_you', label: t('fc.forYou') }, { value: 'new', label: t('fc.newOrder') }]}
+      value={channel.order} label={t('fc.order')} onchange={(order) => { haptic.select(); focusRequest++; focusedPost = null; selectChannelOrder(order); }} />
+  </div>
+
+  {#if feed.length}
     <div class="feed" class:settled>
       {#each rows as r, i (r === 'nw' ? r : keyOf(r))}
         <!-- one element per row (flip needs it) -->
@@ -325,11 +359,11 @@
       {/each}
       {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
     </div>
-    {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t('fc.earlier')}</Button></div>{/if}
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
 
+  {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t(channel.order === 'new' ? 'fc.earlier' : 'fc.more')}</Button></div>{/if}
   <div class="tail"></div>
 </div>
 
@@ -389,6 +423,7 @@
   .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text);
     box-shadow: inset 0 1px 0.5px var(--lg-rim-lo), inset 0 0 0 0.5px var(--line-2); }
 
+  .order { margin-top: var(--s-3); }
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
   /* a post: the head (face, name and when, the menu), the words, the row under them */
   .post { position: relative; display: flex; flex-direction: column; padding: var(--s-4); }

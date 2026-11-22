@@ -2179,4 +2179,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN
         DELETE FROM web_sessions WHERE user_id = old.id;
       END;"""),
+    (217, """CREATE TABLE fchan_feed_pages (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sort TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      post_ids BLOB NOT NULL
+    ) STRICT;
+    CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
+    CREATE INDEX fchan_feed_pages_expiry ON fchan_feed_pages(expires_at);"""),
 ]

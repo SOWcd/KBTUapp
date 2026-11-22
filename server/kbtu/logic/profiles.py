@@ -10,7 +10,7 @@ import sqlite3
 import time
 from collections import Counter
 
-from ..db import tx
+from ..db import maybe, tx
 
 from .core import (ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
     log_action, need_student, one, org_ref, person_ref, rows, short_name)
@@ -51,11 +51,52 @@ def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
     return best, run
 
 
+ACTIVIST_POSTS = (1, 3, 8, 15)
+ACTIVIST_EVENTS = (2, 6, 15, 30)
+
+
+def _activist_posts(con, uid: int) -> int:
+    """Mature public channel posts, at most one per Almaty publication day."""
+    return one(con, """SELECT COUNT(DISTINCT (posted_at + 5 * 3600) / 86400) FROM fchan_posts
+        WHERE user_id = ? AND status = 'live' AND tg_msg > 0 AND posted_at <= ?""", uid, core.now() - 86400)[0]
+
+
+def _activist_count(posts: int, events: int) -> int:
+    """The highest post threshold for which both bars are full, for the shared level machinery."""
+    return max((p for p, e in zip(ACTIVIST_POSTS, ACTIVIST_EVENTS) if posts >= p and events >= e), default=0)
+
+
+def _activist_level(con, uid: int) -> int:
+    posts = _activist_posts(con, uid)
+    count = _activist_count(posts, len(attended(con, uid))) if posts else 0
+    return sum(n <= count for n in ACTIVIST_POSTS)
+
+
+def _unlock_activist(con, uid: int, have: int, level: int) -> int | None:
+    """The time threshold can pass between check-ins. Record it when the owner returns."""
+    if level <= have:
+        return None
+
+    def record():
+        current = _activist_level(con, uid)
+        at = core.now()
+        if current > have:
+            saved = con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'activist', ?, ?)
+                ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
+                WHERE excluded.level > achievement_levels.level""", (uid, current, at))
+            if current == level and saved.rowcount:
+                return at
+        return None
+
+    return maybe(con, record)
+
+
 ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("regular", "trophy_3d", (5, 15, 30, 50), False),  # "streak" (weeks in a row) is off the list (its counting stays, _streak)
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
     ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
+    ("activist", "microphone_3d", ACTIVIST_POSTS, False),
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
@@ -90,7 +131,7 @@ def critic(con, uid: int) -> int:
     return one(con, "SELECT COUNT(DISTINCT post_id) FROM fchan_comments WHERE user_id = ? AND gone = 0", uid)[0]
 
 
-def _counts(con, uid: int) -> dict[str, int]:
+def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
     times = attended(con, uid)
     grants = dict(rows(con, "SELECT code, COUNT(*) FROM achievement_grants WHERE user_id = ? GROUP BY code", uid))
     first_in = one(con, """SELECT COUNT(*) FROM registrations r WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND r.checked_in_at =
@@ -99,9 +140,10 @@ def _counts(con, uid: int) -> dict[str, int]:
     referral = brought(con, uid)
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
+    posts = _activist_posts(con, uid) if with_activist else 0
     seasons = Counter(map(_season_start, times))  # the best semester counts
     counts = {
-        "regular": len(times), "first_in": first_in, "soul": soul, "team": team,
+        "regular": len(times), "activist_posts": posts, "activist": _activist_count(posts, len(times)), "first_in": first_in, "soul": soul, "team": team,
         "season": max(seasons.values(), default=0), "first50": grants.get("first50", 0),
         "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
         "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
@@ -144,8 +186,9 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
     for code, level in _levels(con, uid).items():
         if level > before[code]:
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
-                ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at""", (uid, code, level, core.now()))
-            if code not in PRIVATE:  # a gift of money is never told in the bot's chat
+                ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
+                WHERE excluded.code != 'activist' OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
+            if code not in PRIVATE and code != "activist":  # the activist unlock is shown in the app
                 notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
 
@@ -156,13 +199,22 @@ def sync_levels(con) -> None:
     app's unlock moment; new levels of one that was there already come quietly (else "Recruiter" going from 4 levels to
     9 is a burst of moments for what was done weeks ago): a stored level is a place in the list, so it moves to the level
     of the same need first."""
-    mark = json.dumps([[code, needs] for code, _, needs, _ in ACHIEVEMENTS])
+    now = {code: list(needs) for code, _, needs, _ in ACHIEVEMENTS}
+    now["activist"] = [list(pair) for pair in zip(ACTIVIST_POSTS, ACTIVIST_EVENTS)]
+    mark = json.dumps(list(now.items()))
     last, filled = (one(con, "SELECT value FROM meta WHERE key = ?", k) for k in ("achievements", "achievements_filled"))
     if last and last[0] == mark and filled and filled[0] == mark:
         return
     was = {code: needs for code, needs in json.loads(last[0])} if last else {}
-    now = {code: needs for code, _, needs, _ in ACHIEVEMENTS}
-    to = lambda code, lv: sum(1 for n in now[code] if n <= was[code][lv - 1]) if lv > 0 else 0  # noqa: E731
+    def to(code, level):
+        if level <= 0:
+            return 0
+        old = was[code][level - 1]
+        if code == "activist":
+            posts, events = old if isinstance(old, list) else (old, ACTIVIST_EVENTS[level - 1])
+            return sum(p <= posts and e <= events for p, e in now[code])
+        return sum(need <= old for need in now[code])
+
     put = lambda key: con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, mark))  # noqa: E731
     if not last or last[0] != mark:
         with tx(con):  # the re-tier moves stored levels once: done with its mark in one transaction, never twice
@@ -589,8 +641,13 @@ def unlocked(con, v: Viewer) -> list[dict]:
     """Levels reached that the app hasn't celebrated yet (the unlock moment, §4.11), oldest first."""
     if not v.student:
         return []
-    return [{"code": BADGE_OF.get(r["code"], r["code"]), "level": r["level"]} for r in
-            rows(con, "SELECT code, level FROM achievement_levels WHERE user_id = ? AND level > seen ORDER BY reached_at", v.id)]
+    level = _activist_level(con, v.id)
+    if level:
+        have = one(con, "SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'activist'", v.id)
+        _unlock_activist(con, v.id, have[0] if have else 0, level)
+    return [{"code": BADGE_OF.get(r["code"], r["code"]), "level": min(level, r["level"]) if r["code"] == "activist" else r["level"]}
+            for r in rows(con, "SELECT code, level, seen FROM achievement_levels WHERE user_id = ? AND level > seen ORDER BY reached_at", v.id)
+            if r["code"] != "activist" or level > r["seen"]]
 
 
 def seen_unlock(con, v: Viewer, code: object, level: object) -> None:
@@ -601,20 +658,31 @@ def seen_unlock(con, v: Viewer, code: object, level: object) -> None:
         con.execute("UPDATE achievement_levels SET seen = MAX(seen, ?) WHERE user_id = ? AND code = ?", (level, v.id, c))
 
 
-def achievements(con, uid: int) -> list[dict]:
+def achievements(con, uid: int, *, own: bool = True) -> list[dict]:
     """Mine, each level with its rarity: the share of students who have reached it. Rarity comes from the levels everyone
     reached (achievement_levels: an earned level stays), one query; counting every student's check-ins for every
     profile view is thousands of queries once a few hundred students sign in."""
-    mine = _counts(con, uid)
+    mine = _counts(con, uid, with_activist=own)
     total, at_level, badges = _rarity(con)
     out = []
     reached = {r["code"]: r for r in rows(con, "SELECT code, level, reached_at FROM achievement_levels WHERE user_id = ?", uid)}
     for code, emoji, needs, secret in ACHIEVEMENTS:
+        if code == "activist" and not own:
+            # A public upgrade after the 24-hour wait could identify the writer of an anonymous post.
+            continue
         have = lambda level: sum(n for (c, lv), n in at_level.items() if c == code and lv >= level) / total  # noqa: E731
-        out.append({"code": code, "emoji": emoji, "secret": secret, "count": mine[code], "level": sum(1 for n in needs if mine[code] >= n),
-                    "levels": [{"need": n, "reached": mine[code] >= n, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
-                    "at": reached[code]["reached_at"] if code in reached else None,
-                    **({"now": mine["streak_now"]} if code == "streak" else {})})
+        level = sum(n <= mine[code] for n in needs)
+        item = {"code": code, "emoji": emoji, "secret": secret, "count": mine[code], "level": level,
+                "levels": [{"need": n, "reached": i < level, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
+                "at": reached[code]["reached_at"] if code in reached else None,
+                **({"now": mine["streak_now"]} if code == "streak" else {})}
+        if code == "activist":
+            stored = reached.get(code)
+            item["at"] = stored["reached_at"] if stored and stored["level"] == level else _unlock_activist(con, uid, stored["level"] if stored else 0, level)
+            item["parts"] = {"posts": mine["activist_posts"], "events": mine["regular"]}
+            for step, events in zip(item["levels"], ACTIVIST_EVENTS):
+                step["events"] = events
+        out.append(item)
     return _fold(out, badges)
 
 
@@ -687,7 +755,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # a variant picked on its own ("init26f") shows as its badge
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
-    ach = [a if close else {**a, "at": None} for a in achievements(con, uid)
+    ach = [a if close else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
         if a["code"] == "honor" and a["level"]:

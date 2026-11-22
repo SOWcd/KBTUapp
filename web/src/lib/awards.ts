@@ -101,7 +101,7 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
 // tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
-const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc' };
+const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code === 'honor' || a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
@@ -128,6 +128,8 @@ export function layersOf(art: string): [string, number][] | null {
   // rim of its metal, round or along the shield (PIN_SHAPE)
   const z = /^layer_zn_([a-z0-9]+)_([gs])$/.exec(art);
   if (z) { const s = PIN_SHAPE === 'shield' ? 's' : ''; return [[`zn-${z[1]}-${s}field`, -1], [`zn-${z[1]}-${s}net`, 0.5], [`rc-core-${z[2]}`, 1], [`zn-${s}rim-${z[2]}`, 0]]; }
+  const activist = /^layer_ac_([bsgl])$/.exec(art);
+  if (activist) return [['se-field', -1], [`md-rim-${activist[1]}`, 0]];
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
   return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
 }
@@ -141,7 +143,7 @@ export function coinOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels
 }
 export const isCoin = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): boolean => coinOf(a) !== null;
 /** the full-size medal's engraved name round its band (ui/Medal from 160 px), for the round medals but Recruiter */
-export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o ? `${o[1]}-legend-${o[2]}` : null; };
+export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o && o[1] !== 'ac' ? `${o[1]}-legend-${o[2]}` : null; };
 /** a medal's metal letter at its level (its ribbon's): b, s, g, l */
 export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];
 /** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
@@ -165,9 +167,12 @@ export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 
 export const yearOf = (at: number | null | undefined, fixed?: number): number | undefined =>
   fixed ?? (at ? new Date((at + 5 * 3600) * 1000).getUTCFullYear() : undefined);
 
+export const awardTier = (a: Pick<Achievement, 'code' | 'levels'>, level: number): string =>
+  a.code === 'activist' ? ROMAN[level - 1] : tierLabel(level, a.levels.length);
+
 export function tierName(a: Achievement): string {
   if (a.level === 0) return a.secret ? t('ach.secret') : t('ach.locked');
-  return a.levels.length > 1 ? tierLabel(a.level, a.levels.length) : '';
+  return a.levels.length > 1 ? awardTier(a, a.level) : '';
 }
 
 /** The profile QR's ink: KBTU blue into violet, both dark enough for any camera on white. */
@@ -206,16 +211,37 @@ export interface HeroData {
 
 export const nextOf = (a: Achievement) => a.levels.find((l) => !l.reached);
 const hiddenAch = (a: Achievement) => a.secret && a.level === 0;
-const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
+export function activistBars(a: Achievement, level: Achievement['levels'][number]) {
+  if (!a.parts || level.events === undefined) return [];
+  return [
+    { kind: 'posts' as const, count: a.parts.posts, need: level.need },
+    { kind: 'events' as const, count: a.parts.events, need: level.events },
+  ];
+}
+
+export function weakestBar(a: Achievement) {
+  const next = nextOf(a);
+  if (!next) return undefined;
+  const [posts, events] = activistBars(a, next);
+  return posts && events ? (posts.count / posts.need <= events.count / events.need ? posts : events) : undefined;
+}
+
+export function awardRatio(a: Achievement): number {
+  const bar = weakestBar(a);
+  const next = nextOf(a);
+  return bar ? bar.count / bar.need : next ? a.count / next.need : 1;
+}
 /** The closest medal to its next level (started ones first, else the nearest goal); secrets don't count, nor Bug
  *  hunter (the creator gives it by hand) or the pins (one time, nobody works toward them). */
 export function closest(ach: Achievement[]): Achievement | undefined {
-  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && !addsUp(a.code) && nextOf(a));
-  return [...open].filter((a) => a.count > 0).sort((a, b) => ratio(b) - ratio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];
+  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && !addsUp(a.code) && (a.code !== 'activist' || a.parts) && nextOf(a));
+  return [...open].filter((a) => a.parts ? a.parts.posts > 0 || a.parts.events > 0 : a.count > 0).sort((a, b) => awardRatio(b) - awardRatio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];
 }
 export function leftLine(a: Achievement): string {
   const n = nextOf(a)!, left = n.need - a.count;
-  return a.levels.length > 1 ? t('awp.left', { n: left, tier: tierLabel(a.levels.indexOf(n) + 1, a.levels.length) }) : t('awp.leftOne', { n: left });
+  const bar = weakestBar(a);
+  if (bar) return tn(`ach.activist.left.${bar.kind}`, bar.need - bar.count, { tier: awardTier(a, a.levels.indexOf(n) + 1) });
+  return a.levels.length > 1 ? t('awp.left', { n: left, tier: awardTier(a, a.levels.indexOf(n) + 1) }) : t('awp.leftOne', { n: left });
 }
 
 export function hero(p: PersonCard, mine = false): HeroData {

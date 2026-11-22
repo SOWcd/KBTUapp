@@ -2,12 +2,58 @@
 // a page never waits for its data when it opens), refreshed quietly when the tab comes into view. In memory only:
 // the posts' words stay out of the launch copy. focus: a post to bring into view (the bot's startapp=fp_<id> button).
 // more: an older page may be there ("Show earlier", loadOlder).
-import { api, type ChannelFeedPost, type ChannelHeart, type ChannelVisit, type ForumWhy } from '../api';
+import { api, ApiErr, type ChannelFeedPost, type ChannelHeart, type ChannelOrder, type ChannelVisit, type ForumWhy } from '../api';
 
-export const PAGE = 50; // the server's FEED_MAX
-// why: the AI's reason for my posts it held (ChannelCompose asks once the post is in; shown under it, to me alone)
-// writing: the writing window is up (ChannelCompose): the pill it grew out of hides
-export const channel = $state({ writing: 0, visit: null as ChannelVisit | null, feed: null as ChannelFeedPost[] | null, focus: null as number | null, more: false, why: {} as Record<number, ForumWhy> });
+const orders: ChannelOrder[] = ['for_you', 'new'];
+const empty = () => ({ posts: null as ChannelFeedPost[] | null, cursor: null as string | null, paging: false, request: 0 });
+const pages = $state({ for_you: empty(), new: empty() });
+export const channel = $state({
+  writing: 0, visit: null as ChannelVisit | null, order: 'for_you' as ChannelOrder,
+  focus: null as number | null, why: {} as Record<number, ForumWhy>,
+  get feed() { return pages[this.order].posts; },
+  set feed(posts: ChannelFeedPost[] | null) { pages[this.order].posts = posts; },
+  get more() { return !!pages[this.order].cursor; },
+});
+
+export function selectChannelOrder(order: ChannelOrder) {
+  channel.order = order;
+  void loadChannel(order);
+}
+
+export function refreshChannel(order = channel.order) {
+  pages[order].paging = false;
+  return loadChannel(order);
+}
+
+export function updateChannelPosts(update: (posts: ChannelFeedPost[]) => ChannelFeedPost[]) {
+  for (const order of orders) {
+    const page = pages[order];
+    if (page.posts || order === channel.order) page.posts = update(page.posts ?? []);
+  }
+}
+
+export function removeChannelPost(id: number) {
+  const removed: { order: ChannelOrder; post: ChannelFeedPost; index: number }[] = [];
+  for (const order of orders) {
+    const page = pages[order], index = page.posts?.findIndex((p) => p.id === id) ?? -1;
+    if (page.posts && index >= 0) {
+      removed.push({ order, post: page.posts[index], index });
+      page.posts = page.posts.filter((p) => p.id !== id);
+    }
+  }
+  touched();
+  return () => {
+    touched();
+    for (const { order, post, index } of removed) {
+      const posts = pages[order].posts;
+      if (posts && !posts.some((p) => p.id === id)) posts.splice(index, 0, post);
+    }
+  };
+}
+
+export function warmChannelFeeds() {
+  for (const order of orders) void loadChannel(order);
+}
 
 // bumped by a change of mine (a post, a delete): a refresh asked before it lands stale (the 30 s poll answering after my
 // delete brought the post back, after my post's answer took it away), so it's dropped; the next one is fresh
@@ -63,8 +109,11 @@ export async function toggleHeart(post: ChannelFeedPost): Promise<void> {
     for (;;) {
       const result = await api.setChannelHeart(id, pendingHearts[id].hearted);
       touched();
-      const row = channel.feed?.find((p) => p.id === id);
-      if (row) Object.assign(row, result);
+      for (const order of orders) {
+        const row = pages[order].posts?.find((p) => p.id === id);
+        if (row) Object.assign(row, result);
+      }
+      Object.assign(post, result);
       if (result.hearted === pendingHearts[id].hearted) break;
       pendingHearts[id].hearts = result.hearts + (result.hearted ? -1 : 1);
     }
@@ -73,32 +122,44 @@ export async function toggleHeart(post: ChannelFeedPost): Promise<void> {
   }
 }
 
-// the channel's order: a post by its message in the channel; mine not out yet above them all
-const key = (p: { msg?: number | null }) => p.msg ?? Number.MAX_SAFE_INTEGER;
-
-export async function loadChannel(): Promise<void> {
-  // a post of mine still on its way (a temporary id below 0, ChannelCompose) stays on top through a refresh; the older
-  // pages I opened stay under the fresh first one. ponytail: those aren't refreshed (a post deleted there stays till the
-  // tab is reopened); refresh them too if it shows
-  const at = gen;
+export async function loadChannel(order = channel.order): Promise<void> {
+  const page = pages[order];
+  // Once paging starts, keep the original order and cursor while the student reads.
+  if (page.paging) return;
+  const at = gen, request = ++page.request;
   try {
-    const got = await api.channelFeed(); if (at !== gen) return;
-    const floor = got.length ? key(got[got.length - 1]) : 0;
-    const older = (channel.feed ?? []).filter((p) => p.id > 0 && key(p) < floor);
-    const next = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got, ...older];
-    // the same posts (most refreshes: on the tab's open, every 30 s): nothing is set, so the list isn't rebuilt and its
-    // flip doesn't measure every post (a forced layout of the whole feed each time)
-    if (!channel.feed || JSON.stringify(next) !== JSON.stringify($state.snapshot(channel.feed))) channel.feed = next;
-    if (!older.length) channel.more = got.length >= PAGE;
-  } catch { if (!channel.feed) channel.feed = []; }
+    const got = await api.channelFeed(order);
+    if (at !== gen || request !== page.request) return;
+    const next = [...(page.posts ?? []).filter((p) => p.id < 0), ...got.posts];
+    if (!page.posts || JSON.stringify(next) !== JSON.stringify($state.snapshot(page.posts))) page.posts = next;
+    page.cursor = got.cursor;
+  } catch {
+    if (at === gen && request === page.request && !page.posts) page.posts = [];
+  }
 }
 
-/** The next page under the last post shown; the ids it added. */
+/** Continue the current snapshot. Restart from the top when it expires. */
 export async function loadOlder(): Promise<number[]> {
-  const last = Math.min(...(channel.feed ?? []).filter((p) => p.id > 0 && p.msg).map(key));
-  const got = await api.channelFeed(last);
-  const have = new Set((channel.feed ?? []).map((p) => p.id)), add = got.filter((p) => !have.has(p.id));
-  channel.feed = [...(channel.feed ?? []), ...add];
-  channel.more = got.length >= PAGE;
-  return add.map((p) => p.id);
+  const order = channel.order, page = pages[order], cursor = page.cursor;
+  if (!cursor) return [];
+  const at = gen, request = ++page.request, wasPaging = page.paging;
+  page.paging = true;
+  try {
+    const got = await api.channelFeed(order, cursor);
+    if (request !== page.request) return [];
+    if (at !== gen) { page.paging = wasPaging; return []; }
+    const have = new Set((page.posts ?? []).map((p) => p.id)), add = got.posts.filter((p) => !have.has(p.id));
+    page.posts = [...(page.posts ?? []), ...add];
+    page.cursor = got.cursor;
+    return add.map((p) => p.id);
+  } catch (e) {
+    if (request !== page.request) return [];
+    if (e instanceof ApiErr && e.code === 'not_found' && e.message === 'feed_cursor') {
+      page.paging = false;
+      await loadChannel(order);
+      return [];
+    }
+    page.paging = wasPaging;
+    throw e;
+  }
 }

@@ -5,9 +5,11 @@ const { setChannelHeart, channelVisit, saveVisit } = vi.hoisted(() => ({
   setChannelHeart: vi.fn(), channelVisit: vi.fn(), saveVisit: vi.fn(),
 }));
 let answer: (v: unknown) => void = () => {};
-vi.mock('../api', () => ({ api: { setChannelHeart, channelVisit, markChannelSeen: saveVisit, channelFeed: () => new Promise((done) => { answer = done; }) } }));
-import { channel, channelUnread, loadChannel, loadOlder, markChannelSeen, PAGE, pendingHearts, toggleHeart, touched, watchChannelVisit } from './channel.svelte';
+vi.mock('../api', async () => ({ ApiErr: (await import('../api/errors')).ApiErr, api: { setChannelHeart, channelVisit, markChannelSeen: saveVisit, channelFeed: () => new Promise((done) => { answer = done; }) } }));
+import { channel, channelUnread, loadChannel, loadOlder, markChannelSeen, pendingHearts, refreshChannel, selectChannelOrder, toggleHeart, touched, watchChannelVisit } from './channel.svelte';
 import type { ChannelFeedPost, ChannelHeart, ChannelVisit } from '../api';
+
+const page = (posts: ChannelFeedPost[], cursor: string | null = null) => ({ posts, cursor });
 
 const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, nick: null, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos: [] });
 
@@ -15,31 +17,48 @@ it('drops a refresh that was asked before my delete', async () => {
   channel.feed = [post(1), post(2)];
   const asked = loadChannel();                       // the poll, in flight
   channel.feed = channel.feed!.filter((p) => p.id !== 1); touched();  // I delete post 1
-  answer([post(1), post(2)]);                        // the server's answer from before the delete
+  answer(page([post(1), post(2)]));                        // the server's answer from before the delete
   await asked;
   expect(channel.feed!.map((p) => p.id)).toEqual([2]);
-  const next = loadChannel(); answer([post(2)]); await next;  // the next refresh lands as usual
+  const next = loadChannel(); answer(page([post(2)])); await next;  // the next refresh lands as usual
   expect(channel.feed!.map((p) => p.id)).toEqual([2]);
 });
 
-it('keeps the older pages under a refresh, and "more" by the page size', async () => {
-  const ids = (from: number, n: number) => Array.from({ length: n }, (_, i) => post(from - i));
+it('keeps the ranked snapshot while paging and refreshes when the tab reopens', async () => {
   channel.feed = null;
-  let next = loadChannel(); answer(ids(200, PAGE)); await next;
+  let next = refreshChannel(); answer(page([post(3), post(5)], 'rank.next')); await next;
   expect(channel.more).toBe(true);
-  next = loadOlder().then(() => {}); answer(ids(150, 3)); await next;     // the last page: 150..148
-  expect(channel.feed!.length).toBe(PAGE + 3); expect(channel.more).toBe(false);
-  next = loadChannel(); answer(ids(201, PAGE)); await next;              // a new post on top: nothing below is lost
-  expect(channel.feed!.map((p) => p.id)).toEqual(ids(201, PAGE + 4).map((p) => p.id));  // 201..152, 151 kept, 150..148
+  const more = loadOlder(); answer(page([post(1), post(4)])); await more;
+  expect(channel.more).toBe(false);
+  await loadChannel(); // background polling does not replace a snapshot being read
+  expect(channel.feed!.map((p) => p.id)).toEqual([3, 5, 1, 4]);
+  next = refreshChannel(); answer(page([post(6), post(4)], 'rank.fresh')); await next;
+  expect(channel.feed!.map((p) => p.id)).toEqual([6, 4]);
+  expect(channel.more).toBe(true);
+});
+
+it('keeps each order and its cursor together when a request finishes after switching', async () => {
+  const ranked = refreshChannel(); const rankAnswer = answer;
+  selectChannelOrder('new');
+  expect(channel.order).toBe('new');
+  answer(page([post(6), post(5)], 'new.next'));
+  rankAnswer(page([post(1), post(2)]));
+  await ranked;
+  expect(channel.feed!.map((p) => p.id)).toEqual([6, 5]);
+  expect(channel.more).toBe(true);
+  selectChannelOrder('for_you');
+  answer(page([post(1), post(2)]));
+  await Promise.resolve();
+  expect(channel.feed!.map((p) => p.id)).toEqual([1, 2]);
 });
 
 it('leaves the feed as it is when a refresh brings the same posts (no rebuild, no flip measuring)', async () => {
   channel.feed = null;
-  let next = loadChannel(); answer([post(2), post(1)]); await next;
+  let next = loadChannel(); answer(page([post(2), post(1)])); await next;
   const before = channel.feed;
-  next = loadChannel(); answer([post(2), post(1)]); await next;
+  next = loadChannel(); answer(page([post(2), post(1)])); await next;
   expect(channel.feed).toBe(before);
-  next = loadChannel(); answer([{ ...post(2), comments: 1 }, post(1)]); await next;  // a count moved: set
+  next = loadChannel(); answer(page([{ ...post(2), comments: 1 }, post(1)])); await next;  // a count moved: set
   expect(channel.feed).not.toBe(before);
 });
 
@@ -53,7 +72,7 @@ it('keeps rapid heart taps optimistic through a feed refresh and sends the final
   await toggleHeart(row);
   expect(pendingHearts[7]).toEqual({ hearts: 0, hearted: false });
   const refresh = loadChannel();
-  answer([{ ...post(7), hearts: 3 }]);
+  answer(page([{ ...post(7), hearts: 3 }]));
   await refresh;
   confirm({ hearts: 4, hearted: true });
   await Promise.resolve();

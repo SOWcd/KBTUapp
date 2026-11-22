@@ -13,7 +13,7 @@
   import { recovery } from './lib/state/recovery';
   import { keepNavigation, launchNavigation, readNavigation, type Navigation, type Place, type ScrollAnchor } from './lib/state/navigation';
   import { readCache, writeCache } from './lib/state/cache';
-  import { channel, channelUnread, loadChannel, loadOlder, watchChannelVisit } from './lib/state/channel.svelte';
+  import { channel, channelUnread, loadChannel, loadOlder, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
@@ -143,7 +143,7 @@
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
+  const warmChannel = () => { if (!session.channel) return; void channelPage(); warmChannelFeeds(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, undefined, id == null ? null : `${org}:${id}:${!!staff}`);

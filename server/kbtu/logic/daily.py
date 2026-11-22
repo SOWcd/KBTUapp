@@ -228,6 +228,7 @@ def stats_day(con) -> None:
                  one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at < ? AND NOT {core.staff_sql()}", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
+    con.execute("DELETE FROM fchan_feed_pages WHERE expires_at <= ?", (core.now(),))
     notifications.forget(con)
     web_auth.forget(con, core.now())
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice

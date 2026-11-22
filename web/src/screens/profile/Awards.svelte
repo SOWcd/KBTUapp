@@ -11,7 +11,7 @@
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { achItem, achKey, achName, badgeItem, closest as closestOf, hero, isMedal, isRound, leftLine, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, yearOf, type ShelfItem } from '../../lib/awards';
+  import { achItem, achKey, achName, awardRatio, awardTier, badgeItem, closest as closestOf, hero, isMedal, isRound, leftLine, METALS, metalOf, nextOf, shelfItem, tierName, weakestBar, yearOf, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -34,9 +34,8 @@
   const ach = $derived(all.filter(isMedal));
   const medals = $derived(all.filter((a) => !isMedal(a)).sort((a, b) => b.level - a.level || Number(hidden(a)) - Number(hidden(b))));
   const hidden = (a: Achievement) => a.secret && a.level === 0;
-  const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
   // earned first (higher tiers first), then the ones on their way, then the secrets
-  const sorted = $derived([...ach].sort((a, b) => Number(hidden(a)) - Number(hidden(b)) || b.level - a.level || ratio(b) - ratio(a)));
+  const sorted = $derived([...ach].sort((a, b) => Number(hidden(a)) - Number(hidden(b)) || b.level - a.level || awardRatio(b) - awardRatio(a)));
   let tab = $state<'ach' | 'badges'>('ach');
   const tabs = $derived([
     ['ach', t('person.achievements'), ach.filter((a) => a.level > 0).length],
@@ -44,7 +43,7 @@
   ] as const);
   // the closest to its next level: the reason to go to one more event
   const closest = $derived(closestOf(ach));
-  const pct = (a: Achievement) => { const n = nextOf(a); return n ? Math.min(100, Math.max(4, (a.count / n.need) * 100)) : 100; };
+  const pct = (a: Achievement) => Math.min(100, Math.max(4, awardRatio(a) * 100));
   const share = (x: number) => (x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)));
   const tierClass = (a: Achievement) => (a.level === 0 ? 'none' : a.levels.length === 1 ? 'one' : METALS[metalOf(a.level, a.levels.length)]);
 
@@ -54,7 +53,8 @@
   let saving = $state(false);
   function edit() {
     if (!p) return;
-    picked = (p.shelf.length ? p.shelf : hero(p).shelf.map((x) => x.key.startsWith('a') ? x.key.slice(1) : x.key)).slice(0, 6);
+    picked = (p.shelf.length ? p.shelf : hero(p).shelf.map((x) => x.key.startsWith('a') ? x.key.slice(1) : x.key))
+      .filter((key) => key !== 'activist').slice(0, 6);
     editing = true;
     haptic.select();
   }
@@ -114,6 +114,7 @@
 
       {#snippet card(a: Achievement, i: number)}
         {@const n = nextOf(a)}
+        {@const bar = weakestBar(a)}
         {@const order = picked.indexOf(a.code)}
         <button class="ach {tierClass(a)}" class:zn={!isRound(a)} class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
                 onclick={() => (editing ? toggle(a.code, a.level > 0) : open(achItem(a)))}>
@@ -122,9 +123,9 @@
           <i class="tr">{a.level ? (a.levels.length > 1 ? t('aw.level', { tier: tierName(a) }) : t('aw.have')) : t('ach.locked')}</i>
           {#if !hidden(a)}
             {#if n && a.levels.length > 1}
-              <span class="prog"><span class="bar"><span style="width:{pct(a)}%"></span></span><span class="cnt num">{a.count}/{n.need}</span></span>
+              <span class="prog"><span class="bar"><span style="width:{pct(a)}%"></span></span><span class="cnt num">{bar?.count ?? a.count}/{bar?.need ?? n.need}</span></span>
             {:else if a.levels.length > 1}
-              <span class="prog max">{t('awp.max')} · {a.count}</span>
+              <span class="prog max">{t('awp.max')}{#if !a.parts} · {a.count}{/if}</span>
             {/if}
             <span class="rare">{t('awp.rarity', { p: share(a.level ? a.levels[a.level - 1].rarity : a.rarity) })}</span>
           {/if}
@@ -139,13 +140,13 @@
             <Medal a={closest} size={60} />
             <span class="nx">
               <i class="t-cap">{t('awp.next')}</i>
-              <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + tierLabel(closest.levels.indexOf(n) + 1, closest.levels.length) : '')}</b>
+              <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + awardTier(closest, closest.levels.indexOf(n) + 1) : '')}</b>
               <span class="bar"><span style="width:{pct(closest)}%"></span></span>
               <em>{leftLine(closest)}</em>
             </span>
           </button>
         {/if}
-        <div class="grid">{#each sorted as a, i (achKey(a))}{@render card(a, i)}{/each}</div>
+        <div class="grid">{#each editing ? sorted.filter((a) => a.code !== 'activist') : sorted as a, i (achKey(a))}{@render card(a, i)}{/each}</div>
         {#if !editing}<Recent />{/if}
       </div>
 

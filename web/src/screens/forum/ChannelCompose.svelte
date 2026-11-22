@@ -3,7 +3,7 @@
   import { flushSync } from 'svelte';
   import { open } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
-  import { channel, touched } from '../../lib/state/channel.svelte';
+  import { touched, updateChannelPosts } from '../../lib/state/channel.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { nowTs } from '../../lib/time';
   import { count } from '../../lib/stats';
@@ -43,7 +43,7 @@
     const me = session.me;
     const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : signOf(), mine: true,
       person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos };
-    channel.feed = [temp, ...(channel.feed ?? [])];
+    updateChannelPosts((posts) => [temp, ...posts]);
     return temp;
   }
   // the feed's key for a post that was my stand-in: the stand-in's own, so the card stays the same card when the
@@ -54,12 +54,12 @@
   /** The stand-in becomes the real one (or just goes, if a refresh brought the real one already: no twin keys) */
   export function land(temp: ChannelFeedPost, p: { id: Id; status: ChannelFeedPost['status']; at: number; nick: ChannelFeedPost['nick'] }, human = false,
     review?: ChannelFeedPost['review']): void {
-    const feed = channel.feed ?? []; touched();
-    if (feed.some((x) => x.id === p.id)) { channel.feed = feed.filter((x) => x.id !== temp.id); return; }
+    touched();
     born.set(p.id, temp.id);
-    channel.feed = feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human, review } : x));
+    updateChannelPosts((posts) => posts.some((x) => x.id === p.id) ? posts.filter((x) => x.id !== temp.id)
+      : posts.map((x) => x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human, review } : x));
   }
-  export const unstand = (temp: ChannelFeedPost): void => { channel.feed = (channel.feed ?? []).filter((x) => x.id !== temp.id); };
+  export const unstand = (temp: ChannelFeedPost): void => updateChannelPosts((posts) => posts.filter((x) => x.id !== temp.id));
 </script>
 
 <script lang="ts">
@@ -75,7 +75,7 @@
   import X from '@lucide/svelte/icons/x';
   import { shrink } from '../../lib/photo';
   import { api, ApiErr } from '../../lib/api';
-  import { loadChannel } from '../../lib/state/channel.svelte';
+  import { channel, updateChannelPosts as updatePosts } from '../../lib/state/channel.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { close, hideChrome, removeOverlay, say, type Overlay } from '../../lib/state/ui.svelte';
   import { type Key } from '../../lib/i18n/index.svelte';
@@ -238,7 +238,10 @@
       land(temp, p, p.status === 'held' && (!!p.ai || photo), photo ? { kind: 'photo', explain: null } : undefined);
       haptic.ok();
       // out: the card at the top says it (Publishing…, then the channel's link); no toast over it
-      if (p.status === 'live') { burst(); setTimeout(loadChannel, 5000); }
+      if (p.status === 'live') {
+        burst();
+        setTimeout(() => { void api.channelPost(p.id).then((next) => updatePosts((posts) => posts.map((row) => row.id === p.id ? next : row))).catch(() => {}); }, 5000);
+      }
       else {
         say(t('fc.heldSay'), 'thinking_face_3d');
         if (p.ai) api.channelPostWhy(p.id, text).then((x) => { if (x.explain) channel.why[p.id] = x.explain; }).catch(() => {});

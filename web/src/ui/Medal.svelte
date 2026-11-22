@@ -8,7 +8,7 @@
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
   import Pin from './Pin.svelte';
-  import { PIN_SHAPE, ZNAKI, artOf, coinOf, isMedal, layersOf, legendOf, metalLetter, tierLabel, yearOf } from '../lib/awards';
+  import { PIN_SHAPE, ZNAKI, artOf, awardTier, coinOf, isMedal, layersOf, legendOf, metalLetter, yearOf } from '../lib/awards';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();
 
   const hidden = $derived(a.secret && a.level === 0);
@@ -45,11 +45,16 @@
 {:else if !medal && !layers}<Pin color={zn?.field ?? 'rgb(47, 91, 234)'} emoji={a.emoji} metal={zn?.metal} year={a.level ? yearOf(a.at, zn?.year) : undefined} off={a.level === 0} {hidden} {size} />
 {:else if layers && !hidden}<span class="medal lay" class:shield={!!zn && PIN_SHAPE === 'shield'} class:none={a.level === 0} style="width:{size}px;height:{size}px">
   {#if size >= 96 && !vb && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
-  {#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}
+  {#each layers as [n, z] (n)}
+    {#if a.code === 'activist' && z === 0}
+      <span class="glyph z" style:--z={(size * 0.015).toFixed(1)}><Emoji name={a.emoji} size={Math.round(size * 0.48)} /></span>
+    {/if}
+    <img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />
+  {/each}
   {#if legend}<img src={`medals/${legend}.svg`} alt="" draggable="false" />{/if}
   {#if lit}<i class="glint" style="-webkit-mask-image:{metalMask};mask-image:{metalMask}"></i>{/if}
   {#if legend}<i class="spark" bind:this={spark}></i>{/if}
-  {#if size >= 160 && a.level > 0 && a.levels.length > 1}<span class="lv {metalLetter(a)}" style:font-size="{Math.round(size * 0.075)}px">{tierLabel(a.level, a.levels.length)}</span>{/if}
+  {#if size >= 160 && a.level > 0 && a.levels.length > 1}<span class="lv {metalLetter(a)}" style:font-size="{Math.round(size * 0.075)}px">{awardTier(a, a.level)}</span>{/if}
 </span>
 {:else}<span class="medal emo" class:none={a.level === 0} style="width:{size}px;height:{size}px">
   {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>{:else}<Emoji name={a.emoji} size={Math.round(size * 0.58)} />{/if}
@@ -57,7 +62,8 @@
 
 <style>
   .medal { position: relative; flex: none; border-radius: 50%; display: inline-flex; }
-  .lay img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .glyph { position: absolute; inset: 0; display: grid; place-items: center; }
+  .lay > img { position: absolute; inset: 0; width: 100%; height: 100%; }
   .lay:not(.none) { box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.45); }
   /* a drawn pin in its shield (PIN_SHAPE): the shadow follows the outline */
   .lay.shield { border-radius: 0; }

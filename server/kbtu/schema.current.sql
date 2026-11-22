@@ -455,6 +455,13 @@ CREATE TABLE fchan_comments (
       at      INTEGER NOT NULL,
       gone    INTEGER NOT NULL DEFAULT 0
     ) STRICT;
+CREATE TABLE fchan_feed_pages (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sort TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      post_ids BLOB NOT NULL
+    ) STRICT;
 CREATE TABLE fchan_hearts (
       post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1395,6 +1402,8 @@ CREATE UNIQUE INDEX events_chat_token ON events(chat_token) WHERE chat_token IS 
 CREATE INDEX events_upcoming ON events(status, starts_at);
 CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
 CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
+CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
+CREATE INDEX fchan_feed_pages_expiry ON fchan_feed_pages(expires_at);
 CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
 CREATE INDEX fchan_photos_by_msg ON fchan_photos(msg) WHERE msg > 0;
 CREATE INDEX fchan_photos_by_post ON fchan_photos(post_id, n);
