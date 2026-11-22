@@ -476,7 +476,9 @@ export const server = {
   skillMod: (id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null> => call('PATCH', `/forum/skills/${id}`, change),
   refer: (code: string): Promise<void> => call('POST', '/referral', { code }), // opened by someone's invite link
   channelRevealed: (): Promise<{ revealed: number; next: number | null /* when I may post again (the pace); null: now */ }> => call('GET', '/forum-posts/revealed'), // how many anonymous authors were ever revealed (a count)
-  channelFeed: (before?: number): Promise<import('./types').ChannelFeedPost[]> => call('GET', `/forum-posts/feed${before ? `?before=${before}` : ''}`), // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
+  channelFeed: (order: import('./types').ChannelOrder, cursor?: string): Promise<import('./types').ChannelFeedPage> =>
+    call('GET', '/forum-posts/feed/page' + query({ order, cursor })),
+  channelPost: (id: number): Promise<import('./types').ChannelFeedPost> => call('GET', `/forum-posts/feed/post/${id}`),
   channelVisit: (): Promise<import('./types').ChannelVisit> => call('GET', '/forum-posts/visit'),
   markChannelSeen: (msg: number): Promise<void> => call('PUT', '/forum-posts/visit', { msg }),
   setChannelHeart: (id: Id, hearted: boolean): Promise<import('./types').ChannelHeart> => call('PUT', `/forum-posts/${id}/heart`, { hearted }),

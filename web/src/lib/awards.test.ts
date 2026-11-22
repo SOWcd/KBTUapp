@@ -4,8 +4,9 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, coinOf, isCoin, isMedal, layersOf, legendOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
-import type { PersonCard } from './api';
+import { activistBars, artOf, awardRatio, awardTier, coinOf, isCoin, isMedal, layersOf, legendOf, hero, leftLine, weakestBar, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
+import type { Achievement, PersonCard } from './api';
+import { i18n, loadLang } from './i18n/index.svelte';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
   clubs: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'friends', friendsSince: 1, going: [] });
@@ -90,4 +91,26 @@ it('lists a badge once, its variants inside', () => {
   expect(codesOf(MANUAL[3])).toEqual(['init26p', 'init26', 'init26f']);
   expect(codesOf(MANUAL[2])).toEqual(['bugs']);
   expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26p', 'init26', 'init26f', 'club_founder', 'honor', 'supporter']);
+});
+
+it('uses the weakest active Chief activist bar and the selected tier requirements', async () => {
+  const a: Achievement = { code: 'activist', emoji: 'microphone_3d', secret: false, count: 0, level: 1, rarity: 0.3,
+    parts: { posts: 2, events: 2 }, levels: [
+      { need: 1, events: 2, reached: true, rarity: 0.3 },
+      { need: 3, events: 6, reached: false, rarity: 0.2 },
+      { need: 8, events: 15, reached: false, rarity: 0.1 },
+      { need: 15, events: 30, reached: false, rarity: 0.01 },
+    ] };
+  expect(activistBars(a, a.levels[2])).toEqual([{ kind: 'posts', count: 2, need: 8 }, { kind: 'events', count: 2, need: 15 }]);
+  expect(awardRatio(a)).toBe(1 / 3);
+  expect(weakestBar(a)?.kind).toBe('events');
+  const previous = i18n.lang;
+  await loadLang('en');
+  try {
+    i18n.lang = 'en';
+    expect(leftLine(a)).toBe('4 more events to level II');
+    expect(leftLine({ ...a, parts: { posts: 2, events: 10 } })).toBe('1 more post to level II');
+  } finally { i18n.lang = previous; }
+  expect(awardTier(a, 4)).toBe('IV');
+  expect(layersOf(artOf({ ...a, level: 4 }))).toEqual([['se-field', -1], ['md-rim-l', 0]]);
 });

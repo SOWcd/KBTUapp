@@ -875,7 +875,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
     if "bio" in patch:
         sets["bio"] = str(patch["bio"])[:150]
     if "showcase" in patch:  # up to 6 keys: achievement codes and badges as b<event id>, in the order picked (§4.11)
-        codes = {a[0] for a in ACHIEVEMENTS}
+        codes = {a[0] for a in ACHIEVEMENTS} - {"activist"}
         keys = [k for k in (patch["showcase"] if isinstance(patch["showcase"], list) else [])
                 if isinstance(k, str) and (k in codes or re.fullmatch(r"b\d{1,9}", k))]
         sets["showcase"] = ",".join(list(dict.fromkeys(keys))[:6])
@@ -1250,6 +1250,7 @@ def replay_deletions(con) -> tuple[int, int]:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
+    ("fchan_feed_pages", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),

@@ -21,7 +21,7 @@ import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import anyio
 import httpx
@@ -1394,7 +1394,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.react(con, v, pid, kind, False)
 
     @app.get("/api/users/{uid}")
-    def person(uid: int, con: Con, v: Me):
+    def person(uid: int, con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
         out = logic.person(con, v, uid)
         if cfg.forum and v.role in ("admin", "moderator") and (profile := logic.forum.public_profile(con, v, uid)):
             out["forum"] = profile
@@ -2812,7 +2813,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/forum-posts/feed")
     def fchan_feed(con: Con, v: FChan, before: int | None = None):
-        return F.feed(con, v, before)
+        # Older app builds continue from the last Telegram message ID.
+        return F.feed(con, v, before, order="new")
+
+    @app.get("/api/forum-posts/feed/page")
+    def fchan_page(con: Con, v: FChan, response: Response, order: Literal["for_you", "new"] = "for_you", cursor: str | None = None):
+        response.headers["Cache-Control"] = "private, no-store"
+        return F.feed_page(con, v, order, cursor)
+
+    @app.get("/api/forum-posts/feed/post/{pid}")
+    def fchan_post(pid: int, con: Con, v: FChan, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return F.feed_post(con, v, pid)
 
     @app.get("/api/forum-posts/visit")
     def fchan_visit(con: Con, v: FChan):

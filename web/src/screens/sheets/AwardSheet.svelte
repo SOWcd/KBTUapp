@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, artOf, isCoin, isDrawnPin, isMedal, isRound, layersOf, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, activistBars, artOf, awardTier, isCoin, isDrawnPin, isMedal, isRound, layersOf, metalOf, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -64,9 +64,12 @@
   const hidden = $derived(!!a && a.secret && a.level === 0);
   const tiers = $derived(!!a && a.levels.length > 1);
   const next = $derived(a?.levels.find((l) => !l.reached));
+  const activist = $derived(a?.code === 'activist');
+  const barTier = $derived(peek || (a && next ? a.levels.indexOf(next) + 1 : a?.levels.length ?? 0));
+  const bars = $derived(a && barTier ? activistBars(a, a.levels[barTier - 1]) : []);
   const pct = $derived(a && next ? Math.min(100, Math.max(3, (a.count / next.need) * 100)) : 100); // as the words say: 6 of 15
   const share = (x: number) => (x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)));
-  const tierOf = (i: number) => tierLabel(i + 1, a?.levels.length ?? 1);
+  const tierOf = (i: number) => a ? awardTier(a, i + 1) : '';
   // nine levels ("Recruiter") made a table taller than the screen: five round the next one, the rest a tap away
   let all = $state(false);
   const ladder = $derived.by(() => {
@@ -241,7 +244,23 @@
     {/if}
     {#if a.level && a.at && tiers}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
     {#if !hidden}
-      {#if a.level && !tiers}
+      {#if activist}
+        {#if bars.length}
+          <div class="prog multi up">
+            <p class="t-foot">{t('aw.level', { tier: tierOf(barTier - 1) })}</p>
+            {#each bars as bar (bar.kind)}
+              <div class="part">
+                <div class="row"><b>{t(`ach.activist.${bar.kind}`)}</b><span class="num">{t('ach.progress', { count: bar.count, need: bar.need })}</span></div>
+                <div class="bar"><span style:width={`${Math.min(100, 100 * bar.count / bar.need)}%`}></span></div>
+              </div>
+            {/each}
+            <div class="part">
+              <div class="row"><b>{t('ach.activist.discussions')}</b><span>{t('ach.activist.soon')}</span></div>
+              <div class="bar"></div>
+            </div>
+          </div>
+        {/if}
+      {:else if a.level && !tiers}
         <!-- earned, one level: the day and how rare, one quiet line (the boxed card looked clunky) -->
         <!-- Fuel: no share of students (the server counts no givers) -->
         <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')}{#if a.code !== 'supporter'} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}{/if}</p>
@@ -257,16 +276,16 @@
         <div class="steps up" role="group">
           {#each a.levels as l, i (i)}
             <button class="step" class:fut={!l.reached} class:on={(peek || a.level) === i + 1} aria-label={tierOf(i)} onclick={() => look(i + 1)}>
-              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{l.need}</span>
+              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{activist ? tierOf(i) : l.need}</span>
             </button>
           {/each}
         </div>
-        <div class="ladder up">
-          <div class="lh t-cap"><span>{t('aw.levels')}</span><span>{t('aw.need')}</span><span>{t('aw.students')}</span></div>
+        <div class={['ladder up', { levelsOnly: activist }]}>
+          <div class="lh t-cap"><span>{t('aw.levels')}</span>{#if !activist}<span>{t('aw.need')}</span>{/if}<span>{t('aw.students')}</span></div>
           {#each ladder as l (l.i)}
             <div class="lv" class:got={l.reached}>
               <span class="ln">{#if l.reached}<Check size={15} strokeWidth={2.6} />{/if}{tierOf(l.i)}</span>
-              <span>{l.need}</span><span>{share(l.rarity)}%</span>
+              {#if !activist}<span>{l.need}</span>{/if}<span>{share(l.rarity)}%</span>
             </div>
           {/each}
           {#if ladder.length < a.levels.length}<button class="lv more" onclick={() => { haptic.select(); all = true; }}>{t('aw.allLevels')}</button>{/if}
@@ -407,6 +426,7 @@
   .var.on { background: rgba(255, 255, 255, 0.08); }
   .var:active { transform: scale(0.96); }
   .prog { margin-top: 16px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
+  .multi { display: grid; gap: var(--s-3); }
   .prog .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .prog b { font: 720 17px/1.2 var(--font-display); }
   .prog .row span { font: 560 13px/1.2 var(--font-text); color: var(--text-2); }
@@ -427,6 +447,7 @@
   .step:active > :global(.medal) { transform: scale(0.94); }
   .ladder { margin-top: 14px; display: flex; flex-direction: column; border-radius: var(--r-m); background: var(--surface-2); padding: 4px 0; }
   .lh, .lv { display: grid; grid-template-columns: 1fr 70px 90px; align-items: center; padding: 8px 14px; }
+  .levelsOnly :is(.lh, .lv) { grid-template-columns: 1fr auto; }
   .lh { color: var(--text-3); padding-bottom: 4px; }
   .lh span:not(:first-child), .lv span:not(:first-child) { text-align: right; }
   .lv { font: 600 14.5px/1.2 var(--font-text); color: var(--text-2); }

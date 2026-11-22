@@ -81,6 +81,8 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; 
  *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
 export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
 export interface ChannelHeart { hearts: number; hearted: boolean }
+export type ChannelOrder = 'for_you' | 'new';
+export interface ChannelFeedPage { posts: ChannelFeedPost[]; cursor: string | null }
 export interface ChannelVisit { seen: number; latest: number }
 /** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
@@ -752,7 +754,7 @@ export type PostTag = 'important' | 'recruiting' | 'results' | 'news';
 export interface PostPatch { title?: string; body?: string; tag?: PostTag | string | null; photoId?: Id | null; pinned?: boolean; casting?: Omit<Casting, 'cancelled'> }
 export interface PostInput { title: string; body: string; tag: PostTag | null; photoId?: Id | null; audience?: 'public' | 'clubs'; pinned?: boolean; casting?: Omit<Casting, 'cancelled'> }
 
-export interface AwardLevel { need: number; reached: boolean; rarity: number }
+export interface AwardLevel { need: number; reached: boolean; rarity: number; events?: number }
 export interface Achievement {
   code: string;
   emoji: string;
@@ -761,6 +763,7 @@ export interface Achievement {
   level: number;                // 0 = not earned, else 1..levels.length: I, II, ..., the last of 4+ Legend
   levels: AwardLevel[];
   rarity: number;               // share of students with level ≥ 1, 0..1
+  parts?: { posts: number; events: number }; // Chief activist, visible only to the medal owner
   season?: string;              // season medals: '2026-fall'
   at?: Ts | null;               // when its current level was reached (null: before the dates were kept)
   now?: number;                 // the streak only: weeks in a row up to this one (SPEC §4.11)

@@ -837,7 +837,7 @@ def test_post_faces_and_reactions(env, monkeypatch):
     con2 = db.connect(cfg.db_path)
     con2.set_trace_callback(seen.append)
     logic.fchannel.feed(con2, logic.Viewer(id=3, role="user", student=True))
-    assert sum("fchan_comments" in s for s in seen) == 4                                    # the faces, "being discussed", popular today, the newest comment: one each
+    assert sum("fchan_comments" in s for s in seen) == 2                                    # one for aggregates and one for faces
     con2.close()
     # reactions: Telegram's totals on the channel post (the bot asks for them), the top three on the card
     asked: list[str] = []

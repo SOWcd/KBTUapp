@@ -13,6 +13,8 @@ import json
 import re
 import secrets
 import unicodedata
+from array import array
+from heapq import merge
 
 from .. import texts
 from . import profiles
@@ -127,17 +129,141 @@ def mine(con, v: Viewer) -> list[dict]:
     return [_shape(p) | {"photos": pics.get(p["id"], [])} for p in ps]
 
 
-FEED_MAX = 50  # a page; the next one by the cursor (before: the last id shown), "Show earlier" in the app
+FEED_MAX = 50
+FEED_RANK_MAX = 500  # ponytail: keep the older archive chronological; precompute engagement if the ranked window grows
+FEED_AGE = 15 * 60
+FEED_SNAPSHOTS = 12  # per viewer and order
+_FEED_VISIBLE = "(status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')"
 
 
-def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
-    """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
-    anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
-    is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
-    one carries its author (person: the app's avatar, name with the nick first, and profile), read once for all rows; its
-    signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here).
-    One order, the channel's own: by the message's id in the channel, so a post a moderator let out late
-    sits where Telegram shows it, not where it was written; mine not out yet on top. before: the page under that message."""
+def _feed_hearts(con, ids, uid: int) -> dict:
+    return {r["post_id"]: r for r in rows(con, """SELECT post_id, COUNT(*) n, MAX(user_id = ?) picked
+        FROM fchan_hearts WHERE post_id IN (SELECT value FROM json_each(?)) GROUP BY post_id""", uid, json.dumps(ids))} if ids else {}
+
+
+def _feed_comments(con, ids) -> dict:
+    now = _now()
+    return {r["post_id"]: r for r in rows(con, """SELECT c.post_id, MAX(c.msg_id) AS newest,
+        COUNT(DISTINCT c.user_id) AS people, SUM(c.at > ?) AS busy,
+        COUNT(DISTINCT CASE WHEN c.at > ? AND (p.anon = 1 OR c.user_id != p.user_id) THEN c.user_id END) AS talked
+        FROM fchan_comments c JOIN fchan_posts p ON p.id = c.post_id
+        WHERE c.gone = 0 AND c.post_id IN (SELECT value FROM json_each(?)) GROUP BY c.post_id""",
+        now - 3600, now - TALK_AGE, json.dumps(ids))} if ids else {}
+
+
+def _feed_order(con, v: Viewer, order: str):
+    live = rows(con, """SELECT id, tg_msg, COALESCE(posted_at, created_at) AS published,
+        CASE WHEN anon = 0 THEN user_id END AS signed_author FROM fchan_posts
+        WHERE status = 'live' AND tg_msg > 0 ORDER BY tg_msg DESC, id DESC""")
+    private = rows(con, """SELECT id, tg_msg FROM fchan_posts WHERE user_id = ? AND status != 'gone'
+        AND (status != 'live' OR COALESCE(tg_msg, 0) <= 0)
+        ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC""", v.id)
+    if order == "new":
+        def channel_order(p):
+            return (p["tg_msg"] or (1 << 62), p["id"])
+        return [p["id"] for p in merge(live, private, key=channel_order, reverse=True)], None, None
+    ranked, archive = live[:FEED_RANK_MAX], live[FEED_RANK_MAX:]
+    ids = [p["id"] for p in ranked]
+    hearts = dict.fromkeys(ids) | _feed_hearts(con, ids, v.id)
+    comments = dict.fromkeys(ids) | _feed_comments(con, ids)
+    friends = {r[0] for r in rows(con, "SELECT b FROM friendships WHERE a = ? UNION ALL SELECT a FROM friendships WHERE b = ?", v.id, v.id)}
+    now = _now()
+
+    def score(p):
+        heart, discussion = hearts[p["id"]], comments[p["id"]]
+        likes = heart["n"] if heart else 0
+        people = discussion["people"] if discussion else 0
+        hours = max(0, now - p["published"]) / 3600
+        # engagement under a square root: a club hearting its own post together can't hold the top for days
+        return ((3 + 2 * (likes + 2 * people) ** 0.5 + 3 * (p["signed_author"] in friends)) / (hours + 6) ** 1.35,
+                p["tg_msg"], p["id"])
+
+    ordered = [p["id"] for p in private] + [p["id"] for p in sorted(ranked, key=score, reverse=True)] + [p["id"] for p in archive]
+    return ordered, hearts, comments
+
+
+def _feed_rows(con, v: Viewer, ids, limit: int = FEED_MAX) -> list:
+    if not ids:
+        return []
+    return rows(con, f"""SELECT p.*, j.key AS feed_index FROM json_each(?) j CROSS JOIN fchan_posts p ON p.id = j.value
+        WHERE {_FEED_VISIBLE} ORDER BY j.key LIMIT ?""", json.dumps(list(ids)), v.id, limit)
+
+
+def _feed_account(con, uid: int) -> int | None:
+    student = one(con, "SELECT verified_at FROM students WHERE user_id = ?", uid)
+    return student[0] if student else None
+
+
+def _save_feed(con, uid: int, order: str, ids: list[int], account: int | None) -> str:
+    # SQLite shares the short-lived order across web workers. Cards are always read through current visibility.
+    data = array("q", ids).tobytes()
+    now = _now()
+    latest = one(con, """SELECT token, post_ids FROM fchan_feed_pages WHERE user_id = ? AND sort = ?
+        AND expires_at > ? ORDER BY expires_at DESC, rowid DESC LIMIT 1""", uid, order, now + FEED_AGE // 2)
+    if latest and latest["post_ids"] == data:
+        return latest["token"]
+    token = secrets.token_urlsafe(18)
+    with tx(con):
+        if _feed_account(con, uid) != account:  # an in-flight read cannot recreate data after account erasure
+            raise ApiError("not_found", "feed_cursor")
+        con.execute("INSERT INTO fchan_feed_pages VALUES (?, ?, ?, ?, ?)", (token, uid, order, now + FEED_AGE, data))
+        con.execute("""DELETE FROM fchan_feed_pages WHERE user_id = ? AND sort = ? AND
+            (expires_at <= ? OR token IN (SELECT token FROM fchan_feed_pages WHERE user_id = ? AND sort = ?
+            ORDER BY expires_at DESC, rowid DESC LIMIT -1 OFFSET ?))""", (uid, order, now, uid, order, FEED_SNAPSHOTS))
+    return token
+
+
+def feed_page(con, v: Viewer, order: str, cursor: str | None = None) -> dict:
+    """Freeze ordering across pages, even while hearts, comments and friendships change."""
+    with tx(con, write=False):
+        if cursor is None:
+            ids, hearts, comments = _feed_order(con, v, order)
+            offset = 0
+        else:
+            match = re.fullmatch(r"([A-Za-z0-9_-]{24})[.]([1-9][0-9]{0,9})", cursor)
+            if match is None:
+                raise ApiError("bad_input", "feed_cursor")
+            token, offset = match[1], int(match[2])
+            snap = one(con, """SELECT post_ids FROM fchan_feed_pages
+                WHERE token = ? AND user_id = ? AND sort = ? AND expires_at > ?""", token, v.id, order, _now())
+            if not snap:
+                raise ApiError("not_found", "feed_cursor")
+            ids = array("q")
+            ids.frombytes(snap["post_ids"])
+            hearts = comments = None
+        end = min(len(ids), offset + FEED_MAX)
+        ps = _feed_rows(con, v, ids[offset:end])
+        if len(ps) < FEED_MAX and end < len(ids):
+            # Skip posts taken down since the snapshot. Fill the resulting gap in one batch.
+            need = FEED_MAX - len(ps)
+            extra = _feed_rows(con, v, ids[end:], need)
+            end = end + extra[-1]["feed_index"] + 1 if len(extra) == need else len(ids)
+            ps.extend(extra)
+        posts = _feed_cards(con, v, ps, hearts, comments)
+        more = end < len(ids)
+        if more and cursor is None:
+            account = _feed_account(con, v.id)
+    if more and cursor is None:
+        token = _save_feed(con, v.id, order, ids, account)
+    return {"posts": posts, "cursor": f"{token}.{end}" if more else None}
+
+
+def feed_post(con, v: Viewer, pid: int) -> dict:
+    if not 0 < pid < 1 << 63:
+        raise ApiError("not_found")
+    with tx(con, write=False):
+        ps = _feed_rows(con, v, [pid])
+        if not ps:
+            raise ApiError("not_found")
+        return _feed_cards(con, v, ps)[0]
+
+
+def feed(con, v: Viewer, before: int | None = None, *, order: str = "for_you") -> list[dict]:
+    """The first page, or the channel's chronological page before a Telegram message."""
+    if order == "for_you" and before is None:
+        with tx(con, write=False):
+            ids, hearts, comments = _feed_order(con, v, order)
+            return _feed_cards(con, v, _feed_rows(con, v, ids[:FEED_MAX]), hearts, comments)
     cursor = before if isinstance(before, int) and before > 0 else (1 << 63) - 1
     # Each side contributes at most a page: the public side walks its message index, instead of sorting the whole
     # channel's history on every poll. UNION deduplicates my live posts before the final page limit.
@@ -150,21 +276,23 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
             ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?)
         ) ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?""",
               cursor, FEED_MAX, v.id, cursor, FEED_MAX, FEED_MAX)
+    return _feed_cards(con, v, ps)
+
+
+def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     # people for students alone (a guest: none); never under an anonymous post: its author's face among them, or left
     # out of them, would tell
     faces = _faces(con, [p["id"] for p in ps if p["comments"] and not p["anon"]]) if v.student else {}
-    hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
     pics = _photos(con, [p["id"] for p in ps])
-    pids = [p["id"] for p in ps if p["comments"]]
-    newest = {r["post_id"]: r["m"] for r in rows(con, f"SELECT post_id, MAX(msg_id) m FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(pids))}) GROUP BY post_id", *pids)}
-    live = [p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0]
-    hearts = {r["post_id"]: r for r in rows(con, f"""SELECT post_id, COUNT(*) n, MAX(user_id = ?) picked
-        FROM fchan_hearts WHERE post_id IN ({','.join('?' * len(live))}) GROUP BY post_id""", v.id, *live)}
+    live = {p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0}
+    hearts, comments = hearts or {}, comments or {}
+    hearts.update(_feed_hearts(con, sorted(live - hearts.keys()), v.id))
+    comments.update(_feed_comments(con, [p["id"] for p in ps if p["id"] not in comments and (p["comments"] or p["id"] in live)]))
     out = []
     for p in ps:
-        heart = hearts.get(p["id"])
+        heart, discussion = hearts.get(p["id"]), comments.get(p["id"])
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         # at: when it went out (posted_at), never when it was written: a held anonymous post's writing time is the
         # author's moment in the app; mine not out yet: when I wrote it
@@ -172,11 +300,12 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
              "sign": _anon_sign(p) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id, "photos": pics.get(p["id"], []),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
-             "comments": p["comments"], "thread": (newest.get(p["id"]) or p["rules_msg"]) if p["tg_msg"] else None,
+             "comments": p["comments"], "thread": ((discussion["newest"] if p["comments"] and discussion else None) or p["rules_msg"]) if p["tg_msg"] else None,
              "hearts": heart["n"] if heart else 0, "hearted": bool(heart and heart["picked"]),
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
-             "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day
+             "hot": bool(discussion and (p["comments"] >= HOT and discussion["busy"] >= HOT
+                     or p["id"] in live and discussion["talked"] >= TALK_MIN)),  # being discussed (one label, in place): a busy hour, or several people over the day
              # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
              "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check",
              # why my held post waits, to me alone (it survives a reload): I sent it to a moderator, it has photos and
@@ -224,27 +353,7 @@ def _review(p) -> dict:
 HOT = 5  # comments in the last hour that make a post "being discussed" (the feed's label)
 
 
-def _hot(con, ids: list[int]) -> set[int]:
-    """The posts with HOT or more students' comments (still up) in the last hour, one query for all of them."""
-    if not ids:
-        return set()
-    return {r[0] for r in rows(con, f"""SELECT post_id FROM fchan_comments WHERE gone = 0 AND at > ? AND post_id IN ({','.join('?' * len(ids))})
-        GROUP BY post_id HAVING COUNT(*) >= ?""", _now() - 3600, *ids, HOT)}
-
-
-TALK_MIN, TALK_AGE = 3, 86400  # "being discussed" over the day too: TALK_MIN people or more (not its author) commenting
-
-
-def _talked(con, ids: list[int]) -> set[int]:
-    """The posts TALK_MIN or more distinct people commented on in the last day, one query for all of them: comments still
-    up; a signed post's author left out (it takes others). An anonymous one counts everyone: leaving its author out
-    would tell, by the label, whether a commenter is the author. ponytail: so its author can pad it by
-    one; fine for a hint"""
-    if not ids:
-        return set()
-    return {r[0] for r in rows(con, f"""SELECT p.id FROM fchan_posts p JOIN fchan_comments c ON c.post_id = p.id
-        WHERE p.id IN ({','.join('?' * len(ids))}) AND c.gone = 0 AND c.at > ? AND (p.anon = 1 OR c.user_id != p.user_id)
-        GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ?""", *ids, _now() - TALK_AGE, TALK_MIN)}
+TALK_MIN, TALK_AGE = 3, 86400  # distinct commenters in the last day; the signed author is left out
 
 
 FACES = 10  # the newest commenters a card has room for at most (the card shows as many as fit)
@@ -654,7 +763,8 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
     """The bot sent it: its message id kept (an album's first, and each photo's own); deleted or taken down meanwhile,
     the messages go right back out (with the right words if it's past 48 h: a moderator's take-down isn't the
     author's delete)."""
-    if con.execute("UPDATE fchan_posts SET tg_msg = ?, posted_at = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, _now(), pid, msg_id)).rowcount:
+    now = _now()
+    if con.execute("UPDATE fchan_posts SET tg_msg = ?, posted_at = CASE WHEN tg_msg = 0 THEN ? ELSE COALESCE(posted_at, ?) END WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, now, now, pid, msg_id)).rowcount:
         for n, m in enumerate(pics or []):
             con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
@@ -706,7 +816,7 @@ def found(con, msg_id: int, text: str) -> None:
     hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
             AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{p['body']}", f"{p['body']}\n\n— {_sign(con, p)}")]
     if len(hits) == 1:
-        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = COALESCE(posted_at, ?) WHERE id = ?", (msg_id, _now(), hits[0]))
+        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = ? WHERE id = ?", (msg_id, _now(), hits[0]))
         # an album: the caption is on its first photo, and Telegram numbers one album's messages in a row, so photo n
         # is this one plus n; each then leaves with the post (else only the first does). ponytail: consecutive
         # ids are how Telegram sends a media group; match the copies' media_group_id if that ever changes

@@ -208,10 +208,10 @@ def test_forum_feed_pages_use_message_index(env):
                 WHERE (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')
                 AND COALESCE(NULLIF(tg_msg, 0), 1 << 62) < ?
                 ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT 50""", (uid, cursor))]
-            got = logic.fchannel.feed(con, v, before)
+            got = logic.fchannel.feed(con, v, before, order="new")
             assert [p["id"] for p in got] == want
             assert all(p["person"] is None for p in got)
-    plans = _plans(con, lambda: logic.fchannel.feed(con, v))
+    plans = _plans(con, lambda: logic.fchannel.feed(con, v, order="new"))
     plan = next(p for s, p in plans if "WHERE id IN" in s)
     assert "fchan_posts_by_message (status=? AND tg_msg>? AND tg_msg<?)" in plan, plan
     con.close()
