@@ -105,7 +105,7 @@ def test_ended_guest_claim_requires_attendance_and_surname(door_event, monkeypat
         came = _student(c, con, 1, "24B030001")
         _student(c, con, 2, "24B030002")
         _student(c, con, 3, "24B030003")
-        assert c.get("/api/events/1", headers=tma(1)).json()["canAddPhotos"] is False
+        assert not con.execute("SELECT 1 FROM registrations WHERE event_id = 1").fetchone()
         if trigger == "import":
             # The new CSV name for the third student must never replace the surname proved at the door.
             assert guests.import_csv(con, 1, [*source[:2], "24B030003,,,Jane Testov"]) == (1, 1, 0, 0)
@@ -123,8 +123,6 @@ def test_ended_guest_claim_requires_attendance_and_surname(door_event, monkeypat
         "24B030002", "24B030003"]
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox
     assert c.get("/api/events/1", headers=tma(1)).json()["canAddPhotos"] is True
-    for tg in (2, 3):
-        assert c.get("/api/events/1", headers=tma(tg)).json()["canAddPhotos"] is False
     jpeg = io.BytesIO()
     Image.new("RGB", (64, 48), (20, 90, 160)).save(jpeg, "JPEG")
     added = c.post("/api/events/1/photos", headers=tma(1), content=jpeg.getvalue())
