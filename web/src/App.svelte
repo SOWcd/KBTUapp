@@ -929,7 +929,7 @@
           msBack(true);
         }, () => {});
       }
-      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) greet();
+      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) moment(greet); // in the queue: never over a launch sheet (the install offer), after it closes
       if (tg.startParam) deepLink();
       else if (session.me?.msPending) msBack();
       void credits.then(() => {
