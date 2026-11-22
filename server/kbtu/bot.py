@@ -153,6 +153,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
+    if kind == "app_broadcast":  # the creator's CLI announcement, with a Telegram URL button
+        msg = texts.broadcast_message(lang, m["ref"])
+        url = json.loads(m["payload"]).get("url")
+        return (msg[0], None, [[{"text": msg[1], "url": url}]]) if msg and url else None
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 

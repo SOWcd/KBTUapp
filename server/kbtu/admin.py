@@ -49,6 +49,9 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+                                creator only: queue a bot template once per reachable user. --dry counts new recipients;
+                                @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login, never tied to an account);
@@ -178,6 +181,38 @@ def _user(con, who: str):
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
+    if not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
+        sys.exit("broadcast: expected an https://t.me/ URL")
+    if not all(texts.broadcast_message(lang, name) for lang in texts.BOT):
+        sys.exit("broadcast: expected a translated bot template with a button and no required fields")
+    dry = target == "--dry"
+    with db.tx(con, write=not dry):
+        if not one(con, "SELECT 1 FROM users WHERE is_founder = 1 AND role = 'admin' AND banned_at IS NULL AND tg_id > 0"):
+            sys.exit("broadcast: needs the active creator admin")
+        only = None
+        if target is not None and not dry:
+            if re.fullmatch(r"@[A-Za-z0-9_]+", target):
+                matches = rows(con, "SELECT id FROM users WHERE lower(tg_username) = lower(?) LIMIT 2", target[1:])
+            elif re.fullmatch(r"[0-9]+", target):
+                matches = rows(con, "SELECT id FROM users WHERE tg_id = ?", target)
+            else:
+                sys.exit("broadcast: expected @username or Telegram ID")
+            if len(matches) != 1:
+                sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
+            only = matches[0]["id"]
+        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+            AND (? IS NULL OR u.id = ?) AND NOT EXISTS (SELECT 1 FROM bot_outbox b
+                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ?)"""
+        if dry:
+            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, name)[0]
+        else:
+            count = con.execute(f"""INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after)
+                SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
+                                (name, json.dumps({"url": url}), now(), only, only, name)).rowcount
+    print(f"{'would queue' if dry else 'queued'} {count}")
 
 
 def _gz_arg(args: list[str]) -> bytes | None:
@@ -444,6 +479,8 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
+        _broadcast(con, *args[1:])
     elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and len(args) == 7:

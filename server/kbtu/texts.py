@@ -267,6 +267,7 @@ BOT = {
         "team_ask_yes": ("✅ Разрешили — можно записаться на <b>{title}</b>\n🗓 {when} · {place}", "Записаться"),
         "credit_ask": ("💡 Твоя идея, находка или код уже в KBTU App.\nПоказать твоё имя на экране «Люди приложения»? Решаешь ты.", "Ответить"),
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
+        "app_update_home": ("Обновление KBTU App: теперь его можно поставить на главный экран как отдельное приложение — открывается сразу, без Telegram. Смотри видео в канале.", "Смотреть"),
         "santa_drawn": ("🎅 Жеребьёвка прошла: <b>{title}</b>\n🎁 Узнай, кому даришь", "🎁 Узнать"),
         "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре{terms}", "🎄 Играть"),
         "santa_soon": ("⏳ Тайный Санта <b>{org}</b>: вишлисты до {until}\n🎁 Напиши свой, и ты в игре{terms}", "🎄 Играть"),
@@ -478,6 +479,7 @@ BOT = {
         "team_ask_yes": ("✅ Рұқсат берілді — <b>{title}</b> іс-шарасына жазылуға болады\n🗓 {when} · {place}", "Жазылу"),
         "credit_ask": ("💡 Сенің идеяң, тапқаның немесе кодың енді KBTU App-та.\n«Қосымша адамдары» бетінде атыңды көрсетейік пе? Өзің шешесің.", "Жауап беру"),
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
+        "app_update_home": ("KBTU App жаңартылды: енді оны басты экранға бөлек қолданба ретінде орнатуға болады — ол Telegram-сыз бірден ашылады. Видеоны арнадан көр.", "Көру"),
         "santa_drawn": ("🎅 Жеребе тартылды: <b>{title}</b>\n🎁 Кімге сыйлайтыныңды біл", "🎁 Білу"),
         "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойынын ойнап жатыр\n🎁 Тілек тізіміңді жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
         "santa_soon": ("⏳ <b>{org}</b> Құпия Сантасы: тілек тізімдері {until} дейін\n🎁 Өзіңдікін жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
@@ -683,6 +685,7 @@ BOT = {
         "team_ask_yes": ("✅ You're allowed — you can sign up for <b>{title}</b>\n🗓 {when} · {place}", "Sign up"),
         "credit_ask": ("💡 Your idea, find or code is now in KBTU App.\nShow your name on the “People of the app” screen? It's your call.", "Answer"),
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
+        "app_update_home": ("KBTU App update: you can now install it on your home screen as a separate app. It opens instantly without Telegram. Watch the video in the channel.", "Watch"),
         "santa_drawn": ("🎅 The draw is done: <b>{title}</b>\n🎁 See who you're giving to", "🎁 See"),
         "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in{terms}", "🎄 Play"),
         "santa_soon": ("⏳ <b>{org}</b>'s Secret Santa: wishlists until {until}\n🎁 Write yours and you are in{terms}", "🎄 Play"),
@@ -903,6 +906,14 @@ def receipt_why(lang: str, flags: list[str]) -> str:
 def bot_message(lang: str, kind: str, **fields: object) -> tuple[str, str | None]:
     text, button = pick(BOT, lang)[kind]
     return text.format(**{k: html.escape(str(v)) for k, v in fields.items()}), button
+
+
+def broadcast_message(lang: str, name: str) -> tuple[str, str] | None:
+    try:
+        text, button = bot_message(lang, name)
+    except (KeyError, ValueError, IndexError):  # missing template or a field the CLI cannot supply
+        return None
+    return (text, button) if button else None
 
 
 # a club's group moderated for swearing (bot._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
