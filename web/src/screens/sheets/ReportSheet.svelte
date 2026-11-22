@@ -16,8 +16,8 @@
   type Target = 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost';
   let { overlay, target, id, about = '', onsent }: { overlay: Overlay; target: Target; id: Id; about?: string; onsent?: () => void } = $props();
 
-  // a photo's own two with the Gallery on (GALLERY): it breaks the rules, or I'm in it and against it
-  const REASONS = $derived<ReportReason[]>(target === 'photo' && data.galleryPost ? ['rules', 'me'] : ['spam', 'insult', 'danger', 'other']);
+  // a photo's own three with the Gallery on (GALLERY): it breaks the rules, isn't from the event (a meme), or I'm in it and against it
+  const REASONS = $derived<ReportReason[]>(target === 'photo' && data.galleryPost ? ['rules', 'offtopic', 'me'] : ['spam', 'insult', 'danger', 'other']);
   let reason = $state<ReportReason | null>(null), note = $state(''), busy = $state(false);
 
   async function send() {

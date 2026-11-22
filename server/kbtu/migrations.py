@@ -2188,4 +2188,23 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
     CREATE INDEX fchan_feed_pages_expiry ON fchan_feed_pages(expires_at);"""),
+    # a photo's report gets "not from this event" (a meme, a screenshot): the CHECK can't be altered, so the table is
+    # rebuilt (nothing references reports)
+    (218, """CREATE TABLE reports7 (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply', 'fpost')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other', 'rules', 'offtopic', 'me')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    ) STRICT;
+    INSERT INTO reports7 SELECT id, reporter_id, target, target_id, reason, note, status, created_at, resolved_by, resolved_at FROM reports;
+    DROP TABLE reports;
+    ALTER TABLE reports7 RENAME TO reports;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
+    CREATE INDEX reports_by_target ON reports (target, target_id);"""),
 ]

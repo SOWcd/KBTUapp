@@ -61,7 +61,7 @@ export interface Comment { id: Id; person: PersonRef | null; org: OrgRef | null;
   replyTo?: { id: Id; name: string; body: string } | null /* the comment it answers, quoted while still up */ }
 /** A thread: oldest first; the club's Head+ moderate it and may write as the club (`asOrg`). */
 export interface CommentThread { items: Comment[]; on: boolean; canModerate: boolean; asOrg: OrgRef | null }
-export type ReportReason = 'spam' | 'insult' | 'danger' | 'other' | 'rules' | 'me'; // rules, me: a photo's own two
+export type ReportReason = 'spam' | 'insult' | 'danger' | 'other' | 'rules' | 'offtopic' | 'me'; // rules, offtopic, me: a photo's own three
 /** the clause of the terms' section 3 a removed Telegram comment broke (server tgcomments.RULES) */
 export type TgcRule = 'abuse' | 'fake' | 'spam' | 'pdata' | 'disrupt' | 'other';
 /** The admin's queue: one row per reported thing still up. */

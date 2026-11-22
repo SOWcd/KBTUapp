@@ -864,7 +864,7 @@ CREATE TABLE "reports" (
         reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply', 'fpost')),
         target_id INTEGER NOT NULL,
-        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other', 'rules', 'me')),
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other', 'rules', 'offtopic', 'me')),
         note TEXT,
         status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
         created_at INTEGER NOT NULL,

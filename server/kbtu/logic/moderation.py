@@ -127,9 +127,9 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    # a photo's own two with the Gallery on (GALLERY): "breaks the rules", "I'm in it and against it"
+    # a photo's own three with the Gallery on (GALLERY): "breaks the rules", "not from this event" (a meme), "I'm in it and against it"
     if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") \
-            or reason not in (("rules", "me") if target == "photo" and gallery.on(v) else ()) + ("spam", "insult", "danger", "other") \
+            or reason not in (("rules", "offtopic", "me") if target == "photo" and gallery.on(v) else ()) + ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
