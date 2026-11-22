@@ -63,11 +63,10 @@
     padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
     display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
   /* Telegram's own header pills (owner, Nov 22: "identical to Telegram"): 30 px tall, centred on the capsule's line;
-     the bar keeps a full tap height so the hit area stays 44 px */
+     the bar keeps a full tap height (::after belongs to .glass: never a hit-area trick here) */
   .bar { height: var(--tap); }
   button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
     padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); pointer-events: auto; }
-  button::after { content: ""; position: absolute; inset: -7px -4px; } /* 44 px to the finger */
   .back { padding-inline: 6px 12px; }
   .more { margin-inline-start: auto; }
   button:active { transform: scale(.94); }
