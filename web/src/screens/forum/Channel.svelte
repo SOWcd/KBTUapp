@@ -1,8 +1,6 @@
 <script lang="ts">
-  // The Forum tab has a personalized order and the public channel's order. Liquid Glass: a still,
-  // soft light behind the feed, each post a clear
-  // pane over it (a translucent body, a lit rim, no blur: fifty live blurs would cook an old iPhone), the composer and
-  // the side doors real glass (base.css .glass-pill, Button's glass). Each post a card: the face
+  // The Forum tab has a personalized order and the public channel's order. The composer and the side doors are
+  // glass (base.css .glass-pill, Button's glass); each post the app's card on the plain ground: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
   // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
@@ -373,30 +371,10 @@
 </div>
 
 <style>
-  /* the ground is the app's own (--bg), like every tab: coloured lights here read as a tinted band beside the black */
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column;
-    --pane: rgba(255, 255, 255, 0.05); --pane-sheen: rgba(255, 255, 255, 0.05);
-    --pane-hi: rgba(255, 255, 255, 0.42); --pane-lo: rgba(255, 255, 255, 0.14); --pane-rim: rgba(255, 255, 255, 0.07);
-    --pane-lift: 0 16px 30px -22px rgba(0, 0, 0, 0.7); }
-  /* light: white rims vanish on white, so a pane is a milky body with a white lit arc, an ink reflection and a navy lift */
-  :global(:root[data-theme='light']) .page {
-    --pane: rgba(255, 255, 255, 0.56); --pane-sheen: rgba(255, 255, 255, 0.55);
-    --pane-hi: var(--lg-rim-hi); --pane-lo: rgba(11, 20, 51, 0.16); --pane-rim: rgba(11, 20, 51, 0.05);
-    --pane-lift: 0 1px 2px rgba(24, 36, 90, 0.04), 0 14px 28px -18px rgba(24, 36, 90, 0.22); }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; }
   .page > :global(*) { flex-shrink: 0; }
-  /* a post: a clear pane over the lights. The glass family's recipe (base.css, ui/Button) without the live blur: a
-     translucent body with a sheen in its top, a rim bright on the arc that faces the light and dim on the opposite
-     one (two gradients through a ring mask, painted once), a soft lift */
-  .post { border-radius: var(--r-xl); background: linear-gradient(180deg, var(--pane-sheen), transparent 96px) var(--pane); box-shadow: var(--pane-lift); }
-  .post::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
-    background:
-      radial-gradient(ellipse 60% 110px at 22% 0%, var(--pane-hi), transparent 72%),
-      radial-gradient(ellipse 55% 90px at 78% 100%, var(--pane-lo), transparent 75%),
-      var(--pane-rim);
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude; }
+  /* a post: the app's card (ui/Card's surface and hair rim) */
+  .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
 
   /* the composer: the capsule's glass (base.css .glass-pill: the one live blur here besides the doors'), my face, a
      quiet prompt, the pen */
@@ -496,7 +474,7 @@
   .f + .f { margin-left: -6px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
   .talk { flex: none; display: flex; margin-left: auto; }
-  /* the button's glass on a clear body here (Button's sits on the solid surface): the pane and its light show through */
+  /* the button's glass on a clear body here (Button's sits on the solid surface): the card shows through */
   .talk :global(.btn) { background:
     radial-gradient(ellipse 40% 60% at var(--hx) 0%, var(--lg-spot), transparent 70%),
     linear-gradient(180deg, var(--lg-sheen), transparent 60%) var(--fill); }

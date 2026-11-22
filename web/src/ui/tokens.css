@@ -12,7 +12,7 @@
   --fs-title: 34px; --fs-sec: 22px; --fs-card: 17px; --fs-body: 15px; --fs-sub: 13px; --fs-cap: 12px; --fs-micro: 11px;
   /* the design system's steps the scale lacked (a value never changes under an existing name): a person's or a
      club's name in their sheet, big numbers in stat tiles, menu-like rows (Settings, the admin hub, pickers: data rows
-     stay at --fs-body), the tab bar's labels. Weights: 450, 600, 700, 800 (large titles only). The classes: base.css .fs-* */
+     stay at --fs-body), the tab bar's labels. Weights: 450, 600, 700 (titles), 800 (big numbers). The classes: base.css .fs-* */
   --fs-t1: 28px; --fs-t3: 20px; --fs-row: 17px; --fs-tab: 10.5px;
 
   /* spacing: 4-pt grid; 22 between list groups (Settings), 28 between a screen's sections */

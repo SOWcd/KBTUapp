@@ -101,6 +101,6 @@
     background: radial-gradient(140vw 60vh at 15% -12vh, var(--accent-soft), transparent 70%),
                 radial-gradient(110vw 55vh at 105% 110vh, var(--tint-b), transparent 70%), var(--bg); }
   :global(.theme-light) .glow, :global(.theme-light) .glow .edge { --tint-b: rgba(124, 77, 255, 0.05); }
-  .ttl { margin: 8px 4px 18px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; overflow-wrap: break-word; }
+  .ttl { margin: 8px 4px 18px; font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; overflow-wrap: break-word; }
   .tail { height: calc(var(--safe-bottom) + 40px); }
 </style>

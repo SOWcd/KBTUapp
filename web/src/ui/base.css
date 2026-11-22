@@ -53,7 +53,7 @@ img { max-width: 100%; }
 .t-cap { font: 650 11px/1.2 var(--font-text); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
 /* the design system's type, one class per step of tokens.css --fs-* (the .t-* above stay as they are until their screens
    move): Inter's own tracking per size; a long word breaks at its soft hyphen or at the edge, never "anywhere" */
-.fs-title { font: 800 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.03em; }
+.fs-title { font: 700 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.04em; }
 .fs-t1 { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.022em; }
 .fs-sec { font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; }
 .fs-t3 { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
