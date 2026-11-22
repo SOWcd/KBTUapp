@@ -6,10 +6,9 @@
   // server says no. Its own consent first (lib/reports.ts): no yes, the sheet closes; a member without theirs is listed,
   // never marked.
   import { onMount } from 'svelte';
-  import { api, ApiErr, type EventReport, type Id, type ReportMark, type ReportPerson } from '../../lib/api';
+  import { api, ApiErr, type EventReport, type Id, type ReportMark, type ReportMarkPatch, type ReportPerson } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
-  import { setReportConsent } from '../../lib/reports';
+  import { withReportConsent } from '../../lib/reports';
   import { eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
@@ -18,29 +17,59 @@
   import { relDay, time } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import Field from '../../ui/Field.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import SearchField from '../../ui/SearchField.svelte';
+  import { menu } from '../../ui/menu';
 
   // org: the co-host's own report (the host's without it); on a co-hosted event the subtitle names whose it is
   let { overlay, id, org }: { overlay: Overlay; id: Id; org?: Id } = $props();
   const e = $derived(eventById(id));
   const club = $derived(e?.coHost ? (e.coHost.id === org ? e.coHost : e.org) : null);
 
-  let r = $state<EventReport | null>(null);
+  let saved = $state<EventReport | null>(null);
+  type Apply = (report: EventReport) => EventReport;
+  let pending = $state<Apply[]>([]);
+  const r = $derived(saved && pending.reduce((report, apply) => apply(report), saved));
+  let serial = Promise.resolve();
+  // Keep newer taps visible while previous writes settle, including if one of those writes fails.
+  function change(apply: Apply, send: () => Promise<EventReport>): Promise<boolean> {
+    pending = [...pending, apply];
+    const result = serial.then(async () => {
+      try {
+        if (!saved) return false;
+        saved = await send();
+        return true;
+      } catch (err) {
+        if (err instanceof ApiErr && (err.code === 'forbidden' || err.message === 'not_started')) {
+          saved = null;
+          drafts = {};
+          close(overlay.id);
+        }
+        haptic.error(); say(t('common.error'), 'warning_3d');
+        return false;
+      } finally {
+        pending = pending.slice(1);
+      }
+    });
+    serial = result.then(() => {});
+    return result;
+  }
   // the typed fields stay mine while marks come back from the server; a number input hands back a number (or null), kept as text
   let guests = $state('');
   let note = $state('');
   async function load() {
-    if (!session.me?.reports?.consent && !(await setReportConsent(true))) { close(overlay.id); return; }
-    try { const x = await api.eventReport(id, org); r = x; guests = x.guests == null ? '' : String(x.guests); note = x.note; }
-    catch (err) {
-      // the server knows better (taken back on another phone): ask again
-      if (err instanceof ApiErr && err.message === 'consent' && session.me?.reports) { session.me.reports.consent = false; void load(); }
-      else say(t('common.error'), 'warning_3d');
+    try {
+      const x = await withReportConsent(() => api.eventReport(id, org));
+      if (!x) { close(overlay.id); return; }
+      saved = x; guests = x.guests == null ? '' : String(x.guests); note = x.note;
+    } catch {
+      say(t('common.error'), 'warning_3d');
+      close(overlay.id);
     }
   }
   onMount(() => void load());
@@ -57,26 +86,44 @@
     return q.trim() ? l.filter((p) => hit(q, [p.fullName, p.person.name])) : l;
   });
 
+  let drafts = $state<Record<Id, string>>({});
+  function patchPerson(person: Id, patch: ReportMarkPatch) {
+    return change((report) => ({
+      ...report, people: report.people.map((p) => p.person.id === person
+        ? { ...p, ...patch, comment: patch.status === null ? '' : patch.comment ?? p.comment }
+        : p),
+    }), () => api.eventReportMark(id, person, patch, org));
+  }
+
   async function mark(p: ReportPerson, status: ReportMark | null) {
-    if (!r) return;
     haptic.tap();
-    const was = r;
-    r = { ...r, people: r.people.map((x) => (x.person.id === p.person.id ? { ...x, status } : x)) };
-    try { r = await api.eventReportMark(id, p.person.id, status, org); }
-    catch { r = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    const uid = p.person.id;
+    const draft = drafts[uid];
+    if (await patchPerson(uid, { status }) && status === null && drafts[uid] === draft) delete drafts[uid];
   }
   const markMenu = (p: ReportPerson) => [
-    ...(p.consent ? MARKS : []).map((s) => ({ label: label(s), checked: p.status === s, onselect: () => { if (p.status !== s) void mark(p, s); } })),
+    ...(p.team && p.consent ? MARKS : []).map((s) => ({ label: label(s), checked: p.status === s, onselect: () => { if (p.status !== s) void mark(p, s); } })),
     ...(p.status ? [{ label: t('evr.clear'), destructive: true, onselect: () => void mark(p, null) }] : []),
   ];
 
-  async function setDept(d: Id | null) {
+  async function saveComment(p: ReportPerson) {
+    const uid = p.person.id;
+    const draft = drafts[uid];
+    if (draft == null || draft.trim() === p.comment) return;
+    haptic.tap();
+    if (await patchPerson(uid, { comment: draft.trim() }) && drafts[uid] === draft) delete drafts[uid];
+  }
+
+  function editComment(uid: Id, field: HTMLTextAreaElement) {
+    const chars = Array.from(field.value);
+    if (chars.length > 300) field.value = chars.slice(0, 300).join('');
+    drafts[uid] = field.value;
+  }
+
+  function setDept(d: Id | null) {
     if (!r || r.dept === d) return;
     haptic.select();
-    const was = r;
-    r = { ...r, dept: d };
-    try { r = await api.eventReportSave(id, { dept: d }, org); }
-    catch { r = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    void change((report) => ({ ...report, dept: d }), () => api.eventReportSave(id, { dept: d }, org));
   }
   const deptMenu = $derived([
     ...(r?.depts ?? []).map((d) => ({ label: d.name, checked: r?.dept === d.id, onselect: () => void setDept(d.id) })),
@@ -89,10 +136,12 @@
   let busy = $state(false);
   async function save() {
     if (!r || bad || busy) return;
+    const patch = { guests: count, note: note.trim() };
     busy = true;
-    try { r = await api.eventReportSave(id, { guests: count, note: note.trim() }, org); note = r.note; haptic.ok(); say(t('evr.saved'), 'sparkles_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-    finally { busy = false; }
+    if (await change((report) => ({ ...report, ...patch }), () => api.eventReportSave(id, patch, org))) {
+      haptic.ok(); say(t('evr.saved'), 'sparkles_3d');
+    }
+    busy = false;
   }
   const when = (ts: number) => `${relDay(ts)}, ${time(ts)}`;
   const byline = $derived(!r?.filledAt ? '' : [
@@ -102,19 +151,41 @@
 </script>
 
 <Sheet {overlay} icon={ClipboardCheck} full title={t('evr.title')}>
-  {#if e}<p class="t-foot sub">{e.title}{club ? ` · ${nameOf(club)}` : ''}</p>{/if}
+  {#if e}<p class="t-foot sub">{e.title} · {relDay(e.startsAt)}{club ? ` · ${nameOf(club)}` : ''}</p>{/if}
   {#if r}
     <div class="pg">
       {#if r.depts.length}
         <Group><Row title={t('evr.dept')} value={deptOf?.name ?? t('evr.deptNone')} menu={deptMenu} /></Group>
       {/if}
 
-      <Group caption={t('evr.team')}>
+      <Group caption={t('evr.team')} footnote={list.some((p) => p.team && p.consent) ? t('evr.tapPresent') : undefined}>
         {#each list as p (p.person.id)}
-          <Row dense title={p.fullName} subtitle={p.team ? undefined : t('evr.left')} value={p.status ? label(p.status) : p.consent ? t('evr.mark') : t('evr.noConsent')}
-            menu={p.consent || p.status ? markMenu(p) : undefined}>
-            {#snippet lead()}<Avatar person={p.person} size={30} tappable={false} />{/snippet}
-          </Row>
+          <div class="member">
+            <div class={['member-mark', { present: p.status === 'present' }]}>
+              <div class="member-name">
+                <Row title={p.fullName} subtitle={p.team ? undefined : t('evr.left')}
+                  value={p.status ? (p.status === 'present' ? `+1 · ${label(p.status)}` : label(p.status)) : p.consent ? '+1' : t('evr.noConsent')}
+                  onclick={p.team && p.consent ? () => mark(p, p.status === 'present' ? null : 'present') : undefined}>
+                  {#snippet lead()}<Avatar person={p.person} size={30} tappable={false} />{/snippet}
+                </Row>
+              </div>
+              {#if p.team && p.consent || p.status}
+                <button type="button" class="options" aria-haspopup="menu" aria-label={t('evr.markFor', { who: p.fullName })}
+                  onclick={(event) => menu(event.currentTarget, markMenu(p), 'end')}><Ellipsis size={20} /></button>
+              {/if}
+            </div>
+            {#if p.team && p.status && p.consent}
+              <div class="comment">
+                <textarea rows="2" aria-label={t('evr.commentFor', { who: p.fullName })} placeholder={t('evr.commentPh')}
+                  value={drafts[p.person.id] ?? p.comment} oninput={(event) => editComment(p.person.id, event.currentTarget)}></textarea>
+                {#if drafts[p.person.id] != null && drafts[p.person.id].trim() !== p.comment}
+                  <Button kind="tinted" size="s" onclick={() => saveComment(p)}>{t('common.save')}</Button>
+                {/if}
+              </div>
+            {:else if p.comment}
+              <p class="comment comment-text t-foot">{p.comment}</p>
+            {/if}
+          </div>
         {:else}
           <Row dense title={t('evr.nobody')} />
         {/each}
@@ -155,4 +226,15 @@
   .form { display: flex; flex-direction: column; gap: var(--s-3); }
   .fa { display: flex; gap: var(--s-2); }
   .by { margin: 0 var(--s-1); white-space: pre-line; }
+  .member + .member { border-top: 0.5px solid var(--separator); }
+  .member-mark { display: flex; align-items: stretch; }
+  .member-name { flex: 1; min-width: 0; }
+  .present .member-name :global(.val) { color: var(--accent); }
+  .options { display: grid; width: 44px; flex: none; min-height: 44px; place-items: center; color: var(--text-2); }
+  .comment { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-3) var(--s-3); }
+  .comment-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .comment textarea { flex: 1; width: 100%; min-width: 0; resize: none; padding: var(--s-2) var(--s-3); border-radius: var(--r-m);
+    background: var(--fill); color: var(--text); font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .comment textarea::placeholder { color: var(--text-3); }
+  .comment textarea:focus { box-shadow: inset 0 0 0 1.5px var(--accent); }
 </style>

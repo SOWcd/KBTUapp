@@ -1,6 +1,6 @@
 // Who is looking: the account from /api/me. Guests browse; any action goes through asStudent(),
 // which opens the KBTU sign-in sheet and runs the action by itself after sign-in (SPEC §2).
-import { api, ApiErr, type Me, type Settings } from '../api';
+import { api, ApiErr, type Me, type ReportLogEntry, type Settings } from '../api';
 import { CONSENT_VERSION } from '../legal';
 import { tg } from '../tg';
 import { clearCache } from './cache';
@@ -12,7 +12,9 @@ import { ACCOUNT_KEY, accountRequest, cancelAccountRequests, recovery } from './
 // answers that carry Me don't, so it's kept here; channel (the forum channel's tab) and tgComment too (a deleted Telegram comment of mine waits: App's moment)
 export const session = $state({ me: null as Me | null, ready: false, verified: false, revoked: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION, board: false, boardKnown: false, channel: false, tgComment: false,
   // /api/me alone carries these (a PATCH's me doesn't): kept apart so a settings change never drops them
-  donate: '', support: [] as NonNullable<Me['support']> });
+  donate: '', support: [] as NonNullable<Me['support']>,
+  reportLog: null as { owner: number; entries: ReportLogEntry[] } | null,
+  reportConsentRevision: 0, reportConsentBusy: false });
 
 // Optimistic Settings switches survive a refresh that started before the PATCH finished.
 const pendingSwitches: Partial<Record<SwitchKey, boolean>> = {};
@@ -34,6 +36,7 @@ export function saveSwitch(key: SwitchKey, on: boolean): Promise<boolean> {
         delete pendingSwitches[key];
         delete savedSwitches[key];
       } else savedSwitches[key] = next.settings[key];
+      if (session.me?.id === next.id) next.reports = session.me.reports; // PATCH omits report consent
       session.me = { ...next, settings: { ...next.settings, ...pendingSwitches } };
       return true;
     } catch (error) {
@@ -58,6 +61,7 @@ function revoke(auth?: number) {
   forgetRecovery(auth);
   cancelAccountRequests(true);
   session.me = null;
+  session.reportLog = null;
   session.revoked = true;
 }
 function banned(d: Record<string, unknown>) {
@@ -65,6 +69,7 @@ function banned(d: Record<string, unknown>) {
   forgetRecovery();
   cancelAccountRequests();
   session.banned = { reason: (d.reason as string | null) ?? null, contact: (d.contact as string | null) ?? null };
+  session.reportLog = null;
 }
 if (typeof window !== 'undefined') {
   addEventListener('kb:banned', (e) => banned((e as CustomEvent).detail ?? {}));
@@ -76,12 +81,14 @@ if (typeof window !== 'undefined') {
 }
 
 /** quiet: a background refresh; a failure leaves the screens as they are (no error page while coming back on a poor network). */
-export async function loadMe(quiet = false): Promise<void> {
+export async function loadMe(quiet = false, withReportLog = false): Promise<void> {
   if (session.revoked) return;
   const request = accountRequest(), previous = recovery.scope();
   const settingsAtStart = session.me?.settings;
+  const reportRevision = session.reportConsentRevision;
   try {
-    const me = await api.me();
+    // The personal log lives in memory only. App saves session.me in its startup cache.
+    const { reportLog, ...me } = await api.me(withReportLog);
     if (request.aborted) return;
     if (session.revoked || recovery.lost()) { revoke(); return; }
     if (tg.user?.id !== undefined && tg.user.id !== me.tg.id) { revoke(); return; }
@@ -94,7 +101,15 @@ export async function loadMe(quiet = false): Promise<void> {
     if (session.me && session.me.id === me.id) {
       me.settings = { ...(session.me.settings === settingsAtStart ? me.settings : session.me.settings), ...pendingSwitches };
     }
+    const sameAccount = session.me?.id === me.id;
+    const staleConsent = sameAccount && (session.reportConsentBusy || reportRevision !== session.reportConsentRevision);
+    const consentGranted = !staleConsent && sameAccount && session.me?.reports?.consent === false && me.reports?.consent;
+    if (staleConsent) me.reports = session.me?.reports;
+    else if (!me.reports?.consent) session.reportLog = null;
+    else if (reportLog) session.reportLog = { owner: me.id, entries: reportLog };
+    else if (session.reportLog?.owner !== me.id) session.reportLog = null;
     session.me = me; session.failed = false; session.banned = null; session.policy = me.consentNow ?? session.policy; session.board = !!me.board; session.channel = !!me.forumChannel; session.boardKnown = true; session.tgComment = !!me.tgComment; session.donate = me.donate ?? ''; session.support = me.support ?? [];
+    if (consentGranted && !withReportLog) void loadMe(true, true);
     if (me.avatar) new Image().src = me.avatar; // the profile tab opens with its photo in place
   } catch (x) {
     if (recovery.lost()) { revoke(); return; }

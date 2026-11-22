@@ -326,7 +326,7 @@ export interface Me {
   subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in
   teams?: { consent: boolean };   // GET /api/me only: my own consent to team events (server evteams.CONSENT)
   kriGoogle?: boolean; // GET /api/me only: Google may answer my assistant first (key, switch, my policy); my own yes to it (server assistant.GOOGLE_YES); absent: never
-  reports?: { consent: boolean }; // GET /api/me only: clubs' event reports are on (REPORTS): Studio's report row; my own consent to them
+  reports?: { consent: boolean; legacy?: boolean }; // GET /api/me only: my report consent, including an older consent I can still withdraw
   support?: (PersonRef & { username: string })[]; // GET /api/me: "Support & ideas": the creator, then the main admin
   donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
   tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
@@ -392,7 +392,9 @@ export interface CrewMember { person: PersonRef; kind: CrewKind | 'qr' /* let in
 
 /** a club's report after its event (server logic/evreports.py, REPORTS=1), for the club's people with the "reports" right */
 export type ReportMark = 'present' | 'late' | 'absent' | 'excused';
-export interface ReportPerson { person: PersonRef; fullName: string; depts: Id[]; team: boolean /* false: left the club since, marked */; status: ReportMark | null; consent: boolean /* agreed to be marked */ }
+export interface ReportLogEntry { event: Id; org: Id; title: string; club: string; date: Ts; status: ReportMark; comment: string }
+export interface ReportPerson { person: PersonRef; fullName: string; depts: Id[]; team: boolean /* false: left the club since, marked */; status: ReportMark | null; comment: string; consent: boolean /* agreed to be marked */ }
+export type ReportMarkPatch = Partial<Pick<ReportPerson, 'status' | 'comment'>>;
 export interface EventReport {
   depts: { id: Id; name: string; color: string }[]; // the club's departments
   dept: Id | null; guests: number | null; note: string;

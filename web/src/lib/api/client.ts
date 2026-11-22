@@ -1,8 +1,9 @@
 import type { ChatFill } from '../eventFill';
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportMark, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
+import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
+import type { ReportLogEntry, ReportMarkPatch } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -138,7 +139,7 @@ async function uploadVideo(file: Blob, progress: (done: number) => void, wide = 
 }
 
 export const server = {
-  me: (): Promise<Me> => call('GET', '/me'),
+  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
@@ -335,9 +336,10 @@ export const server = {
   /** a club's report after its event (server logic/evreports.py): read, its fields, one person's mark (null: off) */
   eventReport: (id: Id, org?: Id): Promise<EventReport> => call('GET', `/events/${id}/report${org ? `?org=${org}` : ''}`), // org: the co-host's own report (the host's without it)
   eventReportSave: (id: Id, patch: ReportPatch, org?: Id): Promise<EventReport> => call('PATCH', `/events/${id}/report${org ? `?org=${org}` : ''}`, patch),
-  eventReportMark: (id: Id, user: Id, status: ReportMark | null, org?: Id): Promise<EventReport> => call('PUT', `/events/${id}/report/marks/${user}${org ? `?org=${org}` : ''}`, { status }),
+  eventReportMark: (id: Id, user: Id, patch: ReportMarkPatch, org?: Id): Promise<EventReport> => call('PUT', `/events/${id}/report/marks/${user}${org ? `?org=${org}` : ''}`, patch),
   /** the feature's own consent, mine: given (the version shown) or withdrawn (my marks and author links go) */
-  reportConsent: (version: string | null): Promise<{ consent: boolean }> => (version ? call('POST', '/reports/consent', { consent: version }) : call('DELETE', '/reports/consent')),
+  reportConsent: (version: string | null): Promise<{ consent: boolean; reportLog?: ReportLogEntry[] }> => (version ? call('POST', '/reports/consent', { consent: version }) : call('DELETE', '/reports/consent')),
+  exportTeamLog: (oid: Id): Promise<void> => call('POST', `/orgs/${oid}/reports/export`),
   cohostInvites: (org: Id): Promise<CohostInvite[]> => call('GET', `/orgs/${org}/cohosts`),
   /** volunteers: I apply (a short "why") or take it back; the organizers list them and say yes or no */
   /** "Create chat": Telegram's add-the-bot-to-a-group link for this event */

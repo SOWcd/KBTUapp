@@ -956,7 +956,7 @@
     }
     const hint = tg.startParam ? null : readNavigation(recovery, recovery.peek(tg.user?.id));
     if (hint) void loadPage(hint.tab).catch(() => {});
-    Promise.all([loadMe(), loadAfisha()]).then(async () => {
+    Promise.all([loadMe(false, true), loadAfisha()]).then(async () => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();

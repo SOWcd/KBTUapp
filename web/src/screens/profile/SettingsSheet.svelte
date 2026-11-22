@@ -291,6 +291,7 @@
         <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
         {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
           onchange={async (on) => { if (!(await setReportConsent(on))) undo++; }} />{/key}{/if}
+        {#if me.reports?.legacy}<Row title={t('evr.withdrawOld')} tone="destructive" onclick={() => setReportConsent(false)} />{/if}
         <!-- Gemini in the assistant, my own yes (lib/kriGoogle.ts): only where Google is open to me; on shows the
              assistant card's words first, off takes it back at once -->
         {#if me.kriGoogle != null}{#key undo}<Row title={t('kri.gRow')} accessory="switch" checked={me.kriGoogle}

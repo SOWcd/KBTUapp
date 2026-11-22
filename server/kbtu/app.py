@@ -528,13 +528,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return bool(cfg.gemini_key) and cfg.assist_lead in ("", "google") and ai_on and bool(v.student) \
             and board_on(app.state.cfg, v) and current_ai_policy(con, app.state.policy, v.id)
 
-    @app.get("/api/me")
-    def get_me(con: Con, v: Me):
+    def me_payload(con: Con, v: Me, *, report_log: bool = False):
         logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
+        reports = {}
+        if cfg.reports:
+            with db.tx(con, write=False):
+                summary = logic.evreports.summary(con, v)
+                reports = {"reports": summary}
+                if report_log:
+                    reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
-                                   **({"reports": logic.evreports.summary(con, v)} if app.state.cfg.reports else {}),  # Studio's event reports (REPORTS): my consent
+                                   **reports,
                                    "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
                                    # Google may answer my assistant first: absent, it can't; else my own yes (assistant.GOOGLE_YES)
                                    **({"kriGoogle": logic.assistant.google_yes(con, v.id)} if kri_google(con, v) else {}),
@@ -544,6 +550,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
+
+    @app.get("/api/me")
+    def get_me(con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
+        if cfg.reports:
+            response.headers["Cache-Control"] = "private, no-store"
+        return me_payload(con, v, report_log=report_log)
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -561,7 +573,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/me/consent")
     def consent(con: Con, v: Me, body: dict = Body(...)):
         logic.consent(con, v, body.get("version"), policy_for(con, v, policy))
-        return get_me(con, v)  # all of /api/me (its vol part too): the app replaces its copy with this
+        return me_payload(con, v)  # the app replaces its Me, while the personal report log lives separately
 
     @app.post("/api/me/dm")
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
@@ -1559,15 +1571,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # a club's report after its event (logic/evreports.py, REPORTS=1): the club's people with the "reports" right
     @app.get("/api/events/{eid}/report")
-    def report_get(eid: int, con: Con, v: Reports, org: int | None = None):  # org: whose report (the co-host's; the host's by default)
+    def report_get(eid: int, con: Con, v: Reports, response: Response, org: int | None = None):  # org: whose report (the co-host's; the host's by default)
+        response.headers["Cache-Control"] = "private, no-store"
         return logic.evreports.get(con, v, eid, org)
 
     @app.patch("/api/events/{eid}/report")
-    def report_save(eid: int, con: Con, v: Reports, body: dict = Body(...), org: int | None = None):
+    def report_save(eid: int, con: Con, v: Reports, response: Response, body: dict = Body(...), org: int | None = None):
+        response.headers["Cache-Control"] = "private, no-store"
         return logic.evreports.save(con, v, eid, body, org)
 
     @app.post("/api/reports/consent")
-    def report_agree(con: Con, v: Reports, body: dict = Body(...)):
+    def report_agree(con: Con, v: Reports, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
         return logic.evreports.agree(con, v, body)
 
     @app.delete("/api/reports/consent")
@@ -1575,8 +1590,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.evreports.withdraw(con, v)
 
     @app.put("/api/events/{eid}/report/marks/{uid}")
-    def report_mark(eid: int, uid: int, con: Con, v: Reports, body: dict = Body(...), org: int | None = None):
-        return logic.evreports.mark(con, v, eid, uid, body.get("status"), org)
+    def report_mark(eid: int, uid: int, con: Con, v: Reports, response: Response, body: dict = Body(...), org: int | None = None):
+        response.headers["Cache-Control"] = "private, no-store"
+        return logic.evreports.mark(con, v, eid, uid, body, org)
+
+    @app.post("/api/orgs/{oid}/reports/export", status_code=204)
+    async def export_team_log(oid: int, con: Con, v: Reports, request: Request):
+        tg_id = request.state.tg["id"]
+        lang, org, people = await run_in_threadpool(logic.evreports.export, con, v, oid, tg_id)
+        await send_file(tg_id, *texts.team_log_csv(lang, org, people))
 
     @app.get("/api/orgs/{oid}/cohosts")
     def cohost_invites(oid: int, con: Con, v: Me):
