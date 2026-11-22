@@ -55,7 +55,7 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   return {};
 };
 
-async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id, ordinary = false): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
   const account = accountRequest();
   let r: Response, data: unknown;
@@ -71,7 +71,7 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { ...authHeaders(path.startsWith('/web/')), ...(!ordinary && staffOf(method, path, staffEvent)), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
       // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
@@ -178,7 +178,7 @@ export const server = {
   deleteGalleryPhoto: (id: Id): Promise<void> => call('DELETE', `/gallery/${id}`), // mine: from the Gallery and the albums I put it in
   pastEvents: (org?: Id, mine?: boolean): Promise<EventCard[]> => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })), // org: a club's latest few; mine: the ones I was signed up for or came to
   attendedEvents: (): Promise<EventCard[]> => call('GET', '/events/past?attended=1'), // my check-ins in the last month
-  event: (id: Id, view?: 'ordinary'): Promise<EventFull> => call('GET', `/events/${id}`, undefined, undefined, view === 'ordinary'),
+  event: (id: Id): Promise<EventFull> => call('GET', `/events/${id}`),
   addSeats: (id: Id, add: number): Promise<EventFull> => call('POST', `/events/${id}/seats`, { add }),
   changePlace: (id: Id, place: string): Promise<EventFull> => call('POST', `/events/${id}/place`, { place }), // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
@@ -227,7 +227,7 @@ export const server = {
   adminSetAward: (org: Id, year: number, title: string, on: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/award`, { year, title, on }),
   adminHideOrg: (org: Id, hidden: boolean): Promise<AdminOrg> => call('PUT', `/admin/orgs/${org}/hidden`, { hidden }), // hide, never delete
   adminPresLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/admin/orgs/${org}/president-link`), // the President's one-time link, shown as a QR
-  org: (id: Id, view?: 'ordinary'): Promise<Org> => call('GET', `/orgs/${id}`, undefined, undefined, view === 'ordinary'),
+  org: (id: Id): Promise<Org> => call('GET', `/orgs/${id}`),
   subscribe: (id: Id, on: boolean): Promise<Org> => call(on ? 'PUT' : 'DELETE', `/orgs/${id}/subscription`),
   apply: (org: Id, answers?: Record<string, string | string[]>): Promise<Org> => call('POST', `/orgs/${org}/join-requests`, answers ? { answers } : undefined), // join application (§4.5)
   withdraw: (org: Id): Promise<Org> => call('DELETE', `/orgs/${org}/join-requests/mine`),

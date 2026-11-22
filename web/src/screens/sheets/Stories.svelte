@@ -31,7 +31,7 @@
   import { menu } from '../../ui/menu';
 
   // at: open on that post of the first club (a club page's news list), else its first unread
-  let { overlay, groups, start = 0, at, restored = false }: { overlay: Overlay; groups: StoryGroup[]; start?: number; at?: number; restored?: boolean } = $props();
+  let { overlay, groups, start = 0, at }: { overlay: Overlay; groups: StoryGroup[]; start?: number; at?: number } = $props();
 
   let gi = $state(0);
   let pi = $state(0);
@@ -56,7 +56,6 @@
     if (read.size) void api.readPosts([...read]).catch(() => {}).then(() => loadMe());
   }
   $effect(() => { if (overlay.closing) leave(); });
-  $effect(() => { overlay.place = p ? { kind: 'post', id: p.id, org: p.org.id } : undefined; });
   $effect(() => { overlay.title = g ? nameOf(g.org) : ''; overlay.icon = Newspaper; overlay.theme = 'dark'; }); // the capsule names the club
 
   // read once on screen; sent in one go a moment later
@@ -64,7 +63,7 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => { if (ev) { markSeen(ev.id); if (g) g.unread = g.items.some((s) => (s.post ? !s.post.read : !seenEv.has(s.ev!.id))); } });
   $effect(() => {
-    if (restored || !p || p.read || !session.me?.student) return;
+    if (!p || p.read || !session.me?.student) return;
     p.read = true; read.add(p.id);
     if (g) g.unread = g.items.some((s) => (s.post ? !s.post.read : !seenEv.has(s.ev!.id)));
     clearTimeout(timer);
