@@ -9,6 +9,7 @@ No KBTU session outlives a request (SPEC §4.1), so the bot keeps none to refres
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import html
@@ -63,6 +64,15 @@ EMPTY_WAIT = 60             # after an /all that called nobody: no rescan of the
 _moved: dict[int, int] = {}  # a group turned supergroup: old id -> new (a run that spans it records its wait under the new)
 TAG_MAX = 300               # people one /all calls at most: 60 messages, about 3 minutes at TAG_GAP
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
+# A deploy stops the container (SIGTERM; Docker's grace is 10 s, then SIGKILL): stop() ends the long poll at once, a batch
+# at its next update, the postman at its next message; jobs spawned beside the ears get the rest of DRAIN, then go.
+# It starts only after uvicorn has closed its connections, and the lifespan waits DRAIN + 2 s before it cancels.
+# ponytail: 6 s fits Docker's default grace; a longer stop_grace_period on the host can buy a longer DRAIN
+DRAIN = 6
+OFFSET_KEEP = 86400         # a stored offset older than this isn't trusted: Telegram keeps updates a day (and picks random ids after a week of silence)
+_stop: asyncio.Event | None = None  # run()'s, while it runs; set by stop()
+_stop_by = float("inf")     # time.monotonic() when the drain ends
+_replay: int | None = None  # the update the last process died in the middle of (stored busy): handled again only where that is safe
 
 
 # A bot whose owner has Telegram Premium can use custom emoji. If Telegram rejects them but accepts
@@ -1007,6 +1017,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
+            if _stopping():  # between messages: one taken and cut mid-send would go again after its LEASE, maybe twice
+                return
             msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
             if msg is None:
                 continue
@@ -1282,7 +1294,7 @@ def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg
     return body
 
 
-async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: int | None = None) -> dict | None:
+async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: int | None = None, again: bool = False) -> dict | None:
     """A receipt sent to the bot (§4.3; Kaspi → Share → Telegram → the bot): it goes to the sender's seat on hold, the
     only one, or the one they pick (the buttons answer the receipt's own message, so the pick finds the file in
     reply_to_message: nothing to keep in between). The answer to send, or None for a group chat."""
@@ -1294,6 +1306,20 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
     if not u:
         return say("receipt_signin")
+
+    def taken(eid: int, title: str, c: dict) -> dict:
+        if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
+            return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
+        if one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):  # a team event: the team is the next step, on the event's page
+            return say("receipt_ok_team", f"ev_{eid}", title=title)
+        return say("receipt_ok", f"tk_{eid}", title=title)
+    viewer = logic.Viewer(u["id"], u["role"], True)
+    # again: the last process died in the middle of this very receipt (bot.hear). Taken already: the same answer, never
+    # "no seat on hold" (its seat isn't on hold any more), and never a second seat that went on hold meanwhile
+    if again and (e := one(con, """SELECT e.* FROM receipts c JOIN registrations r ON r.id = c.registration_id
+            JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.status = 'going' AND c.via = 'bot'
+            AND c.created_at >= ? AND (? IS NULL OR e.id = ?) ORDER BY c.id DESC""", u["id"], int(msg.get("date") or 0) - 60, eid, eid)):
+        return taken(e["id"], e["title"], logic.card(con, viewer, e))
     logic.sweep_holds(con)
     holds = rows(con, """SELECT e.id, e.title FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'hold' ORDER BY r.hold_until""", u["id"])
@@ -1309,7 +1335,6 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     f = _file(msg) or {}
     if int(f.get("file_size") or 0) > media.MAX_BYTES:
         return say("receipt_bad")
-    viewer = logic.Viewer(u["id"], u["role"], True)
     try:
         logic.receipt_open(con, viewer, eid)
     except logic.ApiError as exc:
@@ -1331,12 +1356,7 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
         media.drop(root, [] if one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
         return say("receipt_none")
     media.drop(root, gone)  # the one it replaced
-    title = next(h["title"] for h in holds if h["id"] == eid)
-    if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
-        return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
-    if one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):  # a team event: the team is the next step, on the event's page
-        return say("receipt_ok_team", f"ev_{eid}", title=title)
-    return say("receipt_ok", f"tk_{eid}", title=title)
+    return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
 
 
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
@@ -1408,7 +1428,7 @@ async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg
             await anyio.to_thread.run_sync(notifications.feedback, con, category, sent_at, "useful")
 
 
-async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
+async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bool = False) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:); and on the forum's
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
@@ -1444,7 +1464,7 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     m = re.fullmatch(r"rc:(\d+)", data)
     if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
         return
-    body = await _receipt(cfg, http, con, orig, int(m[1])) if _file(orig) else None
+    body = await _receipt(cfg, http, con, orig, int(m[1]), again) if _file(orig) else None
     if body:
         await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
@@ -1563,7 +1583,7 @@ async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lan
     """/all not run: a template under the command, then both are deleted (theirs: if the bot may)."""
     text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", key)
     sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
-    await asyncio.sleep(ALL_NO_TTL)
+    await _nap(ALL_NO_TTL)  # a stop deletes them early: no process would be left to do it later
     for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
         if m:
             await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": m}, 0)
@@ -1664,7 +1684,7 @@ async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, 
 
 
 async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> None:
-    await asyncio.sleep(WARN_FOR)
+    await _nap(WARN_FOR)  # a stop deletes it early: no process would be left to do it later
     await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
 
 
@@ -2124,6 +2144,134 @@ async def _checkouts(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) 
         await asyncio.sleep(CHECKOUT_RETRY)
 
 
+def stop() -> None:
+    """The lifespan's shutdown (SIGTERM, a deploy): what is under way finishes, within DRAIN; nothing new starts."""
+    global _stop, _stop_by
+    if _stop is None:  # before run() got going: it sees this and doesn't start
+        _stop = asyncio.Event()
+    if not _stop.is_set():
+        _stop_by = time.monotonic() + DRAIN
+        _stop.set()
+
+
+def _stopping() -> bool:
+    return _stop is not None and _stop.is_set()
+
+
+async def _nap(seconds: float) -> None:
+    """asyncio.sleep, cut short by stop()."""
+    if _stop is None:
+        await asyncio.sleep(seconds)
+        return
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(_stop.wait(), seconds)
+
+
+async def _or_stop(aw):
+    """aw's result, or None when stop() comes first (aw is cancelled)."""
+    task = asyncio.ensure_future(aw)
+    if _stop is None:
+        return await task
+    waiter = asyncio.ensure_future(_stop.wait())
+    try:
+        await asyncio.wait({task, waiter}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        waiter.cancel()
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    return None if task.cancelled() else task.result()
+
+
+def _save(cfg: Config, con, offset: int, busy: bool, reply: dict | None = None, ms: int = 1000) -> None:
+    """Where the ears are (meta bot_offset), after each update: the next process resumes there (_resume), so nothing
+    handled before a stop or a crash is handled again. busy: the update at `offset` has started (a crash may leave it
+    half done); reply: its answer, the work behind it done, which the next process sends if this one dies sending it.
+    Best effort, a second at most: a skipped write costs only this (Telegram's own confirmation at the next poll holds)."""
+    state = {"bot": cfg.bot_token.split(":")[0], "next": offset, "at": int(time.time()),
+             **({"busy": 1} if busy else {}), **({"reply": reply} if reply else {})}
+    try:
+        db.maybe(con, con.execute, "INSERT INTO meta (key, value) VALUES ('bot_offset', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                 (json.dumps(state),), ms=ms)
+    except sqlite3.Error as exc:
+        log.warning("offset: %s", type(exc).__name__)
+
+
+def _keep_videos(cfg: Config, before: set[int]) -> None:
+    """The group videos started (_video_seen), kept beside the offset: a batch the next process gets again doesn't send
+    them twice."""
+    if _video_seen <= before:
+        return
+    try:
+        con = db.connect(cfg.db_path)  # its own: the batch's may be inside a thread's transaction right now
+        try:
+            db.maybe(con, con.execute, "INSERT INTO meta (key, value) VALUES ('bot_videos', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                     (json.dumps(sorted(_video_seen)),), ms=1000)
+        finally:
+            con.close()
+    except sqlite3.Error as exc:
+        log.warning("offset: %s", type(exc).__name__)
+
+
+def _resume(cfg: Config, con) -> tuple[int, dict | None]:
+    """At start: the stored offset, and the answer the last process died sending (handed out once, and only while
+    FRESH). 0 when none is stored, or it is another bot's, or too old (or from the future: the clock jumped) to trust;
+    Telegram's own confirmation then decides, which lags by at most a batch. Also what the last process had started:
+    its group videos, and the update it died in the middle of (_replay)."""
+    global _replay
+    _replay = None
+    try:
+        got = one(con, "SELECT value FROM meta WHERE key = 'bot_offset'")
+        s = json.loads(got[0]) if got else {}
+        vids = one(con, "SELECT value FROM meta WHERE key = 'bot_videos'")
+        vids = json.loads(vids[0]) if vids else []
+    except (sqlite3.Error, ValueError) as exc:
+        log.warning("offset: %s", type(exc).__name__)
+        return 0, None
+    if isinstance(s, dict) and s.get("reply"):  # once: dying while sending it again doesn't send it a third time
+        try:
+            con.execute("UPDATE meta SET value = ? WHERE key = 'bot_offset'", (json.dumps({k: v for k, v in s.items() if k != "reply"}),))
+        except sqlite3.Error as exc:  # not forgotten: then not sent either
+            log.warning("offset: %s", type(exc).__name__)
+            s.pop("reply")
+    if not isinstance(s, dict) or type(s.get("next")) is not int or type(s.get("at")) is not int:
+        return 0, None
+    age = time.time() - s["at"]
+    if s.get("bot") != cfg.bot_token.split(":")[0] or not -300 <= age <= OFFSET_KEEP:
+        return 0, None
+    if isinstance(vids, list):
+        _video_seen.update(i for i in vids if type(i) is int)
+    _replay = s["next"] if s.get("busy") else None
+    return s["next"], s["reply"] if age <= FRESH and isinstance(s.get("reply"), dict) else None
+
+
+async def _drain() -> None:
+    """After stop(): jobs spawned beside the ears (tgc.spawn: /all, swear warnings, group videos, the AI's looks) finish
+    until the deadline; the rest are cancelled. None runs again: their updates are done (an /all cut short calls nobody
+    twice, a group video isn't sent twice)."""
+    while pending := [t for t in tgc._tasks if not t.done()]:
+        if (left := _stop_by - time.monotonic()) <= 0:
+            break
+        await asyncio.wait(pending, timeout=left)
+    if pending := [t for t in tgc._tasks if not t.done()]:
+        log.warning("stop: %d jobs cut", len(pending))
+        for t in pending:
+            t.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def _wind_down(calm: list[asyncio.Task], rest: list[asyncio.Task]) -> None:
+    """A child of run()'s group: at stop(), the ears and the postman end their update or message by themselves (until the
+    deadline); the loops that start over anyway (videos, translations, the mirror, the chat sync) are cancelled."""
+    await _stop.wait()
+    for t in rest:
+        t.cancel()
+    _, late = await asyncio.wait(calm, timeout=max(0.0, _stop_by - time.monotonic()))
+    for t in late:
+        log.warning("stop: cut %s", t.get_coro().__name__)
+        t.cancel()
+
+
 async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, done: asyncio.Event) -> None:
     """Telegram allows 10 s for a pre-checkout and a batch can spend longer on one receipt's OCR, so while a batch runs
     this looks for new ones. getUpdates at the batch's own offset confirms nothing (they all come again to the next
@@ -2139,30 +2287,42 @@ async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, don
             # miss its 10 s and the donor taps again; upgrade: a webhook (a look past the batch would confirm what it hasn't run)
             r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates", params={"offset": offset, "timeout": 0, "allowed_updates": _wanted(cfg)})
             updates = r.json().get("result") or []
-            _video_updates(cfg, http, updates)
+            if not _stopping():  # a video started now would be cut by the drain and then skipped as seen; the next process starts it
+                before = set(_video_seen)
+                _video_updates(cfg, http, updates)
+                _keep_videos(cfg, before)
             await _checkouts(cfg, http, updates)
         except Exception as exc:  # noqa: BLE001 - hear awaits this: nothing here may cost the batch its offset
             log.warning("checkouts: %s", type(exc).__name__)
 
 
 async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
-    """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
+    """One long poll: answers what came and returns the next offset (the same one when the round failed). Each update
+    handled is stored (_save) before the next starts; after stop() the poll ends at once and a batch at its next update."""
+    global _replay
     try:
-        r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": _wanted(cfg)}, timeout=WAIT + 10)
+        r = await _or_stop(http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
+                                    params={"offset": offset, "timeout": WAIT, "allowed_updates": _wanted(cfg)}, timeout=WAIT + 10))
+        if r is None:  # stopped while waiting: nothing of this poll is confirmed, the next process gets it all
+            return offset
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
-        await asyncio.sleep(5)
+        await _nap(5)
         return offset
     if not answer.get("ok"):  # 409: a webhook is set elsewhere, so this bot's messages go there; say so, now and then
         log.warning("ears: %s", str(answer.get("description", r.status_code))[:200])
-        await asyncio.sleep(60)
+        await _nap(60)
         return offset
     batch = answer["result"]
+    if _stopping():  # it came as the stop did: left for the next process, unconfirmed (pre-checkouts can't wait for it)
+        await _checkouts(cfg, http, batch)
+        return offset
     if cfg.tiktok:
         _video_seen.intersection_update(u["update_id"] for u in batch)
+        before = set(_video_seen)
         _video_updates(cfg, http, batch)
+        _keep_videos(cfg, before)
     await _checkouts(cfg, http, batch)  # Stars' pre-checkouts need no database and have 10 s to answer
     con = db.connect(cfg.db_path)
     done = asyncio.Event()
@@ -2183,6 +2343,11 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 except Exception as exc:  # noqa: BLE001 - the rest of the batch still goes
                     log.warning("guard: %s", type(exc).__name__)
         for upd in answer["result"]:
+            if _stopping():  # the rest of the batch goes to the next process, from here
+                offset = upd["update_id"]
+                break
+            _save(cfg, con, upd["update_id"], True)  # the ones before it done, this one started
+            cut = upd["update_id"] == _replay  # the last process died in the middle of this one
             msg = {}
             try:  # all of it: a locked database even in the ban check would replay the whole batch
                 offset = upd["update_id"] + 1
@@ -2226,7 +2391,12 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
                     continue  # banned: the bot neither answers nor acts for him
                 if "callback_query" in upd:
-                    await _tapped(cfg, http, con, upd["callback_query"])
+                    # cut in the middle: an offer decided, a mute's "useful" counted may have run (once is safer: a
+                    # button left untouched is tapped again); a receipt's pick runs again (losing it costs a seat)
+                    if cut and not str(upd["callback_query"].get("data") or "").startswith("rc:"):
+                        log.warning("ears: a tap cut by the last stop, skipped")
+                        continue
+                    await _tapped(cfg, http, con, upd["callback_query"], cut)
                     continue
                 if "inline_query" in upd:  # "@KBTUappBot ..." typed in any chat (inline mode, BotFather /setinline)
                     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerInlineQuery", json=inline_answer(cfg, con, upd["inline_query"]))
@@ -2239,6 +2409,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _member(cfg, http, con, upd["my_chat_member"])
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
+                    if cut and not msg.get("migrate_to_chat_id"):  # /all or a chat's linking may have run: never twice
+                        log.warning("ears: a group command cut by the last stop, skipped")
+                        continue
                     if _event_copy(cfg, msg):
                         tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
@@ -2257,7 +2430,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     # with no answer and the hold would run out (paid, no seat); so this update again next round, as a
                     # Stars payment does (the same picture is the same file, add_receipt one transaction)
                     try:
-                        body = await _receipt(cfg, http, con, msg)
+                        body = await _receipt(cfg, http, con, msg, again=cut)
                     except sqlite3.OperationalError as exc:
                         if "locked" not in str(exc) and "busy" not in str(exc):
                             raise
@@ -2268,6 +2441,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     body = await _schedule(cfg, http, con, msg) if _sched_file(msg) else _welcome(con, cfg, msg)
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
+                    _save(cfg, con, offset, False, body)  # the work is done: a stop now costs at most the answer, which the next process sends
                     await _send(cfg, http, body)
             except Exception as exc:  # one update that breaks (a page the parser chokes on) never stops the bot for everyone
                 log.warning("ears: %s", type(exc).__name__)  # the type only: never a page's words
@@ -2276,6 +2450,10 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "sched_bad")))
                     except Exception as again:
                         log.warning("ears: %s", type(again).__name__)
+        if batch:
+            _save(cfg, con, offset, False)
+        if _replay is not None and _replay < offset:
+            _replay = None
     finally:
         done.set()
         if watch:
@@ -2285,22 +2463,40 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
 
 
 async def _ears(cfg: Config, http: httpx.AsyncClient) -> None:
-    offset = 0
-    while True:
+    """Until stop(): from where the last process stopped (_resume), the answer it died sending first."""
+    con = db.connect(cfg.db_path)
+    try:
+        offset, reply = _resume(cfg, con)
+    finally:
+        con.close()
+    if reply:
+        try:
+            await _send(cfg, http, reply)
+        except httpx.HTTPError as exc:
+            log.warning("ears: %s", type(exc).__name__)
+    while not _stopping():
         try:
             offset = await hear(cfg, http, offset)
         except Exception:  # a bug in one round must not stop the ears
             log.exception("ears round")
-            await asyncio.sleep(5)
+            await _nap(5)
+    # stopped between updates: once more, waiting longer (the drain has time), so a write the batch skipped on a busy
+    # database doesn't leave an answer to send again or a finished update marked started (an update a retry path left
+    # unfinished runs again either way)
+    con = db.connect(cfg.db_path)
+    try:
+        _save(cfg, con, offset, False, ms=3000)
+    finally:
+        con.close()
 
 
 async def _postman(cfg: Config, http: httpx.AsyncClient) -> None:
-    while True:
+    while not _stopping():
         try:
             await send_due(cfg, http)
         except Exception:  # a bug in one round must not stop the postman
             log.exception("bot round")
-        await asyncio.sleep(POLL)
+        await _nap(POLL)
 
 
 async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict, gap: float = SYNC_GAP) -> dict | None:
@@ -2461,7 +2657,18 @@ async def run(cfg: Config) -> None:
     """Forever, in one process: every worker (and, during a deploy, the other container) waits on a lock file next to
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
     that process dies, the lock goes with it and another takes over within seconds. Then the outbox, every few
-    seconds, and the ears (one poller at a time: Telegram refuses a second)."""
+    seconds, and the ears (one poller at a time: Telegram refuses a second). Until stop(): what is under way finishes
+    (DRAIN), and only then is the lock let go, so the next leader starts where this one stopped (_resume)."""
+    global _stop, _stop_by
+    if not _stopping():
+        _stop, _stop_by = asyncio.Event(), float("inf")
+    try:
+        await _lead(cfg)
+    finally:
+        _stop = None
+
+
+async def _lead(cfg: Config) -> None:
     global _sync_live
     with open(f"{cfg.db_path}.bot.lock", "w") as lock:
         while True:
@@ -2469,7 +2676,9 @@ async def run(cfg: Config) -> None:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except BlockingIOError:
-                await asyncio.sleep(5)
+                if _stopping():
+                    return
+                await _nap(5)
         log.warning("postman in process %d", os.getpid())  # one line per start (warning: the level the container's log keeps)
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         if cfg.chat_sync:  # before the first poll: a join in that window would never come again
@@ -2480,14 +2689,16 @@ async def run(cfg: Config) -> None:
                 await _commands(cfg, http)
                 # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
                 # poller outlives leadership (a plain gather leaves them running after the lock is let go)
-                while True:
+                while not _stopping():
                     try:
                         async with asyncio.TaskGroup() as tg:
-                            for job in (_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
-                                        *([_chat_sync(cfg, http)] if cfg.chat_sync else [])):
-                                tg.create_task(job)
+                            calm = [tg.create_task(_postman(cfg, http)), tg.create_task(_ears(cfg, http))]
+                            rest = [tg.create_task(job) for job in (_videos(cfg), _translator(cfg), _userbot(cfg),
+                                                                    *([_chat_sync(cfg, http)] if cfg.chat_sync else []))]
+                            tg.create_task(_wind_down(calm, rest))
                     except Exception:  # noqa: BLE001 - restarted under the same lock; a cancel (shutdown) goes through
                         log.exception("bot children")
-                        await asyncio.sleep(5)
+                        await _nap(5)
+                await _drain()  # inside: the jobs still use this client
         finally:
             await mtbot.close()  # the bot's MTProto session goes before the lock does

@@ -177,7 +177,7 @@ def test_a_locked_database_keeps_the_payment_for_the_next_round(env, monkeypatch
     con = db.connect(cfg.db_path)
     tapped, real = [], logic.stars.paid
 
-    async def on_tap(_cfg, _http, _con, q):
+    async def on_tap(_cfg, _http, _con, q, *_):
         tapped.append(q["id"])
 
     def locked(*_):

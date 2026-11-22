@@ -19,14 +19,14 @@
 :root {
   --bg: #07080F; --surface: rgba(255,255,255,.055); --ui: #1C1F2E; --ui-2: #262A3D; --line: rgba(255,255,255,.13);
   --fill: rgba(235,238,255,.12); --text: #F4F6FF; --text-2: rgba(240,243,255,.68); --text-3: rgba(232,236,255,.52);
-  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --o1: .5; --o2: .42; --o3: .16;
+  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(34,38,56,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
   --ease: cubic-bezier(.32,.72,0,1);
 }
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #F3F5FB; --surface: #FFFFFF; --ui: #FFFFFF; --ui-2: #ECEFF6; --line: rgba(11,20,51,.13);
     --fill: rgba(11,20,51,.075); --text: #0B1433; --text-2: rgba(11,20,51,.66); --text-3: rgba(11,20,51,.5);
-    --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --o1: .3; --o2: .26; --o3: .14;
+    --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --glass: rgba(255,255,255,.78); --hi: #fff; --o1: .3; --o2: .26; --o3: .14;
   }
 }
 * { box-sizing: border-box; margin: 0; }
@@ -47,30 +47,64 @@ main { position: relative; display: flex; flex-direction: column; align-items: c
 h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025em; text-wrap: balance; }
 .sub { margin-top: 8px; color: var(--text-2); text-wrap: pretty; }
 
-/* the steps, played: three drawn scenes in one frame, one at a time */
+/* the steps, played: drawn scenes in one frame, one at a time (iOS four, Android three) */
 .demo { position: relative; width: 100%; height: 196px; border-radius: 28px; background: var(--surface); box-shadow: inset 0 0 0 .5px var(--line); overflow: hidden; }
 .scene { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 16px; opacity: 0; transform: translate3d(0, 10px, 0) scale(.98); transition: opacity .4s ease, transform .6s var(--ease); }
-.demo[data-s="1"] .s1, .demo[data-s="2"] .s2, .demo[data-s="3"] .s3 { opacity: 1; transform: none; }
+.scene.on { opacity: 1; transform: none; }
+/* iOS shows more of each sheet: a taller frame */
+:root:not(.droid) .demo { height: 252px; }
+:root:not(.droid) .list { height: 214px; border-radius: 26px 26px 0 0; padding-top: 6px; }
+/* Safari 26 is glass: its bars are floating islands, its sheets are panes */
+:root:not(.droid) .url, .tools, .sheet, :root:not(.droid) .list, :root:not(.droid) .dlg { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); }
 .bar { display: flex; align-items: center; gap: 8px; }
 .top .scene.s1 { justify-content: flex-start; }
+.page { display: flex; flex-direction: column; align-items: center; gap: 9px; margin: auto 0; }
+.page i { height: 8px; border-radius: 4px; background: var(--fill); opacity: .7; }
 .url { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 6px 16px -8px rgba(0,0,0,.3); color: var(--text-2); font-size: 15px; font-weight: 500; }
 .rb { position: relative; flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 6px 16px -8px rgba(0,0,0,.3); color: var(--text-3); }
 .rb.hit, .tools .hit { color: var(--accent-text); }
-.tools { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 14px; color: var(--text-3); }
+.tools { display: flex; justify-content: space-between; align-items: center; height: 52px; padding: 0 20px; border-radius: 26px; color: var(--text-2); }
 .tools span { position: relative; display: flex; }
+.tools svg { position: relative; }
+.tools .hit::before { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--accent-soft); }
 svg.g { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* the finger: a ring that opens out of what is tapped */
 .hit::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; }
-.demo[data-s="1"] .s1 .hit::after, .demo[data-s="2"] .s2 .hit::after, .demo[data-s="3"] .s3 .hit::after { animation: tap 1.5s ease-out .5s infinite; }
+.scene.on .hit::after { animation: tap 1.5s ease-out .5s infinite; }
 @keyframes tap { 0% { opacity: .42; transform: scale(.5); } 70%, 100% { opacity: 0; transform: scale(1.5); } }
-/* iOS 26: Share sits behind the ··· */
-.pop { align-self: flex-end; display: flex; align-items: center; gap: 10px; height: 44px; margin-bottom: 8px; padding: 0 16px; border-radius: 22px; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 10px 24px -10px rgba(0,0,0,.4); font-size: 15px; font-weight: 500; opacity: 0; transform-origin: 100% 100%; }
-.demo[data-s="1"] .pop { animation: pop 3.4s var(--ease) both; }
-@keyframes pop { 0%, 36% { opacity: 0; transform: scale(.7); } 50%, 100% { opacity: 1; transform: none; } }
+/* iOS: the share sheet. The page and Options on top, people, apps, then the round actions: View More is the last one */
+.sheet { display: flex; flex-direction: column; gap: 10px; margin: 0 0 -16px; padding: 12px 16px 6px; border-radius: 26px 26px 0 0; overflow: hidden; }
+.sheet .pg { display: flex; align-items: center; gap: 10px; text-align: left; }
+.sheet .pg img { flex: none; width: 36px; height: 36px; border-radius: 26%; }
+.sheet .pg > span { flex: 1; min-width: 0; white-space: nowrap; }
+.sheet .pg b { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; }
+.sheet .pg small { display: block; color: var(--text-3); font-size: 12px; line-height: 1.25; }
+.sheet .pg em { flex: none; display: flex; align-items: center; height: 28px; padding: 0 6px 0 11px; border-radius: 14px; background: var(--fill); color: var(--text-2); font-size: 12px; font-style: normal; font-weight: 500; }
+.sheet .pg em svg.g { width: 14px; height: 14px; }
+/* people and apps run off the sheet's edge, as the real rows scroll; a name under each */
+.sheet .ppl { display: flex; gap: 18px; margin-right: -16px; padding-bottom: 9px; overflow: hidden; }
+.sheet .ppl i { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(160deg, var(--a), var(--b)); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 0 0 .5px var(--line); }
+.sheet .ppl i::before { content: ''; position: absolute; left: 4px; right: 4px; bottom: -9px; height: 4px; border-radius: 2px; background: var(--fill); }
+.sheet .ppl:not(.apps) i::after { content: ''; position: absolute; right: -2px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #34C759; box-shadow: 0 0 0 2px var(--ui); }
+.sheet .apps i { border-radius: 26%; }
+.sheet .ppl i:nth-child(1) { --a: #9AA7FF; --b: #5F6FE3; } .sheet .ppl i:nth-child(2) { --a: #FFC08F; --b: #EE8A5E; } .sheet .ppl i:nth-child(3) { --a: #8ADBBE; --b: #45B091; }
+.sheet .ppl i:nth-child(4) { --a: #F4A6C6; --b: #D76C9D; } .sheet .ppl i:nth-child(5) { --a: #B4BAC6; --b: #8A90A0; } .sheet .ppl i:nth-child(6) { --a: #C3A6F4; --b: #8E6CD7; }
+.sheet .apps i:nth-child(1) { --a: #FFFFFF; --b: #D5DAE5; } .sheet .apps i:nth-child(2) { --a: #6BE585; --b: #2DBE4E; } .sheet .apps i:nth-child(3) { --a: #5CBCFF; --b: #1C7BF2; }
+.sheet .apps i:nth-child(4) { --a: #49C6F2; --b: #229ED9; } .sheet .apps i:nth-child(5) { --a: #FFD86B; --b: #F5A623; } .sheet .apps i:nth-child(6) { --a: #FF8A80; --b: #E5484D; }
+.sheet .acts4 { display: flex; justify-content: space-between; }
+.sheet .acts4 span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 44px; color: var(--text-2); font-size: 11px; font-weight: 500; line-height: 14px; white-space: nowrap; }
+.sheet .acts4 em { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: var(--fill); box-shadow: inset 0 .5px 0 var(--hi); }
+.sheet .acts4 svg.g { width: 21px; height: 21px; }
+.sheet .acts4 b { font-weight: 600; }
+.sheet .acts4 u { width: 30px; height: 5px; margin-top: 4px; border-radius: 3px; background: var(--fill); }
+.sheet .acts4 .hit { color: var(--accent-text); }
+.sheet .acts4 .hit em { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-text); }
+.sheet .acts4 .hit::after { top: 22px; }
 /* the share sheet / the browser's menu: quiet rows, ours lit */
 .list { border-radius: 22px 22px 0 0; margin: 0 0 -16px; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 -10px 30px -12px rgba(0,0,0,.35); overflow: hidden; height: 158px; }
 .rows { transform: translate3d(0, 0, 0); }
-.demo[data-s="2"] .rows { animation: scroll 3.4s var(--ease) both; }
+.scene.on .rows { animation: scroll 3.4s var(--ease) both; }
 @keyframes scroll { 0%, 14% { transform: translate3d(0, 0, 0); } 46%, 100% { transform: translate3d(0, -62px, 0); } }
 .row { position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px; margin: 0 16px; border-bottom: .5px solid var(--line); color: var(--text-3); }
 .row i { height: 8px; border-radius: 4px; background: var(--fill); }
@@ -88,6 +122,19 @@ svg.g { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-widt
 .dlg small { color: var(--text-3); font-size: 12px; }
 .droid .dlg { display: flex; flex-direction: column-reverse; padding: 14px 16px 4px; }
 .droid .dlg .hd i { visibility: hidden; }
+/* iOS: the dialog is Safari's: x, the title, a blue Add; the icon and the name; "Open as Web App", on */
+.dlg .hd { gap: 8px; }
+.dlg .x { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); color: var(--text-2); }
+.dlg .x svg.g { width: 16px; height: 16px; }
+.dlg .tt { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.15; text-align: center; text-wrap: balance; }
+:root:not(.droid) .s3 { padding: 10px; }
+:root:not(.droid) .dlg { padding: 6px 12px 12px; border-radius: 26px; }
+:root:not(.droid) .dlg .it, .dlg .sw { background: var(--fill); }
+:root:not(.droid) .dlg .ok { flex: none; height: 32px; display: flex; align-items: center; padding: 0 13px; border-radius: 16px; background: var(--accent); color: #fff; font-size: 13px; box-shadow: inset 0 1px 1px rgba(255,255,255,.22), 0 6px 14px -8px rgba(59,107,255,.8); }
+.dlg .sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; margin-top: 6px; padding: 8px 10px 8px 12px; border-radius: 14px; }
+.dlg .sw span { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.2; text-align: left; }
+.dlg .sw em { position: relative; flex: none; width: 42px; height: 26px; border-radius: 13px; background: #34C759; }
+.dlg .sw em::after { content: ''; position: absolute; right: 2px; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 
 ol { width: 100%; padding: 0; list-style: none; text-align: left; }
 li { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 10px 4px; color: var(--text-3); font-size: 17px; line-height: 1.25; transition: color .4s ease; cursor: pointer; }
@@ -104,12 +151,11 @@ li.on::before { background: var(--accent); color: #fff; }
 .link { display: block; width: 100%; padding: 14px 16px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 .5px var(--line); color: var(--text-2); font-size: 15px; font-weight: 500; -webkit-user-select: all; user-select: all; }
 .qr { width: 196px; padding: 14px; border-radius: 22px; background: #fff; }
 .qr svg { display: block; width: 100%; height: auto; }
-.done { margin-top: auto; padding: 12px; color: var(--accent-text); font-size: 15px; font-weight: 500; text-decoration: none; }
-@media (max-width: 340px) { h1 { font-size: 24px; } li { font-size: 16px; } main { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 340px) { h1 { font-size: 24px; } li { font-size: 16px; } main { padding-left: 16px; padding-right: 16px; } .sheet .pg { gap: 8px; } .sheet .pg em { padding: 0 4px 0 9px; font-size: 11px; } }
 @media (prefers-reduced-motion: reduce) {
-  main, .hit::after, .pop, .rows { animation: none !important; }
+  main, .hit::after, .rows { animation: none !important; }
   .scene { transition: opacity .2s ease; transform: none; }
-  .pop { opacity: 1; } .rows { transform: translate3d(0, -62px, 0); }
+  .rows { transform: translate3d(0, -62px, 0); }
 }
 </style>
 </head>
@@ -119,18 +165,12 @@ li.on::before { background: var(--accent); color: #fff; }
   <span class="mark"><svg viewBox="0 0 28 24" width="40" height="34" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/><rect x="2" y="7" width="3" height="11" rx="1.5"/><rect x="7.25" y="7" width="3" height="11" rx="1.5"/><rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/><rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></svg></span>
   <div><h1 data-t="h"></h1><p class="sub" data-t="sub"></p></div>
 
-  <div class="demo" data-s="1" data-for="ios android" aria-hidden="true">
+  <div class="demo" data-for="ios android" aria-hidden="true">
     <div class="scene s1">
-      <!-- iOS 26: back, the address, the ··· with Share behind it -->
-      <div class="pop" data-for="ios26"><svg class="g" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7l4-4 4 4M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg><span data-t="share"></span></div>
-      <div class="bar" data-for="ios26">
-        <span class="rb"><svg class="g" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
-        <span class="url">kbtu.sow.kz</span>
-        <span class="rb hit"><svg class="g" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="2.6"/></svg></span>
-      </div>
-      <!-- iOS before 26: the address, then the toolbar with Share in its middle -->
-      <div class="bar" data-for="ios18"><span class="url">kbtu.sow.kz</span></div>
-      <div class="tools" data-for="ios18">
+      <!-- iOS: the address on top, the bottom toolbar with Share in its middle (Safari 26 Top layout, and Safari before 26) -->
+      <div class="bar" data-for="ios"><span class="url">kbtu.sow.kz</span></div>
+      <div class="page" data-for="ios"><i style="width:44%"></i><i style="width:68%"></i><i style="width:56%"></i></div>
+      <div class="tools" data-for="ios">
         <span><svg class="g" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
         <span><svg class="g" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></span>
         <span class="hit"><svg class="g" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7l4-4 4 4M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></span>
@@ -144,19 +184,34 @@ li.on::before { background: var(--accent); color: #fff; }
         <span class="rb hit"><svg class="g" viewBox="0 0 24 24"><path d="M12 6h.01M12 12h.01M12 18h.01" stroke-width="2.6"/></svg></span>
       </div>
     </div>
+    <!-- iOS only: the share sheet, View More at the right end of its round actions -->
+    <div class="scene sv" data-for="ios"><div class="sheet">
+      <div class="pg"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span><em><span data-t="opts"></span><svg class="g" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></em></div>
+      <div class="ppl"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="ppl apps"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="acts4">
+        <span><em><svg class="g" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg></em><u></u></span>
+        <span><em><svg class="g" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5V19.5"/></svg></em><u></u></span>
+        <span><em><svg class="g" viewBox="0 0 24 24"><circle cx="7" cy="14" r="3.5"/><circle cx="17" cy="14" r="3.5"/><path d="M10.5 14h3M3.5 14L5 7M20.5 14L19 7"/></svg></em><u></u></span>
+        <span class="hit"><em><svg class="g" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></svg></em><b data-t="more"></b></span>
+      </div>
+    </div></div>
     <div class="scene s2"><div class="list"><div class="rows">
+      <div class="row" data-for="ios"><i style="width:48%"></i><svg class="g" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg></div>
       <div class="row"><i style="width:38%"></i><svg class="g" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg></div>
       <div class="row"><i style="width:52%"></i><svg class="g" viewBox="0 0 24 24"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"/></svg></div>
       <div class="row"><i style="width:44%"></i><svg class="g" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
       <div class="row me hit"><span data-t="row"></span><svg class="g" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/></svg></div>
       <div class="row"><i style="width:34%"></i><svg class="g" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></div>
+      <div class="row" data-for="ios"><i style="width:40%"></i><svg class="g" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z"/></svg></div>
     </div></div></div>
     <div class="scene s3"><div class="dlg">
-      <div class="hd"><i></i><span class="ok hit" data-t="ok"></span></div>
+      <div class="hd"><i data-for="android"></i><span class="x" data-for="ios"><svg class="g" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-width="2.4"/></svg></span><span class="tt" data-for="ios" data-t="row"></span><span class="ok hit" data-t="ok"></span></div>
       <div class="it"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span></div>
+      <div class="sw" data-for="ios"><span data-t="web"></span><em></em></div>
     </div></div>
   </div>
-  <ol data-for="ios android"><li data-n="1" data-t="s1"></li><li data-n="2" data-t="s2"></li><li data-n="3" data-t="s3"></li></ol>
+  <ol data-for="ios android"><li data-n="1" data-t="s1"></li><li data-n="2" data-t="s2"></li><li data-n="3" data-t="s3"></li><li data-n="4" data-t="s4" data-for="ios"></li></ol>
 
   <span class="link" data-for="inapp webview">kbtu.sow.kz/install</span>
   <div class="qr" data-for="desk"><svg viewBox="-1 -1 31 31" role="img" aria-label="kbtu.sow.kz/install"><path fill="#07080F" d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM25 0h1v1h-1zM26 0h1v1h-1zM27 0h1v1h-1zM28 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM14 1h1v1h-1zM15 1h1v1h-1zM20 1h1v1h-1zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM11 2h1v1h-1zM12 2h1v1h-1zM13 2h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM25 2h1v1h-1zM26 2h1v1h-1zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM12 3h1v1h-1zM16 3h1v1h-1zM17 3h1v1h-1zM19 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM25 3h1v1h-1zM26 3h1v1h-1zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM13 4h1v1h-1zM17 4h1v1h-1zM18 4h1v1h-1zM19 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM25 4h1v1h-1zM26 4h1v1h-1zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM18 5h1v1h-1zM19 5h1v1h-1zM20 5h1v1h-1zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM28 6h1v1h-1zM8 7h1v1h-1zM9 7h1v1h-1zM10 7h1v1h-1zM13 7h1v1h-1zM14 7h1v1h-1zM17 7h1v1h-1zM20 7h1v1h-1zM0 8h1v1h-1zM2 8h1v1h-1zM3 8h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM13 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM17 8h1v1h-1zM18 8h1v1h-1zM22 8h1v1h-1zM25 8h1v1h-1zM27 8h1v1h-1zM28 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM5 9h1v1h-1zM8 9h1v1h-1zM11 9h1v1h-1zM15 9h1v1h-1zM16 9h1v1h-1zM18 9h1v1h-1zM19 9h1v1h-1zM20 9h1v1h-1zM21 9h1v1h-1zM22 9h1v1h-1zM24 9h1v1h-1zM28 9h1v1h-1zM0 10h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM8 10h1v1h-1zM11 10h1v1h-1zM14 10h1v1h-1zM15 10h1v1h-1zM17 10h1v1h-1zM21 10h1v1h-1zM22 10h1v1h-1zM26 10h1v1h-1zM27 10h1v1h-1zM0 11h1v1h-1zM2 11h1v1h-1zM4 11h1v1h-1zM8 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM13 11h1v1h-1zM14 11h1v1h-1zM15 11h1v1h-1zM18 11h1v1h-1zM20 11h1v1h-1zM23 11h1v1h-1zM28 11h1v1h-1zM0 12h1v1h-1zM1 12h1v1h-1zM3 12h1v1h-1zM6 12h1v1h-1zM12 12h1v1h-1zM16 12h1v1h-1zM17 12h1v1h-1zM19 12h1v1h-1zM23 12h1v1h-1zM25 12h1v1h-1zM26 12h1v1h-1zM0 13h1v1h-1zM1 13h1v1h-1zM3 13h1v1h-1zM4 13h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM8 13h1v1h-1zM9 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM19 13h1v1h-1zM20 13h1v1h-1zM21 13h1v1h-1zM22 13h1v1h-1zM26 13h1v1h-1zM27 13h1v1h-1zM28 13h1v1h-1zM0 14h1v1h-1zM4 14h1v1h-1zM6 14h1v1h-1zM7 14h1v1h-1zM8 14h1v1h-1zM14 14h1v1h-1zM18 14h1v1h-1zM19 14h1v1h-1zM22 14h1v1h-1zM26 14h1v1h-1zM27 14h1v1h-1zM28 14h1v1h-1zM0 15h1v1h-1zM3 15h1v1h-1zM5 15h1v1h-1zM7 15h1v1h-1zM10 15h1v1h-1zM12 15h1v1h-1zM13 15h1v1h-1zM15 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM22 15h1v1h-1zM23 15h1v1h-1zM24 15h1v1h-1zM27 15h1v1h-1zM4 16h1v1h-1zM5 16h1v1h-1zM6 16h1v1h-1zM8 16h1v1h-1zM9 16h1v1h-1zM18 16h1v1h-1zM19 16h1v1h-1zM21 16h1v1h-1zM24 16h1v1h-1zM25 16h1v1h-1zM27 16h1v1h-1zM1 17h1v1h-1zM2 17h1v1h-1zM7 17h1v1h-1zM9 17h1v1h-1zM11 17h1v1h-1zM13 17h1v1h-1zM17 17h1v1h-1zM20 17h1v1h-1zM23 17h1v1h-1zM25 17h1v1h-1zM26 17h1v1h-1zM27 17h1v1h-1zM0 18h1v1h-1zM5 18h1v1h-1zM6 18h1v1h-1zM7 18h1v1h-1zM8 18h1v1h-1zM10 18h1v1h-1zM11 18h1v1h-1zM12 18h1v1h-1zM20 18h1v1h-1zM22 18h1v1h-1zM26 18h1v1h-1zM2 19h1v1h-1zM3 19h1v1h-1zM5 19h1v1h-1zM8 19h1v1h-1zM9 19h1v1h-1zM10 19h1v1h-1zM15 19h1v1h-1zM16 19h1v1h-1zM17 19h1v1h-1zM19 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM22 19h1v1h-1zM23 19h1v1h-1zM26 19h1v1h-1zM1 20h1v1h-1zM3 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM10 20h1v1h-1zM13 20h1v1h-1zM15 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM25 20h1v1h-1zM26 20h1v1h-1zM8 21h1v1h-1zM10 21h1v1h-1zM12 21h1v1h-1zM13 21h1v1h-1zM14 21h1v1h-1zM15 21h1v1h-1zM17 21h1v1h-1zM18 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM25 21h1v1h-1zM26 21h1v1h-1zM27 21h1v1h-1zM28 21h1v1h-1zM0 22h1v1h-1zM1 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM5 22h1v1h-1zM6 22h1v1h-1zM8 22h1v1h-1zM9 22h1v1h-1zM10 22h1v1h-1zM13 22h1v1h-1zM16 22h1v1h-1zM18 22h1v1h-1zM19 22h1v1h-1zM20 22h1v1h-1zM22 22h1v1h-1zM24 22h1v1h-1zM25 22h1v1h-1zM27 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM8 23h1v1h-1zM9 23h1v1h-1zM11 23h1v1h-1zM12 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM20 23h1v1h-1zM24 23h1v1h-1zM25 23h1v1h-1zM27 23h1v1h-1zM0 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM6 24h1v1h-1zM9 24h1v1h-1zM10 24h1v1h-1zM11 24h1v1h-1zM12 24h1v1h-1zM14 24h1v1h-1zM15 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1zM26 24h1v1h-1zM27 24h1v1h-1zM28 24h1v1h-1zM0 25h1v1h-1zM2 25h1v1h-1zM3 25h1v1h-1zM4 25h1v1h-1zM6 25h1v1h-1zM8 25h1v1h-1zM10 25h1v1h-1zM11 25h1v1h-1zM12 25h1v1h-1zM14 25h1v1h-1zM16 25h1v1h-1zM17 25h1v1h-1zM21 25h1v1h-1zM23 25h1v1h-1zM24 25h1v1h-1zM25 25h1v1h-1zM27 25h1v1h-1zM0 26h1v1h-1zM2 26h1v1h-1zM3 26h1v1h-1zM4 26h1v1h-1zM6 26h1v1h-1zM8 26h1v1h-1zM10 26h1v1h-1zM11 26h1v1h-1zM12 26h1v1h-1zM13 26h1v1h-1zM15 26h1v1h-1zM16 26h1v1h-1zM20 26h1v1h-1zM21 26h1v1h-1zM23 26h1v1h-1zM26 26h1v1h-1zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM11 27h1v1h-1zM13 27h1v1h-1zM14 27h1v1h-1zM16 27h1v1h-1zM20 27h1v1h-1zM23 27h1v1h-1zM25 27h1v1h-1zM27 27h1v1h-1zM0 28h1v1h-1zM1 28h1v1h-1zM2 28h1v1h-1zM3 28h1v1h-1zM4 28h1v1h-1zM5 28h1v1h-1zM6 28h1v1h-1zM8 28h1v1h-1zM9 28h1v1h-1zM14 28h1v1h-1zM15 28h1v1h-1zM16 28h1v1h-1zM17 28h1v1h-1zM20 28h1v1h-1zM21 28h1v1h-1zM22 28h1v1h-1zM23 28h1v1h-1zM24 28h1v1h-1zM27 28h1v1h-1z"/></svg></div>
@@ -168,55 +223,57 @@ li.on::before { background: var(--accent); color: #fff; }
     <button class="btn quiet" id="copy" data-for="inapp webview" data-t="copy"></button>
     <a class="btn" data-for="done" href="/" data-t="go"></a>
   </div>
-  <a class="done" data-for="ios android inapp webview" href="/" data-t="ready"></a>
 </main>
 <script>
 (function () {
   var T = {
     ru: {
-      'h.ios': 'KBTU App на экран «Домой»', 'sub.ios': 'Три касания в Safari.',
+      'h.ios': 'KBTU App на экран «Домой»', 'sub.ios': 'Четыре касания в Safari.',
       'h.android': 'Установи KBTU App', 'sub.android': 'Иконка появится на главном экране.',
       'h.inapp': 'Открой в Safari', 'sub.inapp': 'На экран «Домой» приложение добавляет только Safari.',
       'h.webview': 'Открой в Chrome', 'sub.webview': 'Установить приложение можно из Chrome.',
       'h.desk': 'Открой на телефоне', 'sub.desk': 'Наведи камеру на код: дальше страница покажет шаги для твоего телефона.',
       'h.done': 'KBTU App установлен', 'sub.done': 'Он уже на главном экране.',
-      share: 'Поделиться',
-      's1.ios26': 'Нажми ··· и «Поделиться»', 's1.ios18': 'Нажми «Поделиться»', 's1.android': 'Нажми ⋮ вверху справа',
-      's2.ios': 'Пролистай вниз: «На экран „Домой“»', 's2.android': 'Выбери «Добавить на главный экран»',
-      's3.ios': 'Нажми «Добавить»', 's3.android': 'Нажми «Установить»',
+      more: 'Ещё', opts: 'Параметры', web: 'Открыть как веб-приложение',
+      's1.ios': 'Нажми «Поделиться» внизу экрана', 's1.android': 'Нажми ⋮ вверху справа',
+      's2.ios': 'Нажми «Ещё»: круглая кнопка справа внизу', 's2.android': 'Выбери «Добавить на главный экран»',
+      's3.ios': 'Пролистай вниз и выбери «На экран „Домой“»', 's3.android': 'Нажми «Установить»',
+      's4.ios': 'Нажми «Добавить» справа вверху',
       'row.ios': 'На экран «Домой»', 'row.android': 'Добавить на главный экран', 'ok.ios': 'Добавить', 'ok.android': 'Установить',
       install: 'Установить', 'open.inapp': 'Открыть в Safari', 'open.webview': 'Открыть в Chrome', copy: 'Скопировать ссылку', copied: 'Скопировано',
-      go: 'Открыть приложение', ready: 'Готово? Открыть приложение'
+      go: 'Открыть приложение'
     },
     kk: {
-      'h.ios': 'KBTU App басты экранға', 'sub.ios': 'Safari-де үш рет басу.',
+      'h.ios': 'KBTU App басты экранға', 'sub.ios': 'Safari-де төрт рет басу.',
       'h.android': 'KBTU App орнат', 'sub.android': 'Белгіше басты экранда пайда болады.',
       'h.inapp': 'Safari-де аш', 'sub.inapp': 'Қолданбаны басты экранға тек Safari қосады.',
       'h.webview': 'Chrome-да аш', 'sub.webview': 'Қолданбаны Chrome арқылы орнатуға болады.',
       'h.desk': 'Телефоннан аш', 'sub.desk': 'Камераны кодқа бағытта: бет телефоныңа сай қадамдарды көрсетеді.',
       'h.done': 'KBTU App орнатылған', 'sub.done': 'Ол басты экранда тұр.',
-      share: 'Бөлісу',
-      's1.ios26': '··· басып, «Бөлісу» таңда', 's1.ios18': '«Бөлісу» түймесін бас', 's1.android': 'Жоғарғы оң жақтағы ⋮ бас',
-      's2.ios': 'Төмен айналдыр: «Басты экранға қосу»', 's2.android': '«Басты экранға қосу» таңда',
-      's3.ios': '«Қосу» түймесін бас', 's3.android': '«Орнату» түймесін бас',
+      more: 'Тағы', opts: 'Параметрлер', web: 'Веб-қолданба ретінде ашу',
+      's1.ios': 'Экранның төменгі жағындағы «Бөлісу» түймесін бас', 's1.android': 'Жоғарғы оң жақтағы ⋮ бас',
+      's2.ios': 'Төменгі оң жақтағы дөңгелек «Тағы» түймесін бас', 's2.android': '«Басты экранға қосу» таңда',
+      's3.ios': 'Төмен айналдырып, «Басты экранға қосу» таңда', 's3.android': '«Орнату» түймесін бас',
+      's4.ios': 'Жоғарғы оң жақтағы «Қосу» түймесін бас',
       'row.ios': 'Басты экранға қосу', 'row.android': 'Басты экранға қосу', 'ok.ios': 'Қосу', 'ok.android': 'Орнату',
       install: 'Орнату', 'open.inapp': 'Safari-де ашу', 'open.webview': 'Chrome-да ашу', copy: 'Сілтемені көшіру', copied: 'Көшірілді',
-      go: 'Қолданбаны ашу', ready: 'Дайын ба? Қолданбаны ашу'
+      go: 'Қолданбаны ашу'
     },
     en: {
-      'h.ios': 'Add KBTU App to your Home Screen', 'sub.ios': 'Three taps in Safari.',
+      'h.ios': 'Add KBTU App to your Home Screen', 'sub.ios': 'Four taps in Safari.',
       'h.android': 'Install KBTU App', 'sub.android': 'Its icon will appear on your home screen.',
       'h.inapp': 'Open in Safari', 'sub.inapp': 'Only Safari can add the app to the Home Screen.',
       'h.webview': 'Open in Chrome', 'sub.webview': 'Chrome can install the app.',
       'h.desk': 'Open on your phone', 'sub.desk': 'Point the camera at the code: the page will show the steps for your phone.',
       'h.done': 'KBTU App is installed', 'sub.done': 'It is already on your home screen.',
-      share: 'Share',
-      's1.ios26': 'Tap ··· and then Share', 's1.ios18': 'Tap Share', 's1.android': 'Tap ⋮ at the top right',
-      's2.ios': 'Scroll down: Add to Home Screen', 's2.android': 'Choose Add to Home screen',
-      's3.ios': 'Tap Add', 's3.android': 'Tap Install',
+      more: 'View More', opts: 'Options', web: 'Open as Web App',
+      's1.ios': 'Tap Share at the bottom of the screen', 's1.android': 'Tap ⋮ at the top right',
+      's2.ios': 'Tap View More: the round button at the bottom right', 's2.android': 'Choose Add to Home screen',
+      's3.ios': 'Scroll down and tap Add to Home Screen', 's3.android': 'Tap Install',
+      's4.ios': 'Tap Add at the top right',
       'row.ios': 'Add to Home Screen', 'row.android': 'Add to Home screen', 'ok.ios': 'Add', 'ok.android': 'Install',
       install: 'Install', 'open.inapp': 'Open in Safari', 'open.webview': 'Open in Chrome', copy: 'Copy link', copied: 'Copied',
-      go: 'Open the app', ready: 'Done? Open the app'
+      go: 'Open the app'
     }
   };
   var root = document.documentElement, ua = navigator.userAgent, nl = (navigator.language || 'ru').toLowerCase();
@@ -230,7 +287,7 @@ li.on::before { background: var(--accent); color: #fff; }
   var android = /Android/.test(ua);
   var v = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'done'
     : ios ? (safari ? 'ios' : 'inapp') : android ? (/; wv\)/.test(ua) ? 'webview' : 'android') : 'desk';
-  var sub = v === 'ios' ? (+(/Version\/(\d+)/.exec(ua) || [])[1] >= 26 ? 'ios26' : 'ios18') : v;
+  var sub = v;
   // opened as the installed app (a home-screen icon saved from this page): straight into the app, not "installed"
   if (v === 'done') location.replace('/');
 
@@ -250,11 +307,12 @@ li.on::before { background: var(--accent); color: #fff; }
   paint();
 
   // the scenes play in turn, each with its step lit; a tap on a step shows it and the play goes on from there
-  var demo = document.querySelector('.demo'), steps = document.querySelectorAll('li'), at = 1, timer;
+  var scenes = document.querySelectorAll('.scene:not([hidden])'), steps = document.querySelectorAll('li:not([hidden])'), at = 1, timer;
   function show(n) {
-    at = n; demo.setAttribute('data-s', n);
+    at = n;
+    scenes.forEach(function (sc, i) { sc.classList.toggle('on', i === n - 1); });
     steps.forEach(function (li, i) { li.classList.toggle('on', i === n - 1); });
-    clearTimeout(timer); timer = setTimeout(function () { show(at % 3 + 1); }, 3400);
+    clearTimeout(timer); timer = setTimeout(function () { show(at % steps.length + 1); }, 3400);
   }
   steps.forEach(function (li, i) { li.addEventListener('click', function () { show(i + 1); }); });
   if (v === 'ios' || v === 'android') show(1);
@@ -276,7 +334,7 @@ li.on::before { background: var(--accent); color: #fff; }
   if (v === 'ios') '440x956@3 430x932@3 428x926@3 420x912@3 414x896@3 414x896@2 402x874@3 393x852@3 390x844@3 375x812@3 375x667@2'.split(' ').forEach(function (s) {
     var m = /(\d+)x(\d+)@(\d)/.exec(s);
     ['dark', 'light'].forEach(function (th) {
-      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + s + '-' + th + '.png';
+      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + m[1] + 'x' + m[2] + '-' + m[3] + 'x-' + th + '.png'; // (tools/splash.mjs's names)
       l.media = '(prefers-color-scheme: ' + th + ') and (device-width: ' + m[1] + 'px) and (device-height: ' + m[2] + 'px) and (-webkit-device-pixel-ratio: ' + m[3] + ') and (orientation: portrait)';
       document.head.appendChild(l);
     });

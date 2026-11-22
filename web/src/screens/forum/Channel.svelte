@@ -17,7 +17,7 @@
   import { tick, untrack } from 'svelte';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import type { TransitionConfig } from 'svelte/transition';
+  import { fade, type TransitionConfig } from 'svelte/transition';
   import { calm } from '../../ui/fold';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
@@ -287,7 +287,9 @@
   </div>
 
   {#if feed.length}
-    <div class="feed" class:settled>
+    <!-- another order is another list: swapped whole with one quick fade, not every card shuffling past the others -->
+    {#key channel.order}
+    <div class="feed" class:settled in:fade={{ duration: calm() ? 0 : 180 }}>
       {#each rows as r, i (r === 'nw' ? r : keyOf(r))}
         <!-- one element per row (flip needs it) -->
         <div class="item" animate:flip={{ duration: calm() ? 0 : 320, easing: cubicOut }} transition:card>
@@ -336,9 +338,10 @@
           {#if live}
             {@const pick = pendingHearts[p.id] ?? p}
             <div class="feedback">
-              <button class="heart" aria-pressed={pick.hearted} onclick={() => heart(p)}>
+              <!-- the app's own heart: a small chip, heart and count; its name is for screen readers only (owner: the words were too big) -->
+              <button class="heart" aria-pressed={pick.hearted} aria-label="{t('fc.appHearts')}: {pick.hearts}" onclick={() => heart(p)}>
                 <Heart size={16} fill={pick.hearted ? 'currentColor' : 'none'} aria-hidden="true" />
-                {t('fc.appHearts')} <span>{pick.hearts}</span>
+                {#if pick.hearts}<span aria-hidden="true">{compact(pick.hearts)}</span>{/if}
               </button>
               <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
               {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
@@ -360,6 +363,7 @@
       {/each}
       {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
     </div>
+    {/key}
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
@@ -410,7 +414,10 @@
   .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-full); text-align: left;
     transition: transform 450ms var(--ease-bounce); }
   .compose:active { transform: scale(0.985); transition-duration: 80ms; }
-  .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
+  /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back). It stays under the window's
+     ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
+     to thin out over */
+  .compose.away { opacity: 0; pointer-events: none; transition: transform 450ms var(--ease-bounce), opacity 0s linear 90ms; }
   /* the side doors: a row of small glass pills, no card; a scroller on a narrow phone (4 px above: their hit areas;
      the room below, taken back by the margin: their lift, which the scroller would cut) */
   .doors { display: flex; gap: var(--s-2); margin: var(--s-3) calc(-1 * var(--gutter)) -14px; padding: 4px var(--gutter) 18px; overflow-x: auto; scrollbar-width: none; }
@@ -485,9 +492,10 @@
   /* The heart and Telegram counts wrap together. Sharing and the discussion stay on their own row. */
   .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; margin-top: var(--s-3); }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
-  .heart { display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 44px; border-radius: var(--r-full);
+  .heart { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 32px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1.2 var(--font-text); font-variant-numeric: tabular-nums; }
   .heart[aria-pressed='true'] { color: var(--danger-text); }
+  .heart::before { content: ''; position: absolute; inset: -6px -2px; } /* a 44 px tap target round the small chip */
   .rx { flex: none; display: flex; gap: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-body); line-height: 1; }

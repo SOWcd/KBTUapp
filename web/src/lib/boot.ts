@@ -16,12 +16,16 @@ export function bootUnder(): DOMRect | null {
   return still() || !from.width ? null : from;
 }
 
-/** gone: faded away over the app (a signed-in launch), or at once when the app already covers it */
+/** gone: its emblem settles back and dissolves as the app lifts in under it (a signed-in launch; index.html's .o, 0.28 s,
+ *  whatever the intro was doing), or at once when the app already covers it. An app ready sooner than 0.4 s after the
+ *  first paint waits until then (owner, Nov 22: the intro is seen), never longer. */
 export function bootOut(): void {
   const b = el();
   if (!b) return;
   const gone = () => { b.remove(); delete document.documentElement.dataset.boot; }; // (its ground on <html> goes with it: the theme's own from here)
   if (b.classList.contains('u') || still() || !b.offsetWidth) return gone();
-  b.classList.add('o');
-  setTimeout(gone, 460);
+  const out = () => { b.classList.add('o'); setTimeout(gone, 340); };
+  // the halo's animation began with the first paint: its clock is the time since (none once it has ended, 0.75 s)
+  const t = Number(b.querySelector('.hl')?.getAnimations?.()[0]?.currentTime ?? NaN);
+  if (t >= 0 && t < 400) setTimeout(out, 400 - t); else out();
 }

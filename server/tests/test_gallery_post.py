@@ -95,9 +95,8 @@ def test_attach_on_the_albums_rules(env):
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'G-4', 0, 0)",
                 (went, c.ids[BO]))  # signed up, never came
     assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [{"id": went, "title": "Went"}]}  # its album open now
-    for eid in (other, ahead, old):
+    for eid in (ahead, old):  # not yet open, or closed; any student may add to an open album (owner)
         assert _post(c, AL, 1, event=eid).status_code == 403
-    assert _post(c, BO, 1, event=went).status_code == 403  # a no-show
     p = _post(c, AL, 1, event=went).json()
     assert p["event"] == {"id": went, "title": "Went"}
     album = c.get(f"/api/events/{went}", headers=tma(CY)).json()["photos"]
