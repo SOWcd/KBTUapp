@@ -1,0 +1,97 @@
+"""The creator's app-wide announcements go through the regular bot outbox."""
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from kbtu import admin, bot, db, texts
+from test_core import env  # noqa: F401  (env: the fixture)
+
+NAME = "app_update_home"
+URL = "https://t.me/example_channel/42"
+
+
+@pytest.fixture
+def audience(env, monkeypatch):
+    _, cfg = env
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    con = db.connect(cfg.db_path)
+    try:
+        con.execute("""INSERT INTO users (tg_id, tg_username, lang, can_dm, role, is_founder, banned_at, created_at, seen_at) VALUES
+            (10, 'reader', 'en', 1, 'admin', 1, NULL, 0, 0),
+            (11, NULL, 'kk', 1, 'user', 0, NULL, 0, 0),
+            (12, NULL, 'ru', 1, 'user', 0, NULL, 0, 0),
+            (13, 'unreachable', 'ru', 0, 'user', 0, NULL, 0, 0),
+            (14, 'banned', 'ru', 1, 'user', 0, 1, 0, 0)""")
+        yield con, cfg
+    finally:
+        con.close()
+
+
+def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
+    con, cfg = audience
+    cmd = ["broadcast", NAME, URL]
+    messages = []
+    monkeypatch.setattr(bot, "_chores", lambda *_: None)
+    monkeypatch.setattr(bot, "GAP", 0)
+
+    def telegram(request):
+        assert request.url.path.endswith("/sendMessage")
+        messages.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True})
+
+    async def send():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            await bot.send_due(cfg, http)
+
+    admin.main([*cmd, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 3"
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
+    admin.main([*cmd, "@unreachable"])
+    assert capsys.readouterr().out.strip() == "queued 0"
+    admin.main([*cmd, "@Reader"])
+    assert capsys.readouterr().out.strip() == "queued 1"
+    asyncio.run(send())
+    assert [m["chat_id"] for m in messages] == [10]
+
+    admin.main([*cmd, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 2"
+    admin.main(["broadcast", NAME, "https://t.me/example_channel/43", "10"])
+    assert capsys.readouterr().out.strip() == "queued 0"
+    admin.main(cmd)
+    assert capsys.readouterr().out.strip() == "queued 2"
+    admin.main(cmd)
+    assert capsys.readouterr().out.strip() == "queued 0"
+    asyncio.run(send())
+
+    assert [m["chat_id"] for m in messages] == [10, 11, 12]
+    for message, lang, button in zip(messages, ("en", "kk", "ru"), ("Watch", "\u041a\u04e9\u0440\u0443", "\u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
+        assert message["text"] == texts.bot_message(lang, NAME)[0]
+        assert message["reply_markup"] == {"inline_keyboard": [[{"text": button, "url": URL}]]}
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE sent_at IS NOT NULL").fetchone()[0] == 3
+
+
+@pytest.mark.parametrize("url", [
+    "http://t.me/channel/42", "https://example.org/channel/42", "https://t.me.example.org/channel/42",
+    "https://t.me@example.org/channel/42", "https://example.org@t.me/channel/42", "https://t.me/line\nbreak",
+])
+def test_broadcast_rejects_other_urls(audience, url):
+    con, _ = audience
+    with pytest.raises(SystemExit, match=r"expected an https://t\.me/ URL"):
+        admin.main(["broadcast", NAME, url])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
+
+
+def test_broadcast_refuses_unsafe_requests(audience):
+    con, _ = audience
+    for name in ("unknown_template", "santa_news", "all_none"):
+        with pytest.raises(SystemExit, match="expected a translated bot template"):
+            admin.main(["broadcast", name, URL])
+    con.execute("UPDATE users SET tg_username = 'READER' WHERE tg_id = 13")
+    with pytest.raises(SystemExit, match="no unique preview recipient"):
+        admin.main(["broadcast", NAME, URL, "@reader"])
+    con.execute("UPDATE users SET is_founder = 0")
+    with pytest.raises(SystemExit, match="needs the active creator admin"):
+        admin.main(["broadcast", NAME, URL])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
