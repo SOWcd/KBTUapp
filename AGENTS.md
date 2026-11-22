@@ -10,7 +10,7 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
   student forum. Unofficial; Russian, Kazakh and English.
 - `web/`: Svelte 5 (runes) + Vite + TypeScript, a static build served by the server.
 - `server/`: Python 3, FastAPI, SQLite (WAL). The API, the Telegram bot (`bot.py`) and the nightly jobs run in one
-  process. Every rule lives in `server/kbtu/logic/` (one module per area); `app.py` only routes.
+  process. Rules live in `server/kbtu/logic/` (one module per area) and a few big modules beside it (`casting.py`, `checkin.py`, `roster.py`, `admin.py`); `app.py` only routes.
 - One Docker image (`Dockerfile`). **A push to `main` deploys production**: never push without the owner's yes.
 
 ## Where things are
@@ -18,7 +18,7 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | What | Where |
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
-| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` nightly jobs; `stats` anonymous usage counters; `credits` the people of the app, its own consent) |
+| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `bot.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent) |
 | Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
@@ -27,6 +27,8 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
 | UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; grep the key prefix and edit by anchor in all three |
 | Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
+| Test helpers | `env`, `login`, `tma`, `set_clock` in `server/tests/test_core.py` (import them from there) |
+| Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
 
 ## Run and check
 
@@ -42,6 +44,9 @@ Before every commit, all of these pass:
 cd server && .venv/bin/python -m pytest -q -n auto tests   # ~5 min on 4 cores
 cd web && npm run check && npm test                   # svelte-check 0 errors, 0 warnings; vitest
 ```
+
+One file: `pytest -q tests/test_x.py -k name` (~1 min: the schema and migrations are built per process). `npm test`
+includes a design ratchet (`web/src/lib/design.test.ts`): new raw hex/font/radius values fail it.
 
 Checking a screen: open a link `qa.py` prints, at phone size (375 px, also 320), in both themes. A hidden browser
 tab freezes animations and `requestAnimationFrame`: look with it visible.
@@ -59,6 +64,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   policy says so first (Codex writes it), and the feature asks its own consent inside itself (like `appeals.CONSENT`),
   never a suffix on the version.
   Deleting an account must cover every new table (`_DEL_GONE` in `logic/account.py`; a test checks the schema).
+- **Limits**: a per-day cap counts the table's own rows in the last 86400 s inside `db.tx` and raises
+  `ApiError("rate_limited", "<why>")` (e.g. `logic/mapflaws.py`).
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
