@@ -1463,8 +1463,7 @@ def test_album(env, monkeypatch):
         return raw.getvalue()
 
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is True
-    assert c.get("/api/events/1", headers=Z).json()["canAddPhotos"] is False               # going, but didn't come
-    assert c.post("/api/events/1/photos", headers=Z, content=jpeg(0)).status_code == 403
+    assert c.get("/api/events/1", headers=Z).json()["canAddPhotos"] is True                # going, not let in: any student may add (owner)
     e = c.post("/api/events/1/photos", headers=A, content=jpeg(0)).json()
     assert len(e["photos"]) == 1 and e["photos"][0]["canDelete"] is True
     first = e["photos"][0]["id"]

@@ -1256,8 +1256,7 @@ def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
         return 0
     co = one(con, ACCEPTED, e["id"])
     team = at_least(role_in(con, v, e["org_id"]), "member") or bool(co and at_least(role_in(con, v, co["org_id"]), "member"))
-    if not team and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id):
-        return 0
+    # any student, not only the checked-in: whoever dropped by adds theirs (owner: a gallery with few limits lives)
     mine = one(con, "SELECT COUNT(*) AS n FROM event_photos WHERE event_id = ? AND added_by = ?", e["id"], v.id)["n"]
     total = one(con, "SELECT COUNT(*) AS n FROM event_photos WHERE event_id = ?", e["id"])["n"]
     return max(0, min((ALBUM_TEAM if team else ALBUM_EACH) - mine, ALBUM_MAX - total))
