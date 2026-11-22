@@ -94,7 +94,7 @@ def start(con, v: Viewer, oid: int, body: dict) -> dict:
         budget = _budget(body.get("budget"))
         until = _until(body["regUntil"], starts) if body.get("regUntil") is not None else default_until(starts) if starts > now() + LEAD else None
         made = create_event(con, v, oid, {"title": body.get("title"), "place": "", "startsAt": starts, "regUntil": until, "emoji": "sparkles_3d",
-                                          "color": "#D7263D", "visibility": "members", "santa": True})
+                                          "color": "#D7263D", "visibility": "members", "santa": True, "seats": None})
         # a deadline within a day: the invite is the reminder (no "closes tomorrow" seconds after it)
         con.execute("UPDATE santa_games SET budget = ?, soon = ? WHERE event_id = ?", (budget, now() if until and until - DAY <= now() else None, made["id"]))
         out = publish_event(con, v, made["id"])

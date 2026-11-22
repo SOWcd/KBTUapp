@@ -120,7 +120,7 @@
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
-    end: '', endDate: '', place: '', placeUrl: '', online: false, onlineUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, santa: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamCap: '', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
+    end: '', endDate: '', place: '', placeUrl: '', online: false, onlineUrl: '', description: '', cap: '' as '' | 'limited' | 'unlimited', seats: '', firstYear: false, needsPhone: false, santa: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamCap: '', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
@@ -184,13 +184,14 @@
   });
   const regTs = $derived(fromInputs(f.regDate, f.regTime));
   // "Until the end" (late sign-up): free, uncapped, public, ours only (the server checks the same)
-  const lateOk = $derived(!f.paid && !(+f.seats > 0) && !f.teamOnly && !f.leaders && !f.partner && !f.teams);
+  const lateOk = $derived(!f.paid && f.cap !== 'limited' && !f.teamOnly && !f.leaders && !f.partner && !f.teams);
   const regMode = $derived(f.late && lateOk ? 'end' : f.deadline ? 'date' : 'start');
   // a team event (server evteams.py): ours, not open until the end; paid too (each player pays their own ticket)
   const teamsOk = $derived(!isMeeting && !f.partner && regMode !== 'end');
   // a paid one with a cap on teams holds at most cap x max seats: nobody pays for a place no team can take
   const capSeats = $derived(f.paid && f.teams && teamsOk && +f.teamCap > 0 ? +f.teamCap * +f.teamMax : null);
-  const seatsN = $derived(capSeats ? Math.min(+f.seats > 0 ? +f.seats : capSeats, capSeats) : +f.seats > 0 ? +f.seats : null);
+  const own = $derived(f.cap === 'limited' && +f.seats > 0 ? +f.seats : null);
+  const seatsN = $derived(capSeats ? Math.min(own ?? capSeats, capSeats) : own);
   // switched on: the day before the event, or its own day when that's already gone
   function deadlineOn(on: boolean) {
     f.deadline = on;
@@ -203,7 +204,8 @@
     when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : endTs != null && endTs <= startTs ? t('ed.endEarly') : '',
     // online: no place; a link, if any, https with a plain host (the server checks it again)
     place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : t('ed.onlineBad')) : f.tba || f.place.trim() ? '' : t('ed.need'),
-    seats: f.seats === '' || (Number.isInteger(+f.seats) && +f.seats > 0) ? '' : t('ed.need'),
+    // capacity is a choice, never a default (the server refuses an event without it): a number, or no limit
+    seats: isMeeting || f.partner || capSeats ? '' : !f.cap ? t('ed.capNeed') : f.cap === 'unlimited' || Number.isInteger(+f.seats) && +f.seats > 0 ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
     payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
     payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
@@ -360,7 +362,7 @@
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: endTime(e.startsAt, e.endsAt), endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', online: !!e.online, onlineUrl: e.onlineUrl ?? '', description: e.description,
-          seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, santa: !!e.santa, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior,
+          cap: e.seats ? 'limited' : 'unlimited', seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, santa: !!e.santa, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior,
           teams: !!e.teamMax, teamMin: String(e.teamMin ?? 2), teamMax: String(e.teamMax ?? 5), teamCap: e.teamCap ? String(e.teamCap) : '', teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null, forBoard: !!e.forBoard,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
@@ -601,7 +603,7 @@
         place: d.place ?? '', placeUrl: d.placeUrl ?? '', online: !!d.online, onlineUrl: d.onlineUrl ?? '', tba: !!d.tba,
         paid: canPrice && !!d.paid, price: canPrice && d.price ? String(d.price) : '', payTo: canPrice ? d.payTo ?? '' : '',
         payPhone: canPrice ? d.payPhone ?? '' : '', freeFirst: canPrice && d.freeFirst ? String(d.freeFirst) : '',
-        seats: d.seats ? String(d.seats) : '', deadline: d.registration === 'date', late: d.registration === 'end',
+        cap: d.seats ? 'limited' : d.seats === 0 ? 'unlimited' : '', seats: d.seats ? String(d.seats) : '', deadline: d.registration === 'date', late: d.registration === 'end',
         regDate: d.regDate ?? '', regTime: d.regTime ?? '', teams: !!d.teams, teamMin: d.teamMin ? String(d.teamMin) : '',
         teamMax: d.teamMax ? String(d.teamMax) : '', teamCap: d.teamCap ? String(d.teamCap) : '',
         needsPhone: !!d.needsPhone, santa: !!d.santa, vol: !plain && !!d.volunteers, volN: String(d.volunteers ?? 5),
@@ -712,7 +714,7 @@
   const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
   const clubNames = $derived.by(() => { const o = data.orgs.find((x) => x.id === org) ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
   const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba || f.online,
-    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: +f.seats || null, club: clubNames })
+    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: own, club: clubNames })
     .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
   const fixable = (x: Finding) => canPrice || !['priceText', 'priceDiff'].includes(x.id);
   const n = (x: number) => x.toLocaleString('ru-RU');
@@ -724,7 +726,7 @@
     haptic.tap(); touch();
     if (x.id === 'priceText') { f.paid = true; f.price = String(x.n); pick = 'price'; }
     else if (x.id === 'priceDiff') f.price = String(x.n);
-    else if (x.id === 'seatsText') f.seats = String(x.n);
+    else if (x.id === 'seatsText') { f.cap = 'limited'; f.seats = String(x.n); }
     else if (x.id === 'noPlace') { f.tba = false; pick = 'place'; }
     else if (x.id === 'noAbout') pick = 'about';
     else if (x.id === 'noCover') pick = 'cover';
@@ -844,7 +846,7 @@
       <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting ? (full ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
         {#if canPrice}<Row icon={Ticket} title={t('ex.price')} value={tried && priceBad ? '' : priceVal} invalid={tried && priceBad} accessory="chevron" onclick={() => open('price')} />
         {:else}<Row icon={Ticket} title={t('ex.price')} value={t('ex.free')} />{/if}
-        <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : seatsN ? String(seatsN) : t('ex.unlimited')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
+        <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : t('ed.capPick')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
         <Row icon={Clock} title={t('ex.regUntil')} value={tried && err.reg ? '' : regVal} invalid={tried && !!err.reg} accessory="chevron" onclick={() => open('reg')} />
       </Group>
     {/if}
@@ -995,7 +997,12 @@
           {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}
 
         {:else if pick === 'seats'}
-          <Field label={t('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder={t('ed.seatsPh')} error={tried && err.seats ? err.seats : undefined} />
+          <!-- limited or not: picked by hand, nothing chosen until then -->
+          <Segmented items={[{ value: 'limited', label: t('ed.capLimited') }, { value: 'unlimited', label: t('ex.unlimited') }]} value={f.cap} label={t('ed.seats')}
+            onchange={(v) => { touch(); f.cap = v; }} />
+          {#if f.cap === 'limited'}<Field label={t('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder="50" error={tried && err.seats ? err.seats : undefined} />
+          {:else if f.cap === 'unlimited'}<p class="hint">{t('ed.capOpen')}</p>
+          {:else if tried && err.seats}<p class="err">{err.seats}</p>{/if}
 
         {:else if pick === 'reg'}
           <!-- until the start, a date before it, or (free and uncapped) the end: one choice in sight -->
@@ -1104,7 +1111,7 @@
           {/if}
 
         {:else if pick === 'memo'}
-          <MemoAsksForm bind:memo={f.memo} seats={f.seats} date={f.date} flat />
+          <MemoAsksForm bind:memo={f.memo} seats={f.cap === 'limited' ? f.seats : ''} date={f.date} flat />
 
         {:else if pick === 'check'}
           {#if fromChat}
@@ -1116,7 +1123,7 @@
                   <Row title={t('ed.payTo')} value={f.payTo} />
                   <Row title={t('ed.payPhone')} value={f.payPhone} accessory="chevron" onclick={() => open('price')} />
                 {/if}
-                <Row title={t('ed.seats')} value={seatsN ? String(seatsN) : t('ex.unlimited')} />
+                <Row title={t('ed.seats')} value={seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : t('ed.capPick')} />
                 <Row title={t('ex.regUntil')} value={regVal} />
               {:else if f.partner}
                 <Row title={t('ed.partnerHost')} value={f.host} />

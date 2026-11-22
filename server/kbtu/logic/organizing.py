@@ -219,7 +219,13 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         description = str(i.get("description") or "").strip()
         url = (str(i.get("placeUrl") or "")).strip() or None
         starts, ends = int(i["startsAt"]), (int(i["endsAt"]) if i.get("endsAt") is not None else None)
-        seats = int(i["seats"]) if i.get("seats") is not None else None
+        # capacity is chosen, never a default: a number, or null for no limit; left out is refused (an editor that
+        # forgot the field would publish an unlimited event by accident)
+        if "seats" not in i:
+            raise ApiError("bad_input", "seats")
+        seats = i["seats"]
+        if not (seats is None or isinstance(seats, int) and not isinstance(seats, bool)):
+            raise ApiError("bad_input", "seats")
         reg_until = int(i["regUntil"]) if i.get("regUntil") is not None else None
         emoji, color = str(i["emoji"]), str(i["color"])
         visibility = None if i.get("visibility") is None else str(i["visibility"])  # left out: kept as it is
@@ -794,7 +800,9 @@ def set_reg_until(con, v: Viewer, eid: int, until: object) -> dict:
         if e["status"] == "cancelled":
             raise ApiError("closed")
         at = core.now() if until == "now" else until
-        if not (at is None or isinstance(at, int) and not isinstance(at, bool) and 0 < at <= e["starts_at"]):
+        # a late sign-up event takes sign-ups until its end: "now" closes it while it runs too
+        last = end_of(e) if until == "now" and e["late_signup"] else e["starts_at"]
+        if not (at is None or isinstance(at, int) and not isinstance(at, bool) and 0 < at <= last):
             raise ApiError("bad_input")
         if until != "now":  # a Santa game's deadline: an hour before its gifts day at the latest
             santa.check_event(con, eid, {"reg_until": at, "starts_at": e["starts_at"]})
