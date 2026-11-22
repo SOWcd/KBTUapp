@@ -82,6 +82,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tg-head: 52px;
   --head-bottom: calc(max(8px, var(--safe-top) + 4px) + 44px);
+  /* the home-screen app's two side pills (StandaloneBar): one width, the capsule centred between them */
+  --pill: clamp(88px, calc((100vw - 184px) / 2 - 18px), 100px);
 }
 
 :root,
