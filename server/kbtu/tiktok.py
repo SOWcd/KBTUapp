@@ -58,6 +58,10 @@ COOKIE_BYTES = 256 * 1024              # a cookies file of instagram.com is a fe
 SESSION_HOSTS = ("instagram.com",)     # the only hosts a signed-in request may connect to, its cookies' only domain
 SIGNED = "instagram-session"           # the breaker of signed-in extractions: a dead session never rests reels
 SESSION_CAP = 60                       # signed-in extractions an hour, all chats together (the account reads like a person)
+SESSION_CHAT_CAP = 15                  # of them for one chat, an hour
+SESSION_USER_CAP = 5                   # and for one person, all chats together: nobody drains the rest's
+MISS_SECONDS = 3600                    # a link the session found nothing behind isn't asked with it again for this long
+CHECK_SECONDS = 30                     # the event loop looks at the cookies file at most this often (_configured)
 _PLAIN_HEADERS = frozenset(("user-agent", "accept", "accept-language", "sec-fetch-mode", "referer", "origin"))
 # Wall-clock limits, end to end however slowly a source answers (each request step: download.TIMEOUT).
 TIMEOUT = 30                  # seconds for one source request (tikwm, one probe)
@@ -86,7 +90,7 @@ def link(msg: dict) -> str | None:
     if (msg.get("from") or {}).get("is_bot") or msg.get("is_automatic_forward"):
         return None
     for m in LINK.finditer(str(msg.get("text") or msg.get("caption") or "")):
-        if not m["story"] or _cookie_path():  # a story without the cookies: as if it weren't there (no request at all)
+        if not m["story"] or _configured():  # a story without the cookies: as if it weren't there (no request at all)
             return m.group(0)
     return None
 
@@ -170,20 +174,40 @@ def _outage(exc: BaseException) -> bool:
     yt-dlp's expected errors (private, deleted, age-gated, geo-blocked, login-only)."""
     from yt_dlp.networking.exceptions import HTTPError, TransportError
     from yt_dlp.utils import ExtractorError
-    chain, todo = [], [exc]
-    while todo and len(chain) < 12:  # DownloadError.exc_info, ExtractorError.cause, __cause__, __context__
-        e = todo.pop(0)
-        if isinstance(e, BaseException) and all(e is not c for c in chain):
-            chain.append(e)
-            info = getattr(e, "exc_info", None)
-            todo += [info[1] if isinstance(info, tuple) and len(info) > 1 else None,
-                     getattr(e, "cause", None), e.__cause__, e.__context__]
+    chain = _chain(exc)
     for e in chain:
         if isinstance(e, HTTPError):
             return e.status == 429 or e.status >= 500
     if any(isinstance(e, (TransportError, TimeoutError, SourceDown)) for e in chain):
         return True
     return not any(isinstance(e, ExtractorError) and e.expected for e in chain)
+
+
+def _chain(exc: BaseException) -> list[BaseException]:
+    """The exception and what it wraps: DownloadError.exc_info, ExtractorError.cause, __cause__, __context__."""
+    chain, todo = [], [exc]
+    while todo and len(chain) < 12:
+        e = todo.pop(0)
+        if isinstance(e, BaseException) and all(e is not c for c in chain):
+            chain.append(e)
+            info = getattr(e, "exc_info", None)
+            todo += [info[1] if isinstance(info, tuple) and len(info) > 1 else None,
+                     getattr(e, "cause", None), e.__cause__, e.__context__]
+    return chain
+
+
+def _login_wall(exc: BaseException) -> bool:
+    """Instagram sent an anonymous reader to its login page (the pinned extractor's raise_login_required for it), and
+    nothing else is wrong: never an HTTP error (404: gone), a post it found empty, a private account (the spare account
+    follows none) or a "Restricted Video" (age or sensitivity: the adult spare account would see what anonymous readers
+    don't). Only then is the session worth a request. Unknown wording: no (fails closed; a test pins the wording)."""
+    from yt_dlp.networking.exceptions import HTTPError
+    from yt_dlp.utils import ExtractorError
+    chain = _chain(exc)
+    if any(isinstance(e, HTTPError) for e in chain):
+        return False
+    said = [str(getattr(e, "orig_msg", "")) for e in chain if isinstance(e, ExtractorError) and e.expected]
+    return any("redirected to the login page" in m and "--cookies" in m and "restricted" not in m.lower() for m in said)
 
 
 class _Flight:
@@ -466,9 +490,9 @@ def _extract(match: re.Match) -> Clip | Album | object | None:
         try:
             return _post(match)
         except Exception as exc:
-            # private, login-only, rate-limited for anonymous readers: the session may see it (not an outage, so not
-            # counted for the anonymous breaker either way). Without the cookies: exactly as before.
-            if _outage(exc) or not _cookie_path():
+            # Instagram's login wall for anonymous readers: the session may see it (no outage, so not counted for the
+            # anonymous breaker either way). Anything else, or without the cookies: exactly as before.
+            if not _login_wall(exc) or not _cookie_path():
                 raise
         return _SIGN_IN
     url = f"https://www.youtube.com/watch?v={youtube}"
@@ -531,21 +555,75 @@ def _post(match: re.Match, cookies: list[http.cookiejar.Cookie] | None = None) -
         return Album(k, items) if items else None
 
 
-_session_uses: deque[float] = deque()  # ponytail: per worker (the bot polls in one), as _sent
+# (chat, person) whose link is being answered (bot._tiktok sets it): the session's caps per chat and per person
+asker: ContextVar[tuple[int, int] | None] = ContextVar("tiktok_asker", default=None)
+_NO_SESSION = object()  # _signed's answer: no usable cookies, nothing was asked
+# ponytail: per worker (the bot polls in one), as _sent; keys idle an hour pruned, at most SENT_KEYS of them
+_session_uses: OrderedDict[tuple, list[float]] = OrderedDict()
+_session_misses: OrderedDict[str, float] = OrderedDict()
+
+
+def _session_take(now: float) -> list[tuple] | None:
+    """One signed-in extraction counted against SESSION_CAP, and the asker's chat and person caps; None past any."""
+    while _session_uses and now - next(iter(_session_uses.values()))[-1] >= 3600:
+        _session_uses.popitem(last=False)
+    who = asker.get()
+    caps = {("all",): SESSION_CAP}
+    if who is not None:
+        caps |= {("chat", who[0]): SESSION_CHAT_CAP, ("user", who[1]): SESSION_USER_CAP}
+    recent = {k: [t for t in _session_uses.get(k, ()) if now - t < 3600] for k in caps}
+    if len(recent[("all",)]) >= SESSION_CAP:
+        _tell("the Instagram session's hourly cap is reached; stories and login-only posts wait")
+        return None
+    if any(len(recent[k]) >= cap for k, cap in caps.items()):
+        return None
+    for k in caps:
+        _session_uses[k] = [*recent[k], now]
+        _session_uses.move_to_end(k)
+    while len(_session_uses) > SENT_KEYS:
+        _session_uses.popitem(last=False)
+    return list(caps)
+
+
+def _session_refund(taken: list[tuple], now: float) -> None:
+    """Nothing was asked after all (no usable cookies, the breaker said no): the slots go back."""
+    for k in taken:
+        uses = _session_uses.get(k)
+        if uses and now in uses:
+            uses.remove(now)
+            if not uses:
+                del _session_uses[k]
 
 
 async def _signed_fetch(match: re.Match) -> Clip | Album | None:
-    """_signed in a thread: only with a readable cookies file and within SESSION_CAP (else None, no request)."""
-    if not _cookie_path():
+    """_signed in a thread, or None without a request: no readable cookies file, the link found empty with the session
+    within MISS_SECONDS, or past a cap. A resting breaker raises Paused before a slot is taken; a call that asked
+    nothing (no session in the file, Paused) gives its slot back. A link with nothing behind it is remembered."""
+    if not _configured():
         return None
+    k = key(match[0])
     now = _clock()
-    while _session_uses and now - _session_uses[0] >= 3600:
-        _session_uses.popleft()
-    if len(_session_uses) >= SESSION_CAP:
-        _tell("the Instagram session's hourly cap is reached; stories and login-only posts wait")
+    if now - _session_misses.get(k, -math.inf) < MISS_SECONDS:
         return None
-    _session_uses.append(now)
-    return await _threaded(_extractors, EXTRACT_SECONDS, _signed, match, hosts=SESSION_HOSTS, source=SIGNED)
+    failures, until = _health.get(SIGNED, (0, 0.0))
+    if failures >= FAILURES and now < until:
+        raise Paused(SIGNED)
+    if (taken := _session_take(now)) is None:
+        return None
+    try:
+        got = await _threaded(_extractors, EXTRACT_SECONDS, _signed, match, hosts=SESSION_HOSTS, source=SIGNED)
+    except Paused:
+        _session_refund(taken, now)
+        raise
+    if got is _NO_SESSION:
+        _session_refund(taken, now)
+        return None
+    if got is None:
+        _session_misses[k] = now
+        _session_misses.move_to_end(k)
+        while len(_session_misses) > CACHE_SIZE:
+            _session_misses.popitem(last=False)
+    return got
 
 
 def _story(match: re.Match, cookies: list[http.cookiejar.Cookie]) -> Clip | None:
@@ -562,10 +640,10 @@ def _signed(match: re.Match) -> Clip | Album | None:
     """A story, or a post only a signed-in account sees, through the owner's spare account. Runs in _threaded with
     SESSION_HOSTS alone (no connection anywhere else, a redirect neither) under its own breaker (SIGNED). The cookies are
     read here, at call time, and live only in this thread's yt-dlp jar: no cookie file of yt-dlp's, nothing written
-    back. No readable cookies: None before any request."""
+    back. No readable cookies: _NO_SESSION before any request."""
     cookies = _cookies()
     if not cookies:
-        return None
+        return _NO_SESSION
     return _story(match, cookies) if match["story"] else _post(match, cookies)
 
 
@@ -603,6 +681,23 @@ def _cookie_path() -> str:
     """INSTAGRAM_COOKIES, read at each call: the path if it names a readable file, else "" (stories off)."""
     path = os.environ.get(COOKIES, "").strip()
     return path if path and os.path.isfile(path) and os.access(path, os.R_OK) else ""
+
+
+_checked: tuple[str, float, str] | None = None  # (the variable's value, when, _cookie_path's answer)
+
+
+def _configured() -> str:
+    """_cookie_path() for the event loop (link, before a signed-in fetch): unset costs nothing, a set one is looked at
+    once per CHECK_SECONDS (a stalled network mount would hold up the poller on every story link). The thread's own
+    read (_cookies) is the one that counts."""
+    global _checked
+    value = os.environ.get(COOKIES, "")
+    if not value.strip():
+        return ""
+    now = _clock()
+    if _checked is None or _checked[0] != value or not 0 <= now - _checked[1] < CHECK_SECONDS:
+        _checked = (value, now, _cookie_path())
+    return _checked[2]
 
 
 def _cookies() -> list[http.cookiejar.Cookie]:

@@ -64,7 +64,9 @@ account, so the bot uses the session of a spare account made for this, never any
 signed in as that account.
 
 1. Make a new Instagram account for the bot: its own email, two-factor on, nothing personal in it. Don't follow
-   private accounts with it: the bot shows whatever this account can see.
+   private accounts with it: the bot shows whatever this account can see. Set its sensitive content control
+   (Settings, Content preferences) to the strictest setting: an adult account sees stories Instagram hides from
+   others, and the bot would post them to student groups.
 2. Export its cookies: in a fresh browser profile or a private window, sign in to it on instagram.com, export the
    cookies of instagram.com in the Netscape `cookies.txt` format with an exporter that runs locally (yt-dlp's FAQ on
    passing cookies names some), and close the window **without signing out** (signing out ends the session the file
@@ -79,12 +81,19 @@ signed in as that account.
 
 The bot reads the file at each story link and never writes it (yt-dlp gets the cookies in memory, never the file: it
 would save its jar back into it). The cookies go only to instagram.com's own hosts, over HTTPS, and only to read a
-story or a post anonymous readers are refused; the video files are fetched without them, and Telegram never gets a
-link found with them. Neither the path nor a cookie is ever logged. Only a story's video: yt-dlp skips photo
-stories, and highlights are not supported.
+story, or a post for which Instagram sent an anonymous reader to its login page (never a missing, private or
+"Restricted" one); the video files are fetched without them, and Telegram never gets a link found with them. Neither
+the path nor a cookie is ever logged. Only a story's video: yt-dlp skips photo stories, and highlights are not
+supported.
 
-At most 60 signed-in reads an hour for all chats together (`SESSION_CAP` in `kbtu/tiktok.py`), so the account reads
-like a person; past it, stories wait.
+Signed-in reads an hour, so the account reads like a person (`kbtu/tiktok.py`): 60 for all chats together, 15 for
+one chat, 5 for one person; a link the session found nothing behind isn't asked again for an hour. Past a cap,
+stories wait.
+
+What members can do with it: a story read through the session shows the spare account in that story's viewer list,
+so anyone in a group can make the account view anyone's public story by posting its link. And a story's video stays
+in the chat, and the bot keeps its Telegram file id (until a restart), so a story can be sent again after it has
+expired on Instagram.
 
 - **Rotate** when the log says "the Instagram cookies were signed out" or "hold no session" (at most once an hour),
   and every few months anyway: export again (step 2) and replace the file.
@@ -109,7 +118,7 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
   embedding from Cloudflare too) waits for its clause in the privacy policy's section 5 (Codex's) and a consent version.
 - `TIKTOK=1` enables captionless group replies to TikTok, YouTube Shorts, youtu.be videos under three minutes, and Instagram reels and posts (`kbtu/tiktok.py`). A post of photos, or a carousel of photos and videos, goes as one album of its first 10 items: an item that fails is left out, and its files together stay within one 50 MB upload. Instagram stories only with `INSTAGRAM_COOKIES` (below). Tikwm resolves TikTok videos and photo albums. yt-dlp resolves YouTube and Instagram. Videos use the highest compatible H.264/AAC resolution within 50 MB. Each worker caches Telegram file IDs and tries direct HTTPS files up to 20 MB before uploading. Failures are silent. All sources share `CHAT_CAP` per chat per minute and skip bots, stale messages, banned users and the forum discussion group.
 - `INSTAGRAM_COOKIES=<path>`: with `TIKTOK=1`, an Instagram story's video (`instagram.com/stories/<user>/<id>`) and
-  the posts Instagram shows only to a signed-in account, through a spare account's cookies ("Instagram stories" above).
+  the posts Instagram keeps behind its login page for anonymous readers, through a spare account's cookies ("Instagram stories" above).
   Unset, or no readable file at the path: story links are ignored as before and nothing is requested. Read at each
   link; never logged.
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
