@@ -414,3 +414,15 @@ def test_admin_u18_queues_minors_at_a_time(door_event, monkeypatch, capsys):
     admin.main(["u18", "1", str(at)])
     assert capsys.readouterr().out == "1\n"
     assert [tuple(r) for r in con.execute("SELECT user_id, send_after FROM bot_outbox WHERE kind = 'u18_leave'")] == [(kid, at)]
+
+
+def test_admin_came_marks_an_erased_guest(door_event, monkeypatch, capsys):
+    """The list row is gone (the retention sweep), the organizers vouch: a checked-in ticket by hand, once."""
+    c, cfg, con = door_event
+    uid = _student(c, con, 1, "24B030001")
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    for _ in range(2):
+        admin.main(["came", "1", "1"])
+        assert capsys.readouterr().out == "came\n"
+    assert [tuple(r) for r in con.execute("""SELECT status, checked_in_at IS NOT NULL, checkin_manual FROM registrations
+        WHERE event_id = 1 AND user_id = ?""", (uid,))] == [("going", 1, 1)]
