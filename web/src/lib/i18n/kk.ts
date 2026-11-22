@@ -3023,6 +3023,8 @@ const kk: Dict = {
   'anthem.pause': "Кідірту",
   'anthem.repeat': "Қайталау",
   'anthem.skipNote': "Марапат әнұранды алға айналдырмай толық тыңдағанға беріледі",
+  'anthem.in': "Жетістікке дейін",
+  'anthem.bg': "Фонда тыңдау",
 
   // the event editor (Luma's create screen, Nov 2)
   'ex.saveAnyway': "Осы күйінде сақтау",

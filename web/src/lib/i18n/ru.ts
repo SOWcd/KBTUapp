@@ -3045,6 +3045,8 @@ const ru = {
   'anthem.pause': "Пауза",
   'anthem.repeat': "Повтор",
   'anthem.skipNote': "Награда — за гимн целиком, без перемотки",
+  'anthem.in': "Достижение через",
+  'anthem.bg': "Слушать в фоне",
 
   // the event editor (Luma's create screen, Nov 2)
   'ex.saveAnyway': "Сохранить как есть",
