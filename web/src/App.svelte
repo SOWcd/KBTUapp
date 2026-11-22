@@ -963,8 +963,9 @@
 
     <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
          the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-    <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
-    <div class="tgfade" aria-hidden="true"></div>
+    <!-- the Afisha is Opal black (.opal), the rest navy: the fades take the page's own colour, else a tinted band shows -->
+    <div class="topfade" class:opal={ui.tab === 'afisha'} aria-hidden="true" use:unfeed></div><div class="botfade" class:opal={ui.tab === 'afisha'} aria-hidden="true" use:unfeed></div>
+    <div class="tgfade" class:opal={ui.tab === 'afisha'} aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
     {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
@@ -996,8 +997,14 @@
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    -webkit-mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top));
-    mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top)); }
+    /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
+    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
+    -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
+    mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
   /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
      --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
