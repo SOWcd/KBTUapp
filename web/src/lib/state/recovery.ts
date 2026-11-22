@@ -9,9 +9,12 @@ const V = 1;
 interface Account { tg: number; user: number; epoch: string }
 type RecordOf<T> = { v: number; at: number; value: T | null };
 const accountId = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n > 0;
+// never backwards: the precise reading can run a ms ahead of Date.now and the next call fall back to the wall,
+// and a record stamped later than "now" reads as not yet written (draft.test.ts flaked in CI)
+let ticked = 0;
 const clock = () => {
   const wall = Date.now(), precise = performance.timeOrigin + performance.now();
-  return precise >= wall && precise < wall + 1 ? precise : wall;
+  return ticked = Math.max(ticked, precise >= wall && precise < wall + 1 ? precise : wall);
 };
 const epoch = () => Math.random().toString(36).slice(2);
 
