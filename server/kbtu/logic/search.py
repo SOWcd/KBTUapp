@@ -1,26 +1,197 @@
-"""One search for the whole app: a query against every name a thing has (an event's title in each
-language the AI wrote, a club's name, short and abbreviation in each, a person's Cyrillic and Latin names and nick),
-case-free in any script (SQLite's LOWER/LIKE fold ASCII only), with yo as ye. What comes back is what the searcher may
-already see: the admin everything, everyone else through the same rules as their lists (seats._visible, clubs.listed).
-
-ponytail: every row folded in Python on each query (thousands of rows: milliseconds); a folded column or FTS past ~50k."""
+"""One search across a row's names and translations. The caller decides which rows are visible."""
 from __future__ import annotations
 
 import json
 import re
 import unicodedata
+from typing import NamedTuple
 
 from .core import Viewer, _by_id, _roles, cards, evdel, now, org_ref, rows
 
 
-# Kazakh letters as the Russian ones a Russian keyboard types for them (a Kazakh name is found
-# without a Kazakh layout); both sides fold, so the Kazakh spelling finds it too. web/src/lib/search.ts: the same table
+# Keep the matching rules in step with web/src/lib/search.ts.
 _KK = str.maketrans("\u0451\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456", "\u0435\u0430\u0433\u043a\u043d\u043e\u0443\u0443\u0445\u0438")
+_WORDS = re.compile(r"[^\W_]+")
+_PARTS = re.compile(r"""(?:[^\W_]|[`\[\];',.=~{}:"<>@#$%*()_+\-])+""")
+_EN_KEYS = "`qwertyuiop[]asdfghjkl;'zxcvbnm,."
+_RU_KEYS = "\u0451\u0439\u0446\u0443\u043a\u0435\u043d\u0433\u0448\u0449\u0437\u0445\u044a\u0444\u044b\u0432\u0430\u043f\u0440\u043e\u043b\u0434\u0436\u044d\u044f\u0447\u0441\u043c\u0438\u0442\u044c\u0431\u044e"
+_KK_ROW = "\u04d9\u0456\u04a3\u0493\u04af\u04b1\u049b\u04e9\u04bb"
+_EN_ROW = "2345890-="
+_UNSHIFTED = str.maketrans('~{}:"<>@#$%*()_+', "`[];',." + _EN_ROW)
+_LAYOUTS = (
+    (_EN_KEYS, _RU_KEYS),
+    (_EN_KEYS + _EN_ROW, _RU_KEYS + _KK_ROW),
+    (_RU_KEYS + _KK_ROW, _EN_KEYS + _EN_ROW),
+    (_RU_KEYS + _EN_ROW, _RU_KEYS + _KK_ROW),
+    (_RU_KEYS + _KK_ROW, _RU_KEYS + _EN_ROW),
+)
+_LAYOUTS = tuple((set(keys), str.maketrans(keys, letters)) for keys, letters in _LAYOUTS)
+
+_LAT = str.maketrans({
+    "\u0430": "a", "\u0431": "b", "\u0432": "v", "\u0433": "g", "\u0434": "d", "\u0435": "e", "\u0436": "zh", "\u0437": "z",
+    "\u0438": "i", "\u0439": "y", "\u043a": "k", "\u043b": "l", "\u043c": "m", "\u043d": "n", "\u043e": "o", "\u043f": "p",
+    "\u0440": "r", "\u0441": "s", "\u0442": "t", "\u0443": "u", "\u0444": "f", "\u0445": "h", "\u0446": "ts", "\u0447": "ch",
+    "\u0448": "sh", "\u0449": "sh", "\u044a": "", "\u044b": "y", "\u044c": "", "\u044d": "e", "\u044e": "yu", "\u044f": "ya",
+    "\u00e4": "a", "\u00e1": "a", "\u011f": "g", "\u01f5": "g", "\u0131": "i", "\u00ed": "i", "\u00f1": "n", "\u0144": "n",
+    "\u00f6": "o", "\u00f3": "o", "\u00fc": "u", "\u016b": "u", "\u00fa": "u", "\u00fd": "u", "\u015f": "sh", "\u015b": "sh",
+    "\u00e7": "ch", "\u0107": "ch", "\u010d": "ch", "\u017e": "zh", "j": "zh", "q": "k",
+})
+_ALIAS = {"shch": "sh", "kh": "h", "gh": "g", "ng": "n", "yu": "iu", "ye": "e", "y": "i"}
+_ALIASES = re.compile(r"shch|kh|gh|ng|[yi]+a|yu|ye|y")
+_DOUBLE = re.compile(r"(.)\1+")
 
 
 def fold(s: object) -> str:
-    """The form both sides are compared in: NFKC, Unicode case-folded, yo as ye, Kazakh letters as Russian, spaces squeezed."""
+    """Keep the case-insensitive spelling used for literal lookups such as usernames and IDs."""
     return " ".join(unicodedata.normalize("NFKC", str(s or "")).casefold().translate(_KK).split())
+
+
+class _Word(NamedTuple):
+    text: str
+    latin: str
+
+
+def _word(s: str) -> _Word:
+    text = s.casefold().translate(_KK)
+    latin = _undouble(text).translate(_LAT)
+    latin = _ALIASES.sub(lambda m: _ALIAS.get(m[0], "a"), latin)
+    return _Word(text, _undouble(latin))
+
+
+def _undouble(s: str) -> str:
+    return _DOUBLE.sub(lambda m: m[1] if m[1].isalpha() else m[0], s)
+
+
+def _query_words(terms):
+    return [(_word(s), min(3, len(s) // 4) if s.isalpha() else 0) for s in terms]
+
+
+def _group(part, literal):
+    forms = [(3, _query_words(literal))]
+    split = [_group(s, [s]) for s in literal] if len(literal) > 1 else []
+    if part.isnumeric():
+        return forms, split
+    unshifted = part.translate(_UNSHIFTED)
+    previous = part
+    for keys, layout in _LAYOUTS:
+        if not keys.issuperset(unshifted):
+            continue
+        fixed = unshifted.translate(layout)
+        if fixed == part or fixed == previous:
+            continue
+        previous = fixed
+        terms = _WORDS.findall(fixed)
+        if terms:
+            forms.append((2, _query_words(terms)))
+    return forms, split
+
+
+def _prepare(q: str):
+    groups = []
+    for part in _PARTS.findall(unicodedata.normalize("NFKC", q).lower()):
+        literal = _WORDS.findall(part)
+        if literal:
+            groups.append(_group(part, literal))
+    return groups
+
+
+def _near(w: str, t: str, limit: int, scratch) -> bool:
+    """Banded edit distance to a word prefix, with adjacent transpositions."""
+    if len(t) + limit < len(w):
+        return False
+    older, prev, cur = scratch
+    end, stop = min(len(w) + limit, len(t)), limit + 1
+    for j in range(limit + 1):
+        prev[j] = j
+    prev[limit + 1] = stop
+    for i in range(1, len(w) + 1):
+        lo, hi = max(1, i - limit), min(end, i + limit)
+        cur[lo - 1] = i if lo == 1 else stop
+        cur[hi + 1] = stop
+        best = cur[lo - 1]
+        for j in range(lo, hi + 1):
+            distance = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (w[i - 1] != t[j - 1]))
+            if i > 1 and j > 1 and w[i - 1] == t[j - 2] and w[i - 2] == t[j - 1]:
+                distance = min(distance, older[j - 2] + 1)
+            cur[j] = distance
+            if distance < best:
+                best = distance
+        if best > limit:
+            return False
+        older, prev, cur = prev, cur, older
+    return True
+
+
+def _word_score(w, edits, terms, prefix, best, scratch) -> int:
+    result = 0
+    for t in terms:
+        if t.text.startswith(w.text):
+            return prefix
+        if prefix == 3 and w.latin and t.latin.startswith(w.latin):
+            result = 2
+    if result or best >= 1 or not edits:
+        return result
+    latin_edits = min(edits, len(w.latin) // 4) if prefix == 3 else 0
+    for t in terms:
+        if _near(w.text, t.text, edits, scratch):
+            return 1
+        if latin_edits and (w.text != w.latin or t.text != t.latin) and _near(w.latin, t.latin, latin_edits, scratch):
+            return 1
+    return 0
+
+
+def _name_score(query, terms, scratch) -> int:
+    level = 3
+    for forms, split in query:
+        best = 0
+        for prefix, words in forms:
+            if prefix <= best:
+                continue
+            match = prefix
+            for w, edits in words:
+                match = min(match, _word_score(w, edits, terms, prefix, best, scratch))
+                if match <= best:
+                    break
+            if match > best:
+                best = match
+        if best < 2 and split:
+            best = max(best, _name_score(split, terms, scratch))
+        if not best:
+            return 0
+        level = min(level, best)
+    return level
+
+
+class _Search:
+    def __init__(self, q: str):
+        self.query = _prepare(q)
+        width = max((max(len(w.text), len(w.latin)) for forms, _ in self.query for _, words in forms for w, _ in words), default=0)
+        self.scratch = [[0] * (width + 5) for _ in range(3)]
+
+    def score(self, texts) -> int:
+        if not self.query:
+            return 0
+        best = 0
+        for text in texts:
+            if not text:
+                continue
+            terms = [_word(w) for w in _WORDS.findall(unicodedata.normalize("NFKC", str(text)).lower())]
+            best = max(best, _name_score(self.query, terms, self.scratch))
+            if best == 3:
+                break
+        return best
+
+    def person_score(self, p) -> int:
+        return self.score(_person_names(p))
+
+
+def score(q: str, texts) -> int:
+    """Exact prefix (3), transliterated or layout-corrected prefix (2), typo (1), no match (0)."""
+    return _Search(q).score(texts)
+
+
+def hit(k: str, texts) -> bool:
+    return score(k, texts) > 0
 
 
 def names(row, *keys: str) -> list[str]:
@@ -29,38 +200,36 @@ def names(row, *keys: str) -> list[str]:
     return [x for k in keys for x in (row[k], *((t or {}).get(k) for t in tr.values())) if x]
 
 
-def hit(k: str, texts) -> bool:
-    """Every word of the folded query `k` starts a word of one of the texts, in any order ("tole bi" and "nightm" find
-    "A Nightmare on Tole Bi Street"; "b" isn't in "IT Club")."""
-    ws = re.findall(r"\w+", k)
-    return bool(ws) and any(all(any(t.startswith(w) for t in ts) for w in ws) for ts in (re.findall(r"\w+", fold(x)) for x in texts))
+def _person_names(p) -> tuple:
+    return (f"{p['first_name'] or ''} {p['last_name'] or ''}", f"{p['first_lat'] or ''} {p['last_lat'] or ''}", p["nick"])
 
 
 def person_hit(k: str, p) -> bool:
     """A person (the students' name columns, the users' nick) by any of their names."""
-    return hit(k, (f"{p['first_name'] or ''} {p['last_name'] or ''}", f"{p['first_lat'] or ''} {p['last_lat'] or ''}", p["nick"]))
+    return hit(k, _person_names(p))
 
 
 def people(found, q: str, n: int = 20) -> list:
     """Out of `found` (rows with u.id, u.tg_username, s.student_id and the name columns; the caller's query decides who
     may come back): the exact @username first, then by app id, exact student ID or any name (students only)."""
-    k = fold(q)
+    k = fold(q.lstrip("@"))
     qid = int(k) if k.isdecimal() else -1
     first = [p for p in found if p["tg_username"] and fold(p["tg_username"]) == k]
     seen = {p["id"] for p in first}
+    matcher = _Search(q)
     return (first + [p for p in found if p["id"] not in seen and (p["id"] == qid or p["student_id"] is not None
-                                                                  and (fold(p["student_id"]) == k or person_hit(k, p)))])[:n]
+                       and (fold(p["student_id"]) == k or matcher.person_score(p)))])[:n]
 
 
 def events(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     """Events by any of their titles, upcoming first (the soonest), then the past (the latest). The admin: any club's, any
     status, hidden too; everyone else: only what seats._visible lets them open (their club's drafts to its team)."""
-    k = fold(q)
-    if len(k) < 2:
+    if len(fold(q)) < 2:
         return []
+    matcher = _Search(str(q or ""))
     t = now()
     found = [e for e in rows(con, f"""SELECT * FROM events e WHERE memo_only = 0 AND NOT {evdel()}
-        ORDER BY starts_at < ?, CASE WHEN starts_at >= ? THEN starts_at END, starts_at DESC""", t, t) if hit(k, names(e, "title"))]
+        ORDER BY starts_at < ?, CASE WHEN starts_at >= ? THEN starts_at END, starts_at DESC""", t, t) if matcher.score(names(e, "title"))]
     if v.role != "admin":
         roles, hidden = _roles(con, v), _hidden_orgs(con)
         found = [e for e in found if _visible(con, v, e, roles, hidden)]
@@ -72,11 +241,11 @@ def events(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
 def clubs(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     """Clubs (types.ts OrgRef) by name, short or abbreviation in any language. The admin: every org, hidden too;
     everyone else: the registry's (clubs.listed)."""
-    k = fold(q)
-    if len(k) < 2:
+    if len(fold(q)) < 2:
         return []
+    matcher = _Search(str(q or ""))
     found = rows(con, "SELECT * FROM orgs") if v.role == "admin" else listed(con, v, small=True)
-    found = sorted((o for o in found if hit(k, names(o, "name", "short", "abbr"))), key=lambda o: fold(o["name"]))[:n]
+    found = sorted((o for o in found if matcher.score(names(o, "name", "short", "abbr"))), key=lambda o: fold(o["name"]))[:n]
     logos = _by_id(con, "files", (o["logo_file_id"] for o in found))
     return [org_ref(con, o, logos) for o in found]
 

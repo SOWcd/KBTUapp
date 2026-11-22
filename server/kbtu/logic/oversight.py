@@ -113,8 +113,9 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     if len(q) < 2 or len(q) > 60:
         raise ApiError("bad_input")
     k = search.fold(q)
+    matcher = search._Search(q)
     found = [p for p in rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id""")
-             if search.hit(k, (p["student_id"],)) or search.person_hit(k, p)][:30]
+             if search.fold(p["student_id"]).startswith(k) or matcher.person_score(p)][:30]
     log_action(con, v.id, "registry_search", "registry", json.dumps({"q": q, "found": len(found)}))  # a look at personal data (§9)
     ids = [p["id"] for p in found]
     of: dict[int, list] = {}
@@ -238,9 +239,11 @@ def find_people(con, v: Viewer, q: object) -> list[dict]:
     """Admin → People: anyone who opened the app by exact @username or app id, students also by name or student ID
     (which only matches, never comes back). The team's own row shape, the ban with it."""
     _admin(v)
-    q = str(q or "").strip().lstrip("@")
-    if not (2 <= len(q) or q.isdigit()) or len(q) > 64:
+    q = str(q or "").strip()
+    bare = q.lstrip("@")
+    if not (2 <= len(bare) or bare.isdigit()) or len(bare) > 64:
         raise ApiError("bad_input")
+    q = "@" + bare if q.startswith("@") else bare  # @ can also be a shifted Kazakh letter key
     found = search.people(rows(con, _STAFF.replace("SELECT ", "SELECT u.banned_at, s.student_id, ", 1) + " WHERE u.tg_id > 0 ORDER BY s.last_name, s.first_name"), q)
     return [{**_staff_row(p), "banned": p["banned_at"] is not None} for p in found]
 
