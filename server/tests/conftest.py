@@ -32,7 +32,10 @@ def no_receipt_audit(monkeypatch):
 @pytest.fixture
 def before_notification_migration():
     def rewind(con):
-        con.executescript("""DROP TABLE notification_days;
+        # later migrations first (rewinding to 212 replays 213 and 214)
+        con.executescript("""ALTER TABLE registrations DROP COLUMN rating_dismissed;
+            ALTER TABLE event_ratings DROP COLUMN public_after;
+            DROP TABLE notification_days;
             ALTER TABLE users DROP COLUMN notification_undo;
             ALTER TABLE users DROP COLUMN n_door;
             ALTER TABLE users DROP COLUMN n_digests;

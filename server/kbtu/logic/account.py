@@ -1327,7 +1327,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         pid = _placeholder(con)
         me_.update(p=pid, end=NO_END, now=core.now())
         for rid, eid in con.execute(f"SELECT id, event_id FROM registrations WHERE user_id = :u AND status = 'going' AND event_id IN ({ended})", me_).fetchall():
-            con.execute("UPDATE registrations SET user_id = ?, note = NULL, answers = NULL, team_want = NULL, phone_shared = 0, ticket_code = ? WHERE id = ?", (pid, _ticket_code(con, eid), rid))
+            con.execute("""UPDATE registrations SET user_id = ?, note = NULL, answers = NULL, team_want = NULL,
+                phone_shared = 0, rating_dismissed = 0, ticket_code = ? WHERE id = ?""", (pid, _ticket_code(con, eid), rid))
         con.execute("UPDATE event_ratings SET user_id = :p, comment = '' WHERE user_id = :u", me_)
         con.execute(f"UPDATE volunteers SET user_id = :p, note = '' WHERE user_id = :u AND event_id IN ({ended})", me_)
         done = "SELECT id FROM rounds WHERE status = 'done'"

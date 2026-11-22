@@ -207,6 +207,7 @@ export interface Org extends OrgRef {
   subscribers: number;
   members: number;
   upcoming: number;
+  eventRating?: number | null;  // club or school average from public events after voting closes
   last?: { id: Id; title: string; startsAt: Ts } | null; // its latest public event ended in the last 30 days (the Clubs list's line)
   recruiting: boolean;          // takes join applications any time (Studio's "always open" switch)
   joinQuestions?: (RoundQuestion & { id: Id })[]; // the club's own questions for them (as a round's; id: the position)
@@ -375,7 +376,8 @@ export interface MyRegistration {
   receipt: 'none' | 'accepted' | 'rejected';
   receiptFlags?: string[];      // why my receipt looks wrong, until the organizer looks at it (§4.3): another file may replace it
   free?: boolean;               // one of a paid event's free seats for 1st-year students (§4.3)
-  rating?: number | null;       // came: my rating after the event (Me → Recent asks until there is one)
+  rating?: number | null;       // came: my rating after the event
+  ratingDismissed?: boolean;   // the in-app prompt was dismissed for this event
   ics?: string | null;          // going: the signed calendar file's path
   note?: string | null;         // "Can't make it": why (a club meeting asks)
 }

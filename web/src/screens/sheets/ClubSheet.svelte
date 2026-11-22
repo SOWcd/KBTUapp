@@ -12,6 +12,7 @@
   import Users from '@lucide/svelte/icons/users';
   import Lock from '@lucide/svelte/icons/lock';
   import Award from '@lucide/svelte/icons/award';
+  import Star from '@lucide/svelte/icons/star';
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -36,7 +37,7 @@
   import { focusPos } from '../../lib/photo';
   import { data, toggleJoin, toggleSub } from '../../lib/state/data.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
-  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { t, tn, fmtNum } from '../../lib/i18n/index.svelte';
   import { roleLabel } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { social } from '../../lib/social';
@@ -63,6 +64,7 @@
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id || e.coHost?.id === id) : null)); // and the ones it co-hosts
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? data.small.find((x) => x.id === id) ?? fetched);
+  const eventRating = $derived(fetched ? fetched.eventRating : o?.eventRating);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
   // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
@@ -105,6 +107,12 @@
     </div>
 
     <div class="body">
+      {#if o.kind === 'club' || o.kind === 'school'}
+        <Group>
+          <Row icon={Star} title={t('rate.orgTitle')} subtitle={t(eventRating != null ? 'rate.orgSource' : 'rate.orgEmpty')}
+            value={eventRating != null ? t('rate.orgValue', { n: fmtNum(eventRating) }) : undefined} whole />
+        </Group>
+      {/if}
       {#if session.me?.memberships.some((m) => m.org.id === id)}
         <Group>
           <Row icon={Users} title={t('club.workspace')} accessory="chevron" onclick={() => sheets.studio(id)} />

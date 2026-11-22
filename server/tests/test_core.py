@@ -600,6 +600,7 @@ def test_delete_my_data(env):
                           (ali["id"],)).lastrowid
         con.execute("INSERT INTO event_photos (event_id, file_id, sort, added_by) VALUES (2, ?, 0, ?)", (pic, ali["id"]))
         con.execute("INSERT INTO event_ratings (event_id, user_id, score, comment, created_at) VALUES (2, ?, 5, 'great', 0)", (ali["id"],))
+        con.execute("UPDATE registrations SET rating_dismissed = 1 WHERE event_id = 2 AND user_id = ?", (ali["id"],))
         con.execute("INSERT INTO volunteers (event_id, user_id, status, note, created_at) VALUES (2, ?, 'yes', 'call me', 0)", (ali["id"],))
         con.execute("INSERT INTO rounds (id, org_id, title, closes_at, status, created_at) VALUES (1, 1, 'Autumn', 0, 'done', 0)")
         app_id = con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, created_at, updated_at)
@@ -643,6 +644,7 @@ def test_delete_my_data(env):
     assert ph["tg_id"] < 0 and ph["tg_id"] != -ali["id"]                                   # random: nothing leads back
     assert ph and (ph["tg_first_name"], ph["tg_username"], ph["seen_at"], ph["can_dm"]) == ("", None, 0, 0)
     assert came() == 2 and con.execute("SELECT note FROM registrations WHERE user_id = ?", (ph["id"],)).fetchone()[0] is None
+    assert con.execute("SELECT rating_dismissed FROM registrations WHERE user_id = ?", (ph["id"],)).fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM registrations WHERE invited_by = ?", (ali["id"],)).fetchone()[0] == 0 and zsoul == 1
     assert tuple(con.execute("SELECT user_id, score, comment FROM event_ratings WHERE event_id = 2").fetchone()) == (ph["id"], 5, "")
     assert tuple(con.execute("SELECT user_id, note FROM volunteers").fetchone()) == (ph["id"], "")
@@ -1375,14 +1377,23 @@ def test_ratings(env):
     assert c.post("/api/events/1/checkin", headers=P, json={"userId": ali["id"]}).json()["result"] == "ok"
     ask = con.execute("SELECT send_after FROM bot_outbox WHERE kind = 'rate' AND user_id = ?", (ali["id"],)).fetchone()
     assert ask and ask[0] == start + 3600 + 3600                                          # an hour after the end
+    dismiss = "/api/events/1/rating/dismiss"
+    assert c.put(dismiss, headers=A).status_code == 403                                   # not over yet
     assert c.put("/api/events/1/rating", headers=A, json={"score": 5}).status_code == 403    # not over yet
     con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 60,))
+    assert c.get("/api/events/past?mine=1", headers=A).json()[0]["my"]["ratingDismissed"] is False
+    assert c.put(dismiss, headers=Z).status_code == 403                                   # didn't come
+    assert c.put(dismiss, headers={**A, "X-Staff-Event": "1"}).status_code == 403
+    assert c.put(dismiss, headers=A).status_code == c.put(dismiss, headers=A).status_code == 204
+    assert c.get("/api/events/past?mine=1", headers=A).json()[0]["my"]["ratingDismissed"] is True
+    assert c.get("/api/events/1", headers=Z).json()["my"]["ratingDismissed"] is False
     assert c.get("/api/events/1", headers=A).json()["canRate"] is True
     assert c.get("/api/events/1", headers=Z).json()["canRate"] is False                   # didn't come
     assert c.put("/api/events/1/rating", headers=Z, json={"score": 1}).status_code == 403
     assert c.put("/api/events/1/rating", headers=A, json={"score": 9}).status_code == 400
     e = c.put("/api/events/1/rating", headers=A, json={"score": 4, "comment": "Great jury"}).json()
     assert e["myRating"] == 4 and e["ratings"] is None                                    # a student never sees the summary
+    assert con.execute("SELECT public_after FROM event_ratings WHERE event_id = 1").fetchone()[0] == e["endsAt"] + logic.organizing.RATE_FOR
     s = c.get("/api/events/1", headers=P).json()["ratings"]
     assert s == {"avg": None, "count": 1, "dist": [], "comments": []}                  # under three: how many, nothing more
     for uid in (pres["id"], zhan["id"]):                                                  # two more (straight in: the rules are above)

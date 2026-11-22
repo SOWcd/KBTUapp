@@ -2865,6 +2865,12 @@ const en: Dict = {
   'upd.delete': "Delete",
   // one-tap rating after the event
   'rate.ask': "How was it?",
+  'rate.dismiss': "Dismiss rating prompt",
+  'rate.score': "Rate {n} out of 5",
+  'rate.orgTitle': "Event rating",
+  'rate.orgSource': "Average from public events",
+  'rate.orgEmpty': "Appears when a public event’s rating window closes with at least three ratings",
+  'rate.orgValue': "{n} / 5",
   'rate.mine': "Your rating",
   'rate.thanks': "Thanks! Your rating is in",
   'rate.anon': "Anonymous: the club sees only the average and comments without names",

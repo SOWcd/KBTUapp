@@ -160,6 +160,7 @@ export const server = {
   postGalleryPhoto: (file: Blob, event?: Id, topic?: GalleryTopic): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ event, topic }), file), // into the Gallery under my name (GalleryPage.post); event: its album too; topic: of no event (one of the two, never both)
   deleteGalleryPhoto: (id: Id): Promise<void> => call('DELETE', `/gallery/${id}`), // mine: from the Gallery and the albums I put it in
   pastEvents: (org?: Id, mine?: boolean): Promise<EventCard[]> => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })), // org: a club's latest few; mine: the ones I was signed up for or came to
+  attendedEvents: (): Promise<EventCard[]> => call('GET', '/events/past?attended=1'), // my check-ins in the last month
   event: (id: Id, view?: 'ordinary'): Promise<EventFull> => call('GET', `/events/${id}`, undefined, undefined, view === 'ordinary'),
   addSeats: (id: Id, add: number): Promise<EventFull> => call('POST', `/events/${id}/seats`, { add }),
   changePlace: (id: Id, place: string): Promise<EventFull> => call('POST', `/events/${id}/place`, { place }), // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
@@ -393,6 +394,7 @@ export const server = {
   // the organizer's updates (Head+, three a day): pinned on the event, the bot pings the people going
   postUpdate: (id: Id, body: string): Promise<EventUpdate[]> => call('POST', `/events/${id}/updates`, { body }),
   rate: (id: Id, score: number, comment?: string): Promise<EventFull> => call('PUT', `/events/${id}/rating`, { score, comment: comment ?? '' }), // one tap after the event (checked-in people)
+  dismissRating: (id: Id): Promise<void> => call('PUT', `/events/${id}/rating/dismiss`),
   deleteUpdate: (id: Id, update: Id): Promise<void> => call('DELETE', `/events/${id}/updates/${update}`),
   checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),

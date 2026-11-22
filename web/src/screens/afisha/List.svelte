@@ -12,9 +12,11 @@
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
+  import Star from '@lucide/svelte/icons/star';
+  import X from '@lucide/svelte/icons/x';
   import { onMount, tick } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
-  import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
+  import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
@@ -65,7 +67,14 @@
 
   // the clock: a minute is enough for "21 min left"; moves on at midnight (the app can stay open overnight)
   let now = $state(nowTs());
-  onMount(() => { const id = setInterval(() => (now = nowTs()), 30_000); return () => clearInterval(id); });
+  onMount(() => {
+    const id = setInterval(() => {
+      const next = nowTs();
+      if (data.events.some((e) => e.my?.status === 'going' && endOf(e) > now && endOf(e) <= next)) void loadMyPast();
+      now = next;
+    }, 30_000);
+    return () => clearInterval(id);
+  });
   const today = $derived(dayNo(now));
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
   const endOf = (e: EventCard) => e.endsAt ?? e.startsAt + 3 * 3600;
@@ -135,6 +144,12 @@
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
+  // Pick one prompt at a time, including events that finish while this tab is still open.
+  const ratePrompt = $derived.by(() => {
+    if (!session.me?.student) return;
+    const events = new Map([...data.events, ...past, ...(data.myPast ?? [])].map((e) => [e.id, e]));
+    return [...events.values()].filter((e) => canAskRating(e, now)).sort((a, b) => endOf(b) - endOf(a))[0];
+  });
 
   // the pull-down search: the events held, upcoming and the last month's that ended, by title, place or club
   let q = $state('');
@@ -221,6 +236,22 @@
       {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
     </div>
   {:else}
+  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
+    {@const e = ratePrompt}
+    <div class="rate-prompt">
+      <Card>
+        <div class="rate-head">
+          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
+          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
+        </div>
+        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
+          {#each [1, 2, 3, 4, 5] as score (score)}
+            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
+          {/each}
+        </div>
+      </Card>
+    </div>
+  {/if}
   <StoryRow />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
@@ -351,6 +382,14 @@
   .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
   .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
   .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
+  .rate-prompt { margin-bottom: var(--s-3); }
+  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+  .rate-head > div { min-width: 0; }
+  .rate-head h2 { font-weight: 600; }
+  .rate-head p { margin-top: 2px; color: var(--text-2); overflow-wrap: anywhere; }
+  .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
+  .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
+  .rate-stars button:active { transform: scale(0.94); }
   .off { margin: 12px 4px 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }

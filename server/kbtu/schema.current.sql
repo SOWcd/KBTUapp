@@ -383,7 +383,7 @@ CREATE TABLE event_ratings (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
         comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300),
-        created_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL, public_after INTEGER,
         PRIMARY KEY (event_id, user_id)
     ) STRICT;
 CREATE TABLE event_slides (
@@ -833,7 +833,7 @@ CREATE TABLE registrations (
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   checked_in_at INTEGER,
-  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0, door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80),
+  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0, door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80), rating_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (rating_dismissed IN (0, 1)),
   UNIQUE (event_id, user_id)
 ) STRICT;
 CREATE TABLE removal_requests (
