@@ -39,6 +39,7 @@
   import ListPage from './screens/afisha/List.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
+  import StandaloneBar from './ui/StandaloneBar.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
@@ -527,13 +528,35 @@
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
-  $effect(() => {
-    if (!session.banned && !session.revoked && ((!gated && overlays.some((o) => !o.closing && !o.holdBack)) || backTo.fn)) backButton.show();
-    else backButton.hide();
-  });
+  const showBack = $derived(!session.banned && !session.revoked && ((!gated && overlays.some((o) => !o.closing && !o.holdBack)) || !!backTo.fn));
+  $effect(() => { if (showBack) backButton.show(); else backButton.hide(); });
   $effect(() => {
     if (!session.banned && !session.revoked) return;
     untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
+  });
+
+  const tabLink: Record<Tab, string> = { afisha: 'afisha', forum: 'fp', club: 'clubs', profile: 'me' };
+  const screenLink = $derived.by(() => {
+    // Links only describe destinations. Never forward launch tokens or private overlay props.
+    for (const o of [...overlays].reverse()) {
+      if (o.closing) continue;
+      const id = o.props.id;
+      switch (o.stat) {
+        case 'sheet.event': if (typeof id === 'number' && !o.props.preview) return `${o.props.album ? 'ph' : 'ev'}_${id}`; break;
+        case 'sheet.club': if (typeof id === 'number') return `cl_${id}`; break;
+        case 'sheet.person': if (typeof id === 'number') return `u_${id}`; break;
+        case 'sheet.ticket': if (typeof id === 'number') return `ev_${id}`; break;
+        case 'sheet.comments': if (typeof id === 'number') return `${o.props.kind === 'event' ? 'cm' : 'cp'}_${id}`; break;
+        case 'sheet.studio': if (typeof o.props.org === 'number') return `cl_${o.props.org}`; break;
+        case 'sheet.friends': return 'friends';
+        case 'sheet.map': return o.props.exit ? 'exit' : 'map';
+        case 'sheet.week': return 'sched';
+        case 'sheet.awards': return 'awards';
+        case 'sheet.news': return 'news';
+        case 'sheet.feed': return 'feed';
+      }
+    }
+    return tabLink[ui.tab];
   });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
@@ -612,7 +635,7 @@
       return;
     }
     const ms = p.match(/^ms_([\w-]{24})$/); // back from the Microsoft sign-in (/ms.html): it lands only on the Telegram that started it
-    if (ms) {
+    if (ms && inTelegram) {
       // then what the guest wanted before Microsoft (a door scan: shown counted) runs after the student ID, as msBack's.
       // A second launch by the same link (ms.html's button after its own redirect) finds the claim taken: no error then
       void api.msClaim(ms[1]).then(() => true, () => false).then(async (ok) => {
@@ -624,6 +647,11 @@
       });
       return;
     }
+    if (p === 'verify') { sheets.login(); return; }
+    if (p === 'afisha') { ui.tab = 'afisha'; return; }
+    if (p === 'map') { sheets.map(); return; }
+    if (p === 'awards') { ui.tab = 'profile'; asStudent(() => sheets.awards()); return; }
+    if (p === 'feed') { ui.tab = 'afisha'; sheets.feed(); return; }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
@@ -787,6 +815,7 @@
 
   // force: the Microsoft return's own call (its start param is ms_, nothing else to open)
   function msBack(force = false) {
+    if (!inTelegram) return;
     // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
     // must not sign anyone up)
     const again = () => {
@@ -933,7 +962,7 @@
 
   onMount(() => {
     count(launchedFrom(tg.startParam));
-    backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
+    const offBack = backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !gated && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
@@ -945,18 +974,21 @@
     addEventListener('wheel', touch, { capture: true, passive: true });
     addEventListener('keydown', touch, true);
     // the last copy first (the instant re-open), the server's answer replaces it
-    const snap = readCache();
+    const recoverTg = inTelegram ? tg.user?.id : session.me?.tg.id;
+    const snap = readCache(recoverTg);
     if (snap) {
-      session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
+      if (inTelegram) {
+        session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
+      }
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
-      localize(data); localize(session.me); // cached in another language, maybe
+      localize(data); if (inTelegram) localize(session.me); // cached in another language, maybe
     }
-    const hint = tg.startParam ? null : readNavigation(recovery, recovery.peek(tg.user?.id));
+    const hint = tg.startParam ? null : readNavigation(recovery, recovery.scope() ?? recovery.peek(recoverTg));
     if (hint) void loadPage(hint.tab).catch(() => {});
-    Promise.all([loadMe(false, true), loadAfisha()]).then(async () => {
+    Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(async () => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
@@ -968,7 +1000,7 @@
       let microsoftReturn = !!session.me?.msPending;
       const owner = recovery.scope();
       const nav = !gated && !interacted && !overlays.length ? launchNavigation(tg.startParam, microsoftReturn) : null;
-      if (!tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
+      if (inTelegram && !tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
         const claim = api.msClaim('').then(async () => {
           await loadMe();
           if (session.banned || session.revoked) return false;
@@ -999,15 +1031,18 @@
         moment(() => sheets.creditAsk());
       });
       setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
+      if (!inTelegram && session.me && !session.me.student?.ms) sheets.login();
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       // DMP at a computer: its registry, wide, instead of the phone hint (once per launch; Back leaves it for the app)
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
       // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
-      moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); booted = true; setTimeout(() => moment(celebrate));
+      if (inTelegram) { moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); }
+      booted = true; setTimeout(() => moment(celebrate));
     });
     const clockTimer = setInterval(() => (clock = nowTs()), 30000);
 
     return () => {
+      offBack();
       clearInterval(clockTimer);
       removeEventListener('keydown', esc);
       removeEventListener('pointerdown', touch, true);
@@ -1039,6 +1074,7 @@
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
+    {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}

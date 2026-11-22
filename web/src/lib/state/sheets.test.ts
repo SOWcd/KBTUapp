@@ -3,7 +3,7 @@ import type { Component } from 'svelte';
 
 vi.stubGlobal('document', { addEventListener: () => {} });
 vi.mock('../stats', () => ({ count: vi.fn() }));
-vi.mock('../tg', () => ({ onShareBusy: () => {} }));
+vi.mock('../tg', () => ({ onShareBusy: () => {}, tg: { initData: '' } }));
 vi.mock('./theme.svelte', () => ({ switching: () => null }));
 vi.mock('../i18n/index.svelte', () => ({ t: (k: string) => k }));
 const { open, close, overlays, removeOverlay } = await import('./ui.svelte');

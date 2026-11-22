@@ -33,7 +33,10 @@ def no_receipt_audit(monkeypatch):
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""ALTER TABLE club_report_marks DROP COLUMN comment_edited_at;
+        con.executescript("""DROP TRIGGER web_sessions_revoke;
+            DROP TABLE web_login_used;
+            DROP TABLE web_sessions;
+            ALTER TABLE club_report_marks DROP COLUMN comment_edited_at;
             ALTER TABLE club_report_marks DROP COLUMN comment_edited_by;
             ALTER TABLE club_report_marks DROP COLUMN comment_at;
             ALTER TABLE club_report_marks DROP COLUMN comment_by;

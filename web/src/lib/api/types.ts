@@ -7,7 +7,7 @@ export type OrgRole = 'member' | 'head' | 'vice' | 'president';
 export type PlatformRole = 'user' | 'moderator' | 'admin';
 export type OrgKind = 'club' | 'school' | 'council' | 'office' | 'app';
 
-export interface ApiError { error: 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict' | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable'; message?: string }
+export interface ApiError { error: 'unauthorized' | 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict' | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable'; message?: string }
 
 /** Image prepared by the server: WebP, thumbnail and a tiny inline blur preview. */
 /** An application to start a club (§4.6): it opens after the creator's check. `applicant` for moderators and the admin. */

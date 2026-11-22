@@ -26,6 +26,8 @@
   import IdCard from '@lucide/svelte/icons/id-card';
   import Info from '@lucide/svelte/icons/info';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
+  import LogOut from '@lucide/svelte/icons/log-out';
+  import Monitor from '@lucide/svelte/icons/monitor';
   import { api, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, dropSchedule } from '../../lib/state/data.svelte';
@@ -34,7 +36,7 @@
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { haptic, openLink, on } from '../../lib/tg';
+  import { haptic, inTelegram, openLink, on } from '../../lib/tg';
   import { menu } from '../../ui/menu';
   import { onMount } from 'svelte';
   import { photoItems } from './mine';
@@ -45,7 +47,7 @@
   import { lookData } from '../../lib/state/looks.svelte';
   import LookPage from './LookPage.svelte';
 
-  let { editing = false, onlanyard }: { editing?: boolean; onlanyard: () => void } = $props();
+  let { editing = false, onlanyard }: { editing?: boolean; onlanyard?: () => void } = $props();
   const me = $derived(session.me);
   const s = $derived(me?.settings);
   const bells = $derived(notificationSettings.filter(([key]) => s?.[key]).length);
@@ -98,6 +100,27 @@
   async function dropWeek() {
     if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
   }
+
+  let signingOut = $state(false);
+  async function signOut(all: boolean) {
+    if (signingOut) return;
+    signingOut = true;
+    try {
+      if (all) {
+        if (!(await sheets.ask({ title: t('web.signOutAll'), text: t('web.signOutAllConfirm'), ok: t('web.signOut'), cancel: t('common.cancel'), danger: true }))) return;
+        await api.webLogoutAll();
+      } else {
+        await api.webLogout();
+      }
+      if (inTelegram) { haptic.ok(); say(t('web.signedOutAll'), 'sparkles_3d'); }
+      else location.reload();
+    } catch {
+      haptic.error(); say(t('common.error'), 'warning_3d');
+    } finally {
+      signingOut = false;
+    }
+  }
+
   onMount(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
   // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
   // no "added" within a few seconds -> say where to allow it, never a button that seems to do nothing
@@ -117,10 +140,12 @@
   {:else}
   {#if me?.student}
     {@const st = me.student}
-    <div data-unit class="first">
-      <Group><Row icon={IdCard} title={t('look.lanyard')} value={wornName} accessory="chevron" onclick={() => { haptic.tap(); onlanyard(); }} /></Group>
-    </div>
-    <div data-unit class="sec">
+    {#if onlanyard}
+      <div data-unit class="first">
+        <Group><Row icon={IdCard} title={t('look.lanyard')} value={wornName} accessory="chevron" onclick={() => { haptic.tap(); onlanyard?.(); }} /></Group>
+      </div>
+    {/if}
+    <div data-unit class={onlanyard ? 'sec' : 'first'}>
       <Group>
         <Row icon={User} title={t('set.aboutMe')} value={[st.firstName, st.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('me'); }} />
         <Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />
@@ -155,6 +180,14 @@
       {#if session.donate}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
+  {#if me}
+    <div data-unit class="sec">
+      <Group>
+        {#if !inTelegram}<Row icon={LogOut} title={t('web.signOut')} tone="destructive" disabled={signingOut} onclick={() => void signOut(false)} />{/if}
+        <Row icon={Monitor} title={t('web.signOutAll')} tone="destructive" disabled={signingOut} onclick={() => void signOut(true)} />
+      </Group>
+    </div>
+  {/if}
   {/if}
 </div>
 

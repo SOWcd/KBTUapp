@@ -1,15 +1,16 @@
 import '@fontsource-variable/inter/opsz.css';
 import './ui/tokens.css';
 import './ui/base.css';
-import { mount, unmount } from 'svelte';
+import { mount } from 'svelte';
 import App from './App.svelte';
-import { boot, hapticTaps, tg } from './lib/tg';
+import { boot, hapticTaps, inTelegram, tg } from './lib/tg';
 import { i18n, loadLang } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
 import './lib/state/keyboard.svelte'; // the app's box at its height without a keyboard, before the first paint
 
 document.documentElement.lang = i18n.lang;
+if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
 boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#07080F');
@@ -31,20 +32,6 @@ window.addEventListener('vite:preloadError', (e) => {
 document.addEventListener('touchstart', () => {}, { passive: true });
 hapticTaps();
 
-// Outside Telegram (a plain browser) the app can't sign in: a page says where it lives first (owner, Oct 30). Told apart
-// by Telegram's launch parameters, not by telegram.org's script, which a filter or a bad network can keep from a real
-// Telegram user (review P3); dev, and "continue in the browser" in this tab, go straight in.
-function fromTelegram(): boolean {
-  if (import.meta.env.DEV || /[#?&]tgWebApp(Data|Platform)=/.test(location.hash + location.search) || /Telegram/i.test(navigator.userAgent)) return true;
-  // telegram-web-app.js keeps the launch parameters here across a reload (an empty "{}" in a plain browser too)
-  try { return /tgWebApp(Data|Platform)/.test(sessionStorage.getItem('__telegram__initParams') ?? '') || sessionStorage.getItem('kb-web') === '1'; } catch { return false; }
-}
-// the link that opens the app in Telegram; a start parameter (a short link's) passes on only in Telegram's own grammar
-function telegramLink(): string {
-  const p = new URLSearchParams(location.search).get('startapp') ?? new URLSearchParams(location.hash.slice(1)).get('tgWebAppStartParam');
-  return p && /^[A-Za-z0-9_-]{1,64}$/.test(p) ? `https://t.me/KBTUappBot?startapp=${p}` : 'https://t.me/KBTUappBot?startapp';
-}
-
 // the app's language before the first render (Russian is in the bundle: at once); without the network, Russian words
 void loadLang(i18n.lang).catch(() => {}).then(async () => {
   const app = document.getElementById('app')!;
@@ -55,13 +42,7 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
   // a production build drops this branch and the chunk with it
   else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) mount((await import('./screens/lab/Lab.svelte')).default, { target: app });
-  else if (fromTelegram()) mount(App, { target: app });
-  else {
-    const Gate = (await import('./screens/OpenInTelegram.svelte')).default;
-    const gate = mount(Gate, { target: app, props: { link: telegramLink(), oncontinue: () => {
-      try { sessionStorage.setItem('kb-web', '1'); } catch { /* no storage: in for this load only */ }
-      void unmount(gate); mount(App, { target: app });
-    } } });
-  }
+  else if (inTelegram) mount(App, { target: app });
+  else mount((await import('./screens/WebEntrance.svelte')).default, { target: app });
   window.__kbStarted = true; // (the other languages load with Settings: profile/SettingsList.svelte)
 });

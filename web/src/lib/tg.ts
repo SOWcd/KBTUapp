@@ -55,7 +55,7 @@ declare global {
 const W: WebApp | undefined = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
 
 /** Inside a real Telegram client (the script also loads in a plain browser, with platform 'unknown'). */
-export const inTelegram = !!W && W.platform !== 'unknown' && !!W.initData;
+export const inTelegram = !!W?.initData;
 /** A computer (Telegram Desktop, macOS, the web clients): the app is made for phones and works there in a phone-sized
  *  window. Telegram's phone platforms are ios, android and android_x. */
 export const onComputer = inTelegram ? !/^(ios|android)/.test(W!.platform)
@@ -71,15 +71,15 @@ function can(v: string): boolean {
 }
 
 export function tgTry(fn: (w: WebApp) => void): void {
-  if (!W) return;
+  if (!inTelegram || !W) return;
   try { fn(W); } catch { /* unsupported here; the app goes on without it */ }
 }
 
 export const tg = {
   initData: W?.initData ?? '',
-  user: W?.initDataUnsafe?.user ?? null,
+  user: inTelegram ? W?.initDataUnsafe?.user ?? null : null,
   // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query
-  startParam: W?.initDataUnsafe?.start_param || (typeof location === 'undefined' ? '' : new URLSearchParams(location.search).get('startapp')) || '',
+  startParam: inTelegram ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
   platform: W?.platform ?? 'unknown',
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
@@ -104,6 +104,7 @@ export const haptic = {
 /** Every tap on something tappable is felt, one listener instead of a
  *  haptic in every handler; a handler's own haptic (ok, error, select...) wins, data-nohaptic opts a part out. */
 export function hapticTaps(): void {
+  if (!inTelegram) return;
   document.addEventListener('click', (e) => {
     const el = (e.target as Element | null)?.closest?.('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], label, summary');
     if (!el || el.closest('[data-nohaptic]') || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true' || performance.now() - felt < 120) return;
@@ -126,12 +127,17 @@ export function boot(bg: string): void {
 
 /** Telegram's own surfaces (under the webview, the bottom bar) follow the app background, so nothing flashes white. */
 export function paint(bg: string): void {
-  if (!inTelegram) return;
+  if (!inTelegram) { document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg); return; }
   if (can('6.1')) { tgTry((w) => w.setBackgroundColor?.(bg)); tgTry((w) => w.setHeaderColor?.(bg)); }
   if (can('7.10')) tgTry((w) => w.setBottomBarColor?.(bg));
 }
 
 export function on(event: string, cb: () => void): () => void {
+  if (!inTelegram && event === 'themeChanged') {
+    const scheme = matchMedia('(prefers-color-scheme: light)');
+    scheme.addEventListener('change', cb);
+    return () => scheme.removeEventListener('change', cb);
+  }
   tgTry((w) => w.onEvent(event, cb));
   return () => tgTry((w) => w.offEvent(event, cb));
 }
@@ -150,16 +156,33 @@ export const homeScreen = {
   android: () => W?.platform === 'android',
 };
 
+let webBack: (() => void) | undefined;
 export const backButton = {
   show: () => can('6.1') && tgTry((w) => w.BackButton.show()),
   hide: () => can('6.1') && tgTry((w) => w.BackButton.hide()),
-  onClick: (cb: () => void) => tgTry((w) => w.BackButton.onClick(cb)),
+  onClick(cb: () => void) {
+    if (!inTelegram) {
+      webBack = cb;
+      return () => { if (webBack === cb) webBack = undefined; };
+    }
+    tgTry((w) => w.BackButton.onClick(cb));
+    return () => tgTry((w) => w.BackButton.offClick(cb));
+  },
+  click: () => webBack?.(),
 };
+
+export const telegramAppLink = (p = ''): string => `https://t.me/KBTUappBot?startapp${p ? '=' + encodeURIComponent(p) : ''}`;
+
+export function openTelegramLink(url: string): void {
+  if (inTelegram) tgTry((w) => w.openTelegramLink(url));
+  else location.assign(url);
+}
 
 /** `web`: always the browser, never a Telegram deep link (an online event's meeting) */
 export function openLink(url: string, web = false): void {
-  if (inTelegram) { tgTry((w) => (!web && url.startsWith('https://t.me/') ? w.openTelegramLink(url) : w.openLink(url))); return; }
-  window.open(url, '_blank', 'noopener');
+  if (!web && url.startsWith('https://t.me/')) openTelegramLink(url);
+  else if (inTelegram) tgTry((w) => w.openLink(url));
+  else window.open(url, '_blank', 'noopener');
 }
 
 /** QR scanner (phones only). `onText` returns true to close the popup. Returns false when unavailable. */
