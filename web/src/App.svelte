@@ -1012,7 +1012,9 @@
         if (nav) microsoftReturn = await claim;
       }
       if (session.banned || session.revoked) return;
-      if (owner && nav && owner === recovery.scope() && !microsoftReturn && !gated && !interacted && !overlays.length) {
+      // the web app opens on the Afisha (owner, Nov 22): its session is known only after the cookie check, so a restored tab
+      // arrived after the first frame and the Afisha jumped to it
+      if (inTelegram && owner && nav && owner === recovery.scope() && !microsoftReturn && !gated && !interacted && !overlays.length) {
         await recoverPlace(nav, owner);
         if (!interacted) {
           checkpointOwner = owner;
