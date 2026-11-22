@@ -77,6 +77,60 @@ def test_guest_import_and_claim_on_sign_in(door_event, monkeypatch, capsys):
     assert con.execute("SELECT 1 FROM event_guests WHERE student_id = '24B030003'").fetchone()
 
 
+@pytest.mark.parametrize("trigger", ["sign-in", "import", "admin"])
+def test_ended_guest_claim_requires_attendance_and_surname(door_event, monkeypatch, capsys, trigger):
+    from PIL import Image
+
+    c, cfg, con = door_event
+    source = ["24B030001,1,,Jane Testov", "24B030002,,,Jane Testov", "24B030003,,,Jane Petrov"]
+    assert guests.import_csv(con, 1, source) == (0, 3, 0, 0)
+    assert guests.door_names(con, 1, ["24B030001,Jane Testov,1,,Owls"]) == (1, 0)
+    start = con.execute("SELECT starts_at FROM events WHERE id = 1").fetchone()[0]
+    set_clock(monkeypatch, lambda: start)
+    door = tma(9)
+    for sid, surname in (("24B030001", "Testov"), ("24B030003", "Petrov")):
+        assert c.post("/api/events/1/door-pending", headers=door,
+                      json={"studentId": sid, "surname": surname}).status_code == 200
+    set_clock(monkeypatch, lambda: start + 7200)
+    # Another open list also matches this student. Event-scoped operations must leave it alone.
+    con.execute("""INSERT INTO events (id, org_id, status, title, starts_at, created_at, updated_at)
+        SELECT 2, org_id, 'published', 'Another list', ?, 0, 0 FROM events WHERE id = 1""", (logic.now() + 3600,))
+    assert guests.import_csv(con, 2, source[:1]) == (0, 1, 0, 0)
+    outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
+    if trigger == "sign-in":
+        came = _sign_in(c, con, 1, "24B030001", surname="Testov")
+        _sign_in(c, con, 2, "24B030002", surname="Testov")
+        _sign_in(c, con, 3, "24B030003", surname="Testov")
+    else:
+        came = _student(c, con, 1, "24B030001")
+        _student(c, con, 2, "24B030002")
+        _student(c, con, 3, "24B030003")
+        assert c.get("/api/events/1", headers=tma(1)).json()["canAddPhotos"] is False
+        if trigger == "import":
+            # The new CSV name for the third student must never replace the surname proved at the door.
+            assert guests.import_csv(con, 1, [*source[:2], "24B030003,,,Jane Testov"]) == (1, 1, 0, 0)
+        else:
+            monkeypatch.setattr(admin.config, "load", lambda: cfg)
+            monkeypatch.setattr(guests, "KEY", b"")  # standalone CLI must derive the same key as the server
+            for expected in ("claimed 1\n", "claimed 0\n"):
+                admin.main(["guests", "claim", "1"])
+                assert capsys.readouterr().out == expected
+        assert not con.execute("SELECT 1 FROM registrations WHERE event_id = 2").fetchone()
+
+    assert [tuple(r) for r in con.execute("""SELECT user_id, status, checked_in_at, checkin_manual, door_team
+        FROM registrations WHERE event_id = 1""")] == [(came, "going", start, 1, "Owls")]
+    assert [r[0] for r in con.execute("SELECT student_id FROM event_guests WHERE event_id = 1 ORDER BY student_id")] == [
+        "24B030002", "24B030003"]
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox
+    assert c.get("/api/events/1", headers=tma(1)).json()["canAddPhotos"] is True
+    for tg in (2, 3):
+        assert c.get("/api/events/1", headers=tma(tg)).json()["canAddPhotos"] is False
+    jpeg = io.BytesIO()
+    Image.new("RGB", (64, 48), (20, 90, 160)).save(jpeg, "JPEG")
+    added = c.post("/api/events/1/photos", headers=tma(1), content=jpeg.getvalue())
+    assert added.status_code == 200 and len(added.json()["photos"]) == 1
+
+
 def test_guest_import_username_fallback(door_event, monkeypatch, capsys):
     c, cfg, con = door_event
     by_id = _student(c, con, 1, "24B030001")
