@@ -22,7 +22,7 @@
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
   let view = $state<'checking' | 'signin' | 'offline'>('checking');
   let entered = $state(false);
-  let busy = $state(false), loginFailed = $state(false), widgetFailed = $state(false), ready = $state(false);
+  let busy = $state(false), loginFailed = $state(false), widgetFailed = $state(false), ready = $state(false), stuck = $state(false);
   let retry = $state(0);
 
   // limit: the first check gives up after it and shows Retry (a captive portal holds a request for the API's 100 s)
@@ -75,6 +75,15 @@
   // the sign-in, start to end: people are wary of typing a phone number into a window
   const STEPS = ['web.step1', 'web.step2', 'web.step3', 'web.step4'] as const;
 
+  // stuck: the dock floats over the page (a short window), which then dissolves into the ground under it
+  function float(dock: HTMLElement) {
+    const page = dock.closest('.entrance')!; // sticky rests on the page's padding edge: a pixel past it means it floats
+    const io = new IntersectionObserver(([e]) => { stuck = e.intersectionRatio < 1; },
+      { root: page, rootMargin: `0px 0px -${parseFloat(getComputedStyle(page).paddingBottom) + 1}px 0px`, threshold: 1 });
+    io.observe(dock);
+    return () => io.disconnect();
+  }
+
   function attachWidget(widget: HTMLElement) {
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -121,7 +130,7 @@
           <!-- Telegram's button is an iframe we can't restyle: it sits in a glass dock of its own shape. The dock is
                its slot too: one size before, while and after the button loads, so nothing under it moves. It floats
                (sticky) at the bottom of a short window, the page passing under it: the way in is always in sight -->
-          <div class="enter in" style:--i={8}>
+          <div class="enter in" class:stuck style:--i={8} {@attach float}>
             {#if !widgetFailed}
               <div class="dock glass glass-pill">
                 {#key retry}<div class="widget" class:ready class:busy {@attach attachWidget} inert={busy}></div>{/key}
@@ -174,7 +183,12 @@
 
   .private { margin-top: auto; padding-top: var(--s-8); display: flex; flex-direction: column; align-items: center; gap: var(--s-2); max-width: 34ch; color: var(--text-3); text-wrap: balance; }
   .private :global(svg) { flex: none; color: var(--text-2); }
-  .enter { position: sticky; bottom: calc(var(--safe-bottom) + var(--s-3)); z-index: 1; display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin-top: var(--s-5); }
+  .enter { position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin-top: var(--s-5); }
+  /* floating: the ground's colour rises behind the dock, the text under it fades out instead of being cut mid-line */
+  .enter::before { content: ''; position: absolute; z-index: -1; left: 50%; width: 100vw; margin-left: -50vw; top: calc(-1 * var(--s-10));
+    bottom: calc(-1 * (var(--safe-bottom) + var(--s-6))); background: linear-gradient(transparent, var(--bg) var(--s-10));
+    opacity: 0; transition: opacity var(--t-base) var(--ease); pointer-events: none; }
+  .enter.stuck::before { opacity: 0.9; }
   .enter p { max-width: 30ch; text-wrap: balance; }
   .dock { position: relative; display: grid; place-items: center; padding: var(--s-2); border-radius: var(--r-full); }
   /* the button's slot, the size Telegram draws it (large: 238 x 40 at most): a quiet pill breathes there until the
