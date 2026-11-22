@@ -9,7 +9,6 @@
 <!-- what the phone adds from this page is the app itself: the manifest's start_url is "/", and these are index.html's -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="KBTU App">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>KBTU App</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -154,7 +153,7 @@ li.on::before { background: var(--accent); color: #fff; }
     </div></div></div>
     <div class="scene s3"><div class="dlg">
       <div class="hd"><i></i><span class="ok hit" data-t="ok"></span></div>
-      <div class="it"><img src="/favicon.svg" alt=""><span><b>KBTU</b><small>kbtu.sow.kz</small></span></div>
+      <div class="it"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span></div>
     </div></div>
   </div>
   <ol data-for="ios android"><li data-n="1" data-t="s1"></li><li data-n="2" data-t="s2"></li><li data-n="3" data-t="s3"></li></ol>
@@ -232,6 +231,8 @@ li.on::before { background: var(--accent); color: #fff; }
   var v = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'done'
     : ios ? (safari ? 'ios' : 'inapp') : android ? (/; wv\)/.test(ua) ? 'webview' : 'android') : 'desk';
   var sub = v === 'ios' ? (+(/Version\/(\d+)/.exec(ua) || [])[1] >= 26 ? 'ios26' : 'ios18') : v;
+  // opened as the installed app (a home-screen icon saved from this page): straight into the app, not "installed"
+  if (v === 'done') location.replace('/');
 
   function paint() {
     var tags = [v, sub];

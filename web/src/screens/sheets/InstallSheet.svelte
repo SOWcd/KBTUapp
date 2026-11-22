@@ -40,7 +40,7 @@
   <div class="inst">
     <div class="home" aria-hidden="true">
       <i></i>
-      <span class="app"><img src="/favicon.svg" alt="" width="56" height="56" /><b>KBTU</b></span>
+      <span class="app"><img src="/favicon.svg" alt="" width="56" height="56" /><b>KBTU App</b></span>
       <i></i>
     </div>
     <h2 class="t-h2">{t('inst.title')}</h2>

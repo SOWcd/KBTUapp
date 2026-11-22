@@ -43,7 +43,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
-  import { haptic, on, openLink, shareCard } from '../../lib/tg';
+  import { haptic, inTelegram, on, openLink, shareCard } from '../../lib/tg';
   import { phrase } from '../../lib/state/data.svelte';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
@@ -54,6 +54,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
+  const TOP = inTelegram ? PULL : 0; // the pull-down search field above the feed is Telegram's only (PullSearch)
   import { hit } from '../../lib/search';
   import { compose, keyOf } from './ChannelCompose.svelte';
 
@@ -88,7 +89,7 @@
   const waiting = $derived(feed.filter((p) => !shown(p)).length);
   const showAll = () => { through = latest; };
   $effect(() => { if ((atTop || !through) && latest > through) through = latest; });
-  function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: PULL, behavior: 'smooth' }); }
+  function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: TOP, behavior: 'smooth' }); }
   // the pull-down search, over the posts held, by their words only (never a signature: an anonymous post has none to match)
   // ponytail: the loaded pages only; a server search when the channel outgrows them
   let q = $state('');
@@ -259,7 +260,7 @@
 
 <svelte:document bind:visibilityState={visibility} />
 
-<div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < PULL + 40; }}>
+<div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < TOP + 40; }}>
   <PullSearch bind:value={q} placeholder={t('fc.search')} />
   <!-- new posts from the refresh while I read further down: a pill, never a jump -->
   <div class="pill">{#if waiting && !atTop}<span class="pin" transition:card>

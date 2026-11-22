@@ -51,7 +51,7 @@
   const shown = $derived(field && !back);
   const mine = () => [...tabSearches].find((s) => {
     const tab = s.node?.closest<HTMLElement>('.tab');
-    return !tab || getComputedStyle(tab).contentVisibility !== 'hidden'; // App hides the other tabs this way
+    return !tab || tab.classList.contains('on'); // the shown tab (App.svelte), not one away or being drawn unseen
   }) ?? null;
 
   async function search() {
