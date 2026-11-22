@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey, askDm } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -864,6 +864,14 @@
   // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
   // (a deep link); the last of the launch's moments
   let hinted = false;
+  // the bot can't write to them (they never opened its chat): on every launch until it can (owner, Nov 23: ~half the
+  // users get no tickets or reminders); Telegram's own "allow messages" is one tap
+  let dmHinted = false;
+  async function dmHint() {
+    if (dmHinted || !inTelegram || !session.me || session.me.canDm || session.banned || session.revoked) return;
+    dmHinted = true;
+    if (await sheets.ask({ title: t('dm.offTitle'), text: t('dm.offText'), ok: t('dm.offOk'), cancel: t('dm.offLater') })) await askDm(undefined, true);
+  }
   function installHint() {
     if (hinted) return;
     // ponytail: the creator, and a friend recording the Android guide, only until the video guides are recorded
@@ -937,7 +945,7 @@
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
       // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
       if (inTelegram) { moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); }
-      booted = true; setTimeout(() => { moment(celebrate); moment(installHint); });
+      booted = true; setTimeout(() => { moment(celebrate); moment(installHint); moment(dmHint); });
     });
     const clockTimer = setInterval(() => (clock = nowTs()), 30000);
 
