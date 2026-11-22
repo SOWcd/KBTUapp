@@ -2010,7 +2010,7 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
                 "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                 "reply_markup": {"inline_keyboard": [[{"text": button, "url": app + start}]]}}
 
-    words = logic.search.fold(q.get("query"))[:64]
+    words = str(q.get("query") or "").strip()[:64]
     out = body["results"]
     if not words:
         v = logic.Viewer(me["id"], me["role"], True)

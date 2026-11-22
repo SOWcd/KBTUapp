@@ -130,7 +130,7 @@ def test_one_search_every_name_scoped_by_who(env):
     con.execute("UPDATE orgs SET i18n = ? WHERE id = 2", (json.dumps({"ru": {"name": "\u0411\u0438 \u041a\u043b\u0451\u0431"}}),))  # Bi Klyob
     find = lambda q, uid=60: c.get("/api/search", params={"q": q}, headers=tma(uid)).json()  # noqa: E731
     up = "\u041a\u041e\u0428\u041c\u0410\u0420"  # KOSHMAR, upper case
-    for q in (ru, up, "\u0442\u043e\u043b\u0435 \u0431\u0438", "nightmare"):  # the Russian title, upper, lower, the English
+    for q in (ru, up, "\u0442\u043e\u043b\u0435 \u0431\u0438", "nightmare", "rjivfh", "koshmar", "koshmra"):
         assert [e["id"] for e in find(q)["events"]] == [2], q
     assert [o["id"] for o in find("\u043a\u043b\u0435\u0431")["clubs"]] == [2]      # yo typed as ye
     assert [e["id"] for e in find(up, 63)["events"]] == [2]                          # a student finds a public one too
@@ -140,6 +140,8 @@ def test_one_search_every_name_scoped_by_who(env):
     assert [e["id"] for e in find("hack", 62)["events"]] == [1]                     # its own club's team: yes
     con.execute("UPDATE events SET status = 'published', hidden_at = 1 WHERE id = 1")
     assert find("hack", 63)["events"] == [] and [e["id"] for e in find("hack")["events"]] == [1]
+    wrong_layout = "\u0440\u0444\u0441\u043b"  # "hack" on a Russian keyboard
+    assert find(wrong_layout, 63)["events"] == [] and [e["id"] for e in find(wrong_layout)["events"]] == [1]
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'member', 0)", (ids["ali"],))
     assert [o["id"] for o in find("b club", 63)["clubs"]] == [2]
     con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 2")
@@ -151,3 +153,8 @@ def test_one_search_every_name_scoped_by_who(env):
     for path in ("/api/admin/people",):
         got = c.get(path, params={"q": "\u0435\u043b\u043a\u0438\u043d\u0430 \u0430\u043b\u0438"}, headers=tma(60)).json()  # "elkina ali"
         assert [p["person"]["id"] for p in got] == [ids["ali"]], path
+        got = c.get(path, params={"q": "fkbz"}, headers=tma(60)).json()  # Aliya on an English keyboard
+        assert [p["person"]["id"] for p in got] == [ids["ali"]], path
+    con.execute("UPDATE students SET first_name = ? WHERE user_id = ?", ("\u04d8\u0441\u0435\u043b", ids["ali"]))
+    got = c.get("/api/admin/people", params={"q": "@ctk"}, headers=tma(60)).json()  # Asel with Shift on the first key
+    assert [p["person"]["id"] for p in got] == [ids["ali"]]
