@@ -2744,6 +2744,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{ref}"}]]}}
         else:
             raise ApiError("bad_input")
+        if body.get("link") is True:  # outside Telegram (the web app): no card, just the button's link for Telegram's share picker
+            return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"]}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/savePreparedInlineMessage", json={

@@ -237,6 +237,12 @@ async function shareVia(card: Record<string, string | number | boolean | null>, 
     if (sent !== null) return sent;
     // a client without cards (a user on Telegram Desktop): Telegram's own picker with the link instead
   }
+  if (!inTelegram) {
+    // the web app: the server makes the same link its card's button would carry (an award or club link is minted there)
+    const r = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...card, link: true }) });
+    const made = r.ok ? (await r.json()).link : null;
+    if (typeof made === 'string') link = made;
+  }
   ready();
   openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
   return false; // the link opens Telegram's own picker: we never learn whether it was sent
