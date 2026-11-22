@@ -66,7 +66,7 @@ def test_off_nothing_new(env):
     fid = _photo(con, eid, c.ids[AL])
     assert c.delete(f"/api/gallery/{fid}", headers=tma(AL)).status_code == 404  # my album photo stays
     rep = lambda reason: c.post("/api/reports", headers=tma(BO), json={"target": "photo", "id": fid, "reason": reason}).status_code  # noqa: E731
-    assert rep("me") == rep("rules") == 400 and rep("spam") == 204
+    assert rep("me") == rep("rules") == rep("offtopic") == 400 and rep("spam") == 204
     p = c.get("/api/gallery", headers=tma(AL)).json()["photos"][0]
     assert p["canDelete"] is False and "at" not in p and "uid" not in p and "post" not in c.get("/api/gallery", headers=tma(AL)).json()
 
@@ -198,7 +198,7 @@ def test_albums_only_of_events_open_to_every_student(env):
     for n, who in enumerate((AL, CY, HEAD)):
         assert c.post("/api/reports", headers=tma(who), json={"target": "photo", "id": b, "reason": "rules"}).status_code == 204
         assert albums(ADMIN) == [(ok, 1 if n == 2 else 2)] and albums(who) == [(ok, 1)]  # mine at once, everyone's at three
-    assert c.post("/api/reports", headers=tma(AL), json={"target": "photo", "id": a, "reason": "rules"}).status_code == 204
+    assert c.post("/api/reports", headers=tma(AL), json={"target": "photo", "id": a, "reason": "offtopic"}).status_code == 204
     assert albums(AL) == [] and albums(BO) == [(ok, 1)]  # nothing of it left for me: no album
 
 
