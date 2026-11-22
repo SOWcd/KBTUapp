@@ -196,6 +196,9 @@ def _feed_account(con, uid: int) -> int | None:
 
 def _save_feed(con, uid: int, order: str, ids: list[int], account: int | None) -> str:
     # SQLite shares the short-lived order across web workers. Cards are always read through current visibility.
+    # ponytail: the whole live channel's ids per snapshot (8 B a post, up to FEED_SNAPSHOTS per reader and order, a new one
+    # whenever the 30 s poll sees the rank move); fine for a few thousand posts. Past that, keep only the ranked
+    # FEED_RANK_MAX and page the archive by tg_msg.
     data = array("q", ids).tobytes()
     now = _now()
     latest = one(con, """SELECT token, post_ids FROM fchan_feed_pages WHERE user_id = ? AND sort = ?

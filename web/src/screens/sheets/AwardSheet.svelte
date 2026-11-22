@@ -301,10 +301,10 @@
   {/if}
 
   <!-- small glass pills in the medal's metal, right under it, not a wide button at the bottom -->
-  {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter')}<!-- Fuel: not shared ("can you get one too?" would ask for money) -->
+  {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter' && !activist)}<!-- Fuel: not shared ("can you get one too?" would ask for money); Chief activist: its tier can out an anonymous writer -->
     <div class="acts up" style:--glow={glow || GLOW[0]}>
       {#if ref}<button class="pill glass glass-pill main" use:glass disabled={inviting} onclick={invite}><Megaphone size={17} />{t('ref.invite')}</button>{/if}
-      {#if mine && a && a.level > 0 && a.code !== 'supporter'}
+      {#if mine && a && a.level > 0 && a.code !== 'supporter' && !activist}
         <button class="pill glass glass-pill" class:main={!ref} use:glass disabled={sharing} onclick={shareIt}><Share size={17} />{t('aw.share')}</button>
       {/if}
     </div>

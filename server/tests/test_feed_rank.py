@@ -1,5 +1,7 @@
 """Forum order and Chief activist through their HTTP entry points."""
-from kbtu import db, logic
+import httpx
+
+from kbtu import app as server, db, logic
 from test_core import env, login, set_clock, tma  # noqa: F401
 from test_fchannel import setup
 
@@ -119,6 +121,11 @@ def test_activist_counts_live_days_and_checkins_and_keeps_progress_private(env, 
     logic.sync_levels(con)
     assert medal()["level"] == 1
     assert {"code": "activist", "level": 1} in c.get("/api/me", headers=tma(1)).json()["unlocked"]
+    real = httpx.AsyncClient  # Telegram would take the card: the refusal must be ours
+    monkeypatch.setattr(server.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json={"ok": True, "result": {"id": "prep1"}}))))
+    assert c.post("/api/share", headers=tma(1), json={"kind": "aw", "code": "activist"}).status_code == 400  # a tier can out an anonymous writer
+    assert c.patch("/api/me", headers=tma(1), json={"showcase": ["activist", "regular"]}).json()["showcase"] == ["regular"]
     assert medal(2) is None  # a new tier could link a timed anonymous publication to this profile
     now += day
     assert medal()["parts"] == {"posts": 1, "events": 2}  # both publications on the same Almaty day

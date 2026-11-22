@@ -2727,7 +2727,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind == "aw":  # an achievement of mine (§4.11): the reader's button opens their own progress toward it
             code = body.get("code")
-            a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student and code not in logic.PRIVATE else None
+            a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student and code not in logic.PRIVATE and code != "activist" else None  # Chief activist counts anonymous posts: never shared
             if not a:
                 raise ApiError("bad_input")
             title, text, button = texts.share_award(lang, a.get("variant") or code, a["level"], len(a["levels"]), a["levels"][a["level"] - 1]["rarity"])
