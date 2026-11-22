@@ -201,10 +201,11 @@ def _verified(r, s) -> bool:
 
 
 def match(con, uid: int) -> list[tuple[int, bool]]:
-    """Join only rows identified by the verified university account."""
+    """Every row naming the student (their Telegram username or KBTU e-mail) joins on its own, no question asked
+    (the owner: the sheet is the truth). A row's city, year and phone fill only what's empty."""
     with tx(con):
-        s, found = _mine(con, uid)
-        return [(r["org_id"], join(con, uid, r)) for r in found if _verified(r, s)]
+        _, found = _mine(con, uid)
+        return [(r["org_id"], join(con, uid, r)) for r in found]
 
 
 def asks(con, uid: int) -> list[sqlite3.Row]:

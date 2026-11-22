@@ -5724,7 +5724,7 @@ def test_roster_load_and_join(env):
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
     orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
     got = roster.load(con, items, orgmap)
-    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
+    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 2)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
     assert con.execute("SELECT official FROM orgs WHERE name = 'Chess'").fetchone()[0] == 1          # no "KBTU" in a name
 
@@ -5744,53 +5744,8 @@ def test_roster_load_and_join(env):
     welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
     assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"
 
-    ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
-    assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()                                         # waiting for approval
-    assert not me["memberships"] and me["roster"] is None and me["city"] is None
-    assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
-    assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
-    req = c.get("/api/roster/requests", headers=tma(70)).json()
-    assert [(r["sheetName"], r["name"]) for r in req] == [("Someone Else", "Bek Testov")]
-    org = req[0]["org"]["id"]                                                            # its Studio: that club's only
-    assert len(c.get(f"/api/roster/requests?org={org}", headers=tma(70)).json()) == 1 and c.get(f"/api/roster/requests?org={org + 999}", headers=tma(70)).json() == []
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=h(72), json={"ok": True}).status_code == 403
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"] is None   # never the row's city
-
-
-def test_roster_claim_no_rights(env):
-    """A claim at the student's word (review, Nov 2): a member's row never hands over a club role that carries rights;
-    an officer's row grants no membership while pending; a waiting claim isn't overwritten."""
-    from kbtu import roster
-    c, cfg = env
-    pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
-    con = db.connect(cfg.db_path)
-    h = lambda uid, u: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": "X", "username": u}, BOT)}  # noqa: E731
-    c.get("/api/me", headers=h(81, "zed_t"))
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, created_at) VALUES (1, 'HR', '#8E8E93', 'member', 'casting,team', 0)")
-    row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": "Someone Else", "school": None,  # noqa: E731
-                       "year": None, "course": None, "city": None, "phone": None, "tg": "zed_t", "email": None, **k}
-    roster.load(con, [row(position="HR", title="HR")], {"Open Mic sheet": "mic"})
-    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
-    roster.decide(con, logic.Viewer(pres["id"], "user", True), ask[0]["id"], True)
-    assert tuple(con.execute("SELECT role, role_id FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()) == ("member", None)
-    con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],))
-    roster.load(con, [row(full_name="Other Person", position="Head of SMM", title="Head of SMM", role="head")], {"Open Mic sheet": "mic"})
-    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert not con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code in (404, 409)   # claimed: not twice
-    req = c.get("/api/roster/requests", headers=tma(80)).json()
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
-    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()   # "not them": out again
-    con.close()
+    me = c.get("/api/me", headers=h(72)).json()                                         # Bek: the username, another name: in all the same
+    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"]["name"] == "Aktau"
 
 
 def test_roster_app_wins(env):
