@@ -165,3 +165,18 @@ def test_roster_load_from_the_gate(env, monkeypatch, capsys):
     assert "rows 1, new 1, clubs made 1" in out
     admin.main(["roster", "load", "--gz", blob])  # again: nothing more
     assert "new 0" in capsys.readouterr().out
+def test_roster_reload_fills_only_whats_empty(env):
+    """A newer sheet with the same joined row: its phone and city fill an empty profile, never overwrite one."""
+    c, cfg = env
+    pres, ali = login(c, 64, "pres"), login(c, 65, "ali")
+    c.get("/api/me", headers=_tg(65, "ali_f"))
+    con = _club(cfg, pres["id"])
+    con.execute("UPDATE students SET email = 'alif@kbtu.kz', phone = NULL WHERE user_id = ?", (ali["id"],))
+    con.execute("UPDATE users SET city = 'Shymkent' WHERE id = ?", (ali["id"],))
+    row = _row(full_name="Ali Testov", email="alif@kbtu.kz", tg="ali_f")
+    roster.load(con, [row], {"S": "it"})
+    assert _member(con, ali["id"]) == "member"
+    roster.load(con, [{**row, "phone": "+7 701 234 56 78", "city": "Almaty"}], {"S": "it"})
+    phone, city = con.execute("SELECT s.phone, u.city FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ?", (ali["id"],)).fetchone()
+    assert phone and phone.endswith("7012345678") or phone == "+77012345678", phone
+    assert city == "Shymkent"  # theirs stays
