@@ -863,13 +863,16 @@
   // the home-screen app, offered once per phone (InstallSheet marks it shown): phones in Telegram only, (for everyone later) never on this
   // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
   // (a deep link); the last of the launch's moments
+  let hinted = false;
   function installHint() {
+    if (hinted) return;
     // ponytail: the creator, and a friend recording the Android guide, only until the video guides are recorded
     // (owner, Nov 22-23); then drop this check
     if (!session.me?.founder && tg.user?.id !== 811158629) return;
     // ponytail: the creator sees it on every launch while the sheet is in review (owner, Nov 23); once it goes public,
     // restore once per phone for everyone: drop `!session.me?.founder &&`
     if (!inTelegram || onComputer || tg.startParam || (!session.me?.founder && seen('kb-install'))) return;
+    hinted = true;
     return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
   }
 
@@ -897,6 +900,7 @@
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       localize(data); if (inTelegram) localize(session.me); // cached in another language, maybe
+      setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
     Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:

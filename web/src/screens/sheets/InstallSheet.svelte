@@ -28,9 +28,15 @@
     // the ring's first frame is empty, then each second glides into the next (a step per second under reduced motion)
     const first = requestAnimationFrame(() => (started = true));
     // iOS plays inline without a tap only when muted is a property, not just the attribute; refused (Low Power Mode): the poster stays
-    if (!still) { video.muted = true; video.play().catch(() => {}); }
+    // played from a blob: iOS plays a src only with HTTP Range, and the CDN serves this file whole (gzipped)
+    let url = '';
+    if (!still) fetch(clip).then((r) => r.blob()).then((b) => {
+      if (!video) return;
+      url = URL.createObjectURL(b);
+      video.src = url; video.muted = true; video.play().catch(() => {});
+    }).catch(() => {});
     const tick = setInterval(() => { if (--left <= 0) clearInterval(tick); }, 1000);
-    return () => { cancelAnimationFrame(first); clearInterval(tick); };
+    return () => { cancelAnimationFrame(first); clearInterval(tick); if (url) URL.revokeObjectURL(url); };
   });
 
   function add() {
@@ -48,7 +54,7 @@
 <Sheet {overlay} icon={Smartphone} title={t('inst.title')} hold={() => left > 0}>
   <div class="inst">
     <div class="phone" aria-hidden="true">
-      <video bind:this={video} src={clip} {poster} width="440" height="952" muted playsinline loop autoplay={!still} preload="auto" disablepictureinpicture disableremoteplayback></video>
+      <video bind:this={video} {poster} width="440" height="952" muted playsinline loop disablepictureinpicture disableremoteplayback></video>
     </div>
     <h2 class="t-h2">{t('inst.title')}</h2>
     <p class="t-callout">{t('inst.text')}</p>
