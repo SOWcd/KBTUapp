@@ -414,7 +414,10 @@
   .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-full); text-align: left;
     transition: transform 450ms var(--ease-bounce); }
   .compose:active { transform: scale(0.985); transition-duration: 80ms; }
-  .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
+  /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back). It stays under the window's
+     ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
+     to thin out over */
+  .compose.away { opacity: 0; pointer-events: none; transition: transform 450ms var(--ease-bounce), opacity 0s linear 90ms; }
   /* the side doors: a row of small glass pills, no card; a scroller on a narrow phone (4 px above: their hit areas;
      the room below, taken back by the margin: their lift, which the scroller would cut) */
   .doors { display: flex; gap: var(--s-2); margin: var(--s-3) calc(-1 * var(--gutter)) -14px; padding: 4px var(--gutter) 18px; overflow-x: auto; scrollbar-width: none; }
