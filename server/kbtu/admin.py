@@ -68,7 +68,9 @@
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
-                                The first import closes prior app sign-ups outside the list. Counts only.
+                                The first import for an open event closes prior app sign-ups outside the list. Counts only.
+  .venv/bin/python -m kbtu.admin guests claim <event id>   link pending tickets to matching student accounts.
+                                After the event ends, only guests checked in at the door qualify. Counts only.
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
@@ -342,15 +344,26 @@ def main(args: list[str]) -> None:
     con = db.connect(cfg.db_path)
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
+    guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     cmd = args[0] if args else ""
     gz = _gz_arg(args)
     if gz is not None:
         args = args[:-2]
-    if cmd == "guests" and len(args) == 2 and re.fullmatch(r"[0-9]{1,19}", args[1]):
-        eid = int(args[1])
+    if cmd == "guests" and (len(args) == 2 or (len(args) == 3 and args[1] == "claim" and gz is None)):
+        if not re.fullmatch(r"[0-9]{1,19}", args[-1]):
+            sys.exit(__doc__)
+        eid = int(args[-1])
         if eid >= 2**63:
             sys.exit("no such event")
-        guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
+        if len(args) == 3:
+            with db.tx(con):
+                if not one(con, "SELECT 1 FROM users WHERE is_founder = 1"):
+                    sys.exit("needs the creator")
+                if not one(con, "SELECT 1 FROM events WHERE id = ?", eid):
+                    sys.exit("no such event")
+                claimed = guests.claim_event(con, eid)
+            print(f"claimed {claimed}")
+            return
         try:
             registered, pending, offline, bad = guests.import_csv(con, eid, gz.decode("utf-8", "replace").splitlines(keepends=True) if gz is not None else sys.stdin)
         except ApiError as exc:
