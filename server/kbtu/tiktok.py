@@ -43,7 +43,8 @@ log = logging.getLogger("kbtu.tiktok")
 # Wall-clock limits, end to end however slowly a source answers (each request step: download.TIMEOUT).
 TIMEOUT = 30                  # seconds for one source request (tikwm, one probe)
 EXTRACT_SECONDS = 60          # one yt-dlp extraction
-DOWNLOAD_SECONDS = 150        # the chosen streams, their remux and thumbnail
+DOWNLOAD_SECONDS = 150        # yt-dlp: the chosen streams, their remux and thumbnail; tikwm: the file alone
+REMUX_SECONDS = 90            # tikwm: the remux and thumbnail of the downloaded file
 REPLY_SECONDS = 300           # one link, from the first request to Telegram's last answer
 FFMPEG_SECONDS = 60           # each child process, and never past the deadline of the work it is part of
 _extractors = asyncio.Semaphore(2)  # leave the shared thread pool available to receipts and other bot updates
@@ -51,7 +52,7 @@ _transfers = asyncio.Semaphore(2)
 _probes = asyncio.Semaphore(4)
 CHAT_CAP = 5                  # answers a chat a minute: a burst of links never turns the chat into a feed
 USER_CAP = 3                  # answers one person gets a minute, all chats together: never a chat's whole CHAT_CAP
-WINDOW = 60                   # seconds the caps count over; the same person's same video again only after it
+WINDOW = 60                   # seconds the caps count over; the same person's same video in a chat again only after it
 SENT_KEYS = 4096
 # ponytail: per worker (the bot polls in one); a table if that changes. Keys idle for a WINDOW are pruned, and the
 # least recently used go past SENT_KEYS (a chat, a person, a person's video: ~1400 answers a minute to reach it).
@@ -70,13 +71,14 @@ def link(msg: dict) -> str | None:
 
 def room(chat: int, now: float | None = None, *, user: int = 0, video: str = "") -> bool:
     """One more answer this minute in this chat (CHAT_CAP) and for this person (USER_CAP), and not this person's same
-    video (key) again within WINDOW. Counted only when all three say yes."""
+    video (key) again in this chat within WINDOW (sharing it to another group is fine). Counted only when all three
+    say yes."""
     now = time.time() if now is None else now
     while _sent and now - next(iter(_sent.values()))[-1] >= WINDOW:
         _sent.popitem(last=False)
     caps = {("chat", chat): CHAT_CAP, ("user", user): USER_CAP}
     if video:
-        caps[("same", user, video)] = 1
+        caps[("same", chat, user, video)] = 1
     recent = {k: [t for t in _sent.get(k, ()) if now - t < WINDOW] for k in caps}
     if any(len(recent[k]) >= cap for k, cap in caps.items()):
         return False
@@ -120,16 +122,46 @@ def _report(source: str, ok: bool) -> None:
 
 
 @contextmanager
-def _source(name: str):
-    """A call to a source through its circuit breaker: an exception (a timeout too) counts as its failure."""
+def _source(name: str, count: bool = True):
+    """A call to a source through its circuit breaker: an exception (a timeout too) counts as its failure, an answer as
+    its success. A cancellation (the reply's own deadline, a shutdown) says nothing about the source: not counted (a
+    trial cancelled so leaves the source resting until REST runs out, then another tries). `count` False: neither
+    asked nor told (the same clip's next version after a failure already counted)."""
+    if not count:
+        yield
+        return
     if not _ready(name):
         raise Paused(name)
-    ok = False
     try:
         yield
-        ok = True
-    finally:
-        _report(name, ok)
+    except asyncio.CancelledError:
+        raise
+    except BaseException:
+        _report(name, False)
+        raise
+    _report(name, True)
+
+
+def _outage(exc: BaseException) -> bool:
+    """The source failed (counts for its breaker) rather than this one video having nothing to send. Failures: transport
+    errors, timeouts, HTTP 429 and 5xx, anything unknown. Not: HTTP 4xx (403, 404, 410: gone, forbidden, region) and
+    yt-dlp's expected errors (private, deleted, age-gated, geo-blocked, login-only)."""
+    from yt_dlp.networking.exceptions import HTTPError, TransportError
+    from yt_dlp.utils import ExtractorError
+    chain, todo = [], [exc]
+    while todo and len(chain) < 12:  # DownloadError.exc_info, ExtractorError.cause, __cause__, __context__
+        e = todo.pop(0)
+        if isinstance(e, BaseException) and all(e is not c for c in chain):
+            chain.append(e)
+            info = getattr(e, "exc_info", None)
+            todo += [info[1] if isinstance(info, tuple) and len(info) > 1 else None,
+                     getattr(e, "cause", None), e.__cause__, e.__context__]
+    for e in chain:
+        if isinstance(e, HTTPError):
+            return e.status == 429 or e.status >= 500
+    if any(isinstance(e, (TransportError, TimeoutError, SourceDown)) for e in chain):
+        return True
+    return not any(isinstance(e, ExtractorError) and e.expected for e in chain)
 
 
 class _Flight:
@@ -166,6 +198,7 @@ class Clip:
     cover: str = ""
     hosts: tuple[str, ...] = download.TIKTOK_FILES
     source: str = "tikwm"
+    down: bool = False  # one of its downloads failed and was counted: the next versions don't count again
 
 
 @dataclass
@@ -255,20 +288,35 @@ def _left() -> float:
     return left
 
 
-async def _threaded(gate: asyncio.Semaphore, end: float, fn, *args, hosts: tuple[str, ...] = ()):
-    """Blocking yt-dlp and ffmpeg work in a thread, done by `end` (time.monotonic()). A thread can't be killed, so the
-    caller stops waiting at `end` and the thread sees the same deadline: in each progress hook, at each new connection
-    (_guard), before each child process, whose own limit is cut to it, and in yt-dlp's waits for its children. Each read
-    is bounded by socket_timeout. It keeps its slot in `gate` until it has really ended, so late threads never pile up."""
-    async with asyncio.timeout(max(end - time.monotonic(), 0)):
-        await gate.acquire()
-    token = _bound.set(_Bound(end, hosts))
-    try:  # no await from the acquire to the callback: the slot is always given back, by the thread's end
-        job = asyncio.ensure_future(asyncio.to_thread(fn, *args))  # the task copies the context, the thread too
+async def _threaded(gate: asyncio.Semaphore, seconds: float, fn, *args, hosts: tuple[str, ...] = (),
+                    source: str = "", count: bool = True):
+    """Blocking yt-dlp and ffmpeg work in a thread, done within `seconds` of getting its slot in `gate`. Waiting for the
+    slot is our own queue: neither the work's time nor the source's failure (the reply's deadline bounds that wait).
+    A thread can't be killed, so the caller stops waiting at the deadline and the thread sees the same deadline: in
+    each progress hook, at each new connection (_guard), before each child process, whose own limit is cut to it, and
+    in yt-dlp's waits for its children. Each read is bounded by socket_timeout. It keeps its slot until it has really
+    ended, so late threads never pile up. With `source`, it goes through that source's breaker (`count`: see _source):
+    an outage raises and counts, a video with nothing to send (_outage says no) returns None."""
+    await gate.acquire()
+    handed = False
+    try:
+        with _source(source, count) if source else nullcontext():
+            token = _bound.set(_Bound(time.monotonic() + seconds, hosts))
+            try:  # no await from here to the callback: the slot is given back by the thread's end
+                job = asyncio.ensure_future(asyncio.to_thread(fn, *args))  # the task copies the context, the thread too
+            finally:
+                _bound.reset(token)
+            job.add_done_callback(lambda j: (gate.release(), j.cancelled() or j.exception()))
+            handed = True
+            try:
+                return await asyncio.wait_for(asyncio.shield(job), seconds)
+            except Exception as exc:
+                if source and not _outage(exc):
+                    return None
+                raise
     finally:
-        _bound.reset(token)
-    job.add_done_callback(lambda j: (gate.release(), j.cancelled() or j.exception()))
-    return await asyncio.wait_for(asyncio.shield(job), max(end - time.monotonic(), 0))
+        if not handed:
+            gate.release()
 
 
 def _limit(progress: dict) -> None:
@@ -315,10 +363,13 @@ def _guard() -> None:
     ponytail: patches named internals of the pinned yt-dlp and urllib3 (a test fails if they move); outside _threaded
     they change nothing. Upgrade: run yt-dlp in a child process behind an egress proxy and kill it at the deadline."""
     import urllib3.util.connection as urllib3_connection
-    from yt_dlp.networking import _urllib
+    from yt_dlp.networking import _requests, _urllib, _websockets
+    from yt_dlp.networking.common import _REQUEST_HANDLERS
     from yt_dlp.utils import Popen
+    if set(_REQUEST_HANDLERS) - {"Urllib", "Requests", "Websockets"}:  # e.g. curl_cffi: its own sockets, unguarded
+        raise RuntimeError("an unguarded yt-dlp request handler is installed")
     with _guarding:  # threads build downloaders
-        for module in (urllib3_connection, _urllib):
+        for module in (urllib3_connection, _urllib, _requests, _websockets):
             if not getattr(module.create_connection, "guarded", False):
                 module.create_connection = _connect(module.create_connection)
         if not getattr(Popen.communicate_or_kill, "guarded", False):
@@ -340,6 +391,7 @@ def _downloader(**options):
         "js_runtimes": {"node": {}}, "cachedir": False, "noplaylist": True, "check_formats": False,
         "quiet": True, "noprogress": True,
         "logger": logging.Logger("yt-dlp", logging.CRITICAL + 1),  # extractor messages may contain the link
+        "proxy": "",  # never HTTPS_PROXY/ALL_PROXY from the environment: a proxy's socket would bypass _connect
         "socket_timeout": min(TIMEOUT, _left()), "retries": 1, "fragment_retries": 1, "extractor_retries": 1,
         "max_filesize": MAX_BYTES, "progress_hooks": [_limit],
         "concurrent_fragment_downloads": 1,  # no threads of its own: _bound (deadline, host checks) is this thread's
@@ -364,7 +416,7 @@ def _extract(match: re.Match) -> Clip | None:
                 return None
             dl.add_default_extra_info(info, dl.get_info_extractor("Instagram"), url)
         duration = info.get("duration") or 0
-        if info.get("_type", "video") != "video" or info.get("is_live") or duration > MAX_SECONDS:
+        if info.get("_type", "video") != "video" or info.get("is_live") or duration > MAX_SECONDS + 1:  # 180.04 s reels
             return None
         if youtube and (not 0 < duration <= MAX_SECONDS or (match["short_host"] and duration >= 180)):
             return None
@@ -390,14 +442,15 @@ async def photos(http: httpx.AsyncClient, urls: list[str]) -> list[bytes]:
 
 
 async def fetch(http: httpx.AsyncClient, url: str) -> Clip | list[str] | None:
-    """What the link holds: a Clip, a slideshow's photo URLs, or None (nothing to send). Paused while the source rests
-    after failures; a failure itself raises (SourceDown, TimeoutError, yt-dlp's errors)."""
+    """What the link holds: a Clip, a slideshow's photo URLs, or None (nothing to send: private, deleted, ...). Paused
+    while the source rests after failures; a failure of the source itself raises (SourceDown, TimeoutError, yt-dlp's
+    transport errors) and counts."""
     match = LINK.match(url)
     if not match:
         return None
     if not match["tiktok"]:
-        with _source("youtube" if match["youtube"] else "instagram"):
-            return await _threaded(_extractors, time.monotonic() + EXTRACT_SECONDS, _extract, match)
+        return await _threaded(_extractors, EXTRACT_SECONDS, _extract, match,
+                               source="youtube" if match["youtube"] else "instagram")
     with _source("tikwm"):
         raw = await download.fetch(http, API, ("www.tikwm.com",), 1024 * 1024, form={"url": match[0], "hd": "1"},
                                    seconds=TIMEOUT)
@@ -567,24 +620,33 @@ async def versions(http, clip: Clip) -> list[Version]:
 
 
 async def prepare_upload(http: httpx.AsyncClient, clip: Clip, version: Version):
-    """The chosen version as (MP4, thumbnail, tracks), or None (too large, not H.264, a source that failed), all within
-    DOWNLOAD_SECONDS (TimeoutError past it). Paused while the source rests."""
-    end = time.monotonic() + DOWNLOAD_SECONDS
+    """The chosen version as (MP4, thumbnail, tracks), or None: too large, not H.264, gone, too slow, or its source
+    failed, so the next version may still come through. A clip's failures count once for its source's breaker.
+    Paused while the source rests (the caller moves on)."""
     if clip.hosts == download.TIKTOK_FILES:
         data = await download.fetch(http, version.video["url"], clip.hosts, MAX_BYTES, types=MEDIA_TYPES,
                                     seconds=DOWNLOAD_SECONDS)
-        return await _threaded(_transfers, end, upload, version, data) if data else None
+        if not data:
+            return None
+        try:  # the remux has its own time: a slow download leaves it the same
+            return await _threaded(_transfers, REMUX_SECONDS, upload, version, data)
+        except TimeoutError:
+            return None
     try:
-        with _source(clip.source):
-            return await _threaded(_transfers, end, upload, version, hosts=clip.hosts)
-    except SourceDown:
-        return None  # counted; the next version may still come through
+        return await _threaded(_transfers, DOWNLOAD_SECONDS, upload, version, hosts=clip.hosts, source=clip.source,
+                               count=not clip.down)
+    except Paused:
+        raise
+    except Exception:  # an outage (_threaded returned None for the rest): counted, once for this clip
+        clip.down = True
+        return None
 
 
 def upload(version: Version, source: bytes | None = None) -> tuple[bytes, bytes, dict] | None:
     """Download only the chosen streams. Copy them into a fast-start MP4 and take one frame for Telegram.
-    Runs in _threaded: yt-dlp's connections pass _connect, every step sees the deadline. Raises SourceDown when
-    yt-dlp's download fails; None for anything else that isn't sendable (too large, too long, not H.264, too slow)."""
+    Runs in _threaded: yt-dlp's connections pass _connect, every step sees the deadline. yt-dlp's errors propagate
+    (_threaded tells an outage from a gone video); None for anything else that isn't sendable (too large, too long,
+    not H.264, a child process out of time, or a format that becomes available only past the deadline)."""
     try:
         return _upload(version, source)
     except subprocess.SubprocessError:  # ffmpeg ran out of time (killed)
@@ -593,9 +655,9 @@ def upload(version: Version, source: bytes | None = None) -> tuple[bytes, bytes,
 
 def _upload(version: Version, source: bytes | None) -> tuple[bytes, bytes, dict] | None:
     from .video import FORMATS, SAFE_IN
-    if source is None:
-        from yt_dlp.utils import DownloadError
-        from yt_dlp.networking.exceptions import RequestError
+    if source is None and any((f.get("available_at") or 0) - time.time() >= _left()
+                              for f in filter(None, (version.video, version.audio))):
+        return None  # yt-dlp would sleep until then, past any deadline
     with tempfile.TemporaryDirectory() as tmp, (_downloader() if source is None else nullcontext()) as dl:
         inputs = []
         size = 0
@@ -610,8 +672,6 @@ def _upload(version: Version, source: bytes | None) -> tuple[bytes, bytes, dict]
                     ok, _ = dl.dl(str(path), f)
                 except TooLarge:
                     return None
-                except (DownloadError, RequestError) as exc:
-                    raise SourceDown(type(exc).__name__) from None
                 if not ok or not path.is_file():  # e.g. its Content-Length is past max_filesize
                     return None
             size += path.stat().st_size

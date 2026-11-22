@@ -756,9 +756,9 @@ def test_per_person_caps_and_bounded_memory(monkeypatch):
     # one person never takes the chat's whole budget: the others still have the rest of it
     assert all(tiktok.room(-1, t, user=8 + i, video="v") for i in range(tiktok.CHAT_CAP - tiktok.USER_CAP))
     assert not tiktok.room(-1, t, user=20, video="v")  # the chat's cap
-    # the same person's same video: once a WINDOW, whichever chat; a refusal costs no budget
-    assert tiktok.room(-3, t, user=30, video="same") and not tiktok.room(-4, t + 1, user=30, video="same")
-    assert tiktok.room(-4, t + 2, user=30, video="new") and tiktok.room(-3, t + tiktok.WINDOW, user=30, video="same")
+    # the same person's same video: once a WINDOW in a chat (another group may get it); a refusal costs no budget
+    assert tiktok.room(-3, t, user=30, video="same") and not tiktok.room(-3, t + 1, user=30, video="same")
+    assert tiktok.room(-4, t + 2, user=30, video="same") and tiktok.room(-3, t + tiktok.WINDOW, user=30, video="same")
     # idle keys go, and there are never more than SENT_KEYS
     assert tiktok.room(-9, t + 10 * tiktok.WINDOW, user=1) and len(tiktok._sent) == 2
     monkeypatch.setattr(tiktok, "SENT_KEYS", 50)
@@ -825,13 +825,14 @@ def test_a_thread_past_its_deadline_keeps_its_slot_until_it_ends(monkeypatch):
         gate = asyncio.Semaphore(1)
         start = time.monotonic()
         with pytest.raises(TimeoutError):
-            await tiktok._threaded(gate, start + 0.1, work)
+            await tiktok._threaded(gate, 0.1, work)
         assert time.monotonic() - start < 1 and gate.locked() and not ended
-        with pytest.raises(TimeoutError):  # no second thread starts while the first one runs
-            await tiktok._threaded(gate, time.monotonic() + 0.05, lambda: pytest.fail("ran beside a late thread"))
+        with pytest.raises(TimeoutError):  # no second thread starts while the first one runs (the reply's deadline)
+            async with asyncio.timeout(0.05):
+                await tiktok._threaded(gate, 1, lambda: pytest.fail("ran beside a late thread"))
         while gate.locked():
             await asyncio.sleep(0.01)
-        assert ended and await tiktok._threaded(gate, time.monotonic() + 1, lambda: 42) == 42
+        assert ended and await tiktok._threaded(gate, 1, lambda: 42) == 42
     asyncio.run(go())
 
 
@@ -899,7 +900,7 @@ def test_the_deadline_cuts_a_child_process_short(stuck_ffmpeg):
     async def go():
         gate = asyncio.Semaphore(1)
         with contextlib.suppress(TimeoutError):  # the caller's limit and the child's are the same deadline
-            assert await tiktok._threaded(gate, time.monotonic() + 2, tiktok.upload, tiktok.Version(FORMAT), VIDEO) is None
+            assert await tiktok._threaded(gate, 2, tiktok.upload, tiktok.Version(FORMAT), VIDEO) is None
         while gate.locked():
             await asyncio.sleep(0.01)
     start = time.monotonic()
@@ -922,7 +923,7 @@ def test_ytdlp_children_are_bounded_by_the_deadline():
 
     async def go():
         with pytest.raises((subprocess.TimeoutExpired, TimeoutError)):
-            await tiktok._threaded(asyncio.Semaphore(1), time.monotonic() + 0.2, solve)
+            await tiktok._threaded(asyncio.Semaphore(1), 0.2, solve)
     start = time.monotonic()
     asyncio.run(go())
     assert time.monotonic() - start < 5 and _gone(pid[0])
@@ -998,8 +999,8 @@ def test_a_probe_refuses_a_page_and_learns_the_size(media_dns, movies):
 def test_duration_cap_for_ytdlp_sources(env, monkeypatch, movies):
     _, cfg = env
     reel = [_file_format("reel", host="scontent.cdninstagram.com")]
-    assert not _source(monkeypatch, cfg, REEL, {"duration": tiktok.MAX_SECONDS + 1, "formats": reel})[1]
-    assert _source(monkeypatch, cfg, REEL, {"duration": tiktok.MAX_SECONDS, "formats": reel})[1]
+    assert not _source(monkeypatch, cfg, REEL, {"duration": tiktok.MAX_SECONDS + 1.5, "formats": reel})[1]
+    assert _source(monkeypatch, cfg, REEL, {"duration": tiktok.MAX_SECONDS + 0.04, "formats": reel})[1]  # a full reel
     # the length the file itself has, whatever the listing said (yt-dlp's download writes a 0.25 s movie)
     from yt_dlp import YoutubeDL
     movie = movies("long", "32x48")
@@ -1089,7 +1090,7 @@ def test_ytdlp_connections_are_pinned(monkeypatch):
 
     async def run(url, hosts):
         with pytest.raises(Exception) as caught:
-            await tiktok._threaded(asyncio.Semaphore(1), time.monotonic() + 10, get, url, hosts=hosts)
+            await tiktok._threaded(asyncio.Semaphore(1), 10, get, url, hosts=hosts)
         return caught.value
 
     try:
@@ -1205,24 +1206,152 @@ def test_breaker_per_source_and_silent(monkeypatch, caplog):
     assert [m for m, _, _ in http.calls] == ["sendChatAction"] and _routes(caplog) == ["Paused"]  # no words to anyone
 
 
-def test_ytdlp_download_failures_count_and_too_large_does_not(monkeypatch):
+def _ytdlp_error(kind: str):
+    """yt-dlp's errors as they reach us: a DownloadError around what happened."""
+    import io
+    import sys
+    from yt_dlp.networking import Response
+    from yt_dlp.networking.exceptions import HTTPError, TransportError
+    from yt_dlp.utils import DownloadError, ExtractorError
+    try:
+        if kind == "private":
+            raise ExtractorError("This content isn't available", expected=True)
+        if kind == "network":
+            raise ExtractorError("Unable to download webpage", cause=TransportError("reset"))
+        if kind == "broken":
+            raise ExtractorError("Unable to extract data")  # the site changed: the source is broken for everyone
+        status = int(kind)
+        raise ExtractorError("HTTP Error", cause=HTTPError(Response(io.BytesIO(b""), "https://x.example", {}, status=status)))
+    except ExtractorError:
+        return DownloadError("ERROR", sys.exc_info())
+
+
+def test_what_counts_as_an_outage():
+    assert not tiktok._outage(_ytdlp_error("private"))
+    assert not any(tiktok._outage(_ytdlp_error(code)) for code in ("403", "404", "410"))
+    assert all(tiktok._outage(_ytdlp_error(kind)) for kind in ("429", "500", "503", "network", "broken"))
+    assert tiktok._outage(TimeoutError()) and tiktok._outage(tiktok.SourceDown("x")) and tiktok._outage(RuntimeError())
+
+
+def test_a_bad_link_never_rests_a_source(monkeypatch):
+    """Private, deleted, age-gated links: nothing to send, and the source is fine (one person can't shut it)."""
+    calls = []
+
+    def extract(match):
+        calls.append(1)
+        raise _ytdlp_error("private" if len(calls) % 2 else "404")
+    monkeypatch.setattr(tiktok, "_extract", extract)
+    for _ in range(3 * tiktok.FAILURES):
+        assert asyncio.run(tiktok.fetch(None, REEL)) is None
+    assert len(calls) == 3 * tiktok.FAILURES and tiktok._health["instagram"] == (0, 0.0)
+
+
+def test_our_own_queue_is_not_a_source_failure(monkeypatch):
+    """Seven links at once on a healthy source: they wait for the two extraction slots, and none of that waiting is
+    the source's time or its failure."""
+    monkeypatch.setattr(tiktok, "_extractors", asyncio.Semaphore(2))
+    monkeypatch.setattr(tiktok, "EXTRACT_SECONDS", 0.3)
+
+    def extract(match):
+        time.sleep(0.2)
+        return None
+    monkeypatch.setattr(tiktok, "_extract", extract)
+
+    async def go():
+        return await asyncio.gather(*(tiktok.fetch(None, SHORT) for _ in range(7)))
+    assert asyncio.run(go()) == [None] * 7 and tiktok._health["youtube"] == (0, 0.0)
+
+
+def test_a_cancelled_call_is_not_counted(monkeypatch):
+    def extract(match):
+        time.sleep(0.2)
+    monkeypatch.setattr(tiktok, "_extract", extract)
+
+    async def go():
+        job = asyncio.create_task(tiktok.fetch(None, SHORT))
+        await asyncio.sleep(0.05)
+        job.cancel()  # the reply's own deadline, or a shutdown
+        with pytest.raises(asyncio.CancelledError):
+            await job
+    for _ in range(tiktok.FAILURES + 1):
+        asyncio.run(go())
+    assert tiktok._health.get("youtube", (0, 0.0))[0] == 0
+
+
+def test_ytdlp_download_failures_count_once_per_clip(monkeypatch):
     from yt_dlp import YoutubeDL
-    from yt_dlp.utils import DownloadError
     outcome = []
 
     def transfer(dl, path, info):
         raise outcome[0]
     monkeypatch.setattr(YoutubeDL, "dl", transfer)
-    clip = tiktok.Clip("yt:1", 10, [], hosts=("googlevideo.com",), source="youtube")
+    clip = lambda: tiktok.Clip("yt:1", 10, [], hosts=("googlevideo.com",), source="youtube")  # noqa: E731
     version = tiktok.Version(_file_format("v"))
-    outcome[:] = [tiktok.TooLarge("big")]
-    assert asyncio.run(tiktok.prepare_upload(None, clip, version)) is None and "youtube" not in tiktok._health or \
-        tiktok._health["youtube"][0] == 0
-    outcome[:] = [DownloadError("403")]
-    for _ in range(tiktok.FAILURES):
-        assert asyncio.run(tiktok.prepare_upload(None, clip, version)) is None
+    for gone in (tiktok.TooLarge("big"), _ytdlp_error("403"), _ytdlp_error("private")):  # this video, not the source
+        outcome[:] = [gone]
+        assert asyncio.run(tiktok.prepare_upload(None, clip(), version)) is None
+    assert tiktok._health["youtube"] == (0, 0.0)
+    outcome[:] = [_ytdlp_error("network")]
+    one = clip()
+    for _ in range(tiktok.FAILURES + 2):  # every version of one clip fails: one failure, never Paused mid-reply
+        assert asyncio.run(tiktok.prepare_upload(None, one, version)) is None
+    assert tiktok._health["youtube"][0] == 1
+    for _ in range(tiktok.FAILURES - 1):
+        assert asyncio.run(tiktok.prepare_upload(None, clip(), version)) is None
     with pytest.raises(tiktok.Paused):
-        asyncio.run(tiktok.prepare_upload(None, clip, version))
+        asyncio.run(tiktok.prepare_upload(None, clip(), version))
+
+
+def test_a_resting_source_still_lets_a_later_version_go_by_url(monkeypatch, caplog):
+    caplog.set_level("INFO", logger="uvicorn.error")
+    big = {**_file_format("big", 1080, 1920), "protocol": "https", "filesize": tiktok.URL_BYTES + 1}
+    small = {**_file_format("small"), "protocol": "https"}
+    got = tiktok.Clip("yt:aB1234567_-", 10, [small, big], hosts=("googlevideo.com",), source="youtube")
+
+    async def fetch(http, url):
+        return got
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    tiktok._health["youtube"] = (tiktok.FAILURES, time.monotonic() + 3600)
+    http = _Telegram()
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, SHORT), SHORT))
+    assert [b["video"] for b, _ in http.said("sendVideo")] == [small["url"]] and _routes(caplog) == ["url"]
+
+
+def test_a_format_available_only_past_the_deadline_is_skipped(monkeypatch):
+    from yt_dlp import YoutubeDL
+    monkeypatch.setattr(YoutubeDL, "dl", lambda *a: pytest.fail("yt-dlp would sleep until it is available"))
+    later = tiktok.Version({**_file_format("v"), "available_at": time.time() + 3600})
+    assert asyncio.run(tiktok._threaded(asyncio.Semaphore(1), 5, tiktok.upload, later)) is None
+
+
+def test_a_slow_tiktok_download_leaves_the_remux_its_time(monkeypatch):
+    monkeypatch.setattr(tiktok, "DOWNLOAD_SECONDS", 0.3)
+    monkeypatch.setattr(tiktok, "REMUX_SECONDS", 0.5)
+    remux = [0.1]
+
+    async def fetch(http, url, hosts, cap, **kw):
+        await asyncio.sleep(0.2)  # most of the download's time
+        return VIDEO
+
+    def upload(version, data):
+        time.sleep(remux[0])
+        return VIDEO, b"", {}
+    monkeypatch.setattr(download, "fetch", fetch)
+    monkeypatch.setattr(tiktok, "upload", upload)
+    assert asyncio.run(tiktok.prepare_upload(None, CLIP, tiktok.Version(FORMAT))) == (VIDEO, b"", {})
+    remux[0] = 0.8  # a remux out of time: this version gives None, the next one is still tried
+    assert asyncio.run(tiktok.prepare_upload(None, CLIP, tiktok.Version(FORMAT))) is None
+
+
+def test_the_guard_covers_every_handler_and_ignores_proxies(monkeypatch):
+    from yt_dlp.networking import _requests, _websockets
+    from yt_dlp.networking.common import _REQUEST_HANDLERS
+    with tiktok._downloader() as dl:
+        assert dl.params["proxy"] == ""  # HTTPS_PROXY / ALL_PROXY from the environment never apply
+    assert _requests.create_connection.guarded and _websockets.create_connection.guarded
+    monkeypatch.setitem(_REQUEST_HANDLERS, "CurlCFFI", object)  # e.g. curl_cffi installed: its own sockets
+    with pytest.raises(RuntimeError):
+        tiktok._downloader()
 
 
 def test_failures_log_no_link_and_no_ids(monkeypatch, caplog):

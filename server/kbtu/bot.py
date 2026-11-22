@@ -1930,7 +1930,10 @@ async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict,
                 return "refused"
         if not answer.get("ok"):
             async with _video_uploads:
-                upload = await tiktok.prepare_upload(http, got, version)
+                try:
+                    upload = await tiktok.prepare_upload(http, got, version)
+                except tiktok.Paused:  # the source rests: a later version may still go by URL
+                    upload = None
                 if not upload:
                     continue  # e.g. the real size exceeds the estimate: try the next resolution
                 video, thumb, tracks = upload
