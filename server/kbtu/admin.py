@@ -43,7 +43,7 @@
                                 sources, errors, open time; the numbers of the Monday message to the creator
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
-  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
+  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json> | --gz <b64 of gzip {"rows", "map"}>   the clubs' rosters from DMP's sheet (PLAN 95): rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
@@ -378,10 +378,15 @@ def main(args: list[str]) -> None:
         print("sign-up closes", args[2])
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
-    elif cmd == "roster" and len(args) == 4 and args[1] == "load":
+    elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
         from . import roster
         try:
-            got = roster.load(con, json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8")))
+            if gz is not None:  # the prod gate passes arguments only: {"rows": [...], "map": {...}} as `--gz`
+                given = json.loads(gz)
+                items, orgmap = given["rows"], given["map"]
+            else:
+                items, orgmap = json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8"))
+            got = roster.load(con, items, orgmap)
         except ValueError as exc:
             sys.exit(str(exc))
         print(f"rows {got['rows']}, new {got['added']}, clubs made {len(got['orgs_made'])}, joined now {got['joined']}, "
