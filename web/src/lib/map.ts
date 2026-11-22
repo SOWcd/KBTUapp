@@ -137,3 +137,38 @@ export function nearRooms(rooms: Record<string, number[][]>, room: string, ar: n
   if (!lo || !hi) return lo || hi ? [one((lo ?? hi)!)] : [];
   return Math.hypot(lo.at[0] - hi.at[0], (lo.at[1] - hi.at[1]) * ar) < 0.25 ? [one(lo), one(hi)] : [one(-lo.d <= hi.d ? lo : hi)];
 }
+
+/** A point on the main map's plan (Uni-Q's: the routes' graph is drawn on it): a floor and fractions of its width and height */
+type At = { f: number; u: number; v: number };
+type Door = At & { k?: string; name?: string; r?: string[] };
+/** What a typed text means on the main map, for a route's start or end and "Show on map": an entrance by its name,
+ *  a named place with a point (the canteen), a room where its number is printed, else its door on the graph, else its
+ *  nearest numbered neighbour ("435 isn't on the plan: somewhere here", near: the room asked for). rooms: by floor, the
+ *  room → where its number is printed; doors: the graph's points; ar: the plan's height to its width */
+export function locate(text: string, rooms: Record<string, number[][]>[], doors: Door[], ar: number): (At & { room: string; spot?: string; near?: string }) | null {
+  const x = doors.find((n) => n.k === 'x' && n.name === text.trim());
+  if (x) return { f: x.f, u: x.u, v: x.v, room: x.name! };
+  const s = spotOf(text);
+  if (s?.f != null) return { f: s.f, u: s.u!, v: s.v!, room: s.k, spot: s.k };
+  const r = roomOf(text) ?? s?.room ?? null, f = floorOf(r);
+  if (!r || f == null) return null;
+  const at = rooms[f]?.[r]?.[0], door = doors.find((n) => n.r?.includes(r));
+  if (at) return { f, u: at[0], v: at[1], room: r };
+  if (door) return { f: door.f, u: door.u, v: door.v, room: r };
+  const nb = nearRooms(rooms[f] ?? {}, r, ar)[0];
+  return nb ? { f, u: nb[1][0], v: nb[1][1], room: nb[0], near: r } : null;
+}
+
+/** What a tap on the main map means for a route's end: the entrance, the named place or the room whose number is
+ *  nearest the finger, within reach (a fraction of the plan's width: a finger's size at the zoom on screen); else
+ *  nothing, and the point itself is the end. An entrance or a named place wins over a room's number at the same reach */
+export function tapAt(p: At, rooms: Record<string, number[][]>[], doors: Door[], ar: number, reach: number): { exit?: string; spot?: string; room?: string } | null {
+  const d = (q: { u: number; v: number }) => Math.hypot(q.u - p.u, (q.v - p.v) * ar);
+  const x = doors.filter((n) => n.k === 'x' && n.name && n.f === p.f && d(n) < reach).sort((a, b) => d(a) - d(b))[0];
+  if (x) return { exit: x.name };
+  const s = SPOTS.filter((s) => s.f === p.f && d({ u: s.u!, v: s.v! }) < reach).sort((a, b) => d({ u: a.u!, v: a.v! }) - d({ u: b.u!, v: b.v! }))[0];
+  if (s) return { spot: s.k };
+  let best = '', bd = reach;
+  for (const [r, at] of Object.entries(rooms[p.f] ?? {})) for (const [u, v] of at) if (d({ u, v }) < bd) { bd = d({ u, v }); best = r; }
+  return best ? { room: best } : null;
+}

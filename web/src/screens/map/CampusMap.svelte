@@ -87,6 +87,7 @@
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
   let routing = $state(false);
+  let routeUI = $state<ReturnType<typeof RouteUI>>();
   let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one
   async function openRoute() {
     haptic.tap();
@@ -106,7 +107,7 @@
   // the step on screen: framed again whenever the stage changes size (the keyboard going away after "Lead me out" grows
   // it: else the way sits small at the top) until a finger moves the map
   let framed: number[][] | null = null, reframeT = 0;
-  function reframe() { if (!framed || !rt.route) return; glided = false; clearTimeout(glideT); frame(framed); }
+  function reframe() { if (!framed || !(rt.route || rt.pick)) return; glided = false; clearTimeout(glideT); frame(framed); }
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
   const routeFloors = $derived(new Set(rt.route?.legs.map((l) => l.f) ?? []));
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
@@ -350,7 +351,7 @@
     fingers = e.isPrimary ? 1 : fingers + 1;
     if (!e.isPrimary) { press = null; swipeEnd(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
     const at = (press = local(e)), id = e.pointerId;
-    if (rt.route) return;
+    if (rt.route || rt.pick) return; // on the way, or an end being tapped: no note held down
     // held: the finger is the stage's from here on, and the click its let-go may bring is swallowed, so neither lands
     // on the note's sheet that has just opened under the finger and shuts it
     holdT = setTimeout(() => {
@@ -380,11 +381,16 @@
   function tap(e: MapMouseEvent) {
     if (held) { held = false; return; } // the let-go of a hold
     const el = e.originalEvent.target as Element, p = e.point, now = performance.now();
-    const pin = Number(el.closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0), tinted = el.closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
-    if (pin || seen) { if (pin) haptic.tap(); seen = pin && pin !== seen ? pin : 0; }
-    if (pin) return;
-    // a tap on a tinted room: its card, with when it is free (no glide: it is on screen already)
-    if (tinted) { haptic.tap(); at = null; room = tinted; glided = true; lastTap = 0; return; }
+    if (rt.pick) { // a route's end being picked on the map: what is under the finger (a finger's reach, 24 px at this zoom); a second tap still zooms
+      const [u, v] = uvAt(p.x, p.y);
+      if (u >= 0 && u <= 1 && v >= 0 && v <= 1) routeUI?.mapTap(cur, u, v, 24 / widthAt(fr, map.getZoom()));
+    } else {
+      const pin = Number(el.closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0), tinted = el.closest<HTMLElement>('[data-room]')?.dataset.room ?? '';
+      if (pin || seen) { if (pin) haptic.tap(); seen = pin && pin !== seen ? pin : 0; }
+      if (pin) return;
+      // a tap on a tinted room: its card, with when it is free (no glide: it is on screen already)
+      if (tinted) { haptic.tap(); at = null; room = tinted; glided = true; lastTap = 0; return; }
+    }
     if (lastTap && now - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) {
       haptic.tap(); lastTap = 0;
       if (scale() > 1.5) fit();
@@ -801,9 +807,11 @@
     <div class="first" bind:this={first}>{#if ghost}{#key ghost}<img class="ghost" bind:this={ghostEl} src={ghost} alt="" draggable="false" />{/key}{/if}{#key `${ver}${cur}`}<img src={overview(ver, look === 'dark', cur)} alt="" draggable="false" />{/key}</div>
     <div class="gl" bind:this={gl}></div>
     <div class="plan" bind:this={plan} style:aspect-ratio="1 / {AR}">
-        {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
+        <!-- a route's end being picked: where the tap (or the typed room) landed, A green, B blue -->
+        {#if rt.pick?.at && rt.pick.at.f === cur}{#key rt.pick.at}<span class="pin cand {rt.pick.end}" style:left="{rt.pick.at.u * 100}%" style:top="{rt.pick.at.v * 100}%"></span>{/key}{/if}
+        {#each routing ? [] : spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
           {#if i === 0 && card}<span class="pin flag" style:left="{u * 100}%" style:top="{v * 100}%">{cardTitle}</span>{/if}{/each}
-        {#each near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
+        {#each routing ? [] : near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
         {#each freeHere as f (f.r + f.u + f.v)}<span class="room" class:free={f.free} data-room={f.r} style:left="{f.u * 100}%" style:top="{f.v * 100}%"></span>{/each}
         {#if legsHere.length}
           <svg class="way" viewBox="0 0 1000 {1000 * AR}" preserveAspectRatio="none" aria-hidden="true">
@@ -893,7 +901,7 @@
   {/if}
   {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, ...placeGroups()]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
   {#if routing}
-    <RouteUI {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
+    <RouteUI bind:this={routeUI} {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
   {/if}
 </div>
 
@@ -959,6 +967,10 @@
   .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: #2fc277; } /* A is green, B blue */
   .pin.tag { transform: translate(-50%, calc(-100% - 20px)); padding: 6px 10px; border-radius: 10px; background: #fff; color: #0a0f24; font: 750 12px/1 var(--font-text); white-space: nowrap;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+  /* a route's end being picked: a ring in its point's colour (the room's number shows through), dropped in where the finger was */
+  .pin.cand { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--accent); background: rgba(59, 107, 255, 0.16); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); animation: drop 0.45s var(--ease-bounce); }
+  .pin.cand.a { border-color: var(--success); background: rgba(47, 191, 113, 0.16); }
+  .pin.cand::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 3px solid; border-color: inherit; animation: ripple 2s var(--ease-spring) infinite; }
   .pin.end { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fff, 0 6px 18px rgba(59, 107, 255, 0.8); }
   .pin.end::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--accent-text); animation: ripple 2s var(--ease-spring) infinite; }
   .pin.flag { transform: translate(-50%, calc(-100% - 24px)); padding: 7px 12px; border-radius: 12px; white-space: nowrap; background: var(--accent); color: #fff;
@@ -980,8 +992,8 @@
     font: 600 var(--fs-sub)/1.35 var(--font-text); text-align: center; overflow-wrap: anywhere; box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.35); animation: noteIn 0.3s var(--ease-spring); }
   @keyframes noteIn { from { opacity: 0; transform: translate(-50%, calc(-100% - 6px)) scale(0.92); } }
   :global(html.lowfx) .pin.mark.draft::after,
-  :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag, .pin.mark.draft::after { animation: none; } }
+  :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before, :global(html.lowfx) .pin.cand::before { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.cand, .pin.cand::before, .pin.flag, .pin.mark.draft::after { animation: none; } }
 
   /* right edge: the look button, the floors as a lift panel, "whole floor" */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }

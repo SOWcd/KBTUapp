@@ -49,9 +49,10 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
 
-  let { title, go, point, placeTab, groups, check, onsubmit, onclose, start = '' }: {
+  // see: the map button beside the main one (a route's ends): what is typed shown on the map, or the map to tap on
+  let { title, go, point, placeTab, groups, check, onsubmit, onclose, start = '', see }: {
     title: string; go: string; point: 'a' | 'b'; placeTab: string; groups: { title?: string; tiles: PadTile[] }[];
-    check: (text: string) => PadCheck; onsubmit: (text: string) => void; onclose: () => void; start?: string;
+    check: (text: string) => PadCheck; onsubmit: (text: string) => void; onclose: () => void; start?: string; see?: (text: string) => void;
   } = $props();
 
   const example = EX[Math.floor(Math.random() * EX.length)] ?? '305';
@@ -133,7 +134,10 @@
       {/each}
     </div>
   </div>
-  <button class="go" disabled={!res.ok} onclick={submit}>{go}</button>
+  <div class="foot">
+    {#if see}<button class="see" onclick={() => see(res.ok ? typed : '')}><MapPin size={18} />{t('pad.onMap')}</button>{/if}
+    <button class="go" disabled={!res.ok} onclick={submit}>{go}</button>
+  </div>
 </div>
 
 <style>
@@ -214,7 +218,11 @@
   .tile.on { background: var(--pt); color: #fff; }
   .tile.on .ti { background: rgba(255, 255, 255, 0.2); color: #fff; }
   .tile.on small { color: rgba(255, 255, 255, 0.7); }
-  .go { width: 100%; height: 56px; margin-top: 10px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font: 750 17px/1 var(--font-text); color: #fff;
+  .foot { display: flex; gap: 8px; margin-top: 10px; }
+  /* the map button: as tall as the main one, as wide as its words, the point's colour */
+  .see { flex: none; max-width: 52%; height: 56px; padding: 0 16px; border-radius: var(--r-full); display: flex; align-items: center; gap: 6px; font: 700 var(--fs-body)/1 var(--font-text);
+    color: var(--pt-text); background: var(--surface-2); white-space: nowrap; overflow: hidden; }
+  .go { flex: 1; min-width: 0; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font: 750 17px/1 var(--font-text); color: #fff;
     background: linear-gradient(180deg, #5c85ff, #3b6bff 55%, #3457e0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px -8px rgba(59, 107, 255, 0.8);
     transition: opacity 0.25s, filter 0.25s; }
   .pt-a .go { background: linear-gradient(180deg, #55e29c, #2fc277 60%, #22a866); color: #04140b; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 24px -8px rgba(63, 214, 138, 0.7); }
