@@ -901,7 +901,7 @@ def test_members_csv(env):
     head, top, row = (r.split(";") for r in data.decode("utf-8-sig").splitlines())
     role = head.index("Role")
     assert "Middle name" not in head and "Department" not in head and "Position" not in head  # none, or empty: no column
-    assert top[role] == "President" and row[role] == "Member" and row[head.index("First name (Latin)")] == "Ali*" and "made up" in caption
+    assert top[role] == "President" and row[role] == "Member" and row[head.index("First name (Latin)")] == "Ali*" and "generated automatically" in caption
     assert texts.latin("\u0414\u0430\u0443\u043b\u0435\u0442\u04b1\u043b\u044b") == "Dauletuly"
     assert "24Bali" not in data.decode("utf-8-sig") and "kbtu.kz" not in data.decode("utf-8-sig") and "7700" not in data.decode("utf-8-sig")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'members_export'").fetchone()[0] == 1
@@ -3214,7 +3214,7 @@ def test_memo(env, monkeypatch):
     assert text.count("Pres Testov") == 3 and "Pres Testov\n+7 (701) 234 56 78\n-------" in text       # kk and ru, then the Latin one
     pos = texts.MEMO2_POS["president"]
     assert "\n".join((texts.MEMO2_SIGN["kk"][0], texts.MEMO2_SIGN["kk"][1].format(org="IT Club", pos=pos["kk"]))) in text
-    assert "Regards and best wishes,\nPresident of Student Organization «IT Club»\nPres Testov" in text
+    assert "Kind regards,\nPresident of the student organization “IT Club”\nPres Testov" in text
     assert c.get("/api/orgs/1/memo", headers=tma(10)).status_code == 403
 
     # Wednesday 10:00 in Almaty: the President hears it once
@@ -3288,7 +3288,7 @@ def test_memo_v2(env, monkeypatch):
                 texts.MEMO2_PROVIDE_HEAD.format(items="; ".join([*provide, "extension cord"])), texts.MEMO2_QUIET,
                 texts.MEMO2_DATES.format(dates=texts._dates(every["promo"]["dates"])),
                 f"{texts.MEMO2_FILM}\n", "10:00-12:00", "interview", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]) + f"\n{' '.join(cyr)}\n+7 (700) 111 22 33",
-                texts.MEMO2_SIGN["kk"][1].format(org="StudEx", pos=sec["kk"]), "Secretary of Student Organization «StudEx»\nAigerim Saparova"):
+                texts.MEMO2_SIGN["kk"][1].format(org="StudEx", pos=sec["kk"]), "Secretary of the student organization “StudEx”\nAigerim Saparova"):
         assert bit in t, bit
     assert texts._dates(["2026-10-14", "2026-10-13", "2026-11-03"]) == f"13, 14 {texts.MONTHS['ru'][9]} \u0438 3 {texts.MONTHS['ru'][10]} 2026"
     seventh = next(x for x in t.split("\n") if x.startswith("7) "))
