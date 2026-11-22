@@ -336,9 +336,10 @@
           {#if live}
             {@const pick = pendingHearts[p.id] ?? p}
             <div class="feedback">
-              <button class="heart" aria-pressed={pick.hearted} onclick={() => heart(p)}>
+              <!-- the app's own heart: a small chip, heart and count; its name is for screen readers only (owner: the words were too big) -->
+              <button class="heart" aria-pressed={pick.hearted} aria-label="{t('fc.appHearts')}: {pick.hearts}" onclick={() => heart(p)}>
                 <Heart size={16} fill={pick.hearted ? 'currentColor' : 'none'} aria-hidden="true" />
-                {t('fc.appHearts')} <span>{pick.hearts}</span>
+                {#if pick.hearts}<span aria-hidden="true">{compact(pick.hearts)}</span>{/if}
               </button>
               <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
               {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
@@ -485,9 +486,10 @@
   /* The heart and Telegram counts wrap together. Sharing and the discussion stay on their own row. */
   .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; margin-top: var(--s-3); }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
-  .heart { display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 44px; border-radius: var(--r-full);
+  .heart { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 32px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1.2 var(--font-text); font-variant-numeric: tabular-nums; }
   .heart[aria-pressed='true'] { color: var(--danger-text); }
+  .heart::before { content: ''; position: absolute; inset: -6px -2px; } /* a 44 px tap target round the small chip */
   .rx { flex: none; display: flex; gap: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-body); line-height: 1; }
