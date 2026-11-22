@@ -25,8 +25,10 @@
   let busy = $state(false), loginFailed = $state(false), widgetFailed = $state(false);
   let retry = $state(0);
 
-  async function enter() {
-    await loadMe(false, true, await api.me(true));
+  // limit: the first check gives up after it and shows Retry (a captive portal holds a request for the API's 100 s)
+  async function enter(limit = 0) {
+    const me = api.me(true);
+    await loadMe(false, true, await (limit ? Promise.race([me, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), limit))]) : me));
     entered = true;
   }
 
@@ -34,7 +36,7 @@
   async function check() {
     view = 'checking';
     bootOver();
-    try { await enter(); }
+    try { await enter(8000); }
     catch (e) { view = e instanceof ApiErr && e.code === 'unauthorized' ? 'signin' : 'offline'; }
   }
 

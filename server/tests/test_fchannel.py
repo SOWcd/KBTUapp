@@ -130,6 +130,7 @@ def test_post_ai_exact_word(monkeypatch):
                  "personal stories about mental health, relationships, money and failures",
                  "When unsure about the author's own experience, prefer OK unless a rule above clearly applies"):
         assert rule in rules
+    assert rules.index("are fair game") < rules.index("in order")  # the app-makers' exception is read before the rules
 
 
 def test_post_personal_stories_and_holds(env, monkeypatch):
