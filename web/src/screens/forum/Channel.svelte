@@ -17,7 +17,7 @@
   import { tick, untrack } from 'svelte';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import type { TransitionConfig } from 'svelte/transition';
+  import { fade, type TransitionConfig } from 'svelte/transition';
   import { calm } from '../../ui/fold';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
@@ -287,7 +287,9 @@
   </div>
 
   {#if feed.length}
-    <div class="feed" class:settled>
+    <!-- another order is another list: swapped whole with one quick fade, not every card shuffling past the others -->
+    {#key channel.order}
+    <div class="feed" class:settled in:fade={{ duration: calm() ? 0 : 180 }}>
       {#each rows as r, i (r === 'nw' ? r : keyOf(r))}
         <!-- one element per row (flip needs it) -->
         <div class="item" animate:flip={{ duration: calm() ? 0 : 320, easing: cubicOut }} transition:card>
@@ -361,6 +363,7 @@
       {/each}
       {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
     </div>
+    {/key}
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
