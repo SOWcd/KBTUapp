@@ -3023,6 +3023,8 @@ const en: Dict = {
   'anthem.pause': "Pause",
   'anthem.repeat': "Repeat",
   'anthem.skipNote': "The award is for the whole anthem, no skipping",
+  'anthem.in': "Achievement in",
+  'anthem.bg': "Play in background",
 
   // the event editor (Luma's create screen, Nov 2)
   'ex.saveAnyway': "Save as it is",

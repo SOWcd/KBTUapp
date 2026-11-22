@@ -32,6 +32,7 @@
   import Ban from '@lucide/svelte/icons/ban';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live } from './ui/Capsule.svelte';
+  import { anthem } from './lib/state/anthem.svelte';
   import { TAB_ICON } from './ui/icons';
   import KbtuMark from './ui/KbtuMark.svelte';
   import Toast from './ui/Toast.svelte';
@@ -469,10 +470,17 @@
 
   // ---- live capsule: an event today you're going to, or a class within the next hour ----
   let clock = $state(nowTs());
+  // the anthem playing in the background (its sheet's small button): the time left, a tap opens the sheet again
+  const anthemLive = $derived.by<Live | null>(() => {
+    if (!anthem.bg) return null;
+    const left = Math.max(0, Math.floor(anthem.dur) - Math.floor(anthem.cur));
+    return { kind: 'class', title: t('anthem.title'), at: 0, emoji: 'headphone_3d', tint: 'var(--accent)', label: `−${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, onopen: () => sheets.anthem() };
+  });
   const live = $derived.by<Live | null>(() => {
     const now = clock;
     const running = runningCheckin(now); // wins over a class or an event while it runs
     if (running) return { kind: 'checkin', title: running.title, at: now, emoji: 'laptop_3d', tint: 'var(--accent)', label: t('cap.checkin'), onopen: () => openCheckin(running) };
+    if (anthemLive) return anthemLive;
     const today = dayNo(now);
     const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now
       && (e.endsAt ?? e.startsAt) - e.startsAt < 86400); // not one of several days (a casting over a week: owner, Nov 3)
