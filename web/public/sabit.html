@@ -92,6 +92,29 @@ footer { margin-top: 28px; font-size: 12px; color: var(--muted); border-top: 1px
   h2, .kicker { break-after: avoid; }
   .pb { break-before: page; }
 }
+
+/* motion: only with JS and without reduced motion; the page reads the same without it */
+@keyframes glow { 0%,100% { transform: translate(0,0) scale(1); opacity:.9 } 50% { transform: translate(-6%,4%) scale(1.15); opacity:1 } }
+@keyframes rise { from { opacity:0; transform: translateY(14px) } to { opacity:1; transform:none } }
+.hero { position: relative; overflow: hidden; }
+.hero::before { content:""; position:absolute; inset:-40% -20% auto auto; width:80%; height:160%;
+  background: radial-gradient(closest-side, rgba(70,110,255,.55), transparent 70%); filter: blur(10px); pointer-events:none; }
+.hero .in { position: relative; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero::before { animation: glow 9s ease-in-out infinite; }
+  .js .hero h1, .js .hero p, .js .hero .date { animation: rise .8s cubic-bezier(.2,.8,.2,1) both; }
+  .js .hero p { animation-delay: .12s } .js .hero .date { animation-delay: .24s }
+  .js .rv { opacity:0; transform: translateY(18px) scale(.985); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); transition-delay: var(--d,0s); }
+  .js .rv.on { opacity:1; transform:none; }
+  .js .chart rect { transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); transition: transform .9s cubic-bezier(.2,.8,.2,1); transition-delay: var(--d,0s); }
+  .js .chart.on rect { transform: none; }
+  .js .chart polyline { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); transition: stroke-dashoffset 1.6s cubic-bezier(.4,0,.2,1) .2s; }
+  .js .chart.on polyline { stroke-dashoffset: 0; }
+  .js .chart circle { opacity:0; transition: opacity .4s 1.7s; } .js .chart.on circle { opacity:1; }
+  .card { transition: transform .25s ease, box-shadow .25s ease; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -12px rgba(47,91,255,.35); }
+}
+@media print { .js .rv, .js .chart rect, .js .chart polyline, .js .chart circle { opacity:1 !important; transform:none !important; stroke-dashoffset:0 !important; } .hero::before { display:none } }
 </style>
 </head>
 <body>
@@ -188,7 +211,7 @@ footer { margin-top: 28px; font-size: 12px; color: var(--muted); border-top: 1px
   <div class="kicker">Чем университет может помочь</div>
   <h2>Что нам нужно для развития</h2>
   <p class="muted">Приложение уже работает и растёт. Чтобы оно было надёжным и могло стать частью инфраструктуры университета,
-    мы бы хотели обсудить следующее.</p>
+    хотелось бы обсудить следующее.</p>
   <ol class="ask">
     <li class="card item"><h3>Размещение в дата-центре КБТУ <span class="tag">главное</span></h3>
       <p>Данные студентов хранились бы внутри университета, а работа приложения не зависела бы от внешнего хостинга.
@@ -207,8 +230,8 @@ footer { margin-top: 28px; font-size: 12px; color: var(--muted); border-top: 1px
       <p>Если университет сочтёт это возможным: доступ к расписанию и данным о студентах. Тогда вход и профиль
         станут официальными, а расписание — всегда актуальным. Это не обязательное условие, а возможный следующий шаг.</p></li>
     <li class="card item"><h3>Финансовая поддержка <span class="tag">вопрос к обсуждению</span></h3>
-      <p>Сейчас проект развивается на личные средства команды: хостинг, работа ИИ-ассистента и инструменты разработки.
-        Мы были бы благодарны за любую, даже небольшую, финансовую поддержку и готовы обсудить её формат:
+      <p>Сейчас проект почти полностью развивается на мои личные средства: хостинг, работа ИИ-ассистента и инструменты разработки.
+        Я был бы благодарен за любую, даже небольшую, финансовую поддержку и готов обсудить её формат:
         грант, оплата конкретных расходов или поддержка как студенческой инициативы.</p></li>
   </ol>
 </section>
@@ -218,5 +241,40 @@ footer { margin-top: 28px; font-size: 12px; color: var(--muted); border-top: 1px
   Автор — студент КБТУ Сухраб Нурматов, Telegram @Sowers. KBTU App — неофициальный студенческий проект.
 </footer>
 </main>
+<script>
+(function () {
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.documentElement.classList.add('js');
+  var els = document.querySelectorAll('main .card, main h2');
+  els.forEach(function (el) {
+    el.classList.add('rv');
+    var sib = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+    el.style.setProperty('--d', Math.min(sib, 8) * 0.06 + 's');
+  });
+  document.querySelectorAll('.chart').forEach(function (c) {
+    c.querySelectorAll('rect').forEach(function (r, i) { r.style.setProperty('--d', (i * 0.025).toFixed(3) + 's'); });
+    c.querySelectorAll('polyline').forEach(function (l) { l.style.setProperty('--len', Math.ceil(l.getTotalLength())); });
+  });
+  function count(el) {
+    var t = el.textContent, n = parseInt(t.replace(/\D/g, ''), 10), suf = /%$/.test(t) ? '%' : '';
+    if (!n || n < 10) return;
+    var t0 = null, dur = 1200;
+    function step(ts) {
+      t0 = t0 || ts; var k = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(n * e).toLocaleString('ru-RU') + suf;
+      if (k < 1) requestAnimationFrame(step); else el.innerHTML = t.replace(/\s/g, '&nbsp;');
+    }
+    requestAnimationFrame(step);
+  }
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('on'); io.unobserve(e.target);
+      var num = e.target.querySelector && e.target.querySelector('.num'); if (num) count(num);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+  els.forEach(function (el) { io.observe(el); });
+})();
+</script>
 </body>
 </html>
