@@ -20,6 +20,14 @@ html,body{margin:0;background:#07080F;color:#fff;font:15px/1.35 -apple-system,sy
 <div class="probe" id="dvh" style="height:100dvh"></div><div class="probe" id="vh" style="height:100vh"></div>
 <div class="probe" id="sat" style="height:env(safe-area-inset-top)"></div><div class="probe" id="sab" style="height:env(safe-area-inset-bottom)"></div>
 <div id="fix"></div><pre id="out"></pre>
+<!-- link test: how an outside link best leaves the home-screen app (GitHub's universal link left a blank sheet) -->
+<div id="lk" style="position:absolute;left:12px;right:12px;top:50%;display:grid;gap:10px">
+<button onclick="event.stopPropagation();window.open('https://github.com/SOWcd/KBTUapp','_blank','noopener')">A: window.open</button>
+<a href="https://github.com/SOWcd/KBTUapp" target="_blank" rel="noopener" onclick="event.stopPropagation()">B: link, new tab</a>
+<a href="https://github.com/SOWcd/KBTUapp" onclick="event.stopPropagation()">C: link, same window</a>
+<button onclick="event.stopPropagation();location.href='x-safari-https://github.com/SOWcd/KBTUapp'">D: open in Safari</button>
+</div>
+<style>#lk button,#lk a{display:block;padding:14px;border-radius:14px;background:#1d2030;color:#fff;font:600 16px system-ui;text-align:center;text-decoration:none;border:0}</style>
 <script>
 var h = function (id) { return document.getElementById(id).getBoundingClientRect().height; };
 function run() {
