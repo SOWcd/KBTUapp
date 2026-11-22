@@ -1818,7 +1818,7 @@ async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str
                 return
         finally:
             con.close()
-        if tiktok.room(msg["chat"]["id"]):
+        if tiktok.room(msg["chat"]["id"], user=int((msg.get("from") or {}).get("id") or 0), video=tiktok.key(url)):
             await _tiktok(cfg, http, msg, url, started)
     except Exception as exc:
         log.warning("group video: %s", type(exc).__name__)
@@ -1839,8 +1839,9 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, sta
 
     async def reply():
         try:
-            route = await _video_reply(http, api, chat, msg["message_id"], url)
-        except Exception as exc:  # the network or the source failed: leave the link alone
+            async with asyncio.timeout(tiktok.REPLY_SECONDS):
+                route = await _video_reply(http, api, chat, msg["message_id"], url)
+        except Exception as exc:  # the network or the source failed, or took too long: leave the link alone
             route = type(exc).__name__
         _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
 
@@ -1852,15 +1853,23 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
     body = {**chat, "reply_parameters": reply, "supports_streaming": True}
     form = {**chat, "reply_parameters": json.dumps(reply)}
     alias = tiktok.key(url)
+    short_host = bool(tiktok.LINK.match(url)["short_host"])
 
     async def reuse(k: str) -> str | None:
         entry = tiktok.cached(k)
         if not entry:
             return None
         file_id, duration = entry
-        if tiktok.LINK.match(url)["short_host"] and duration >= 180:
+        if isinstance(file_id, tuple):  # a slideshow's photos
+            if len(file_id) == 1:
+                r = await http.post(api + "sendPhoto", json={**chat, "reply_parameters": reply, "photo": file_id[0]}, timeout=60)
+            else:
+                media = [{"type": "photo", "media": p} for p in file_id]
+                r = await http.post(api + "sendMediaGroup", json={**chat, "reply_parameters": reply, "media": media}, timeout=60)
+        elif short_host and duration >= 180:
             return "unavailable"  # youtu.be has a stricter duration limit than /shorts/
-        r = await http.post(api + "sendVideo", json={**body, "video": file_id}, timeout=60)
+        else:
+            r = await http.post(api + "sendVideo", json={**body, "video": file_id}, timeout=60)
         answer = r.json()
         if answer.get("error_code", r.status_code) == 400:
             if tiktok.cached(k) == entry:
@@ -1873,15 +1882,39 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
 
     if route := await reuse(alias):
         return route
-    got = await tiktok.fetch(http, url)
-    if not got:
-        return "unavailable"
-    if isinstance(got, list):
-        async with _video_uploads:
-            return await _video_album(http, api, form, got)
-    if got.key != alias and (route := await reuse(got.key)):
-        return route
+    # The same video asked for at once (several chats, or twice in one) is fetched once: the others wait for the first
+    # and send its file id. A youtu.be link flies apart from /shorts/ ones: its source answer can differ (shorter cap).
+    lane = alias + ":be" if short_host else alias
+    async with tiktok.flight(lane) as shared:
+        if shared.runs:
+            if route := await reuse(alias):
+                return route
+            if shared.gone:
+                return "unavailable"
+        got = await tiktok.fetch(http, url)
+        if not got:
+            shared.gone = True
+            return "unavailable"
+        if isinstance(got, list):
+            async with _video_uploads:
+                route = await _video_album(http, api, form, got, alias)
+            shared.gone = route == "unavailable"
+            return route
+        if got.key == lane:
+            route = await _video_send(http, api, body, form, alias, got)
+            shared.gone = route == "unavailable"
+            return route
+        async with tiktok.flight(got.key) as same:  # another link to this same video may be on its way
+            if same.gone:
+                return "unavailable"
+            if route := await reuse(got.key):
+                return route
+            route = await _video_send(http, api, body, form, alias, got)
+            shared.gone = same.gone = route == "unavailable"  # the source had nothing sendable
+            return route
 
+
+async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict, alias: str, got: tiktok.Clip) -> str:
     for version in await tiktok.versions(http, got):
         f = version.video
         duration = got.duration or f.get("duration") or 0
@@ -1918,7 +1951,7 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
     return "unavailable"
 
 
-async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str]) -> str:
+async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str], alias: str) -> str:
     photos = await tiktok.photos(http, urls)
     if not photos:
         return "unavailable"
@@ -1928,8 +1961,16 @@ async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list
         method = "sendMediaGroup"
         files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(photos)}
         form["media"] = json.dumps([{"type": "photo", "media": f"attach://{k}"} for k in files])
-    r = await http.post(api + method, data=form, files=files, timeout=120)
-    return "photos" if r.json().get("ok") else "refused"
+    answer = (await http.post(api + method, data=form, files=files, timeout=120)).json()
+    if not answer.get("ok"):
+        return "refused"
+    sent = answer.get("result")
+    sent = sent if isinstance(sent, list) else [sent]
+    # each photo's largest size: another chat gets them by id, without a second download
+    ids = tuple(((m.get("photo") or [{}])[-1] or {}).get("file_id") if isinstance(m, dict) else None for m in sent)
+    if len(ids) == len(photos) and all(isinstance(i, str) for i in ids):
+        tiktok.remember(alias, ids, 0)
+    return "photos"
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
