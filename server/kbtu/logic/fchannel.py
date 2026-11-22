@@ -88,10 +88,8 @@ def _clean(raw: object) -> str:
     return s
 
 
-# Meaningless posts (such as "\u0444\u0440\u0440\u0440"): a cheap gate before the AI. The letters counted with every run of
-# one letter squeezed to one ("\u0444\u0440\u0440\u0440" is "\u0444\u0440"), a word is two letters or more with a vowel in it; a post needs two
-# words ("who is here?"), or one of ten letters. Then not the same as one of my posts this week
-# (near: SequenceMatcher on those squeezed letters). What gets past and is still noise, the AI calls NOISE (ai.py).
+# A cheap gate for text without a plausible word. One word can be a whole post, so leave borderline noise to the AI.
+# For this and the repeat check, squeeze runs of the same letter ("\u0444\u0440\u0440\u0440" becomes "\u0444\u0440").
 VOWELS = set("aeiouy\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f\u04d9\u04e9\u04af\u04b1\u0456")  # Latin, Russian, Kazakh
 SAME_DAYS, SAME_AT = 7, 0.9
 
@@ -102,10 +100,7 @@ def _squeeze(s: str) -> list[str]:
 
 
 def _meaningful(s: str) -> bool:
-    words = _squeeze(s)
-    letters = sum(map(len, words))
-    real = sum(1 for w in words if len(w) >= 2 and VOWELS & set(w))
-    return real >= 2 or real >= 1 and letters >= 10  # "who is here?" passes; one short word ("hello", "\u0444\u0440\u0440\u0440") is a comment, not a post
+    return any(len(w) >= 3 or (len(w) == 2 and VOWELS.intersection(w)) for w in _squeeze(s))
 
 
 def _repeat(con, uid: int, text: str) -> bool:

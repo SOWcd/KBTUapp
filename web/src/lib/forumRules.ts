@@ -45,12 +45,9 @@ export function brokenAll(raw: string): Rule[] {
 /** The first rule the words break, or null. */
 export const broken = (raw: string): Rule | null => brokenAll(raw)[0] ?? null;
 
-// the server's _meaningful: words as letters only, each run of one letter as one; a word is two letters or more with a
-// vowel; a post needs two words, or one and ten letters in all ("who is here?" passes, "hello" is a comment)
+// The server's _meaningful: after squeezing repeated letters, three letters (including slang like FML) or two with a vowel.
 const VOWELS = new Set('aeiouy\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f\u04d9\u04e9\u04af\u04b1\u0456');
 export function meaningful(s: string): boolean {
   const words = (s.toLowerCase().match(/[\p{L}\p{Nl}\p{No}]+/gu) ?? []).map((w) => [...w.replace(/(.)\1+/gu, '$1')]);
-  const letters = words.reduce((n, w) => n + w.length, 0);
-  const real = words.filter((w) => w.length >= 2 && w.some((c) => VOWELS.has(c))).length;
-  return real >= 2 || (real >= 1 && letters >= 10);
+  return words.some((w) => w.length >= 3 || (w.length === 2 && w.some((c) => VOWELS.has(c))));
 }
