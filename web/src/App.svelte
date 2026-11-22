@@ -960,11 +960,13 @@
     return lazy(pcSheet, { ok: () => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } } });
   }
 
-  // the home-screen app, offered once per phone (InstallSheet marks it shown): phones in Telegram only, never on this
+  // the home-screen app, offered once per phone (InstallSheet marks it shown): phones in Telegram only, (for everyone later) never on this
   // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
   // (a deep link); the last of the launch's moments
   function installHint() {
-    if (!inTelegram || onComputer || tg.startParam || !returning() || seen('kb-install')) return;
+    // ponytail: the creator only until the video guides are recorded (owner, Nov 22); then drop the founder check
+    if (!session.me?.founder) return;
+    if (!inTelegram || onComputer || tg.startParam || seen('kb-install')) return;
     return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
   }
 
