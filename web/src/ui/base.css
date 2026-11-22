@@ -324,3 +324,6 @@ button.set-row:active { background: var(--surface-2); }
   transition: transform 400ms ease-out; will-change: transform; }
 html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
 @media (prefers-reduced-motion: reduce) { .z { transform: scale(var(--zs, 1)); transition: none; } }
+/* the home-screen app (no Telegram): iOS 26 without a translucent status bar reported a short innerHeight at launch, so
+   --app-h left a black band at the bottom and the nav rode up (owner, Nov 22); here the box simply fills the window */
+:root[data-web] #app, :root[data-web] .pane { bottom: 0; height: auto; }
