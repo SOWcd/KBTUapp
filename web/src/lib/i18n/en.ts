@@ -1539,6 +1539,8 @@ const en: Dict = {
   'tgo.show': 'Looking for the big screen?',
   'web.widgetFailed': 'Telegram sign-in couldn’t load.',
   'web.loading': 'Connecting',
+  'web.hello': 'Come on in',
+  'web.about': 'Events, clubs, your timetable and the campus map for KBTU students.',
   'web.signInFailed': 'Couldn’t sign in. Try again.',
   'web.cookie': 'By signing in, you agree to a cookie that keeps you signed in.',
   'web.policy': 'Privacy Policy',
