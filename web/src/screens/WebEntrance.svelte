@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import SquareArrowUp from '@lucide/svelte/icons/square-arrow-up';
+  import LockKeyhole from '@lucide/svelte/icons/lock-keyhole';
   import App from '../App.svelte';
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
@@ -29,7 +30,7 @@
     entered = true;
   }
 
-  // while the session is checked the page draws nothing: index.html's boot screen (its lights, its mark) carries on
+  // while the session is checked the page draws nothing: index.html's boot screen (its emblem) carries on
   async function check() {
     view = 'checking';
     bootOver();
@@ -58,16 +59,17 @@
   // the app is up and painted under the boot screen: it fades away over it
   $effect(() => { if (entered) requestAnimationFrame(() => requestAnimationFrame(bootOut)); });
 
-  // The welcome: the boot screen's mark is ours from here. Ours starts where that one stood and glides into its place
-  // (the glint carries on from the same moment), the lights stay as the ground, the words and the card rise after it.
+  // The welcome: the boot screen's emblem lets go of its mark. Ours starts where that one stood and glides into its
+  // place; the lights wake under the page, the words rise after it.
   function land(mark: HTMLElement) {
     const from = bootUnder();
     if (!from) return;
     const to = mark.getBoundingClientRect();
-    mark.animate([{ transform: `translate(${from.x - to.x}px, ${from.y - to.y}px)` }, { transform: 'none' }], { duration: 760, easing: 'cubic-bezier(.32, .72, 0, 1)' });
-    const glint = mark.querySelector('i')?.getAnimations()[0];
-    if (glint) glint.currentTime = from.glint;
+    mark.animate([{ transform: `translate(${from.x - to.x}px, ${from.y - to.y}px)` }, { transform: 'none' }], { duration: 820, easing: 'cubic-bezier(.32, .72, 0, 1)' });
   }
+
+  // the sign-in, start to end: people are wary of typing a phone number into a window
+  const STEPS = ['web.step1', 'web.step2', 'web.step3', 'web.step4'] as const;
 
   function attachWidget(widget: HTMLElement) {
     const script = document.createElement('script');
@@ -91,31 +93,31 @@
   <main class="entrance scroll" aria-busy={view === 'checking'}>
     {#if view !== 'checking'}
       <div class="col">
-        <!-- .kb-mark: index.html's, the boot screen's own mark (one look, defined once) -->
-        <span class="kb-mark mark" {@attach land}><KbtuMark size={48} /><i></i></span>
+        <span class="mark" {@attach land}><KbtuMark size={56} /></span>
         {#if view === 'offline'}
           <p class="fs-body dim in" style:--i={1}>{t('common.offline')}</p>
-          <div class="in" style:--i={2}><Button kind="primary" onclick={check}>{t('common.retry')}</Button></div>
+          <div class="enter in" style:--i={2}><Button kind="primary" onclick={check}>{t('common.retry')}</Button></div>
         {:else}
           <h1 class="fs-title in" style:--i={1}>{t('web.hello')}</h1>
           <p class="about fs-body dim in" style:--i={2}>{t('web.about')}</p>
-          <section class="card glass in" style:--i={3}>
-            <i class="sweep" aria-hidden="true"></i>
-            <!-- Telegram's button is an iframe we can't restyle: it sits in a glass well, clipped to the pill -->
+          <!-- Telegram's button is an iframe we can't restyle: bare, clipped to its own pill, nothing drawn round it -->
+          <div class="enter in" style:--i={3}>
             {#if !widgetFailed}
-              {#key retry}<div class="well" class:busy><div class="widget" {@attach attachWidget} inert={busy}></div></div>{/key}
+              {#key retry}<div class="widget" class:busy {@attach attachWidget} inert={busy}></div>{/key}
             {:else}
               <p class="fs-sub" role="alert">{t('web.widgetFailed')}</p>
               <Button kind="plain" onclick={() => { widgetFailed = false; retry++; }}>{t('common.retry')}</Button>
             {/if}
             {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
             {#if loginFailed}<p class="fs-sub" role="alert">{t('web.signInFailed')}</p>{/if}
-            <p class="fs-sub faint">{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
-          </section>
-          {#if onIos && !installed}
-            <p class="hint glass glass-pill fs-sub in" style:--i={4}><SquareArrowUp size={18} /><span>{t('web.install')}</span></p>
-          {/if}
-          {#if onComputer}<a class="fs-sub dim in" style:--i={4} href="/show">{t('tgo.show')}</a>{/if}
+          </div>
+          <ol class="steps fs-sub in" style:--i={4}>
+            {#each STEPS as key, n (key)}<li><b class="num">{n + 1}</b><span>{t(key)}</span></li>{/each}
+          </ol>
+          <p class="private fs-sub in" style:--i={5}><LockKeyhole size={14} /><span>{t('web.private')}</span></p>
+          <p class="fine fs-sub in" style:--i={6}>{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
+          {#if onIos && !installed}<p class="fine hint fs-sub in" style:--i={7}><SquareArrowUp size={15} /><span>{t('web.install')}</span></p>{/if}
+          {#if onComputer}<a class="fine fs-sub in" style:--i={7} href="/show">{t('tgo.show')}</a>{/if}
         {/if}
       </div>
     {/if}
@@ -123,41 +125,39 @@
 {/if}
 
 <style>
-  /* no ground of its own: index.html's boot screen lies under it, its lights drifting on */
+  /* no ground of its own: index.html's boot screen lies under it, its lights awake. No cards, no boxes: type on the
+     ground, hairlines between the steps, Telegram's own button the one filled thing */
   .entrance { position: absolute; inset: 0; display: flex; flex-direction: column;
-    padding: calc(var(--safe-top) + var(--s-6)) var(--gutter) calc(var(--safe-bottom) + var(--s-6)); text-align: center; }
+    padding: calc(var(--safe-top) + var(--s-8)) var(--s-6) calc(var(--safe-bottom) + var(--s-6)); text-align: center; }
   /* margin auto, not justify-content: a short window scrolls from the top instead of cutting it */
-  .col { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; max-width: 380px; margin: auto; }
-  .mark { flex: none; margin-bottom: var(--s-3); }
-  .mark i { animation-iteration-count: 1; } /* the glint it arrived with ends; a still mark from then on */
-  /* the words and the card rise one after another behind the mark, all inside ~1.2 s */
-  .in { animation: up 640ms var(--ease-spring) both; animation-delay: calc(240ms + var(--i) * 80ms); }
-  @keyframes up { from { opacity: 0; transform: translateY(18px); } }
+  .col { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 320px; margin: auto; }
+  .mark { display: flex; flex: none; margin-bottom: var(--s-6); color: var(--text); }
+  /* the words rise one after another behind the mark, all inside ~1.3 s */
+  .in { animation: up 640ms var(--ease-spring) both; animation-delay: calc(200ms + var(--i) * 70ms); }
+  @keyframes up { from { opacity: 0; transform: translateY(16px); } }
 
-  .about { max-width: 30ch; text-wrap: balance; }
-  .card { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; margin-top: var(--s-4);
-    padding: var(--s-6) var(--s-5) var(--s-5); border-radius: var(--r-xl); }
-  .card p { max-width: 32ch; text-wrap: balance; }
-  .card a { color: var(--accent-text); }
-  /* one slow glint across the glass as it settles */
-  .sweep { position: absolute; inset: 0; z-index: -1; overflow: hidden; border-radius: inherit; pointer-events: none; }
-  .sweep::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 45%; opacity: 0;
-    background: linear-gradient(100deg, transparent, var(--lg-spot), transparent); animation: glint 1100ms var(--ease) 900ms; }
-  @keyframes glint { from { opacity: 1; transform: translateX(-110%); } to { opacity: 1; transform: translateX(330%); } }
-
-  .well { display: flex; justify-content: center; min-width: 200px; max-width: 100%; padding: 6px; border-radius: var(--r-full);
-    background: var(--fill); box-shadow: var(--lg-bevel), var(--lg-lift); transition: opacity var(--t-base) var(--ease); }
-  .well.busy { opacity: 0.5; }
-  .widget { display: flex; min-height: 40px; max-width: 100%; }
+  .about { max-width: 28ch; margin-top: var(--s-3); text-wrap: balance; }
+  .enter { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin-top: var(--s-8); }
+  .enter p { max-width: 30ch; text-wrap: balance; }
+  .widget { display: flex; justify-content: center; min-height: 40px; max-width: 100%; border-radius: var(--r-full); transition: opacity var(--t-base) var(--ease); }
+  .widget:not(:has(:global(iframe))) { width: 224px; background: var(--fill); } /* its place while Telegram's script loads */
+  .widget.busy { opacity: 0.5; }
   /* color-scheme: else Chromium paints white corners behind the button in dark */
   .widget :global(iframe) { display: block; max-width: 100%; border-radius: var(--r-full); color-scheme: light; }
 
-  .hint { position: relative; display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); padding: var(--s-3) var(--s-4);
-    border-radius: var(--r-l); color: var(--text-2); text-align: start; }
-  .hint span { text-wrap: balance; }
-  .hint :global(svg) { flex: none; color: var(--accent-text); }
+  .steps { width: 100%; margin-top: var(--s-8); list-style: none; text-align: start; color: var(--text-2); }
+  .steps li { display: flex; gap: var(--s-3); padding-block: 10px; }
+  .steps li + li { border-top: 0.5px solid var(--separator); }
+  .steps b { flex: none; width: 1.1em; font-weight: 600; color: var(--text-3); }
+  .private { display: flex; gap: var(--s-2); width: 100%; margin-top: var(--s-3); padding-top: var(--s-4); border-top: 0.5px solid var(--separator);
+    text-align: start; color: var(--text-3); }
+  .private :global(svg) { flex: none; margin-top: 2px; }
+  .fine { max-width: 34ch; margin-top: var(--s-6); color: var(--text-3); text-wrap: balance; }
+  .fine a, a.fine { color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+  .hint { display: flex; gap: var(--s-2); margin-top: var(--s-4); text-align: start; }
+  .hint :global(svg) { flex: none; margin-top: 1px; }
 
   .spinner { display: flex; color: var(--text-2); animation: turn 900ms linear infinite; }
   @keyframes turn { to { transform: rotate(1turn); } }
-  @media (prefers-reduced-motion: reduce) { .in, .sweep::after, .spinner { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .in, .spinner { animation: none; } }
 </style>

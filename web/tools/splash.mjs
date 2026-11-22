@@ -24,7 +24,7 @@ const PHONES = [
 ];
 
 const html = readFileSync(INDEX, 'utf8');
-const css = html.match(/<style id="boot-css">[\s\S]*?<\/style>/)?.[0], boot = html.match(/<div id="boot"[\s\S]*?<\/div>/)?.[0];
+const css = html.match(/<style id="boot-css">[\s\S]*?<\/style>/)?.[0], boot = html.match(/<div id="boot"[\s\S]*?(?=<div id="app")/)?.[0];
 if (!css || !boot || !html.includes('<!-- splash:start -->')) throw new Error('splash: #boot, its CSS or the markers are missing in index.html');
 
 rmSync(OUT, { recursive: true, force: true });
@@ -37,7 +37,7 @@ for (const [w, h, dpr] of PHONES) {
     // the first frame: every animation at its start
     await page.setContent(`<!doctype html><html data-boot="${theme}"><head>${css}</head><body>${boot}</body></html>`);
     await page.evaluate(() => document.getAnimations().forEach((x) => { x.pause(); x.currentTime = 0; }));
-    const name = `${w}x${h}@${dpr}-${theme}.png`;
+    const name = `${w}x${h}-${dpr}x-${theme}.png`;
     await page.screenshot({ path: new URL(name, OUT).pathname });
     links.push(`<link rel="apple-touch-startup-image" href="/splash/${name}" media="(prefers-color-scheme: ${theme}) and (device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)">`);
   }

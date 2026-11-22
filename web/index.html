@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#07080F">
+<!-- the iPhone's status bar (the home-screen app; iOS 26.1 lets no page draw under it) and the browser's own bars take
+     this colour: each theme's ground, the very colour of the page's top edge, so the bar and the page are one surface.
+     The system's theme until the script below and the app (lib/tg.ts paint) put the person's own -->
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#07080F">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F5FB">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="KBTU">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>KBTU App</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -21,62 +24,75 @@
   if (/^\/(show|screen)\/?$/.test(location.pathname)) return;
   try { t = localStorage.getItem('kb-theme'); } catch (e) {}
   document.documentElement.dataset.boot = t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  // the status bar's colour: this theme's ground, whichever the system's is
+  var c = document.documentElement.dataset.boot === 'light' ? '#F3F5FB' : '#07080F', m = document.querySelectorAll('meta[name="theme-color"]');
+  for (var i = 0; i < m.length; i++) m[i].content = c;
 })();
 </script>
-<!-- The boot screen. Its still first frame (the ground and the mark) is the home-screen app's launch picture
-     (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). Then the lights wake and drift, a glint crosses the mark, a glow breathes under it.
-     lib/boot.ts hands it over: .u = under the page, its ground of lights from then on (the entrance draws its own .kb-mark
-     where this one stood and glides it into place); .o = fading away over the app. Transform and opacity only. -->
+<!-- The boot screen: an emblem on the plain ground. Its still first frame (the ground and the mark) is the home-screen
+     app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). Then a
+     hairline draws round the mark, the legend writes itself on along its circle (a stroke uncovering it) and turns slowly.
+     lib/boot.ts hands it over: .o = fading away over the app; .u = under the page as the entrance's ground: its lights
+     wake, the legend goes, and the entrance draws its own mark where this one stood and glides it into place.
+     Transform, opacity, stroke only. -->
 <style id="boot-css">
-#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;background:#07080F;transition:opacity .42s cubic-bezier(.4,0,.2,1)}
+html[data-boot]{background:#07080F}
+html[data-boot=light]{background:#F3F5FB}
+#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .42s cubic-bezier(.4,0,.2,1)}
 [data-boot] #boot{display:block}
-[data-boot=light] #boot{background:#F3F5FB}
+[data-boot=light] #boot{color:#0B1433;background:#F3F5FB}
 #boot.u{z-index:auto}
 #boot.o{opacity:0}
-#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:var(--o);will-change:transform;animation:kb-drift 24s ease-in-out infinite alternate,kb-wake 1.4s cubic-bezier(.4,0,.2,1) both}
+#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1);animation:kb-drift 24s ease-in-out infinite alternate paused}
 #boot b:nth-child(1){--c:#3B6BFF;--o:.5;--x:-45;--y:-70;--dx:16%;--dy:10%}
-#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s,1.4s}
-#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s,1.4s}
+#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s}
+#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s}
 [data-boot=light] #boot b:nth-child(1){--o:.3}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
-#boot>s{position:absolute;left:50%;top:50%;width:260px;height:260px;margin:-130px 0 0 -130px;transition:opacity .4s}
-#boot.u>s{opacity:0}
-#boot s s{display:block;width:100%;height:100%;background:radial-gradient(closest-side,#3B6BFF,transparent);opacity:0;animation:kb-halo 2.6s ease-in-out .35s infinite}
-.kb-mark{position:relative;display:flex;align-items:center;justify-content:center;width:88px;height:88px;border-radius:26%;overflow:hidden;color:#fff;background:linear-gradient(135deg,#2A4FD6,#5B2BC0);box-shadow:inset 0 1px 1px rgba(255,255,255,.16),inset 0 -8px 14px -8px rgba(0,0,0,.3),inset 1.5px 0 1px -.5px rgba(255,120,200,.32),inset -1.5px 0 1px -.5px rgba(90,190,255,.36),0 18px 40px -14px #3B6BFF}
-.kb-mark i{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(105deg,transparent 34%,rgba(255,255,255,.4) 50%,transparent 66%);transform:translateX(-100%);animation:kb-glint 2.6s cubic-bezier(.4,0,.2,1) .35s infinite}
-#boot .kb-mark{position:absolute;left:50%;top:50%;margin:-44px 0 0 -44px;transition:transform .42s cubic-bezier(.4,0,.2,1)}
-#boot.u .kb-mark{visibility:hidden}
-#boot.o .kb-mark{transform:scale(1.2)}
+#boot.u b{opacity:var(--o);animation-play-state:running}
+#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .42s cubic-bezier(.4,0,.2,1)}
+#boot.o .em{transform:scale(1.14)}
+#boot .em svg{position:absolute;left:0;top:0}
+#boot .lg{transition:opacity .28s;animation:kb-turn 90s linear .2s infinite}
+#boot .lg text{font:600 10.5px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;fill:currentColor;opacity:.78}
+#boot .lg .hr{fill:none;stroke:currentColor;stroke-width:.75;opacity:.3;stroke-dasharray:378;stroke-dashoffset:378;animation:kb-draw 1.1s cubic-bezier(.5,0,.2,1) .1s forwards}
+#boot .lg .wr{fill:none;stroke:#fff;stroke-width:26;stroke-dasharray:510;stroke-dashoffset:510;animation:kb-draw 1.5s cubic-bezier(.5,0,.2,1) .2s forwards}
+#boot .em .mk{left:80px;top:84px}
+#boot.u .lg{opacity:0}
+#boot.u .mk{visibility:hidden}
 @keyframes kb-drift{to{transform:translate3d(var(--dx),var(--dy),0) scale(1.12)}}
-@keyframes kb-wake{from{opacity:0}}
-@keyframes kb-glint{0%{transform:translateX(-100%)}40%,to{transform:translateX(100%)}}
-@keyframes kb-halo{0%{opacity:0;transform:scale(.7)}45%{opacity:.5;transform:scale(1)}to{opacity:0;transform:scale(1.25)}}
-@media (prefers-reduced-motion:reduce){#boot b,#boot s s,.kb-mark i{animation:none}#boot,#boot .kb-mark{transition:none}}
+@keyframes kb-turn{to{transform:rotate(1turn)}}
+@keyframes kb-draw{to{stroke-dashoffset:0}}
+/* The iPhone's status bar (the home-screen app) is a strip in theme-color, the ground's colour, that no page draws
+   under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
+#boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 72px);background:linear-gradient(#07080F 30%,rgba(7,8,15,0))}
+[data-boot=light] #boot:after{background:linear-gradient(#F3F5FB 30%,rgba(243,245,251,0))}
+@media (prefers-reduced-motion:reduce){#boot b,#boot .lg{animation:none}#boot .lg .hr,#boot .lg .wr{animation:none;stroke-dashoffset:0}#boot,#boot .em,#boot b{transition:none}}
 </style>
 <!-- splash:start -->
-<link rel="apple-touch-startup-image" href="/splash/440x956@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/440x956@3-light.png" media="(prefers-color-scheme: light) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/430x932@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/430x932@3-light.png" media="(prefers-color-scheme: light) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/428x926@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/428x926@3-light.png" media="(prefers-color-scheme: light) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/420x912@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/420x912@3-light.png" media="(prefers-color-scheme: light) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896@3-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896@2-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896@2-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/402x874@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/402x874@3-light.png" media="(prefers-color-scheme: light) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/393x852@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/393x852@3-light.png" media="(prefers-color-scheme: light) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/390x844@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/390x844@3-light.png" media="(prefers-color-scheme: light) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x812@3-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x812@3-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x667@2-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x667@2-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/440x956-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/430x932-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/430x932-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/428x926-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/428x926-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/420x912-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/420x912-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-2x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-2x-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/402x874-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/402x874-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/393x852-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/393x852-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/390x844-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/390x844-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x812-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x812-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x667-2x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x667-2x-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
 <!-- splash:end -->
 <link rel="preconnect" href="https://telegram.org">
 <!-- deferred: parsing and the first paint don't wait for telegram.org; it still runs before the app module -->
@@ -127,12 +143,13 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
     if (window.__kbStarted) return;
     show('promise: ' + (e.reason && e.reason.message || e.reason));
   });
+  // (the boot screen is no blank screen: under it a slow line gets longer before the page gives up)
   setTimeout(function () {
     var a = document.getElementById('app');
     if (a && !a.children.length) show('модуль загрузился, но ничего не отрисовалось');
-  }, 6000);
+  }, document.documentElement.dataset.boot ? 20000 : 6000);
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><s><s></s></s><span class="kb-mark"><svg viewBox="0 0 28 24" width="48" height="41" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/><rect x="2" y="7" width="3" height="11" rx="1.5"/><rect x="7.25" y="7" width="3" height="11" rx="1.5"/><rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/><rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></svg><i></i></span></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><svg class="lg" viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/><mask id="kb-write" maskUnits="userSpaceOnUse" x="-108" y="-108" width="216" height="216"><circle class="wr" r="81" transform="rotate(-90)"/></mask></defs><circle class="hr" r="60" transform="rotate(-90)"/><g mask="url(#kb-write)"><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></g></svg><svg class="mk" viewBox="0 0 28 24" width="56" height="48"><g fill="currentColor"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/><rect x="2" y="7" width="3" height="11" rx="1.5"/><rect x="7.25" y="7" width="3" height="11" rx="1.5"/><rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/><rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></svg></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>

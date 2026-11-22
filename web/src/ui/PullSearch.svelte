@@ -1,6 +1,11 @@
 <script lang="ts" module>
   /** How far a tab's page starts scrolled: the field's height and its gap. A tab's own "at the top" counts from here. */
   export const PULL = 56;
+
+  /** The web app has one search, the bar's own field (ui/StandaloneBar): there a tab's PullSearch draws nothing and
+   *  lends the bar its value and placeholder. `node`: a hidden mark in the tab's page, to tell whose tab is on. */
+  export interface TabSearch { node: Element | null; readonly placeholder: string; value: string }
+  export const tabSearches = new Set<TabSearch>();
 </script>
 
 <script lang="ts">
@@ -8,8 +13,11 @@
   // the page opens scrolled just past it, so the pull is the browser's own scroll, no touch handling. Stopped halfway, it
   // settles open or shut. Goes directly in a tab's .scroll page (position: absolute).
   import SearchField from './SearchField.svelte';
+  import { inTelegram } from '../lib/tg';
 
   let { value = $bindable(''), placeholder }: { value?: string; placeholder: string } = $props();
+  const lent: TabSearch = { node: null, get placeholder() { return placeholder; }, get value() { return value; }, set value(v) { value = v; } };
+  function lend(node: Element) { lent.node = node; tabSearches.add(lent); return () => { tabSearches.delete(lent); }; }
   let seen = $state(0); // fades in with the pull: shut, it would show under the capsule and Telegram's buttons
 
   function track(field: HTMLElement) {
@@ -42,9 +50,13 @@
   }
 </script>
 
-<div class="pull" style:opacity={seen} inert={seen === 0} {@attach track}><SearchField bind:value {placeholder} /></div>
-<!-- a short list still scrolls by PULL, so the field can hide -->
-<i class="hold" aria-hidden="true"></i>
+{#if inTelegram}
+  <div class="pull" style:opacity={seen} inert={seen === 0} {@attach track}><SearchField bind:value {placeholder} /></div>
+  <!-- a short list still scrolls by PULL, so the field can hide -->
+  <i class="hold" aria-hidden="true"></i>
+{:else}
+  <i class="hold" hidden {@attach lend}></i>
+{/if}
 
 <style>
   .pull { margin-bottom: var(--s-3); }
