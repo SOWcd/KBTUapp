@@ -13,6 +13,7 @@
   import { close, goTab, overlays, say, ui } from '../lib/state/ui.svelte';
   import { backButton, openTelegramLink, telegramAppLink } from '../lib/tg';
   import { copyText } from './copy';
+  import { glass } from './glass';
   import { menu } from './menu';
 
   let { back, start, onsettings }: { back: boolean; start: string; onsettings: () => void } = $props();
@@ -67,29 +68,41 @@
 </script>
 
 <header class="bar">
-  <!-- always there (owner, Nov 22): only its content swaps, Search <-> Back, crossfading like Telegram's Close <-> Back -->
-  <button class="glass glass-pill left" class:back type="button" aria-label={back ? t('web.back') : t('web.search')} onclick={() => (back ? backButton.click() : void search())}>
-    <span class="face" aria-hidden={back}><Search size={18} /><span>{t('web.search')}</span></span>
-    <span class="face" aria-hidden={!back}><ChevronLeft size={20} /><span>{t('web.back')}</span></span>
+  <!-- always there (owner, Nov 22): the capsule's own glass and height; only the content changes, Search <-> Back, the way
+       Telegram's Close <-> Back does: the icon turns into the other in place, the word slides through the pill -->
+  <button class="glass glass-pill side left" class:back type="button" aria-label={back ? t('web.back') : t('web.search')} onclick={() => (back ? backButton.click() : void search())} use:glass={{ bloom: true }}>
+    <span class="tone-base" aria-hidden="true"></span>
+    <span class="ico" aria-hidden="true"><i class="a"><Search size={17} strokeWidth={2.4} /></i><i class="b"><ChevronLeft size={20} strokeWidth={2.4} /></i></span>
+    <span class="txt" aria-hidden="true"><i class="a">{t('web.search')}</i><i class="b">{t('web.back')}</i></span>
   </button>
-  <button class="glass glass-pill more" type="button" aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options}><Ellipsis size={20} /></button>
+  <button class="glass glass-pill side more" type="button" aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options} use:glass={{ bloom: true }}>
+    <span class="tone-base" aria-hidden="true"></span><Ellipsis size={20} strokeWidth={2.4} />
+  </button>
 </header>
 
 <style>
-  .bar { position: absolute; inset: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)) 0 auto; z-index: calc(var(--z-sheet) + 7);
-    padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
-    display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-  /* Telegram's own header pills (owner, Nov 22: "identical to Telegram"): 30 px tall, centred on the capsule's line;
-     the bar keeps a full tap height (::after belongs to .glass: never a hit-area trick here) */
-  .bar { height: 38px; } /* the capsule's own top and height (ui/Capsule.svelte): one centre line for all three */
-  button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
-    padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); pointer-events: auto; }
-  /* both faces share one cell, so the pill keeps one width and never jumps */
-  .left { display: grid; padding-inline: 8px 12px; }
-  .face { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: 4px;
-    transition: opacity .2s ease, transform .25s var(--ease); }
-  .face:last-child, .back .face:first-child { opacity: 0; transform: scale(.8); }
-  .back .face:last-child { opacity: 1; transform: none; gap: 2px; }
-  @media (prefers-reduced-motion: reduce) { .face { transition: none; } }
-  button:active { transform: scale(.94); }
+  /* the capsule's own line: its top and 38 px height (ui/Capsule.svelte); both pills one width (--pill, tokens.css),
+     the capsule centred between them with the same gap each side */
+  .bar { position: absolute; inset: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)) 0 auto; height: 38px;
+    z-index: calc(var(--z-sheet) + 7); padding-inline: 12px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .side { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; width: var(--pill); height: 38px;
+    padding-inline: 7px; border-radius: var(--r-full); background: none; color: var(--text); font: 600 var(--fs-body)/1 var(--font-text);
+    letter-spacing: -0.01em; pointer-events: auto; transition: transform 200ms var(--ease); }
+  .side > .tone-base { background: var(--glass-clear); }
+  :global(html[data-theme='light'][data-sheet]) .side > .tone-base { background: var(--glass-solid); }
+  .side:active { transform: scale(.94); }
+  .side :global(svg) { flex: none; }
+
+  .ico, .txt { display: grid; place-items: center; }
+  .txt { overflow: hidden; min-width: 0; }
+  .ico > i, .txt > i { grid-area: 1 / 1; font-style: normal; white-space: nowrap;
+    transition: opacity 220ms var(--ease), transform 380ms var(--ease-spring), filter 220ms var(--ease); }
+  .ico > i { display: flex; }
+  /* what is not shown waits: the icon turned and small, the word just past the pill's edge */
+  .ico > .b, .back .ico > .a { opacity: 0; transform: scale(.5) rotate(-60deg); }
+  .back .ico > .a { transform: scale(.5) rotate(60deg); }
+  .txt > .b { opacity: 0; transform: translateX(70%); filter: blur(2px); }
+  .back .txt > .a { opacity: 0; transform: translateX(-70%); filter: blur(2px); }
+  .back .ico > .b, .back .txt > .b { opacity: 1; transform: none; filter: none; }
+  @media (prefers-reduced-motion: reduce) { .ico > i, .txt > i { transition: opacity 120ms linear; transform: none !important; filter: none !important; } }
 </style>
