@@ -3074,6 +3074,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         # name iOS reads when adding; a stale one kept "KBTU" after the rename) are always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
                  "no-cache" if f.suffix == ".html" or path == "manifest.json" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
+        if f.suffix in (".mp4", ".webm", ".mov", ".m4a", ".mp3"):
+            cache += ", no-transform"  # the CDN gzipped a video and dropped Range: iOS shows it black (owner, Nov 23)
         headers, send = {"Cache-Control": cache}, f
         if path.startswith("assets/"):
             # the build's ready .br / .gz (vite.config.ts precompress()): no gzip of the same bundle on the loop for
