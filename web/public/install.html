@@ -19,14 +19,14 @@
 :root {
   --bg: #07080F; --surface: rgba(255,255,255,.055); --ui: #1C1F2E; --ui-2: #262A3D; --line: rgba(255,255,255,.13);
   --fill: rgba(235,238,255,.12); --text: #F4F6FF; --text-2: rgba(240,243,255,.68); --text-3: rgba(232,236,255,.52);
-  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --o1: .5; --o2: .42; --o3: .16;
+  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(34,38,56,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
   --ease: cubic-bezier(.32,.72,0,1);
 }
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #F3F5FB; --surface: #FFFFFF; --ui: #FFFFFF; --ui-2: #ECEFF6; --line: rgba(11,20,51,.13);
     --fill: rgba(11,20,51,.075); --text: #0B1433; --text-2: rgba(11,20,51,.66); --text-3: rgba(11,20,51,.5);
-    --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --o1: .3; --o2: .26; --o3: .14;
+    --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --glass: rgba(255,255,255,.78); --hi: #fff; --o1: .3; --o2: .26; --o3: .14;
   }
 }
 * { box-sizing: border-box; margin: 0; }
@@ -52,40 +52,55 @@ h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025
 .scene { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 16px; opacity: 0; transform: translate3d(0, 10px, 0) scale(.98); transition: opacity .4s ease, transform .6s var(--ease); }
 .scene.on { opacity: 1; transform: none; }
 /* iOS shows more of each sheet: a taller frame */
-:root:not(.droid) .demo { height: 232px; }
-:root:not(.droid) .list { height: 194px; }
+:root:not(.droid) .demo { height: 252px; }
+:root:not(.droid) .list { height: 214px; border-radius: 26px 26px 0 0; padding-top: 6px; }
+/* Safari 26 is glass: its bars are floating islands, its sheets are panes */
+:root:not(.droid) .url, .tools, .sheet, :root:not(.droid) .list, :root:not(.droid) .dlg { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); }
 .bar { display: flex; align-items: center; gap: 8px; }
 .top .scene.s1 { justify-content: flex-start; }
-.bar.up { margin-bottom: auto; }
+.page { display: flex; flex-direction: column; align-items: center; gap: 9px; margin: auto 0; }
+.page i { height: 8px; border-radius: 4px; background: var(--fill); opacity: .7; }
 .url { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 6px 16px -8px rgba(0,0,0,.3); color: var(--text-2); font-size: 15px; font-weight: 500; }
 .rb { position: relative; flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 6px 16px -8px rgba(0,0,0,.3); color: var(--text-3); }
 .rb.hit, .tools .hit { color: var(--accent-text); }
-.tools { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 14px; color: var(--text-3); }
+.tools { display: flex; justify-content: space-between; align-items: center; height: 52px; padding: 0 20px; border-radius: 26px; color: var(--text-2); }
 .tools span { position: relative; display: flex; }
+.tools svg { position: relative; }
+.tools .hit::before { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--accent-soft); }
 svg.g { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* the finger: a ring that opens out of what is tapped */
 .hit::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; }
 .scene.on .hit::after { animation: tap 1.5s ease-out .5s infinite; }
 @keyframes tap { 0% { opacity: .42; transform: scale(.5); } 70%, 100% { opacity: 0; transform: scale(1.5); } }
-/* iOS: the share sheet. The page on top, people, apps, then the round actions: View More is the last one */
-.sheet { display: flex; flex-direction: column; justify-content: space-between; height: 200px; margin: 0 0 -16px; padding: 12px 14px 10px; border-radius: 22px 22px 0 0; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 -10px 30px -12px rgba(0,0,0,.35); }
-.sheet > div { display: flex; align-items: flex-start; justify-content: space-between; }
-.sheet .pg { align-items: center; justify-content: flex-start; gap: 10px; text-align: left; }
-.sheet .pg img { width: 34px; height: 34px; border-radius: 26%; }
-.sheet .pg span { flex: 1; }
-.sheet .pg b { display: block; font-size: 13px; font-weight: 600; line-height: 1.2; }
-.sheet .pg small { color: var(--text-3); font-size: 12px; }
-.sheet .pg i { width: 62px; height: 26px; border-radius: 13px; background: var(--fill); }
-.sheet .dots i { width: 34px; height: 34px; border-radius: 50%; background: var(--fill); }
+/* iOS: the share sheet. The page and Options on top, people, apps, then the round actions: View More is the last one */
+.sheet { display: flex; flex-direction: column; gap: 10px; margin: 0 0 -16px; padding: 12px 16px 6px; border-radius: 26px 26px 0 0; overflow: hidden; }
+.sheet .pg { display: flex; align-items: center; gap: 10px; text-align: left; }
+.sheet .pg img { flex: none; width: 36px; height: 36px; border-radius: 26%; }
+.sheet .pg > span { flex: 1; min-width: 0; white-space: nowrap; }
+.sheet .pg b { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; }
+.sheet .pg small { display: block; color: var(--text-3); font-size: 12px; line-height: 1.25; }
+.sheet .pg em { flex: none; display: flex; align-items: center; height: 28px; padding: 0 6px 0 11px; border-radius: 14px; background: var(--fill); color: var(--text-2); font-size: 12px; font-style: normal; font-weight: 500; }
+.sheet .pg em svg.g { width: 14px; height: 14px; }
+/* people and apps run off the sheet's edge, as the real rows scroll; a name under each */
+.sheet .ppl { display: flex; gap: 18px; margin-right: -16px; padding-bottom: 9px; overflow: hidden; }
+.sheet .ppl i { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(160deg, var(--a), var(--b)); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 0 0 .5px var(--line); }
+.sheet .ppl i::before { content: ''; position: absolute; left: 4px; right: 4px; bottom: -9px; height: 4px; border-radius: 2px; background: var(--fill); }
+.sheet .ppl:not(.apps) i::after { content: ''; position: absolute; right: -2px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #34C759; box-shadow: 0 0 0 2px var(--ui); }
 .sheet .apps i { border-radius: 26%; }
-.sheet .acts4 span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 40px; color: var(--text-3); font-size: 11px; font-weight: 500; line-height: 14px; white-space: nowrap; }
-.sheet .acts4 em { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--fill); }
-.sheet .acts4 svg.g { width: 20px; height: 20px; }
-.sheet .acts4 b { font-weight: 500; }
-.sheet .acts4 u { width: 28px; height: 6px; margin-top: 4px; border-radius: 3px; background: var(--fill); }
+.sheet .ppl i:nth-child(1) { --a: #9AA7FF; --b: #5F6FE3; } .sheet .ppl i:nth-child(2) { --a: #FFC08F; --b: #EE8A5E; } .sheet .ppl i:nth-child(3) { --a: #8ADBBE; --b: #45B091; }
+.sheet .ppl i:nth-child(4) { --a: #F4A6C6; --b: #D76C9D; } .sheet .ppl i:nth-child(5) { --a: #B4BAC6; --b: #8A90A0; } .sheet .ppl i:nth-child(6) { --a: #C3A6F4; --b: #8E6CD7; }
+.sheet .apps i:nth-child(1) { --a: #FFFFFF; --b: #D5DAE5; } .sheet .apps i:nth-child(2) { --a: #6BE585; --b: #2DBE4E; } .sheet .apps i:nth-child(3) { --a: #5CBCFF; --b: #1C7BF2; }
+.sheet .apps i:nth-child(4) { --a: #49C6F2; --b: #229ED9; } .sheet .apps i:nth-child(5) { --a: #FFD86B; --b: #F5A623; } .sheet .apps i:nth-child(6) { --a: #FF8A80; --b: #E5484D; }
+.sheet .acts4 { display: flex; justify-content: space-between; }
+.sheet .acts4 span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 44px; color: var(--text-2); font-size: 11px; font-weight: 500; line-height: 14px; white-space: nowrap; }
+.sheet .acts4 em { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: var(--fill); box-shadow: inset 0 .5px 0 var(--hi); }
+.sheet .acts4 svg.g { width: 21px; height: 21px; }
+.sheet .acts4 b { font-weight: 600; }
+.sheet .acts4 u { width: 30px; height: 5px; margin-top: 4px; border-radius: 3px; background: var(--fill); }
 .sheet .acts4 .hit { color: var(--accent-text); }
-.sheet .acts4 .hit em { background: var(--accent-soft); }
-.sheet .acts4 .hit::after { top: 20px; }
+.sheet .acts4 .hit em { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-text); }
+.sheet .acts4 .hit::after { top: 22px; }
 /* the share sheet / the browser's menu: quiet rows, ours lit */
 .list { border-radius: 22px 22px 0 0; margin: 0 0 -16px; background: var(--ui); box-shadow: 0 0 0 .5px var(--line), 0 -10px 30px -12px rgba(0,0,0,.35); overflow: hidden; height: 158px; }
 .rows { transform: translate3d(0, 0, 0); }
@@ -109,16 +124,17 @@ svg.g { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-widt
 .droid .dlg .hd i { visibility: hidden; }
 /* iOS: the dialog is Safari's: x, the title, a blue Add; the icon and the name; "Open as Web App", on */
 .dlg .hd { gap: 8px; }
-.dlg .x { flex: none; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--fill); color: var(--text-2); }
+.dlg .x { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); color: var(--text-2); }
 .dlg .x svg.g { width: 16px; height: 16px; }
-.dlg .tt { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.15; text-align: center; text-wrap: balance; }
+.dlg .tt { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.15; text-align: center; text-wrap: balance; }
 :root:not(.droid) .s3 { padding: 10px; }
-:root:not(.droid) .dlg { padding: 4px 12px 12px; }
-:root:not(.droid) .dlg .ok { flex: none; height: 30px; display: flex; align-items: center; padding: 0 12px; border-radius: 15px; background: var(--accent); color: #fff; font-size: 13px; }
-.dlg .sw { display: flex; align-items: center; justify-content: space-between; height: 40px; margin-top: 6px; padding: 0 10px; border-radius: 14px; background: var(--ui-2); }
-.dlg .sw i { width: 46%; height: 8px; border-radius: 4px; background: var(--fill); }
-.dlg .sw em { position: relative; width: 40px; height: 24px; border-radius: 12px; background: #34C759; }
-.dlg .sw em::after { content: ''; position: absolute; right: 2px; top: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+:root:not(.droid) .dlg { padding: 6px 12px 12px; border-radius: 26px; }
+:root:not(.droid) .dlg .it, .dlg .sw { background: var(--fill); }
+:root:not(.droid) .dlg .ok { flex: none; height: 32px; display: flex; align-items: center; padding: 0 13px; border-radius: 16px; background: var(--accent); color: #fff; font-size: 13px; box-shadow: inset 0 1px 1px rgba(255,255,255,.22), 0 6px 14px -8px rgba(59,107,255,.8); }
+.dlg .sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; margin-top: 6px; padding: 8px 10px 8px 12px; border-radius: 14px; }
+.dlg .sw span { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.2; text-align: left; }
+.dlg .sw em { position: relative; flex: none; width: 42px; height: 26px; border-radius: 13px; background: #34C759; }
+.dlg .sw em::after { content: ''; position: absolute; right: 2px; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 
 ol { width: 100%; padding: 0; list-style: none; text-align: left; }
 li { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 10px 4px; color: var(--text-3); font-size: 17px; line-height: 1.25; transition: color .4s ease; cursor: pointer; }
@@ -135,8 +151,7 @@ li.on::before { background: var(--accent); color: #fff; }
 .link { display: block; width: 100%; padding: 14px 16px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 .5px var(--line); color: var(--text-2); font-size: 15px; font-weight: 500; -webkit-user-select: all; user-select: all; }
 .qr { width: 196px; padding: 14px; border-radius: 22px; background: #fff; }
 .qr svg { display: block; width: 100%; height: auto; }
-.done { margin-top: auto; padding: 12px; color: var(--accent-text); font-size: 15px; font-weight: 500; text-decoration: none; }
-@media (max-width: 340px) { h1 { font-size: 24px; } li { font-size: 16px; } main { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 340px) { h1 { font-size: 24px; } li { font-size: 16px; } main { padding-left: 16px; padding-right: 16px; } .sheet .pg { gap: 8px; } .sheet .pg em { padding: 0 4px 0 9px; font-size: 11px; } }
 @media (prefers-reduced-motion: reduce) {
   main, .hit::after, .rows { animation: none !important; }
   .scene { transition: opacity .2s ease; transform: none; }
@@ -153,7 +168,8 @@ li.on::before { background: var(--accent); color: #fff; }
   <div class="demo" data-for="ios android" aria-hidden="true">
     <div class="scene s1">
       <!-- iOS: the address on top, the bottom toolbar with Share in its middle (Safari 26 Top layout, and Safari before 26) -->
-      <div class="bar up" data-for="ios"><span class="url">kbtu.sow.kz</span></div>
+      <div class="bar" data-for="ios"><span class="url">kbtu.sow.kz</span></div>
+      <div class="page" data-for="ios"><i style="width:44%"></i><i style="width:68%"></i><i style="width:56%"></i></div>
       <div class="tools" data-for="ios">
         <span><svg class="g" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
         <span><svg class="g" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></span>
@@ -170,9 +186,9 @@ li.on::before { background: var(--accent); color: #fff; }
     </div>
     <!-- iOS only: the share sheet, View More at the right end of its round actions -->
     <div class="scene sv" data-for="ios"><div class="sheet">
-      <div class="pg"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span><i></i></div>
-      <div class="dots"><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="dots apps"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="pg"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span><em><span data-t="opts"></span><svg class="g" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></em></div>
+      <div class="ppl"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="ppl apps"><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div class="acts4">
         <span><em><svg class="g" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg></em><u></u></span>
         <span><em><svg class="g" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5V19.5"/></svg></em><u></u></span>
@@ -192,7 +208,7 @@ li.on::before { background: var(--accent); color: #fff; }
     <div class="scene s3"><div class="dlg">
       <div class="hd"><i data-for="android"></i><span class="x" data-for="ios"><svg class="g" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-width="2.4"/></svg></span><span class="tt" data-for="ios" data-t="row"></span><span class="ok hit" data-t="ok"></span></div>
       <div class="it"><img src="/favicon.svg" alt=""><span><b>KBTU App</b><small>kbtu.sow.kz</small></span></div>
-      <div class="sw" data-for="ios"><i></i><em></em></div>
+      <div class="sw" data-for="ios"><span data-t="web"></span><em></em></div>
     </div></div>
   </div>
   <ol data-for="ios android"><li data-n="1" data-t="s1"></li><li data-n="2" data-t="s2"></li><li data-n="3" data-t="s3"></li><li data-n="4" data-t="s4" data-for="ios"></li></ol>
@@ -207,7 +223,6 @@ li.on::before { background: var(--accent); color: #fff; }
     <button class="btn quiet" id="copy" data-for="inapp webview" data-t="copy"></button>
     <a class="btn" data-for="done" href="/" data-t="go"></a>
   </div>
-  <a class="done" data-for="ios android inapp webview" href="/" data-t="ready"></a>
 </main>
 <script>
 (function () {
@@ -219,14 +234,14 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.webview': 'Открой в Chrome', 'sub.webview': 'Установить приложение можно из Chrome.',
       'h.desk': 'Открой на телефоне', 'sub.desk': 'Наведи камеру на код: дальше страница покажет шаги для твоего телефона.',
       'h.done': 'KBTU App установлен', 'sub.done': 'Он уже на главном экране.',
-      more: 'Ещё',
+      more: 'Ещё', opts: 'Параметры', web: 'Открыть как веб-приложение',
       's1.ios': 'Нажми «Поделиться» внизу экрана', 's1.android': 'Нажми ⋮ вверху справа',
       's2.ios': 'Нажми «Ещё»: круглая кнопка справа внизу', 's2.android': 'Выбери «Добавить на главный экран»',
       's3.ios': 'Пролистай вниз и выбери «На экран „Домой“»', 's3.android': 'Нажми «Установить»',
       's4.ios': 'Нажми «Добавить» справа вверху',
       'row.ios': 'На экран «Домой»', 'row.android': 'Добавить на главный экран', 'ok.ios': 'Добавить', 'ok.android': 'Установить',
       install: 'Установить', 'open.inapp': 'Открыть в Safari', 'open.webview': 'Открыть в Chrome', copy: 'Скопировать ссылку', copied: 'Скопировано',
-      go: 'Открыть приложение', ready: 'Готово? Открыть приложение'
+      go: 'Открыть приложение'
     },
     kk: {
       'h.ios': 'KBTU App басты экранға', 'sub.ios': 'Safari-де төрт рет басу.',
@@ -235,14 +250,14 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.webview': 'Chrome-да аш', 'sub.webview': 'Қолданбаны Chrome арқылы орнатуға болады.',
       'h.desk': 'Телефоннан аш', 'sub.desk': 'Камераны кодқа бағытта: бет телефоныңа сай қадамдарды көрсетеді.',
       'h.done': 'KBTU App орнатылған', 'sub.done': 'Ол басты экранда тұр.',
-      more: 'Тағы',
+      more: 'Тағы', opts: 'Параметрлер', web: 'Веб-қолданба ретінде ашу',
       's1.ios': 'Экранның төменгі жағындағы «Бөлісу» түймесін бас', 's1.android': 'Жоғарғы оң жақтағы ⋮ бас',
       's2.ios': 'Төменгі оң жақтағы дөңгелек «Тағы» түймесін бас', 's2.android': '«Басты экранға қосу» таңда',
       's3.ios': 'Төмен айналдырып, «Басты экранға қосу» таңда', 's3.android': '«Орнату» түймесін бас',
       's4.ios': 'Жоғарғы оң жақтағы «Қосу» түймесін бас',
       'row.ios': 'Басты экранға қосу', 'row.android': 'Басты экранға қосу', 'ok.ios': 'Қосу', 'ok.android': 'Орнату',
       install: 'Орнату', 'open.inapp': 'Safari-де ашу', 'open.webview': 'Chrome-да ашу', copy: 'Сілтемені көшіру', copied: 'Көшірілді',
-      go: 'Қолданбаны ашу', ready: 'Дайын ба? Қолданбаны ашу'
+      go: 'Қолданбаны ашу'
     },
     en: {
       'h.ios': 'Add KBTU App to your Home Screen', 'sub.ios': 'Four taps in Safari.',
@@ -251,14 +266,14 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.webview': 'Open in Chrome', 'sub.webview': 'Chrome can install the app.',
       'h.desk': 'Open on your phone', 'sub.desk': 'Point the camera at the code: the page will show the steps for your phone.',
       'h.done': 'KBTU App is installed', 'sub.done': 'It is already on your home screen.',
-      more: 'View More',
+      more: 'View More', opts: 'Options', web: 'Open as Web App',
       's1.ios': 'Tap Share at the bottom of the screen', 's1.android': 'Tap ⋮ at the top right',
       's2.ios': 'Tap View More: the round button at the bottom right', 's2.android': 'Choose Add to Home screen',
       's3.ios': 'Scroll down and tap Add to Home Screen', 's3.android': 'Tap Install',
       's4.ios': 'Tap Add at the top right',
       'row.ios': 'Add to Home Screen', 'row.android': 'Add to Home screen', 'ok.ios': 'Add', 'ok.android': 'Install',
       install: 'Install', 'open.inapp': 'Open in Safari', 'open.webview': 'Open in Chrome', copy: 'Copy link', copied: 'Copied',
-      go: 'Open the app', ready: 'Done? Open the app'
+      go: 'Open the app'
     }
   };
   var root = document.documentElement, ua = navigator.userAgent, nl = (navigator.language || 'ru').toLowerCase();
