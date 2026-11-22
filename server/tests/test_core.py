@@ -8392,3 +8392,22 @@ def test_erasure_removes_all_microsoft_claims_for_owner(env):
     for token in ("", *tokens):
         assert c.post("/api/ms/claim", headers=tma(91), json={"claim": token}).status_code == 403
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key GLOB 'ms_claim:*'")] == [f"ms_claim:{other}"]
+
+
+def test_cancelled_event_leaves_the_afisha_after_a_day(env, monkeypatch):
+    """A cancelled event shows on the Afisha, struck through, for a day; then it is gone."""
+    c, cfg = env
+    login(c, 20, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, 1)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, (SELECT id FROM users WHERE tg_id = 20), 'president', 0)")
+    start = int(time.time()) + 5 * 86400
+    body = {"title": "Movie night", "place": "", "startsAt": start, "endsAt": start + 3600, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": 5}
+    eid = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["id"]
+    c.post(f"/api/events/{eid}/publish", headers=tma(20))
+    c.post(f"/api/events/{eid}/cancel", headers=tma(20))
+    login(c, 21, "student")
+    ids = lambda: [e["id"] for e in c.get("/api/events", headers=tma(21)).json()]
+    assert eid in ids()
+    con.execute("UPDATE events SET cancelled_at = cancelled_at - 86401 WHERE id = ?", (eid,))
+    assert eid not in ids()

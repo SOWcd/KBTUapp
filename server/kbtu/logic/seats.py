@@ -450,6 +450,8 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     args: list = [core.now() - 366 * 86400, NO_END, core.now()]
     if org is None:
         sql += " AND " + on_afisha(); args += on_afisha_args(v)
+        # a cancelled event stays a day, struck through, for those who meant to go; then it leaves the Afisha (owner)
+        sql += " AND (status != 'cancelled' OR cancelled_at > ?)"; args.append(core.now() - CANCELLED_SHOWN)
     else:
         # a club's page: its own and the ones it co-hosts (accepted, cohosts.py)
         sql += " AND (org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))"; args += [org, org]
@@ -463,6 +465,7 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)], share=True)
 
 
+CANCELLED_SHOWN = 86400  # a cancelled event's day on the Afisha
 PAST_DAYS = 30  # the Afisha's "Past" reaches back a month
 
 
