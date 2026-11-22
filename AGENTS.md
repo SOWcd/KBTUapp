@@ -3,6 +3,15 @@
 How to work on KBTU App, for any coding agent (Claude Code, Codex, Cursor, ...) and for people. Read this first.
 What the app is and how to run it: [README.md](README.md). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## The goals (the owner's hard rules, in this order)
+
+1. **Speed.** The app is incredibly fast: every tap answers in the same frame, nothing waits that could be ready.
+2. **Beauty, never at speed's cost.** Visuals, motion and style are as beautiful, modern, aesthetic and professional
+   as the best iOS apps. How it works inside doesn't matter; what the person sees and feels does. No visible seams,
+   bands, jumps or mismatched colours ship.
+3. **A simple repository.** The code stays clear, minimal and efficient, so any agent or person understands it fast:
+   no bloat, no speculative layers, delete before adding.
+
 ## The project in one screen
 
 - A Telegram Mini App for KBTU students: events and tickets (free and paid by Kaspi receipt), clubs and their
