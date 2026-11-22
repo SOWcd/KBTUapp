@@ -4,6 +4,7 @@ import './ui/base.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { boot, hapticTaps, inTelegram, tg } from './lib/tg';
+import { bootOut } from './lib/boot';
 import { i18n, loadLang } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
@@ -41,8 +42,8 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await import('./screens/Screen.svelte')).default, { target: document.body });
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
   // a production build drops this branch and the chunk with it
-  else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) mount((await import('./screens/lab/Lab.svelte')).default, { target: app });
-  else if (inTelegram) mount(App, { target: app });
+  else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) bootOut(), mount((await import('./screens/lab/Lab.svelte')).default, { target: app });
+  else if (inTelegram) bootOut(), mount(App, { target: app }); // (index.html's boot screen is for outside Telegram: WebEntrance takes it over)
   else mount((await import('./screens/WebEntrance.svelte')).default, { target: app });
   window.__kbStarted = true; // (the other languages load with Settings: profile/SettingsList.svelte)
 });
