@@ -60,3 +60,12 @@ def test_share_post_card_and_inline(env, monkeypatch):
         return [r["id"] for r in bot.inline_answer(cfg, con, {"id": "q", "from": {"id": tg, "language_code": "en"}, "query": ""})["results"]]
     assert [i for i in ask(61) if i.startswith("fp-")] == [f"fp-{signed}"]
     assert not any(i.startswith("fp-") for i in ask(62))
+
+
+def test_share_link_for_the_web_app(env):
+    """The web app has no shareMessage: link=true returns the card button's link, Telegram untouched (an award link is
+    minted on the server, so the bare bot link the web app had lost it)."""
+    c, _ = env
+    login(c, 63, "cy")
+    r = c.post("/api/share", headers=tma(63), json={"kind": "rf", "link": True}).json()
+    assert r["link"].startswith("https://t.me/") and "startapp=r_" in r["link"] and "id" not in r
