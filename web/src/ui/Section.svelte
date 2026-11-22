@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A section of a screen or a sheet: one header style everywhere (a --fs-sec title, a grey count, "All ›" on the right),
+  // A section of a screen or a sheet: one header style everywhere (a --fs-t3 title, the Afisha's, a grey count, "All ›" on the right),
   // then its content.
   //   title     the section's name;  count: how many (grey, after the title; 0 hides it)
   //   onmore    shows "All ›" (moreLabel to name it otherwise), which opens the whole list; loud: as a filled capsule
@@ -21,7 +21,7 @@
 <style>
   .sec { display: flex; flex-direction: column; gap: var(--s-3); }
   .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); padding: 0 var(--s-1); }
-  .tt { min-width: 0; font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; overflow-wrap: break-word; hyphens: auto; }
+  .tt { min-width: 0; font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; overflow-wrap: break-word; hyphens: auto; }
   .n { margin-left: 8px; font-weight: 450; color: var(--text-3); }
   .more { position: relative; flex: none; display: inline-flex; align-items: center; gap: 0; margin-right: -6px; color: var(--accent-text);
     font: 450 var(--fs-row)/1.2 var(--font-text); letter-spacing: -0.012em; }

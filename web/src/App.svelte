@@ -967,9 +967,8 @@
 
     <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
          the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-    <!-- the Afisha is Opal black (.opal), the rest navy: the fades take the page's own colour, else a tinted band shows -->
-    <div class="topfade" class:opal={ui.tab === 'afisha'} aria-hidden="true" use:unfeed></div><div class="botfade" class:opal={ui.tab === 'afisha'} aria-hidden="true" use:unfeed></div>
-    <div class="tgfade" class:opal={ui.tab === 'afisha'} aria-hidden="true"></div>
+    <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+    <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
     {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}

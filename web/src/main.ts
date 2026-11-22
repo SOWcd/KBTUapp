@@ -14,7 +14,7 @@ document.documentElement.lang = i18n.lang;
 if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
-boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#07080F');
+boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000');
 
 // A deploy replaces the lazily loaded screens, so an app opened before it fails to load its next sheet and the tap
 // does nothing: reload into the new build.

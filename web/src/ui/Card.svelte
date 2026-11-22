@@ -1,7 +1,7 @@
 <script lang="ts">
   // A card for rich content only (an event, a club, a post); a list of things is Rows in a Group.
-  // --surface, --r-l, 16 inside; a soft shadow in the light theme, none in the dark. Under .opal (tokens.css): 24 round,
-  // 20 inside, a hair rim (--card-rim).
+  // --surface, --r-l (24 round),
+  // 20 inside, a hair rim (--card-rim; in the light theme a soft shadow with it).
   //   onclick   the whole card opens something (a press that gives; Enter and Space too). A card with buttons inside
   //             keeps them its own: they don't trigger the card
   import type { Snippet } from 'svelte';
