@@ -158,14 +158,28 @@
     caret = null;
   }
 
-  // Three layers, transforms only (an animated clip-path repainted the whole window every frame on iPhone): win, the
-  // frame, rounds and clips; pane, the surface, slides down out of the pill's row; inner slides back by as much, so
-  // the words never move inside the window while its lower edge sweeps open.
+  // Done on the keyboard (the field gives the focus to nothing) with nothing written folds the window back into the
+  // pill, as Apple's own fields do when left empty; words or a photo keep it open (Back, the dim or a swipe on it
+  // close it, the draft kept). A tap on the window's own controls takes the focus from the field too: never that.
+  let touchAt = -1e9;
+  const touch = () => { touchAt = performance.now(); };
+  const empty = () => !body.trim() && !pics.length;
+  function left() {
+    if (!empty() || performance.now() - touchAt < 500) return;
+    setTimeout(() => { if (!gone && empty() && !win.contains(document.activeElement)) close(overlay.id); });  // a tick on: where the focus went
+  }
+
+  // One morph, transforms and opacity only (an animated clip-path repainted the whole window every frame on iPhone):
+  // win, the frame, rounds and clips; pane, the surface, slides down out of the pill's row; inner slides back by as
+  // much, so the words never move inside the window while its lower edge sweeps open. The pill itself stays under
+  // it at the folded end (Channel .compose.away) and the window fades over it, so the capsule's glass and rounding
+  // never swap for the window's in one frame. The dim and the nav move on this one clock.
   let win: HTMLDivElement, pane: HTMLDivElement, inner: HTMLDivElement;
   let motion: Animation[] = [];
   let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
   let gone = false, sent = false;
-  let still = $state(false);  // the opening is over: only then the feed behind blurs (a blur under a moving window and the keyboard lags on iPhone)
+  let restore = () => {};  // the pill and the nav come back as the fold starts, not after it
+  const OPEN = 460, SHUT = 360;  // the scrim's times in CSS are these
   const ease = () => getComputedStyle(win).getPropertyValue('--ease-spring').trim();
 
   // where the pill is, against the window's resting place (its layout box: read with no motion on it)
@@ -175,10 +189,14 @@
     return { dy: p.top - win.getBoundingClientRect().top, h: Math.min(p.height, win.offsetHeight) };
   }
   // the pill's row and the window, one morph either way; from: the frame on screen (Back mid-growth folds from there)
-  function morph(f: { dy: number; h: number }, from?: string[]): Animation[] {
+  function morph(f: { dy: number; h: number }, from?: string[], shown = '1'): Animation[] {
     const H = win.offsetHeight, ends = [`translateY(${f.dy}px)`, `translateY(${f.h - H}px)`, `translateY(${H - f.h}px)`];
-    return [win, pane, inner].map((el, i) => el.animate(from ? [{ transform: from[i] }, { transform: ends[i] }] : [{ transform: ends[i] }, { transform: 'none' }],
-      { duration: from ? 260 : 320, easing: ease(), fill: from ? 'forwards' : 'none' }));
+    return [...[win, pane, inner].map((el, i) => el.animate(from ? [{ transform: from[i] }, { transform: ends[i] }] : [{ transform: ends[i] }, { transform: 'none' }],
+      { duration: from ? SHUT : OPEN, easing: ease(), fill: from ? 'forwards' : 'none' })),
+      // the hand-over: the window comes over the pill in its first moments (Channel hides the pill after these 90 ms)
+      // and thins out over it in its last
+      win.animate(from ? [{ opacity: shown }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: 1 }],
+        from ? { duration: 140, delay: SHUT - 140, easing: 'ease-in', fill: 'both' } : { duration: 90, easing: 'ease-out' })];
   }
 
   function leave() {
@@ -190,7 +208,8 @@
     for (const a of motion) a.cancel();
     const f = calm() ? null : pill();
     (document.activeElement as HTMLElement | null)?.blur?.(); // the keyboard goes with it
-    motion = f ? morph(f, from) : [win.animate([{ opacity: shown }, { opacity: 0 }], { duration: calm() ? 1 : 200, easing: ease(), fill: 'forwards' })];
+    restore();
+    motion = f ? morph(f, from, shown) : [win.animate([{ opacity: shown }, { opacity: 0 }], { duration: calm() ? 1 : 200, easing: ease(), fill: 'forwards' })];
     motion[0].onfinish = () => {
       flushSync(() => removeOverlay(overlay.id));
       document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });
@@ -201,6 +220,7 @@
   onMount(() => {
     channel.writing++;
     const chrome = hideChrome();
+    restore = () => { restore = () => {}; channel.writing--; chrome(); };
     // the feed behind is out of reach while I write: no focus, no screen reader (the dialog is modal)
     const bg = document.querySelector('section.tab.on'), was = bg?.hasAttribute('inert');
     bg?.setAttribute('inert', '');
@@ -210,12 +230,11 @@
       if (gone) return;
       const f = calm() ? null : pill();
       motion = f ? morph(f) : [win.animate([{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 1 : 200, easing: ease() })];
-      motion[0].onfinish = () => { if (!gone) still = true; };
       out = false;
     });
     return () => {
       cancelAnimationFrame(frame); for (const a of motion) a.cancel();
-      channel.writing--; chrome();
+      restore();
       if (!was) bg?.removeAttribute('inert');
     };
   });
@@ -259,10 +278,10 @@
   const key = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } };
 </script>
 
-<div class="scrim" class:out class:still onclick={() => close(overlay.id, true)} role="presentation"></div>
+<div class="scrim" class:out onclick={() => close(overlay.id, true)} ontouchmove={() => close(overlay.id, true)} role="presentation"></div>
 <!-- the window ends above the keyboard (keyboard.h: the app's one number for it); its scroller keeps its own room
      (data-kb-own): a spacer the keyboard code put under the words slid them down and back while it came up -->
-<div class="cw" class:out bind:this={win} style:--kb="{keyboard.h}px" role="dialog" aria-modal="true" aria-label={t('fc.new')}>
+<div class="cw" class:out bind:this={win} style:--kb="{keyboard.h}px" onpointerdowncapture={touch} onpointerupcapture={touch} role="dialog" aria-modal="true" aria-label={t('fc.new')}>
 <div class="pane glass glass-sheet" use:glass bind:this={pane}>
 <div class="in" bind:this={inner}>
   <!-- the pill's own row, the same places: my face, then who it goes out as (the pill's words fade into it), Send -->
@@ -287,7 +306,7 @@
     <!-- the AI's reason and advice from a refusal (Edit), until I change the words -->
     {#if tip}<div class="tip"><p>{tip.reason}</p>{#if tip.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{tip.fix}</span></p>{/if}</div>{/if}
     <textarea class="cw-text" class:bad={rules.length > 0} bind:this={field} bind:value={body} maxlength={MAX} rows="4" placeholder={t('fc.share')} aria-label={t('fc.ph')}
-      aria-invalid={rules.length > 0} aria-describedby="cw-hold" onkeydown={key} use:grow></textarea>
+      aria-invalid={rules.length > 0} aria-describedby="cw-hold" onkeydown={key} onblur={left} use:grow></textarea>
     <!-- every rule broken, at once, in plain words; a tap on Send adds why it held -->
     <div class="hints" id="cw-hold" role="status">{#each hints as h (h)}<p>{t(h)}</p>{/each}</div>
     <!-- the photos, in the order picked: each its own state (uploading, failed: tap to try again), its x; a tap views it -->
@@ -325,11 +344,11 @@
 </div>
 
 <style>
-  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 280ms var(--ease); }
-  /* the blur comes once the window stands, by its layer's opacity (an animated backdrop-filter re-blurs every frame) */
-  .scrim.still::before { content: ''; position: absolute; inset: 0; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: blur-in 220ms var(--ease) both; }
-  @keyframes blur-in { from { opacity: 0; } }
-  .scrim.out { opacity: 0; transition-duration: 240ms; }
+  /* the dim, on the morph's clock (OPEN and SHUT in the script). No blur under it: it came as a second step once the
+     window stood, and went in one frame as the dim began to fade (WebKit drops a backdrop-filter under an animated
+     opacity) */
+  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 460ms var(--ease-spring); }
+  .scrim.out { opacity: 0; transition-duration: 360ms; }
   /* the frame: where the window rests, its rounding and its clip (nothing painted of its own); the ground ends 12 px
      above the keyboard */
   .cw { position: absolute; z-index: var(--z-sheet); top: calc(var(--head-bottom) + var(--s-2)); left: var(--gutter); right: var(--gutter);
@@ -340,18 +359,21 @@
     -webkit-backdrop-filter: none; backdrop-filter: none; }
   .in { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
-  /* the top row: the pill's paddings and sizes, so its face and its pen stay put */
+  /* the top row: the pill's sizes, so its pen stays put; my face and the words sit a step further in than the pill's
+     (the window's own margin) and glide that step with the morph */
   .top { position: relative; flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
   .face { flex: none; display: flex; }
+  .face, .ghost { transition: transform 460ms var(--ease-spring), opacity 100ms var(--ease); }
+  .out .face, .out .ghost { transform: translateX(calc(var(--s-3) - var(--s-4))); transition-duration: 360ms, 160ms; }
   .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill-2); color: var(--text); }
-  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; transition: opacity var(--t-base) var(--ease); }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; transition: opacity var(--t-base) var(--ease) 60ms; }
   .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .sub { font: 450 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
-  /* the pill's words, where they were: they fade as the name comes */
+  /* the pill's words, where they were. One line goes before the other comes: the two never read through each other */
   .ghost { position: absolute; left: calc(var(--s-4) + 36px + var(--s-3)); right: calc(36px + var(--s-3) * 2); top: 50%; translate: 0 -50%; opacity: 0; pointer-events: none;
-    font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); transition: opacity 160ms var(--ease); }
-  .out .who { opacity: 0; transition-duration: var(--t-fast); }
-  .out .ghost { opacity: 1; }
+    font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
+  .out .who { opacity: 0; transition-duration: var(--t-fast); transition-delay: 0s; }
+  .out .ghost { opacity: 1; transition-delay: 0s, 80ms; }
 
   /* the pen turns into Send: one round button, the accent while it can send (held: grey, a tap says why) */
   .send { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--fill-2); color: var(--text-3);
@@ -419,7 +441,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .pic.up img { animation: none; }
-    .scrim, .who, .ghost, .send, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
-    .scrim.still::before { animation: none; }
+    .scrim, .who, .face, .ghost, .send, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
   }
 </style>
