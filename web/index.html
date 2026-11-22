@@ -31,19 +31,19 @@
 </script>
 <!-- The boot screen: an emblem on the plain ground. Its still first frame (the ground and the mark) is the home-screen
      app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). The app is
-     often up within half a second, so everything is said by then: a halo blooms behind the mark, the legend swings in
+     often up within half a second, so everything is said in ~0.75 s: a halo blooms behind the mark, the legend swings in
      on its circle, light rakes through the colonnade onto the ground, a wave runs along the columns (and again every
      few seconds while a slow line loads).
-     lib/boot.ts hands it over: .o = the way in: the view flies in between two columns (.em grows thirtyfold about
-     that gap) as the ground dissolves over the app (transitions on #boot and .em, the intro on their children: the two
-     compose, so an app ready at once still gets a whole gesture and never waits);
+     lib/boot.ts hands it over: .o = the emblem settles back a little and dissolves with the ground while the app
+     lifts into place under it, 0.28 s (transitions on #boot and .em, the intro on their children: the two compose, so
+     an app ready early still gets a whole gesture; it waits only for the 0.4 s since the first paint to pass);
      .u = under the page as the entrance's ground: its lights wake, the legend goes, and the entrance draws its own mark
      where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on the compositor,
      running while the bundle keeps the main thread busy. -->
 <style id="boot-css">
 html[data-boot]{background:#07080F}
 html[data-boot=light]{background:#F3F5FB}
-#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .26s cubic-bezier(.5,0,.8,.6) .14s}
+#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .28s cubic-bezier(.2,.7,.3,1)}
 [data-boot] #boot{display:block}
 [data-boot=light] #boot{color:#0B1433;background:#F3F5FB}
 #boot.u{z-index:auto}
@@ -56,25 +56,28 @@ html[data-boot=light]{background:#F3F5FB}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transform-origin:113.25px 109px;transition:transform .4s cubic-bezier(.5,0,.8,.3)}
-#boot.o .em{transform:scale(30)}
-#boot .hl{position:absolute;left:-62px;top:-62px;width:340px;height:340px;background:radial-gradient(closest-side,#3B6BFF,transparent);opacity:.3;transition:opacity .28s;animation:kb-halo .5s cubic-bezier(.2,.8,.2,1) backwards}
+#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot.o .em{transform:scale(.96)}
+/* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
+@media (max-width:599.98px){#boot.o+#app{animation:kb-lift .32s cubic-bezier(.2,.8,.2,1)}}
+@keyframes kb-lift{from{transform:translateY(8px)}}
+#boot .hl{position:absolute;left:-62px;top:-62px;width:340px;height:340px;background:radial-gradient(closest-side,#3B6BFF,transparent);opacity:.3;transition:opacity .28s;animation:kb-halo .75s cubic-bezier(.2,.8,.2,1) backwards}
 [data-boot=light] #boot .hl{opacity:.2}
-#boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .46s cubic-bezier(.2,.8,.2,1) .04s backwards}
+#boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .68s cubic-bezier(.2,.8,.2,1) .06s backwards}
 #boot .lg svg{display:block;animation:kb-turn 90s linear infinite}
 #boot .lg text{font:600 10.5px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;fill:currentColor;opacity:.78}
 #boot .lg circle{fill:none;stroke:currentColor;stroke-width:.75;opacity:.3}
 #boot .mk{position:absolute;left:80px;top:84px;width:56px;height:48px}
-#boot .mk i{position:absolute;top:14px;width:6px;height:22px;border-radius:3px;background:currentColor;transform-origin:50% 100%;animation:kb-col 2.6s .06s infinite backwards}
+#boot .mk i{position:absolute;top:14px;width:6px;height:22px;border-radius:3px;background:currentColor;transform-origin:50% 100%;animation:kb-col 3.9s .08s infinite backwards}
 #boot .mk i:nth-child(1){left:2px;top:3px;width:52px;height:8px;animation:none}
 #boot .mk i:nth-child(2){left:4px}
-#boot .mk i:nth-child(3){left:14.5px;animation-delay:.1s}
-#boot .mk i:nth-child(4){left:25px;animation-delay:.14s}
-#boot .mk i:nth-child(5){left:35.5px;animation-delay:.18s}
-#boot .mk i:nth-child(6){left:46px;animation-delay:.22s}
+#boot .mk i:nth-child(3){left:14.5px;animation-delay:.14s}
+#boot .mk i:nth-child(4){left:25px;animation-delay:.2s}
+#boot .mk i:nth-child(5){left:35.5px;animation-delay:.26s}
+#boot .mk i:nth-child(6){left:46px;animation-delay:.32s}
 #boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
 /* light rakes through the four gaps onto the ground before the building, under the legend */
-#boot .ry{position:absolute;left:80px;top:131px;width:56px;height:120px;--r:#AFC3FF;opacity:.6;transform-origin:50% 0;transform:perspective(220px) rotateX(62deg);transition:opacity .28s;animation:kb-rays .5s cubic-bezier(.2,.8,.2,1) .06s backwards}
+#boot .ry{position:absolute;left:80px;top:131px;width:56px;height:120px;--r:#AFC3FF;opacity:.6;transform-origin:50% 0;transform:perspective(220px) rotateX(62deg);transition:opacity .28s;animation:kb-rays .7s cubic-bezier(.2,.8,.2,1) .08s backwards}
 [data-boot=light] #boot .ry{--r:#3B6BFF;opacity:.5}
 #boot .ry s{position:absolute;top:0;left:10px;width:4.5px;height:100%;background:linear-gradient(var(--r),transparent)}
 #boot .ry s:nth-child(2){left:20.5px}
@@ -87,13 +90,13 @@ html[data-boot=light]{background:#F3F5FB}
 @keyframes kb-turn{to{transform:rotate(1turn)}}
 @keyframes kb-halo{from{opacity:0;transform:scale(.4)}}
 @keyframes kb-in{from{opacity:0;transform:rotate(-64deg) scale(.84)}}
-/* one column's dip and spring back, ~0.3 s of the 2.6 s round; each a beat after its neighbour */
+/* one column's dip and spring back, ~0.45 s of the 3.9 s round; each a beat after its neighbour */
 @keyframes kb-col{0%{transform:none;opacity:1;animation-timing-function:cubic-bezier(.4,0,.6,.5)}4.5%{transform:scaleY(.52);opacity:.45;animation-timing-function:cubic-bezier(.2,1.5,.4,1)}12%,100%{transform:none;opacity:1}}
 /* The iPhone's status bar (the home-screen app) is a strip in theme-color, the ground's colour, that no page draws
    under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
 #boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 72px);background:linear-gradient(#07080F 30%,rgba(7,8,15,0))}
 [data-boot=light] #boot:after{background:linear-gradient(#F3F5FB 30%,rgba(243,245,251,0))}
-@media (prefers-reduced-motion:reduce){#boot b,#boot .hl,#boot .lg,#boot .lg svg,#boot .mk i,#boot .ry{animation:none!important}#boot,#boot .em,#boot b,#boot .hl,#boot .lg,#boot .ry{transition:none!important}}
+@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot .hl,#boot .lg,#boot .lg svg,#boot .mk i,#boot .ry{animation:none!important}#boot,#boot .em,#boot b,#boot .hl,#boot .lg,#boot .ry{transition:none!important}}
 </style>
 <!-- splash:start -->
 <link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
