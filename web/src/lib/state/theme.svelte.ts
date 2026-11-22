@@ -27,7 +27,7 @@ export function applyTheme(t: Theme, telegramToo = true): void {
 }
 
 /** Telegram's own surfaces (background, header, bottom bar) in a theme's colour */
-export const paintFor = (t: Theme) => paint(t === 'light' ? '#F3F5FB' : '#07080F');
+export const paintFor = (t: Theme) => paint(t === 'light' ? '#F2F2F7' : '#000000');
 
 const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Android/.test(navigator.userAgent); // iPhone, Mac Safari
 // the soft edge is a share of the circle, so it widens as the circle grows: crisp at the tap, a wide dusk by the far

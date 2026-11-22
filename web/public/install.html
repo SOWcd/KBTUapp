@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#07080F" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F3F5FB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
 <!-- what the phone adds from this page is the app itself: the manifest's start_url is "/", and these are index.html's -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="KBTU App">
@@ -17,14 +17,14 @@
 /* The page the app's "Add to Home Screen" sheet opens in the phone's browser (screens/sheets/InstallSheet.svelte):
    it reads the device and shows that device's steps. Self-contained; the colours are ui/tokens.css's. */
 :root {
-  --bg: #07080F; --surface: rgba(255,255,255,.055); --ui: #1C1F2E; --ui-2: #262A3D; --line: rgba(255,255,255,.13);
+  --bg: #000000; --surface: rgba(255,255,255,.055); --ui: #1C1C1E; --ui-2: #2C2C2E; --line: rgba(255,255,255,.13);
   --fill: rgba(235,238,255,.12); --text: #F4F6FF; --text-2: rgba(240,243,255,.68); --text-3: rgba(232,236,255,.52);
-  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(34,38,56,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
+  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(36,36,38,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
   --ease: cubic-bezier(.32,.72,0,1);
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #F3F5FB; --surface: #FFFFFF; --ui: #FFFFFF; --ui-2: #ECEFF6; --line: rgba(11,20,51,.13);
+    --bg: #F2F2F7; --surface: #FFFFFF; --ui: #FFFFFF; --ui-2: #E9E9EE; --line: rgba(11,20,51,.13);
     --fill: rgba(11,20,51,.075); --text: #0B1433; --text-2: rgba(11,20,51,.66); --text-3: rgba(11,20,51,.5);
     --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --glass: rgba(255,255,255,.78); --hi: #fff; --o1: .3; --o2: .26; --o3: .14;
   }

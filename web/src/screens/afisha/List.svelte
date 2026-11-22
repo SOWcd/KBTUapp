@@ -216,7 +216,7 @@
   {/if}
 {/snippet}
 
-<div class="page scroll stagger opal">
+<div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
   <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   <header class="hd">

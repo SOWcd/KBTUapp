@@ -14,9 +14,8 @@
 
   //   bare: no large title of ours, the page brings its own (Studio's club header) and says when it scrolls away
   //   keeps: its fields write straight into the form under it (a form's sub-page): Back leaves with them, nothing to ask
-  //   opal: the page in Opal's look (tokens.css .opal: black first), its ground and scroll edge with it
   //   glow: a soft tint of the brand's colours over the ground, still while the page scrolls (no flat black slab)
-  let { overlay, title, icon, bare = false, keeps = false, opal = false, glow = false, children }: { overlay: Overlay; title: string; icon?: Component<any>; bare?: boolean; keeps?: boolean; opal?: boolean; glow?: boolean; children: Snippet } = $props();
+  let { overlay, title, icon, bare = false, keeps = false, glow = false, children }: { overlay: Overlay; title: string; icon?: Component<any>; bare?: boolean; keeps?: boolean; glow?: boolean; children: Snippet } = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let el: HTMLDivElement;
@@ -77,7 +76,7 @@
   }
 </script>
 
-<div class="pane scroll" class:opal class:glow class:scrolled role="region" aria-label={title} bind:this={el} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}
+<div class="pane scroll" class:glow class:scrolled role="region" aria-label={title} bind:this={el} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}
   onscroll={() => { if (scrolled !== el.scrollTop > 2) scrolled = !scrolled; }}>
   <div class="edge" aria-hidden="true"></div>
   {#if !bare}<h1 class="ttl" use:fitTitle use:largeTitle={(g) => (overlay.quiet = !g)}>{title}</h1>{/if}

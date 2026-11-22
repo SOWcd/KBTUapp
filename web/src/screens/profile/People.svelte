@@ -47,7 +47,7 @@
 <!-- a word rising from under its own baseline, as the pitch's headings do -->
 {#snippet rise(text: string, at = 0)}{#each text.split(' ') as w, i (i)}<span class="w"><span style:--i={at + i}>{w}</span></span>{/each}{/snippet}
 
-<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare opal glow>
+<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare glow>
   <div class="ppl">
     <h1 class="lbl ttl" use:largeTitle={(g) => (overlay.quiet = !g)}>{t('cr.title')}</h1>
     {#if !c}

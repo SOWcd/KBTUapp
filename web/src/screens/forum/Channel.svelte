@@ -373,27 +373,16 @@
 </div>
 
 <style>
-  /* the ground: three soft cool lights that stay put while the feed scrolls (a scroller's own background doesn't
-     move with its content), so every pane and the capsule have something to bend. Static paint, no filter, no motion:
-     nothing to stop under lowfx or reduced motion.
-     ponytail: still lights; a slow drift on a layer of its own (transform only) if the owner wants it alive */
+  /* the ground is the app's own (--bg), like every tab: coloured lights here read as a tinted band beside the black */
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column;
     --pane: rgba(255, 255, 255, 0.05); --pane-sheen: rgba(255, 255, 255, 0.05);
     --pane-hi: rgba(255, 255, 255, 0.42); --pane-lo: rgba(255, 255, 255, 0.14); --pane-rim: rgba(255, 255, 255, 0.07);
-    --pane-lift: 0 16px 30px -22px rgba(0, 0, 0, 0.7);
-    background:
-      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.24), transparent 70%),
-      radial-gradient(75% 40% at 105% 58%, rgba(124, 92, 255, 0.15), transparent 70%),
-      radial-gradient(85% 50% at -5% 95%, rgba(40, 160, 255, 0.13), transparent 70%); }
+    --pane-lift: 0 16px 30px -22px rgba(0, 0, 0, 0.7); }
   /* light: white rims vanish on white, so a pane is a milky body with a white lit arc, an ink reflection and a navy lift */
   :global(:root[data-theme='light']) .page {
     --pane: rgba(255, 255, 255, 0.56); --pane-sheen: rgba(255, 255, 255, 0.55);
     --pane-hi: var(--lg-rim-hi); --pane-lo: rgba(11, 20, 51, 0.16); --pane-rim: rgba(11, 20, 51, 0.05);
-    --pane-lift: 0 1px 2px rgba(24, 36, 90, 0.04), 0 14px 28px -18px rgba(24, 36, 90, 0.22);
-    background:
-      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.2), transparent 70%),
-      radial-gradient(75% 40% at 105% 58%, rgba(150, 110, 255, 0.15), transparent 70%),
-      radial-gradient(85% 50% at -5% 95%, rgba(60, 180, 255, 0.16), transparent 70%); }
+    --pane-lift: 0 1px 2px rgba(24, 36, 90, 0.04), 0 14px 28px -18px rgba(24, 36, 90, 0.22); }
   .page > :global(*) { flex-shrink: 0; }
   /* a post: a clear pane over the lights. The glass family's recipe (base.css, ui/Button) without the live blur: a
      translucent body with a sheen in its top, a rim bright on the arc that faces the light and dim on the opposite
