@@ -113,9 +113,10 @@
   .cap.flat { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .cap.flat > .tone-base { background: var(--glass-solid); }
   .cap.wide { width: min(174px, calc(100vw - 208px)); }
-  /* outside Telegram our own pills flank it (StandaloneBar): centred, 6 px from each */
+  /* outside Telegram our own pills flank it (StandaloneBar): centred, 10 px from each; away while the bar is a search field */
   :global(:root[data-web]) .cap, :global(:root[data-web]) .cap.wide, :global(:root[data-web]) .cap.boot {
-    right: calc(18px + var(--pill)); width: calc(100vw - 36px - 2 * var(--pill)); }
+    right: calc(22px + var(--pill)); width: calc(100vw - 44px - 2 * var(--pill)); }
+  :global(:root[data-search]) .cap { opacity: 0; pointer-events: none; }
   .cap.boot { width: min(152px, calc(100vw - 230px)); }
   .cap > .tone-base { background: var(--glass-clear); }
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
