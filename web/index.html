@@ -27,9 +27,19 @@
   // the status bar's colour: this theme's ground, whichever the system's is
   var c = document.documentElement.dataset.boot === 'light' ? '#F3F5FB' : '#07080F', m = document.querySelectorAll('meta[name="theme-color"]');
   for (var i = 0; i < m.length; i++) m[i].content = c;
+  // The home-screen app on an iPhone: the launch picture covers the whole screen, the page begins under the status
+  // bar (the window is shorter by it), so 45% of the window would sit lower than the picture's 45% of the screen and
+  // the emblem would jump as the page takes over. There the emblem goes where the picture has it, in the window's own
+  // coordinates. Portrait only (screen.height is the portrait height on iOS); anywhere else 45% of the window.
+  try {
+    var d = screen.height - innerHeight;
+    if (navigator.standalone && innerHeight > 0 && d >= 0 && d < 140 && matchMedia('(orientation: portrait)').matches)
+      document.documentElement.style.setProperty('--kb-em', (screen.height * .45 - d) + 'px');
+  } catch (e) {}
 })();
 </script>
-<!-- The boot screen: an emblem on the plain ground. Its still first frame (the ground and the mark) is the home-screen
+<!-- The boot screen: an emblem on the plain ground, its centre at 45% of the height (the optical centre: the rays hang
+     below it; --kb-em, set above, is that same point of the launch picture in the home-screen app). Its still first frame (the ground and the mark) is the home-screen
      app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). The app is
      often up within half a second, so everything is said in ~0.75 s: a halo blooms behind the mark, the legend swings in
      on its circle, light rakes through the colonnade onto the ground, a wave runs along the columns (and again every
@@ -56,7 +66,7 @@ html[data-boot=light]{background:#F3F5FB}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot .em{position:absolute;left:50%;top:var(--kb-em,45%);width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
 #boot.o .em{transform:scale(.96)}
 /* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
 @media (max-width:599.98px){#boot.o+#app{animation:kb-lift .32s cubic-bezier(.2,.8,.2,1)}}
