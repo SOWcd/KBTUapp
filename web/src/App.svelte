@@ -17,7 +17,7 @@
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
-  import { hiNow, nextUp, once, opened, seen } from './lib/greet';
+  import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { nameOf } from './lib/short';
   import { sheets, type SheetKey } from './lib/state/sheets';
   import { setTeamConsent } from './lib/teamConsent';
@@ -960,6 +960,14 @@
     return lazy(pcSheet, { ok: () => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } } });
   }
 
+  // the home-screen app, offered once per phone (InstallSheet marks it shown): phones in Telegram only, never on this
+  // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
+  // (a deep link); the last of the launch's moments
+  function installHint() {
+    if (!inTelegram || onComputer || tg.startParam || !returning() || seen('kb-install')) return;
+    return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
+  }
+
   onMount(() => {
     count(launchedFrom(tg.startParam));
     const offBack = backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
@@ -1039,7 +1047,7 @@
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
       // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
       if (inTelegram) { moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); }
-      booted = true; setTimeout(() => moment(celebrate));
+      booted = true; setTimeout(() => { moment(celebrate); moment(installHint); });
     });
     const clockTimer = setInterval(() => (clock = nowTs()), 30000);
 
