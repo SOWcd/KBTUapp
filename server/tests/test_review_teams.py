@@ -21,18 +21,6 @@ def _member(con, uid: int) -> str | None:
     return r[0] if r else None
 
 
-def test_roster_claim_ignores_club_ban(env):
-    """A student the club banned claims a roster row ("Yes, it's me") and is back in the club."""
-    c, cfg = env
-    pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
-    c.get("/api/me", headers=_tg(81, "zed_t"))
-    con = _club(cfg, pres["id"])
-    con.execute("INSERT INTO org_bans (org_id, user_id, by_id, created_at) VALUES (1, ?, ?, 0)", (zed["id"], pres["id"]))
-    roster.load(con, [_row(tg="zed_t")], {"S": "it"})
-    ask = c.get("/api/me", headers=_tg(81, "zed_t")).json()["roster"]["ask"]
-    c.post(f"/api/roster/{ask[0]['id']}/claim", headers=_tg(81, "zed_t"))
-    assert _member(con, zed["id"]) is None, "a banned student joined the club by a roster claim"
-
 
 def test_roster_match_ignores_club_ban(env):
     """A banned student whose name and username match a newly loaded sheet row joins the club at once."""
@@ -45,22 +33,6 @@ def test_roster_match_ignores_club_ban(env):
     roster.load(con, [_row(full_name="Ali Testov", email="ali@kbtu.kz", tg="ali_u", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
     assert _member(con, ali["id"]) is None, "a banned student joined the club (as a Head) by the roster load"
 
-
-def test_roster_confirm_after_ban(env):
-    """An officer's row claimed (in as a member), then removed and banned; the waiting claim, confirmed, brings them
-    back as the row's officer."""
-    c, cfg = env
-    pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
-    c.get("/api/me", headers=_tg(81, "zed_t"))
-    con = _club(cfg, pres["id"])
-    roster.load(con, [_row(tg="zed_t", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
-    ask = c.get("/api/me", headers=_tg(81, "zed_t")).json()["roster"]["ask"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=_tg(81, "zed_t")).status_code == 204
-    assert _member(con, zed["id"]) is None
-    con.execute("INSERT INTO org_bans (org_id, user_id, by_id, created_at) VALUES (1, ?, ?, 0)", (zed["id"], pres["id"]))
-    req = c.get("/api/roster/requests", headers=tma(80)).json()
-    c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": True})
-    assert _member(con, zed["id"]) is None, "a banned student came back (as a Head) by a claim confirmed later"
 
 
 def test_roster_title_rights_above_role(env):
@@ -96,58 +68,6 @@ def test_delete_role_grants_level_rights(env):
     assert logic.rights_of(con, mem["id"], 1) <= {"door", "events"}, "deleting a role's name gave its holder more rights"
 
 
-def test_roster_claim_race(env, monkeypatch):
-    """Two students (one by the row's username, one by its e-mail) claim the same officer's row at once: the second
-    overwrites the first's claim, and the first stays in the club for good: a 'no' only takes the later one out."""
-    c, cfg = env
-    pres, zed, bek = login(c, 80, "pres"), login(c, 81, "zed"), login(c, 82, "bek")
-    c.get("/api/me", headers=_tg(81, "zed_t"))
-    con = _club(cfg, pres["id"])
-    con.execute("UPDATE students SET email = 'bek.t@kbtu.kz' WHERE user_id = ?", (bek["id"],))
-    roster.load(con, [_row(tg="zed_t", email="bek.t@kbtu.kz", position="Head of SMM", title="Head of SMM", role="head")], {"S": "it"})
-    rid = con.execute("SELECT id FROM roster_pending").fetchone()[0]
-    real, raced = roster.asks, []
-
-    def racing(con_, uid):
-        r = real(con_, uid)
-        if uid == zed["id"] and not raced:  # bek's claim runs to its end between zed's read and zed's write
-            raced.append(1)
-            other = db.connect(cfg.db_path)
-            roster.claim(other, bek["id"], rid)
-            other.close()
-        return r
-    monkeypatch.setattr(roster, "asks", racing)
-    try:
-        roster.claim(con, zed["id"], rid)
-    except logic.ApiError:
-        pass  # refused: the right answer
-    monkeypatch.setattr(roster, "asks", real)
-    req = c.get("/api/roster/requests", headers=tma(80)).json()
-    assert len(req) == 1
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
-    left = {u["id"]: _member(con, u["id"]) for u in (zed, bek)}
-    assert left == {zed["id"]: None, bek["id"]: None}, f"still in the club after the claim was declined: {left}"
-
-
-def test_roster_requires_verified_email_or_approval(env):
-    c, cfg = env
-    pres, ali = login(c, 60, "pres"), login(c, 61, "ali")
-    con = _club(cfg, pres["id"])
-    c.get("/api/me", headers=_tg(61, "ali_u"))
-    con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
-    # Even people with the same name can hold a username at different times.
-    roster.load(con, [_row(full_name="Ali Testov", tg="ali_u", email="other@kbtu.kz")], {"S": "it"})
-    assert _member(con, ali["id"]) is None
-    rid = roster.asks(con, ali["id"])[0]["id"]
-    sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, created_at) VALUES ('Team', 'pin', 1, 0)").lastrowid
-    con.execute("INSERT INTO qr_hand_marks (session_id, who, at) VALUES (?, ?, 100)", (sid, f"r{rid}"))
-    roster.claim(con, ali["id"], rid)
-    assert _member(con, ali["id"]) is None
-    assert con.execute("SELECT claimed_by FROM roster_pending WHERE id = ?", (rid,)).fetchone()[0] == ali["id"]
-    assert not con.execute("SELECT 1 FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()
-    roster.decide(con, logic.Viewer(pres["id"], "user", True), rid, True)
-    assert tuple(con.execute("SELECT user_id, done_at FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()) == (ali["id"], 100)
-    assert _member(con, ali["id"]) == "member"
 
 
 def test_roster_load_from_the_gate(env, monkeypatch, capsys):

@@ -201,18 +201,11 @@ def _verified(r, s) -> bool:
 
 
 def match(con, uid: int) -> list[tuple[int, bool]]:
-    """Join only rows identified by the verified university account."""
+    """Every row naming the student (their Telegram username or KBTU e-mail) joins on its own, no question asked
+    (the owner: the sheet is the truth). A row's city, year and phone fill only what's empty."""
     with tx(con):
-        s, found = _mine(con, uid)
-        got = [(r["org_id"], join(con, uid, r)) for r in found if _verified(r, s)]
-        # a row for a seat already held (the same role, or the club's President): nothing to confirm, it just goes
-        held = [r for r in found if not _verified(r, s) and _holds(con, uid, r)]
-        return got + [(r["org_id"], join(con, uid, r, trusted=False)) for r in held]
-
-
-def _holds(con, uid: int, r) -> bool:
-    m = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid)
-    return bool(m and m["role"] in (r["role"], "president"))
+        _, found = _mine(con, uid)
+        return [(r["org_id"], join(con, uid, r)) for r in found]
 
 
 def asks(con, uid: int) -> list[sqlite3.Row]:
