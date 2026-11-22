@@ -327,3 +327,6 @@ html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
 /* the home-screen app (no Telegram): iOS 26 without a translucent status bar reported a short innerHeight at launch, so
    --app-h left a black band at the bottom and the nav rode up (owner, Nov 22); here the box simply fills the window */
 :root[data-web] #app { bottom: 0; height: auto; } /* ui/Pane.svelte does the same for its pane */
+/* iOS 26 home-screen app: the window reports a height short by the status bar (WebKit bug 301108), leaving a black band
+   under the nav even with bottom: 0; only the large viewport unit spans the whole screen there */
+@media (display-mode: standalone) { :root[data-web] #app { bottom: auto; height: 100lvh; } }
