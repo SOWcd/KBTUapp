@@ -867,7 +867,9 @@
     // ponytail: the creator, and a friend recording the Android guide, only until the video guides are recorded
     // (owner, Nov 22-23); then drop this check
     if (!session.me?.founder && tg.user?.id !== 811158629) return;
-    if (!inTelegram || onComputer || tg.startParam || seen('kb-install')) return;
+    // ponytail: the creator sees it on every launch while the sheet is in review (owner, Nov 23); once it goes public,
+    // restore once per phone for everyone: drop `!session.me?.founder &&`
+    if (!inTelegram || onComputer || tg.startParam || (!session.me?.founder && seen('kb-install'))) return;
     return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
   }
 

@@ -1555,7 +1555,7 @@ const en: Dict = {
   'web.policy': 'Privacy Policy',
   'web.install': 'In Safari, tap Share → Add to Home Screen.',
   'inst.title': "KBTU App on your Home Screen",
-  'inst.text': "Opens straight from the Home Screen, full screen. Same account: sign in with Telegram.",
+  'inst.text': "A real app, not a shortcut into Telegram: it opens instantly, like any other. Same account.",
   'inst.add': "Add to Home Screen",
   'inst.later': "Not now",
   'web.verify': 'Verify your student status once in the Telegram app.',
