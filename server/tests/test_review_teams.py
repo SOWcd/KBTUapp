@@ -148,3 +148,20 @@ def test_roster_requires_verified_email_or_approval(env):
     roster.decide(con, logic.Viewer(pres["id"], "user", True), rid, True)
     assert tuple(con.execute("SELECT user_id, done_at FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()) == (ali["id"], 100)
     assert _member(con, ali["id"]) == "member"
+
+
+def test_roster_load_from_the_gate(env, monkeypatch, capsys):
+    """The prod gate passes arguments only: `roster load --gz <b64 gzip {"rows", "map"}>` loads like the two files."""
+    import base64
+    import gzip
+    import json
+    from kbtu import admin, config
+    monkeypatch.setattr(config, "load", lambda: env[1])
+    row = {"sheet": "S", "full_name": "Test Person", "tg": "someone_x", "email": None, "phone": None, "position": "member",
+           "role": "member", "title": None, "dept": None, "school": None, "course": None, "year": None, "city": None}
+    blob = base64.b64encode(gzip.compress(json.dumps({"rows": [row], "map": {"S": {"new": {"name": "Gz Club", "short": "GZ"}}}}).encode())).decode()
+    admin.main(["roster", "load", "--gz", blob])
+    out = capsys.readouterr().out
+    assert "rows 1, new 1, clubs made 1" in out
+    admin.main(["roster", "load", "--gz", blob])  # again: nothing more
+    assert "new 0" in capsys.readouterr().out
