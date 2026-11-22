@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "KBTU",
-  "short_name": "KBTU",
+  "name": "KBTU App",
+  "short_name": "KBTU App",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
