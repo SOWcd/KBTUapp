@@ -121,16 +121,8 @@ li.on::before { background: var(--accent); color: #fff; }
 
   <div class="demo" data-s="1" data-for="ios android" aria-hidden="true">
     <div class="scene s1">
-      <!-- iOS 26: back, the address, the ··· with Share behind it -->
-      <div class="pop" data-for="ios26"><svg class="g" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7l4-4 4 4M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg><span data-t="share"></span></div>
-      <div class="bar" data-for="ios26">
-        <span class="rb"><svg class="g" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
-        <span class="url">kbtu.sow.kz</span>
-        <span class="rb hit"><svg class="g" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="2.6"/></svg></span>
-      </div>
-      <!-- iOS before 26: the address, then the toolbar with Share in its middle -->
-      <div class="bar" data-for="ios18"><span class="url">kbtu.sow.kz</span></div>
-      <div class="tools" data-for="ios18">
+      <!-- iOS: the bottom toolbar with Share in its middle (Safari 26 Top layout, and Safari before 26) -->
+      <div class="tools" data-for="ios">
         <span><svg class="g" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
         <span><svg class="g" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></span>
         <span class="hit"><svg class="g" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7l4-4 4 4M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></span>
@@ -181,7 +173,7 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.desk': 'Открой на телефоне', 'sub.desk': 'Наведи камеру на код: дальше страница покажет шаги для твоего телефона.',
       'h.done': 'KBTU App установлен', 'sub.done': 'Он уже на главном экране.',
       share: 'Поделиться',
-      's1.ios26': 'Нажми ··· и «Поделиться»', 's1.ios18': 'Нажми «Поделиться»', 's1.android': 'Нажми ⋮ вверху справа',
+      's1.ios': 'Нажми «Поделиться»', 's1.android': 'Нажми ⋮ вверху справа',
       's2.ios': 'Пролистай вниз: «На экран „Домой“»', 's2.android': 'Выбери «Добавить на главный экран»',
       's3.ios': 'Нажми «Добавить»', 's3.android': 'Нажми «Установить»',
       'row.ios': 'На экран «Домой»', 'row.android': 'Добавить на главный экран', 'ok.ios': 'Добавить', 'ok.android': 'Установить',
@@ -196,7 +188,7 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.desk': 'Телефоннан аш', 'sub.desk': 'Камераны кодқа бағытта: бет телефоныңа сай қадамдарды көрсетеді.',
       'h.done': 'KBTU App орнатылған', 'sub.done': 'Ол басты экранда тұр.',
       share: 'Бөлісу',
-      's1.ios26': '··· басып, «Бөлісу» таңда', 's1.ios18': '«Бөлісу» түймесін бас', 's1.android': 'Жоғарғы оң жақтағы ⋮ бас',
+      's1.ios': '«Бөлісу» түймесін бас', 's1.android': 'Жоғарғы оң жақтағы ⋮ бас',
       's2.ios': 'Төмен айналдыр: «Басты экранға қосу»', 's2.android': '«Басты экранға қосу» таңда',
       's3.ios': '«Қосу» түймесін бас', 's3.android': '«Орнату» түймесін бас',
       'row.ios': 'Басты экранға қосу', 'row.android': 'Басты экранға қосу', 'ok.ios': 'Қосу', 'ok.android': 'Орнату',
@@ -211,7 +203,7 @@ li.on::before { background: var(--accent); color: #fff; }
       'h.desk': 'Open on your phone', 'sub.desk': 'Point the camera at the code: the page will show the steps for your phone.',
       'h.done': 'KBTU App is installed', 'sub.done': 'It is already on your home screen.',
       share: 'Share',
-      's1.ios26': 'Tap ··· and then Share', 's1.ios18': 'Tap Share', 's1.android': 'Tap ⋮ at the top right',
+      's1.ios': 'Tap Share', 's1.android': 'Tap ⋮ at the top right',
       's2.ios': 'Scroll down: Add to Home Screen', 's2.android': 'Choose Add to Home screen',
       's3.ios': 'Tap Add', 's3.android': 'Tap Install',
       'row.ios': 'Add to Home Screen', 'row.android': 'Add to Home screen', 'ok.ios': 'Add', 'ok.android': 'Install',
@@ -230,7 +222,7 @@ li.on::before { background: var(--accent); color: #fff; }
   var android = /Android/.test(ua);
   var v = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'done'
     : ios ? (safari ? 'ios' : 'inapp') : android ? (/; wv\)/.test(ua) ? 'webview' : 'android') : 'desk';
-  var sub = v === 'ios' ? (+(/Version\/(\d+)/.exec(ua) || [])[1] >= 26 ? 'ios26' : 'ios18') : v;
+  var sub = v;
   // opened as the installed app (a home-screen icon saved from this page): straight into the app, not "installed"
   if (v === 'done') location.replace('/');
 
