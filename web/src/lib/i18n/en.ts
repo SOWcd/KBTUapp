@@ -1118,6 +1118,7 @@ const en: Dict = {
   'ai.avg': "~{s} s",
   'ai.showOrig': "Show original",
   'event.about': "About",
+  'event.links': "Links and documents",
   'event.free': "Free",
   'event.placeTba': "Place to be confirmed",
   'event.online': "Online",
