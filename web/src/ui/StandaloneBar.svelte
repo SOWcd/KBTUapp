@@ -1,6 +1,7 @@
 <script lang="ts">
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import Search from '@lucide/svelte/icons/search';
   import Share from '@lucide/svelte/icons/share';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
@@ -8,7 +9,8 @@
   import LogOut from '@lucide/svelte/icons/log-out';
   import { api } from '../lib/api';
   import { t } from '../lib/i18n/index.svelte';
-  import { close, overlays, say } from '../lib/state/ui.svelte';
+  import { tick } from 'svelte';
+  import { close, goTab, overlays, say, ui } from '../lib/state/ui.svelte';
   import { backButton, openTelegramLink, telegramAppLink } from '../lib/tg';
   import { copyText } from './copy';
   import { menu } from './menu';
@@ -38,6 +40,19 @@
     }
   }
 
+  // no Back: the left pill opens the tab's pull-down search (Profile has none: the Afisha's), so neither side is ever empty
+  async function search() {
+    if (ui.tab === 'profile') { goTab('afisha'); await tick(); }
+    const field = [...document.querySelectorAll<HTMLElement>('.pull')].find((el) => {
+      const tab = el.closest<HTMLElement>('.tab');
+      return !tab || getComputedStyle(tab).contentVisibility !== 'hidden'; // App hides the other tabs this way
+    });
+    if (!field) return;
+    field.inert = false; // shut, the field is inert; it fades in with the scroll below
+    field.querySelector('input')?.focus({ preventScroll: true }); // first, inside the tap, or iOS shows no keyboard
+    field.closest('.scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function options(e: MouseEvent) {
     if (expanded) { close(menuId); return; }
     const url = telegramAppLink(start);
@@ -52,9 +67,11 @@
 </script>
 
 <header class="bar">
-  {#if back}
-    <button class="glass glass-pill back" type="button" aria-label={t('web.back')} onclick={backButton.click}><ChevronLeft size={20} /><span>{t('web.back')}</span></button>
-  {/if}
+  <!-- always there (owner, Nov 22): only its content swaps, Search <-> Back, crossfading like Telegram's Close <-> Back -->
+  <button class="glass glass-pill left" class:back type="button" aria-label={back ? t('web.back') : t('web.search')} onclick={() => (back ? backButton.click() : void search())}>
+    <span class="face" aria-hidden={back}><Search size={18} /><span>{t('web.search')}</span></span>
+    <span class="face" aria-hidden={!back}><ChevronLeft size={20} /><span>{t('web.back')}</span></span>
+  </button>
   <button class="glass glass-pill more" type="button" aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options}><Ellipsis size={20} /></button>
 </header>
 
@@ -67,7 +84,12 @@
   .bar { height: var(--tap); }
   button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
     padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); pointer-events: auto; }
-  .back { padding-inline: 6px 12px; }
-  .more { margin-inline-start: auto; }
+  /* both faces share one cell, so the pill keeps one width and never jumps */
+  .left { display: grid; padding-inline: 8px 12px; }
+  .face { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+    transition: opacity .2s ease, transform .25s var(--ease); }
+  .face:last-child, .back .face:first-child { opacity: 0; transform: scale(.8); }
+  .back .face:last-child { opacity: 1; transform: none; gap: 2px; }
+  @media (prefers-reduced-motion: reduce) { .face { transition: none; } }
   button:active { transform: scale(.94); }
 </style>

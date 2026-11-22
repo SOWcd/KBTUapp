@@ -1545,6 +1545,7 @@ const en: Dict = {
   'web.install': 'In Safari, tap Share → Add to Home Screen.',
   'web.verify': 'Verify your student status once in the Telegram app.',
   'web.back': 'Back',
+  'web.search': 'Search',
   'web.menu': 'Menu',
   'web.share': 'Share this screen',
   'web.reload': 'Reload',
