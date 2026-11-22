@@ -59,6 +59,7 @@
     script.dataset.size = 'large';
     script.dataset.onauth = 'kbTelegramLogin(user)';
     script.dataset.requestAccess = 'write';
+    script.dataset.lang = i18n.lang === 'en' ? 'en' : 'ru'; // the widget has no Kazakh: Russian reads closer than English
     script.onerror = () => { widgetFailed = true; };
     window.kbTelegramLogin = (user) => void login(user);
     widget.append(script);
@@ -85,7 +86,7 @@
       {/if}
       {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
       {#if loginFailed}<p class="t-callout" role="alert">{t('web.signInFailed')}</p>{/if}
-      <p class="t-foot">{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('login.consentLink')}</a></p>
+      <p class="t-foot">{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
       {#if onIos && !installed}<p class="t-foot">{t('web.install')}</p>{/if}
       {#if onComputer}<a class="t-foot" href="/show">{t('tgo.show')}</a>{/if}
     {/if}
@@ -98,7 +99,7 @@
   .mark { width: 76px; height: 76px; flex: none; box-shadow: none; }
   p { max-width: 30ch; }
   .widget { min-height: 40px; max-width: 100%; margin-block: var(--s-2); }
-  .widget :global(iframe) { max-width: 100%; }
+  .widget :global(iframe) { max-width: 100%; color-scheme: light; } /* else Chromium paints white corners behind the button in dark */
   .spinner { display: flex; color: var(--text-2); animation: turn 900ms linear infinite; }
   @keyframes turn { to { transform: rotate(1turn); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

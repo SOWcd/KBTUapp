@@ -1541,6 +1541,7 @@ const en: Dict = {
   'web.loading': 'Connecting',
   'web.signInFailed': 'Couldn’t sign in. Try again.',
   'web.cookie': 'By signing in, you agree to a cookie that keeps you signed in.',
+  'web.policy': 'Privacy Policy',
   'web.install': 'In Safari, tap Share → Add to Home Screen.',
   'web.verify': 'Verify your student status once in the Telegram app.',
   'web.back': 'Back',
