@@ -312,7 +312,7 @@ li.on::before { background: var(--accent); color: #fff; }
     at = n;
     scenes.forEach(function (sc, i) { sc.classList.toggle('on', i === n - 1); });
     steps.forEach(function (li, i) { li.classList.toggle('on', i === n - 1); });
-    clearTimeout(timer); timer = setTimeout(function () { show(at % steps.length + 1); }, 3400);
+    clearTimeout(timer); timer = setTimeout(function () { show(at % steps.length + 1); }, 2000);  // owner: 3.4 s a step felt slow
   }
   steps.forEach(function (li, i) { li.addEventListener('click', function () { show(i + 1); }); });
   if (v === 'ios' || v === 'android') show(1);
