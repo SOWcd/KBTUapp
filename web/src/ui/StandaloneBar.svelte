@@ -66,7 +66,7 @@
      the bar keeps a full tap height so the hit area stays 44 px */
   .bar { height: var(--tap); }
   button { position: relative; display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; min-width: 44px;
-    padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 15px/1 var(--font-text); pointer-events: auto; }
+    padding-inline: 10px; border-radius: var(--r-full); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); pointer-events: auto; }
   button::after { content: ""; position: absolute; inset: -7px -4px; } /* 44 px to the finger */
   .back { padding-inline: 6px 12px; }
   .more { margin-inline-start: auto; }
