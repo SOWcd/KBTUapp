@@ -1,12 +1,12 @@
 import { expect, it, vi } from 'vitest';
+import { loadMe, saveSwitch, session } from './session.svelte';
 
-const { me, updateMe } = vi.hoisted(() => ({ me: vi.fn(), updateMe: vi.fn() }));
+const { me, updateMe, tg } = vi.hoisted(() => ({ me: vi.fn(), updateMe: vi.fn(), tg: { initData: '', user: { id: 17 } as { id: number } | null } }));
 vi.mock('../api', () => ({ api: { me, updateMe }, ApiErr: class extends Error {} }));
-vi.mock('../tg', () => ({ tg: { initData: '', user: { id: 17 } } }));
+vi.mock('../tg', () => ({ tg }));
 vi.mock('./cache', () => ({ clearCache: vi.fn() }));
 
 it('loads the personal log for the verified account and clears it on revocation', async () => {
-  const { loadMe, saveSwitch, session } = await import('./session.svelte');
   const profile = { id: 7, tg: { id: 17 }, settings: { nDoor: true } };
   const account = { ...profile, reports: { consent: true } };
   const entry = { event: 1, org: 2, club: 'Club', title: 'Event', date: 0, status: 'present', comment: 'Set up' };
@@ -36,4 +36,19 @@ it('loads the personal log for the verified account and clears it on revocation'
   await loadMe(true, true);
   expect(session.revoked).toBe(true);
   expect(session.reportLog).toBeNull();
+});
+
+it('uses the browser session response to verify the account and keep the log out of the profile', async () => {
+  vi.resetModules();
+  tg.user = null;
+  me.mockClear();
+  const { loadMe, session } = await import('./session.svelte');
+  const profile = { id: 7, tg: { id: 17 }, reports: { consent: true }, reportLog: [] };
+
+  await loadMe(false, true, profile as unknown as Awaited<ReturnType<typeof import('../api').api.me>>);
+  expect(me).not.toHaveBeenCalled();
+  expect(session.verified).toBe(true);
+  expect(session.reportLog).toEqual({ owner: 7, entries: [] });
+  expect(session.me).not.toHaveProperty('reportLog');
+  tg.user = { id: 17 };
 });

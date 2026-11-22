@@ -622,7 +622,7 @@ def main(args: list[str]) -> None:
         a, b = _user(con, args[1]), _user(con, args[2])
         why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
                else "the target is banned" if b["banned_at"] else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
-               if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads")  # opening the app is no data
+               if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads", "web_sessions")
                if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
         if why:
             sys.exit(f"refused: {why}")
@@ -979,6 +979,7 @@ def main(args: list[str]) -> None:
     elif cmd == "chatsync":
         _chatsync(con, cfg, args[1:])
     elif cmd == "redelete":
+        con.execute("DELETE FROM web_sessions")  # a restored copy must not bring signed-out sessions back
         n, total = replay_deletions(con)
         print(f"{n} deleted again ({total} in deletions.log)")
     else:

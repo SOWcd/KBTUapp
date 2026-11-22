@@ -7,6 +7,7 @@ import re
 import time
 
 import pytest
+from fastapi.testclient import TestClient
 
 from kbtu import bot, logic, receipt, texts
 from kbtu.logic import organizing, seats
@@ -16,6 +17,7 @@ from test_event_teams import _event, _go
 from test_paid_teams import _rid
 from test_review_seats import _shot
 from test_team_guests import PAID, _club, _uid
+from test_web_auth import ORIGIN, WRITE, sign_in, widget
 
 
 @pytest.fixture
@@ -279,6 +281,19 @@ def test_ask_needs_my_own_username_and_the_same_checks(paid):
     assert _ask(c, eid, a, 11).status_code == 403
     assert _ask(c, eid, _uid(con, 12)).status_code == 404  # no seat
     assert _asks(con) == []
+
+
+def test_browser_ask_does_not_use_cached_organizer_username(paid):
+    c, con, eid, _ = paid
+    _seat(c, con, eid, 10)
+    attendee = _uid(con, 10)
+    browser = TestClient(c.app, base_url=ORIGIN)
+    assert sign_in(browser, widget(uid=20, username="pres_k")).status_code == 204
+    assert con.execute("SELECT tg_username FROM users WHERE tg_id = 20").fetchone()[0] == "pres_k"
+    response = browser.post(f"/api/events/{eid}/people/{attendee}/ask", headers=WRITE)
+    assert response.status_code == 400 and response.json()["message"] == "own_username"
+    assert _asks(con) == []
+    assert _ask(c, eid, attendee).json() == {"asked": True}
 
 
 def test_asks_count_toward_the_forty(paid):

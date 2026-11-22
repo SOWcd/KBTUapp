@@ -19,7 +19,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, inTelegram, openLink } from '../../lib/tg';
   import type { MenuItem } from '../../ui/menu';
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -90,6 +90,7 @@
       const { username, asked } = await api.attendeeContact(id, p.id);
       if (username) { openLink(`https://t.me/${encodeURIComponent(username)}`); return; }
       if (asked) { say(t('att.asked'), 'waving_hand_3d_default'); return; }
+      if (!inTelegram) { say(t('att.askInTelegram'), 'warning_3d'); return; }
       if (!(await sheets.ask({ title: t('att.askTitle'), text: t('att.askText'), ok: t('att.askOk'), cancel: t('common.cancel') }))) return;
       await api.askToWrite(id, p.id);
       haptic.ok(); say(t('att.asked'), 'waving_hand_3d_default');

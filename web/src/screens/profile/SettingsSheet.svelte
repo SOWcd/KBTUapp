@@ -6,6 +6,7 @@
   // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
   import { copyText } from '../../ui/copy';
   import Lock from '@lucide/svelte/icons/lock';
+  import Settings from '@lucide/svelte/icons/settings';
   import Bell from '@lucide/svelte/icons/bell';
   import Info from '@lucide/svelte/icons/info';
   import Phone from '@lucide/svelte/icons/phone';
@@ -33,6 +34,7 @@
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
   import Group from '../../ui/Group.svelte';
+  import SettingsList from './SettingsList.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
@@ -42,9 +44,9 @@
   import { setKriGoogle } from '../../lib/kriGoogle';
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
+  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
-  const TITLE: Record<Kind, [Key, typeof Lock]> = { me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
+  const TITLE: Record<Kind, [Key, typeof Lock]> = { app: ['me.settings', Settings], me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
     sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
   const me = $derived(session.me);
@@ -228,7 +230,9 @@
 {#snippet once()}<div class="once"><Notice tone="danger" title={t('pd.onceTitle')} text={t('pd.onceBig')} /></div>{/snippet}
 
 <Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} bare={kind === 'donate'}>
-  {#if kind === 'notify' && me}
+  {#if kind === 'app'}
+    <SettingsList />
+  {:else if kind === 'notify' && me}
     {#each notificationSettings as [k, title, hint], i (k)}
       <div class={{ sw: i > 0 }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}

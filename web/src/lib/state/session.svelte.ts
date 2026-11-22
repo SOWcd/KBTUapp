@@ -2,9 +2,9 @@
 // which opens the KBTU sign-in sheet and runs the action by itself after sign-in (SPEC §2).
 import { api, ApiErr, type Me, type ReportLogEntry, type Settings } from '../api';
 import { CONSENT_VERSION } from '../legal';
-import { tg } from '../tg';
+import { inTelegram, tg } from '../tg';
 import { clearCache } from './cache';
-import { ACCOUNT_KEY, accountRequest, cancelAccountRequests, recovery } from './recovery';
+import { accountRequest, cancelAccountRequests, recovery } from './recovery';
 
 // banned: the platform ban, why and whom to write; the app shows only that; policy: the version in force
 // (the server's word: its forum part counts only with the forum on)
@@ -53,12 +53,12 @@ export function saveSwitch(key: SwitchKey, on: boolean): Promise<boolean> {
 }
 
 const authAt = Number(new URLSearchParams(tg.initData).get('auth_date')) || 0;
-export function forgetRecovery(auth?: number): void {
-  recovery.invalidate(tg.user?.id ?? session.me?.tg.id, auth);
+export function forgetRecovery(tgId = tg.user?.id ?? session.me?.tg.id, auth?: number): void {
+  recovery.invalidate(tgId, auth);
   session.verified = false;
 }
 function revoke(auth?: number) {
-  forgetRecovery(auth);
+  forgetRecovery(undefined, auth);
   cancelAccountRequests(true);
   session.me = null;
   session.reportLog = null;
@@ -74,25 +74,26 @@ function banned(d: Record<string, unknown>) {
 if (typeof window !== 'undefined') {
   addEventListener('kb:banned', (e) => banned((e as CustomEvent).detail ?? {}));
   addEventListener('kb:signedOut', () => revoke());
+  addEventListener('kb:web-session-ended', () => { if (!inTelegram && session.me) revoke(); });
   addEventListener('kb:initExpired', () => { if (tg.initData) revoke(authAt); });
   addEventListener('storage', (e: StorageEvent) => {
-    if ((e.key === ACCOUNT_KEY || e.key === null) && recovery.lost()) revoke();
+    if ((e.key === recovery.accountKey || e.key === null) && recovery.lost()) revoke();
   });
 }
 
 /** quiet: a background refresh; a failure leaves the screens as they are (no error page while coming back on a poor network). */
-export async function loadMe(quiet = false, withReportLog = false): Promise<void> {
+export async function loadMe(quiet = false, withReportLog = false, initial?: Awaited<ReturnType<typeof api.me>>): Promise<void> {
   if (session.revoked) return;
   const request = accountRequest(), previous = recovery.scope();
   const settingsAtStart = session.me?.settings;
   const reportRevision = session.reportConsentRevision;
   try {
     // The personal log lives in memory only. App saves session.me in its startup cache.
-    const { reportLog, ...me } = await api.me(withReportLog);
+    const { reportLog, ...me } = initial ?? await api.me(withReportLog);
     if (request.aborted) return;
     if (session.revoked || recovery.lost()) { revoke(); return; }
     if (tg.user?.id !== undefined && tg.user.id !== me.tg.id) { revoke(); return; }
-    if (me.deleteAt) forgetRecovery();
+    if (me.deleteAt) forgetRecovery(me.tg.id);
     else if (!recovery.superseded()) {
       if (!recovery.verify(me.tg.id, me.id, !!me.student, me.no, authAt)) { revoke(); return; }
       if (previous && previous !== recovery.scope()) { revoke(); return; }
@@ -134,11 +135,10 @@ export const kriCorner = (): boolean => session.board && !!session.me?.student;
 export function asStudent(action: () => void, again?: string, lock = false): void {
   if (session.revoked || session.banned) return;
   if (session.me?.student) return action();
-  const owner = recovery.scope();
-  recovery.write(owner, AGAIN, JSON.stringify(again ?? null));
+  if (inTelegram) recovery.write(recovery.scope(), AGAIN, JSON.stringify(again ?? null));
   loginHook?.(() => {
     if (session.revoked || session.banned) return;
-    takeAgain();
+    if (inTelegram) takeAgain();
     action();
   }, lock);
 }

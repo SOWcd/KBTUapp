@@ -87,7 +87,7 @@ STUDENT_ID = re.compile(r"\d{2}(?:[A-Z]\d{5,7}|[A-Z]{2}\d{4,7})", re.ASCII)  # a
 
 
 class ApiError(Exception):
-    STATUS = {"need_student": 401, "forbidden": 403, "not_found": 404, "full": 409, "closed": 409,
+    STATUS = {"unauthorized": 401, "need_student": 401, "forbidden": 403, "not_found": 404, "full": 409, "closed": 409,
               "conflict": 409, "guest_list": 403, "rate_limited": 429, "bad_input": 400, "unavailable": 503}
 
     def __init__(self, code: str, message: str = "", extra: dict | None = None):

@@ -37,6 +37,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
+from .logic import web_auth
 
 log = logging.getLogger("kbtu.app")
 # httpx logs every request URL at INFO, and Telegram's URL carries the bot token
@@ -83,6 +84,16 @@ class _Route(APIRoute):
         if isinstance(response_model, DefaultPlaceholder) and get_typed_return_annotation(endpoint) is None and status_code != 204:
             response_model = Any
         super().__init__(path, endpoint, response_model=response_model, status_code=status_code, **kw)
+
+    def get_route_handler(self):
+        handle = super().get_route_handler()
+
+        async def route(request: Request) -> Response:
+            response = await handle(request)
+            _web_response(request, response)
+            return response
+
+        return route
 
 
 # ------------------------------------------------------------ who is calling
@@ -160,12 +171,25 @@ def _lent_role(con, request: Request, org: int) -> dict:
 
 def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     cfg = request.app.state.cfg
-    head = request.headers.get("authorization", "")
-    tg = auth.check_init_data(head[4:], cfg.bot_token) if head.startswith("tma ") else None
-    if not tg:
-        raise ApiError("forbidden", "init_data")
-    request.state.tg = tg
-    v = _upsert(con, tg, cfg.admins)
+    head = request.headers.get("authorization")
+    if head is not None:
+        tg = auth.check_init_data(head[4:], cfg.bot_token) if head.startswith("tma ") else None
+        if not tg:
+            raise ApiError("forbidden", "init_data")
+        request.state.tg = tg
+        v = _upsert(con, tg, cfg.admins)
+    else:
+        token = request.cookies.get(web_auth.COOKIE, "")
+        if not token and request.headers.get("x-kbtu") != "1":
+            raise ApiError("forbidden", "init_data")
+        _web_csrf(request, cfg.domain)
+        u = web_auth.lookup(con, token, cfg.admins)
+        request.state.tg = {"id": u["tg_id"], "username": u["tg_username"]}
+        request.state.web_token = token
+        request.state.renew_web_cookie = web_auth.touch(con, token, u, cfg.admins, SEEN_EVERY)
+        if u["tg_id"] in cfg.admins and u["role"] != "admin":
+            u = web_auth.lookup(con, token, cfg.admins)
+        v = _viewer_user(con, u)
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
         caller["uid"] = v.id  # forum.may_touch_ask reads whether I may see a subject's listings (subjects.may_read)
@@ -251,6 +275,10 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
                     logic.visit(con, u["id"], t)
             db.maybe(con, fresh_seen)
             u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
+    return _viewer_user(con, u)
+
+
+def _viewer_user(con, u) -> Viewer:
     if u["banned_at"]:
         raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
     # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (Microsoft only)
@@ -258,6 +286,36 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
 
 
 Me = Annotated[Viewer, Depends(viewer)]
+
+
+def _web_csrf(request: Request, domain: str) -> None:
+    if request.headers.get("x-kbtu") != "1":
+        raise ApiError("forbidden", "csrf")
+    # Some reads update state too. The custom header excludes cross-site navigations and subresources.
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    origin = request.headers.get("origin")
+    # Loopback HTTP is accepted only when explicitly configured for local QA.
+    local = re.fullmatch(r"(?:localhost|127\.0\.0\.1)(?::[0-9]+)?", domain)
+    if origin != f"https://{domain}" and not (local and origin == f"http://{domain}"):
+        raise ApiError("forbidden", "csrf")
+
+
+def _web_cookie(response: Response, token: str) -> None:
+    response.set_cookie(web_auth.COOKIE, token, max_age=web_auth.IDLE if token else 0,
+                        secure=True, httponly=True, samesite="lax", path="/")
+
+
+def _web_response(request: Request, response: Response) -> None:
+    if token := getattr(request.state, "web_token", ""):
+        response.headers["Cache-Control"] = "private, no-store"
+        if request.state.renew_web_cookie:
+            _web_cookie(response, token)
+
+
+def _mini_app_only(request: Request) -> None:
+    if getattr(request.state, "web_token", ""):
+        raise ApiError("forbidden", "telegram")
 
 
 def forum_viewer(request: Request, v: Me, con: Con) -> Viewer:
@@ -494,8 +552,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ errors
 
     @app.exception_handler(ApiError)
-    async def api_error(_: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse({**exc.extra, "error": exc.code, "message": exc.message}, status_code=exc.status)
+    async def api_error(request: Request, exc: ApiError) -> JSONResponse:
+        response = JSONResponse({**exc.extra, "error": exc.code, "message": exc.message}, status_code=exc.status)
+        _web_response(request, response)
+        if exc.message in ("web_login", "web_session"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def bad_request(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -521,6 +583,40 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         log.warning("FORUM_CHANNEL is set without FORUM_GROUP: deleted posts' copies in its discussion group stay")
     app.state.policy = policy
 
+    @app.post("/api/web/login", status_code=204)
+    def web_login(request: Request, con: Con, body: dict = Body(...)):
+        _web_csrf(request, cfg.domain)
+        t = logic.now()
+        tg = auth.check_widget(body, cfg.bot_token, t)
+        if tg is None:
+            raise ApiError("forbidden", "web_login")
+        with db.tx(con):
+            web_auth.consume(con, tg, t)
+            v = _upsert(con, tg, cfg.admins)
+            logic.guests.claim_username(con, v.id)  # only while Telegram's proof of this username is fresh
+            token = web_auth.issue(con, v.id, request.cookies.get(web_auth.COOKIE, ""), t)
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, token)
+        return response
+
+    @app.post("/api/web/logout", status_code=204)
+    def web_logout(request: Request, con: Con):
+        _web_csrf(request, cfg.domain)
+        web_auth.revoke(con, request.cookies.get(web_auth.COOKIE, ""))
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, "")
+        return response
+
+    @app.post("/api/web/logout-all", status_code=204)
+    def web_logout_all(request: Request, con: Con, v: Me):
+        _web_csrf(request, cfg.domain)
+        web_auth.revoke_all(con, v.id)
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        if getattr(request.state, "web_token", ""):
+            request.state.renew_web_cookie = False
+            _web_cookie(response, "")
+        return response
+
     def kri_google(con, v: Viewer) -> bool:
         """Google may answer this student's assistant first, once they say yes: its key, ASSIST_LEAD unset or google
         (off: the operator's kill switch), the assistant open to them, the policy that names Google in force (ai_on) and
@@ -528,8 +624,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return bool(cfg.gemini_key) and cfg.assist_lead in ("", "google") and ai_on and bool(v.student) \
             and board_on(app.state.cfg, v) and current_ai_policy(con, app.state.policy, v.id)
 
-    def me_payload(con: Con, v: Me, *, report_log: bool = False):
-        logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
+    def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
+        if not getattr(request.state, "web_token", ""):
+            logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
         if cfg.reports:
             with db.tx(con, write=False):
@@ -552,10 +649,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
     @app.get("/api/me")
-    def get_me(con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
+    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
-        return me_payload(con, v, report_log=report_log)
+        return me_payload(request, con, v, report_log=report_log)
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -571,12 +668,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
-    def consent(con: Con, v: Me, body: dict = Body(...)):
+    def consent(request: Request, con: Con, v: Me, body: dict = Body(...)):
         logic.consent(con, v, body.get("version"), policy_for(con, v, policy))
-        return me_payload(con, v)  # the app replaces its Me, while the personal report log lives separately
+        return me_payload(request, con, v)  # the app replaces its Me, while the personal report log lives separately
 
     @app.post("/api/me/dm")
-    def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
+    def dm_on(request: Request, con: Con, v: Me, body: dict | None = Body(None)):
+        _mini_app_only(request)
         return logic.dm_on(con, v, (body or {}).get("event"))
 
     @app.post("/api/donate/stars")
@@ -619,11 +717,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.admin_set_role(con, v, oid, body)
 
     @app.post("/api/kbtu/manual")
-    def kbtu_manual(con: Con, v: Me, body: dict = Body(...)):
+    def kbtu_manual(request: Request, con: Con, v: Me, body: dict = Body(...)):
         """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
         empty), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
         no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
         to the Microsoft one; held by a Microsoft-confirmed one, it's refused and sorted without admins (id_clash)."""
+        _mini_app_only(request)
         consent = str(body.get("consentVersion") or "")
         sid = str(body.get("studentId") or "").strip().upper()
         course = logic.course_of(sid)  # the ID says the year (else a typed "1" takes free first-year seats); None: a year ahead
@@ -776,8 +875,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return qr.mark(con, cfg.token_key, v, str(body.get("p") or ""))
 
     @app.post("/api/ms/start")
-    def ms_start(v: Me):
+    def ms_start(request: Request, v: Me):
         """The Microsoft sign-in link for me (msauth.py); the Mini App opens it outside Telegram"""
+        _mini_app_only(request)
         return {"url": msauth.link(cfg.token_key, v.id, cfg.domain)}
 
     @app.get("/api/ms/verifier")
@@ -819,9 +919,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.ms_release(con, str(body.get("claim") or ""))
 
     @app.post("/api/ms/claim")
-    def ms_claim(con: Con, v: Me, body: dict = Body(...)):
+    def ms_claim(request: Request, con: Con, v: Me, body: dict = Body(...)):
         """The app's ms_<secret> start link from /ms.html: the sign-in lands only on the Telegram that asked for it. With
         no secret (the app, back in sight): mine that the browser released"""
+        _mini_app_only(request)
         logic.ms_claim(con, v, str(body.get("claim") or ""))
         return {"ok": True}
 
@@ -1062,8 +1163,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/people/{uid}/ask")
     def attendee_ask(eid: int, uid: int, request: Request, con: Con, v: Me):
-        # no username: the bot asks them to write to the organizer, on his username as this signed session says
-        return logic.attendee_ask(con, v, eid, uid, request.state.tg.get("username"))
+        # The bot's button needs the organizer's username from their signed Mini App data.
+        nick = None if getattr(request.state, "web_token", "") else request.state.tg.get("username")
+        return logic.attendee_ask(con, v, eid, uid, nick)
 
     @app.delete("/api/events/{eid}/people/{uid}", status_code=204)
     def remove_person(eid: int, uid: int, con: Con, v: Me):

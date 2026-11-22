@@ -2162,4 +2162,21 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE club_report_marks ADD COLUMN comment_at INTEGER;
     ALTER TABLE club_report_marks ADD COLUMN comment_edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE club_report_marks ADD COLUMN comment_edited_at INTEGER;"""),
+    (216, """CREATE TABLE IF NOT EXISTS web_sessions (
+      digest BLOB PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS web_sessions_user ON web_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS web_sessions_last_used ON web_sessions(last_used_at);
+    CREATE TABLE IF NOT EXISTS web_login_used (
+      digest BLOB PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS web_login_used_expires ON web_login_used(expires_at);
+    CREATE TRIGGER IF NOT EXISTS web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
+      WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN
+        DELETE FROM web_sessions WHERE user_id = old.id;
+      END;"""),
 ]

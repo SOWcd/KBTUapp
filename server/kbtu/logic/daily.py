@@ -229,6 +229,7 @@ def stats_day(con) -> None:
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     notifications.forget(con)
+    web_auth.forget(con, core.now())
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
     con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words
@@ -343,7 +344,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatlist, chatmod, chatsync, mapflaws, stats  # noqa: E402
+from . import appeals, assistant, chatlist, chatmod, chatsync, mapflaws, stats, web_auth  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

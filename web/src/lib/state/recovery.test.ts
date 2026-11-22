@@ -16,7 +16,7 @@ function device() {
   };
   return {
     storage, values, time: (ms: number) => { at += ms; },
-    open: () => recoveryStore(() => storage, () => at),
+    open: (web = false) => recoveryStore(() => storage, () => at, web),
   };
 }
 const nav: Navigation = { tab: 'club', club: 3, scroll: { top: 480, item: 'club-3', offset: 24 }, sheet: { kind: 'event', id: 7 } };
@@ -147,6 +147,22 @@ describe('cold Mini App recovery', () => {
     expect(waiting.lost()).toBe(true);
     waiting.invalidate(100);
     expect(readNavigation(next)).toEqual(home);
+  });
+
+  it('restores a browser checkpoint without disturbing the Mini App when signing out', () => {
+    const d = device(), mini = d.open(), browser = d.open(true);
+    mini.verify(100, 1);
+    save(mini, nav);
+    browser.verify(200, 2);
+    save(browser, home);
+
+    const reopened = d.open(true);
+    expect(reopened.verify(200, 2)).toBe(true);
+    expect(readNavigation(reopened)).toEqual(home);
+    browser.invalidate(200);
+    expect(reopened.lost()).toBe(true);
+    expect(readNavigation(reopened)).toBeNull();
+    expect(readNavigation(mini)).toEqual(nav);
   });
 
   it('does not let an older expired Telegram credential purge a newer verified copy', () => {

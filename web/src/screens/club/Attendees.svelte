@@ -5,6 +5,7 @@
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
   // Someone the organizers removed (⋯) who had paid waits folded at the end, their receipt there for the refund.
   // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
+  import { onMount } from 'svelte';
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -12,7 +13,7 @@
   import { menu } from '../../ui/menu';
   import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, inTelegram, openLink } from '../../lib/tg';
   import { eventById, studioChanged } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
@@ -36,7 +37,7 @@
 
   let list = $state<Attendee[] | null>(null);
   const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
-  $effect(() => { void load(); });
+  onMount(() => { void load(); });
   let q = $state('');
   const found = $derived((list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick])));
   // removed by the organizers after paying (server attendees): folded at the end, their receipt there for the refund;
@@ -104,6 +105,7 @@
       const { username, asked } = await api.attendeeContact(id, a.person.id);
       if (username) { openLink(`https://t.me/${encodeURIComponent(username)}`); return; }
       if (asked) { say(t('att.asked'), 'waving_hand_3d_default'); return; }
+      if (!inTelegram) { say(t('att.askInTelegram'), 'warning_3d'); return; }
       // no @username: the bot asks them to write to me instead (my own Telegram on its button)
       if (!(await sheets.ask({ title: t('att.askTitle'), text: t('att.askText'), ok: t('att.askOk'), cancel: t('common.cancel') }))) return;
       await api.askToWrite(id, a.person.id);

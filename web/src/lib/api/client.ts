@@ -1,5 +1,5 @@
 import type { ChatFill } from '../eventFill';
-// The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
+// The real server (SPEC §6). Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
 import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
@@ -11,6 +11,18 @@ import { sheets } from '../state/sheets';
 import { tg } from '../tg';
 import { accountClosed, accountRequest } from '../state/recovery';
 import { i18n } from '../i18n/index.svelte';
+
+const authHeaders = (webWrite = false): Record<string, string> => ({
+  ...(tg.initData ? { Authorization: `tma ${tg.initData}` } : {}),
+  ...(!tg.initData || webWrite ? { 'X-KBTU': '1' } : {}),
+});
+export const WEB_SESSION_CHANGE = 'kb-web-session-change';
+
+async function changeWebSession(path: '/web/login' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+  await call('POST', path, body);
+  if (!tg.initData && path !== '/web/login') dispatchEvent(new Event('kb:signedOut'));
+  try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
+}
 
 // the start's first answers, asked for by index.html with the page: each taken once, in the first seconds, and only when
 // signed with the initData this app holds (else the call goes out as usual)
@@ -59,7 +71,7 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { Authorization: `tma ${tg.initData}`, ...(!ordinary && staffOf(method, path, staffEvent)), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { ...authHeaders(path.startsWith('/web/')), ...(!ordinary && staffOf(method, path, staffEvent)), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
       // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
@@ -77,6 +89,7 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   if (account.aborted || accountClosed()) throw new ApiErr('forbidden', 'init_data');
   if (r.status === 204) return undefined as T;
   if (r.status === 403 && (data as ApiError | null)?.message === 'init_data') dispatchEvent(new Event('kb:initExpired'));
+  if (r.status === 401 && (data as ApiError | null)?.message === 'web_session') dispatchEvent(new Event('kb:web-session-ended'));
   // banned mid-session: the app hears it from any call, not only at launch
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
@@ -140,6 +153,9 @@ async function uploadVideo(file: Blob, progress: (done: number) => void, wide = 
 
 export const server = {
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
+  webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
+  webLogout: (): Promise<void> => changeWebSession('/web/logout'),
+  webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
@@ -415,10 +431,15 @@ export const server = {
   uploadReceipt: (event: Id, file: Blob): Promise<EventCard> => call('POST', `/events/${event}/receipt`, file),
   /** A receipt's image (its sender, the event's Head+, the admin), as an object URL to show. */
   receiptImage: async (id: Id): Promise<string> => {
-    // private (§4.3): it needs Telegram's initData, which an <img src> can't send
-    const r = await fetch(`/api/receipts/${id}/image`, { headers: { Authorization: `tma ${tg.initData}` } }).catch(() => null);
+    // Private (§4.3): fetch can attach the authentication headers an <img> cannot.
+    if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
+    const account = accountRequest();
+    const r = await fetch(`/api/receipts/${id}/image`, { headers: authHeaders(), signal: account }).catch(() => null);
+    if (r?.status === 401) dispatchEvent(new Event('kb:web-session-ended'));
     if (!r?.ok) throw new ApiErr(r?.status === 404 ? 'not_found' : 'unavailable');
-    return URL.createObjectURL(await r.blob());
+    const blob = await r.blob();
+    if (account.aborted || accountClosed()) throw new ApiErr('forbidden', 'init_data');
+    return URL.createObjectURL(blob);
   },
   /** Head+: the receipt is fine, or rejected (the ticket stops working, the seat goes on, the bot tells the student). */
   // why: a rejection's reason, which the bot names to the student (server seats.REJECT_WHY)

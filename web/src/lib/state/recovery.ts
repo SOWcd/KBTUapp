@@ -1,13 +1,13 @@
-// Device-local recovery shared by Mini App copies. An account marker invalidates leases held by older copies.
+// Each sign-in mode shares recovery across its own copies. The marker invalidates leases held by older copies.
+import { tg } from '../tg';
+
 export const ACCOUNT_KEY = 'kb-recovery-account';
-const PREFIX = 'kb-recovery:';
 export const SCREEN_AGE = 6 * 60 * 60_000;
 export const DRAFT_AGE = 7 * 24 * 60 * 60_000;
 const V = 1;
 
 interface Account { tg: number; user: number; epoch: string }
 type RecordOf<T> = { v: number; at: number; value: T | null };
-const scopeOf = (a: Account) => `${PREFIX}${a.tg}:${a.epoch}:`;
 const accountId = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n > 0;
 const clock = () => {
   const wall = Date.now(), precise = performance.timeOrigin + performance.now();
@@ -15,12 +15,15 @@ const clock = () => {
 };
 const epoch = () => Math.random().toString(36).slice(2);
 
-export function recoveryStore(storage: () => Storage, now = clock) {
+export function recoveryStore(storage: () => Storage, now = clock, web = false) {
+  const accountKey = web ? 'kb-web-recovery-account' : ACCOUNT_KEY;
+  const prefix = web ? 'kb-web-recovery:' : 'kb-recovery:';
+  const scopeOf = (a: Account) => `${prefix}${a.tg}:${a.epoch}:`;
   const get = (key: string) => { try { return storage().getItem(key); } catch { return null; } };
   const set = (key: string, value: string) => { try { storage().setItem(key, value); } catch { /* blocked or full */ } };
   const remove = (key: string) => { try { storage().removeItem(key); } catch { /* blocked */ } };
   const parse = <T,>(raw: string | null): T | null => { try { return JSON.parse(raw ?? 'null'); } catch { return null; } };
-  const marker = () => get(ACCOUNT_KEY);
+  const marker = () => get(accountKey);
   const account = (raw: string | null) => {
     const a = parse<Account>(raw);
     return a && accountId(a.tg) && accountId(a.user) && typeof a.epoch === 'string' ? a : null;
@@ -41,8 +44,8 @@ export function recoveryStore(storage: () => Storage, now = clock) {
     const scope = keep && scopeOf(keep);
     for (const key of keys()) {
       if (marker() !== expected) return;
-      if (/^kb-(?:nav|appeal|ask|again|round-\d+|cache-\d+)(?::\d+)?$/.test(key)) remove(key);
-      else if (key.startsWith(PREFIX)) {
+      if (!web && /^kb-(?:nav|appeal|ask|again|round-\d+|cache-\d+)(?::\d+)?$/.test(key)) remove(key);
+      else if (key.startsWith(prefix)) {
         if (!scope || !key.startsWith(scope)) { remove(key); continue; }
         if (key === scope + 'student' || key === scope + 'auth' || key === scope + 'snapshot') continue;
         const ttl = key.includes(':kb-nav:') ? SCREEN_AGE : key.endsWith(':kb-again') ? 30 * 60_000 : DRAFT_AGE;
@@ -63,7 +66,7 @@ export function recoveryStore(storage: () => Storage, now = clock) {
     const erased = oldCard !== null && (!student || card != null && oldCard !== 's' && oldCard !== String(card));
     const first = !lease;
     lease = same && !erased ? raw : JSON.stringify({ tg, user, epoch: epoch() });
-    if (lease !== raw) set(ACCOUNT_KEY, lease!);
+    if (lease !== raw) set(accountKey, lease!);
     if (live()) {
       const a = account(lease)!;
       const prefix = scopeOf(a);
@@ -76,7 +79,7 @@ export function recoveryStore(storage: () => Storage, now = clock) {
   function invalidate(tg?: number, auth?: number) {
     const raw = marker(), a = account(raw), held = lease ?? cached;
     if (a && (held ? held === raw : launch === raw && a.tg === tg) && (auth === undefined || auth >= Number(get(scopeOf(a) + 'auth')))) {
-      set(ACCOUNT_KEY, 'null'); // storage events tell the other copies to drop their account state
+      set(accountKey, 'null'); // storage events tell the other copies to drop their account state
       sweep('null');
     } else if (!a) sweep(raw);
     stopped = true;
@@ -120,11 +123,11 @@ export function recoveryStore(storage: () => Storage, now = clock) {
     if (owner && scope() === owner) remove(owner + key);
   }
   const writeCheckpoint = (owner: string | null, key: string, json: string) => write(owner, key + ':' + windowId, json);
-  return { verify, invalidate, scope, peek, read, write, clear, newest, writeCheckpoint, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
+  return { accountKey, verify, invalidate, scope, peek, read, write, clear, newest, writeCheckpoint, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
 
 }
 
-export const recovery = recoveryStore(() => localStorage);
+export const recovery = recoveryStore(() => localStorage, clock, !tg.initData);
 
 let requests = new AbortController();
 let closed = false;

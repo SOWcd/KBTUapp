@@ -1335,6 +1335,16 @@ CREATE TABLE volunteers (
       created_at INTEGER NOT NULL,
       decided_at INTEGER,
       PRIMARY KEY (event_id, user_id));
+CREATE TABLE web_login_used (
+      digest BLOB PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE web_sessions (
+      digest BLOB PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER NOT NULL
+    ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
@@ -1480,6 +1490,9 @@ CREATE UNIQUE INDEX vol_people_user ON vol_people(org_id, user_id) WHERE user_id
 CREATE INDEX vol_shifts_by_session ON vol_shifts(session_id);
 CREATE INDEX vol_shifts_by_vol ON vol_shifts(vol_id);
 CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
+CREATE INDEX web_login_used_expires ON web_login_used(expires_at);
+CREATE INDEX web_sessions_last_used ON web_sessions(last_used_at);
+CREATE INDEX web_sessions_user ON web_sessions(user_id);
 CREATE TRIGGER chat_seen_chat_sync_delete AFTER DELETE ON chat_sync BEGIN
   DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
       (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
@@ -1641,3 +1654,7 @@ CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
         WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
     END;
+CREATE TRIGGER web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
+      WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN
+        DELETE FROM web_sessions WHERE user_id = old.id;
+      END;

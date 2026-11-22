@@ -16,7 +16,7 @@
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink, on } from '../../lib/tg';
+  import { haptic, inTelegram, openLink, openTelegramLink, on, telegramAppLink } from '../../lib/tg';
   import { nowTs, parts } from '../../lib/time';
 
   let { overlay, after, lock = false }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other'; lock?: boolean } = $props();
@@ -39,7 +39,11 @@
   $effect(() => {
     if (!away) return;
     // first the sign-in the browser released for me, if its start link opened nothing (/ms.html's "Doesn't open?"): 403 when none
-    const back = () => { if (!document.hidden) void api.msClaim('').catch(() => {}).then(() => loadMe()); };
+    const back = () => {
+      if (document.hidden) return;
+      if (inTelegram) void api.msClaim('').catch(() => {}).then(() => loadMe());
+      else void loadMe();
+    };
     document.addEventListener('visibilitychange', back);
     const off = on('activated', back);
     return () => { document.removeEventListener("visibilitychange", back); off(); };
@@ -105,7 +109,10 @@
 
 <Sheet {overlay} icon={LogIn} title={t('login.title')} full={lock} hold={lock ? () => !session.me?.student : undefined}>
   <form class="wrap" onsubmit={submit}>
-    {#if st}
+    {#if !inTelegram}
+      <p class="t-body">{t('web.verify')}</p>
+      <Button kind="primary" size="l" full onclick={() => { away = true; openTelegramLink(telegramAppLink('verify')); }}>{t('tgo.open')}</Button>
+    {:else if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
       {@render msButton(t('login.msConfirm'))}
       {@render consent()}

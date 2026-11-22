@@ -19,9 +19,7 @@
   import { onMount, untrack } from 'svelte';
   import { keyboard, KB_MS, kbEase, riseMs, roomAbove } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
-  import X from '@lucide/svelte/icons/x';
-  import { haptic, inTelegram, onAndroid, tg } from '../lib/tg';
-  import { t } from '../lib/i18n/index.svelte';
+  import { haptic, onAndroid, tg } from '../lib/tg';
   import { glass } from './glass';
   import { unsent } from './guard';
 
@@ -248,8 +246,7 @@
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
 <div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
-  {#if !full}<div class="grip" aria-hidden="true"></div>
-  {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
+  {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
   <!-- (past the keyboard's room: the assistant's greeting lifted over the keyboard is not "scrolled under the top") -->
   <div class="body scroll" data-kb-own class:scrolled bind:this={body} onscroll={() => { if (scrolled !== body.scrollTop > 2 + roomPx) scrolled = !scrolled; }}>
@@ -282,8 +279,6 @@
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .full::before, .full::after { display: none; }
   .full .body { padding-top: var(--page-top); }
-  .x { position: absolute; top: calc(var(--safe-top) + 4px); left: 12px; z-index: 1; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--surface); color: var(--text); }
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }
   .tint {
