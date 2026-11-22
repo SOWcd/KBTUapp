@@ -22,6 +22,7 @@
   // reduced motion: the poster (the home screen with our icon) stands still
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let video: HTMLVideoElement;
+  const clipBlob = still ? null : fetch(clip).then((r) => r.blob());  // asked for before the sheet mounts
 
   onMount(() => {
     once('kb-install'); // shown: never again on this phone, however it ends
@@ -30,7 +31,7 @@
     // iOS plays inline without a tap only when muted is a property, not just the attribute; refused (Low Power Mode): the poster stays
     // played from a blob: iOS plays a src only with HTTP Range, and the CDN serves this file whole (gzipped)
     let url = '';
-    if (!still) fetch(clip).then((r) => r.blob()).then((b) => {
+    clipBlob?.then((b) => {
       if (!video) return;
       url = URL.createObjectURL(b);
       video.src = url; video.muted = true; video.play().catch(() => {});
