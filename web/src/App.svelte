@@ -864,8 +864,9 @@
   // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
   // (a deep link); the last of the launch's moments
   function installHint() {
-    // ponytail: the creator only until the video guides are recorded (owner, Nov 22); then drop the founder check
-    if (!session.me?.founder) return;
+    // ponytail: the creator, and a friend recording the Android guide, only until the video guides are recorded
+    // (owner, Nov 22-23); then drop this check
+    if (!session.me?.founder && tg.user?.id !== 811158629) return;
     if (!inTelegram || onComputer || tg.startParam || seen('kb-install')) return;
     return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
   }
