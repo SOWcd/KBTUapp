@@ -259,18 +259,19 @@
     {@const e = hero}
     {@const mine = e.my?.status === 'going'}
     <!-- the hero: my next event (its ticket and the way there), else the nearest; its cover, or its 3D mark lit on black -->
-    <section class="hero" class:pic={heroPic} style="--c:{e.color ?? e.tint}">
+    <section class="hero" class:pic={heroPic} style="--c:{e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint}">
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-      {#if heroPic}<Poster item={e} big radius={0} />{:else}<span class="glow"></span><span class="mark"><Emoji name={e.emoji ?? 'sparkles_3d'} size={128} /></span>{/if}
+      {#if heroPic}<Poster item={e} big radius={28} />{:else}<span class="glow"></span><span class="mark"><Emoji name={e.emoji ?? 'sparkles_3d'} size={84} /></span>{/if}
       <div class="shade"></div>
+      <span class="rim" aria-hidden="true"></span>
       <div class="hero-tx">
         <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
         <b class="clamp-2">{e.title}</b>
         <span class="where ellipsis">{placeOf(e.place, e.online)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
         {#if mine}
           <span class="acts">
-            <Button kind="glass" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button>
-            {#if floorOf(e.place) != null}<Button kind="glass" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={17} />{/snippet}{t('route.open')}</Button>{/if}
+            <Button kind="glass" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
+            {#if floorOf(e.place) != null}<Button kind="glass" size="s" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={15} />{/snippet}{t('route.open')}</Button>{/if}
           </span>
         {:else}<span class="hsub">{@render status(e)}</span>{/if}
       </div>
@@ -410,20 +411,40 @@
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
   /* the hero: one rich visual, everything else monochrome. A cover; without one the event's 3D mark lit on black */
-  .hero { position: relative; height: min(340px, 88vw); overflow: hidden; border-radius: var(--r-xl); background: var(--media);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 48px -30px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
+  /* Opal's card size (owner, Nov 22: the 340px hero took the whole screen): as tall as its words, about 150-176px.
+     Nothing clips here (the halo lives outside the box), so each layer takes the radius itself */
+  .hero { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 148px;
+    border-radius: var(--r-xl); background: var(--media); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   .hero :global(.poster) { position: absolute; inset: 0; }
-  .glow { position: absolute; inset: 0; opacity: 0.6; background: radial-gradient(62% 48% at 50% 34%, var(--c), transparent 74%); }
-  .mark { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); filter: drop-shadow(0 22px 30px rgba(0, 0, 0, 0.6)); animation: float 6s ease-in-out infinite; }
-  @keyframes float { 50% { transform: translate(-50%, calc(-50% - 6px)); } }
-  @media (prefers-reduced-motion: reduce) { .mark { animation: none; } }
-  .shade { position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.82)); pointer-events: none; }
-  .hero:not(.pic) .shade { inset: 50% 0 0; }
-  .hero-tx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 4px; padding: var(--s-5); color: var(--on-accent); pointer-events: none; }
-  .when { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.66); }
-  .hero-tx b { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.035em; }
-  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.66); }
+  /* the cover as light, not as a poster: softened so its own lettering never fights the title (the sharp one is a tap away) */
+  .hero :global(.poster img) { filter: blur(10px) saturate(1.25); transform: scale(1.12); }
+  /* Opal's lit card: a halo of the event's colour breathes round the border (opacity only) */
+  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0.6; will-change: opacity;
+    box-shadow: 0 0 0 1px var(--c, transparent), 0 0 16px 1px var(--c, transparent), 0 14px 36px -12px var(--c, transparent); animation: breathe 3.6s ease-in-out infinite alternate; }
+  @keyframes breathe { from { opacity: 0.32; } to { opacity: 0.78; } }
+  .glow { position: absolute; inset: 0; border-radius: inherit; opacity: 0.55; background: radial-gradient(150px 120px at calc(100% - 62px) 56px, var(--c), transparent 72%); }
+  .mark { position: absolute; right: 20px; top: 14px; filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.6)); animation: float 6s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-5px); } }
+  /* and a shade that keeps white words readable over a white cover (4.5:1 at the top left, more below) */
+  .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.56) 50%, rgba(0, 0, 0, 0.84) 100%), linear-gradient(90deg, rgba(0, 0, 0, 0.45), transparent 80%); }
+  .hero:not(.pic) .shade { background: linear-gradient(transparent 40%, rgba(0, 0, 0, 0.7)); }
+  /* the rim: a hair of white all round, and one soft light of the event's colour travelling it. The light is a big
+     conic square turning under a ring mask: transform only (and no @property: Button owns --rim) */
+  .rim { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: inherit; padding: 1.5px; pointer-events: none;
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
+  .rim::before { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%; will-change: transform;
+    background: conic-gradient(rgba(255, 255, 255, 0.14) 0deg, var(--c, white) 36deg, white 60deg, var(--c, white) 84deg, rgba(255, 255, 255, 0.14) 130deg, rgba(255, 255, 255, 0.14) 215deg, var(--c, white) 262deg, rgba(255, 255, 255, 0.14) 310deg);
+    animation: turn 12s linear infinite; }
+  @keyframes turn { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .mark, .hero::before, .rim::before { animation: none; } }
+  .hero-tx { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 18px var(--s-5); color: var(--on-accent); pointer-events: none; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45); }
+  .hero:not(.pic) .hero-tx > :not(.acts) { padding-right: 92px; }
+  .when { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.72); }
+  .hero-tx b { font: 700 var(--fs-sec)/1.14 var(--font-display); letter-spacing: -0.03em; }
+  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .acts { position: relative; z-index: 2; display: flex; gap: 8px; margin-top: 12px; pointer-events: auto; }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 6px; }
   .hsub:empty { display: none; }
