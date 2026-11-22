@@ -61,6 +61,8 @@
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin came <@username | telegram id> <event id>   a guest the organizers let in by hand whose list
+                                row the retention sweep already erased: a checked-in ticket (manual), audited as came_by_hand
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
   .venv/bin/python -m kbtu.admin guest-names <event id> --gz <b64>   the door's list by name (student_id,name,adult,username)
@@ -468,6 +470,18 @@ def main(args: list[str]) -> None:
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "came" and len(args) == 3 and args[2].isdigit():  # the creator alone, on the organizers' word
+        from .db import tx
+        uid, eid = _user(con, args[1])["id"], int(args[2])
+        with tx(con):
+            e = one(con, "SELECT starts_at FROM events WHERE id = ?", eid)
+            if not e:
+                raise SystemExit("no such event")
+            guests._ticket(con, eid, uid, None)
+            con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+                WHERE event_id = ? AND user_id = ?""", (e["starts_at"] or now(), eid, uid))
+            log_action(con, None, "came_by_hand", f"event:{eid}", json.dumps({"user": uid}))
+        print("came")
     elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
         from .logic import seats
         print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
