@@ -329,4 +329,4 @@ html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
 :root[data-web] #app { bottom: 0; height: auto; } /* ui/Pane.svelte does the same for its pane */
 /* iOS 26 home-screen app: the window reports a height short by the status bar (WebKit bug 301108), leaving a black band
    under the nav even with bottom: 0; only the large viewport unit spans the whole screen there */
-@media (display-mode: standalone) { :root[data-web] #app { bottom: auto; height: 100lvh; } }
+@media (display-mode: standalone) { :root[data-web] #app { bottom: auto; height: max(100lvh, var(--screen-h, 0px)); } } /* main.ts --screen-h */
