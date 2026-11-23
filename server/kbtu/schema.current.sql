@@ -518,6 +518,19 @@ CREATE TABLE files (
   owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
 , color TEXT, taken_at REAL) STRICT;
+CREATE TABLE form_answers (
+      id INTEGER PRIMARY KEY,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE forms (
+      id INTEGER PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      spec TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER
+    ) STRICT;
 CREATE TABLE friend_invites (                        -- "Bring a friend"
   from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1416,6 +1429,7 @@ CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
 CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;
 CREATE INDEX fchan_reply_reports_by_user ON fchan_reply_reports(user_id);
 CREATE INDEX files_by_hash ON files(sha256);
+CREATE INDEX form_answers_by_form ON form_answers(form_id, created_at);
 CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
 CREATE INDEX friendships_b ON friendships(b);
 CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);

@@ -2207,4 +2207,19 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE reports7 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     CREATE INDEX reports_by_target ON reports (target, target_id);"""),
+    # public forms (logic/forms.py): anonymous answers, so no user, IP or cookie column on purpose
+    (219, """CREATE TABLE IF NOT EXISTS forms (
+      id INTEGER PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      spec TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS form_answers (
+      id INTEGER PRIMARY KEY,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS form_answers_by_form ON form_answers(form_id, created_at);"""),
 ]
