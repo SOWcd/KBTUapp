@@ -2,7 +2,7 @@
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
 import ru from './i18n/ru';
-import { addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
+import { DORM_2GIS, addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
 import uniqRooms from '../assets/map/uniq-rooms.json';
 
 it('finds the floor of a room, never of an address', () => {
@@ -83,6 +83,8 @@ it('the institutes off campus', () => {
 });
 
 it('a typed street address becomes a 2GIS search; rooms and campus places never do', () => {
+  expect(addressGis('KBTU Jastar City (Dormitory), Islam Karimova, 70k4')).toBe(DORM_2GIS);
+  expect(addressGis('\u041e\u0431\u0449\u0430\u0433\u0430')).toBe(DORM_2GIS);
   expect(addressGis('Gogolya 157')).toBe('https://2gis.kz/almaty/search/Gogolya%20157');
   expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
   for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
