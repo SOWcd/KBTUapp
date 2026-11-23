@@ -147,6 +147,7 @@ CREATE TABLE chat_asks (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (chat_id, user_id)
     ) STRICT;
+CREATE TABLE chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;
 CREATE TABLE chat_opens (
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   chat_id   INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,

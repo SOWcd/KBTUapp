@@ -2222,4 +2222,6 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS form_answers_by_form ON form_answers(form_id, created_at);"""),
+    # /all in a club's group kept to its Telegram admins (Studio's switch); a group not here: its club roles call too
+    (220, "CREATE TABLE IF NOT EXISTS chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;"),
 ]
