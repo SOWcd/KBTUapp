@@ -1126,7 +1126,6 @@ const ru = {
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Лабораторная",
   'sched.cardTitle': "Добавить расписание",
-  'sched.cardSub': "Отправь боту страницу расписания — займёт минуту",
   'sched.cardAdd': "Добавить",
   'sched.howTitle': "Пары",
   'sched.howLead': "Вся неделя пар — прямо в приложении.",

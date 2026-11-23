@@ -1105,7 +1105,6 @@ const kk: Dict = {
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Зертханалық",
   'sched.cardTitle': "Кестені қосу",
-  'sched.cardSub': "Кесте бетін ботқа жібер — бір минут қана",
   'sched.cardAdd': "Қосу",
   'sched.howTitle': "Кесте",
   'sched.howLead': "Бүкіл апталық сабақтар — қосымшада.",

@@ -248,10 +248,10 @@
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
     <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} label={t('map.open')} onclick={openMapFrom} />{/if}
-      {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
-      <IconButton icon={Images} label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
-      <IconButton icon={Newspaper} label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
+      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
+      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
+      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
+      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
     </span>
   </header>
   {#if searching}
@@ -294,18 +294,18 @@
             <span class="where ellipsis">{placeOf(e.place, e.online)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
             {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
           </span>
-          <span class="when num"><span>{soon(e.startsAt, now)}</span><b class="ellipsis">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b></span>
+          <span class="when num"><b class="ellipsis">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b><span>{soon(e.startsAt, now)}</span></span>
         </div>
         <!-- under the thumb: my ticket and the way there; not mine yet: one tap signs up (a paid one opens its payment) -->
         {#if mine}
           <span class="acts">
-            <Button size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
+            <Button kind="tinted" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
             {#if floorOf(e.place) != null}<Button kind="secondary" size="s" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={15} />{/snippet}{t('route.open')}</Button>{/if}
           </span>
         {:else if e.my?.status === 'hold'}
-          <span class="acts"><Button size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
         {:else if canGo(e)}
-          <span class="acts"><Button size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
         {/if}
       </div>
       <span class="rim" aria-hidden="true"></span>
@@ -315,8 +315,8 @@
     <nav class="week" aria-label={t('list.title')}>
       {#each strip as w (w.d)}
         {@const ts = dayTs(w.d) + 12 * 3600}
-        <button class={['wd', { today: w.d === today, mine: w.mine }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
-          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.n }}></i>
+        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
+          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
         </button>
       {/each}
     </nav>
@@ -340,7 +340,7 @@
   {#if showClasses && askSched}
     <!-- no timetable yet: one card at the top, under my events (an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
-    <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} text={t('sched.cardSub')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
+    <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
   {/if}
 
   <div class="events-head">
@@ -432,12 +432,12 @@
   .hd > span:first-child { min-width: 0; }
   /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
      at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
   .hd > span:first-child { flex: 1 0 120px; }
   .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
   .wk { color: var(--accent-text); }
   .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
-  .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
+  .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
   .rate-head > div { min-width: 0; }
@@ -446,7 +446,7 @@
   .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
   .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
   .rate-stars button:active { transform: scale(0.94); }
-  .off { margin: 12px 4px 0; color: var(--text-2); }
+  .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }
   .past { display: flex; flex-direction: column; gap: 8px; }
@@ -456,7 +456,7 @@
   .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; }
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
-  .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: 10px calc(-1 * var(--gutter)) 0; padding: 4px var(--gutter); scrollbar-width: none; }
+  .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .sep { flex: none; width: 0.5px; height: 20px; background: var(--separator); }
   .none { margin-top: var(--s-4); }
@@ -482,8 +482,11 @@
   .shade, .rim { border-radius: inherit; pointer-events: none; }
   /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
   .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
-  /* no cover: the event's 3D mark stands at the left, its foot behind the frost */
-  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-start; padding: 4px 0 0 12px; }
+  /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
+     tilted at the right, its foot behind the frost (the title's side stays clean) */
+  .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
+  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-end; padding: var(--s-1) var(--s-5) 0 0; }
+  .nopic .art :global(.poster > *) { transform: rotate(9deg) scale(1.2); transform-origin: 50% 0; }
   /* the rim: a hair of white lit at the top left, as glass is. The light comes round once as the card arrives and rests
      there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
   .rim { z-index: 1; overflow: hidden; padding: 1px;
@@ -502,34 +505,36 @@
     box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
     -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
   :global(:root[data-theme='light']) .slab { --dim: 1; --edge: rgba(255, 255, 255, 0.8); }
-  .top { display: flex; align-items: center; gap: 12px; }
+  .top { display: flex; align-items: flex-start; gap: var(--s-3); } /* the time on the title's own line, the day on the place's */
   .acts { position: relative; z-index: 2; display: flex; gap: 8px; margin-left: -2px; pointer-events: auto; }
   .acts :global(.btn) { flex: 1; min-width: 0; }
   .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .hero-tx b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
   .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 45%; }
-  .when span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
-  .when b { max-width: 100%; font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; }
+  .when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; max-width: 45%; }
+  .when span { font: 600 var(--fs-micro)/calc(1.3 * var(--fs-sub)) var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+  .when b { max-width: 100%; font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
   .hsub:empty { display: none; }
   /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
-     the one filled circle, a quiet day dimmed and not a button */
-  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-5) 0 0; }
+     the one solid disc, a day with events on a soft one (it reads as a button), a quiet day dimmed and not a button; the
+     accent dot: I'm going */
+  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
   .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
   .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
   .wd b { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
     transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
   .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
+  .wd.has b { background: var(--fill); font-weight: 700; }
   .wd.today b { background: var(--text); color: var(--bg); }
-  .wd:disabled b { color: var(--text-3); }
-  .wd.today:disabled b { background: var(--fill-2); color: var(--text); }
+  .wd:disabled:not(.today) { opacity: 0.6; }
+  .wd:disabled b { color: var(--text-3); font-weight: 450; }
+  .wd.today:disabled b { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3); color: var(--text); } /* nothing on today: a ring, not a button */
   .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
-  .wd i.on { background: var(--text-3); }
-  .wd.mine i.on { background: var(--accent); }
+  .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
-  .pin { margin: 10px 0 0; }
+  .pin { margin: var(--s-3) 0 0; }
   .pin :global(.card) { display: flex; flex-direction: column; gap: 6px; }
   .pin-top { display: flex; align-items: center; gap: 8px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
   .pin b { font: 700 var(--fs-card)/1.25 var(--font-text); }
@@ -595,6 +600,6 @@
   .cl-r.on :global(.btn) { max-width: 100%; padding: 0 var(--s-3); } /* a little tighter: the subject's room */
   .free { margin: 0 var(--s-1); color: var(--text-3); }
 
-  .ask { margin-top: 14px; }
+  .ask { margin-top: var(--s-4); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

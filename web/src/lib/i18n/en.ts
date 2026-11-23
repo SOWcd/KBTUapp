@@ -1105,7 +1105,6 @@ const en: Dict = {
   'list.kind.practiceLong': "Practice",
   'list.kind.labLong': "Lab",
   'sched.cardTitle': "Add your timetable",
-  'sched.cardSub': "Send the bot your timetable page: it takes a minute",
   'sched.cardAdd': "Add",
   'sched.howTitle': "Classes",
   'sched.howLead': "Your whole week of classes, right in the app.",
