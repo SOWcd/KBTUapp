@@ -57,6 +57,7 @@
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf, addressGis } from '../../lib/map';
   import { meetHost } from '../../lib/meet';
+  import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
@@ -111,6 +112,9 @@
   const about = $derived(preview ? preview.description : detail?.description);
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
+  // the description's addresses as typed (a translation may mangle one), less those with a row of their own
+  const links = $derived(eventLinks(preview ? preview.description : detail?.orig?.description ?? detail?.description,
+    [meetUrl, e?.externalUrl, detail?.chat, detail?.discuss]));
   const st = $derived(e?.my?.status);
   // a team event: my team follows my sign-up (made or joined with the same tap, server evteams.signup)
   let seenSt: string | null = null;
@@ -575,13 +579,20 @@
       </Notice>
     {/if}
 
-    <!-- its rules (a PDF the club attached): the pages as pictures in the photo viewer -->
-    {#if detail?.doc}{@const d = detail.doc}<Group><Row icon={FileText} title={d.title ?? t('event.doc')} accessory="chevron" onclick={() => sheets.photos(d.pages.map((x, k) => ({ ...x, id: -k - 1, by: null, mine: true, canDelete: false })), 0)} /></Group>{/if}
     {#if about}
       <Section title={t('event.about')}>
         <p class="fs-body desc selectable"><Linked text={(aiAbout && raw ? detail?.orig?.description : about) ?? ''} /></p><!-- addresses tappable: a tournament's rules, a form -->
         {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
       </Section>
+    {/if}
+
+    <!-- links and documents: its rules (a PDF the club attached, the pages as pictures in the photo viewer) and the
+         description's addresses, each with its host; nothing when it has neither -->
+    {#if detail?.doc || links.length}
+      <div class="links"><Group caption={t('event.links')}>
+        {#if detail?.doc}{@const d = detail.doc}<Row icon={FileText} title={d.title ?? t('event.doc')} subtitle={tn('ed.docPages', d.pages.length)} accessory="chevron" onclick={() => sheets.photos(d.pages.map((x, k) => ({ ...x, id: -k - 1, by: null, mine: true, canDelete: false })), 0)} />{/if}
+        {#each links as l (l.url)}<Row icon={Link} title={l.host} subtitle={l.rest || undefined} accessory="external" onclick={() => openLink(l.url)} />{/each}
+      </Group></div>
     {/if}
 
     <!-- volunteers: a student applies with a short "why", the organizers answer; the team sees the count -->
@@ -718,6 +729,7 @@
 </Sheet>
 
 <style>
+  .links :global(.st) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* an address's path: one line, never past the screen */
   /* the stack under the header: one gap between blocks, Groups like Settings */
   .page { display: flex; flex-direction: column; gap: var(--s-5); }
   .pv { display: flex; justify-content: center; margin: 0 0 10px; }

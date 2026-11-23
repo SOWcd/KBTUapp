@@ -1122,6 +1122,7 @@ const kk: Dict = {
   'ai.avg': "~{s} с",
   'ai.showOrig': "Түпнұсқаны көрсету",
   'event.about': "Іс-шара туралы",
+  'event.links': "Сілтемелер мен құжаттар",
   'event.free': "Тегін",
   'event.placeTba': "Орны нақтыланады",
   'event.online': "Онлайн",

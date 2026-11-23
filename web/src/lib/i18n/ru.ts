@@ -1143,6 +1143,7 @@ const ru = {
   'ai.avg': "~{s} с", // a link's average answer time today (ms / timed answers)
   'ai.showOrig': "Показать оригинал",
   'event.about': "О событии",
+  'event.links': "Ссылки и документы",
   'event.free': "Бесплатно",
   'event.placeTba': "Место уточняется",
   'event.online': "Онлайн",
