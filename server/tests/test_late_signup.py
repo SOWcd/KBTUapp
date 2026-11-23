@@ -15,7 +15,7 @@ def _event(c, cfg, **extra):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
     start = int(time.time()) + 3600
-    body = {"title": "Talk", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
+    body = {"seats": None, "title": "Talk", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     if "id" in ev:
         c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))

@@ -622,7 +622,7 @@ export interface EventInput {
   onlineUrl?: string | null;   // its meeting link, https; null: none yet
   emoji: string;
   color: string;
-  seats: number | null;
+  seats: number | null;        // capacity, always chosen: a number, or null for no limit (the server refuses it left out)
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
   lateSignup?: boolean;        // open until the end instead (free, uncapped, public only); left out = off
   firstYear: boolean;

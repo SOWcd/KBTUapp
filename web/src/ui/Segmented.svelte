@@ -2,9 +2,10 @@
   // A segmented switch (2-4 equal parts): a capsule track on --fill and a thumb that slides to the chosen part, 36 high,
   // the row's whole width. Replaces base.css .seg.
   //   items  { value, label }[];  value: bindable;  label: what it switches, for screen readers;  onchange
+  import { fade } from 'svelte/transition';
   let { items, value = $bindable(), label, onchange }: { items: { value: T; label: string }[]; value: T; label?: string; onchange?: (v: T) => void } = $props();
 
-  const at = $derived(Math.max(0, items.findIndex((i) => i.value === value)));
+  const at = $derived(items.findIndex((i) => i.value === value)); // -1: nothing chosen yet: no thumb; the first pick fades it in where it lands
   function pick(v: T) {
     if (v === value) return;
     value = v;
@@ -13,7 +14,7 @@
 </script>
 
 <div class="sgm" role="radiogroup" aria-label={label} style:--n={items.length}>
-  <span class="thumb" style:transform="translateX({at * 100}%)" aria-hidden="true"></span>
+  {#if at >= 0}<span class="thumb" in:fade={{ duration: 180 }} style:transform="translateX({at * 100}%)" aria-hidden="true"></span>{/if}
   {#each items as it (it.value)}
     <button role="radio" aria-checked={it.value === value} class:on={it.value === value} onclick={() => pick(it.value)}>{it.label}</button>
   {/each}

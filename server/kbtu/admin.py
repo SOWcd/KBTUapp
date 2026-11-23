@@ -112,7 +112,7 @@
   .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
                                 students), once each, an hour before; --test: to the creator now; no flag: counts
   .venv/bin/python -m kbtu.admin event create <club slug> < event.json   a club's event made for it, no role given: one JSON object,
-                                the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, guestHost,
+                                the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, "seats": a number or null for no limit, required, guestHost,
                                 externalUrl, ...) and "cover": "<base64 jpg/png>"; a DRAFT by the creator, never a price (the
                                 club sets it in Studio), in the audit log; prints `draft <id>`
   .venv/bin/python -m kbtu.admin event publish <event id>   that draft (any draft) out by the usual rules (followers hear by
@@ -282,7 +282,7 @@ def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -
     if any(not isinstance(raw.get(k), str) for k in fields):
         sys.exit("title, description and place must be strings")
     body = {k: raw[k] for k in fields}
-    body.update(startsAt=_event_time(raw.get("starts_at"), "starts_at"), emoji="sparkles_3d", color="#3B6BFF")
+    body.update(startsAt=_event_time(raw.get("starts_at"), "starts_at"), emoji="sparkles_3d", color="#3B6BFF", seats=None)  # a guest list: no cap
     if raw.get("ends_at") is not None:
         body["endsAt"] = _event_time(raw["ends_at"], "ends_at")
     v = Viewer(boss[0], "admin", True, staff_org=org[0])
@@ -901,7 +901,7 @@ def main(args: list[str]) -> None:
             sys.exit("needs the creator and the dmp office")
         v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600
         e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
-                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head"})
+                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
     elif cmd == "event" and len(args) == 3 and args[1] in ("create", "publish"):

@@ -58,7 +58,7 @@ def organizer(env):
 def test_receipt_rejections_share_one_budget_across_app_and_bot(organizer, monkeypatch):
     c, cfg, con, _ = organizer
     login(c, 10, "ali")
-    event = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Gala", "place": "Hall", "startsAt": logic.now() + 3600,
+    event = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Gala", "place": "Hall", "startsAt": logic.now() + 3600,
         "emoji": "laptop_3d", "color": "#3B6BFF", "price": 2000, "payToName": "Test A.", "payPhone": "87071234567"}).json()
     eid = event["id"]
     c.post(f"/api/events/{eid}/publish", headers=tma(20))

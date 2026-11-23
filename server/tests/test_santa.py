@@ -58,7 +58,7 @@ def test_sign_up_draw_and_who_reads_what(env):
     c.delete(f"/api/events/{eid}/registration", headers=tma(14))  # changed their mind before the draw: not in it
     assert _draw(c, eid).json()["santa"] == {"drawn": True}
     assert _draw(c, eid).json()["message"] == "drawn"  # once
-    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={"title": "Case", "place": "Hall", "startsAt": _page(c, eid, 20)["startsAt"],
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={"seats": None, "title": "Case", "place": "Hall", "startsAt": _page(c, eid, 20)["startsAt"],
                                                                   "emoji": "laptop_3d", "color": "#3B6BFF", "santa": False}).json()["message"] == "santa"
     r = _go(c, eid, 15, "late")
     assert r.status_code == 409 and r.json()["error"] == "closed"  # sign-up closed with the draw
@@ -129,7 +129,7 @@ def test_nobody_lands_in_a_drawn_game(env):
     assert _gives(c, con, eid, (11, 12)) == {11: 12, 12: 11}
     plain = _event(c)
     c.post(f"/api/events/{plain}/registration", headers=tma(10), json={})
-    body = {"title": "Case", "place": "Hall", "startsAt": _page(c, plain, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
+    body = {"seats": None, "title": "Case", "place": "Hall", "startsAt": _page(c, plain, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
     r = c.patch(f"/api/events/{plain}", headers=tma(20), json={**body, "santa": True})
     assert r.status_code == 409 and r.json()["message"] == "santa_signed"
     c.delete(f"/api/events/{plain}/registration", headers=tma(10))
@@ -137,7 +137,7 @@ def test_nobody_lands_in_a_drawn_game(env):
 
 
 def _start(c, tg, org=1, **body):
-    return c.post(f"/api/orgs/{org}/santa", headers=tma(tg), json={"title": "Secret Santa", "startsAt": int(time.time()) + 20 * 86400, "budget": 3000, **body})
+    return c.post(f"/api/orgs/{org}/santa", headers=tma(tg), json={"seats": None, "title": "Secret Santa", "startsAt": int(time.time()) + 20 * 86400, "budget": 3000, **body})
 
 
 def test_one_button_starts_the_game(env):
@@ -441,7 +441,7 @@ def test_santa_is_for_the_whole_team(env):
     c, cfg = env
     con, eid = _team_game(c, cfg, members=(10, 11, 12))
     p = _page(c, eid, 20)
-    body = {"title": p["title"], "place": "", "startsAt": p["startsAt"], "emoji": "sparkles_3d", "color": "#D7263D",
+    body = {"seats": None, "title": p["title"], "place": "", "startsAt": p["startsAt"], "emoji": "sparkles_3d", "color": "#D7263D",
             "visibility": "members", "forBoard": True, "regUntil": p["regUntil"]}
     r = c.patch(f"/api/events/{eid}", headers=tma(20), json=body)
     assert r.status_code == 400 and r.json()["message"] == "santa_audience"
@@ -509,7 +509,7 @@ def test_deadline_an_hour_before_gifts_day(env):
     put = lambda **b: c.put(f"/api/events/{eid}/santa", headers=tma(20), json=b)  # noqa: E731
     assert put(regUntil=starts).status_code == 400 and put(regUntil=starts - 3599).status_code == 400
     assert put(regUntil=starts - 3600).status_code == 200
-    body = {"title": p["title"], "place": "", "startsAt": starts, "emoji": "sparkles_3d", "color": "#D7263D", "visibility": "members"}
+    body = {"seats": None, "title": p["title"], "place": "", "startsAt": starts, "emoji": "sparkles_3d", "color": "#D7263D", "visibility": "members"}
     r = c.patch(f"/api/events/{eid}", headers=tma(20), json={**body, "regUntil": starts - 60})
     assert r.status_code == 400 and r.json()["message"] == "santa_until"  # the editor too
     assert c.put(f"/api/events/{eid}/reg-until", headers=tma(20), json={"until": starts - 60}).status_code == 400  # and Admin's

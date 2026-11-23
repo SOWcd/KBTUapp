@@ -24,7 +24,7 @@ def _club(c, cfg, official: bool, name="Chess", pres=20):
 
 
 def _body(title, **kw):
-    return {**EV, "title": title, "startsAt": logic.core.now() + 7 * 86400, **kw}
+    return {"seats": None, **EV, "title": title, "startsAt": logic.core.now() + 7 * 86400, **kw}
 
 
 def _publish(c, oid, title, pres=20, **kw):

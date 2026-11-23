@@ -29,7 +29,7 @@ def test_inline_answer(env):
     con.execute("UPDATE events SET visibility = 'members' WHERE id = ?", (members,))
     hidden = _event(c, off, OFF, "Hackathon Hidden")
     con.execute("UPDATE events SET hidden_at = 1 WHERE id = ?", (hidden,))
-    draft = c.post(f"/api/orgs/{off}/events", headers=tma(OFF), json={**EV, "title": "Hackathon Draft", "startsAt": logic.now() + 86400}).json()["id"]
+    draft = c.post(f"/api/orgs/{off}/events", headers=tma(OFF), json={"seats": None, **EV, "title": "Hackathon Draft", "startsAt": logic.now() + 86400}).json()["id"]
     leak = {f"ev-{x}" for x in (initiative, members, hidden, draft)}
 
     # an unknown person: no cards, one button into the app

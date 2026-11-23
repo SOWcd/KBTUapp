@@ -42,7 +42,7 @@ START = int(time.time()) + 5 * 3600
 
 
 def _body(**extra):
-    return {"title": TITLE, "place": "Hall", "startsAt": START, "endsAt": START + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
+    return {"seats": None, "title": TITLE, "place": "Hall", "startsAt": START, "endsAt": START + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
 
 
 def _event(c, oid=1, tg=20, **extra):

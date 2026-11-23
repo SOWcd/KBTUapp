@@ -111,7 +111,7 @@ def test_phone_not_asked_after_signups(env):
     """needsPhone can't be switched on once people are in: the export would hand out phones they gave elsewhere."""
     c, con, ids = _setup(env)
     start = con.execute("SELECT starts_at FROM events WHERE id = 1").fetchone()[0]
-    body = {"title": "Hack", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "needsPhone": True}
+    body = {"seats": None, "title": "Hack", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "needsPhone": True}
     assert c.post("/api/events/1/registration", headers=tma(63), json={}).status_code == 200
     r = c.patch("/api/events/1", headers=tma(62), json=body)
     assert r.status_code == 409 and r.json()["message"] == "needs_phone"

@@ -21,7 +21,7 @@ def test_last_and_recent(env):
     now = logic.core.now()
 
     def ev(title, ago, **kw):
-        e = c.post(f"/api/orgs/{org}/events", headers=tma(PRES), json={"place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF",
+        e = c.post(f"/api/orgs/{org}/events", headers=tma(PRES), json={"seats": None, "place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF",
                    "title": title, "startsAt": now + 86400, **kw}).json()
         assert c.post(f"/api/events/{e['id']}/publish", headers=tma(PRES)).status_code == 200
         con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (now - ago * 86400, e["id"]))

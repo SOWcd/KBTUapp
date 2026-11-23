@@ -23,7 +23,7 @@ def _org(uid: int, oid: object = 1) -> dict:
 
 
 def _body(**more) -> dict:
-    return {"title": "Guest night", "place": "Hall 1", "description": "Come", "startsAt": int(time.time()) + 86400,
+    return {"seats": None, "title": "Guest night", "place": "Hall 1", "description": "Come", "startsAt": int(time.time()) + 86400,
             "emoji": "laptop_3d", "color": "#3B6BFF", **more}
 
 
