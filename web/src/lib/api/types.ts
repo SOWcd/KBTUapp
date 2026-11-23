@@ -909,3 +909,9 @@ export interface SubjectPerson { ask: Id; person: PersonRef; name: string; cours
   offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
+
+/** Secret Santa's chat (server santa.chat): a message says only whether it is mine, never who wrote it */
+export interface SantaMsg { id: Id; mine: boolean; text: string; at: Ts }
+export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: one of the two reported it
+/** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
+export interface SantaChats { to: SantaThread | null; from: SantaThread | null }

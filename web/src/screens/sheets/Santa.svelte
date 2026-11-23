@@ -4,8 +4,11 @@
   // I give to, kept on this phone); then, calmly, whom I give to and their wishlist. My own wishlist under it.
   import { onDestroy } from 'svelte';
   import PenLine from '@lucide/svelte/icons/pen-line';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
   import { api, type EventCard, type EventFull, type Id } from '../../lib/api';
   import { sheets } from '../../lib/state/sheets';
+  import { data, loadSantaChat } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -13,6 +16,7 @@
   import { dayMonthShort, time, nowTs } from '../../lib/time';
   import Avatar from '../../ui/Avatar.svelte';
   import SantaBack from './SantaBack.svelte';
+  import SantaChat from './SantaChat.svelte';
   import SantaReveal from './SantaReveal.svelte';
 
   let { id, e, mine }: { id: Id; e: EventCard; mine: NonNullable<EventFull['mySanta']> } = $props();
@@ -52,6 +56,12 @@
     try { edited = (await api.santaWish(id, w)).wish; haptic.ok(); say(t('santa.wishSaved'), 'party_popper_3d'); }
     catch { edited = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // the pair's chat (SantaChat): its two rows are here with the page, their last words come with the read below; it
+  // lives three days past the gifts day (server santa.MSG_KEEP)
+  const chatOn = $derived(!!mine.to && nowTs() < (e.endsAt ?? e.startsAt) + 3 * 86400);
+  $effect(() => { if (chatOn) void loadSantaChat(id); });
+  const last = (side: 'to' | 'from') => { const m = data.santaChat[id]?.[side]?.msgs.at(-1); return m ? (m.mine ? t('santa.chatYou', { text: m.text }) : m.text) : ''; };
+  const talk = (side: 'to' | 'from') => { haptic.tap(); open(SantaChat, { event: id, side, name: mine.to?.person.name }, undefined, `santa-${id}-${side}`); };
   const drawAt = $derived(e.regUntil && e.regUntil > nowTs() ? `${dayMonthShort(e.regUntil)}, ${time(e.regUntil)}` : '');
 </script>
 
@@ -80,6 +90,14 @@
     <p class="wish t-body">{mine.to.wish}</p>
   </section>
 {/if}
+{#snippet chat(side: 'to' | 'from')}
+  <button class="santa row talk" onclick={() => talk(side)}>
+    <span class="ic"><MessageCircle size={20} /></span>
+    <span class="txt"><b class="fs-row">{t(side === 'to' ? 'santa.chatToRow' : 'santa.chatFromRow')}</b>{#if last(side)}<span class="t-foot ellipsis">{last(side)}</span>{/if}</span>
+    <span class="ic"><ChevronRight size={18} /></span>
+  </button>
+{/snippet}
+{#if chatOn && opened}{@render chat('to')}{/if}
 {#if mine.to !== null}
   <button class="santa card mine" onclick={editWish} aria-label="{t('santa.mine')}: {t('santa.edit')}">
     <div class="cap"><span class="t-foot">{t('santa.mine')}</span><span class="t-foot hint">{t('santa.mineHint')}</span></div>
@@ -87,12 +105,17 @@
     <span class="edit t-foot"><PenLine size={14} />{t('santa.edit')}</span>
   </button>
 {/if}
+{#if chatOn}{@render chat('from')}{/if}
 
 <style>
   .santa { margin: 0; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--text); text-align: left; }
   .row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); }
   .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
   .txt b, .seal b { font-weight: 600; }
+  .talk { width: 100%; border: 0; cursor: pointer; transition: transform 450ms var(--ease-bounce); }
+  .talk:active { transform: scale(0.98); transition-duration: 80ms; }
+  .ic { flex: none; display: grid; color: var(--text-3); }
+  .ic:first-child { color: var(--accent); }
   .card { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4); }
   .dim { margin: 0; color: var(--text-2); }
   .seal { display: flex; flex-direction: column; align-items: center; gap: var(--s-4); width: 100%; padding: var(--s-6) var(--s-4) var(--s-5); border: 0; cursor: pointer; }

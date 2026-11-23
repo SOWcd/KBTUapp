@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 
 from kbtu import admin, bot, logic
-from test_core import delete_now, env, login, tma  # noqa: F401  (env is a fixture)
+from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _uid
 
 PLAYERS = (10, 11, 12, 13, 14)
@@ -719,3 +719,108 @@ def test_change_my_wishlist(env):
     assert _rewish(c, eid, santa, "too late").status_code == 409  # the gifts day began
     con.execute("UPDATE events SET starts_at = ?, status = 'cancelled' WHERE id = ?", (int(time.time()) + DAY, eid))
     assert _rewish(c, eid, santa, "cancelled").status_code == 404
+
+
+def _chat(c, eid, tg):
+    return c.get(f"/api/events/{eid}/santa/chat", headers=tma(tg))
+
+
+def _say(c, eid, tg, side, text="hello"):
+    return c.post(f"/api/events/{eid}/santa/chat", headers=tma(tg), json={"side": side, "text": text})
+
+
+def test_chat_is_the_pair_alone(env):
+    """The pair's thread: the Santa writes, their person reads it from "Secret Santa" and answers; nothing in the
+    receiver's answer names the Santa; nobody else reads or writes it (a third player, the organizer, a stranger); the
+    bot's push is a template without the words, once an hour per thread; a report deletes it and closes it."""
+    c, cfg = env
+    con, eid = _game(c, cfg, 4)
+    assert _chat(c, eid, 10).status_code == 404 and _say(c, eid, 10, "to").status_code == 404  # no draw, no chat
+    assert _draw(c, eid).status_code == 200
+    gives = _gives(c, con, eid, PLAYERS[:4])
+    a, b = 10, gives[10]
+    third = next(tg for tg in PLAYERS[:4] if tg not in (a, b) and gives[tg] != a)  # neither of the pair, nor a's own Santa
+    assert _chat(c, eid, a).json() == {"to": {"closed": False, "msgs": []}, "from": {"closed": False, "msgs": []}}
+    for bad in (None, " ", "x" * 501, 5):
+        r = c.post(f"/api/events/{eid}/santa/chat", headers=tma(a), json={"side": "to", "text": bad})
+        assert r.status_code == 400 and r.json()["message"] == "text", r.text
+    assert _say(c, eid, a, "them").status_code == 400
+    m = _say(c, eid, a, "to", "  a hint:\n look   under the tree ").json()
+    assert m == {"id": m["id"], "mine": True, "text": "a hint: look under the tree", "at": m["at"]}  # one line of plain words
+    got = _chat(c, eid, b)
+    assert got.json()["from"]["msgs"] == [{"id": m["id"], "mine": False, "text": "a hint: look under the tree", "at": m["at"]}]
+    assert got.json()["to"]["msgs"] == []  # b's own thread as a Santa is another one
+    # anonymity: the receiver's answer is these keys alone, no id or name of anyone in it
+    ua = _uid(con, a)
+    assert set(got.json()["from"]) == {"closed", "msgs"} and set(got.json()["from"]["msgs"][0]) == {"id", "mine", "text", "at"}
+    assert "person" not in got.text and "name" not in got.text and "giver" not in got.text and "p10" not in got.text
+    assert _say(c, eid, b, "from", "thank you, Santa").json()["mine"] is True
+    assert [(x["mine"], x["text"]) for x in _chat(c, eid, a).json()["to"]["msgs"]] == [(True, "a hint: look under the tree"), (False, "thank you, Santa")]
+    # a third player has their own threads, the organizer and a stranger none; nobody's write lands in the pair's
+    assert "tree" not in _chat(c, eid, third).text and "thank" not in _chat(c, eid, third).text
+    for tg in (20, 15):
+        assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404 and _say(c, eid, tg, "from").status_code == 404
+    assert "tree" not in c.get(f"/api/events/{eid}", headers=tma(20)).text  # the event's page has no message for anyone
+    assert _say(c, eid, third, "to", "other").status_code == 200 and len(_chat(c, eid, a).json()["to"]["msgs"]) == 2
+    # the bot: a template with a button into the game, never the words, once an hour per thread
+    mine = lambda kind, tg: [x for x in _out(con, kind) if x["user_id"] == _uid(con, tg)]  # noqa: E731
+    sent = mine("santa_msg", b)
+    assert len(sent) == 1 and "tree" not in str(tuple(sent[0]))
+    text, button, start = bot._render(con, sent[0])
+    assert start == f"ev_{eid}" and text.startswith("\U0001f385") and "tree" not in text + str(button) and "Test" not in text
+    back = mine("santa_reply", a)
+    assert len(back) == 1 and "thank" not in bot._render(con, back[0])[0]
+    _say(c, eid, a, "to", "again")
+    assert len(mine("santa_msg", b)) == 1
+    con.execute("UPDATE bot_outbox SET send_after = send_after - 3601, ref = ref || '0' WHERE kind = 'santa_msg'")
+    _say(c, eid, a, "to", "an hour on")
+    assert len(mine("santa_msg", b)) == 2
+    assert not con.execute("SELECT 1 FROM audit_log WHERE data LIKE '%tree%' OR action LIKE '%santa%'").fetchone()  # no audit row
+    # a report by the receiver: the words are gone for both, nobody writes there again; the push falls quiet
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(20), json={"side": "from"}).status_code == 404
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(b), json={"side": "from"}).status_code == 204
+    assert _chat(c, eid, b).json()["from"] == {"closed": True, "msgs": []} == _chat(c, eid, a).json()["to"]
+    assert _say(c, eid, a, "to").status_code == 409 and _say(c, eid, b, "from").status_code == 409
+    assert not con.execute("SELECT 1 FROM santa_msgs WHERE text LIKE '%tree%'").fetchone()
+    assert bot._render(con, mine("santa_msg", b)[0]) is None
+    assert _chat(c, eid, a).json()["from"]["closed"] is False  # a's thread with their own Santa is untouched
+
+
+def test_chat_cap_and_what_deletes_it(env, monkeypatch):
+    """Fifty messages a day per person; a thread goes with a lost seat (the new pair starts empty), with an account,
+    and three days after the gifts day."""
+    c, cfg = env
+    con, eid = _game(c, cfg, 5)
+    assert _draw(c, eid).status_code == 200
+    gives = _gives(c, con, eid, PLAYERS)
+    a, b = 10, gives[10]
+    for i in range(logic.santa.MSG_DAY):
+        assert _say(c, eid, a, "to" if i % 2 else "from", f"m{i}").status_code == 200
+    r = _say(c, eid, a, "to")
+    assert r.status_code == 429 and r.json()["message"] == "santa_msgs"
+    assert _say(c, eid, b, "from").status_code == 200  # the cap is a person's, not a thread's
+    con.execute("UPDATE santa_msgs SET created_at = created_at - 86401")
+    assert _say(c, eid, a, "to").status_code == 200
+    # b loses the seat: both of b's threads go, and a's new person finds an empty one
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs WHERE to_id = ?", (_uid(con, b),)).fetchone()[0]
+    c.delete(f"/api/events/{eid}/registration", headers=tma(b))
+    assert not con.execute("SELECT 1 FROM santa_msgs WHERE ? IN (giver_id, to_id)", (_uid(con, b),)).fetchone()
+    assert _chat(c, eid, a).json()["to"] == {"closed": False, "msgs": []} and _chat(c, eid, b).status_code == 404
+    assert len(_chat(c, eid, a).json()["from"]["msgs"]) == logic.santa.MSG_DAY // 2  # a's thread with their own Santa stays
+    # an account deleted: its messages with it
+    assert _say(c, eid, a, "to", "to my new person").status_code == 200
+    ua = _uid(con, a)
+    delete_now(c, cfg, tma(a))
+    assert not con.execute("SELECT 1 FROM santa_msgs WHERE ? IN (giver_id, to_id)", (ua,)).fetchone()
+    # retention: writable for three days after the gifts day, swept by the night's round then
+    x = next(tg for tg in PLAYERS if tg not in (a, b))
+    assert _say(c, eid, x, "to", "kept").status_code == 200
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 3 * DAY + 60, eid))
+    assert _say(c, eid, x, "to", "thanks after the party").status_code == 200
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs WHERE event_id = ?", (eid,)).fetchone()[0] == 2
+    con.execute("UPDATE events SET starts_at = starts_at - 120 WHERE id = ?", (eid,))
+    assert _chat(c, eid, x).status_code == 404 and _say(c, eid, x, "to").status_code == 404
+    set_clock(monkeypatch, lambda: (int(time.time()) + 5 * 3600) // DAY * DAY + DAY - 5 * 3600 + 60)  # just past Almaty's midnight: the night's round
+    logic.stats_day(con)
+    assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()

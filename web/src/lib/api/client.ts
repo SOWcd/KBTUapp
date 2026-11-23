@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch } from './types';
+import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -48,7 +48,7 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = event === undefined ? /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1] : String(event);
   // A personal action always uses the student's own authority, even while Admin has the event open.
-  if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish)(?:[/?]|$)/.test(path)) return {};
+  if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish|santa\/chat)(?:[/?]|$)/.test(path)) return {};
   if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
   if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id)
     && path !== `/events/${id}/seats`)) return orgHead();
@@ -196,6 +196,9 @@ export const server = {
   santaStart: (org: Id, title: string, startsAt: Ts, budget: number, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget (none or out of bounds) / until)
   santaSettings: (id: Id, s: { budget?: number; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
   santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)
+  santaChat: (id: Id): Promise<SantaChats> => call('GET', `/events/${id}/santa/chat`), // my two threads of a drawn game (error not_found: none)
+  santaWrite: (id: Id, side: 'to' | 'from', text: string): Promise<SantaMsg> => call('POST', `/events/${id}/santa/chat`, { side, text }), // errors rate_limited, closed (reported)
+  santaReport: (id: Id, side: 'to' | 'from'): Promise<void> => call('POST', `/events/${id}/santa/chat/report`, { side }), // the thread is deleted and closed for both
   santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)

@@ -6,7 +6,9 @@ Secrecy is the point: a pair and a wishlist are read in one place, view(), by th
 audit row has them (the wishlist lives here, not in registrations.answers, which the organizers read).
 A gift budget and the wishlists' deadline (the event's reg_until) set at the start; at the deadline the
 bot's round draws by itself through the same _draw (tick()); reminders before the deadline and on the eve of the
-gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day."""
+gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day.
+After the draw the two of a pair may write to each other (chat, write, report): one thread per pair, the receiver never
+told who their Santa is; no list, export, log, audit row or admin view has a message; gone 3 days after the gifts day."""
 from __future__ import annotations
 
 import secrets
@@ -20,6 +22,7 @@ WISH_MAX = 300
 MIN = 3
 BUDGET = (100, 1_000_000)  # tenge: a gift's sane bounds
 DAY = 86400
+MSG_MAX, MSG_DAY, MSG_KEEP = 500, 50, 3 * DAY  # the chat: a message's length, mine a day, how long after the gifts day it lives
 LEAD = 3600  # the wishlists close an hour before the gifts day at the latest: the round needs the moment to draw
 
 _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
@@ -371,6 +374,82 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
     if me:
         out["mySanta"] = {"wish": me["wish"], **({"to": _to(con, e["id"], v.id)} if s["drawn_at"] else {})}
     return out
+
+
+def _thread(con, eid: int, uid: int, mine: bool) -> tuple[int, int] | None:
+    """A thread's two people (giver, receiver), read off the ring by my own row alone, never from the client. mine: the
+    one where I am the Santa; else the one with my Santa. None: no such pair, or no game to talk in (not drawn, not
+    published, MSG_KEEP past the gifts day, or I'm not playing): the same answer to an organizer and a stranger."""
+    r = one(con, f"""SELECT p.user_id, p.gives_to FROM santa_people p JOIN santa_events s ON s.event_id = p.event_id AND s.drawn_at IS NOT NULL
+        JOIN events e ON e.id = p.event_id AND e.status = 'published' AND e.hidden_at IS NULL AND COALESCE(e.ends_at, e.starts_at) + ? > ?
+        WHERE p.event_id = ? AND p.{'user_id' if mine else 'gives_to'} = ? AND p.gives_to != p.user_id""", MSG_KEEP, now(), eid, uid)
+    return (r[0], r[1]) if r and one(con, _GOING + " AND p.user_id = ?", eid, uid) else None
+
+
+_MSGS = "FROM santa_msgs WHERE event_id = ? AND giver_id = ? AND to_id = ?"
+
+
+def chat(con, v: Viewer, eid: int) -> dict:
+    """My two threads in a drawn game: `to`, where I write as the Santa of my person (named on the event's page), and
+    `from`, with my own Santa. A message says only whether it is mine: never an id or a name, so my Santa stays secret."""
+    out = {}
+    for side in ("to", "from"):
+        p = _thread(con, eid, v.id, side == "to")
+        ms = rows(con, f"SELECT id, from_giver, text, created_at {_MSGS} ORDER BY id", eid, *p) if p else []
+        out[side] = {"closed": any(m["text"] is None for m in ms),
+                     "msgs": [{"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]}
+                              for m in ms if m["text"] is not None]} if p else None
+    if not any(out.values()):
+        raise ApiError("not_found")
+    return out
+
+
+def _side(body: dict) -> bool:
+    if body.get("side") not in ("to", "from"):
+        raise ApiError("bad_input")
+    return body["side"] == "to"
+
+
+def write(con, v: Viewer, eid: int, body: dict) -> dict:
+    """A message into one of my two threads: plain words, one line, up to MSG_MAX; MSG_DAY a day per person. The other
+    one hears it from the bot: a template with no words of mine, once an hour per thread at most."""
+    mine = _side(body)
+    text = " ".join(body["text"].split()) if isinstance(body.get("text"), str) else ""
+    if not 1 <= len(text) <= MSG_MAX:
+        raise ApiError("bad_input", "text")
+    with tx(con):  # the count and the insert as one: parallel taps can't pass the day's limit
+        p = _thread(con, eid, v.id, mine)
+        if not p:
+            raise ApiError("not_found")
+        if one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p):
+            raise ApiError("closed")
+        # ponytail: the day's count reads my threads through two indexes (giver, receiver); a sender column if it shows up slow
+        if one(con, """SELECT COUNT(*) FROM santa_msgs WHERE created_at > ? AND text IS NOT NULL
+                AND (giver_id = ? AND from_giver = 1 OR to_id = ? AND from_giver = 0)""", now() - DAY, v.id, v.id)[0] >= MSG_DAY:
+            raise ApiError("rate_limited", "santa_msgs")
+        mid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, text, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                          (eid, *p, int(mine), text, now())).lastrowid
+        other, kind = (p[1], "santa_msg") if mine else (p[0], "santa_reply")
+        if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = ? AND ref LIKE ? AND send_after > ?", other, kind, f"event:{eid}:%", now() - 3600):
+            notify(con, other, kind, f"event:{eid}:{now()}")
+    return {"id": mid, "mine": True, "text": text, "at": now()}
+
+
+def report(con, v: Viewer, eid: int, body: dict) -> None:
+    """Report on a thread, by either of its two: its words are deleted and nobody writes in it again. No staff reads
+    it: a moderator's queue would show them the pair, and the pair is nobody's but its giver's."""
+    mine = _side(body)
+    with tx(con):
+        p = _thread(con, eid, v.id, mine)
+        if not p:
+            raise ApiError("not_found")
+        con.execute(f"DELETE {_MSGS}", (eid, *p))
+        con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?)", (eid, *p, int(mine), now()))
+
+
+def forget(con) -> None:
+    """The nightly sweep (daily.stats_day): the threads go MSG_KEEP after the gifts day."""
+    con.execute("DELETE FROM santa_msgs WHERE event_id IN (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) + ? <= ?)", (MSG_KEEP, now()))
 
 
 def gone(con, uid: int) -> None:

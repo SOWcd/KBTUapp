@@ -991,6 +991,14 @@ CREATE TABLE santa_games (  -- IF NOT EXISTS: tests rewind user_version
       eve INTEGER,
       late INTEGER,
       nudged_at INTEGER) STRICT;
+CREATE TABLE santa_msgs (
+      id INTEGER PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      giver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_giver INTEGER NOT NULL CHECK (from_giver IN (0, 1)),
+      text TEXT CHECK (length(text) BETWEEN 1 AND 500),
+      created_at INTEGER NOT NULL) STRICT;
 CREATE TABLE santa_people (
       event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1480,6 +1488,8 @@ CREATE INDEX roster_by_tg ON roster_pending(tg);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
+CREATE INDEX santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
+CREATE INDEX santa_msgs_to ON santa_msgs (to_id);
 CREATE INDEX santa_people_to ON santa_people (gives_to);
 CREATE INDEX santa_people_user ON santa_people (user_id);
 CREATE INDEX saved_by_event ON saved_events(event_id);
@@ -1653,6 +1663,9 @@ CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations
     END;
 CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
       DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
+    END;
+CREATE TRIGGER santa_msgs_gone AFTER DELETE ON santa_people BEGIN
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id);
     END;
 CREATE TRIGGER kri_consents_student_gone AFTER DELETE ON students BEGIN
       DELETE FROM kri_consents WHERE user_id = OLD.user_id;
