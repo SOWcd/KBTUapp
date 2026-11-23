@@ -7,12 +7,11 @@ import { addressGis } from './map';
 export type Place = 'main' | 'b2' | 'dorm' | 'away';
 export const PLACES: Place[] = ['main', 'b2', 'dorm', 'away'];
 
-// ponytail: a circle round one point per building. MAIN and DORM are approximate (Tole Bi 59; the dorm's spot is
-// unconfirmed: the owner checks both in 2GIS); B2 is the point of lib/map.ts BLDG2_2GIS. Outlines if a neighbour's
-// yard starts to count as campus.
-const MAIN: [number, number] = [43.2553, 76.9431];
+// ponytail: a circle round one point per building (2GIS points: Tole Bi 59, lib/map.ts BLDG2_2GIS and DORM_2GIS).
+// Outlines if a neighbour's yard starts to count as campus.
+const MAIN: [number, number] = [43.255628, 76.943119];
 const B2: [number, number] = [43.253443, 76.909355];
-const DORM: [number, number] = [43.2507, 76.8715];
+const DORM: [number, number] = [43.252333, 76.882323];
 const NEAR_M = 250; // a building's own size plus a phone's GPS error indoors
 const SITES: [Place, [number, number]][] = [['main', MAIN], ['b2', B2], ['dorm', DORM]];
 
