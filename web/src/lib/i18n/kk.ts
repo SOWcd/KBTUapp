@@ -1710,7 +1710,7 @@ const kk: Dict = {
   'adm.notify': "Менің хабарламаларым",
   'adm.notificationStats': "Хабарлан­дырулар",
   'adm.notificationStats.period': "Соңғы 30 күн. Пайыздар жіберілген хабарламалар санынан есептеледі.",
-  'adm.notificationStats.counts': "Жіберілді: {sent} · Пайдалы: {useful} ({usefulRate}) · Өшірілді: {off} ({offRate})",
+  'adm.notificationStats.counts': "Жіберілді: {sent} · Өшірілді: {off} ({offRate})",
   'adm.notify.club_application': "Жаңа клубтарға өтінімдер",
   'adm.notify.club_path': "Ресми мәртебе сұраулары",
   'adm.notify.backup': "Дерекқордың резервтік көшірмелері",

@@ -1710,7 +1710,7 @@ const en: Dict = {
   'adm.notify': "My notifications",
   'adm.notificationStats': "Notifications",
   'adm.notificationStats.period': "Last 30 days. Rates are the share of sent messages.",
-  'adm.notificationStats.counts': "Sent {sent} · Useful {useful} ({usefulRate}) · Turned off {off} ({offRate})",
+  'adm.notificationStats.counts': "Sent {sent} · Turned off {off} ({offRate})",
   'adm.notify.club_application': "New club applications",
   'adm.notify.club_path': "Official status requests",
   'adm.notify.backup': "Database backups",

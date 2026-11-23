@@ -122,7 +122,7 @@ export interface TgComment { body: string; link: string | null; student: boolean
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number; studentsToday: number;
   days: { day: number; active: number; new: number; students: number }[];
-  notificationCounts?: { category: keyof Settings; sent: number; useful: number; turnedOff: number }[];
+  notificationCounts?: { category: keyof Settings; sent: number; turnedOff: number }[];
   /** the translator (PLAN 9): Cloudflare's keys set, translated today (UTC), the last error */
   ai?: { on: boolean; today: number; error: string | null };
   today?: number /* opened the app today so far (the visits log) */;

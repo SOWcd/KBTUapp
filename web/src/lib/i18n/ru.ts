@@ -1731,7 +1731,7 @@ const ru = {
   'adm.notify': "Мои уведомления",
   'adm.notificationStats': "Уведомления",
   'adm.notificationStats.period': "Последние 30 дней. Проценты рассчитаны от числа отправленных сообщений.",
-  'adm.notificationStats.counts': "Отправлено: {sent} · Полезно: {useful} ({usefulRate}) · Отключено: {off} ({offRate})",
+  'adm.notificationStats.counts': "Отправлено: {sent} · Отключено: {off} ({offRate})",
   'adm.notify.club_application': "Заявки на новые клубы",
   'adm.notify.club_path': "Запросы официального статуса",
   'adm.notify.backup': "Резервные копии базы",

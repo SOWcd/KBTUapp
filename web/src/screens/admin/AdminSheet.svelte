@@ -174,11 +174,11 @@
     </Group>
     {#if admin && data.adminStats?.notificationCounts}
       <Group caption={t('adm.notificationStats')} footnote={t('adm.notificationStats.period')}>
-        {#each data.adminStats.notificationCounts as { category, sent, useful, turnedOff } (category)}
+        {#each data.adminStats.notificationCounts as { category, sent, turnedOff } (category)}
           {@const label = notificationSettings.find(([key]) => key === category)?.[1]}
           {#if label}
             <Row dense title={t(label)} subtitle={t('adm.notificationStats.counts', {
-              sent: fmtNum(sent), useful: fmtNum(useful), usefulRate: rate(useful, sent), off: fmtNum(turnedOff), offRate: rate(turnedOff, sent),
+              sent: fmtNum(sent), off: fmtNum(turnedOff), offRate: rate(turnedOff, sent),
             })} />
           {/if}
         {/each}
