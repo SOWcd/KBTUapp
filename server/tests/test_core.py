@@ -284,9 +284,9 @@ def test_postman(env, monkeypatch):
     con.execute("UPDATE users SET can_dm = 1, lang = 'kk'")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
-        VALUES (5, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
+        VALUES (20003, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
     uid = con.execute("SELECT id FROM users WHERE tg_id = 10").fetchone()[0]
-    for kind, ref in (("seat_free", "event:5"), ("new_event", "event:5"), ("event_changed", "event:404:1")):
+    for kind, ref in (("usage_week", "uw:20003"), ("seat_free", "event:20003"), ("new_event", "event:20003"), ("event_changed", "event:404:1")):
         con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, ?, ?, 0)", (uid, kind, ref))
     sent = []
 
@@ -303,14 +303,14 @@ def test_postman(env, monkeypatch):
     from kbtu import texts
     kk = texts.bot_message("kk", "seat_free", title="Hack <night>", when=texts.when(1791090000, "kk"), place="305")[0]
     assert first["chat_id"] == 10 and first["text"] == kk and "Hack &lt;night&gt;" in kk   # Kazakh, escaped
-    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_5")
+    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_20003")
     state = dict(con.execute("SELECT kind, COALESCE(error, 'sent') FROM bot_outbox").fetchall())
-    assert state == {"seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
+    assert state == {"usage_week": "gone", "seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
     assert con.execute("SELECT can_dm FROM users WHERE id = ?", (uid,)).fetchone()[0] == 0
 
     con.execute("DELETE FROM bot_outbox")
     con.execute("UPDATE users SET can_dm = 1")
-    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:5', 0)", (uid,))
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:20003', 0)", (uid,))
     stale = bot.rows(con, "SELECT b.*, u.tg_id, u.lang, u.can_dm FROM bot_outbox b JOIN users u ON u.id = b.user_id")
     sent.clear()
 
@@ -4837,8 +4837,7 @@ def test_app_team(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    # the bot keeps quiet to him. Only his chat counts: send_due also runs the chores, and on a Monday from 9:00 (Almaty)
-    # stats.week() sends the owner (a founder here) the week's digest (was: `not sent`, which failed every Monday)
+    # The bot skips the banned user's chat.
     assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
     assert logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"
     assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200

@@ -1,12 +1,11 @@
 """Anonymous usage counters: what students open, what nobody opens, how long the app takes to open. One table of daily
 totals, (day, key, n), with no person in it (no user id, Telegram id, hash, IP or session); that is what keeps it out
-of the privacy policy. The app sends batches (web/src/lib/stats.ts); the owner reads a weekly bot message and
-`admin stats-usage`."""
+of the privacy policy. The app sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage`."""
 from __future__ import annotations
 
-from ..db import maybe, tx
+from ..db import maybe
 from . import core
-from .core import _once, one, rows
+from .core import one, rows
 
 # no sheet.admin: with one moderator, its error count would say who hit it
 # the one allowlist: anything else a client sends is ignored. web/src/lib/stats.ts has the same names (a test checks)
@@ -64,19 +63,6 @@ def add(con, uid: int, body: dict) -> None:
 
 def forget(con) -> None:
     con.execute("DELETE FROM usage_days WHERE day < ?", (_today() - KEEP_DAYS,))
-
-
-def week(con) -> None:
-    """Monday from 9:00 (Almaty), once: the last seven days' numbers to the creator alone."""
-    local = core.now() + 5 * 3600
-    day = local // 86400
-    if (day + 3) % 7 or local % 86400 < 9 * 3600:
-        return
-    with tx(con):  # the mark and the queue together: a restart between them can't lose the digest
-        if not _once(con, "usage_week", str(day)):
-            return
-        for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND tg_id > 0"):
-            notify(con, uid, "usage_week", f"uw:{day}")
 
 
 def _percentile(bars: list[int], share: float, labels: tuple = BUCKETS) -> str:
@@ -142,6 +128,3 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),
             "opens": "\n".join(opens) or "—"}
-
-
-from .seats import notify  # noqa: E402  (imported last: seats reaches this package's other modules too)
