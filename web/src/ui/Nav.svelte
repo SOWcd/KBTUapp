@@ -90,6 +90,9 @@
     transition: transform var(--t-slow) var(--ease-spring), visibility 0s;
   }
   .dock > * { pointer-events: auto; }
+  /* the home-screen app: iOS's full home-indicator inset (34 pt) sat the bar ~14 pt above where Telegram puts it (its
+     inset is smaller); the same spot in both, still clear of the home indicator (owner's two screenshots, Nov 23) */
+  :global(html[data-web]) .dock { bottom: calc(max(0px, var(--safe-bottom) - 14px) + 10px); }
   /* gone once it has slid away: off screen its two backdrop filters were still composited under every sheet and the
      map (iOS has a budget for them, the map's glass drew without its backdrop once it ran short); back at once */
   :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); visibility: hidden;
