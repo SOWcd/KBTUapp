@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey, askDm } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { nameOf } from './lib/short';
@@ -866,11 +866,13 @@
   let hinted = false;
   // the bot can't write to them (they never opened its chat): on every launch until it can (owner, Nov 23: ~half the
   // users get no tickets or reminders); Telegram's own "allow messages" is one tap
+  // a sheet that shows it (DmSheet: a plain question was closed unread), its chunk warmed with the first sheets
+  const dmSheet = () => import('./screens/sheets/DmSheet.svelte');
   let dmHinted = false;
-  async function dmHint() {
+  function dmHint() {
     if (dmHinted || !inTelegram || !session.me || session.me.canDm || session.banned || session.revoked) return;
     dmHinted = true;
-    if (await sheets.ask({ title: t('dm.offTitle'), text: t('dm.offText'), ok: t('dm.offOk'), cancel: t('dm.offLater') })) await askDm(undefined, true);
+    return lazy(dmSheet, {});
   }
   function installHint() {
     if (hinted) return;
@@ -910,7 +912,7 @@
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
       // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
-      for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
+      for (const load of [eventSheet, personSheet, clubSheet, ...(inTelegram && session.me && !session.me.canDm ? [dmSheet] : [])]) load().then((m) => loaded.set(load, m)).catch(() => {});
       for (const k of TABS) loadPage(k).catch(() => {});
       if (session.banned || session.revoked) return;
       // A Microsoft return without a start parameter can still carry a verified pending claim.
