@@ -57,16 +57,18 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
 
     admin.main([*cmd, "--dry"])
     assert capsys.readouterr().out.strip() == "would queue 2"
-    admin.main(["broadcast", NAME, "https://t.me/example_channel/43", "10"])
-    assert capsys.readouterr().out.strip() == "queued 0"
+    admin.main([*cmd, "10"])  # a preview goes again (the owner checks a changed text)
+    assert capsys.readouterr().out.strip() == "queued 1"
+    asyncio.run(send())
+    assert [m["chat_id"] for m in messages] == [10, 10]
     admin.main(cmd)
     assert capsys.readouterr().out.strip() == "queued 2"
     admin.main(cmd)
     assert capsys.readouterr().out.strip() == "queued 0"
     asyncio.run(send())
 
-    assert [m["chat_id"] for m in messages] == [10, 11, 12]
-    for message, lang, button in zip(messages, ("en", "kk", "ru"), ("\U0001f3ac Watch", "\U0001f3ac \u041a\u04e9\u0440\u0443", "\U0001f3ac \u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
+    assert [m["chat_id"] for m in messages] == [10, 10, 11, 12]
+    for message, lang, button in zip(messages[1:], ("en", "kk", "ru"), ("\U0001f3ac Watch", "\U0001f3ac \u041a\u04e9\u0440\u0443", "\U0001f3ac \u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
         assert message["text"] == texts.bot_message(lang, NAME)[0]
         assert message["reply_markup"] == {"inline_keyboard": [[{"text": button, "url": URL}]]}
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE sent_at IS NOT NULL").fetchone()[0] == 3
