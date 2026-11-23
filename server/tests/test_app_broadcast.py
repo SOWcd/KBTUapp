@@ -95,3 +95,11 @@ def test_broadcast_refuses_unsafe_requests(audience):
     with pytest.raises(SystemExit, match="needs the active creator admin"):
         admin.main(["broadcast", NAME, URL])
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
+
+
+def test_a_failed_preview_can_go_again(audience, capsys):
+    con, _ = audience
+    admin.main(["broadcast", NAME, URL, "@reader"])
+    con.execute("UPDATE bot_outbox SET error = 'gone'")
+    admin.main(["broadcast", NAME, URL, "@reader"])
+    assert capsys.readouterr().out.split() == ["queued", "1", "queued", "1"]
