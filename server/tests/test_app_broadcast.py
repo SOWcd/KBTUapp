@@ -8,7 +8,7 @@ import pytest
 from kbtu import admin, bot, db, texts
 from test_core import env  # noqa: F401  (env: the fixture)
 
-NAME = "app_update_home"
+NAME = "app_home"
 URL = "https://t.me/example_channel/42"
 
 
@@ -66,7 +66,7 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
     asyncio.run(send())
 
     assert [m["chat_id"] for m in messages] == [10, 11, 12]
-    for message, lang, button in zip(messages, ("en", "kk", "ru"), ("Watch", "\u041a\u04e9\u0440\u0443", "\u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
+    for message, lang, button in zip(messages, ("en", "kk", "ru"), ("\U0001f3ac Watch", "\U0001f3ac \u041a\u04e9\u0440\u0443", "\U0001f3ac \u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
         assert message["text"] == texts.bot_message(lang, NAME)[0]
         assert message["reply_markup"] == {"inline_keyboard": [[{"text": button, "url": URL}]]}
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE sent_at IS NOT NULL").fetchone()[0] == 3
