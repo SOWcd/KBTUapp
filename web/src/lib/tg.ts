@@ -225,6 +225,11 @@ export async function shareCard(card: Record<string, string | number | boolean |
   finally { shareBusy(false); }
 }
 
+/** Telegram's share picker with our words first, the link under them (its `text` param would go below the link). */
+export function tgShare(link: string, text: string) {
+  openLink(`https://t.me/share/url?url=${encodeURIComponent(`${text}\n${link}`)}`);
+}
+
 async function shareVia(card: Record<string, string | number | boolean | null>, link: string, text: string, ready: () => void): Promise<boolean> {
   if (inTelegram && can('8.0') && W?.shareMessage) {
     // the server reads initData from the header like every API call; the dev server still reads it from the body
@@ -244,7 +249,7 @@ async function shareVia(card: Record<string, string | number | boolean | null>, 
     if (typeof made === 'string') link = made;
   }
   ready();
-  openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+  tgShare(link, text);
   return false; // the link opens Telegram's own picker: we never learn whether it was sent
 }
 

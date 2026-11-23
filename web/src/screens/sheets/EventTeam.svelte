@@ -24,7 +24,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say } from '../../lib/state/ui.svelte';
   import { t, money } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, tgShare } from '../../lib/tg';
   import { setTeamConsent, teamConsentOk } from '../../lib/teamConsent';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Avatar from '../../ui/Avatar.svelte';
@@ -50,7 +50,7 @@
     try { onchange(await call()); ok?.(); } catch (e) { onchange(was); fail(e); }
   }
 
-  const share = () => { haptic.tap(); openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('tm.inviteMsg', { title: detail.title }))}`); };
+  const share = () => { haptic.tap(); tgShare(link, t('tm.inviteMsg', { title: detail.title })); };
   async function copy() {
     if (!(await copyText(link, t('tm.copied')))) say(t('common.error'), 'pleading_face_3d');
   }
