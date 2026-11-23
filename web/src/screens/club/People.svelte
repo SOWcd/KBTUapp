@@ -13,7 +13,7 @@
   import { api, ApiErr, type DoorPerson, type Id, type TeamList } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { eventById } from '../../lib/state/data.svelte';
+  import { errorText, eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
   import { time, nowTs } from '../../lib/time';
@@ -25,6 +25,7 @@
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import { checkinMessages } from './checkinMessages';
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
@@ -66,7 +67,7 @@
   });
   const others = $derived((aud !== 'guests' ? team?.other ?? [] : []).filter(want));
 
-  const err = (e: unknown) => { haptic.error(); say(t(e instanceof ApiErr && e.code === 'closed' ? 'mk.closed' : 'common.error'), 'warning_3d'); };
+  const err = (e: unknown) => { haptic.error(); say(e instanceof ApiErr && e.code === 'closed' ? t('mk.closed') : errorText(e), 'warning_3d'); };
   const keep = (x: Item) => { if (!stay.includes(x.key)) stay.push(x.key); };
   async function mark(x: Item, admit = false) {
     haptic.ok(); keep(x);
@@ -84,7 +85,7 @@
           else if (!admit && await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') })) void mark(x, true);
           return;
         }
-        if (r.result !== 'ok' && r.result !== 'already') { set(x, was.at, was.manual); haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : r.result === 'not_open' ? 'scan.notOpen' : 'common.error'), 'warning_3d'); return; }
+        if (!('at' in r)) { set(x, was.at, was.manual); haptic.error(); say(t(checkinMessages[r.result]), 'warning_3d'); return; }
         set(x, r.at, r.result === 'ok');
       }
       onchange?.();

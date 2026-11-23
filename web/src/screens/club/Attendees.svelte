@@ -32,6 +32,7 @@
   import Notice from '../../ui/Notice.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import { checkinMessages } from './checkinMessages';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -73,7 +74,7 @@
         if (!admit && await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') })) void mark(a, true);
         return;
       }
-      if (r.result !== 'ok' && r.result !== 'already') { haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : r.result === 'not_open' ? 'scan.notOpen' : 'common.error'), 'pleading_face_3d'); return; }
+      if (!('at' in r)) { haptic.error(); say(t(checkinMessages[r.result]), 'pleading_face_3d'); return; }
       a.checkedInAt = r.at; a.manual = r.result === 'ok';
       haptic.ok();
       undoFor = a.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);

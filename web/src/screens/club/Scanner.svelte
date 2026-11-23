@@ -39,6 +39,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import EventQr from './EventQr.svelte';
+  import { checkinMessages } from './checkinMessages';
 
   // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
   // qr: the Mark screen: the rotating QR first («QR | Scanner»: the camera for tickets and
@@ -94,8 +95,6 @@
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
   $effect(() => { overlay.title = qr ? t('mk.title') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
-  const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
-
   // one of our own QRs (the door's own check-in QR, a club's link...) read by this scanner: opened as if tapped, so a
   // team member scanning the door's QR here is marked himself (people scanned it with this scanner)
   const ours = (raw: string) => raw.trim().match(/^(?:https?:\/\/)?t\.me\/KBTUappBot(?:\/\w+)?\?startapp=([\w-]{1,64})$/i)?.[1];
@@ -114,7 +113,11 @@
         code = '';
         if (camera && live === 'failed') setTimeout(() => { if (!gone) scan(); }, 1100); // the popup: the next one in the queue
       } else haptic.error(); // "already" too: a ticket used twice is a problem at the door
-    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = false; }
+    } catch (e) {
+      haptic.error();
+      const code = e instanceof ApiErr ? e.code : undefined;
+      say(t(code === 'rate_limited' ? 'scan.rateLimited' : code === 'bad_input' ? 'scan.badInput' : 'common.error'), 'warning_3d');
+    } finally { busy = false; }
   }
   const scan = () => scanQr(t('scan.prompt'), (text) => { void check(text); return true; });
 
@@ -260,7 +263,7 @@
             {/if}
           </div>
         {:else}
-          <div class="res bad"><span class="ic"><TriangleAlert size={44} /></span><b class="nm">{t(MSG[res.result])}</b></div>
+          <div class="res bad"><span class="ic"><TriangleAlert size={44} /></span><b class="nm">{t(checkinMessages[res.result])}</b></div>
         {/if}
       {/if}
     {/key}
