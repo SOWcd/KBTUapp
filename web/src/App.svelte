@@ -870,7 +870,7 @@
   const dmSheet = () => import('./screens/sheets/DmSheet.svelte');
   let dmHinted = false;
   function dmHint() {
-    if (dmHinted || !inTelegram || !session.me || session.me.canDm || session.banned || session.revoked) return;
+    if (dmHinted || !session.me || session.me.canDm || session.banned || session.revoked) return;
     dmHinted = true;
     return lazy(dmSheet, {});
   }

@@ -2,10 +2,12 @@
   // The bot can't write to this person (App dmHint, every launch until it can): a plain question was closed by reflex,
   // so this one shows what they miss. A lock screen's notifications from the app land one by one (the ticket, "in
   // 2 hours", a reply), newest on top, then the pile clears and it starts over. Drawn in CSS: transform and opacity
-  // only, no files to fetch. "Turn on" is Telegram's own allow-messages dialog (askDm).
+  // only, no files to fetch. "Turn on" is Telegram's own allow-messages dialog (askDm); outside Telegram (the web or
+  // home-screen app) it opens the bot's chat: /start there lets the bot write (bot.py, can_dm).
   import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { askDm } from '../../lib/state/data.svelte';
+  import { inTelegram, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
@@ -15,7 +17,8 @@
 
   function on() {
     close(overlay.id);
-    void askDm(undefined, true);
+    if (inTelegram) void askDm(undefined, true);
+    else openLink('https://t.me/KBTUappBot?start=dm');
   }
 </script>
 
