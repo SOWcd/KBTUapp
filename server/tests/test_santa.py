@@ -830,7 +830,7 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     assert _draw(c, eid).status_code == 200
     gives = _gives(c, con, eid, PLAYERS)
     a, b = 10, gives[10]
-    x = next(tg for tg in PLAYERS if tg not in (a, b))
+    x = next(tg for tg in PLAYERS if tg not in (a, b) and gives[tg] != a)  # not a's Santa: a's account, deleted below, takes its threads along
     assert _page(c, eid, a)["mySanta"]["chat"] is True
     for i in range(logic.santa.MSG_DAY):
         assert _say(c, eid, a, "to" if i % 2 else "from", f"m{i}").status_code == 200
