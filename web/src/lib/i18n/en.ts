@@ -1562,7 +1562,7 @@ const en: Dict = {
   'web.cookie': 'By signing in, you agree to a cookie that keeps you signed in.',
   'web.policy': 'Privacy Policy',
   'web.install': 'In Safari, tap Share → Add to Home Screen.',
-  'inst.title': "Like a real app",
+  'inst.title': "Almost like a real app",
   'inst.text': "An icon on your Home Screen, not a shortcut into Telegram: it opens instantly, like any other app. Same account.",
   'inst.add': "Add to Home Screen",
   'inst.later': "Not now",
