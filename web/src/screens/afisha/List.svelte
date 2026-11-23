@@ -53,6 +53,9 @@
   import { hit as orgHit } from '../../lib/clubs';
   import { hit, namesOf } from '../../lib/search';
   import GalleryCard from './GalleryCard.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import { afishaFilter, filterEvents, choices, active, pick, clearFilter } from '../../lib/state/afisha.svelte';
+  import { schoolName } from '../../lib/short';
 
   const TIMETABLE = 'kbtu.afisha.classes';
   let showClasses = $state((() => { try { return localStorage.getItem(TIMETABLE) !== 'hidden'; } catch { return true; } })());
@@ -80,6 +83,7 @@
 
   const featured = $derived(data.posts.find((p) => p.featured));
   const shown = $derived(data.events.filter((e) => e.status !== 'cancelled'));
+  const filtering = $derived(active(afishaFilter)); // a school or a type chosen (lib/state/afisha): castings step aside
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard } | { p: Post });
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
@@ -88,9 +92,9 @@
   const running = $derived(data.events.filter((e) => dayNo(e.startsAt) < today && endOf(e) > now).map((e) => e.id).join());
   const days = $derived.by(() => {
     const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
-    for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
+    for (const e of filterEvents(data.events, afishaFilter)) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs
-    for (const p of data.castings) { if (!p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
+    for (const p of data.castings) { if (filtering || !p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
     // the coming week's class days too (so a class day isn't missed), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -130,6 +134,16 @@
 
   // Opal's one hero: my next event, else the nearest coming one (a real cover first: the hero carries the screen's colour)
   const coming = $derived(shown.filter((e) => endOf(e) > now).sort((a, b) => a.startsAt - b.startsAt));
+  // the filters (a school, a type) narrow the days below only, on the list held: the chips are what it has
+  const chips = $derived(choices(coming, afishaFilter));
+  const matched = $derived(filtering ? filterEvents(coming, afishaFilter).length : coming.length);
+  // a kept chip past the row's edge (a school at 320 px) comes into view with the tab: never on unseen
+  function showPicked(row: HTMLElement) {
+    const on = [...row.querySelectorAll<HTMLElement>('[aria-pressed="true"]')].at(-1);
+    if (!on) return;
+    const over = on.getBoundingClientRect().right - row.getBoundingClientRect().right;
+    if (over > 0) row.scrollLeft += over + 16;
+  }
   const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
   const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
   const stats = $derived([
@@ -309,6 +323,16 @@
     <h2 class="sec two">{t('list.title')}</h2>
     <label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>
   </div>
+  {#if filtering || coming.length > 1}
+    <div class="chips" role="group" aria-label={t('list.f.label')} use:showPicked>
+      {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
+      {#if chips.types.length && chips.schools.length}<i class="sep" aria-hidden="true"></i>{/if}
+      {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
+    </div>
+  {/if}
+  {#if filtering && !matched}
+    <div class="none"><EmptyState title={t('list.f.none')} action={{ label: t('list.f.all'), onclick: () => { haptic.select(); clearFilter(); } }} /></div>
+  {/if}
 
   {#if featured}
     <div class="pin"><Card onclick={() => (openPost = !openPost)}>
@@ -405,6 +429,11 @@
   .sec { margin: 30px var(--s-1) 12px; font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
   .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px var(--s-1) 4px; }
   .sec.two { min-width: 0; margin: 0; }
+  /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
+  .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: 10px calc(-1 * var(--gutter)) 0; padding: 4px var(--gutter); scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .sep { flex: none; width: 0.5px; height: 20px; background: var(--separator); }
+  .none { margin-top: var(--s-4); }
   .cls { flex: none; display: flex; align-items: center; gap: 10px; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse

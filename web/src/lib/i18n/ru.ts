@@ -768,6 +768,14 @@ const ru = {
   'feed.end': "Это все события",
   'feed.endText': "Новые появляются каждый день. Подпишись на клубы — бот напишет первым.",
   'feed.empty': 'Скоро здесь появятся события',
+  'list.f.label': "Фильтры",
+  'list.f.free': "Бесплатно",
+  'list.f.paid': "Платно",
+  'list.f.online': "Онлайн",
+  'list.f.firstYear': "1 курс",
+  'list.f.team': "Командные",
+  'list.f.none': "Под эти фильтры событий нет",
+  'list.f.all': "Показать все",
 
   // the capsule over a club, an event, a person, a roster: a plain word (the hero below names it)
   'cap.club': "Клуб",
