@@ -346,6 +346,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "chat_approved":  # ca:<chat>, to each who suggested it, while it is still in the catalog: the Chats screen
         c = one(con, "SELECT title, kind, forum FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
         return (*texts.chat_approved(lang, "forum" if c["forum"] else c["kind"], c["title"]), "chats") if c else None
+    if kind in ("anon_feedback", "helper_offer"):  # afb:<day> | ho:<id>, to the creator: the template only, the words are read in Admin
+        boss = one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1 AND role = 'admin'", m["user_id"])  # still the creator
+        return (*texts.bot_message(lang, kind), "voices") if boss else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None

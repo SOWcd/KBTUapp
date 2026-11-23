@@ -10,6 +10,7 @@
   // Escape take it back.
   import Check from '@lucide/svelte/icons/check';
   import Plus from '@lucide/svelte/icons/plus';
+  import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
@@ -33,7 +34,9 @@
   import { api, type PersonCard } from '../../lib/api';
   import { nextUp, nameOf, whenOf, semester, termsOf, MASTER, PSYCHOLOGIST } from '../../lib/academic';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
-  import { dateInput, dayMonth, nowTs } from '../../lib/time';
+  import { dateInput, dayMonth, dayNo, nowTs } from '../../lib/time';
+  import { helpDone, helpDue, helpSeen } from '../../lib/helpus';
+  import ActionCard from '../../ui/ActionCard.svelte';
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import { may } from '../../lib/perms';
@@ -81,6 +84,10 @@
   // while the tab is away, in the next idle moment. Unseen either way: those blocks fade in on the page's stagger, from
   // 80 ms after the badge.
   let rest = $state(false);
+  // the one-time "students make this app" card (lib/helpus): an engaged student's, on one day, gone after a tap
+  let helpTapped = $state(false);
+  const helpAsk = $derived(rest && !helpTapped && helpDue(dayNo(nowTs()))); // read with the deferred blocks, not before the first paint
+  $effect(() => { if (helpAsk && rest && ui.tab === 'profile' && session.me?.student) helpSeen(dayNo(nowTs())); });
   onMount(() => {
     if (ui.tab !== 'profile' && 'requestIdleCallback' in window) { const h = requestIdleCallback(() => (rest = true), { timeout: 1000 }); return () => cancelIdleCallback(h); }
     let k = 0;
@@ -300,6 +307,9 @@
     </section>
   {/if}
   {#if rest}
+  {#if helpAsk && me?.student}
+    <div data-away><ActionCard icon={HeartHandshake} title={t('help.ask')} action={t('help.go')} onclick={() => { haptic.tap(); helpDone(); helpTapped = true; sheets.helpUs(); }} /></div>
+  {/if}
   {#if me?.deleteAt}
     <!-- the week to change my mind (DeleteSheet), with the way back -->
     <div data-away><Notice tone="danger" text={t('del.soon', { date: dayMonth(me.deleteAt) })} action={{ label: t('del.keep'), onclick: keepAccount }} /></div>

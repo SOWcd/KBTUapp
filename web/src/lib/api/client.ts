@@ -512,6 +512,11 @@ export const server = {
   mapFlaws: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]> => call('GET', '/map/flaws'), // the admin
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
+  // to the creator (server logic/helpus.py): an anonymous line, a signed offer to help; the admin's list of both
+  helpAnon: (body: string): Promise<void> => call('POST', '/helpus/anon', { body }),
+  helpOffer: (kinds: string[], note: string, consent: string): Promise<void> => call('POST', '/helpus/offer', { kinds, note, consent }),
+  helpList: (): Promise<{ anon: { body: string; day: number; new: boolean }[]; offers: { id: Id; person: PersonRef; username: string | null; kinds: ('code' | 'design' | 'ideas' | 'partner' | 'lang' | 'test')[]; note: string | null; at: Ts; new: boolean }[] }> => call('GET', '/helpus'),
+  helpSeen: (day: number, offer: Id): Promise<void> => call('POST', '/helpus/seen', { day, offer }), // read up to what the list showed
   assistant: (q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply> => call('POST', '/assistant', { q, history, context }), // the students' assistant; context: the card it was asked from (the server reads its facts)
   kriGoogle: (on: boolean): Promise<{ yes: boolean }> => (on ? call('POST', '/assistant/google', { consent: 'kri-g1' }) : call('DELETE', '/assistant/google')), // the assistant's own yes to Google (server assistant.GOOGLE_YES: the card's version), given or taken back
   assistantVote: (mark: string, vote: 'up' | 'down'): Promise<void> => call('POST', '/assistant/vote', { mark, vote }), // 👍/👎 on an answer's signed topic

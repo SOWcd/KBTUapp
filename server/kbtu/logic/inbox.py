@@ -45,7 +45,8 @@ def inbox(con, v: Viewer) -> dict:
     items.sort(key=lambda x: (not x["hidden"], not x.pop("harm"), x["at"]))
     # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide
     flaws = one(con, "SELECT COUNT(*) FROM map_flaws WHERE done_at IS NULL")[0] if admin else 0
-    return {"items": items, "done": done(con, v), "flaws": flaws, "santa": one(con, "SELECT COUNT(*) " + santa._OPEN)[0]}  # its own row in Admin, as the flaws
+    return {"items": items, "done": done(con, v), "flaws": flaws, "santa": one(con, "SELECT COUNT(*) " + santa._OPEN)[0],
+            "voices": helpus.unread(con, v) if admin else 0}  # its own row in Admin, as the flaws
 
 
 def _item(kind: str, key, at: int, hidden: bool, data: dict, harm: bool = False) -> dict:
@@ -192,7 +193,7 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
 
 
 # the other domains', imported last: they import this one too
-from . import autoev, fchannel, santa, subjects, tgcomments  # noqa: E402
+from . import autoev, fchannel, helpus, santa, subjects, tgcomments  # noqa: E402
 from .account import roster_requests  # noqa: E402
 from .chatlist import pending_chats, undo_chat  # noqa: E402
 from .clubs import club_applications, official_requests, undo_club_refusal, undo_official  # noqa: E402
