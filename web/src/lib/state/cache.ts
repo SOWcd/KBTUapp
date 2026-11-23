@@ -1,10 +1,10 @@
 // The instant re-open: show the last lists from this account while the server answers.
-import type { AlbumPhoto, GalleryAlbum, ClassItem, EventCard, Friends, Me, Org, PersonCard, Post, TeamMember } from '../api';
+import type { AlbumPhoto, GalleryAlbum, GalleryMyEvent, ClassItem, EventCard, Friends, Me, Org, PersonCard, Post, TeamMember } from '../api';
 import { tg } from '../tg';
 import { DRAFT_AGE, recovery } from './recovery';
 
 export interface Snapshot { me: Me | null; events: EventCard[]; orgs: Org[]; schedule: ClassItem[]; posts: Post[]; castings?: Post[]; friends?: Friends | null; myCard?: PersonCard | null; news?: { casts: Post[]; posts: Post[] } | null;
-  gallery?: AlbumPhoto[]; galleryAlbums?: GalleryAlbum[]; galleryPost?: { events: { id: number; title: string }[] } | null; studio?: Record<number, EventCard[]>; team?: Record<number, TeamMember[]> }
+  gallery?: AlbumPhoto[]; galleryAlbums?: GalleryAlbum[]; galleryPost?: { events: GalleryMyEvent[] } | null; studio?: Record<number, EventCard[]>; team?: Record<number, TeamMember[]> }
 const KEY = 'snapshot';
 
 export function readCache(tgId = tg.user?.id): Snapshot | null {

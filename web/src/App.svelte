@@ -85,8 +85,7 @@
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
   sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
   const galleryPage = () => import('./screens/afisha/Gallery.svelte');
-  sheets.gallery = (albums) => lazy(galleryPage, { albums });
-  sheets.galleryAdd = (files, topic) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files, topic });
+  sheets.gallery = () => lazy(galleryPage, {});
   // one sign-in sheet at a time, and none once Microsoft has confirmed me: a second one (Microsoft's return opening its
   // own over the waiting one) stayed under the first and asked a new student to sign in with Microsoft again (Nov 14)
   sheets.login = (after, lock) => {

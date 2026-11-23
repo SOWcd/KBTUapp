@@ -15,7 +15,8 @@ PAGE = 60
 A_DAY = 30               # uploads one person starts in a day (attempts: deleting doesn't give any back)
 TOPICS = ("campus", "study", "life", "other")  # what a photo of no event is about (gallery_photos.topic); "events": the feed's filter for the rest
 ALBUMS = 60              # the albums the Gallery lists
-MY_EVENTS = 5            # the events a photo may go to, offered in the picker's menu (the newest)
+PLACES = ("main", "b2", "dorm", "away")  # where a photo was taken (gallery_photos.place): the phone names it from the EXIF, no coordinates come here
+MY_EVENTS = 5            # the events a photo may go to (the newest): the app attaches one taken at an event held elsewhere
 
 
 def on(v: Viewer) -> bool:
@@ -31,6 +32,7 @@ def _shape(f, v: Viewer) -> dict:
             **({"uid": f["poster"]} if f["poster"] else {}),
             **({"at": f["posted"] or f["created_at"]} if f["poster"] or on(v) else {}),  # the feed's days; off: no more than the album says
             **({"topic": f["topic"] or "other"} if f["poster"] and not f["event_id"] else {}),  # Use Other for a standalone photo without a topic.
+            **({"place": f["place"]} if f["place"] else {}),
             **({"event": {"id": f["event_id"], "title": f["title"],
                           **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(f["i18n"]).items()}} if f["i18n"] else {})}}
                if f["event_id"] else {})}
@@ -76,7 +78,7 @@ def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: st
             UNION ALL
             SELECT g.file_id, NULL, g.user_id FROM gallery_photos g
             WHERE ? AND g.event_id IS NULL AND COALESCE(g.topic, 'other') = COALESCE(?, g.topic, 'other') AND NOT EXISTS (SELECT 1 FROM event_photos WHERE file_id = g.file_id))
-        SELECT f.*, x.event_id, x.uid, g.user_id AS poster, g.created_at AS posted, g.topic, e.title, e.i18n, s.first_name, s.last_name, u.nick
+        SELECT f.*, x.event_id, x.uid, g.user_id AS poster, g.created_at AS posted, g.topic, g.place, e.title, e.i18n, s.first_name, s.last_name, u.nick
         FROM x JOIN files f ON f.id = x.file_id LEFT JOIN gallery_photos g ON g.file_id = f.id LEFT JOIN events e ON e.id = x.event_id
         LEFT JOIN users u ON u.id = x.uid LEFT JOIN students s ON s.user_id = x.uid
         WHERE {PHOTO_SHOWN} AND f.id < ?
@@ -92,36 +94,40 @@ def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: st
 
 def my_events(con, v: Viewer) -> list[dict]:
     """The events my photo may go to: their albums take one from me now (_album_room: I came or I'm the team, from
-    the start to a week after the end, my share not used up)."""
+    the start to a week after the end, my share not used up). When and where each is held: the app puts a photo taken
+    off campus during one held elsewhere into its album (web lib/place.ts eventFor)."""
     # ponytail: _album_room per candidate (a few queries each, MY_EVENTS * 2 candidates at most); one query if it grows
     found = rows(con, """SELECT e.* FROM events e WHERE e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at <= ? AND e.starts_at > ?
         AND (e.id IN (SELECT event_id FROM registrations WHERE user_id = ? AND checked_in_at IS NOT NULL)
              OR e.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?))
         ORDER BY e.starts_at DESC LIMIT ?""", now(), now() - 60 * 86400, v.id, v.id, MY_EVENTS * 2)
-    return [{"id": e["id"], "title": e["title"]} for e in found if _album_room(con, v, e) > 0][:MY_EVENTS]
+    return [{"id": e["id"], "title": e["title"], "at": e["starts_at"], "end": e["ends_at"], "place": e["place"], "away": bool(e["place_url"])}
+            for e in found if _album_room(con, v, e) > 0][:MY_EVENTS]
 
 
 def _day_key(v: Viewer) -> str:
     return f"gal:{v.id}:{now() // 86400}"
 
 
-def check(con, v: Viewer, eid: int | None = None, topic: str | None = None) -> None:
+def check(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None) -> None:
     """May I post to the Gallery (to this event's album, or about this topic)? Asked before the upload is decoded, and
-    again as it is saved. A photo of no event says its topic (none yet from an old bundle); an event's never does."""
+    again as it is saved. The app sends no topic any more (it sorts by place); an old bundle's still counts, never
+    with an event."""
     if not on(v):
         raise ApiError("not_found")
-    # ponytail: allow standalone photos without a topic for cached web bundles until 2026-11-25, then require one.
+    if place is not None and place not in PLACES:
+        raise ApiError("bad_input", "place")
     if topic is not None and (eid is not None or topic not in TOPICS):  # never both
         raise ApiError("bad_input", "topic")
     if eid is not None and _album_room(con, v, _event(con, v, eid)) <= 0:
         raise ApiError("forbidden")
 
 
-def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None) -> None:
+def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None) -> None:
     """One more upload today, counted before the work (a deleted photo or a refused one still counts: a person can't
     keep the picture workers busy for everyone, receipts included)."""
     with tx(con):
-        check(con, v, eid, topic)
+        check(con, v, eid, topic, place)
         k = _day_key(v)
         if int((one(con, "SELECT value FROM meta WHERE key = ?", k) or ["0"])[0]) >= A_DAY:
             raise ApiError("rate_limited", "gallery")
@@ -129,16 +135,16 @@ def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None) ->
         con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (k,))
 
 
-def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None = None) -> dict:
-    """A processed upload (media.save) into the Gallery under my name, and into the event's album when given; of no
-    event, about a topic."""
+def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None = None, place: str | None = None) -> dict:
+    """A processed upload (media.save) into the Gallery under my name, and into the event's album when given; place:
+    where the phone says it was taken (PLACES)."""
     with tx(con):
-        check(con, v, eid, topic)
+        check(con, v, eid, topic, place)
         fid = event_photo_file(con, v.id, saved)
-        if con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
-                       (fid, v.id, eid, now(), topic)).rowcount and eid is not None:  # the same photo again: the one I posted
+        if con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic, place) VALUES (?, ?, ?, ?, ?, ?)",
+                       (fid, v.id, eid, now(), topic, place)).rowcount and eid is not None:  # the same photo again: the one I posted
             attach_album_photo(con, eid, fid, v.id)
-    f = one(con, """SELECT f.*, g.user_id AS uid, g.user_id AS poster, g.created_at AS posted, g.topic, g.event_id, e.title, e.i18n, s.first_name, s.last_name, u.nick
+    f = one(con, """SELECT f.*, g.user_id AS uid, g.user_id AS poster, g.created_at AS posted, g.topic, g.place, g.event_id, e.title, e.i18n, s.first_name, s.last_name, u.nick
         FROM gallery_photos g JOIN files f ON f.id = g.file_id LEFT JOIN events e ON e.id = g.event_id
         LEFT JOIN users u ON u.id = g.user_id LEFT JOIN students s ON s.user_id = g.user_id WHERE g.file_id = ?""", fid)
     return _shape(f, v)
@@ -192,8 +198,8 @@ def restore(con, d: dict) -> None:
     eid = g["event_id"] if g["event_id"] and one(con, "SELECT 1 FROM events WHERE id = ?", g["event_id"]) else None
     if g["event_id"] and not eid and not g.get("open"):
         return
-    con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic) VALUES (?, ?, ?, ?, ?)",
-                (g["file_id"], g["user_id"], eid, g["created_at"], g.get("topic")))  # An undo snapshot can omit the optional topic.
+    con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic, place) VALUES (?, ?, ?, ?, ?, ?)",
+                (g["file_id"], g["user_id"], eid, g["created_at"], g.get("topic"), g.get("place")))  # An older undo snapshot has neither.
     for p in d["albums"]:
         if one(con, "SELECT 1 FROM events WHERE id = ?", p["event_id"]):
             con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",

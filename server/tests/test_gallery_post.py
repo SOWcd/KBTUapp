@@ -94,7 +94,8 @@ def test_attach_on_the_albums_rules(env):
                 (ahead, c.ids[AL]))
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'G-4', 0, 0)",
                 (went, c.ids[BO]))  # signed up, never came
-    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [{"id": went, "title": "Went"}]}  # its album open now
+    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [  # its album open now
+        {"id": went, "title": "Went", "at": NOW - 7200, "end": NOW - 3600, "place": "Hall", "away": False}]}
     for eid in (ahead, old):  # not yet open, or closed; any student may add to an open album (owner)
         assert _post(c, AL, 1, event=eid).status_code == 403
     p = _post(c, AL, 1, event=went).json()
@@ -388,3 +389,20 @@ def test_account_deletion_leaves_no_topic_photo(env):
     assert photos == [path] and not (c.media / f"{path}.webp").exists()
     assert not con.execute("SELECT 1 FROM gallery_photos UNION ALL SELECT 1 FROM files WHERE id = ?", (fid,)).fetchone()
     assert _feed(c, topic="campus") == []
+
+
+def test_place_is_one_of_four_words_and_nothing_finer(env):
+    c, con, oid = _app(env)
+    assert _post(c, AL, seed=1, topic=None, place="b2").json()["place"] == "b2"
+    assert "place" not in _post(c, AL, seed=2, topic=None).json()  # no GPS in the photo: no word
+    for bad in ("43.25,76.94", "Main", ""):  # coordinates never fit
+        assert _post(c, AL, seed=3, topic=None, place=bad).status_code == 400, bad
+    assert [p.get("place") for p in c.get("/api/gallery", headers=tma(CY)).json()["photos"]] == [None, "b2"]
+    assert {"place"} == {r[1] for r in con.execute("PRAGMA table_info(gallery_photos)")} - {"file_id", "user_id", "event_id", "created_at", "topic"}
+    # an event I came to says when and where it is held: the app attaches a photo taken there (off campus)
+    eid = _event(con, c, oid)
+    con.execute("UPDATE events SET place = 'Mad Murphy', place_url = 'https://2gis.kz/almaty/geo/1' WHERE id = ?", (eid,))
+    _came(con, c, eid, AL, "T-1")
+    mine = c.get("/api/gallery", headers=tma(AL)).json()["post"]["events"]
+    assert mine == [{"id": eid, "title": mine[0]["title"], "at": NOW - 7200, "end": NOW - 3600, "place": "Mad Murphy", "away": True}]
+    assert _post(c, AL, seed=4, event=eid, place="away").json()["event"]["id"] == eid

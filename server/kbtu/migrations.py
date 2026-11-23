@@ -2272,4 +2272,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS helper_offers_by_user ON helper_offers(user_id, created_at);
     CREATE INDEX IF NOT EXISTS anon_feedback_by_day ON anon_feedback(day);"""),
+    # where a Gallery photo was taken, as one of four words the phone itself picked from the photo's EXIF (gallery.PLACES);
+    # the coordinates never arrive
+    (224, "ALTER TABLE gallery_photos ADD COLUMN place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'));"),
 ]

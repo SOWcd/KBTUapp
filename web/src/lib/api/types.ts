@@ -164,12 +164,13 @@ export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgR
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
 
 /** A photo in an event's album: the one who added it or the club's Head+ may take it out. */
-export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; topic?: GalleryTopic; at?: Ts; uid?: Id; pending?: boolean; failed?: boolean; key?: Id } // topic: a Gallery post of no event; by: who added it (nick or "First L."); event: in the Gallery; uid: a Gallery post's author (their profile); at: when it was posted or uploaded (the feed's days; the Gallery on for me); pending: mine, still uploading; failed: mine, the upload didn't get through (Retry, Remove); key: the tile my upload had while it went up, kept so the server's takes over the same element
-export type GalleryTopic = 'campus' | 'study' | 'life' | 'other'; // what a photo of no event is about (the server's gallery.TOPICS)
+export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; place?: 'main' | 'b2' | 'dorm' | 'away'; at?: Ts; uid?: Id; pending?: boolean; failed?: boolean; key?: Id } // place: where it was taken, as the poster's phone named it (lib/place.ts; the server's gallery.PLACES); by: who added it (nick or "First L."); event: in the Gallery; uid: a Gallery post's author (their profile); at: when it was posted or uploaded (the feed's days; the Gallery on for me); pending: mine, still uploading; failed: mine, the upload didn't get through (Retry, Remove); key: the tile my upload had while it went up, kept so the server's takes over the same element
+/** An event my photo may go to (its album takes one from me now): when and where it is held, for lib/place.ts eventFor. */
+export interface GalleryMyEvent { id: Id; title: string; at: Ts; end: Ts | null; place: string; away: boolean /* it has a 2GIS link: held off campus */ }
 export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
 /** An event's album on the Gallery's shelf: its cover (the event's own, else its newest photo), its day and how many photos I see in it. */
 export interface GalleryAlbum { id: Id; title: string; n: number; at: Ts /* the event's start */; cover: Media; i18n?: GalleryEvent['i18n'] }
-export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; albums?: GalleryAlbum[] /* the first page of everything: newest first */; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
+export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; albums?: GalleryAlbum[] /* the first page of everything: newest first */; post?: { events: GalleryMyEvent[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
 
 /** An event's video (server video.py): our own compressed copy, its poster a photo; `error`: too_long | not_a_video. */
 export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'ready' | 'failed'; url: string | null; duration: number | null;
