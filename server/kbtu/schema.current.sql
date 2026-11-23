@@ -147,6 +147,7 @@ CREATE TABLE chat_asks (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (chat_id, user_id)
     ) STRICT;
+CREATE TABLE chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;
 CREATE TABLE chat_opens (
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   chat_id   INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -212,7 +213,7 @@ CREATE TABLE chats (
   sort       INTEGER NOT NULL DEFAULT 0,
   added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
-, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT, call_roles INTEGER NOT NULL DEFAULT 1) STRICT;
+, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT) STRICT;
 CREATE TABLE "club_applications" (
       id          INTEGER PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

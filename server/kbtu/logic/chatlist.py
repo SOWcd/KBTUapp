@@ -346,11 +346,12 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
     """The org's chats, the main channel first, then by size. editor (Studio): the invite links too and whether our bot
     keeps the card."""
     out = []
+    admins_only = {r[0] for r in rows(con, "SELECT a.chat_id FROM chat_call_admins a JOIN chats c ON c.id = a.chat_id WHERE c.org_id = ?", oid)} if editor else set()
     for c in rows(con, "SELECT * FROM chats WHERE org_id = ? ORDER BY main DESC, COALESCE(members, -1) DESC, title", oid):
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]), "callRoles": bool(c["call_roles"]),
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]), "callRoles": c["id"] not in admins_only,
                        "swearMiss": c["swear_miss"].split(",") if c["swear_miss"] else []} if editor else x)
     return out
 
@@ -435,7 +436,7 @@ def call_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
         raise ApiError("bad_input")
     with tx(con):
         chatmod.target(con, v, oid, cid)  # the club's linked group, its President or Vice
-        con.execute("UPDATE chats SET call_roles = ? WHERE id = ?", (int(on), cid))
+        con.execute("DELETE FROM chat_call_admins WHERE chat_id = ?" if on else "INSERT OR IGNORE INTO chat_call_admins VALUES (?)", (cid,))
         log_action(con, v.id, "org_chats", f"org:{oid}", f"call roles {'on' if on else 'off'} {cid}")
     return org_chats(con, oid, True)
 
@@ -659,11 +660,11 @@ def student(con, tg: int) -> bool:
 
 def may_call(con, chat: int, tg: int, admin: bool) -> bool:
     """A verified group admin, or a verified officer or assigned role holder of this chat's club (unless its Studio
-    keeps /all to the group's admins: chats.call_roles)."""
+    keeps /all to the group's admins: chat_call_admins)."""
     if admin:
         return student(con, tg)
     _, _, oid = _holder(con, chat)
-    if oid and one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id = ? AND call_roles = 0", chat, oid):
+    if oid and one(con, "SELECT 1 FROM chats c JOIN chat_call_admins a ON a.chat_id = c.id WHERE c.tg_chat_id = ? AND c.org_id = ?", chat, oid):
         return False
     return bool(oid and one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id
         JOIN students s ON s.user_id = u.id AND s.manual = 0 JOIN orgs o ON o.id = m.org_id AND o.status = 'active'

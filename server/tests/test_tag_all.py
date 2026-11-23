@@ -625,7 +625,7 @@ def test_mtbot_session_per_database_and_bot(env, monkeypatch):
 
 
 def test_studio_keeps_all_to_group_admins(env, monkeypatch):
-    """Studio's switch (chats.call_roles): off, a club role (head 20) no longer calls; the group's admin still does."""
+    """Studio's switch (chat_call_admins): off, a club role (head 20) no longer calls; the group's admin still does."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
     cid, oid = con.execute("SELECT id, org_id FROM chats WHERE tg_chat_id = -100").fetchone()
