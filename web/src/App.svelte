@@ -140,10 +140,10 @@
   const warmChannel = () => { if (!session.channel) return; void channelPage(); warmChannelFeeds(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
-  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, undefined, id == null ? null : `${org}:${id}:${!!staff}`);
+  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
   sheets.deepLink = (p) => deepLink(p);
-  sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, undefined, `${id}:${!!names}:${!!qr}`);
-  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, undefined, `only:${id}`); // a scan-only helper: the Mark screen, no lists
+  sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, 'sheet.scanner', `${id}:${!!names}:${!!qr}`);
+  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, 'sheet.scanner', `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
   sheets.appeals = () => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), {}));
   sheets.myAppeal = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id });
@@ -182,11 +182,11 @@
     f.addEventListener('blur', () => f.remove(), { once: true });
     return f;
   }
-  sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
-  sheets.doorPeople = (id, onchange, guestsOnly) => lazy(() => import('./screens/club/People.svelte'), { id, onchange, guestsOnly }, undefined, `${id}:${!!guestsOnly}`);
+  sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id }, 'sheet.attendees');
+  sheets.doorPeople = (id, onchange, guestsOnly) => lazy(() => import('./screens/club/People.svelte'), { id, onchange, guestsOnly }, 'sheet.doorpeople', `${id}:${!!guestsOnly}`);
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   // a helper lands on the same Mark screen as the organizer (owner, Nov 14: helpers didn't know where to go); no scanner of the event: its QR alone
-  sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true }, undefined, `session:${sess}`)
+  sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true }, 'sheet.scanner', `session:${sess}`)
     : lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner }));
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
@@ -202,7 +202,7 @@
     }
     haptic.tap(); sheets.screens();
   };
-  sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org }, undefined, `${id}:${!!staff}:${org ?? ''}`);
+  sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org }, 'sheet.manage', `${id}:${!!staff}:${org ?? ''}`);
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });
@@ -249,9 +249,9 @@
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
   sheets.teamSetup = (org, onchange) => lazy(() => import('./screens/club/TeamSetupSheet.svelte'), { org, onchange });
-  sheets.member = (org, user, setup, depts, onchange) => lazy(() => import('./screens/club/MemberSheet.svelte'), { org, user, setup, depts, onchange });
+  sheets.member = (org, user, setup, depts, onchange) => lazy(() => import('./screens/club/MemberSheet.svelte'), { org, user, setup, depts, onchange }, 'sheet.member');
   sheets.removeMember = (org, user, name, request, ondone) => lazy(() => import('./screens/club/RemoveSheet.svelte'), { org, user, name, request, ondone });
-  sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
+  sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org }, 'sheet.joininbox');
   sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
   sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
   const adminSheet = () => import('./screens/admin/AdminSheet.svelte');
@@ -301,7 +301,7 @@
   sheets.news = () => lazy(newsPage, {}, 'sheet.news');
   sheets.feed = () => lazy(feedPage, {}, 'sheet.feed');
   sheets.friends = () => lazy(friendsPage, {}, 'sheet.friends');
-  sheets.team = (at) => lazy(teamPage, { at });
+  sheets.team = (at) => lazy(teamPage, { at }, 'sheet.team');
   setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- the Clubs tab: one feed for everyone; a club of mine opens its Studio pushed over it (round 5) ----

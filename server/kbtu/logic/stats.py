@@ -11,7 +11,8 @@ from .core import one, rows
 # the one allowlist: anything else a client sends is ignored. web/src/lib/stats.ts has the same names (a test checks)
 SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.event", "sheet.club", "sheet.ticket", "sheet.person", "sheet.friends", "sheet.compose", "sheet.comments",
-           "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant")
+           "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant",
+           "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox")
 ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.donate")
 SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "from.other")  # the startapp's class, never its value
 # the appeals' funnel (logic/appeals.py): opened the composer, started typing, asked the AI, sent, closed without

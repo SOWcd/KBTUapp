@@ -2710,6 +2710,8 @@ const en: Dict = {
   'scan.already': "Already checked in at {time}",
   'scan.cancelled': "Registration cancelled or unpaid",
   'scan.notFound': "Ticket or badge not found",
+  'scan.rateLimited': "Too many wrong codes. Wait a minute",
+  'scan.badInput': "This is not a ticket QR",
   'scan.closed': "Check-in is closed: the event is over",
   'scan.notOpen': "The President hasn't opened the door yet",
   'door.openAt': "The door opens at {time}",
