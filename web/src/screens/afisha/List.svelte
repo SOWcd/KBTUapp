@@ -21,7 +21,7 @@
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { ui, toTickets } from '../../lib/state/ui.svelte';
-  import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
@@ -119,6 +119,7 @@
     const id = requestIdleCallback(() => (upto += STEP), { timeout: 1000 });
     return () => cancelIdleCallback(id);
   });
+  const weekCount = $derived(shown.filter((e) => endOf(e) > now && dayNo(e.startsAt) < today + 7).length);
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
@@ -156,7 +157,9 @@
   }));
   async function toDay(d: number) {
     haptic.select();
-    if (!shownDays.some((x) => x.d === d)) { upto = Infinity; await tick(); }
+    // its rows drawn first, only as far as that day (the list draws a few days per idle moment)
+    upto = Math.max(upto, days.slice(0, days.findIndex((x) => x.d === d) + 1).reduce((n, x) => n + x.items.length, 0));
+    await tick();
     document.querySelector(`.tab.on .day[data-d="${d}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
@@ -240,7 +243,7 @@
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
+  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}{#if data.eventsReady && weekCount}<span class="wk">&nbsp;· {tn('list.week', weekCount)}</span>{/if}</p>
   <header class="hd">
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
@@ -342,7 +345,8 @@
 
   <div class="events-head">
     <h2 class="sec two">{t('list.title')}</h2>
-    <label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>
+    <!-- no timetable: nothing to show or hide (kept while off: switching it back on brings the card that asks for one) -->
+    {#if data.schedule.length || !showClasses}<label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>{/if}
   </div>
   {#if filtering || coming.length > 1}
     <div class="chips" role="group" aria-label={t('list.f.label')} use:showPicked>
@@ -431,6 +435,7 @@
   .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
   .hd > span:first-child { flex: 1 0 120px; }
   .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
+  .wk { color: var(--accent-text); }
   .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
   .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
@@ -447,8 +452,8 @@
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: 30px var(--s-1) 12px; font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px var(--s-1) 4px; }
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; }
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: 10px calc(-1 * var(--gutter)) 0; padding: 4px var(--gutter); scrollbar-width: none; }
@@ -459,7 +464,7 @@
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
-  .day { margin: 26px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
+  .day { margin: var(--s-6) calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
   .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
   .dh span { color: var(--text-3); font-weight: 600; }
   .dh span::first-letter { text-transform: none; }
