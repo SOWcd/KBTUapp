@@ -337,6 +337,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "event_reported":  # er:<event>:<its oldest open report>, to moderators: 3 people reported it; quiet once decided or taken down
         r = one(con, "SELECT 1 FROM reports r JOIN events e ON e.id = r.target_id AND e.hidden_at IS NULL WHERE r.id = ? AND r.status = 'open'", int(ref[2]))
         return (*texts.bot_message(lang, kind), "capps") if r else None
+    if kind == "santa_reported":  # srp:<report>, to moderators: a Santa chat was reported; quiet once handled
+        r = one(con, "SELECT 1 FROM santa_msgs WHERE id = ? AND text IS NULL AND done_at IS NULL", int(ref[1]))
+        return (*texts.bot_message(lang, kind), "capps") if r else None
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None

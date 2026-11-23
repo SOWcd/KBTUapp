@@ -998,7 +998,8 @@ CREATE TABLE santa_msgs (
       to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       from_giver INTEGER NOT NULL CHECK (from_giver IN (0, 1)),
       text TEXT CHECK (length(text) BETWEEN 1 AND 500),
-      created_at INTEGER NOT NULL) STRICT;
+      created_at INTEGER NOT NULL,
+      done_at INTEGER) STRICT;
 CREATE TABLE santa_people (
       event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1665,7 +1666,9 @@ CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
       DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
     END;
 CREATE TRIGGER santa_msgs_gone AFTER DELETE ON santa_people BEGIN
-      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id);
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id)
+        AND NOT EXISTS (SELECT 1 FROM santa_msgs r WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id
+          AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;
 CREATE TRIGGER kri_consents_student_gone AFTER DELETE ON students BEGIN
       DELETE FROM kri_consents WHERE user_id = OLD.user_id;

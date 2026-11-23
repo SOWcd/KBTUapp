@@ -2636,6 +2636,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def santa_report(eid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.santa.report(con, v, eid, body)
 
+    @app.get("/api/admin/santa-reports")  # the app's staff: the reported threads, whole, with both their people
+    def santa_reports(con: Con, v: Me):
+        return logic.santa.reports(con, v)
+
+    @app.post("/api/admin/santa-reports/{rid}/done", status_code=204)
+    def santa_report_done(rid: int, con: Con, v: Me):
+        logic.santa.report_done(con, v, rid)
+
     @app.post("/api/events/{eid}/santa/remind")  # "Remind those not in yet", once a day
     def santa_remind(eid: int, con: Con, v: Me):
         return logic.santa.remind(con, v, eid)

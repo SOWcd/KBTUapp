@@ -2225,7 +2225,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # /all in a club's group kept to its Telegram admins (Studio's switch); a group not here: its club roles call too
     (220, "CREATE TABLE IF NOT EXISTS chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;"),
     # Secret Santa's chat (logic/santa.py): one thread per pair, kept by both its people so a spliced ring's new pair
-    # starts empty; text NULL: that side closed the thread (its report). Whoever leaves the ring takes their threads along
+    # starts empty; text NULL: that side reported the thread (closed; done_at: staff handled it). Whoever leaves the
+    # ring takes their threads along, a reported one stays for the staff
     (221, """CREATE TABLE IF NOT EXISTS santa_msgs (
       id INTEGER PRIMARY KEY,
       event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
@@ -2233,10 +2234,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       from_giver INTEGER NOT NULL CHECK (from_giver IN (0, 1)),
       text TEXT CHECK (length(text) BETWEEN 1 AND 500),
-      created_at INTEGER NOT NULL) STRICT;
+      created_at INTEGER NOT NULL,
+      done_at INTEGER) STRICT;
     CREATE INDEX IF NOT EXISTS santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
     CREATE INDEX IF NOT EXISTS santa_msgs_to ON santa_msgs (to_id);
     CREATE TRIGGER IF NOT EXISTS santa_msgs_gone AFTER DELETE ON santa_people BEGIN
-      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id);
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id)
+        AND NOT EXISTS (SELECT 1 FROM santa_msgs r WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id
+          AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;"""),
 ]

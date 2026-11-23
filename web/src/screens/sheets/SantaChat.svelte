@@ -2,7 +2,7 @@
   // Secret Santa's chat (server santa.chat): one thread of a pair. side 'to': I write as the Santa of my person (named:
   // I know them); 'from': with my own Santa, who is only ever "Secret Santa" here. The thread lives in the store
   // (data.santaChat), read again as this opens; a send shows in the same frame and is put back if it fails. A tap on
-  // a received message reports: the thread is deleted and closed for both (no moderator reads a pair).
+  // a received message reports: the thread closes for both and goes to the app's staff (Admin), who alone then read it.
   import { tick, untrack } from 'svelte';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import { api, ApiErr, type Id, type SantaMsg } from '../../lib/api';

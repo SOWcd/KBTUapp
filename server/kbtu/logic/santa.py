@@ -8,7 +8,8 @@ A gift budget and the wishlists' deadline (the event's reg_until) set at the sta
 bot's round draws by itself through the same _draw (tick()); reminders before the deadline and on the eve of the
 gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day.
 After the draw the two of a pair may write to each other (chat, write, report): one thread per pair, the receiver never
-told who their Santa is; no list, export, log, audit row or admin view has a message; gone 3 days after the gifts day."""
+told who their Santa is; no list, export, log or audit row has a message; gone 3 days after the gifts day. A report by
+either closes the thread and shows it, with its two people, to the app's staff alone (Admin: reports, report_done)."""
 from __future__ import annotations
 
 import secrets
@@ -16,13 +17,14 @@ import sqlite3
 
 from ..db import tx
 
-from .core import PERSON, ApiError, Viewer, _may, full, now, one, person_ref, rights_of, rows
+from .core import PERSON, ApiError, Viewer, _may, full, log_action, now, one, person_ref, rights_of, rows
 
 WISH_MAX = 300
 MIN = 3
 BUDGET = (100, 1_000_000)  # tenge: a gift's sane bounds
 DAY = 86400
 MSG_MAX, MSG_DAY, MSG_KEEP = 500, 50, 3 * DAY  # the chat: a message's length, mine a day, how long after the gifts day it lives
+REPORT_KEEP = 30 * DAY  # a reported thread: that long after the gifts day, and until the staff handled it
 LEAD = 3600  # the wishlists close an hour before the gifts day at the latest: the round needs the moment to draw
 
 _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
@@ -396,9 +398,9 @@ def chat(con, v: Viewer, eid: int) -> dict:
     for side in ("to", "from"):
         p = _thread(con, eid, v.id, side == "to")
         ms = rows(con, f"SELECT id, from_giver, text, created_at {_MSGS} ORDER BY id", eid, *p) if p else []
-        out[side] = {"closed": any(m["text"] is None for m in ms),
-                     "msgs": [{"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]}
-                              for m in ms if m["text"] is not None]} if p else None
+        closed = any(m["text"] is None for m in ms)  # reported: shut for both, its words now the staff's to read
+        out[side] = {"closed": closed, "msgs": [] if closed else [
+            {"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]} for m in ms]} if p else None
     if not any(out.values()):
         raise ApiError("not_found")
     return out
@@ -436,20 +438,55 @@ def write(con, v: Viewer, eid: int, body: dict) -> dict:
 
 
 def report(con, v: Viewer, eid: int, body: dict) -> None:
-    """Report on a thread, by either of its two: its words are deleted and nobody writes in it again. No staff reads
-    it: a moderator's queue would show them the pair, and the pair is nobody's but its giver's."""
+    """Report on a thread, by either of its two: nobody writes in it again, and it goes to the app's staff (Admin),
+    the only ones who then read it and see both its people. The staff hear it from the bot, a template."""
     mine = _side(body)
     with tx(con):
         p = _thread(con, eid, v.id, mine)
         if not p:
             raise ApiError("not_found")
-        con.execute(f"DELETE {_MSGS}", (eid, *p))
-        con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?)", (eid, *p, int(mine), now()))
+        if one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p):
+            return
+        rid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?)",
+                          (eid, *p, int(mine), now())).lastrowid
+        notify_staff(con, _mods(con), "santa_reported", f"srp:{rid}")
+
+
+_OPEN = "FROM santa_msgs WHERE text IS NULL AND done_at IS NULL"
+
+
+def reports(con, v: Viewer) -> list[dict]:
+    """Admin → Santa reports, the app's staff alone (never a club's organizer): each open report with the whole thread
+    and both its people, oldest first."""
+    _mod(v)
+    out = []
+    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN} ORDER BY id"):
+        who = {p["id"]: person_ref(p) for p in rows(con, PERSON + " WHERE u.id IN (?, ?)", r["giver_id"], r["to_id"])}
+        e = one(con, "SELECT title FROM events WHERE id = ?", r["event_id"])
+        out.append({"id": r["id"], "at": r["created_at"], "title": e["title"], "giver": who.get(r["giver_id"]), "to": who.get(r["to_id"]),
+                    "byGiver": bool(r["from_giver"]),
+                    "msgs": [{"id": m["id"], "fromGiver": bool(m["from_giver"]), "text": m["text"], "at": m["created_at"]} for m in rows(
+                        con, f"SELECT id, from_giver, text, created_at {_MSGS} AND text IS NOT NULL ORDER BY id", r["event_id"], r["giver_id"], r["to_id"])]})
+    return out
+
+
+def report_done(con, v: Viewer, rid: int) -> None:
+    """The staff handled a report (whatever they did about it, with their own tools): it leaves the list; the audit
+    log keeps who and which report, never the pair or a word."""
+    _mod(v)
+    with tx(con):
+        if not con.execute("UPDATE santa_msgs SET done_at = ? WHERE id = ? AND text IS NULL AND done_at IS NULL", (now(), rid)).rowcount:
+            raise ApiError("not_found")
+        log_action(con, v.id, "santa_report_done", f"santa_report:{rid}")
 
 
 def forget(con) -> None:
-    """The nightly sweep (daily.stats_day): the threads go MSG_KEEP after the gifts day."""
-    con.execute("DELETE FROM santa_msgs WHERE event_id IN (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) + ? <= ?)", (MSG_KEEP, now()))
+    """The nightly sweep (daily.stats_day): a thread goes MSG_KEEP after the gifts day; a reported one REPORT_KEEP after
+    it, and not before the staff handled it."""
+    con.execute("""DELETE FROM santa_msgs WHERE id IN (SELECT m.id FROM santa_msgs m JOIN events e ON e.id = m.event_id
+        LEFT JOIN santa_msgs r ON r.event_id = m.event_id AND r.giver_id = m.giver_id AND r.to_id = m.to_id AND r.text IS NULL
+        WHERE CASE WHEN r.id IS NULL THEN COALESCE(e.ends_at, e.starts_at) + ? <= ?
+                   ELSE r.done_at IS NOT NULL AND COALESCE(e.ends_at, e.starts_at) + ? <= ? END)""", (MSG_KEEP, now(), REPORT_KEEP, now()))
 
 
 def gone(con, uid: int) -> None:
@@ -476,4 +513,6 @@ def drop(con, uid: int, oid: int | None = None) -> None:
 
 
 from .organizing import _staff_event, create_event, publish_event  # noqa: E402  (they import core, core imports this)
-from .seats import for_me, notify, promote  # noqa: E402
+from .tgcomments import _mods  # noqa: E402
+from .oversight import _mod  # noqa: E402
+from .seats import for_me, notify, notify_staff, promote  # noqa: E402

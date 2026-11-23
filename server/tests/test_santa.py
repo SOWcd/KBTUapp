@@ -732,7 +732,7 @@ def _say(c, eid, tg, side, text="hello"):
 def test_chat_is_the_pair_alone(env):
     """The pair's thread: the Santa writes, their person reads it from "Secret Santa" and answers; nothing in the
     receiver's answer names the Santa; nobody else reads or writes it (a third player, the organizer, a stranger); the
-    bot's push is a template without the words, once an hour per thread; a report deletes it and closes it."""
+    bot's push is a template without the words, once an hour per thread; a report closes it and shows it to the app's staff alone."""
     c, cfg = env
     con, eid = _game(c, cfg, 4)
     assert _chat(c, eid, 10).status_code == 404 and _say(c, eid, 10, "to").status_code == 404  # no draw, no chat
@@ -776,14 +776,46 @@ def test_chat_is_the_pair_alone(env):
     _say(c, eid, a, "to", "an hour on")
     assert len(mine("santa_msg", b)) == 2
     assert not con.execute("SELECT 1 FROM audit_log WHERE data LIKE '%tree%' OR action LIKE '%santa%'").fetchone()  # no audit row
-    # a report by the receiver: the words are gone for both, nobody writes there again; the push falls quiet
+    # a report by the receiver: shut for both, nobody writes there again; the app's staff alone read it, with both its people
+    login(c, 30, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 30")
     assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(20), json={"side": "from"}).status_code == 404
     assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(b), json={"side": "from"}).status_code == 204
-    assert _chat(c, eid, b).json()["from"] == {"closed": True, "msgs": []} == _chat(c, eid, a).json()["to"]
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(a), json={"side": "to"}).status_code == 204  # once: no second report
+    got = _chat(c, eid, b)
+    assert got.json()["from"] == {"closed": True, "msgs": []} == _chat(c, eid, a).json()["to"]
+    assert "giver" not in got.text and "person" not in got.text  # the receiver still isn't told who
     assert _say(c, eid, a, "to").status_code == 409 and _say(c, eid, b, "from").status_code == 409
-    assert not con.execute("SELECT 1 FROM santa_msgs WHERE text LIKE '%tree%'").fetchone()
-    assert bot._render(con, mine("santa_msg", b)[0]) is None
     assert _chat(c, eid, a).json()["from"]["closed"] is False  # a's thread with their own Santa is untouched
+    for tg in (20, a, b, third):  # the organizer and the players: never the staff's list
+        assert c.get("/api/admin/santa-reports", headers=tma(tg)).status_code == 403
+        assert c.post("/api/admin/santa-reports/1/done", headers=tma(tg)).status_code == 403
+    assert "tree" not in c.get(f"/api/events/{eid}", headers=tma(20)).text
+    reps = c.get("/api/admin/santa-reports", headers=tma(30)).json()
+    assert len(reps) == 1 and (reps[0]["giver"]["id"], reps[0]["to"]["id"], reps[0]["byGiver"]) == (ua, _uid(con, b), False)
+    assert [(m["fromGiver"], m["text"]) for m in reps[0]["msgs"]][:2] == [(True, "a hint: look under the tree"), (False, "thank you, Santa")]
+    assert c.get("/api/admin/inbox", headers=tma(30)).json()["santa"] == 1
+    told = _out(con, "santa_reported")
+    assert [x["user_id"] for x in told] == [_uid(con, 30)] and "tree" not in str(tuple(told[0]))
+    text, _, start = bot._render(con, told[0])
+    assert text.startswith("\U0001f6a8") and start == "capps" and "Test" not in text
+    # a lost seat doesn't take a reported thread from the staff
+    c.delete(f"/api/events/{eid}/registration", headers=tma(a))
+    assert len(c.get("/api/admin/santa-reports", headers=tma(30)).json()[0]["msgs"]) == 4
+    # kept until handled and 30 days past the gifts day, whichever is later
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 31 * DAY, eid))
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 5  # the pair's four and the report; the third player's own is swept
+    assert c.post(f"/api/admin/santa-reports/{reps[0]['id']}/done", headers=tma(30)).status_code == 204
+    assert c.get("/api/admin/santa-reports", headers=tma(30)).json() == [] and bot._render(con, told[0]) is None
+    log = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'santa_report_done'").fetchall()
+    assert [tuple(x) for x in log] == [(_uid(con, 30), f"santa_report:{reps[0]['id']}", "{}")]  # who and which, never the pair
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 29 * DAY, eid))
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 5  # handled, but not 30 days yet
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 31 * DAY, eid))
+    logic.santa.forget(con)
+    assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
 
 
 def test_chat_cap_and_what_deletes_it(env, monkeypatch):

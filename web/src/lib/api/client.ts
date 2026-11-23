@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg } from './types';
+import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -198,7 +198,9 @@ export const server = {
   santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)
   santaChat: (id: Id): Promise<SantaChats> => call('GET', `/events/${id}/santa/chat`), // my two threads of a drawn game (error not_found: none)
   santaWrite: (id: Id, side: 'to' | 'from', text: string): Promise<SantaMsg> => call('POST', `/events/${id}/santa/chat`, { side, text }), // errors rate_limited, closed (reported)
-  santaReport: (id: Id, side: 'to' | 'from'): Promise<void> => call('POST', `/events/${id}/santa/chat/report`, { side }), // the thread is deleted and closed for both
+  santaReport: (id: Id, side: 'to' | 'from'): Promise<void> => call('POST', `/events/${id}/santa/chat/report`, { side }), // the thread is closed for both and goes to the app's staff
+  santaReports: (): Promise<SantaReport[]> => call('GET', '/admin/santa-reports'), // the staff: reported threads, whole
+  santaReportDone: (id: Id): Promise<void> => call('POST', `/admin/santa-reports/${id}/done`),
   santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)
