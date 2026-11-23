@@ -2,11 +2,13 @@
 // the page paints, so each is the boot screen's still first frame, drawn from index.html's own #boot markup and CSS at
 // each iPhone's size, dark and light: the picture turns into the live boot screen without a jump.
 // Writes public/splash/*.png and the <link> lines between index.html's splash markers.
+// iOS keeps a launch picture by its URL: when the first frame changes, raise V (and install.html's ?v=) so it fetches the new ones.
 // usage: node tools/splash.mjs   (from web/, after changing #boot or its CSS; Playwright's Chromium, as the QA tools use)
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
+const V = 3;
 const INDEX = new URL('../index.html', import.meta.url), OUT = new URL('../public/splash/', import.meta.url);
 // portrait iPhones by CSS size and pixel ratio (iOS takes a picture only at its exact size)
 const PHONES = [
@@ -34,12 +36,11 @@ const links = [];
 for (const [w, h, dpr] of PHONES) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
   for (const theme of ['dark', 'light']) {
-    // the first frame: every animation at its start
-    await page.setContent(`<!doctype html><html data-boot="${theme}"><head>${css}</head><body>${boot}</body></html>`);
-    await page.evaluate(() => document.getAnimations().forEach((x) => { x.pause(); x.currentTime = 0; }));
+    // the first frame: every animation held at its start (paused from the first style, so none ever runs a frame)
+    await page.setContent(`<!doctype html><html data-boot="${theme}"><head>${css}<style>#boot *{animation-play-state:paused!important}</style></head><body>${boot}</body></html>`);
     const name = `${w}x${h}-${dpr}x-${theme}.png`;
     await page.screenshot({ path: new URL(name, OUT).pathname });
-    links.push(`<link rel="apple-touch-startup-image" href="/splash/${name}" media="(prefers-color-scheme: ${theme}) and (device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)">`);
+    links.push(`<link rel="apple-touch-startup-image" href="/splash/${name}?v=${V}" media="(prefers-color-scheme: ${theme}) and (device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)">`);
   }
   await page.close();
 }

@@ -25,7 +25,7 @@ export function bootOut(): void {
   const gone = () => { b.remove(); delete document.documentElement.dataset.boot; }; // (its ground on <html> goes with it: the theme's own from here)
   if (b.classList.contains('u') || still() || !b.offsetWidth) return gone();
   const out = () => { b.classList.add('o'); setTimeout(gone, 340); };
-  // the halo's animation began with the first paint: its clock is the time since (none once it has ended, 0.75 s)
-  const t = Number(b.querySelector('.hl')?.getAnimations?.()[0]?.currentTime ?? NaN);
+  // the legend's animation began with the first paint: its clock is the time since (none once it has ended, 0.6 s)
+  const t = Number(b.querySelector('.lg')?.getAnimations?.()[0]?.currentTime ?? NaN);
   if (t >= 0 && t < 400) setTimeout(out, 400 - t); else out();
 }

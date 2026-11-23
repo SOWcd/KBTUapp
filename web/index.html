@@ -29,27 +29,25 @@
   for (var i = 0; i < m.length; i++) m[i].content = c;
   // The home-screen app on an iPhone: the launch picture covers the whole screen, the page begins under the status
   // bar (the window is shorter by it), so 45% of the window would sit lower than the picture's 45% of the screen and
-  // the emblem would jump as the page takes over. There the emblem goes where the picture has it, in the window's own
-  // coordinates. Portrait only (screen.height is the portrait height on iOS); anywhere else 45% of the window.
-  try {
-    var d = screen.height - innerHeight;
-    if (navigator.standalone && innerHeight > 0 && d >= 0 && d < 140 && matchMedia('(orientation: portrait)').matches)
-      document.documentElement.style.setProperty('--kb-em', (screen.height * .45 - d) + 'px');
-  } catch (e) {}
+  // the emblem would jump as the page takes over. There the emblem stands where the picture has it: 55% of the screen
+  // above the window's bottom edge, which is the screen's. The CSS works it out from the window's height at layout,
+  // never this script: this early innerHeight can still be the whole screen's (the emblem then sat a status bar lower).
+  try { if (navigator.standalone && screen.width < 500) document.documentElement.style.setProperty('--kb-em', 'calc(100% - ' + screen.height * .55 + 'px)'); } catch (e) {}
 })();
 </script>
-<!-- The boot screen: an emblem on the plain ground, its centre at 45% of the height (the optical centre: the rays hang
-     below it; --kb-em, set above, is that same point of the launch picture in the home-screen app). Its still first frame (the ground and the mark) is the home-screen
-     app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). The app is
-     often up within half a second, so everything is said in ~0.75 s: a halo blooms behind the mark, the legend swings in
-     on its circle, light rakes through the colonnade onto the ground, a wave runs along the columns (and again every
-     few seconds while a slow line loads).
+<!-- The boot screen: the emblem on the ground, its centre at 45% of the height (the optical centre; --kb-em, set above,
+     is that same point of the launch picture in the home-screen app). Its still first frame (the ground and the mark)
+     is the home-screen app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run
+     the tool), and the mark never moves from there. The app is often up within half a second, so everything is said in
+     ~0.65 s, around the still mark: the ground's own lights (the entrance's, at a fraction) come up as a quiet field,
+     the legend settles onto its circle, two hairline orbits open past it into the screen, a shade crosses the columns
+     (and again every few seconds while a slow line loads).
      lib/boot.ts hands it over: .o = the emblem settles back a little and dissolves with the ground while the app
      lifts into place under it, 0.28 s (transitions on #boot and .em, the intro on their children: the two compose, so
      an app ready early still gets a whole gesture; it waits only for the 0.4 s since the first paint to pass);
-     .u = under the page as the entrance's ground: its lights wake, the legend goes, and the entrance draws its own mark
-     where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on the compositor,
-     running while the bundle keeps the main thread busy. -->
+     .u = under the page as the entrance's ground: its lights wake fully, the legend and orbits go, and the entrance
+     draws its own mark where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on
+     the compositor, running while the bundle keeps the main thread busy. -->
 <style id="boot-css">
 html[data-boot]{background:#000000}
 html[data-boot=light]{background:#F2F2F7}
@@ -58,55 +56,51 @@ html[data-boot=light]{background:#F2F2F7}
 [data-boot=light] #boot{color:#0B1433;background:#F2F2F7}
 #boot.u{z-index:auto}
 #boot.o{opacity:0}
-#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1);animation:kb-drift 24s ease-in-out infinite alternate paused}
+#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:calc(var(--o)*.5);transition:opacity 1.4s cubic-bezier(.4,0,.2,1);animation:kb-drift 24s ease-in-out infinite alternate paused,kb-on .7s cubic-bezier(.2,.8,.2,1) backwards}
 #boot b:nth-child(1){--c:#3B6BFF;--o:.5;--x:-45;--y:-70;--dx:16%;--dy:10%}
-#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s}
-#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s}
+#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s,.7s}
+#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s,.7s}
 [data-boot=light] #boot b:nth-child(1){--o:.3}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:var(--kb-em,45%);width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot .em{position:absolute;left:50%;top:45%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+@media (orientation:portrait){#boot .em{top:var(--kb-em,45%)}}
 #boot.o .em{transform:scale(.96)}
 /* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
 @media (max-width:599.98px){#boot.o+#app{animation:kb-lift .32s cubic-bezier(.2,.8,.2,1)}}
 @keyframes kb-lift{from{transform:translateY(8px)}}
-#boot .hl{position:absolute;left:-62px;top:-62px;width:340px;height:340px;background:radial-gradient(closest-side,#3B6BFF,transparent);opacity:.3;transition:opacity .28s;animation:kb-halo .75s cubic-bezier(.2,.8,.2,1) backwards}
-[data-boot=light] #boot .hl{opacity:.2}
-#boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .68s cubic-bezier(.2,.8,.2,1) .06s backwards}
+/* two hairline orbits past the legend, the outer one wider than a phone: the emblem's circles carried into the screen */
+#boot u{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);border:1px solid;border-radius:50%;opacity:var(--o);transition:opacity .28s;animation:kb-orbit .6s cubic-bezier(.2,.8,.2,1) .05s backwards}
+#boot u:nth-of-type(1){--d:324px;--o:.11}
+#boot u:nth-of-type(2){--d:500px;--o:.06;animation-delay:.11s}
+#boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .6s cubic-bezier(.2,.8,.2,1) backwards}
 #boot .lg svg{display:block;animation:kb-turn 90s linear infinite}
 #boot .lg text{font:600 10.5px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;fill:currentColor;opacity:.78}
 #boot .lg circle{fill:none;stroke:currentColor;stroke-width:.75;opacity:.3}
 #boot .mk{position:absolute;left:80px;top:84px;width:56px;height:48px}
-#boot .mk i{position:absolute;top:14px;width:6px;height:22px;border-radius:3px;background:currentColor;transform-origin:50% 100%;animation:kb-col 3.9s .08s infinite backwards}
+#boot .mk i{position:absolute;top:14px;width:6px;height:22px;border-radius:3px;background:currentColor;animation:kb-col 3.9s .06s infinite backwards}
 #boot .mk i:nth-child(1){left:2px;top:3px;width:52px;height:8px;animation:none}
 #boot .mk i:nth-child(2){left:4px}
-#boot .mk i:nth-child(3){left:14.5px;animation-delay:.14s}
-#boot .mk i:nth-child(4){left:25px;animation-delay:.2s}
-#boot .mk i:nth-child(5){left:35.5px;animation-delay:.26s}
-#boot .mk i:nth-child(6){left:46px;animation-delay:.32s}
+#boot .mk i:nth-child(3){left:14.5px;animation-delay:.1s}
+#boot .mk i:nth-child(4){left:25px;animation-delay:.14s}
+#boot .mk i:nth-child(5){left:35.5px;animation-delay:.18s}
+#boot .mk i:nth-child(6){left:46px;animation-delay:.22s}
 #boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
-/* light rakes through the four gaps onto the ground before the building, under the legend */
-#boot .ry{position:absolute;left:80px;top:131px;width:56px;height:120px;--r:#AFC3FF;opacity:.6;transform-origin:50% 0;transform:perspective(220px) rotateX(62deg);transition:opacity .28s;animation:kb-rays .7s cubic-bezier(.2,.8,.2,1) .08s backwards}
-[data-boot=light] #boot .ry{--r:#3B6BFF;opacity:.5}
-#boot .ry s{position:absolute;top:0;left:10px;width:4.5px;height:100%;background:linear-gradient(var(--r),transparent)}
-#boot .ry s:nth-child(2){left:20.5px}
-#boot .ry s:nth-child(3){left:31px}
-#boot .ry s:nth-child(4){left:41.5px}
-@keyframes kb-rays{from{opacity:0;transform:perspective(220px) rotateX(62deg) scaleY(.05)}}
-#boot.u .lg,#boot.u .hl,#boot.u .ry{opacity:0}
+#boot.u .lg,#boot.u u{opacity:0}
 #boot.u .mk{visibility:hidden}
 @keyframes kb-drift{to{transform:translate3d(var(--dx),var(--dy),0) scale(1.12)}}
 @keyframes kb-turn{to{transform:rotate(1turn)}}
-@keyframes kb-halo{from{opacity:0;transform:scale(.4)}}
-@keyframes kb-in{from{opacity:0;transform:rotate(-64deg) scale(.84)}}
-/* one column's dip and spring back, ~0.45 s of the 3.9 s round; each a beat after its neighbour */
-@keyframes kb-col{0%{transform:none;opacity:1;animation-timing-function:cubic-bezier(.4,0,.6,.5)}4.5%{transform:scaleY(.52);opacity:.45;animation-timing-function:cubic-bezier(.2,1.5,.4,1)}12%,100%{transform:none;opacity:1}}
+@keyframes kb-on{from{opacity:0}}
+@keyframes kb-orbit{from{opacity:0;transform:scale(.88)}}
+@keyframes kb-in{from{opacity:0;transform:rotate(-20deg) scale(.94)}}
+/* a shade crosses the colonnade: each column dims and clears a beat after its neighbour, ~0.5 s of the 3.9 s round */
+@keyframes kb-col{0%{opacity:1}3%{opacity:.38}9%,100%{opacity:1}}
 /* The iPhone's status bar (the home-screen app) is a strip in theme-color, the ground's colour, that no page draws
    under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
-#boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 72px);background:linear-gradient(#000000 30%,rgba(0,0,0,0))}
-[data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 30%,rgba(242,242,247,0))}
-@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot .hl,#boot .lg,#boot .lg svg,#boot .mk i,#boot .ry{animation:none!important}#boot,#boot .em,#boot b,#boot .hl,#boot .lg,#boot .ry{transition:none!important}}
+#boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 160px);background:linear-gradient(#000000 12%,rgba(0,0,0,.62) 40%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0))}
+[data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 12%,rgba(242,242,247,.62) 40%,rgba(242,242,247,.2) 72%,rgba(242,242,247,0))}
+@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot u,#boot .lg{transition:none!important}}
 </style>
 <!-- splash:start -->
 <link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
@@ -193,5 +187,5 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><div class="hl"></div><div class="ry"><s></s><s></s><s></s><s></s></div><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><u></u><u></u><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>
