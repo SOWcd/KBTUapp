@@ -16,14 +16,14 @@
   import X from '@lucide/svelte/icons/x';
   import { onMount, tick } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
-  import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt } from '../../lib/state/data.svelte';
+  import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { ui, toTickets } from '../../lib/state/ui.svelte';
   import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
@@ -31,7 +31,7 @@
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
-  import { inner } from '../../lib/perms';
+  import { inner, onTeam } from '../../lib/perms';
   import Poster from '../../ui/Poster.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Group from '../../ui/Group.svelte';
@@ -46,7 +46,6 @@
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import StatRow from '../../ui/StatRow.svelte';
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
@@ -120,7 +119,6 @@
     const id = requestIdleCallback(() => (upto += STEP), { timeout: 1000 });
     return () => cancelIdleCallback(id);
   });
-  const weekCount = $derived(shown.filter((e) => endOf(e) > now && dayNo(e.startsAt) < today + 7).length);
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
@@ -146,11 +144,21 @@
   }
   const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
   const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
-  const stats = $derived([
-    { label: t('list.statWeek'), value: weekCount, key: true },
-    ...(going.length ? [{ label: t('list.statGoing'), value: going.length }] : []), // no "0": shown only when I'm going somewhere
-    ...(showClasses && data.schedule.length ? [{ label: t('list.statLeft'), value: left.length }] : []),
-  ]);
+  // one tap signs up from the hero when there is nothing to ask first that this card can't say: a plain open event
+  // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
+  const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
+    && !e.externalUrl && !e.guestHost && !e.guestList && !inner(e) && !e.santa && !(e.seats != null && e.taken >= e.seats) && !onTeam(e, session.me?.memberships);
+  // the week at a glance, in place of the lone counters: seven days from today, a dot where something is on (the accent:
+  // I'm going), a tap goes to that day's card. Built from the days above: nothing is read twice
+  const strip = $derived(Array.from({ length: 7 }, (_, i) => {
+    const d = today + i, ev = days.find((x) => x.d === d)?.items.filter((x) => 'e' in x) ?? [];
+    return { d, on: days.some((x) => x.d === d && (x.items.length || (showClasses && data.schedule.length))), n: ev.length, mine: ev.some((x) => 'e' in x && x.e.my?.status === 'going') };
+  }));
+  async function toDay(d: number) {
+    haptic.select();
+    if (!shownDays.some((x) => x.d === d)) { upto = Infinity; await tick(); }
+    document.querySelector(`.tab.on .day[data-d="${d}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
@@ -285,18 +293,31 @@
           </span>
           <span class="when num"><span>{soon(e.startsAt, now)}</span><b class="ellipsis">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b></span>
         </div>
+        <!-- under the thumb: my ticket and the way there; not mine yet: one tap signs up (a paid one opens its payment) -->
         {#if mine}
-          <!-- the same pills as "Your events" below, side by side under the thumb -->
           <span class="acts">
-            <Button kind="secondary" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
+            <Button size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
             {#if floorOf(e.place) != null}<Button kind="secondary" size="s" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={15} />{/snippet}{t('route.open')}</Button>{/if}
           </span>
+        {:else if e.my?.status === 'hold'}
+          <span class="acts"><Button size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+        {:else if canGo(e)}
+          <span class="acts"><Button size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
         {/if}
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
   {/if}
-  {#if data.eventsReady}<div class="stats"><StatRow items={stats} /></div>{/if}
+  {#if data.eventsReady && days.length}
+    <nav class="week" aria-label={t('list.title')}>
+      {#each strip as w (w.d)}
+        {@const ts = dayTs(w.d) + 12 * 3600}
+        <button class={['wd', { today: w.d === today, mine: w.mine }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
+          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.n }}></i>
+        </button>
+      {/each}
+    </nav>
+  {/if}
 
   {#if going.length > 1}
     <!-- the rest of my week: one grouped card, a ticket pill at each row's end -->
@@ -347,7 +368,7 @@
     <!-- without a timetable an empty day isn't shown: not a "free day" we can't know (the card above asks for it) -->
     {#if day.items.length || (showClasses && data.schedule.length)}
       {@const [a, b] = head(day.d)}
-      <div class="day">
+      <div class="day" data-d={day.d}>
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
       <!-- one timeline: an event's full row, a class's thin one between them -->
       <div class="list">
@@ -438,7 +459,7 @@
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
-  .day { margin: 26px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); content-visibility: auto; contain-intrinsic-size: auto 360px; }
+  .day { margin: 26px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
   .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
   .dh span { color: var(--text-3); font-weight: 600; }
   .dh span::first-letter { text-transform: none; }
@@ -449,12 +470,13 @@
      a slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
      follows the theme and stays legible whatever the cover is), the time at its right end, my ticket and the way
      there in a row at its foot */
-  .hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 44px 6px 6px; /* the picture always keeps its strip */
+  .hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 72px 6px 6px; /* the picture always keeps its strip, the action row under the words too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   .art, .shade, .rim { position: absolute; inset: 0; }
   .shade, .rim { border-radius: inherit; pointer-events: none; }
-  .shade { background: rgba(0, 0, 0, 0.2); }
+  /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
+  .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
   /* no cover: the event's 3D mark stands at the left, its foot behind the frost */
   .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-start; padding: 4px 0 0 12px; }
   /* the rim: a hair of white lit at the top left, as glass is. The light comes round once as the card arrives and rests
@@ -470,7 +492,7 @@
   @media (prefers-reduced-motion: reduce) { .rim::before { animation: none; } }
   /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
      dark it also dims what is under it: white words hold 4.5:1 over a white cover */
-  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px 14px;
+  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px 14px;
     border-radius: var(--r-l); color: var(--text); background: var(--glass-bg); pointer-events: none;
     box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
     -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
@@ -486,7 +508,20 @@
   .when b { max-width: 100%; font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
   .hsub:empty { display: none; }
-  .stats { margin: 22px 0 6px; }
+  /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
+     the one filled circle, a quiet day dimmed and not a button */
+  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-5) 0 0; }
+  .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
+  .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+  .wd b { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
+    transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
+  .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
+  .wd.today b { background: var(--text); color: var(--bg); }
+  .wd:disabled b { color: var(--text-3); }
+  .wd.today:disabled b { background: var(--fill-2); color: var(--text); }
+  .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
+  .wd i.on { background: var(--text-3); }
+  .wd.mine i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
   .pin { margin: 10px 0 0; }

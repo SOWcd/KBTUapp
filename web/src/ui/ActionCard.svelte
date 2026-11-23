@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Opal's prompt card: a grey glyph on the left, the title bold, one grey line, a muted pill on the right ("Enable").
+  // Opal's prompt card: a grey glyph in a tile on the left, the title bold, one grey line, a muted pill ("Enable").
   // The whole card does the pill's thing.
   import type { Component } from 'svelte';
   import Card from './Card.svelte';
@@ -17,10 +17,14 @@
 </Card>
 
 <style>
-  .ac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) 14px; }
-  .ic { flex: none; display: grid; place-items: center; color: var(--text-2); }
-  .tx { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  /* a phone: the glyph in its tile beside the words, the pill under them on the words' edge (beside them it squeezed the
+     line into four) */
+  .ac { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-3) 14px; }
+  .ic { align-self: start; display: grid; place-items: center; width: var(--ctl-m); height: var(--ctl-m); border-radius: var(--r-s); background: var(--fill); color: var(--text-2); }
+  .tx { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .tx b { font: 700 var(--fs-card)/1.25 var(--font-text); letter-spacing: -0.01em; }
   .tx span { font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
-  .pill { flex: none; margin-left: auto; }
+  .pill { grid-column: 2; justify-self: start; }
+  .ac > .tx:first-child { grid-column: 1 / -1; } /* no glyph: the words from the card's edge */
+  .ac > .tx:first-child + .pill { grid-column: 1; }
 </style>
