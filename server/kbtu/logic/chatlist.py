@@ -9,6 +9,7 @@ import time
 from ..db import tx
 
 from .core import (ApiError, Viewer, _org, _qs, can, card, log_action, need_student, one, org_ref, photo, rows)
+from . import chatmod
 
 
 # ---------------------------------------------------------------- the chats directory (§4.11)
@@ -349,7 +350,7 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]),
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]), "callRoles": bool(c["call_roles"]),
                        "swearMiss": c["swear_miss"].split(",") if c["swear_miss"] else []} if editor else x)
     return out
 
@@ -425,6 +426,17 @@ def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict
             raise ApiError("not_found")
         con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (int(on), cid))
         _chats_audit(con, v, oid, f"mirror {'on' if on else 'off'} {c['url']}")
+    return org_chats(con, oid, True)
+
+
+def call_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
+    """Studio's switch: who may /all in this group, its club roles too or its Telegram admins alone (logic.chatlist.may_call)."""
+    if not isinstance(on, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        chatmod.target(con, v, oid, cid)  # the club's linked group, its President or Vice
+        con.execute("UPDATE chats SET call_roles = ? WHERE id = ?", (int(on), cid))
+        log_action(con, v.id, "org_chats", f"org:{oid}", f"call roles {'on' if on else 'off'} {cid}")
     return org_chats(con, oid, True)
 
 
@@ -646,10 +658,13 @@ def student(con, tg: int) -> bool:
 
 
 def may_call(con, chat: int, tg: int, admin: bool) -> bool:
-    """A verified group admin, or a verified officer or assigned role holder of this chat's club."""
+    """A verified group admin, or a verified officer or assigned role holder of this chat's club (unless its Studio
+    keeps /all to the group's admins: chats.call_roles)."""
     if admin:
         return student(con, tg)
     _, _, oid = _holder(con, chat)
+    if oid and one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND org_id = ? AND call_roles = 0", chat, oid):
+        return False
     return bool(oid and one(con, """SELECT 1 FROM org_members m JOIN users u ON u.id = m.user_id
         JOIN students s ON s.user_id = u.id AND s.manual = 0 JOIN orgs o ON o.id = m.org_id AND o.status = 'active'
         WHERE m.org_id = ? AND u.tg_id = ? AND u.banned_at IS NULL AND (m.role != 'member' OR m.role_id IS NOT NULL)""", oid, tg))

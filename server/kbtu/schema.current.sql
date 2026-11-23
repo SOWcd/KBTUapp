@@ -212,7 +212,7 @@ CREATE TABLE chats (
   sort       INTEGER NOT NULL DEFAULT 0,
   added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
-, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT) STRICT;
+, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT, call_roles INTEGER NOT NULL DEFAULT 1) STRICT;
 CREATE TABLE "club_applications" (
       id          INTEGER PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
