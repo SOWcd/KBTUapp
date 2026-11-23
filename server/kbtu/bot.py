@@ -596,7 +596,7 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
     e = one(con, """SELECT e.*, o.name AS org, s.drawn_at, g.budget FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
         JOIN santa_events s ON s.event_id = e.id LEFT JOIN santa_games g ON g.event_id = e.id
         WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
-    chat = {"santa_msg": "to_id = ? AND from_giver = 1", "santa_reply": "giver_id = ? AND from_giver = 0"}.get(kind)  # the chat outlives the gifts day
+    chat = kind in ("santa_msg", "santa_reply")  # the chat outlives the gifts day
     if not e or not chat and (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
         return None
     playing = one(con, logic.santa._GOING + " AND p.user_id = ?", e["id"], uid)
@@ -620,8 +620,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
-    if chat and not one(con, f"SELECT 1 FROM santa_msgs WHERE event_id = ? AND text IS NOT NULL AND {chat}", e["id"], uid):
-        return None  # the thread is gone since (the pair changed, a report, the sweep); never its words, only that there are some
+    if chat and not logic.santa.pushable(con, e["id"], uid, kind):
+        return None  # no chat for them any more (retired, over, out of the club) or the thread shut; never its words, only that there are some
     where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 

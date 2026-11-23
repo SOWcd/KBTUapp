@@ -3564,6 +3564,7 @@ const en: Dict = {
   'santa.chatReportText': "The chat closes for both of you. The app’s staff will see it and the two of you to handle the report.",
   'santa.chatReportGo': "Close chat",
   'santa.chatLimit': "That's enough messages for today — continue tomorrow",
+  'santa.chatOff': "No chat: it works in games of four or more, while nobody has left",
   'santa.repTitle': "Secret Santa reports",
   'santa.repNone': "No reports",
   'santa.repSanta': "Santa",

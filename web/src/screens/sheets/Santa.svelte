@@ -16,7 +16,6 @@
   import { dayMonthShort, time, nowTs } from '../../lib/time';
   import Avatar from '../../ui/Avatar.svelte';
   import SantaBack from './SantaBack.svelte';
-  import SantaChat from './SantaChat.svelte';
   import SantaReveal from './SantaReveal.svelte';
 
   let { id, e, mine }: { id: Id; e: EventCard; mine: NonNullable<EventFull['mySanta']> } = $props();
@@ -56,12 +55,13 @@
     try { edited = (await api.santaWish(id, w)).wish; haptic.ok(); say(t('santa.wishSaved'), 'party_popper_3d'); }
     catch { edited = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // the pair's chat (SantaChat): its two rows are here with the page, their last words come with the read below; it
-  // lives three days past the gifts day (server santa.MSG_KEEP)
-  const chatOn = $derived(!!mine.to && nowTs() < (e.endsAt ?? e.startsAt) + 3 * 86400);
-  $effect(() => { if (chatOn) void loadSantaChat(id); });
+  // the pair's chat (SantaChat, its own chunk): the server says whether this game has one (mine.chat: four or more in
+  // the ring, nobody left it, not over); its two rows are here with the page, their last words come with the read
+  let over = $state(false); // the read said there is none any more
+  const chatOn = $derived(!!mine.to && !!mine.chat && !over);
+  $effect(() => { if (mine.to && mine.chat) void loadSantaChat(id).then((ok) => (over = !ok)); });
   const last = (side: 'to' | 'from') => { const m = data.santaChat[id]?.[side]?.msgs.at(-1); return m ? (m.mine ? t('santa.chatYou', { text: m.text }) : m.text) : ''; };
-  const talk = (side: 'to' | 'from') => { haptic.tap(); open(SantaChat, { event: id, side, name: mine.to?.person.name }, undefined, `santa-${id}-${side}`); };
+  const talk = (side: 'to' | 'from') => { haptic.tap(); sheets.santaChat(id, side, mine.to?.person.name); };
   const drawAt = $derived(e.regUntil && e.regUntil > nowTs() ? `${dayMonthShort(e.regUntil)}, ${time(e.regUntil)}` : '');
 </script>
 
@@ -106,6 +106,7 @@
   </button>
 {/if}
 {#if chatOn}{@render chat('from')}{/if}
+{#if mine.to && !chatOn}<p class="t-foot off">{t('santa.chatOff')}</p>{/if}
 
 <style>
   .santa { margin: 0; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--text); text-align: left; }
@@ -115,6 +116,7 @@
   .talk { width: 100%; border: 0; cursor: pointer; transition: transform 450ms var(--ease-bounce); }
   .talk:active { transform: scale(0.98); transition-duration: 80ms; }
   .ic { flex: none; display: grid; color: var(--text-3); }
+  .off { margin: 0 var(--s-4); color: var(--text-3); }
   .ic:first-child { color: var(--accent); }
   .card { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4); }
   .dim { margin: 0; color: var(--text-2); }

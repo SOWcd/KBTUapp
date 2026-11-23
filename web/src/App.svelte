@@ -160,6 +160,7 @@
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.eventReport = (id, org) => lazy(() => import('./screens/club/EventReport.svelte'), { id, org }, undefined, org == null ? id : `${id}:${org}`);
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
+  sheets.santaChat = (event, side, name) => lazy(() => import('./screens/sheets/SantaChat.svelte'), { event, side, name }, undefined, `santa-${event}-${side}`);
   sheets.santaReports = () => lazy(() => import('./screens/admin/SantaReports.svelte'), {});
   // a new conversation opens with the keyboard up, as every AI app does. iOS raises it only for a focus inside the tap,
   // and the chunk may come later: a stand-in field takes the focus now, the assistant's own field takes it over as it

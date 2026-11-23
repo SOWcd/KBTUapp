@@ -980,6 +980,9 @@ CREATE TABLE rounds (
         created_at INTEGER NOT NULL,
         sent_at INTEGER
     , next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300), group_link TEXT) STRICT;
+CREATE TABLE santa_chats (  -- its own table, not a column: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      until INTEGER NOT NULL) STRICT;
 CREATE TABLE santa_events (  -- IF NOT EXISTS: tests rewind user_version
       event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
       drawn_at INTEGER) STRICT;
@@ -1006,6 +1009,9 @@ CREATE TABLE santa_people (
       wish TEXT NOT NULL,
       gives_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
       PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE santa_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL) STRICT;
 CREATE TABLE saved_events (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -1489,10 +1495,12 @@ CREATE INDEX roster_by_tg ON roster_pending(tg);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
+CREATE INDEX santa_msgs_giver ON santa_msgs (giver_id);
 CREATE INDEX santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
 CREATE INDEX santa_msgs_to ON santa_msgs (to_id);
 CREATE INDEX santa_people_to ON santa_people (gives_to);
 CREATE INDEX santa_people_user ON santa_people (user_id);
+CREATE INDEX santa_sends_by_user ON santa_sends (user_id, at);
 CREATE INDEX saved_by_event ON saved_events(event_id);
 CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
 CREATE INDEX short_links_by_org ON short_links(org_id);
@@ -1666,9 +1674,9 @@ CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
       DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
     END;
 CREATE TRIGGER santa_msgs_gone AFTER DELETE ON santa_people BEGIN
-      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id)
-        AND NOT EXISTS (SELECT 1 FROM santa_msgs r WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id
-          AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
+      UPDATE santa_chats SET until = 0 WHERE event_id = OLD.event_id;
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND NOT EXISTS (SELECT 1 FROM santa_msgs r
+        WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;
 CREATE TRIGGER kri_consents_student_gone AFTER DELETE ON students BEGIN
       DELETE FROM kri_consents WHERE user_id = OLD.user_id;

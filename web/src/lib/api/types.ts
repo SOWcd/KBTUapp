@@ -517,8 +517,8 @@ export interface EventFull extends EventCard {
    *  remind: how many "Remind those not in yet" would reach now; remindAt: when the button works again (null: now) */
   santaTeam?: { in: PersonRef[]; out: PersonRef[]; remind: number; remindAt: Ts | null };
   santaTold?: number;           // santa.start's answer: how many of the team the invite went to (0: they had it within a day, not repeated)
-  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left) */
-  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null };
+  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left), and `chat` */
+  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null; chat?: boolean }; // chat: the pair's chat is on (false: a ring under four, or someone left it)
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
   meetingTag?: Id | null;       // "for whom" on a team-only event: one of the club's tags; null = the whole team

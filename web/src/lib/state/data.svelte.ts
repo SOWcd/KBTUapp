@@ -63,8 +63,20 @@ export const data = $state({
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
 
-/** Secret Santa's chat of one game: read again whenever its page or a thread opens (the bot's push leads there); no polling */
-export const loadSantaChat = (id: Id): Promise<void> => api.santaChat(id).then((c) => { data.santaChat[id] = c; }).catch(() => {});
+/** Secret Santa's chat of one game: read again whenever its page or a thread opens or the app comes back (the bot's
+ *  push leads there); no polling. One read at a time per game. false: there is no chat for me any more (over, retired,
+ *  out of the game): what the phone held of it is dropped at once. A network failure keeps what is shown. */
+const santaReads = new Map<Id, Promise<boolean>>();
+export function loadSantaChat(id: Id): Promise<boolean> {
+  let read = santaReads.get(id);
+  if (!read) {
+    read = api.santaChat(id).then((c) => { data.santaChat[id] = c; return true; })
+      .catch((e) => { if (!(e instanceof ApiErr) || (e.code !== 'not_found' && e.code !== 'forbidden')) return true; delete data.santaChat[id]; return false; })
+      .finally(() => santaReads.delete(id));
+    santaReads.set(id, read);
+  }
+  return read;
+}
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
 export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); }

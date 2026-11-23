@@ -2224,9 +2224,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS form_answers_by_form ON form_answers(form_id, created_at);"""),
     # /all in a club's group kept to its Telegram admins (Studio's switch); a group not here: its club roles call too
     (220, "CREATE TABLE IF NOT EXISTS chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;"),
-    # Secret Santa's chat (logic/santa.py): one thread per pair, kept by both its people so a spliced ring's new pair
-    # starts empty; text NULL: that side reported the thread (closed; done_at: staff handled it). Whoever leaves the
-    # ring takes their threads along, a reported one stays for the staff
+    # Secret Santa's chat (logic/santa.py): one thread per pair, kept by both its people; text NULL: that side reported
+    # the thread (closed; done_at: staff handled it). santa_chats.until: the chat's end, fixed at the draw (the gifts day + 3
+    # days: an edit of the event never revives it); 0 once anyone left the ring: the chat is retired for everyone alike
+    # and its words go (whose thread vanished would name a Santa), a reported thread stays for the staff.
+    # santa_sends: the day's count of my messages, apart from them so a deleted thread refunds nothing
     (221, """CREATE TABLE IF NOT EXISTS santa_msgs (
       id INTEGER PRIMARY KEY,
       event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
@@ -2238,9 +2240,19 @@ MIGRATIONS: list[tuple[int, str]] = [
       done_at INTEGER) STRICT;
     CREATE INDEX IF NOT EXISTS santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
     CREATE INDEX IF NOT EXISTS santa_msgs_to ON santa_msgs (to_id);
+    CREATE INDEX IF NOT EXISTS santa_msgs_giver ON santa_msgs (giver_id);
+    CREATE TABLE IF NOT EXISTS santa_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS santa_sends_by_user ON santa_sends (user_id, at);
+    CREATE TABLE IF NOT EXISTS santa_chats (  -- its own table, not a column: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      until INTEGER NOT NULL) STRICT;
+    INSERT OR IGNORE INTO santa_chats (event_id, until) SELECT s.event_id, e.starts_at + 259200 FROM santa_events s
+      JOIN events e ON e.id = s.event_id WHERE s.drawn_at IS NOT NULL;
     CREATE TRIGGER IF NOT EXISTS santa_msgs_gone AFTER DELETE ON santa_people BEGIN
-      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND (giver_id = OLD.user_id OR to_id = OLD.user_id)
-        AND NOT EXISTS (SELECT 1 FROM santa_msgs r WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id
-          AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
+      UPDATE santa_chats SET until = 0 WHERE event_id = OLD.event_id;
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND NOT EXISTS (SELECT 1 FROM santa_msgs r
+        WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;"""),
 ]

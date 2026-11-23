@@ -774,7 +774,10 @@ def test_chat_is_the_pair_alone(env):
     assert len(mine("santa_msg", b)) == 1
     con.execute("UPDATE bot_outbox SET send_after = send_after - 3601, ref = ref || '0' WHERE kind = 'santa_msg'")
     _say(c, eid, a, "to", "an hour on")
-    assert len(mine("santa_msg", b)) == 2
+    assert len(mine("santa_msg", b)) == 1  # the first one still waits (a bot back from an outage): no second beside it
+    con.execute("UPDATE bot_outbox SET sent_at = 1 WHERE kind = 'santa_msg'")
+    _say(c, eid, a, "to", "and sent")
+    assert len(mine("santa_msg", b)) == 2 and logic.notifications.CATEGORY_OF["santa_msg"] == "nRemind"  # theirs to mute
     assert not con.execute("SELECT 1 FROM audit_log WHERE data LIKE '%tree%' OR action LIKE '%santa%'").fetchone()  # no audit row
     # a report by the receiver: shut for both, nobody writes there again; the app's staff alone read it, with both its people
     login(c, 30, "mod")
@@ -801,58 +804,93 @@ def test_chat_is_the_pair_alone(env):
     assert text.startswith("\U0001f6a8") and start == "capps" and "Test" not in text
     # a lost seat doesn't take a reported thread from the staff
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
-    assert len(c.get("/api/admin/santa-reports", headers=tma(30)).json()[0]["msgs"]) == 4
+    assert len(c.get("/api/admin/santa-reports", headers=tma(30)).json()[0]["msgs"]) == 5
     # kept until handled and 30 days past the gifts day, whichever is later
     con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 31 * DAY, eid))
     logic.santa.forget(con)
-    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 5  # the pair's four and the report; the third player's own is swept
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 6  # the pair's four and the report; the third player's own is swept
     assert c.post(f"/api/admin/santa-reports/{reps[0]['id']}/done", headers=tma(30)).status_code == 204
     assert c.get("/api/admin/santa-reports", headers=tma(30)).json() == [] and bot._render(con, told[0]) is None
     log = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'santa_report_done'").fetchall()
     assert [tuple(x) for x in log] == [(_uid(con, 30), f"santa_report:{reps[0]['id']}", "{}")]  # who and which, never the pair
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 29 * DAY, eid))
     logic.santa.forget(con)
-    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 5  # handled, but not 30 days yet
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 6  # handled, but not 30 days yet
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 31 * DAY, eid))
     logic.santa.forget(con)
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
 
 
-def test_chat_cap_and_what_deletes_it(env, monkeypatch):
-    """Fifty messages a day per person; a thread goes with a lost seat (the new pair starts empty), with an account,
-    and three days after the gifts day."""
+def test_chat_cap_end_and_retiring(env, monkeypatch):
+    """Fifty messages a day per person, whatever becomes of them; the chat ends three days after the gifts day as it
+    stood at the draw (an edit revives nothing) and the night's round deletes it; the first one to leave the ring
+    retires the chat for everyone alike (whose thread vanished would name a Santa); an unhandled report: 90 days."""
     c, cfg = env
     con, eid = _game(c, cfg, 5)
     assert _draw(c, eid).status_code == 200
     gives = _gives(c, con, eid, PLAYERS)
     a, b = 10, gives[10]
+    x = next(tg for tg in PLAYERS if tg not in (a, b))
+    assert _page(c, eid, a)["mySanta"]["chat"] is True
     for i in range(logic.santa.MSG_DAY):
         assert _say(c, eid, a, "to" if i % 2 else "from", f"m{i}").status_code == 200
     r = _say(c, eid, a, "to")
     assert r.status_code == 429 and r.json()["message"] == "santa_msgs"
     assert _say(c, eid, b, "from").status_code == 200  # the cap is a person's, not a thread's
-    con.execute("UPDATE santa_msgs SET created_at = created_at - 86401")
-    assert _say(c, eid, a, "to").status_code == 200
-    # b loses the seat: both of b's threads go, and a's new person finds an empty one
-    assert con.execute("SELECT COUNT(*) FROM santa_msgs WHERE to_id = ?", (_uid(con, b),)).fetchone()[0]
-    c.delete(f"/api/events/{eid}/registration", headers=tma(b))
-    assert not con.execute("SELECT 1 FROM santa_msgs WHERE ? IN (giver_id, to_id)", (_uid(con, b),)).fetchone()
-    assert _chat(c, eid, a).json()["to"] == {"closed": False, "msgs": []} and _chat(c, eid, b).status_code == 404
-    assert len(_chat(c, eid, a).json()["from"]["msgs"]) == logic.santa.MSG_DAY // 2  # a's thread with their own Santa stays
-    # an account deleted: its messages with it
-    assert _say(c, eid, a, "to", "to my new person").status_code == 200
-    ua = _uid(con, a)
-    delete_now(c, cfg, tma(a))
-    assert not con.execute("SELECT 1 FROM santa_msgs WHERE ? IN (giver_id, to_id)", (ua,)).fetchone()
-    # retention: writable for three days after the gifts day, swept by the night's round then
-    x = next(tg for tg in PLAYERS if tg not in (a, b))
-    assert _say(c, eid, x, "to", "kept").status_code == 200
-    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 3 * DAY + 60, eid))
-    assert _say(c, eid, x, "to", "thanks after the party").status_code == 200
-    logic.santa.forget(con)
-    assert con.execute("SELECT COUNT(*) FROM santa_msgs WHERE event_id = ?", (eid,)).fetchone()[0] == 2
-    con.execute("UPDATE events SET starts_at = starts_at - 120 WHERE id = ?", (eid,))
+    assert len(_chat(c, eid, a).json()["from"]["msgs"]) == logic.santa.MSG_DAY // 2
+    # out of the club in a team-only game, or banned: no chat, though the seat is still theirs
+    con.execute("UPDATE events SET visibility = 'members' WHERE id = ?", (eid,))
     assert _chat(c, eid, x).status_code == 404 and _say(c, eid, x, "to").status_code == 404
+    con.execute("UPDATE events SET visibility = 'public' WHERE id = ?", (eid,))
+    assert _chat(c, eid, x).status_code == 200
+    # the end: fixed at the draw; moving the gifts day later brings nothing back; the night's round deletes
+    until = con.execute("SELECT g.until - e.starts_at FROM santa_chats g JOIN events e ON e.id = g.event_id WHERE e.id = ?", (eid,)).fetchone()[0]
+    assert until == 3 * DAY
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == logic.santa.MSG_DAY + 1
+    con.execute("UPDATE santa_chats SET until = ? WHERE event_id = ?", (int(time.time()) - 1, eid))
+    con.execute("UPDATE events SET starts_at = starts_at + ?, ends_at = NULL WHERE id = ?", (30 * DAY, eid))
+    assert _chat(c, eid, a).status_code == 404 and _say(c, eid, b, "from").status_code == 404 and _page(c, eid, a)["mySanta"]["chat"] is False
+    sent = [m for m in _out(con, "santa_msg") if m["user_id"] == _uid(con, b)]
+    assert sent and bot._render(con, sent[0]) is None  # nor a push about a chat that is over
     set_clock(monkeypatch, lambda: (int(time.time()) + 5 * 3600) // DAY * DAY + DAY - 5 * 3600 + 60)  # just past Almaty's midnight: the night's round
     logic.stats_day(con)
+    set_clock(monkeypatch, lambda: int(time.time()))
+    assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
+    # someone leaves the ring: every thread goes and the chat is off for all, the same for each; a reported thread stays
+    con.execute("UPDATE santa_chats SET until = ? WHERE event_id = ?", (int(time.time()) + DAY, eid))
+    assert _say(c, eid, x, "to", "kept for the staff").status_code == 200 and _say(c, eid, b, "to", "gone").status_code == 200
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(x), json={"side": "to"}).status_code == 204
+    c.delete(f"/api/events/{eid}/registration", headers=tma(a))
+    assert [r["text"] for r in con.execute("SELECT text FROM santa_msgs ORDER BY id")] == ["kept for the staff", None]
+    for tg in PLAYERS:
+        assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
+    assert _page(c, eid, b)["mySanta"]["chat"] is False and _page(c, eid, x)["mySanta"]["chat"] is False
+    r = _say(c, eid, b, "from")
+    assert r.status_code == 404  # and the day's count is kept: a deleted thread refunds nothing
+    assert con.execute("SELECT COUNT(*) FROM santa_sends WHERE user_id = ?", (_uid(con, a),)).fetchone()[0] == logic.santa.MSG_DAY
+    ua = _uid(con, a)
+    delete_now(c, cfg, tma(a))
+    assert not con.execute("SELECT 1 FROM santa_sends WHERE user_id = ?", (ua,)).fetchone()
+    # an unhandled report: 90 days after the gifts day at most
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 89 * DAY, eid))
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 2
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 91 * DAY, eid))
+    logic.santa.forget(con)
+    assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
+    con.execute("UPDATE santa_sends SET at = at - 86401")
+    logic.santa.forget(con)
+    assert not con.execute("SELECT 1 FROM santa_sends").fetchone()
+
+
+def test_no_chat_in_a_small_ring(env):
+    """Three in the ring: whom I give to leaves one possible Santa, so there is no chat, and the page says so."""
+    c, cfg = env
+    con, eid = _game(c, cfg, 3)
+    assert _draw(c, eid).status_code == 200
+    for tg in PLAYERS[:3]:
+        assert _page(c, eid, tg)["mySanta"]["chat"] is False
+        assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
+        assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(tg), json={"side": "from"}).status_code == 404
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
