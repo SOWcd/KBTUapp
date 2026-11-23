@@ -1043,8 +1043,9 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if not notifications.allowed(con, category, m["user_id"], to):
                     _mark(con, m, False, "gone")
                     continue
-                body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
-                    _feedback_buttons(cfg, to, m["lang"], category))
+                if category not in NO_FEEDBACK:
+                    body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
+                        _feedback_buttons(cfg, to, m["lang"], category))
             try:
                 r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
                 if r is None:
@@ -1360,6 +1361,9 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
         return say("receipt_none")
     media.drop(root, gone)  # the one it replaced
     return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
+
+
+NO_FEEDBACK = {"nFriends"}  # rare and personal (owner, Nov 23): no Useful / Do-not-send row; Settings still mutes them
 
 
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
