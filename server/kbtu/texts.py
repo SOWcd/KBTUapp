@@ -1419,6 +1419,29 @@ def place_or_tba(place: str, lang: str, online: bool = False) -> str:
     return where(place, online, lang) or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
 
 
+# /f/<slug>, a public form (logic/forms.py): the page's own words; the form's are its spec's. A browser outside
+# Telegram, no account; the spec's "lang" picks the set.
+FORM_PAGE = {
+    "ru": {"anon": "Анонимно", "other": "Другое", "otherHint": "Свой вариант", "many": "Можно выбрать несколько",
+           "required": "Ответьте на этот вопрос", "send": "Отправить", "thanks": "Спасибо!", "made": "Сделано в KBTU App",
+           "fail": "Не отправилось. Проверьте интернет и попробуйте ещё раз.", "full": "Сегодня ответов слишком много. Попробуйте завтра.",
+           "shut": "Форма уже закрыта.", "empty": "Ответьте хотя бы на один вопрос.",
+           "closed": ("Форма закрыта", "Ответы больше не принимаются. Спасибо за интерес!"),
+           "none": ("Такой формы нет", "Проверьте ссылку: возможно, в ней опечатка.")},
+    "kk": {"anon": "Анонимді", "other": "Басқа", "otherHint": "Өз нұсқаңыз", "many": "Бірнешеуін таңдауға болады",
+           "required": "Осы сұраққа жауап беріңіз", "send": "Жіберу", "thanks": "Рақмет!", "made": "KBTU App-та жасалған",
+           "fail": "Жіберілмеді. Интернетті тексеріп, қайталап көріңіз.", "full": "Бүгін жауап тым көп. Ертең қайталап көріңіз.",
+           "shut": "Форма жабылған.", "empty": "Кемінде бір сұраққа жауап беріңіз.",
+           "closed": ("Форма жабық", "Жауаптар енді қабылданбайды. Қызығушылығыңызға рақмет!"),
+           "none": ("Мұндай форма жоқ", "Сілтемені тексеріңіз: қате кеткен болуы мүмкін.")},
+    "en": {"anon": "Anonymous", "other": "Other", "otherHint": "Your own answer", "many": "Choose any that apply",
+           "required": "Please answer this question", "send": "Submit", "thanks": "Thank you!", "made": "Made in KBTU App",
+           "fail": "It didn't send. Check your connection and try again.", "full": "Too many answers today. Please try tomorrow.",
+           "shut": "This form is already closed.", "empty": "Please answer at least one question.",
+           "closed": ("This form is closed", "It no longer takes answers. Thank you for your interest!"),
+           "none": ("No such form", "Check the link: it may have a typo.")},
+}
+
 # /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set.
 # Each state: a title and a line. "ask"/"yes"/"here": the way in when the start link opens nothing ("stuck").
 MS_PAGE = {

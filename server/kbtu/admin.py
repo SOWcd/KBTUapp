@@ -70,6 +70,9 @@
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
   .venv/bin/python -m kbtu.admin guest-names <event id> --gz <b64>   the door's list by name (student_id,name,adult,username)
   .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
+  .venv/bin/python -m kbtu.admin form new <slug> --gz <base64 gzip json>   a public form at /f/<slug>, open to anyone with no
+                                account (logic/forms.py has the spec's shape); answers are anonymous. form close <slug> stops it,
+                                form answers <slug> prints them as CSV (a column per question), form list counts them
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
@@ -550,6 +553,26 @@ def main(args: list[str]) -> None:
         from . import casting
         n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))
         print(f"{'would send now' if args[2:] else 'sending now'} {n}")
+    elif cmd == "form" and args[1:2] in (["new"], ["close"], ["answers"], ["list"]):  # public forms (logic/forms.py)
+        from .logic import forms
+        try:
+            if args[1] == "new" and len(args) == 3 and gz is not None:
+                forms.create(con, args[2], json.loads(gz))
+                print(f"form /f/{args[2]}")
+            elif args[1] == "close" and len(args) == 3:
+                forms.close(con, args[2])
+                print(f"closed /f/{args[2]}")
+            elif args[1] == "answers" and len(args) == 3:
+                sys.stdout.write(forms.export(con, args[2]))  # CSV as is: its control characters went at the door
+            elif args[1] == "list" and len(args) == 2:
+                for slug, is_open, n in forms.listing(con):
+                    print(f"{'open' if is_open else 'closed':<6} {n:>5}  /f/{slug}")
+            else:
+                sys.exit(__doc__)
+        except ValueError:
+            sys.exit("the spec: JSON expected")
+        except ApiError as exc:
+            sys.exit(f"{exc.code} {exc.message}".strip())
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"

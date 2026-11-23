@@ -3058,6 +3058,24 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 </style></head><body><main><nav><a href="{other}?lang={lang}">{LEGAL_NAMES[other][lang]}</a><span>{langs}</span></nav>{body}</main></body></html>"""
         return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
+    # public forms (logic/forms.py): no account, nothing about the sender kept
+    @app.get("/f/{slug}")
+    def form_page(con: Con, slug: str):
+        status, body = logic.forms.page(con, slug)
+        return Response(body, status_code=status, media_type="text/html", headers={
+            "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
+
+    async def form_sheet(request: Request) -> object:  # no account in front: the body is capped before it is parsed
+        try:
+            return json.loads(await read_upload(request, logic.forms.MOST))
+        except (ValueError, RecursionError):
+            raise ApiError("bad_input") from None
+
+    @app.post("/api/f/{slug}")
+    def form_submit(con: Con, slug: str, body: object = Depends(form_sheet)):
+        logic.forms.submit(con, slug, body)
+        return {"ok": True}
+
     if cfg.old_dir:
         app.mount("/old", StaticFiles(directory=cfg.old_dir, html=True), name="old")
 
