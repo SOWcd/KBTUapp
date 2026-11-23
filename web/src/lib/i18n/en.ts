@@ -397,6 +397,7 @@ const en: Dict = {
   'cast.send': "Send the application",
   'cast.save': "Save the changes",
   'cast.change': "Change the application",
+  'app.turn': "Turn your phone upright",
   'ban.title': "Access closed",
   'ban.reason': "Reason: {reason}",
   'ban.appeal': "Write if this is a mistake",
