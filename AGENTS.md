@@ -81,6 +81,9 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **The bot** sends templates with a button into the app, never a user's words. The few exceptions (forum channel posts and
   replies, `/all`, restored comments, share cards, group video replies) are listed in `server/kbtu/BOT_WORDS.md`: read
   it before touching bot.py, fchannel.py, tgcomments.py or tiktok.py.
+- **Bot texts the owner sees first**: every bot message opens with an emoji (a test checks), is short (a few
+  lines, emoji over words), and a new or changed one, above all a broadcast, goes to the owner as a preview
+  (`admin broadcast ... @who`, or a screenshot) for his yes before anyone else gets it.
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own

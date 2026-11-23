@@ -2310,6 +2310,16 @@ def test_bot_texts_match_across_languages():
                 assert [fields(x) for x in ru if isinstance(x, str)] == [fields(x) for x in other if isinstance(x, str)], (key, lang)
 
 
+def test_bot_texts_open_with_an_emoji():
+    """The owner's hard rule: every bot message starts with an emoji (a bare paragraph gets skipped)."""
+    import unicodedata
+    for lang, table in texts.BOT.items():
+        for key, v in table.items():
+            text = (v[0] if isinstance(v, tuple) else v).lstrip()
+            if isinstance(text, str) and text and not text.startswith("{"):
+                assert unicodedata.category(text[0]) == "So" or text[0] in "ℹ", (lang, key, text[:30])
+
+
 def test_club_applications(env, monkeypatch):
     """Starting a club (§4.6): one pending application per person, the admins hear about it; yes = the club exists with
     the applicant as President; no = a reason, and a new application only in 30 days."""
