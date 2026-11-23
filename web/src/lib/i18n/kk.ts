@@ -397,6 +397,7 @@ const kk: Dict = {
   'cast.send': "Өтінім жіберу",
   'cast.save': "Өзгерістерді сақтау",
   'cast.change': "Өтінімді өзгерту",
+  'app.turn': "Телефонды тігінен ұста",
   'ban.title': "Кіру жабық",
   'ban.reason': "Себебі: {reason}",
   'ban.appeal': "Қате болса, жаз",

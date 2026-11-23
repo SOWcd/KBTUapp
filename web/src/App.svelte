@@ -28,6 +28,7 @@
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live } from './ui/Capsule.svelte';
   import { anthem } from './lib/state/anthem.svelte';
@@ -995,10 +996,17 @@
       <p class="t-foot">{t('ban.data')}</p>
     </div>
   {/if}
+  <!-- a phone turned sideways in the home-screen app (iOS can't lock it; Telegram's Mini App is locked by Telegram) -->
+  <div class="turn" aria-hidden="true"><Smartphone size={34} /><p class="t-callout">{t('app.turn')}</p></div>
 </main>
 
 <style>
   .cap-theme { display: contents; }
+  .turn { display: none; }
+  @media (orientation: landscape) and (max-height: 500px) {
+    :global(html[data-web]) .turn { position: absolute; inset: 0; z-index: 10001; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; background: var(--bg); color: var(--text-2); }
+  }
   .banned { position: absolute; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
     padding: 24px; text-align: center; background: var(--glow), var(--bg); }
   .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
