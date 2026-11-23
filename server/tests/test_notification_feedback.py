@@ -47,28 +47,24 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
                 await bot._tapped(cfg, http, con, {"id": "tap", "from": {"id": who}, "message": message, "data": data})
         asyncio.run(go())
 
-    key = "nRemind"
+    key = "nBroadcasts"
     settings = lambda: c.get("/api/me", headers=tma(10)).json()["settings"]  # noqa: E731
-    logic.notify(con, uid, "remind_2h", f"event:5:{sent_at + 86400}")
+    con.execute("INSERT INTO posts (id, org_id, title, created_at) VALUES (1, 1, 'News', ?)", (sent_at,))
+    logic.notify(con, uid, "broadcast", "post:1")
     asyncio.run(send())
     card, = messages
     app, feedback = card["reply_markup"]["inline_keyboard"]
-    assert app[0]["url"].endswith("startapp=tk_5")
-    assert [b["text"] for b in feedback] == [texts.bot_message("kk", f"feedback_{action}")[0] for action in ("useful", "off")]
-    useful, off = (b["callback_data"] for b in feedback)
-    assert max(len(useful), len(off)) <= 64
+    assert app[0]["url"].endswith("startapp=news")
+    off, = feedback  # an announcement: only "Don't send these", no "Useful" (Nov 23)
+    assert off["text"] == texts.bot_message("kk", "feedback_off")[0]
+    off = off["callback_data"]
+    assert len(off) <= 64
 
     tap(card, off, who=11)
     assert not edits and settings()[key]
-    tap(card, useful)
-    tap(card, useful)
-    assert len(edits) == 1 and edits[0][0] == "editMessageReplyMarkup"
-    assert edits[0][1]["reply_markup"]["inline_keyboard"][1][0]["text"] == "\u2713"
-    assert settings()[key]
-
     tap(card, off)
     tap(card, off)
-    assert len(edits) == 2 and not settings()[key] and settings()["nDoor"]
+    assert len(edits) == 1 and not settings()[key] and settings()["nRemind"]
     _, muted = edits[-1]
     status, undo_label = texts.bot_message("kk", "feedback_disabled")
     assert muted["text"].endswith(status)
@@ -76,39 +72,36 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
     undo, = muted["reply_markup"]["inline_keyboard"][1]
     assert undo["text"] == undo_label
 
+    # A ticket's reminder, a rating ask, door and seat alerts: the whole keyboard is their own action.
+    logic.notify(con, uid, "remind_2h", f"event:5:{sent_at + 86400}")
     logic.notify(con, uid, "rate", "rate:5")
     logic.notify(con, uid, "door_open", "event:5")
     logic.notify(con, uid, "seat_free", "event:5")
     asyncio.run(send())
-    assert len(messages) == 3
+    assert len(messages) == 5
     assert all(len(m["reply_markup"]["inline_keyboard"]) == 1 for m in messages[1:])
-    assert logic.one(con, "SELECT error FROM bot_outbox WHERE kind = 'rate'")[0] == "gone"
 
     tap({**card, **muted}, undo["callback_data"])
     assert settings()[key]
     assert edits[-1][1]["text"].endswith(texts.bot_message("kk", "feedback_enabled")[0])
-    # A restart can replay older callbacks with their original keyboards.
+    # A restart can replay older callbacks with their original keyboards; an old card's "Useful" does nothing.
     bot._feedback_edits.clear()
     count = len(edits)
-    tap(card, useful)
+    tap(card, off.replace("nf:off:", "nf:useful:"))
     assert len(edits) == count
     tap(card, off)
     assert settings()[key]
-    assert tuple(logic.one(con, "SELECT sent, useful, turned_off FROM notification_days")) == (1, 1, 1)
+    assert tuple(logic.one(con, "SELECT sent, turned_off FROM notification_days WHERE category = ?", key)) == (1, 1)
     assert c.get("/api/admin/stats", headers=tma(10)).status_code == 403
     result = c.get("/api/admin/stats", headers=tma(11)).json()["notificationCounts"]
-    assert next(r for r in result if r["category"] == key) == {"category": key, "sent": 1, "useful": 1, "turnedOff": 1}
+    assert next(r for r in result if r["category"] == key) == {"category": key, "sent": 1, "turnedOff": 1}
 
-    assert c.patch("/api/me", headers=tma(10), json={"nBroadcasts": False}).status_code == 200
-    con.execute("INSERT INTO posts (id, org_id, title, created_at) VALUES (1, 1, 'News', ?)", (sent_at,))
-    logic.notify(con, uid, "broadcast", "post:1")
-    logic.notify(con, uid, "important", "post:1")
+    assert c.patch("/api/me", headers=tma(10), json={key: False}).status_code == 200
+    con.execute("INSERT INTO posts (id, org_id, title, created_at) VALUES (2, 1, 'More', ?)", (sent_at,))
+    logic.notify(con, uid, "broadcast", "post:2")
     asyncio.run(send())
-    assert len(messages) == 4
-    (app_row,) = messages[-1]["reply_markup"]["inline_keyboard"]
-    assert app_row[0]["url"].endswith("startapp=news")
-    assert logic.one(con, "SELECT error FROM bot_outbox WHERE kind = 'broadcast'")[0] == "gone"
-    assert logic.one(con, "SELECT COUNT(*) FROM notification_days")[0] == 1
+    assert len(messages) == 5
+    assert logic.one(con, "SELECT error FROM bot_outbox WHERE kind = 'broadcast' ORDER BY id DESC")[0] == "gone"
     con.close()
 
 
@@ -124,7 +117,7 @@ def test_preference_undo_respects_subsequent_settings_changes(env):
         assert c.patch("/api/me", headers=tma(10), json={key: on}).json()["settings"][key] == on
     assert notifications.switch_from_chat(con, 10, key, True, "first", now) == ("ru", False, False)
     assert not c.get("/api/me", headers=tma(10)).json()["settings"][key]
-    assert tuple(logic.one(con, "SELECT sent, useful, turned_off FROM notification_days")) == (1, 0, 1)
+    assert tuple(logic.one(con, "SELECT sent, turned_off FROM notification_days")) == (1, 1)
     assert not any(r["sent"] for r in notifications.summary(con, now + 30 * 86400))
     assert not list(con.execute("PRAGMA foreign_key_list(notification_days)"))
     con.close()

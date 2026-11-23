@@ -1043,7 +1043,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if not notifications.allowed(con, category, m["user_id"], to):
                     _mark(con, m, False, "gone")
                     continue
-                if category not in NO_FEEDBACK:
+                if m["kind"] in MUTE_ROW:
                     body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
                         _feedback_buttons(cfg, to, m["lang"], category))
             try:
@@ -1363,7 +1363,9 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
 
 
-NO_FEEDBACK = {"nFriends"}  # rare and personal (owner, Nov 23): no Useful / Do-not-send row; Settings still mutes them
+# Only announcements a student can browse or ignore get "Don't send these" (Codex review, owner Nov 23); a ticket, a
+# reply or a reminder keeps the whole keyboard for its own action. Settings still mutes every category.
+MUTE_ROW = {"new_event", "casting_open", "round_open", "broadcast"}
 
 
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
@@ -1375,7 +1377,7 @@ def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: s
 def _feedback_buttons(cfg: Config, chat: int, lang: str, category: str) -> list[dict]:
     nonce = secrets.token_hex(8)
     return [{"text": texts.bot_message(lang, f"feedback_{action}")[0],
-             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("useful", "off")]
+             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("off",)]
 
 
 # Telegram holds the button state. ponytail: keep the last 512 edits in memory for taps already in
@@ -1384,7 +1386,7 @@ _feedback_edits: OrderedDict[str, set[str]] = OrderedDict()
 
 
 async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg: dict, data: str) -> None:
-    match = re.fullmatch(r"nf:(useful|off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
+    match = re.fullmatch(r"nf:(off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
     chat = msg.get("chat") or {}
     tg, mid, sent_at = chat.get("id"), msg.get("message_id"), msg.get("date")
     if not match or chat.get("type") != "private" or tg != (cq.get("from") or {}).get("id") or not tg or not mid or not sent_at:
@@ -1397,42 +1399,34 @@ async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg
     if not keyboard or not any(b.get("callback_data") == data for b in keyboard[-1]):
         return
     edits = _feedback_edits.get(nonce, set())
-    if action in edits or (action == "useful" and "off" in edits):
+    if action in edits:
         return
     ids = {"chat_id": tg, "message_id": mid}
     links = keyboard[:-1]
     undo = _feedback_token(cfg, tg, "undo", category, nonce, mid)
     card = undo.rsplit(":", 1)[1]
-    if action == "useful":
-        if not await anyio.to_thread.run_sync(notifications.can_mark_useful, con, tg, category, card):
-            return
-        row = [{**b, "text": "✓", "callback_data": "nf:seen"} if b.get("callback_data") == data else b for b in keyboard[-1]]
-        r = await _tg(cfg, http, "editMessageReplyMarkup", {**ids, "reply_markup": {"inline_keyboard": [*links, row]}})
-    else:
-        state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
-        if state is None:
-            return
-        lang, on, can_undo = state
-        original = msg.get("text") or ""
-        if action == "undo":
-            for locale in texts.BOT:
-                off = texts.bot_message(locale, "feedback_disabled")[0]
-                original = "" if original == off else original.removesuffix(f"\n\n{off}")
-        status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
-        edited = f"{original}\n\n{status}" if original else status
-        entities = msg.get("entities") or []
-        if len(edited) > 4096:
-            edited, entities = status, []
-        keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
-        r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
-            "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
+    state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
+    if state is None:
+        return
+    lang, on, can_undo = state
+    original = msg.get("text") or ""
+    if action == "undo":
+        for locale in texts.BOT:
+            off = texts.bot_message(locale, "feedback_disabled")[0]
+            original = "" if original == off else original.removesuffix(f"\n\n{off}")
+    status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
+    edited = f"{original}\n\n{status}" if original else status
+    entities = msg.get("entities") or []
+    if len(edited) > 4096:
+        edited, entities = status, []
+    keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
+    r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
+        "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
     if r.json().get("ok"):
         _feedback_edits[nonce] = edits | {action}
         _feedback_edits.move_to_end(nonce)
         if len(_feedback_edits) > 512:
             _feedback_edits.popitem(last=False)
-        if action == "useful":
-            await anyio.to_thread.run_sync(notifications.feedback, con, category, sent_at, "useful")
 
 
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bool = False) -> None:
