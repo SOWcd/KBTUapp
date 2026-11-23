@@ -5,12 +5,17 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 
 ## The goals (the owner's hard rules, in this order)
 
-1. **Speed.** The app is incredibly fast: every tap answers in the same frame, nothing waits that could be ready.
+1. **Speed and convenience.** The app is incredibly fast and effortless: every tap answers in the same frame, nothing
+   waits that could be ready, every flow takes the fewest taps.
 2. **Beauty, never at speed's cost.** Visuals, motion and style are as beautiful, modern, aesthetic and professional
    as the best iOS apps. How it works inside doesn't matter; what the person sees and feels does. No visible seams,
    bands, jumps or mismatched colours ship.
 3. **A simple repository.** The code stays clear, minimal and efficient, so any agent or person understands it fast:
    no bloat, no speculative layers, delete before adding.
+
+Both 1 and 2 matter; when they truly conflict, faster and more convenient wins. We never stand still: the app is
+improved screen by screen toward ideal (owner, Nov 23): design goes to the best model by contest (so far Fable), one
+screen per PR, never slower than before, checked on a phone in both themes.
 
 ## The project in one screen
 
