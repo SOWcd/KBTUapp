@@ -1883,12 +1883,16 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
         if not entry:
             return None
         file_id, duration = entry
-        if isinstance(file_id, tuple):  # a slideshow's photos
+        if isinstance(file_id, tuple):  # an album's items: a slideshow's photos, a post's photos and videos
             if len(file_id) == 1:
-                r = await http.post(api + "sendPhoto", json={**chat, "reply_parameters": reply, "photo": file_id[0]}, timeout=60)
+                (one,) = file_id
+                kind, media = one["type"], one["media"]
+                extra = {k: v for k, v in one.items() if k not in ("type", "media")}
+                r = await http.post(api + ("sendPhoto" if kind == "photo" else "sendVideo"),
+                                    json={**chat, "reply_parameters": reply, **extra, kind: media}, timeout=60)
             else:
-                media = [{"type": "photo", "media": p} for p in file_id]
-                r = await http.post(api + "sendMediaGroup", json={**chat, "reply_parameters": reply, "media": media}, timeout=60)
+                r = await http.post(api + "sendMediaGroup",
+                                    json={**chat, "reply_parameters": reply, "media": [dict(m) for m in file_id]}, timeout=60)
         elif short_host and duration >= 180:
             return "unavailable"  # youtu.be has a stricter duration limit than /shorts/
         else:
@@ -1918,7 +1922,7 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
         if not got:
             shared.gone = True
             return "unavailable"
-        if isinstance(got, list):
+        if isinstance(got, (list, tiktok.Album)):  # an Album's key is its link's (ig:<code>): this flight's
             async with _video_uploads:
                 route = await _video_album(http, api, form, got, alias)
             shared.gone = route == "unavailable"
@@ -1959,12 +1963,7 @@ async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict,
                     upload = None
                 if not upload:
                     continue  # e.g. the real size exceeds the estimate: try the next resolution
-                video, thumb, tracks = upload
-                meta = {k: int(tracks[k]) for k in ("duration", "width", "height") if tracks.get(k)}
-                files = {"video": ("video.mp4", video, "video/mp4")}
-                if thumb:
-                    files["thumbnail"] = ("thumbnail.jpg", thumb, "image/jpeg")
-                    meta["thumbnail"] = "attach://thumbnail"
+                meta, files = _video_files(tiktok.Part(*upload), "video", "thumbnail")
                 r = await http.post(api + "sendVideo", data={**form, **meta, "supports_streaming": "true"}, files=files, timeout=120)
                 answer = r.json()
                 route = "upload"
@@ -1977,26 +1976,78 @@ async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict,
     return "unavailable"
 
 
-async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str], alias: str) -> str:
-    photos = await tiktok.photos(http, urls)
-    if not photos:
-        return "unavailable"
-    if len(photos) == 1:
-        method, files = "sendPhoto", {"photo": ("tiktok.jpg", photos[0], "image/jpeg")}
+def _video_files(part: tiktok.Part, name: str, thumb: str) -> tuple[dict, dict]:
+    """A video upload's InputMedia fields (its real duration and size, the thumbnail as an attachment) and its files."""
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    files = {name: (f"{name}.mp4", part.data, "video/mp4")}
+    if part.thumb:
+        files[thumb] = (f"{thumb}.jpg", part.thumb, "image/jpeg")
+        meta["thumbnail"] = f"attach://{thumb}"
+    return meta, files
+
+
+async def _video_album(http: httpx.AsyncClient, api: str, form: dict, got: list[str] | tiktok.Album, alias: str) -> str:
+    """A slideshow's photos, or an Instagram post's photos and videos: one alone as itself, more as one album, no
+    caption. The items that failed are left out; none left: nothing at all."""
+    if isinstance(got, tiktok.Album):
+        parts = await tiktok.gather(http, got)
     else:
-        method = "sendMediaGroup"
-        files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(photos)}
-        form["media"] = json.dumps([{"type": "photo", "media": f"attach://{k}"} for k in files])
-    answer = (await http.post(api + method, data=form, files=files, timeout=120)).json()
+        parts = [tiktok.Part(p) for p in await tiktok.photos(http, got)]
+    answer: dict = {}
+    for attempt in range(2):
+        if not parts:
+            return "unavailable"
+        answer = await _album_send(http, api, form, parts)
+        if answer.get("ok") or attempt:
+            break
+        # Telegram refuses an album whole for one item it can't take, naming it ("message #3"): once, the rest go
+        bad = re.search(r"message #(\d+) ", str(answer.get("description") or ""))
+        if answer.get("error_code") != 400 or not bad or len(parts) < 2 or not 1 <= int(bad[1]) <= len(parts):
+            break
+        del parts[int(bad[1]) - 1]
     if not answer.get("ok"):
         return "refused"
     sent = answer.get("result")
     sent = sent if isinstance(sent, list) else [sent]
-    # each photo's largest size: another chat gets them by id, without a second download
-    ids = tuple(((m.get("photo") or [{}])[-1] or {}).get("file_id") if isinstance(m, dict) else None for m in sent)
-    if len(ids) == len(photos) and all(isinstance(i, str) for i in ids):
-        tiktok.remember(alias, ids, 0)
-    return "photos"
+    # each item's file id (a photo's largest size): another chat gets them by id, without a second download
+    media = tuple(_sent_media(m, p) for m, p in zip(sent, parts))
+    if len(sent) == len(parts) and all(media):
+        tiktok.remember(alias, media, 0)
+    return "photos" if all(p.tracks is None for p in parts) else "album"
+
+
+async def _album_send(http: httpx.AsyncClient, api: str, form: dict, parts: list[tiktok.Part]) -> dict:
+    if len(parts) == 1 and parts[0].tracks is None:
+        method, data, files = "sendPhoto", form, {"photo": ("tiktok.jpg", parts[0].data, "image/jpeg")}
+    elif len(parts) == 1:
+        meta, files = _video_files(parts[0], "video", "thumbnail")
+        method, data = "sendVideo", {**form, **meta, "supports_streaming": "true"}
+    else:
+        files, media = {}, []
+        for i, p in enumerate(parts):  # each file its own part; a video's thumbnail beside it
+            if p.tracks is None:
+                files[f"p{i}"] = (f"{i}.jpg", p.data, "image/jpeg")
+                media.append({"type": "photo", "media": f"attach://p{i}"})
+            else:
+                meta, more = _video_files(p, f"v{i}", f"t{i}")
+                files.update(more)
+                media.append({"type": "video", "media": f"attach://v{i}", **meta, "supports_streaming": True})
+        method, data = "sendMediaGroup", {**form, "media": json.dumps(media)}
+    r = await http.post(api + method, data=data, files=files, timeout=120)
+    answer = r.json()
+    return answer if answer.get("ok") else {**answer, "error_code": answer.get("error_code", r.status_code)}
+
+
+def _sent_media(m, part: tiktok.Part) -> dict | None:
+    """The InputMedia that sends this item again by its file id."""
+    if not isinstance(m, dict):
+        return None
+    if part.tracks is None:
+        file_id = ((m.get("photo") or [{}])[-1] or {}).get("file_id")
+        return {"type": "photo", "media": file_id} if isinstance(file_id, str) else None
+    file_id = (m.get("video") or {}).get("file_id")
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    return {"type": "video", "media": file_id, **meta, "supports_streaming": True} if isinstance(file_id, str) else None
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:

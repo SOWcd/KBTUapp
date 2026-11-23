@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import dataclasses
 import json
+import math
 import os
 import shutil
 import socket
@@ -255,7 +256,7 @@ def test_source_formats_and_reply(env, monkeypatch):
     assert files is None and body["duration"] == 179 and body["height"] == 1920
     entry = {"id": "slide", "title": "slide", "duration": 4,
              "formats": [_file_format("silent", acodec="none", host="scontent.cdninstagram.com")]}
-    url, ((body, _),) = _source(monkeypatch, cfg, REEL, {"_type": "playlist", "entries": [{"formats": []}, entry, entry]})
+    url, ((body, _),) = _source(monkeypatch, cfg, REEL, {"_type": "playlist", "entries": [{"formats": []}, entry]})
     assert url == "https://www.instagram.com/p/Re_123-4/" and body["video"].endswith("/silent.mp4")
 
 
@@ -1370,3 +1371,406 @@ def test_failures_log_no_link_and_no_ids(monkeypatch, caplog):
     for _ in range(tiktok.FAILURES):
         tiktok._report("tikwm", False)
     assert caplog.messages and all(x not in caplog.text for x in ("ZSecret9", "7777123", "100987654", "4242"))
+
+
+# --- Instagram carousels and photo posts (issue #170, task 2): one album, the items that fail left out. ---
+
+POST = "https://www.instagram.com/p/Car_0-sel/"
+IG = "https://scontent-ams2-1.cdninstagram.com"
+
+
+def _image(width=8, height=8, kind="JPEG", mode="RGB") -> bytes:
+    from io import BytesIO
+    from PIL import Image
+    out = BytesIO()
+    Image.new(mode, (width, height)).save(out, kind)
+    return out.getvalue()
+
+
+def _shot(name, width=1080, height=1350, host=IG):
+    """A photo item as yt-dlp's Instagram extractor lists it (no formats; its image sizes as thumbnails)."""
+    return {"id": name, "title": "Post by x", "formats": [], "thumbnails": [
+        {"url": f"{host}/{name}_small.jpg", "width": 320, "height": 400},
+        {"url": f"{host}/{name}.jpg", "width": width, "height": height}]}
+
+
+def _reel(name, duration=5.0, **kw):
+    return {"id": name, "title": "Post by x", "duration": duration, "thumbnails": [{"url": f"{IG}/{name}_cover.jpg"}],
+            "formats": [_file_format(name, host="scontent.cdninstagram.com", **kw)]}
+
+
+def _post(monkeypatch, info, link=POST):
+    """The Instagram extraction with a made-up yt-dlp answer (the pinned yt-dlp normalizes the videos' formats)."""
+    from yt_dlp import YoutubeDL
+    asked = []
+
+    def extract(dl, url, *, download, process):
+        assert not download and not process and dl.params["ignore_no_formats_error"]
+        asked.append(url)
+        return {"extractor": "fixture", "id": "post", "title": "post", **info}
+    monkeypatch.setattr(YoutubeDL, "extract_info", extract)
+    got = tiktok._extract(tiktok.LINK.match(link))
+    assert asked == ["https://www.instagram.com/p/Car_0-sel/"]
+    return got
+
+
+def test_instagram_post_links():
+    say = lambda text: tiktok.link({"text": text, "from": {"id": 1}})  # noqa: E731
+    shapes = ("https://www.instagram.com/p/Car_0-sel/", "https://instagram.com/p/Car_0-sel",
+              "https://www.instagram.com/some.one_1/p/Car_0-sel/", "https://www.instagram.com/some.one_1/reel/Car_0-sel/",
+              "https://www.instagram.com/tv/Car_0-sel/")
+    for url in shapes:
+        assert say(f"look {url}?img_index=3 wow") == url and say(f"({url})") == url
+        assert tiktok.key(url) == "ig:Car_0-sel"
+    for url in ("https://www.instagram.com/stories/p/3141592653589793238/", "https://www.instagram.com/stories/someone/31415/",
+                "https://www.instagram.com/share/p/BAcd1234/", "https://www.instagram.com/someone/reels/",
+                "https://www.instagram.com/a/b/p/Car_0-sel/", "https://www.instagram.com/p/", "https://instagram.com/someone/tagged/",
+                "https://notinstagram.com/p/Car_0-sel/", "https://www.instagram.com.example/p/Car_0-sel/",
+                "https://www.instagram.com/explore/tags/p/", "https://www.instagram.com/p/Car_0-sel/c/1/",
+                "https://www.instagram.com/some\u043eone/p/Car_0-sel/", "instagram.com/p/Car_0-sel/"):
+        assert say(url) is None, url
+    assert "(?<" not in tiktok.LINK.pattern  # no lookbehind (the web build refuses it; the server keeps it simple too)
+
+
+def test_instagram_photo_posts_and_carousels(monkeypatch):
+    # a photo post: one photo, its largest image on Instagram's own hosts
+    got = _post(monkeypatch, _shot("one"))
+    assert got == tiktok.Album("ig:Car_0-sel", [f"{IG}/one.jpg"]) and got.hosts == tiktok.INSTAGRAM_FILES
+    # a carousel of photos, in its order; a photo only off Instagram's hosts is left out, a smaller one on them is taken
+    off = _shot("off", host="https://evil.example")
+    mixed_hosts = {**_shot("mixed"), "thumbnails": [{"url": f"{IG}/mixed_small.jpg", "width": 320, "height": 400},
+                                                    {"url": "https://127.0.0.1/mixed.jpg", "width": 1080, "height": 1350}]}
+    got = _post(monkeypatch, {"_type": "playlist", "entries": [_shot("a"), off, mixed_hosts, _shot("b")]})
+    assert got.items == [f"{IG}/a.jpg", f"{IG}/mixed_small.jpg", f"{IG}/b.jpg"]
+    # a mixed post: photos and videos in place; a video past MAX_SECONDS and one without formats or photo left out
+    entries = [_shot("a"), _reel("v1"), _reel("long", duration=tiktok.MAX_SECONDS + 2),
+               {"id": "x", "duration": 4, "formats": [], "thumbnails": [{"url": f"{IG}/cover.jpg"}]}, _shot("b"), _reel("v2")]
+    got = _post(monkeypatch, {"_type": "playlist", "entries": entries})
+    a, v1, b, v2 = got.items
+    assert (a, b) == (f"{IG}/a.jpg", f"{IG}/b.jpg") and isinstance(v1, tiktok.Clip) and isinstance(v2, tiktok.Clip)
+    assert v1.source == "instagram" and v1.hosts == tiktok.INSTAGRAM_FILES and v1.duration == 5
+    assert [f["format_id"] for f in v1.formats] == ["v1"] and v2.formats[0]["url"].endswith("/v2.mp4")
+    # 11 and more items: the first ten (Telegram's limit for an album)
+    got = _post(monkeypatch, {"_type": "playlist", "entries": [_shot(str(i)) for i in range(12)]})
+    assert got.items == [f"{IG}/{i}.jpg" for i in range(tiktok.ALBUM)]
+    # a carousel with one video that can be sent is that video (by URL first, as a reel); nothing sendable: nothing
+    got = _post(monkeypatch, {"_type": "playlist", "entries": [_reel("v1"), _reel("long", duration=999)]})
+    assert isinstance(got, tiktok.Clip) and got.key == "ig:Car_0-sel"
+    assert _post(monkeypatch, {"_type": "playlist", "entries": [off, {"formats": []}, "junk"]}) is None
+    # an item yt-dlp fails on, or a link to elsewhere, is left out; the others still go
+    real = tiktok._clip
+
+    def clip(dl, entry, k, source):
+        if entry["id"] == "bad":
+            raise ValueError("unreadable")
+        return real(dl, entry, k, source)
+    monkeypatch.setattr(tiktok, "_clip", clip)
+    elsewhere = {"_type": "url", "url": "https://instagram.com/p/Other", "thumbnail": f"{IG}/other.jpg"}
+    got = _post(monkeypatch, {"_type": "playlist", "entries": [_reel("bad"), elsewhere, _shot("a"), _reel("v1")]})
+    assert got.items[0] == f"{IG}/a.jpg" and len(got.items) == 2
+    assert _post(monkeypatch, {"formats": [], "thumbnails": []}) is None
+
+
+def test_sendable_photos():
+    assert tiktok.sendable(_image()) and tiktok.sendable(_image(kind="PNG")) and tiktok.sendable(_image(kind="WEBP"))
+    assert tiktok.sendable(_image(200, 10))  # 20:1
+    assert not tiktok.sendable(_image(210, 10)) and not tiktok.sendable(_image(10, 210))
+    assert not tiktok.sendable(_image(5001, 5000, "PNG", "1"))  # width and height past 10000 together
+    assert not tiktok.sendable(_image(kind="GIF")) and not tiktok.sendable(b"\0\0\0\x18ftypheic" + b"x" * 64)
+    assert not tiktok.sendable(b"") and not tiktok.sendable(_image()[:20])
+
+
+TRACKS = {"duration": 5.4, "width": 720, "height": 1280, "vcodec": "h264", "acodec": "aac"}
+
+
+def _uploads(monkeypatch, sizes: dict, fail=(), hang=(), pause=()):
+    """prepare_upload made up: a version's file is its listed size; `fail` raise, `hang` never end, `pause` rest."""
+    calls = []
+
+    async def prepare(http, clip, version, *, cap=0):
+        name = version.video["format_id"]
+        calls.append((name, cap))
+        if name in fail:
+            raise tiktok.SourceDown("instagram")
+        if name in pause:
+            raise tiktok.Paused("instagram")
+        if name in hang:
+            await asyncio.sleep(3600)
+        size = sizes.get(name, 100)
+        return None if cap and size > cap else (b"v" * size, b"t" * 10, dict(TRACKS))
+    monkeypatch.setattr(tiktok, "prepare_upload", prepare)
+    return calls
+
+
+def _ig_format(name, **kw):
+    return _file_format(name, host="scontent.cdninstagram.com", protocol="https", **kw)
+
+
+def _ig_clip(*formats):
+    return tiktok.Clip("", 5, list(formats), hosts=tiktok.INSTAGRAM_FILES, source="instagram")
+
+
+def _gather(album, photos=None, monkeypatch=None):
+    if photos is not None:
+        async def fake(http, urls, hosts=download.TIKTOK_FILES):
+            assert hosts == album.hosts and len(urls) == 1
+            p = photos.get(urls[0])
+            return [p] if p else []
+        monkeypatch.setattr(tiktok, "photos", fake)
+    return asyncio.run(tiktok.gather(None, album))
+
+
+def test_gather_skips_what_fails_and_keeps_the_order(monkeypatch, media_dns):
+    """Photos over a fake transport: a missing one, a page, one too large, one Telegram can't take; a video that fails
+    and one whose only stream is HEVC. The rest go, in the post's order."""
+    good, wide = _image(), _image(210, 10)
+    files = {"/a.jpg": good, "/big.jpg": good + b"x" * 64, "/wide.jpg": wide, "/b.jpg": good, "/heic.jpg": b"ftypheic"}
+
+    def handle(req):
+        if req.url.path == "/page.jpg":
+            return httpx.Response(200, headers={"Content-Type": "text/html"}, content=b"<html>")
+        body = files.get(req.url.path)
+        return httpx.Response(200, headers={"Content-Type": "image/jpeg"}, content=body) if body else httpx.Response(404)
+    monkeypatch.setattr(tiktok, "PHOTO_BYTES", len(good) + 1)
+    calls = _uploads(monkeypatch, {}, fail=("broken",))
+    hevc = _ig_clip(_ig_format("hevc", vcodec="hevc"))
+    album = tiktok.Album("ig:x", [f"{IG}/a.jpg", f"{IG}/gone.jpg", _ig_clip(_ig_format("broken")),
+                                  f"{IG}/page.jpg", f"{IG}/big.jpg", f"{IG}/wide.jpg", hevc, f"{IG}/heic.jpg",
+                                  _ig_clip(_ig_format("ok")), f"{IG}/b.jpg"])
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+            return await tiktok.gather(http, album)
+    parts = asyncio.run(go())
+    assert [(p.data[:1] if p.tracks else p.data) for p in parts] == [good, b"v", good]
+    assert parts[1].thumb == b"t" * 10 and parts[1].tracks["width"] == 720
+    assert [name for name, _ in calls] == ["broken", "ok"]  # the HEVC-only video has no version to try
+
+
+def test_gather_keeps_one_request_within_the_size_budget(monkeypatch):
+    """Photos first; then each video gets an even share of what is left, its best version within it, and a share it
+    leaves unused goes to the next. An item too large for its share is left out, never the whole album."""
+    monkeypatch.setattr(tiktok, "THUMB_BYTES", 10)
+    monkeypatch.setattr(tiktok, "ALBUM_BYTES", 3020)
+    photo = _image()
+    fmt = lambda name, size, h=1280: _ig_format(name, width=720, height=h, filesize=size)  # noqa: E731
+    sizes = {"big": 5000, "hd": 2500, "sd": 900, "small": 400, "unknown": 1000}
+    calls = _uploads(monkeypatch, sizes)
+    album = tiktok.Album("ig:x", [_ig_clip(fmt("big", 5000, 1920)), f"{IG}/p.jpg",
+                                  _ig_clip(fmt("hd", 2500, 1920), fmt("sd", 900)), _ig_clip(fmt("small", 400))])
+    parts = _gather(album, {f"{IG}/p.jpg": photo}, monkeypatch)
+    left = 3020 - len(photo)
+    # the first video's only version is past its third: left out; the second takes half of the rest (sd), the third the rest
+    assert [len(p.data) for p in parts] == [len(photo), 900, 400]
+    assert [c for c in calls] == [("sd", left // 2 - 10), ("small", left - 910 - 10)]
+    assert sum(p.size for p in parts) <= tiktok.ALBUM_BYTES
+    # photos past the budget: the later ones are left out
+    monkeypatch.setattr(tiktok, "ALBUM_BYTES", 2 * len(photo))
+    album = tiktok.Album("ig:x", [f"{IG}/{i}.jpg" for i in range(3)])
+    assert len(_gather(album, {f"{IG}/{i}.jpg": photo for i in range(3)}, monkeypatch)) == 2
+
+
+def test_upload_cap_reaches_the_download(monkeypatch):
+    """prepare_upload's cap is the download's own: yt-dlp's max_filesize and progress hook, and the file's real size."""
+    async def go():
+        out = await tiktok._threaded(asyncio.Semaphore(1), 5, tiktok.upload, tiktok.Version(FORMAT),
+                                     VIDEO, cap=len(VIDEO) - 1)
+        seen = await tiktok._threaded(asyncio.Semaphore(1), 5,
+                                      lambda: (tiktok._downloader().params["max_filesize"], tiktok._cap()), cap=77)
+        return out, seen
+    out, seen = asyncio.run(go())
+    assert out is None and seen == (77, 77) and tiktok._cap() == tiktok.MAX_BYTES
+
+    def over():
+        tiktok._limit({"downloaded_bytes": 78})
+    with pytest.raises(tiktok.TooLarge):
+        asyncio.run(tiktok._threaded(asyncio.Semaphore(1), 5, over, cap=77))
+
+
+def test_gather_sends_what_is_ready_by_its_deadline(monkeypatch):
+    monkeypatch.setattr(tiktok, "ALBUM_SECONDS", 0.2)
+    _uploads(monkeypatch, {}, hang=("slow",))
+    album = tiktok.Album("ig:x", [_ig_clip(_ig_format("slow")), f"{IG}/p.jpg"])
+    start = time.monotonic()
+    parts = _gather(album, {f"{IG}/p.jpg": _image()}, monkeypatch)
+    assert time.monotonic() - start < 2 and [p.tracks for p in parts] == [None]
+
+
+class _AlbumTelegram(_Http):
+    """Telegram answering each item of an album with its file id; `refuse(method, data)` may answer an error instead."""
+    def __init__(self, refuse=None):
+        super().__init__()
+        self.refuse = refuse
+
+    async def post(self, url, json=None, data=None, files=None, **_):
+        method = url.rsplit("/", 1)[1]
+        body = json if json is not None else data
+        self.calls.append((method, body, files))
+        if self.refuse and (error := self.refuse(method, body)):
+            return _Resp({"ok": False, **error}, error.get("error_code", 400))
+        if method == "sendMediaGroup":
+            media = body["media"] if json is not None else __import__("json").loads(body["media"])
+            return _Resp({"ok": True, "result": [
+                {"video": {"file_id": f"vid-{m['media'].rsplit('/', 1)[-1]}"}} if m["type"] == "video"
+                else {"photo": [{"file_id": "small"}, {"file_id": f"ph-{m['media'].rsplit('/', 1)[-1]}"}]} for m in media]})
+        if method == "sendPhoto":
+            return _Resp({"ok": True, "result": {"photo": [{"file_id": "ph-one"}]}})
+        return _Resp({"ok": True, "result": {"video": {"file_id": "vid-one"}}})
+
+
+def _mixed(monkeypatch, *items, photos=None):
+    async def fetch(http, url):
+        return tiktok.Album(tiktok.key(url), list(items))
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    photo = _image()
+    _uploads(monkeypatch, {})
+
+    async def fake(http, urls, hosts=download.TIKTOK_FILES):
+        return [photo] if not (photos and urls[0] not in photos) else []
+    monkeypatch.setattr(tiktok, "photos", fake)
+    return photo
+
+
+def test_mixed_post_is_one_album_in_its_topic(monkeypatch, caplog):
+    caplog.set_level("INFO", logger="uvicorn.error")
+    photo = _mixed(monkeypatch, f"{IG}/a.jpg", _ig_clip(_ig_format("v")), f"{IG}/b.jpg")
+    http = _AlbumTelegram()
+    msg = _msg(31, f"look {POST}", mid=17, is_topic_message=True, message_thread_id=6)
+    asyncio.run(bot._tiktok(CFG, http, msg, tiktok.link(msg)))
+    ((form, files),) = http.said("sendMediaGroup")
+    assert form["chat_id"] == -100 and form["message_thread_id"] == 6 and json.loads(form["reply_parameters"])["message_id"] == 17
+    assert "caption" not in form and all("caption" not in m for m in json.loads(form["media"]))
+    assert json.loads(form["media"]) == [
+        {"type": "photo", "media": "attach://p0"},
+        {"type": "video", "media": "attach://v1", "duration": 5, "width": 720, "height": 1280,
+         "thumbnail": "attach://t1", "supports_streaming": True},
+        {"type": "photo", "media": "attach://p2"}]
+    assert {k: (v[1], v[2]) for k, v in files.items()} == {
+        "p0": (photo, "image/jpeg"), "v1": (b"v" * 100, "video/mp4"), "t1": (b"t" * 10, "image/jpeg"), "p2": (photo, "image/jpeg")}
+    assert http.said("sendChatAction")[0][0]["message_thread_id"] == 6
+    assert _routes(caplog) == ["album"] and POST not in caplog.text
+    # another chat: the same album by file ids, nothing downloaded again
+    monkeypatch.setattr(tiktok, "fetch", lambda http, url: pytest.fail("fetched again"))
+    asyncio.run(bot._tiktok(CFG, http, _msg(32, POST, mid=18, chat={"type": "group", "id": -5}), POST))
+    (again, none), = [c for c in http.said("sendMediaGroup") if c[0]["chat_id"] == -5]
+    assert none is None and again["reply_parameters"]["message_id"] == 18 and "caption" not in again
+    assert again["media"] == [{"type": "photo", "media": "ph-p0"},
+                              {"type": "video", "media": "vid-v1", "duration": 5, "width": 720, "height": 1280,
+                               "supports_streaming": True},
+                              {"type": "photo", "media": "ph-p2"}]
+
+
+def test_one_item_left_goes_alone_and_none_left_sends_nothing(monkeypatch):
+    # a photo post: one photo
+    _mixed(monkeypatch, f"{IG}/a.jpg")
+    http = _AlbumTelegram()
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    ((form, files),) = http.said("sendPhoto")
+    assert set(files) == {"photo"} and "caption" not in form and not http.said("sendMediaGroup")
+    assert tiktok.cached("ig:Car_0-sel") == (({"type": "photo", "media": "ph-one"},), 0)
+    # a carousel where only its video came through: that video, uploaded with its thumbnail and size, then by id
+    tiktok._files.clear()
+    _mixed(monkeypatch, f"{IG}/gone.jpg", _ig_clip(_ig_format("v")), photos={"none"})
+    http = _AlbumTelegram()
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=4), POST))
+    ((form, files),) = http.said("sendVideo")
+    assert set(files) == {"video", "thumbnail"} and form["thumbnail"] == "attach://thumbnail" and form["width"] == 720
+    asyncio.run(bot._tiktok(CFG, http, _msg(32, POST, mid=5, chat={"type": "group", "id": -7}), POST))
+    body, none = http.said("sendVideo")[-1]
+    assert none is None and body["video"] == "vid-one" and body["chat_id"] == -7 and body["height"] == 1280
+    # every item failed: nothing at all, and nobody is told
+    tiktok._files.clear()
+    _mixed(monkeypatch, f"{IG}/gone.jpg", _ig_clip(_ig_format("hevc", vcodec="hevc")),
+           photos={"none"})
+    http = _AlbumTelegram()
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=6), POST))
+    assert [m for m, _, _ in http.calls] == ["sendChatAction"]
+
+
+def test_telegram_refusing_one_item_sends_the_rest(monkeypatch):
+    """Telegram refuses an album whole for one bad item and names it: once, the album goes without it (and only the
+    items that went are remembered). An error naming nothing, or a second refusal: nothing, silently."""
+    items = (f"{IG}/a.jpg", _ig_clip(_ig_format("v")), f"{IG}/b.jpg")
+    _mixed(monkeypatch, *items)
+
+    def refuse(method, body):
+        if method == "sendMediaGroup" and "attach://v1" in body["media"]:
+            return {"error_code": 400, "description": 'Bad Request: failed to send message #2 with the error message "VIDEO_CONTENT_TYPE_INVALID"'}
+    http = _AlbumTelegram(refuse)
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    first, second = http.said("sendMediaGroup")
+    assert [m["media"] for m in json.loads(second[0]["media"])] == ["attach://p0", "attach://p1"] and set(second[1]) == {"p0", "p1"}
+    assert [m["media"] for m in tiktok.cached("ig:Car_0-sel")[0]] == ["ph-p0", "ph-p1"]
+    for description in ("Bad Request: wrong file identifier", 'Bad Request: failed to send message #9 with the error message "X"'):
+        tiktok._files.clear()
+        tiktok._sent.clear()
+        http = _AlbumTelegram(lambda method, body, d=description: {"error_code": 400, "description": d})
+        asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+        assert len(http.said("sendMediaGroup")) == 1 and not tiktok.cached("ig:Car_0-sel")
+    http = _AlbumTelegram(lambda method, body: {"error_code": 400, "description": "failed to send message #1 with x"})
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    assert len(http.said("sendMediaGroup")) == 2 and not http.said("sendPhoto") and not tiktok.cached("ig:Car_0-sel")
+
+
+def test_the_same_post_at_once_is_gathered_once(monkeypatch):
+    """Three chats, two link shapes of one post: one extraction, one download of its items, the others by file id."""
+    gathered = []
+    real = tiktok.gather
+
+    async def go():
+        gate = asyncio.Event()
+        _mixed(monkeypatch, f"{IG}/a.jpg", _ig_clip(_ig_format("v")))
+        fetch = tiktok.fetch
+
+        async def slow(http, url):
+            await gate.wait()
+            return await fetch(http, url)
+
+        async def gather(http, album):
+            gathered.append(album.key)
+            return await real(http, album)
+        monkeypatch.setattr(tiktok, "fetch", slow)
+        monkeypatch.setattr(tiktok, "gather", gather)
+        http = _AlbumTelegram()
+        links = (POST, "https://www.instagram.com/some.one/p/Car_0-sel/?img_index=2", POST)
+        msgs = [_msg(31 + i, url, mid=10 + i, chat={"type": "group", "id": -10 - i}) for i, url in enumerate(links)]
+        jobs = [asyncio.create_task(bot._tiktok(CFG, http, m, tiktok.link(m))) for m in msgs]
+        await asyncio.sleep(0.05)
+        assert list(tiktok._flights) == ["ig:Car_0-sel"]
+        gate.set()
+        await asyncio.gather(*jobs)
+        return http
+    http = asyncio.run(go())
+    sent = http.said("sendMediaGroup")
+    assert gathered == ["ig:Car_0-sel"] and len(sent) == 3 and sum(files is not None for _, files in sent) == 1
+    assert {body["chat_id"] for body, _ in sent} == {-10, -11, -12} and tiktok._flights == {}
+
+
+def test_album_items_follow_the_breaker_rules(monkeypatch):
+    """A photo post is no outage; an item with nothing to send (gone, too large) is none either; an outage of several
+    videos in one album counts once, as one clip's does; a resting source stops the videos and the photos still go."""
+    from yt_dlp.networking.exceptions import TransportError
+    from yt_dlp.utils import ExtractorError
+    got = _post(monkeypatch, _shot("one"))
+    assert isinstance(got, tiktok.Album) and tiktok._health == {}
+    got = asyncio.run(tiktok.fetch(None, POST))
+    assert isinstance(got, tiktok.Album) and tiktok._health["instagram"][0] == 0
+
+    def run(error):
+        def upload(version, source=None):
+            if error is None:
+                return None  # too large, not H.264 after all
+            raise error
+        monkeypatch.setattr(tiktok, "upload", upload)
+        clips = [_ig_clip(_ig_format(f"v{i}"), _ig_format(f"w{i}", width=480, height=854)) for i in range(3)]
+        return _gather(tiktok.Album("ig:x", [*clips, f"{IG}/p.jpg"]), {f"{IG}/p.jpg": _image()}, monkeypatch)
+    for gone in (ExtractorError("This post is gone", expected=True), None):
+        tiktok._health.clear()
+        assert [p.tracks for p in run(gone)] == [None] and tiktok._health["instagram"][0] == 0
+    tiktok._health.clear()
+    assert [p.tracks for p in run(TransportError("reset"))] == [None] and tiktok._health["instagram"][0] == 1
+    # resting: the first video is refused at once, the others are not even tried; the photo goes
+    tried = _uploads(monkeypatch, {}, pause=("a", "b"))
+    album = tiktok.Album("ig:x", [_ig_clip(_ig_format("a")), _ig_clip(_ig_format("b")), f"{IG}/p.jpg"])
+    parts = _gather(album, {f"{IG}/p.jpg": _image()}, monkeypatch)
+    assert [p.tracks for p in parts] == [None] and [name for name, _ in tried] == ["a"]
