@@ -20,11 +20,13 @@ import time
 
 from ..db import tx
 from .. import texts
+from ..calpage import _sha
 from . import core
 from .core import ApiError, one, rows
 
 A_DAY = 500          # answers a form takes in a day, from everyone: a flood can't fill the disk
 LONG, SHORT = 4000, 200
+MOST = 1 << 20       # an answer sheet's bytes: far above a real one; no account guards the route, so it's capped unread
 OTHER = "__other__"  # the "Other" chip's value; its words come in the field "<id>~"
 TYPES = ("text", "long", "choice", "multi", "scale")
 SCALE = ("1", "2", "3", "4", "5")
@@ -204,7 +206,7 @@ def page(con, slug: str) -> tuple[int, str]:
     if not f or f["closed_at"]:
         title, line = t["closed" if f else "none"]
         body = f'<section class="note"><h1>{e(title)}</h1><p class="intro">{e(line)}</p></section>'
-        return (410 if f else 404), _HTML.replace("__LANG__", spec["lang"]).replace("__TITLE__", e(title)).replace("__BODY__", body).replace("__FOOT__", e(t["made"]))
+        return (410 if f else 404), _fill(spec["lang"], e(title), body, e(t["made"]))
     n = len(spec["sections"])
     cards = "".join(f'<section class="card"><p class="step">{i} / {n}</p>' + (f'<h2>{e(s["title"])}</h2>' if s["title"] else "")
                     + "".join(_question(q, t) for q in s["questions"]) + "</section>" for i, s in enumerate(spec["sections"], 1))
@@ -218,7 +220,13 @@ def page(con, slug: str) -> tuple[int, str]:
 </form>
 <section id="done" class="note" hidden>{_CHECK}<h1>{e(t["thanks"])}</h1><p class="intro">{e(spec["thanks"])}</p></section>
 <script>{_JS}</script>"""
-    return 200, _HTML.replace("__LANG__", spec["lang"]).replace("__TITLE__", e(spec["title"])).replace("__BODY__", body).replace("__FOOT__", e(t["made"]))
+    return 200, _fill(spec["lang"], e(spec["title"]), body, e(t["made"]))
+
+
+def _fill(lang: str, title: str, body: str, foot: str) -> str:
+    """The page with its slots filled in one pass, so a spec's "__BODY__" stays words."""
+    got = {"LANG": lang, "TITLE": title, "BODY": body, "FOOT": foot}
+    return re.sub(r"__(LANG|TITLE|BODY|FOOT)__", lambda m: got[m[1]], _HTML)
 
 
 _LOCK = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1.5 1.5 0 0 0-1.5 1.5v5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 12 6h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0Z"/></svg>'
@@ -227,8 +235,8 @@ _CHECK = '<svg class="ok" viewBox="0 0 72 72" width="72" height="72" aria-hidden
 # the values are web/src/ui/tokens.css's (light and dark): --bg, --surface, --fill, --text*, --accent*, --danger-text,
 # --card-rim, --separator, --r-group 24, --r-s 12, --ctl-l 50, --tap 44, --ease-spring
 _HTML = """<!doctype html><html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex"><title>__TITLE__</title><style>
-:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--fill:rgba(11,20,51,.075);--text:#0A0A0C;--t2:rgba(60,60,67,.86);--t3:rgba(60,60,67,.72);
+<meta name="robots" content="noindex"><title>__TITLE__</title><style>"""
+_CSS = """:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--fill:rgba(11,20,51,.075);--text:#0A0A0C;--t2:rgba(60,60,67,.86);--t3:rgba(60,60,67,.72);
 --accent:#3B6BFF;--at:#2A57E6;--soft:rgba(59,107,255,.12);--bad:#BA342E;--sep:rgba(60,60,67,.16);
 --rim:inset 0 0 0 .5px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.03),0 10px 24px -14px rgba(0,0,0,.12);--ease:cubic-bezier(.32,.72,0,1)}
 @media(prefers-color-scheme:dark){:root{--bg:#000;--card:#131314;--fill:rgba(235,235,245,.12);--text:#FFF;--t2:rgba(235,235,245,.74);
@@ -286,8 +294,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .ok path{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:42;stroke-dashoffset:42;animation:draw .45s .25s var(--ease) forwards}
 @keyframes up{from{opacity:0;transform:translateY(12px)}}
 @keyframes draw{to{stroke-dashoffset:0}}
-@media(prefers-reduced-motion:reduce){*{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}}
-</style></head><body><main>__BODY__<p class="foot">__FOOT__</p></main></body></html>"""
+@media(prefers-reduced-motion:reduce){*{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}}"""
+_HTML += _CSS + """</style></head><body><main>__BODY__<p class="foot">__FOOT__</p></main></body></html>"""
 
 # the draft lives in this browser's localStorage until sent; a radio taps off again (an optional question can be unanswered)
 _JS = """(()=>{const f=document.getElementById('f'),go=document.getElementById('go'),msg=document.getElementById('msg'),bar=document.getElementById('bar'),
@@ -312,3 +320,8 @@ if(!r.ok)throw r.status;
 try{localStorage.removeItem(K)}catch{}
 f.hidden=true;document.querySelector('.bar').hidden=true;document.getElementById('done').hidden=false;scrollTo(0,0)}
 catch(c){go.disabled=false;msg.textContent=c===429?f.dataset.full:c===409||c===404?f.dataset.shut:f.dataset.fail}})})()"""
+
+
+# only this page's own style and script run (by their hashes): an injected tag wouldn't, even past an escaping slip
+CSP = (f"default-src 'none'; style-src {_sha(_CSS)}; script-src {_sha(_JS)}; connect-src 'self'; base-uri 'none'; "
+       "form-action 'none'; frame-ancestors 'none'")

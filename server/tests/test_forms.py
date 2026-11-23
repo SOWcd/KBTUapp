@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import csv
 import gzip
+import hashlib
 import io
 import json
 
@@ -64,7 +65,7 @@ def test_spec_checked(form):
 def test_page(form):
     c, con = form
     r = c.get("/f/abroad")
-    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html") and "script-src 'unsafe-inline'" in r.headers["content-security-policy"]
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html") and "script-src 'sha256-" in r.headers["content-security-policy"]
     t = r.text
     assert "Study &lt;abroad&gt;" in t and "<abroad>" not in t and "Master &lt;b&gt;" in t and "Anything &lt;i&gt;else&lt;/i&gt;" in t
     assert "About &quot;you&quot;" in t and 'value="Master &lt;b&gt;"' in t and 'name="level~"' in t and 'name="website"' in t
@@ -138,3 +139,31 @@ def test_cli_csv(form, capsys):
     assert capsys.readouterr().out.split() == ["closed", "/f/abroad", "closed", "2", "/f/abroad"]
     with pytest.raises(SystemExit):
         admin.main(["form", "answers", "nothing"])
+
+
+def test_csp_hashes(form):  # the inline script and style run by their hashes; an injected tag wouldn't
+    c, con = form
+    r = c.get("/f/abroad")
+    csp, t = r.headers["content-security-policy"], r.text
+    assert "unsafe-inline" not in csp
+    for tag in ("script", "style"):
+        inline = t.split(f"<{tag}>")[1].split(f"</{tag}>")[0]
+        assert f"'sha256-{base64.b64encode(hashlib.sha256(inline.encode()).digest()).decode()}'" in csp, tag
+
+
+def test_placeholders_in_spec(env):  # noqa: F811  (the spec's words are never read as the page's own slots)
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    forms.create(con, "slots", {"title": "__BODY__", "intro": "__FOOT__ __LANG__", "sections": [{"questions": [{"id": "a", "type": "text", "label": "A"}]}]})
+    t = c.get("/f/slots").text
+    assert "<title>__BODY__</title>" in t and "__FOOT__ __LANG__" in t
+
+
+def test_body_capped(form):  # no account in front of this route: a huge or deep body is refused before it is parsed
+    c, con = form
+    r = c.post("/api/f/abroad", content=b'{"age": "' + b"x" * (forms.MOST + 1) + b'"}', headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["message"] == "too_big"
+    r = c.post("/api/f/abroad", content=b"[" * 200000, headers={"content-type": "application/json"})
+    assert r.status_code == 400
+    assert c.post("/api/f/abroad", content=b'{"age": "1"', headers={"content-type": "application/json"}).status_code == 400
+    assert not _answers(con)

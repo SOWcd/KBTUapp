@@ -3063,12 +3063,16 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     def form_page(con: Con, slug: str):
         status, body = logic.forms.page(con, slug)
         return Response(body, status_code=status, media_type="text/html", headers={
-            "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer",
-            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; "
-                                       "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"})
+            "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
+
+    async def form_sheet(request: Request) -> object:  # no account in front: the body is capped before it is parsed
+        try:
+            return json.loads(await read_upload(request, logic.forms.MOST))
+        except (ValueError, RecursionError):
+            raise ApiError("bad_input") from None
 
     @app.post("/api/f/{slug}")
-    def form_submit(con: Con, slug: str, body: dict = Body(...)):
+    def form_submit(con: Con, slug: str, body: object = Depends(form_sheet)):
         logic.forms.submit(con, slug, body)
         return {"ok": True}
 
