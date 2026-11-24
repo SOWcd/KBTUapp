@@ -6,9 +6,11 @@
     "dev": "vite",
     "build": "vite build && ! grep -lE '\\(\\?<[=!]' dist/assets/*.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "npm run build && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/three": "0.187.0",
     "svelte": "^5.57.1",

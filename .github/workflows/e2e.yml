@@ -1,0 +1,50 @@
+# End-to-end: the built app in Chromium and WebKit on phone-sized screens, against fresh seeded qa.py servers
+# (web/e2e, `cd web && npm run e2e`). Non-blocking while it settles in: a red run is a signal, not a gate.
+name: E2E
+on:
+  pull_request:
+    paths: ['web/**', 'server/**', '.github/workflows/e2e.yml']
+concurrency:
+  group: e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r server/requirements.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: web
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.pw.outputs.version }}
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: web
+      - run: npm run e2e
+        working-directory: web
+        env:
+          E2E_PYTHON: python
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 14

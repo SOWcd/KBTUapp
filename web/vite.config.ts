@@ -93,6 +93,8 @@ export default defineConfig({
   server: { host: true, port: 5180 },
   // not prebundled in dev, so the dev server's icons go through ui/LucideIcon.svelte too (plugins don't run in a prebundle)
   optimizeDeps: { exclude: ['@lucide/svelte'] },
+  // vitest: the unit tests in src; e2e/*.spec.ts are Playwright's (npm run e2e)
+  test: { include: ['src/**/*.test.ts'] },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
