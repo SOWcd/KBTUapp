@@ -27,9 +27,6 @@
   <!-- the lanyard's own art on this side too (the back was a bare colour) -->
   {#if look === 'sower'}<SowerArt wide />{/if}
   {#if banded(look)}<LanyardBand {look} wide qr />{/if}
-  <!-- the art calms down under the text: it fades into the card's own colour toward the foot (owner, Nov 25: the name
-       sat on Case Club's laptop) -->
-  <i class="scrim" aria-hidden="true"></i>
   <!-- no JCC sakura pieces on this side: cut by the plate they read as stray bits; their scene has its own -->
   <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
   {#snippet code()}<Qr {text} tone={QR_LOOK[look]} {lazy}>{#if mark}{@render mark()}{:else}<LookMark {look} />{/if}</Qr>{/snippet}
@@ -47,7 +44,7 @@
 </div>
 
 <style>
-  .cb { --kb: linear-gradient(155deg, rgb(42, 79, 214), rgb(18, 26, 61) 72%); position: relative; isolation: isolate; height: 100%; display: flex; align-items: center; gap: 14px;
+  .cb { --kb: linear-gradient(155deg, rgb(42, 79, 214), rgb(18, 26, 61) 72%); position: relative; isolation: isolate; height: 100%; display: flex; align-items: center; gap: 12px;
     padding: 22px 14px 18px 18px; overflow: hidden; border-radius: var(--r-l); color: white;
     background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
@@ -65,18 +62,13 @@
   .faces { --role: rgb(255, 155, 214); }
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .sower { --role: rgb(192, 193, 190); }
-  /* the scrim's colour: each card's own at its foot (a club's or a school's from CLUB_LOOKS via lookVars) */
-  .cb { --scr: rgb(18, 26, 61); }
-  .club { --scr: var(--c2); }
-  .faces { --scr: rgb(0, 0, 0); }
-  .sower { --scr: rgb(30, 30, 30); }
-  .studex { --scr: rgb(11, 28, 68); }
-  .cheer { --scr: rgb(24, 26, 52); }
-  .knights { --scr: rgb(7, 20, 54); }
-  .moments { --scr: rgb(20, 11, 8); }
-  /* strongest under the role and the course line, half way at the name, clear by the medallion */
-  .scrim { position: absolute; z-index: 2; inset: 0; pointer-events: none; opacity: 0.92;
-    background: linear-gradient(0deg, var(--scr) 0 30%, transparent 78%); }
+  /* no art behind any text (owner, Nov 25: the name sat on Case Club's laptop, the role on Business's king): the scene
+     shows only round the medallion in the top-right corner and a breath along the top, and is gone before the name's
+     column (68 px in from the card's edge, 30 px down at the highest) and the role (76 px down at the highest); the
+     rest is the card's own ground */
+  .cb > :global(:is(.band, .sa)) {
+    -webkit-mask: radial-gradient(76px 70px at 100% 0%, black 40%, transparent 94%), radial-gradient(190px 28px at 100% 0%, black 30%, transparent);
+    mask: radial-gradient(76px 70px at 100% 0%, black 40%, transparent 94%), radial-gradient(190px 28px at 100% 0%, black 30%, transparent); }
   /* no tilt reaches the back (the face's glass writes --gx): its depth layers stand still, so they are painted with the
      side, not each kept as a layer of its own */
   .cb :global(.z) { will-change: auto; }
@@ -86,22 +78,20 @@
   .plate { position: relative; z-index: 3; flex: none; display: block; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
     box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
   button.plate:active { transform: scale(0.96); }
-  /* the name and the rest down to the number at the foot. Two-line fields push the column up beside the medallion (under
-     it there is room for one line each), so the name and the role keep its width clear, as on the face (Hero .nm); the
-     course line and the number start below it at the most. A halo in the scrim's colour round the letters */
-  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1;
-    align-self: stretch; text-shadow: 0 0 2px var(--scr), 0 0 8px var(--scr); }
-  .bnm, .role { padding-right: 56px; } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a gap */
-  .bside > * { flex: none; }
+  /* the name and the rest down to the number at the foot. At the most (a two-line name and course line) the name stands
+     beside the medallion, so its column stays clear of it; the role starts below the medallion, one line */
+  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1; align-self: stretch; }
+  .bnm { padding-right: 64px; } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a 12 px gap */
+  .bside > * { flex: none; max-width: 100%; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
   .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
-  .sower :is(.bnm, .role) { padding-right: 62px; }
+  .sower .bnm { padding-right: 70px; }
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
-  .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
+  .bnm { font: 780 var(--fs-card)/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .role { display: -webkit-box; margin-top: 2px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  .role { margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     font: 760 var(--fs-tab)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--role, rgb(169, 192, 255)); }
   .meta { display: -webkit-box; margin-top: 1px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .moments .meta { color: rgba(255, 255, 255, 0.84); }
@@ -109,15 +99,6 @@
   .sower .meta { color: rgba(232, 232, 231, 0.7); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
-  /* the anime club's art where this side sets the name (mid-right): its mist moved under it, its swirl's ink haloed */
-  .klubanimeshnikov :global(.mist) { background: radial-gradient(34% 52% at 64% 56%, rgba(232, 232, 235, 0.72), transparent 80%); }
-  .klubanimeshnikov .bside { text-shadow: 0 0 3px rgba(226, 226, 230, 0.9), 0 0 9px rgba(226, 226, 230, 0.7); }
-  /* kbtu.mag: its issues stand where this side sets the name: quieter here, the name haloed in their cream */
-  .kbtumag :global(.near) { opacity: 0.45; }
-  .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
-  /* SOWER: the hand stands where this side sets the name: quieter here, the name lifted off it */
-  .sower :global(.near) { opacity: 0.45; }
-  .sower .bside { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.8), 0 0 10px rgba(14, 14, 14, 0.7); }
-  .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
-  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } .bnm { font-size: var(--fs-card); } }
+  /* a narrow phone: a smaller plate and medallion, so the name keeps 64 px beside it */
+  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } .bmed { top: 12px; right: 12px; width: 44px; height: 44px; } .bnm { padding-right: 54px; } }
 </style>
