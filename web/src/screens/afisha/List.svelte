@@ -283,7 +283,7 @@
     {@const e = hero}
     {@const mine = e.my?.status === 'going'}
     <!-- the hero: my next event (its ticket and the way there), else the nearest -->
-    <section class="hero" class:nopic={!heroPic}>
+    <section class="hero" class:nopic={!heroPic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
@@ -470,16 +470,24 @@
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* the hero: the one rich visual, kept calm (owner, Nov 22: the coloured halo, the blurred cover and the circling
-     light read as childish). Opal's card size, about 156px. The cover sharp edge to edge, a little dimmed; the words on
+  /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
+     childish). Opal's card size, about 156px. The cover sharp edge to edge, a little dimmed; the words on
      a slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
      follows the theme and stays legible whatever the cover is), the time at its right end, my ticket and the way
      there in a row at its foot */
-  .hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 72px 6px 6px; /* the picture always keeps its strip, the action row under the words too */
+  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 72px 6px 6px; /* the picture always keeps its strip, the action row under the words too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
+  /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
+     the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
+     cover does), so the light can leave it */
+  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--glow);
+    box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
+  :global(:root[data-theme='light']) .hero { --glow: 0.5; }
+  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--glow) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
-  .shade, .rim { border-radius: inherit; pointer-events: none; }
+  .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
+  .art { overflow: hidden; }
   /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
   .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
   /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
@@ -487,17 +495,17 @@
   .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
   .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-end; padding: var(--s-1) var(--s-5) 0 0; }
   .nopic .art :global(.poster > *) { transform: rotate(9deg) scale(1.2); transform-origin: 50% 0; }
-  /* the rim: a hair of white lit at the top left, as glass is. The light comes round once as the card arrives and rests
+  /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
      there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
   .rim { z-index: 1; overflow: hidden; padding: 1px;
     -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
     mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
   .rim::before { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%;
-    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 100deg, rgba(255, 255, 255, 0.22) 125deg, rgba(255, 255, 255, 0.1) 150deg,
-      rgba(255, 255, 255, 0.1) 265deg, rgba(255, 255, 255, 0.55) 296deg, rgba(255, 255, 255, 0.12) 340deg);
+    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 95deg, var(--c, rgba(255, 255, 255, 0.22)) 125deg, rgba(255, 255, 255, 0.1) 155deg,
+      rgba(255, 255, 255, 0.1) 250deg, var(--c, rgba(255, 255, 255, 0.55)) 284deg, rgba(255, 255, 255, 0.7) 296deg, var(--c, rgba(255, 255, 255, 0.55)) 308deg, rgba(255, 255, 255, 0.12) 345deg);
     animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
   @keyframes arrive { from { transform: rotate(-200deg); } }
-  @media (prefers-reduced-motion: reduce) { .rim::before { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
   /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
      dark it also dims what is under it: white words hold 4.5:1 over a white cover */
   .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px 14px;
