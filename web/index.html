@@ -40,12 +40,12 @@
      is the home-screen app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run
      the tool), and the mark never moves from there. The app is often up within half a second, so everything is said in
      ~0.65 s, around the still mark: the ground's own lights (the entrance's, at a fraction) come up as a quiet field,
-     the legend settles onto its circle, two hairline orbits open past it into the screen, a shade crosses the columns
+     the legend settles onto its circle, a dial of fine ticks opens past it into the screen, a shade crosses the columns
      (and again every few seconds while a slow line loads).
      lib/boot.ts hands it over: .o = the emblem settles back a little and dissolves with the ground while the app
      lifts into place under it, 0.28 s (transitions on #boot and .em, the intro on their children: the two compose, so
      an app ready early still gets a whole gesture; it waits only for the 0.4 s since the first paint to pass);
-     .u = under the page as the entrance's ground: its lights wake fully, the legend and orbits go, and the entrance
+     .u = under the page as the entrance's ground: its lights wake fully, the legend and the dial go, and the entrance
      draws its own mark where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on
      the compositor, running while the bundle keeps the main thread busy. -->
 <style id="boot-css">
@@ -70,10 +70,10 @@ html[data-boot=light]{background:#F2F2F7}
 /* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
 @media (max-width:599.98px){#boot.o+#app{animation:kb-lift .32s cubic-bezier(.2,.8,.2,1)}}
 @keyframes kb-lift{from{transform:translateY(8px)}}
-/* two hairline orbits past the legend, the outer one wider than a phone: the emblem's circles carried into the screen */
-#boot u{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);border:1px solid;border-radius:50%;opacity:var(--o);transition:opacity .28s;animation:kb-orbit .6s cubic-bezier(.2,.8,.2,1) .05s backwards}
-#boot u:nth-of-type(1){--d:324px;--o:.11}
-#boot u:nth-of-type(2){--d:500px;--o:.06;animation-delay:.11s}
+/* a precision dial past the legend (an engineering school's instrument): fine ticks every 3 degrees, a longer one every 30,
+   turning very slowly against the legend; a second, sparser scale wider than a phone turns the other way */
+#boot .dl{position:absolute;left:50%;top:50%;margin:-250px 0 0 -250px;fill:none;stroke:currentColor;transition:opacity .28s;animation:kb-dial .7s cubic-bezier(.2,.8,.2,1) .05s backwards,kb-turn 300s linear .75s infinite reverse}
+#boot .dl+.dl{--r:14deg;animation-delay:.11s,.81s;animation-duration:.7s,420s;animation-direction:normal}
 #boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .6s cubic-bezier(.2,.8,.2,1) backwards}
 #boot .lg svg{display:block;animation:kb-turn 90s linear infinite}
 #boot .lg text{font:600 10.5px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;fill:currentColor;opacity:.78}
@@ -87,12 +87,12 @@ html[data-boot=light]{background:#F2F2F7}
 #boot .mk i:nth-child(5){left:35.5px;animation-delay:.18s}
 #boot .mk i:nth-child(6){left:46px;animation-delay:.22s}
 #boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
-#boot.u .lg,#boot.u u{opacity:0}
+#boot.u .lg,#boot.u .dl{opacity:0}
 #boot.u .mk{visibility:hidden}
 @keyframes kb-drift{to{transform:translate3d(var(--dx),var(--dy),0) scale(1.12)}}
 @keyframes kb-turn{to{transform:rotate(1turn)}}
 @keyframes kb-on{from{opacity:0}}
-@keyframes kb-orbit{from{opacity:0;transform:scale(.88)}}
+@keyframes kb-dial{from{opacity:0;transform:rotate(var(--r,-20deg)) scale(.95)}}
 @keyframes kb-in{from{opacity:0;transform:rotate(-20deg) scale(.94)}}
 /* a shade crosses the colonnade: each column dims and clears a beat after its neighbour, ~0.5 s of the 3.9 s round */
 @keyframes kb-col{0%{opacity:1}3%{opacity:.38}9%,100%{opacity:1}}
@@ -100,7 +100,7 @@ html[data-boot=light]{background:#F2F2F7}
    under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
 #boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 160px);background:linear-gradient(#000000 12%,rgba(0,0,0,.62) 40%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0))}
 [data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 12%,rgba(242,242,247,.62) 40%,rgba(242,242,247,.2) 72%,rgba(242,242,247,0))}
-@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot u,#boot .lg{transition:none!important}}
+@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot .dl,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot .dl,#boot .lg{transition:none!important}}
 </style>
 <!-- splash:start -->
 <link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
@@ -187,5 +187,5 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><u></u><u></u><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><svg class="dl" viewBox="-250 -250 500 500" width="500" height="500"><circle r="142.5" pathLength="360" stroke-width="5" stroke-dasharray=".3 2.7" opacity=".24"/><circle r="144.5" pathLength="360" stroke-width="9" stroke-dasharray=".45 29.55" opacity=".44"/></svg><svg class="dl" viewBox="-250 -250 500 500" width="500" height="500"><circle r="246" pathLength="360" stroke-width="6" stroke-dasharray=".2 5.8" opacity=".13"/></svg><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>
