@@ -163,6 +163,10 @@ export const sheets = {
   /** People of the app: the screen; my own "name me?" sheet */
   credits: () => {},
   creditAsk: () => {},
+  /** students make the app: the ways to help and the signed offer; what is wrong (anonymous or in Telegram); the admin's list of both */
+  helpUs: () => {},
+  feedback: () => {},
+  adminVoices: () => {},
   /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
   santaHi: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch

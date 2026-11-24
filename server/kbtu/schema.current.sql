@@ -14,6 +14,11 @@ CREATE TABLE achievement_levels (                    -- last notified level, so 
   reached_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, code)
 ) STRICT;
+CREATE TABLE anon_feedback (
+      id INTEGER PRIMARY KEY,
+      body TEXT NOT NULL CHECK (length(body) <= 1000),
+      day INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE appeal_ai_consents (
       user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
       version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;
@@ -583,6 +588,14 @@ CREATE TABLE help_consents (
 CREATE TABLE help_staff (
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       at INTEGER NOT NULL) STRICT;
+CREATE TABLE helper_offers (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      kinds TEXT NOT NULL,
+      note TEXT CHECK (note IS NULL OR length(note) <= 500),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE join_requests (
   id         INTEGER PRIMARY KEY,
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1383,6 +1396,7 @@ CREATE TABLE web_sessions (
     ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
+CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);
 CREATE INDEX ask_pings_by_user ON ask_pings(user_id, at);
@@ -1450,6 +1464,7 @@ CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
 CREATE INDEX friendships_b ON friendships(b);
 CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
 CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);
+CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
 CREATE INDEX join_requests_by_user ON join_requests(user_id);
 CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
 CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);

@@ -2256,4 +2256,20 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;"""),
     (222, "ALTER TABLE posts ADD COLUMN tg_fmt TEXT;"),
+    # logic/helpus.py: an anonymous line to the creator (no user column and only the day, on purpose) and a signed offer to help
+    (223, """CREATE TABLE IF NOT EXISTS anon_feedback (
+      id INTEGER PRIMARY KEY,
+      body TEXT NOT NULL CHECK (length(body) <= 1000),
+      day INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS helper_offers (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      kinds TEXT NOT NULL,
+      note TEXT CHECK (note IS NULL OR length(note) <= 500),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS helper_offers_by_user ON helper_offers(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS anon_feedback_by_day ON anon_feedback(day);"""),
 ]

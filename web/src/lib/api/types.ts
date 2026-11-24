@@ -805,7 +805,7 @@ export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; p
   cover: EventCard['cover']; emoji: string; color: string; tint?: string } // cover: the post's picture (server autoev.cover)
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
-export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number; santa?: number } // santa: open Secret Santa chat reports (their own row)
+export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number; santa?: number; voices?: number } // santa: open Secret Santa chat reports (their own row); voices: unread lines and offers to the creator
 
 export interface PersonCard extends PersonRef {
   forum?: Pick<ForumMe, 'skills' | 'open'>;              // their skills and "open to projects", for those who see the forum

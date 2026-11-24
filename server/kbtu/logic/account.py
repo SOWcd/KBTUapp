@@ -1272,6 +1272,7 @@ _DEL_GONE = {
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
+    ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("credit_consents", "user_id"),  # my answers to "shall we name you?" (credits.py); my lines stay nameless (credits.gone)
     ("fchan_photos", "user_id"),  # my photos picked for a post and never posted (posted ones go with their post)

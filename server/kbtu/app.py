@@ -75,6 +75,17 @@ async def read_upload(request: Request, most: int = media.MAX_BYTES) -> bytes:
     return bytes(data)
 
 
+def json_body(most: int):
+    """A JSON body as a dependency, capped at `most` bytes before it is parsed (Body(...) reads it whole first); put it
+    after Me, so a stranger's body is never read."""
+    async def read(request: Request) -> object:
+        try:
+            return json.loads(await read_upload(request, most))
+        except (ValueError, RecursionError):
+            raise ApiError("bad_input") from None
+    return read
+
+
 class _Route(APIRoute):
     """Answers go out through pydantic's JSON writer (Rust) instead of FastAPI's jsonable_encoder, which walks every value
     in Python: two thirds of the Afisha's time on a big database (load test). Our answers are plain JSON
@@ -2287,6 +2298,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # to the creator (logic/helpus.py): an anonymous line (no author kept), a signed offer to help; the admin's list
+    helpus_body = Depends(json_body(logic.helpus.BODY_MOST))
+
+    @app.post("/api/helpus/anon", status_code=204)
+    def helpus_anon(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.send_anon(con, v, body)
+
+    @app.post("/api/helpus/offer", status_code=204)
+    def helpus_offer(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.offer(con, v, body)
+
+    @app.get("/api/helpus")
+    def helpus_list(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"  # contacts and notes never kept on the device
+        return logic.helpus.listing(con, v)
+
+    @app.post("/api/helpus/seen", status_code=204)
+    def helpus_seen(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.seen(con, v, body)
+
     @app.get("/api/map/flaws")
     def map_flaws(con: Con, v: Me):
         return logic.mapflaws.listing(con, v)
@@ -3089,14 +3120,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         return Response(body, status_code=status, media_type="text/html", headers={
             "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
 
-    async def form_sheet(request: Request) -> object:  # no account in front: the body is capped before it is parsed
-        try:
-            return json.loads(await read_upload(request, logic.forms.MOST))
-        except (ValueError, RecursionError):
-            raise ApiError("bad_input") from None
-
-    @app.post("/api/f/{slug}")
-    def form_submit(con: Con, slug: str, body: object = Depends(form_sheet)):
+    @app.post("/api/f/{slug}")  # no account in front: the body is capped before it is parsed
+    def form_submit(con: Con, slug: str, body: object = Depends(json_body(logic.forms.MOST))):
         logic.forms.submit(con, slug, body)
         return {"ok": True}
 

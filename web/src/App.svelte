@@ -16,6 +16,7 @@
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
+  import { visit } from './lib/helpus';
   import { nameOf } from './lib/short';
   import { sheets, type SheetKey } from './lib/state/sheets';
   import { setTeamConsent } from './lib/teamConsent';
@@ -249,6 +250,11 @@
   const peoplePage = () => import('./screens/profile/People.svelte');
   sheets.credits = () => lazy(peoplePage, {});
   sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
+  const helpPage = () => import('./screens/profile/HelpSheet.svelte'), feedbackPage = () => import('./screens/profile/FeedbackSheet.svelte');
+  const voicesPage = () => import('./screens/admin/AdminVoices.svelte'); // stable loaders: lazy()'s cache is keyed by them
+  sheets.helpUs = () => asStudent(() => lazy(helpPage, {}));
+  sheets.feedback = () => asStudent(() => lazy(feedbackPage, {}));
+  sheets.adminVoices = () => lazy(voicesPage, {});
   sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
@@ -486,6 +492,7 @@
 
   // ---- greeting ----
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
+  idle(() => visit(dayNo(nowTs()))); // and for the one-time help ask (lib/helpus: this phone's days, kept on it), after the first paint
   // an office's own people (DMP) are greeted as the team, once per phone, full screen (owner, Nov 17: the toast was missed):
   // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
@@ -570,6 +577,7 @@
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
+    if (p === 'voices') { sheets.adminVoices(); return; }                       // the bot, to the creator: a line or an offer to help came
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
     // the bot's "photos are in the album" / "add yours": the event, its album open over it. The sheet opens the album
     // itself once its details are in (it used to be a second fetch and a second lazy() here, which any other sheet
