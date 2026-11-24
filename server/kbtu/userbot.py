@@ -166,7 +166,7 @@ class Mirror:
         res = getattr(m.reactions, "results", None)
         reactions = [(getattr(r.reaction, "emoticon", None) or "★", r.count) for r in res] if res is not None else ([] if m.reactions is None else None)
         entities = [(style, e.offset, e.length, getattr(e, "url", None))
-                    for e in m.entities or () if (style := _ENTITY_KINDS.get(type(e).__name__))]
+                    for e in getattr(m, "entities", None) or () if (style := _ENTITY_KINDS.get(type(e).__name__))]
         return mirror.Msg(id=m.id, date=int(m.date.timestamp()), text=m.message or "", grouped=m.grouped_id, photo=photo, media=kind,
                           views=m.views, reactions=reactions, entities=entities)
 
