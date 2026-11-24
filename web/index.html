@@ -73,7 +73,10 @@ html[data-boot=light]{background:#F2F2F7}
 /* three hairline arcs past the legend, the outer one wider than a phone: parts of the emblem's circles, each bright at its
    head and fading out along its tail, swung into place as if drawn and then going round very slowly, all the
    same way at its own pace; the inner and the outer one carry a small point of light at the head, a planet and its trail, the far one smaller
-   (a ring of conic gradient cut to a hairline by a mask; u swings in, its :before and :after go round together) */
+   (a ring of conic gradient cut to a hairline by a mask; u swings in, its :before and :after go round together).
+   At the handover (.o, and .u under the entrance) the arcs open a little as the emblem settles back: s holds them. */
+#boot s{position:absolute;left:50%;top:50%;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot.o s,#boot.u s{transform:scale(1.07)}
 #boot u{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);transition:opacity .28s;animation:kb-arc .8s cubic-bezier(.16,1,.3,1) .05s backwards}
 #boot u:before,#boot u:after{position:absolute;transform:rotate(var(--a));animation:kb-round var(--t) linear infinite}
 #boot u:before{content:'';top:0;right:0;bottom:0;left:0;border-radius:50%;opacity:var(--o);background:conic-gradient(transparent calc(100% - var(--l)),calc(100% - var(--l)*.35),currentColor calc(100% - var(--h,0%)),transparent);-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 1.6px),#000 calc(100% - 1px));mask:radial-gradient(closest-side,transparent calc(100% - 1.6px),#000 calc(100% - 1px))}
@@ -109,7 +112,7 @@ html[data-boot=light]{background:#F2F2F7}
    under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
 #boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 160px);background:linear-gradient(#000000 12%,rgba(0,0,0,.62) 40%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0))}
 [data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 12%,rgba(242,242,247,.62) 40%,rgba(242,242,247,.2) 72%,rgba(242,242,247,0))}
-@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot u:before,#boot u:after,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot u,#boot .lg{transition:none!important}}
+@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot u:before,#boot u:after,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot s,#boot u,#boot .lg{transition:none!important}}
 </style>
 <!-- splash:start -->
 <link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
@@ -196,5 +199,5 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><u></u><u></u><u></u><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><s><u></u><u></u><u></u></s><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>
