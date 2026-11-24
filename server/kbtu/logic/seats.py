@@ -1,6 +1,7 @@
 """Events for students: the lists, registration and seats, receipts, volunteers, event chats, the channel, calendars."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -50,7 +51,8 @@ def volunteer_apply(con, v: Viewer, eid: int, note: object) -> dict:
 def volunteer_leave(con, v: Viewer, eid: int) -> dict:
     """Taking my application back (or stepping down): the place opens again."""
     e = _event(con, v, eid)
-    con.execute("DELETE FROM volunteers WHERE event_id = ? AND user_id = ?", (eid, v.id))
+    # a "no" holds: deleting it would let them apply again into the organizer's queue (Inkar's review, Nov 23)
+    con.execute("DELETE FROM volunteers WHERE event_id = ? AND user_id = ? AND status != 'no'", (eid, v.id))
     return full(con, v, e)
 
 
@@ -151,14 +153,12 @@ GUARD_TTL = 15 * 60  # a guarded request's app link, then join again
 
 def guard_token(key: bytes, chat_id: int, tg_id: int, qid: str) -> str:
     """The app's link for a guarded join request: who, where, which query, when, signed (no row kept: nothing to delete)."""
-    import base64
     body = base64.urlsafe_b64encode(json.dumps([chat_id, tg_id, qid, int(time.time())], separators=(",", ":")).encode()).decode().rstrip("=")
     return body + "." + hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]
 
 
 def guard_read(key: bytes, token: str) -> tuple[int, int, str]:
     """(chat, Telegram id, query) from guard_token's link; forbidden when it's forged, gone when it's old."""
-    import base64
     body, _, sig = (token or "").partition(".")
     if not body or not hmac.compare_digest(sig, hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]):
         raise ApiError("forbidden")
@@ -269,7 +269,6 @@ REF_KEY = secrets.token_bytes(32)
 
 
 def ev_ref(uid: int) -> str:
-    import base64
     return base64.b32encode(hmac.new(REF_KEY, f"evref:{uid}".encode(), hashlib.sha256).digest())[:10].decode()
 
 
@@ -819,7 +818,7 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     if r and r["status"] == "going":
         old = one(con, """SELECT * FROM receipts WHERE id = (SELECT MAX(id) FROM receipts WHERE registration_id = ?)
             AND status = 'accepted' AND reviewed_at IS NULL AND flags != 'spot' AND created_at >= ?""", r["id"], r["created_at"])  # this seat's own  # a spot one: as final as a checked one
-        if not old or (e["ends_at"] or e["starts_at"] + 3 * 3600) < core.now():
+        if not old or end_of(e) < core.now():
             r = None
         elif one(con, "SELECT COUNT(*) FROM receipt_replaced WHERE registration_id = ?", r["id"])[0] >= RECEIPT_TRIES:
             raise ApiError("rate_limited", "receipt")  # enough: the organizer looks at the last one
@@ -1011,9 +1010,11 @@ def unregister(con, v: Viewer, eid: int) -> dict:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if not r:
             raise ApiError("not_found")
+        if r["checked_in_at"]:  # in the room already (a late-sign-up event): the seat stays, as remove_seats keeps it
+            raise ApiError("conflict", "checked_in")
         if not signup_open(e):
             raise ApiError("closed")
-        if _seat_out(con, r, "self"):
+        if r["status"] != "cancelled" and _seat_out(con, r, "self"):  # a stale second cancel keeps why it ended
             promote(con, e)
     return card(con, v, e)
 

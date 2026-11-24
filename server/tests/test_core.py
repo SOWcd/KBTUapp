@@ -3387,6 +3387,8 @@ def test_place_changes(env, monkeypatch):
     con.execute("UPDATE events SET starts_at = ?, place = 'Aud. 305', place_url = NULL WHERE id = ?", (int(time.time()) - 600, e["id"]))
     con.execute("UPDATE registrations SET checked_in_at = ? WHERE event_id = ? AND user_id = ?", (int(time.time()), e["id"], uid[10]))
     assert c.post(f"/api/events/{e['id']}/place", headers=tma(20), json={"place": "Aud. 202"}).status_code == 200
+    gone = c.delete(f"/api/events/{e['id']}/registration", headers=tma(10))                   # in the room: the seat stays
+    assert gone.status_code == 409 and gone.json()["message"] == "checked_in"
     soon = told()
     assert set(soon) == {uid[11], uid[12]} and all(t <= int(time.time()) for t in soon.values())
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 7200, int(time.time()) - 3600, e["id"]))
@@ -3911,6 +3913,9 @@ def test_volunteers(env):
     assert c.put(f"/api/events/{e['id']}/volunteers/{ids[22]}", headers=tma(20), json={"yes": True}).status_code == 409   # one place
     assert c.put(f"/api/events/{e['id']}/volunteers/{ids[22]}", headers=tma(20), json={"yes": False}).status_code == 200
     assert {r[0] for r in con.execute("SELECT kind FROM bot_outbox WHERE kind LIKE 'volunteer_%'")} == {"volunteer_yes", "volunteer_no"}
+    c.delete(f"/api/events/{e['id']}/volunteer", headers=tma(22))                                            # a "no" can't be undone
+    c.post(f"/api/events/{e['id']}/volunteer", headers=tma(22), json={})                                     # by leaving and applying again
+    assert con.execute("SELECT status FROM volunteers WHERE event_id = ? AND user_id = ?", (e["id"], ids[22])).fetchone()[0] == "no"
     assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["volunteers"] == {"need": 1, "senior": True, "taken": 1, "mine": None, "asked": 0}
 
 
