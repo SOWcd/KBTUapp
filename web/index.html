@@ -43,7 +43,7 @@
      the legend settles onto its circle, three hairline arcs swing in past it into the screen, a shade crosses the columns
      (and again every few seconds while a slow line loads).
      lib/boot.ts hands it over: .o = the emblem settles back a little and dissolves with the ground while the app
-     lifts into place under it, 0.28 s (transitions on #boot and .em, the intro on their children: the two compose, so
+     lifts into place under it, 0.3 s (transitions on #boot and .em, the intro on their children: the two compose, so
      an app ready early still gets a whole gesture; it waits only for the 0.4 s since the first paint to pass);
      .u = under the page as the entrance's ground: its lights wake fully, the legend and the arcs go, and the entrance
      draws its own mark where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on
@@ -51,7 +51,7 @@
 <style id="boot-css">
 html[data-boot]{background:#000000}
 html[data-boot=light]{background:#F2F2F7}
-#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#000000;transition:opacity .28s cubic-bezier(.2,.7,.3,1)}
+#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#000000;transition:opacity .3s cubic-bezier(.33,.33,.4,1)}
 [data-boot] #boot{display:block}
 [data-boot=light] #boot{color:#0B1433;background:#F2F2F7}
 #boot.u{z-index:auto}
@@ -64,12 +64,12 @@ html[data-boot=light]{background:#F2F2F7}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:45%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot .em{position:absolute;left:50%;top:45%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
 @media (orientation:portrait){#boot .em{top:var(--kb-em,45%)}}
 #boot.o .em{transform:scale(.96)}
 /* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
-@media (max-width:599.98px){#boot.o+#app{animation:kb-lift .32s cubic-bezier(.2,.8,.2,1)}}
-@keyframes kb-lift{from{transform:translateY(8px)}}
+@media (max-width:599.98px){#boot.o+#app{animation:kb-lift .3s cubic-bezier(.2,.8,.2,1)}}
+@keyframes kb-lift{from{transform:translateY(8px) scale(.985)}}
 /* three hairline arcs past the legend, the outer one wider than a phone: parts of the emblem's circles, each bright at its
    head and fading out along its tail, swung into place as if drawn and then going round very slowly, all the same way, the
    nearer the quicker and the heavier (depth: line and pace by distance). The inner and the outer one carry a small point of
@@ -78,7 +78,7 @@ html[data-boot=light]{background:#F2F2F7}
    legend, so nothing more moves). At the handover (.o, .u) the arcs open a little as the emblem settles back: s holds them.
    (the line is the transparent border of a round box over a conic gradient, everything inside the border masked away: both of
    its edges are the box's own circles, so it is evenly thick and truly round; u swings in, its :before and :after go round together) */
-#boot s{position:absolute;left:50%;top:50%;transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+#boot s{position:absolute;left:50%;top:50%;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
 #boot.o s,#boot.u s{transform:scale(1.07)}
 #boot u{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);transition:opacity .28s;animation:kb-arc .8s cubic-bezier(.16,1,.3,1) .05s backwards}
 #boot u:before,#boot u:after{position:absolute;transform:rotate(var(--a));animation:kb-round var(--t) linear infinite}
@@ -104,6 +104,9 @@ html[data-boot=light]{background:#F2F2F7}
 #boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
 #boot.u .lg,#boot.u u{opacity:0}
 #boot.u .mk{visibility:hidden}
+/* the handover is one motion, 0.3 s: the emblem settles back, the arcs open and the app rises on one curve, the ground clears evenly over
+   them (not front-loaded: the opening arcs are seen over the page); the mark and the legend go first, so the page never shows through them */
+#boot.o .lg,#boot.o .mk{opacity:0;transition:opacity .16s cubic-bezier(.4,0,.6,1)}
 @keyframes kb-drift{to{transform:translate3d(var(--dx),var(--dy),0) scale(1.12)}}
 @keyframes kb-turn{to{transform:rotate(1turn)}}
 @keyframes kb-on{from{opacity:0}}
