@@ -288,19 +288,16 @@
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
       <div class="slab">
-        <div class="top">
-          <span class="hero-tx">
-            <b class="clamp-2">{e.title}</b>
-            <span class="where ellipsis">{placeOf(e.place, e.online)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
-            {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
-          </span>
-          <span class="when num"><b class="ellipsis">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b><span>{soon(e.startsAt, now)}</span></span>
-        </div>
-        <!-- under the thumb: my ticket and the way there; not mine yet: one tap signs up (a paid one opens its payment) -->
+        <span class="hero-tx">
+          <b class="clamp-2">{e.title}</b>
+          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
+          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
+        </span>
+        <!-- under the thumb, at the slab's end: my ticket and the way there, two round icons; not mine yet: one tap signs up (a paid one opens its payment) -->
         {#if mine}
           <span class="acts">
-            <Button kind="tinted" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
-            {#if floorOf(e.place) != null}<Button kind="secondary" size="s" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={15} />{/snippet}{t('route.open')}</Button>{/if}
+            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
+            {#if floorOf(e.place) != null}<IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(e.place)} />{/if}
           </span>
         {:else if e.my?.status === 'hold'}
           <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
@@ -471,11 +468,11 @@
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
   /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
-     childish). Opal's card size, about 156px. The cover sharp edge to edge, a little dimmed; the words on
-     a slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
-     follows the theme and stays legible whatever the cover is), the time at its right end, my ticket and the way
-     there in a row at its foot */
-  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 72px 6px 6px; /* the picture always keeps its strip, the action row under the words too */
+     childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
+     a low slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
+     follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
+     there as two round icons at its end */
+  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
@@ -508,22 +505,24 @@
   @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
   /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
      dark it also dims what is under it: white words hold 4.5:1 over a white cover */
-  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px 14px;
+  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
     border-radius: var(--r-l); color: var(--text); background: var(--glass-bg); pointer-events: none;
     box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
     -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
   :global(:root[data-theme='light']) .slab { --dim: 1; --edge: rgba(255, 255, 255, 0.8); }
-  .top { display: flex; align-items: flex-start; gap: var(--s-3); } /* the time on the title's own line, the day on the place's */
-  .acts { position: relative; z-index: 2; display: flex; gap: 8px; margin-left: -2px; pointer-events: auto; }
-  .acts :global(.btn) { flex: 1; min-width: 0; }
+  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
+  .acts :global(.btn) { min-width: 0; }
+  .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .hero-tx b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; max-width: 45%; }
-  .when span { font: 600 var(--fs-micro)/calc(1.3 * var(--fs-sub)) var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
-  .when b { max-width: 100%; font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
+  .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
+  /* one line: when (in the title's ink), how soon, where, whose. The club gives way first (it shrinks a thousand times faster), the room after it */
+  .where { display: flex; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .where > span { flex: 0 1 auto; min-width: 0; }
+  .where > .by { flex-shrink: 1000; }
+  @media (max-width: 340px) { .where > .by { display: none; } } /* 320: the line is the time and the room alone */
+  .where b { font-weight: 600; color: var(--text); }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
-  .hsub:empty { display: none; }
+  .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
   /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
      the one solid disc, a day with events on a soft one (it reads as a button), a quiet day dimmed and not a button; the
      accent dot: I'm going */
