@@ -64,6 +64,9 @@
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? data.small.find((x) => x.id === id) ?? fetched);
   const eventRating = $derived(fetched ? fetched.eventRating : o?.eventRating);
+  // its recruitment round: the catalog keeps the shared part up to 15 s on the server, so a round opened just now is
+  // only in the club's own copy (fetched); the catalog's wins while both have it (it carries my tap's "applied")
+  const round = $derived(fetched && !fetched.round ? null : o?.round ?? fetched?.round ?? null);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
   // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
@@ -83,9 +86,9 @@
   const write = () => { if (o && contact) { haptic.tap(); openLink(clubDm(contact, o, session.me?.memberships ?? [])); } };
   // in the footer while the club takes no applications; otherwise a row under its links (collabs, questions)
   // the second button: apply, the pending application, or "write to the club" once it's closed
-  const join = $derived(!!o && joinable && !!(o.round || o.myRequest || o.recruiting || contact));
-  const rowWrite = $derived(!!o && !!contact && !o.myRole && (!join || !!(o.round || o.myRequest || o.recruiting)));
-  const shut = $derived(!!o && joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest); // takes no applications
+  const join = $derived(!!o && joinable && !!(round || o.myRequest || o.recruiting || contact));
+  const rowWrite = $derived(!!o && !!contact && !o.myRole && (!join || !!(round || o.myRequest || o.recruiting)));
+  const shut = $derived(!!o && joinable && !o.myRole && !round && !o.recruiting && !o.myRequest); // takes no applications
 </script>
 
 {#snippet bell()}{#if o?.subscribed}<BellCheck size={19} />{:else}<Bell size={19} />{/if}{/snippet}
@@ -101,7 +104,7 @@
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
       {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleLabel({ role: o.myRole, title: o.myTitle, titleKk: o.myTitleKk, titleEn: o.myTitleEn }) })}</Tag></span>
-      {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>
+      {:else if round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(round.closesAt) })}</Tag></span>
       {:else if shut && o.members}<span class="tag"><Tag>{t('club.closedTag')}</Tag></span>{/if}
     </div>
 
@@ -223,8 +226,8 @@
         {#if join}
           <!-- next to a join action the bell needs no words -->
           <Button kind={o.subscribed ? 'neutral' : 'secondary'} size="l" label={sub} icon={bell} onclick={() => toggleSub(id)} />
-          {#if o.round}
-            <Button kind={o.round.applied ? 'neutral' : 'primary'} size="l" full onclick={() => sheets.roundApply(o.id)}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
+          {#if round}
+            <Button kind={round.applied ? 'neutral' : 'primary'} size="l" full onclick={() => sheets.roundApply(o.id)}>{round.applied ? t('cast.applied') : t('join.apply')}</Button>
           {:else if o.myRequest === 'rejected'}
             <Button kind="neutral" size="l" full disabled>{t('join.notNow')}</Button>
           {:else if o.myRequest || o.recruiting}
