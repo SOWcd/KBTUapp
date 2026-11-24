@@ -303,8 +303,8 @@
   .hasfoot .body { --pb: var(--s-4); }
   /* Keep the moving scroll body free of an extra masked layer on Android. */
   .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
-  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
-    mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
+  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));
+    mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to)); }
   /* the heading row: the title wraps (a long word at its soft hyphen or the edge), the actions keep their place */
   .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: var(--s-1) 2px var(--s-4); }
   .hdt { min-width: 0; padding-top: 8px; font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; overflow-wrap: break-word; }

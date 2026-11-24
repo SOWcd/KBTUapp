@@ -93,7 +93,7 @@
      (drifted left, dimmed) read through beside the capsule. Sticky offsets count from inside the pane's padding. */
   .edge { position: sticky; top: calc(-1 * var(--page-top)); z-index: calc(var(--z-sticky) + 1); height: var(--page-top);
     margin: calc(-1 * var(--page-top)) calc(-1 * var(--gutter)) 0; background: var(--bg); pointer-events: none; opacity: 0;
-    -webkit-mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); }
+    -webkit-mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to)); mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to)); }
   .scrolled .edge { opacity: 1; }
   /* sizes in viewport units, not %: the pane and its scroll edge share a top and a width, so the edge's strip shows the
      same glow it covers. A background on the scroller itself stays put while the content scrolls */
