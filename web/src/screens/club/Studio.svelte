@@ -317,7 +317,7 @@
           <Row icon={TriangleAlert} title={t('studio.noUserT')} subtitle={t('studio.noUserHow')} />{/if}
         {#each coAsks as x (x.event.id)}
           <Row title={x.event.title} subtitle={t('co.ask', { club: nameOf(x.host) })}>
-            {#snippet lead()}{#if x.event.cover}<img class="cov" src={x.event.cover.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}{/snippet}
+            {#snippet lead()}{#if x.event.cover}<img class="cov" src={coverFor(x.event.cover, 'list')!.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}{/snippet}
             {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('co.no')} onclick={(ev) => coNo(ev, x)} />
               <Button kind="tinted" size="s" onclick={() => coAnswer(x, true)}>{t('co.yes')}</Button></span>{/snippet}
           </Row>

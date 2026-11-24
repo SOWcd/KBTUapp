@@ -512,7 +512,7 @@ def _focus_of(s: str | None) -> list[float] | None:
 
 
 def _event_cover(con, e: sqlite3.Row, files: dict | None = None, by: list | None = None) -> dict | None:
-    """types.ts Media with its focus, and `by`: the formats that have their own crop ({focus}) or their own photo (a whole
+    """types.ts Media with its focus, and `formats`: those that have their own crop ({focus}) or their own photo (a whole
     Media) over it (event_covers). by: that event's rows when a list read them once for all its events."""
     cover = media_shape(files[e["cover_file_id"]]) if files and e["cover_file_id"] in files else photo(con, e["cover_file_id"])
     if cover:
@@ -522,7 +522,7 @@ def _event_cover(con, e: sqlite3.Row, files: dict | None = None, by: list | None
             f = files[r["file_id"]] if files and r["file_id"] in files else one(con, "SELECT * FROM files WHERE id = ?", r["file_id"]) if r["file_id"] else None
             own[r["format"]] = {**(media_shape(f) if f else {}), "focus": _focus_of(r["focus"])}
         if own:
-            cover["by"] = own
+            cover["formats"] = own
     return cover
 
 

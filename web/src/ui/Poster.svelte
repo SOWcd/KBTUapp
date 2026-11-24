@@ -2,14 +2,17 @@
   // Event or club picture: the uploaded photo, or a video's poster, or a 3D emoji on the organizer's colour. `play` (the
   // event sheet's header) with a video: the video plays over its poster, muted, with a sound button.
   import Emoji from './Emoji.svelte';
-  import { focusPos } from '../lib/photo';
+  import { coverFor, focusPos } from '../lib/photo';
+  import type { CoverFormat } from '../lib/api/types';
   import { t } from '../lib/i18n/index.svelte';
   import Volume2 from '@lucide/svelte/icons/volume-2';
   import VolumeX from '@lucide/svelte/icons/volume-x';
-  type Pic = { url: string; thumb: string; focus?: [number, number] | null };
+  type Pic = { url: string; thumb: string; focus?: [number, number] | null; formats?: Partial<Record<CoverFormat, Partial<Pic>>> };
   type P = { cover: Pic | null; video?: { url: string | null; poster: Pic | null } | null; emoji: string | null; color: string | null; tint?: string };
-  let { item, size = 64, radius = 14, big = false, dim = false, play = false }: { item: P; size?: number; radius?: number; big?: boolean; dim?: boolean; play?: boolean } = $props();
-  const pic = $derived(item.cover ?? item.video?.poster ?? null);
+  // fmt: which of an event cover's formats this is (its own crop or photo, lib/photo coverFor): a big one is the card, a small one a list's thumbnail
+  let { item, size = 64, radius = 14, big = false, dim = false, play = false, fmt = big ? 'card' : 'list' }:
+    { item: P; size?: number; radius?: number; big?: boolean; dim?: boolean; play?: boolean; fmt?: CoverFormat } = $props();
+  const pic = $derived(coverFor(item.cover, fmt) ?? item.video?.poster ?? null);
   const clip = $derived(play && !dim ? item.video?.url : null);
   let sound = $state(false);
 </script>

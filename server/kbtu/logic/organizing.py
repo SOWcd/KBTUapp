@@ -342,17 +342,17 @@ FORMATS = ("feed", "card", "list")
 
 
 def _cover_by(con, v: Viewer, body: dict, eid: int, cover: int | None, was: int | None) -> None:
-    """The editor's coverBy: {format: {focus} | {id, focus} | null}, a format's own crop or its own photo over the one
+    """The editor's coverFormats: {format: {focus} | {id, focus} | null}, a format's own crop or its own photo over the one
     cover (the Feed's tall slide, the event's card, a list's thumbnail). Absent keeps them, a format's null goes back to
     the cover; a photo must be on that format already (a co-organizer's) or the caller's upload. No cover: none; another
     cover and nothing said: the crops made for the old one go."""
     if cover is None:
         con.execute("DELETE FROM event_covers WHERE event_id = ?", (eid,))
-    elif body.get("coverBy") is None:
+    elif body.get("coverFormats") is None:
         if cover != was:
             con.execute("DELETE FROM event_covers WHERE event_id = ? AND file_id IS NULL", (eid,))
     else:
-        by = body["coverBy"]
+        by = body["coverFormats"]
         if not isinstance(by, dict) or set(by) - set(FORMATS):
             raise ApiError("bad_input")
         for k, x in by.items():

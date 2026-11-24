@@ -46,39 +46,39 @@ def test_a_cover_per_format(env):
     con, org, _ = _club(c, cfg)
     cover, tall, theirs = _photo(c, PRES, 10), _photo(c, PRES, 90), _photo(c, HEAD, 170)
     # created with one photo, the Feed's own crop and the list's own photo
-    e = _draft(c, org, coverId=cover, coverFocus=[0.5, 0.2], coverBy={"feed": {"focus": [0.1, 0.9]}, "list": {"id": tall, "focus": None}})
+    e = _draft(c, org, coverId=cover, coverFocus=[0.5, 0.2], coverFormats={"feed": {"focus": [0.1, 0.9]}, "list": {"id": tall, "focus": None}})
     eid, got = e["id"], e["cover"]
     assert got["id"] == cover and got["focus"] == [0.5, 0.2]
-    assert got["by"]["feed"] == {"focus": [0.1, 0.9]}                       # a crop: no photo of its own
-    assert got["by"]["list"]["id"] == tall and got["by"]["list"]["url"].endswith(".webp") and got["by"]["list"]["focus"] is None
-    assert "card" not in got["by"]
+    assert got["formats"]["feed"] == {"focus": [0.1, 0.9]}                       # a crop: no photo of its own
+    assert got["formats"]["list"]["id"] == tall and got["formats"]["list"]["url"].endswith(".webp") and got["formats"]["list"]["focus"] is None
+    assert "card" not in got["formats"]
     # the same in Studio's list (read once for all rows) and on the event's page
-    assert c.get(f"/api/orgs/{org}/events", headers=tma(PRES)).json()[0]["cover"]["by"] == got["by"]
-    assert c.get(f"/api/events/{eid}", headers=tma(HEAD)).json()["cover"]["by"] == got["by"]
+    assert c.get(f"/api/orgs/{org}/events", headers=tma(PRES)).json()[0]["cover"]["formats"] == got["formats"]
+    assert c.get(f"/api/events/{eid}", headers=tma(HEAD)).json()["cover"]["formats"] == got["formats"]
     patch = lambda body, tg=PRES: c.patch(f"/api/events/{eid}", headers=tma(tg), json={**EV, "startsAt": logic.core.now() + 86400, **body})  # noqa: E731
     # left out: kept; one format changed: the others stay; null: back to the cover
-    assert patch({}).json()["cover"]["by"] == got["by"]
-    by = patch({"coverBy": {"card": {"focus": [1, 0]}, "feed": None}}).json()["cover"]["by"]
+    assert patch({}).json()["cover"]["formats"] == got["formats"]
+    by = patch({"coverFormats": {"card": {"focus": [1, 0]}, "feed": None}}).json()["cover"]["formats"]
     assert set(by) == {"card", "list"} and by["card"] == {"focus": [1.0, 0.0]}
     # a photo that is neither mine nor on that format already, the cover itself, a wrong format or point: refused
     for bad in ({"feed": {"id": theirs}}, {"feed": {"id": cover}}, {"feed": {"id": 10 ** 9}}, {"story": {"focus": [0, 0]}},
                 {"feed": {"focus": [2, 0]}}, {"feed": "x"}, ["feed"]):
-        assert patch({"coverBy": bad}).status_code == 400, bad
+        assert patch({"coverFormats": bad}).status_code == 400, bad
     # a co-organizer keeps my photo on its format (it is the event's already), and puts their own on another
-    by = patch({"coverBy": {"list": {"id": tall, "focus": [0.3, 0.3]}, "feed": {"id": theirs}}}, HEAD).json()["cover"]["by"]
+    by = patch({"coverFormats": {"list": {"id": tall, "focus": [0.3, 0.3]}, "feed": {"id": theirs}}}, HEAD).json()["cover"]["formats"]
     assert by["list"]["id"] == tall and by["list"]["focus"] == [0.3, 0.3] and by["feed"]["id"] == theirs
-    assert patch({"coverBy": {"card": {"id": tall}}}, HEAD).status_code == 400      # but not onto a format it isn't on
-    assert patch({"coverBy": {"feed": {"focus": [0, 0]}}}, MEMBER).status_code == 403  # nor may a plain member touch the club's event
+    assert patch({"coverFormats": {"card": {"id": tall}}}, HEAD).status_code == 400      # but not onto a format it isn't on
+    assert patch({"coverFormats": {"feed": {"focus": [0, 0]}}}, MEMBER).status_code == 403  # nor may a plain member touch the club's event
     # a photo in use is never trimmed away as an unused upload
     assert con.execute(logic.account._FILE_USED.format(fid=tall)).fetchone()
     # another cover and nothing said: the crops made for the old photo go, a format's own photo stays
-    patch({"coverBy": {"card": {"focus": [0.2, 0.2]}}})
-    by = patch({"coverId": _photo(c, PRES, 130)}).json()["cover"]["by"]
+    patch({"coverFormats": {"card": {"focus": [0.2, 0.2]}}})
+    by = patch({"coverId": _photo(c, PRES, 130)}).json()["cover"]["formats"]
     assert set(by) == {"list", "feed"}
     # no cover: none of them; and the event's deletion takes its rows
     assert patch({"coverId": None}).json()["cover"] is None
     assert con.execute("SELECT COUNT(*) FROM event_covers").fetchone()[0] == 0
-    patch({"coverId": cover, "coverBy": {"list": {"id": tall}}})
+    patch({"coverId": cover, "coverFormats": {"list": {"id": tall}}})
     assert c.delete(f"/api/events/{eid}", headers=tma(PRES)).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM event_covers").fetchone()[0] == 0
 

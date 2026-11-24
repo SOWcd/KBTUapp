@@ -178,7 +178,15 @@ export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'r
 export interface Media {
   id?: Id; url: string; thumb: string; w: number; h: number; blur: string; color?: string | null /* a photo's average colour */;
   focus?: [number, number] | null; // an event cover's point that every frame keeps in view, 0..1; null = the middle
+  /** An event cover's formats that have their own crop ({focus}) or their own photo (a whole Media) over it; read
+   *  through lib/photo coverFor, never by hand. */
+  formats?: Partial<Record<CoverFormat, Partial<Media>>>;
 }
+/** Where an event's cover shows: the Feed's tall slide and its story, the event's card (the Afisha's hero, its own page,
+ *  a share card), a list's square thumbnail. */
+export type CoverFormat = 'feed' | 'card' | 'list';
+/** Why a member's draft came back from the club's President or a Vice (server organizing.REVIEW_REASONS). */
+export type ReviewReason = 'details' | 'when' | 'cover' | 'repeat' | 'later';
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
@@ -458,6 +466,9 @@ export interface EventCard {
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
   fromPost?: string;            // Studio, the club's Head+: a draft found in the club's channel (server autoev.py), its post's link
+  /** A draft, in Studio and its editor: mine (I made it: a member's own stays theirs to edit until approved), askedAt:
+   *  sent to the club's President and Vices and waiting, reason: why it came back. */
+  review?: { mine: boolean; askedAt: number | null; reason: ReviewReason | null };
   teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
   teamMax?: number;
   teamCap?: number | null;      // at most this many teams; null: no cap
@@ -651,6 +662,9 @@ export interface EventInput {
   slideIds?: Id[];
   /** The cover's focus, [x, y] from 0 to 1; null = the middle; left out keeps it. */
   coverFocus?: [number, number] | null;
+  /** A format's own crop ({focus}) or its own photo ({id, focus}) over the cover; a format's null: back to the cover;
+   *  left out keeps them. */
+  coverFormats?: Partial<Record<CoverFormat, { id?: Id | null; focus?: [number, number] | null } | null>>;
   /** Paid (§4.3): tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's
    *  Vice+ send these, and they are fixed once someone has paid; left out keeps them. */
   price?: number | null;
