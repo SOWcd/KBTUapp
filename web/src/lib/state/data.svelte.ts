@@ -79,8 +79,9 @@ export function loadSantaChat(id: Id): Promise<boolean> {
   return read;
 }
 
-/** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
-export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); }
+/** A friendship changed (a request answered, a QR used): the Friends page, the Profile tab's dot and the events' "friends
+ *  going" (read from the Afisha's copy) catch up. */
+export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); void loadAfisha(); }
 
 /** Friends, requests and where friends go, in the background (the speed rule: the page never waits for it); their faces
  * and the covers of where they go are fetched ahead too, so the page opens complete, not picture by picture. */
