@@ -39,7 +39,7 @@ export function panFocus(focus: [number, number] | null | undefined, dx: number,
 }
 
 /** Where a photo's subject most likely is, from an n x n RGBA thumbnail of the whole photo: the centre of its detail
- *  (edges weigh, flat sky and walls don't), held a little toward the middle. A flat picture: the middle.
+ *  (edges weigh, flat sky and walls don't). A flat picture: the middle.
  *  ponytail: edge energy, not faces; the Shape Detection API's FaceDetector where it exists is the upgrade. */
 export function smartFocus(px: ArrayLike<number>, n = 32): [number, number] {
   const lum = (i: number) => px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114;
@@ -49,8 +49,7 @@ export function smartFocus(px: ArrayLike<number>, n = 32): [number, number] {
     sum += e; sx += e * x; sy += e * y;
   }
   if (sum < n * n) return [0.5, 0.5]; // under one grey level a pixel: nothing to aim at
-  const pull = (v: number) => unit(0.5 + (v / (n - 1) - 0.5) * 0.8);
-  return [pull(sx / sum), pull(sy / sum)];
+  return [unit(sx / sum / (n - 1)), unit(sy / sum / (n - 1))];
 }
 
 /** smartFocus of a photo by its address; the middle when it can't be read. */

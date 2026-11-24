@@ -1267,7 +1267,7 @@
             <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} onclick={() => { only(); void submit(goKind); }}>
               {found.length && goKind !== 'send' ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : goLabel}</Button></span>
           {:else}
-            <span class="main"><Button kind="tinted" size="l" full onclick={back}>{t('ex.done')}</Button></span>
+            <span class="main"><Button kind="filled" size="l" full onclick={back}>{t('ex.done')}</Button></span>
           {/if}
         </div>
       </footer>
