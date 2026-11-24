@@ -2289,4 +2289,21 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # Meetup scans keep each attempt, apart from attendance's one row.
+    (227,"""ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
+    ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
+    ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
+    ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));
+    CREATE TABLE qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
+    ) STRICT;
+    CREATE INDEX qr_meet_scans_session ON qr_meet_scans(session_id, id);
+    CREATE INDEX qr_meet_scans_user ON qr_meet_scans(user_id);
+    UPDATE qr_sessions SET meetup = 1 WHERE crew_event_id IS NOT NULL OR (org_id IS NOT NULL AND event_id IS NULL);
+    """),
 ]

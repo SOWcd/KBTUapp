@@ -533,7 +533,11 @@ export const server = {
   clubScreen: (org: Id, title: string, who: 'club' | 'all' | Id): Promise<import('./types').ScreenSession> => call('POST', `/orgs/${org}/screens`, { title, who }), // a club's own session, no event (who runs its sessions; capped); who: the expected list frozen now (a tag's id: its people)
   screenBadge: (id: Id, qr: string): Promise<{ person: string; done: boolean }> => call('POST', `/screens/${id}/badge`, { qr }), // marked by hand: a student's badge QR scanned by who runs it
   screenPeople: (id: Id): Promise<{ came: string[]; other: string[]; absent: string[] }> => call('GET', `/screens/${id}/people`), // the host's three lists: the members who came, who came not on the list, the members who haven't
-  crewScreen: (event: Id, title: string): Promise<import('./types').ScreenSession> => call('POST', `/events/${event}/crew-screen`, { title }), // an event's team marked: its club's session, made once (the one there is after)
+  meetupSession: (id: Id): Promise<import('./types').ScreenSession> => call('GET', `/screens/${id}`),
+  meetupScans: (id: Id, before?: Id): Promise<import('./types').MeetupScans> => call('GET', `/screens/${id}/scans${before ? `?before=${before}` : ''}`),
+  meetupDecide: (id: Id, user: Id, add: boolean): Promise<import('./types').MeetupScans> => call('POST', `/screens/${id}/scans/${user}`, { add }),
+  existingCrewScreen: (event: Id): Promise<import('./types').ScreenSession | null> => call('GET', `/events/${event}/crew-screen`),
+  crewScreen: (event: Id, title: string, who: 'club' | Id = 'club'): Promise<import('./types').ScreenSession> => call('POST', `/events/${event}/crew-screen`, { title, who }), // an event's team marked: its club's session, made once (the one there is after)
   screenCsv: (id: Id): Promise<{ url: string; name: string }> => call('POST', `/screens/${id}/csv`), // a short-lived link for Telegram's download
   screenGrant: (id: Id, code: string): Promise<{ granted: number; batch: string }> => call('POST', `/screens/${id}/grant`, { code }), // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
   restore: (target: TakenDown['target'], id: Id): Promise<void> => call('POST', `/admin/taken-down/${target}/${id}/restore`), // admin: undo one

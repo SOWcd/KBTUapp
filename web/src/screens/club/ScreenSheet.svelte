@@ -1,29 +1,28 @@
 <script lang="ts">
   // "Check-in", the check-in page: a control room, one obvious action per state.
   // The organizer's side of /show (server checkin.py): Start, the QR, the lists, a laptop paired by its QR (sh_<code>).
-  // Nothing open: a calm hero, "Start check-in" (one tap, the club's members expected; anyone may scan and is listed
+  // Nothing open: a calm hero, "Start check-in" (choose the whole club or a department; anyone may scan and is listed
   // apart) and "Connect a screen". Something open: that session is the page; several: a switcher on top. Past ones at
   // the bottom, each opening the same view. Ways in: Studio (`org`: that club), an event's guests (`event`) or its team
   // (`crew`: made and started on the first tap, then the same one), the capsule (`seed`), a scanned pairing QR (`code`),
   // Profile's row for whom Studio doesn't lead here (a door handed over, the app's admin).
   import { onMount, untrack } from 'svelte';
-  import { api, ApiErr, type Id, type ScreenSession, type VolDoor } from '../../lib/api';
+  import { api, ApiErr, type Id, type ScreenSession, type VolDoor, type MeetupScan } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { eventById } from '../../lib/state/data.svelte';
+  import { data, eventById, loadMeetups, loadMeetupSetup, loadTeam } from '../../lib/state/data.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
   import { downloadFile, haptic, scanQr } from '../../lib/tg';
   import { nameOf } from '../../lib/short';
   import { menu } from '../../ui/menu';
-  import { dayMonth, nowTs } from '../../lib/time';
+  import { dayMonth, time, nowTs } from '../../lib/time';
   import Pane from '../../ui/Pane.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
-  import Segmented from '../../ui/Segmented.svelte';
   import ScanQrCode from '@lucide/svelte/icons/scan-qr-code';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Play from '@lucide/svelte/icons/play';
@@ -43,8 +42,9 @@
 
   let { overlay, code, event, seed, org, crew }: { overlay: Overlay; code?: string; event?: Id; seed?: ScreenSession; org?: Id; crew?: Id } = $props();
   // the first frame from the store: the capsule's session (mine, running), else the hero until the list comes
-  const mine = untrack(() => { const c = session.me?.checkin; return seed ?? (c && !c.helper && !event && !crew && !code ? c : null); });
-  let list = $state<ScreenSession[] | null>(untrack(() => (mine ? [mine] : null)));
+  const mine = untrack(() => { const c = session.me?.checkin; return seed ?? (c && !c.helper && !event && !crew && !code && (!org || c.org === org) ? c : null); });
+  let list = $state<ScreenSession[] | null>(untrack(() => seed ? [seed] : code ? null : data.meetups?.filter((s) =>
+    event ? s.event === event : crew ? s.crew === crew : org ? s.org === org && !s.event && !s.crew : true) ?? (mine ? [mine] : null)));
   let pick = $state(false);   // an unpaired screen and several open sessions: which one
   let note = $state('');      // why there's nothing to do here
   let busy = $state(0);
@@ -52,13 +52,21 @@
   let sel = $state<Id>(0);    // the session in view: an open one picked on the switcher, or a past one opened
   let paired = $state(0);     // the session a screen was just paired to: a short "Screen connected" on the page
   // a co-hosted event's session: its co-host starts the screen; the rest (finish, unpair, the CSV) is the host's (server cohosts.py)
-  const own = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
+  const own = (s: ScreenSession) => { if (s.reviewOnly) return false; const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
 
-  // Studio's Meetings row (org): the club's own meetings only; an event's sessions live on its Mark screen
-  const scope = (l: ScreenSession[]) => (event ? l.filter((x) => x.event === event) : made ? l.filter((x) => x.session === made) : org ? l.filter((x) => !x.event && !x.crew) : l);
+  // Studio's meetups row (org): the club's own meetups only; an event's sessions live on its Mark screen
+  const scope = (l: ScreenSession[]) => (event ? l.filter((x) => x.event === event) : made ? l.filter((x) => x.session === made) : org ? l.filter((x) => x.org === org && !x.event && !x.crew) : l);
   // an event's team session is named by the server in English ("… · team"): said in the app's language
   const nm = (s: ScreenSession) => (s.crew ? `${s.title.replace(/ · team$/, '')} · ${t('mk.teamTag')}` : s.title);
-  const refresh = () => { if (crew && !made) return; void api.screens().then((l) => { if (!pick) list = scope(l); }).catch(() => {}); };
+  const refresh = () => {
+    if (crew && !made) return;
+    // A notification can open a meetup older than the recent list; keep refreshing that exact session.
+    if (made) {
+      void api.meetupSession(made).then((s) => { list = [s]; }).catch(() => {});
+      return;
+    }
+    void loadMeetups().then(() => { if (!pick && data.meetups) list = scope(data.meetups); });
+  };
   let pairing = untrack(() => code ?? ''); // the screen's code being bound: the link's, or one scanned here
   async function bind(sid?: Id) {
     try {
@@ -75,21 +83,27 @@
       list = [];
     }
   }
-  // the event's team: made on the first tap and started (one per event: the server returns the one there is)
-  async function team(eid: Id) {
-    const ev = eventById(eid), name = ev?.title ?? '';
+  // Existing team sessions open at once; a new one first asks which department to expect.
+  async function team(eid: Id, who?: 'club' | Id): Promise<ScreenSession | null> {
     try {
-      let s = await api.crewScreen(eid, `${name.length > 48 ? name.slice(0, 47).trimEnd() + '…' : name} · ${t('scr.teamMark')}`);
-      if (!s.started && !s.ended) { s = await api.screenAct(s.session, 'start').catch(() => s); void loadMe(true); }
-      made = s.session; list = [s];
-    } catch (e) { haptic.error(); note = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; }
+      let s = who === undefined ? await api.existingCrewScreen(eid) : null;
+      if (!s) {
+        const ev = eventById(eid) ?? await api.event(eid), name = ev.title;
+        if (who === undefined) { prepare(ev.org.id); return null; }
+        s = await api.crewScreen(eid, `${name.length > 48 ? name.slice(0, 47).trimEnd() + '…' : name} · ${t('scr.teamMark')}`, who);
+      }
+      if (!s.started && !s.ended) { const initial = s; s = await api.screenAct(s.session, 'start').catch(() => initial); void loadMe(true); }
+      made = s.session; list = [s]; note = '';
+      return s;
+    } catch (e) { haptic.error(); note = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; return null; }
   }
   onMount(() => {
+    for (const m of clubs) void loadMeetupSetup(m.org.id);
     if (code) void bind();
     else if (crew) void team(crew);
     else if (event) api.eventScreen(event).then((s) => (list = [s])).catch(() => { haptic.error(); note = t('common.error'); list = []; });
     else void refresh();
-    const id = setInterval(() => { void refresh(); for (const k of Object.keys(doors)) void loadDoor(Number(k)); }, 4000); // the count goes up while people scan; a door of mine: answers given in its sheet
+    const id = setInterval(() => { void refresh(); if (cur?.meetup) void loadScans(cur.session); for (const k of Object.keys(doors)) void loadDoor(Number(k)); }, 4000); // the count goes up while people scan; a door of mine: answers given in its sheet
     return () => clearInterval(id);
   });
 
@@ -139,14 +153,26 @@
     if (list?.find((x) => x.session === s.session)?.started) sheets.helperQr(s.session, null, false);
   }
 
-  // a new session of a club: one tap, its members expected (server checkin.club_new), started at once
+  // A new club session starts as soon as its expected audience is chosen.
   const clubs = $derived((session.me?.memberships ?? []).filter((m) => may(m, 'events') && (!org || m.org.id === org)));
   let creating = $state(false);
-  async function create(o: Id): Promise<ScreenSession | null> {
+  let forming = $state<Id>(0), connectNew = $state(false);
+  function prepare(o: Id, connect = false) { forming = o; connectNew = connect; note = ''; void loadMeetupSetup(o); }
+  async function launch(who: 'club' | Id) {
+    if (creating) return;
+    const o = forming, connect = connectNew;
+    forming = 0;
+    if (crew) creating = true;
+    const s = crew ? await team(crew, who) : await create(o, who);
+    creating = false;
+    if (s && connect) pairScan(s.session);
+    if (!s) forming = o;
+  }
+  async function create(o: Id, who: 'club' | Id = 'club'): Promise<ScreenSession | null> {
     if (creating) return null;
     creating = true;
     try {
-      const s = await api.clubScreen(o, t('scr.meeting', { date: dayMonth(nowTs()) }), 'club');
+      const s = await api.clubScreen(o, t('scr.meeting', { date: dayMonth(nowTs()) }), who);
       const n = await api.screenAct(s.session, 'start').catch(() => s);
       haptic.ok(); void loadMe(true); // the capsule
       list = [n, ...(list ?? []).filter((x) => x.session !== n.session)]; sel = n.session; note = '';
@@ -164,14 +190,13 @@
   // a laptop's /show: Telegram's own scanner at once (full screen); its pairing QR binds it to the session (none open:
   // the club's new one); another QR: said once, the scanner closes
   const PAIR_QR = /[?&]startapp=sh_([0-9a-f]{16})$/;
-  function pairScan(sid?: Id, club?: Id) {
+  function pairScan(sid?: Id) {
     haptic.tap();
     const can = scanQr(t('scr.aim'), (text) => {
       const m = text.match(PAIR_QR);
       if (!m) { haptic.error(); say(t('scr.wrongQr'), 'pleading_face_3d'); return true; }
       pairing = m[1]; note = '';
-      if (sid || !club) void bind(sid);
-      else void create(club).then((s) => s && bind(s.session));
+      void bind(sid);
       return true;
     });
     if (!can) say(t('give.phone'), 'pleading_face_3d');
@@ -206,6 +231,39 @@
   }
   $effect(refreshPeople);
 
+  let scans = $state<Record<Id, MeetupScan[]>>(untrack(() => Object.fromEntries(Object.entries(data.meetupScans).map(([id, p]) => [id, p.rows]))));
+  let scanNext = $state<Record<Id, Id | null>>(untrack(() => Object.fromEntries(Object.entries(data.meetupScans).map(([id, p]) => [id, p.next]))));
+  let deciding = $state<Id>(0);
+  let scanGeneration = 0;
+  async function loadScans(id: Id, more = false) {
+    if (deciding) return;
+    const generation = ++scanGeneration;
+    try {
+      const p = await api.meetupScans(id, more ? scanNext[id] ?? undefined : undefined);
+      if (!deciding && generation === scanGeneration) {
+        const previous = scans[id] ?? [];
+        const older = !more && previous.length > 100 ? previous.filter((x) => x.id < (p.rows.at(-1)?.id ?? 0)) : [];
+        scans[id] = more ? [...previous, ...p.rows] : [...p.rows, ...older];
+        if (!more) data.meetupScans[id] = p;
+        if (more || !older.length) scanNext[id] = p.next;
+      }
+    } catch (e) {
+      if (e instanceof ApiErr && e.code === 'forbidden') { delete scans[id]; delete scanNext[id]; delete data.meetupScans[id]; }
+    }
+  }
+  function refreshScans() { const id = curId; void cur?.scans; if (id && cur?.meetup) void loadScans(id); }
+  $effect(refreshScans);
+  async function decide(s: ScreenSession, p: MeetupScan, add: boolean) {
+    if (deciding) return;
+    const before = scans[s.session];
+    const review: MeetupScan['review'] = add ? 'added' : 'declined';
+    deciding = p.user; scanGeneration++; haptic.tap();
+    scans[s.session] = before.map((x) => x.user === p.user ? { ...x, ask: false, review } : x);
+    try { const result = await api.meetupDecide(s.session, p.user, add); data.meetupScans[s.session] = result; scans[s.session] = result.rows; scanNext[s.session] = result.next; haptic.ok(); if (add && s.org) void loadTeam(s.org); }
+    catch { scans[s.session] = before; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { deciding = 0; void loadScans(s.session); }
+  }
+
   // past: finished, or made and never started for a day (nobody will: not "waiting" any more)
   const over = (x: ScreenSession) => !!x.ended || (!x.started && !!x.created && x.created < nowTs() - 86400);
   const live = $derived((list ?? []).filter((x) => !over(x)));
@@ -227,6 +285,14 @@
 
 <Pane {overlay} title={t('scr.page')} icon={ScanQrCode}>
   <div class="pg">
+    {#if forming}
+      <Group caption={t('scr.audience')}>
+        <Row title={t('scr.wholeClub')} accessory="chevron" onclick={() => launch('club')} />
+        {#each data.meetupSetup[forming]?.tags.filter((d) => d.department) ?? [] as d (d.id)}
+          <Row title={d.name} accessory="chevron" onclick={() => launch(d.id)} />
+        {/each}
+      </Group>
+    {/if}
     {#if pick}
       <p class="lead">{t('scr.pick')}</p>
       <Group>{#each list ?? [] as s (s.session)}<Row title={nm(s)} accessory="chevron" onclick={() => bind(s.session)} />{/each}</Group>
@@ -235,10 +301,17 @@
     {:else if cur}
       {@const s = cur}
       {#if live.length > 1 && !made && !event && !pastOpen}
-        <Segmented items={live.map((x) => ({ value: x.session, label: nm(x) }))} value={s.session} onchange={(v) => { haptic.tap(); sel = v; }} />
+        <Group>
+          {#each live as x (x.session)}
+            <Row title={nm(x)} subtitle={[x.department, x.flagged ? t('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')}
+              accessory="check" checked={x.session === s.session} onclick={() => { haptic.tap(); sel = x.session; }} />
+          {/each}
+        </Group>
       {/if}
       <header class="head">
         <h2 class="t-h2 ttl">{nm(s)}</h2>
+        {#if s.department}<p class="sub">{s.department}</p>{/if}
+        {#if s.flagged}<Tag tone="accent">{t('scr.flaggedN', { n: s.flagged })}</Tag>{/if}
         <Tag tone={s.started && !s.ended ? 'accent' : 'neutral'}>{s.ended ? `${t('scr.closed')} · ${when(s)}` : s.started ? t('scr.live') : t('scr.waiting')}</Tag>
       </header>
       <!-- the members who came of the club's members; without a list (an event's guests), everyone counted -->
@@ -251,7 +324,7 @@
       {/if}
       {#if paired === s.session}<p class="ok"><Check size={16} strokeWidth={2.6} />{t('scr.paired')}</p>{/if}
 
-      {#if !s.ended}
+      {#if !s.ended && !s.reviewOnly}
         <div class="cta">
           <!-- an event's guests (EventManage → More → Big screen): its QR and helpers live on the door screen; here the laptop -->
           {#if event && s.started}<Button kind="primary" size="l" full onclick={() => pairScan(s.session)}>{#snippet icon()}<MonitorUp size={19} />{/snippet}{t('scr.connect')}</Button>
@@ -274,8 +347,25 @@
         </Group>
       {/if}
 
+      {#if s.meetup}
+        <Group caption={t('scr.scans')}>
+          {#each scans[s.session] ?? [] as p (p.id)}
+            <Row dense icon={p.flag ? UserX : UserCheck} title={p.name}
+              subtitle={[`${dayMonth(p.at)} · ${time(p.at)}`, t(p.phase === 'out' ? 'scr.scanOut' : 'scr.scanIn'),
+                p.flag ? t(p.flag === 'outsider' ? 'scr.outsider' : p.flag === 'unassigned' ? 'scr.unassigned' : 'scr.outsideDept') : '',
+                p.review ? t(p.review === 'added' ? 'scr.deptAdded' : 'scr.deptDeclined') : ''].filter(Boolean).join(' · ')} />
+            {#if p.ask}
+              <Row dense title={t('scr.askDept')} />
+              <Row dense icon={UserPlus} title={t('scr.addDept')} onclick={() => decide(s, p, true)} />
+              <Row dense icon={UserX} title={t('scr.notMine')} onclick={() => decide(s, p, false)} />
+            {/if}
+          {/each}
+          {#if scanNext[s.session]}<Row title={t('common.more')} accessory="chevron" onclick={() => loadScans(s.session, true)} />{/if}
+        </Group>
+      {/if}
+
       <Group>
-        {#if s.started && !s.ended && s.phase !== 'out' && !event}<Row icon={ScanLine} title={t('scr.byHand')} accessory="chevron" onclick={() => byHand(s)} />{/if}
+        {#if s.started && !s.ended && !s.reviewOnly && s.phase !== 'out' && !event}<Row icon={ScanLine} title={t('scr.byHand')} accessory="chevron" onclick={() => byHand(s)} />{/if}
         {#if s.started && !s.ended && own(s)}<Row icon={s.phase === 'out' ? LogIn : LogOut} title={t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')} onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')} />{/if}
         {#if doors[s.session] && (waiting(s) || (doors[s.session].lead && (!s.ended || doors[s.session].hand)))}<Row icon={DoorOpen} title={waiting(s) ? t('ledg.unresolvedN', { n: waiting(s) }) : t('ledg.hand')} accessory="chevron" onclick={() => { haptic.tap(); sheets.volDoor(s.session, s.title); }} />{/if}
         {#if handed(s) && doors[s.session].by}<Row icon={DoorOpen} title={t('ledg.handedBy', { name: doors[s.session].by!.name })} />{/if}
@@ -285,17 +375,17 @@
       {#if s.started && !s.ended && own(s)}
         <Group><Row tone="destructive" icon={Square} title={t('scr.finish')} onclick={() => act(s, 'finish')} /></Group>
       {/if}
-      {#if pastOpen || (!live.length && clubs.length && !made && !event)}
-        <div class="cta"><Button kind="secondary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => void create(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button></div>
+      {#if clubs.length && !made && !event && !crew && !forming}
+        <div class="cta"><Button kind="secondary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.newMeetup')}</Button></div>
       {/if}
-    {:else if list || !(made || event || crew || code)}
+    {:else if !forming && (list || !(made || event || crew || code))}
       <!-- nothing open: what this is, one obvious action, and the laptop's way in -->
       <div class="hero">
         <span class="mark"><ScanQrCode size={36} strokeWidth={1.6} /></span>
         <p class="lead">{t('scr.heroText')}</p>
         {#if clubs.length}
-          <Button kind="primary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => void create(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>
-          <Button kind="plain" size="m" full onclick={(ev) => forClub(ev, (o) => pairScan(undefined, o))}>{#snippet icon()}<MonitorUp size={17} />{/snippet}{t('scr.connect')}</Button>
+          <Button kind="primary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>
+          <Button kind="plain" size="m" full onclick={(ev) => forClub(ev, (o) => prepare(o, true))}>{#snippet icon()}<MonitorUp size={17} />{/snippet}{t('scr.connect')}</Button>
         {:else if list}<p class="sub">{t('scr.none')}</p>{/if}
       </div>
     {/if}
@@ -303,7 +393,7 @@
     {#if past.length && !made && !event && !pick && !note}
       {#if showPast}
         <Group caption={t('scr.past')}>
-          {#each past as x (x.session)}<Row title={nm(x)} subtitle={when(x)} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
+          {#each past as x (x.session)}<Row title={nm(x)} subtitle={[when(x), x.department, x.flagged ? t('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
         </Group>
       {:else}
         <button class="past" onclick={() => { haptic.tap(); showPast = true; }}>{t('scr.past')} · {past.length}</button>
