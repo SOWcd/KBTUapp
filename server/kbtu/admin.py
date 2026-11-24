@@ -207,15 +207,16 @@ def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
             if len(matches) != 1:
                 sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
             only = matches[0]["id"]
-        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
                 WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
         if dry:
-            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, name)[0]
+            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
                 SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), only, only, only, name)).rowcount
+                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 

@@ -124,6 +124,10 @@ def test_broadcast_votes(audience, capsys):
     tap(12, 1)                                                     # changed their mind
     tap(999, 0)                                                    # not in the app: nothing kept
     assert sorted(con.execute("SELECT vote FROM broadcast_votes WHERE name = ?", (NAME,)).fetchall()) == [(1,), (1,)]
+    tap(11, 0)                                                     # "don't send these": broadcasts off for them
+    assert con.execute("SELECT n_broadcasts FROM users WHERE tg_id = 11").fetchone()[0] == 0
+    admin.main(["broadcast", NAME, URL, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 2"        # the admin and 12; 11 turned them off
     assert ("editMessageReplyMarkup", {"chat_id": 11, "message_id": 5, "reply_markup": {"inline_keyboard": kb[:1]}}) in calls
     admin.main(["broadcast-votes", NAME])
-    assert capsys.readouterr().out.strip() == f"{NAME}: 2 interested, 0 not"
+    assert capsys.readouterr().out.strip() == f"{NAME}: 1 interested, 1 not"
