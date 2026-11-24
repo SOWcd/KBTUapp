@@ -477,7 +477,7 @@ def test_telegram_and_github(env, capsys, monkeypatch):
     _line(con, 7000802, kind="find", day="2026-11-04", word="b-both")
     admin.main(["credit", "gh", str(cid("b-both")), "bee-dev"])
     _line(con, 7000802, day="2026-11-01", word="b-plain")
-    assert con.execute("SELECT tg_id, gh FROM credits WHERE id = ?", (cid("a-both"),)).fetchone() == (7000801, "Octo")
+    assert tuple(con.execute("SELECT tg_id, gh FROM credits WHERE id = ?", (cid("a-both"),)).fetchone()) == (7000801, "Octo")
     for bad in (["credit", "gh", "999999", "x"], ["credit", "gh", str(cid("b-plain")), "-bad"], ["credit", "gh", "1"],
                 ["credit", "add", "gh:x", "code", "a", "b", "c", "--gh", "y"], ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "a_b"],
                 ["credit", "add", "7000801", "code", "a", "b", "c", "--x", "y"]):
