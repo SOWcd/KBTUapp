@@ -854,7 +854,7 @@
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
   <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
@@ -965,6 +965,8 @@
   {#if pick}
     {#key pick}
     <div class="page">
+      <!-- the same ground as the main page: no seam between the two as one slides over the other -->
+      <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
       <div class="pg scroll">
         {#if !inTelegram}<h2 class="pt">{pageTitle}</h2>{/if}
         {#if pick === 'cover'}
@@ -1282,6 +1284,7 @@
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
     --pill: var(--surface-2); --surface-solid: transparent; /* its buttons on the event's colour, not navy (Button's solid ground) */
     --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); --dock-h: calc(var(--safe-bottom) + 84px); }
+  .panel.hinted { --dock-h: calc(var(--safe-bottom) + 108px); } /* the line over the bar: who publishes a member's draft */
   :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }
   .wash { position: absolute; inset: 0; background: var(--tint); overflow: hidden; pointer-events: none; }
   .wash img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(48px) saturate(1.3); }
@@ -1366,7 +1369,7 @@
   .dh { align-self: center; padding: 0 var(--s-4); text-align: center; font: 500 var(--fs-cap)/1.3 var(--font-text); color: var(--text-2); }
 
   /* a pushed page: the same tinted ground, in from the right as iOS pushes */
-  .page { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint);
+  .page { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--bg);
     animation: push 340ms var(--ease-spring) backwards; }
   @keyframes push { from { transform: translate3d(100%, 0, 0); } }
   :global(html.lowfx) .page { animation: none; }

@@ -10,7 +10,7 @@
   let { photo, fmt, onpick }: { photo: Media; fmt: CoverFormat; onpick: (focus: [number, number]) => void } = $props();
   let last: [number, number] | null = null;
   let moved = $state(false); // the hint goes with the first drag
-  const at = $derived(photo.focus ?? [0.5, 0.5]);
+  const at = $derived<[number, number]>(photo.focus ?? [0.5, 0.5]);
 
   function drag(ev: PointerEvent) {
     if (!last) return;
