@@ -2289,4 +2289,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # People of the app's Team: the core developers the creator picked (`kbtu.admin team add|del`, credits.py), shown
+    # only after their own yes. Not users.mark: that goes out with every person_ref, consent or not
+    (227, """CREATE TABLE IF NOT EXISTS credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;"""),
 ]

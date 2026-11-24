@@ -2182,6 +2182,7 @@ const kk: Dict = {
   'cr.title': "Қосымша адамдары",
   'cr.founder': "Жасаушы",
   'cr.idea': "Идея",
+  'cr.team': "Команда",
   'cr.list': "Идеялар мен табылған қателер",
   'cr.student': "Студент",
   'cr.students': "Студенттер",
