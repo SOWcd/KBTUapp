@@ -210,14 +210,14 @@
     if (!left.length) { close(overlay.id); return; }
     list = left; at = Math.min(at, left.length - 1);
   }
-  // ⋯: report another's photo, delete mine (or any, for the club's Head+ in its album)
+  // ⋯: report another's photo, delete mine (or any, for the club's Head+ in its album); a single one is its own button
+  const acts = $derived(list[at] ? [
+    ...(!list[at].mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),
+    ...(onremove && list[at].canDelete ? [{ label: t('gallery.delete'), icon: Trash, destructive: true, onselect: remove }] : []),
+  ] : []);
   function more(e: MouseEvent) {
-    const p = list[at];
-    if (!p) return;
-    menu(e.currentTarget as Element, [
-      ...(!p.mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),
-      ...(onremove && p.canDelete ? [{ label: t('gallery.delete'), icon: Trash, destructive: true, onselect: remove }] : []),
-    ], 'end');
+    if (acts.length === 1) acts[0].onselect();
+    else menu(e.currentTarget as Element, acts, 'end');
   }
   // the day it was taken; the year too when it isn't this one
   const when = (ts: number) => dayMonth(ts) + (parts(ts).y !== parts(nowTs()).y ? ` ${parts(ts).y}` : '');
@@ -266,8 +266,9 @@
       </div>
     {/if}
     {#if data.galleryPost}
-      {#if list[at] && (!list[at].mine || (onremove && list[at].canDelete))}
-        <button class="tool r glass glass-pill" use:glass aria-label={t('common.more')} onclick={more}><Ellipsis size={22} /></button>
+      {#if acts.length}
+        {@const Icon = acts.length === 1 ? acts[0].icon : Ellipsis}
+        <button class="tool r glass glass-pill" use:glass aria-label={acts.length === 1 ? acts[0].label : t('common.more')} onclick={more}><Icon size={acts.length === 1 ? 20 : 22} /></button>
       {/if}
     {:else}
       <!-- the Gallery off (GALLERY): report and remove at the ×'s sides, as before -->
