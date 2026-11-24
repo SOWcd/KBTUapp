@@ -698,6 +698,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
         return {"url": await logic.stars.invoice(app.state.cfg, ai_http(), v.id, lang, body.get("amount"))}
 
+    @app.post("/api/me/dmp-hi", status_code=204)  # DMP's one-time hello left for Microsoft (me.dmpHi)
+    def dmp_hi(con: Con, v: Me):
+        logic.account.dmp_greeted(con, v)
+
     @app.post("/api/me/keep")
     def keep_me(con: Con, v: Me):
         return logic.keep_me(con, v)

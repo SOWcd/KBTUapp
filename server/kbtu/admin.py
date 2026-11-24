@@ -29,6 +29,9 @@
                                 Microsoft sign-in, then the policy, makes the staff row with the directory's names (no ID asked;
                                 not if Microsoft calls them a student). staff-ok list | staff-ok revoke <@username | telegram id>
                                 (revoke also takes back a row it made; `unlink` and deleting the account clear it too)
+  .venv/bin/python -m kbtu.admin dmp add <@username | telegram id> [...]   DMP's staff, before they open the app: unverified,
+                                they get a one-time "Hi, DMP" leading to Microsoft, and sign in as staff-ok does (ids hold;
+                                a username can change hands). dmp list | dmp del <@username | telegram id> [...]
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
                                 student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
@@ -741,6 +744,20 @@ def main(args: list[str]) -> None:
             if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount:  # a fresh start: staff again only by staff-ok
                 log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"by": "unlink"}))
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("unlinked, signing in with KBTU links again" if n else "wasn't linked"))
+    elif cmd == "dmp" and args[1:] == ["list"]:
+        for r in rows(con, """SELECT d.*, s.user_id AS signed FROM dmp_list d LEFT JOIN users u ON d.tg_id = u.tg_id OR d.tg_username = u.tg_username
+                LEFT JOIN students s ON s.user_id = u.id GROUP BY d.id ORDER BY d.id"""):
+            print(f"{'@' + r['tg_username'] if r['tg_username'] else r['tg_id']}: "
+                  + ("signed in" if r["signed"] else "greeted" if r["greeted_at"] else "not greeted yet"))
+    elif cmd == "dmp" and len(args) > 2 and args[1] in ("add", "del"):
+        keys = [("tg_id", int(w)) if w.isdigit() else ("tg_username", w.lstrip("@")) for w in args[2:]]
+        if not all(x for _, x in keys):
+            sys.exit(__doc__)
+        with db.tx(con):
+            n = sum(con.execute(f"INSERT OR IGNORE INTO dmp_list ({c}, added_at) VALUES (?, ?)", (x, now())).rowcount if args[1] == "add"
+                    else con.execute(f"DELETE FROM dmp_list WHERE {c} = ?", (x,)).rowcount for c, x in keys)
+            log_action(con, None, f"dmp_{args[1]}", "dmp_list", json.dumps({"n": n}))
+        print(f"{n} {'added' if args[1] == 'add' else 'removed'}, {one(con, 'SELECT COUNT(*) FROM dmp_list')[0]} on the list")
     elif cmd == "staff-ok" and args[1:] == ["list"]:
         for r in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, k.granted_at, s.student_id FROM staff_ok k JOIN users u ON u.id = k.user_id
                 LEFT JOIN students s ON s.user_id = u.id ORDER BY k.granted_at"""):

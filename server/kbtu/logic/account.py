@@ -397,11 +397,27 @@ def staff_row(con, uid: int, first: str, last: str, school: str | None = None, c
 
 def staff_ok(con, uid: int, who: dict | None) -> bool:
     """The creator said this account is KBTU staff (kbtu.admin staff-ok), and Microsoft doesn't call it a student: its
-    sign-in asks no student ID. Office membership, roles, audit lines: never a reason."""
-    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid):
+    sign-in asks no student ID; DMP's list (kbtu.admin dmp) is the same word given ahead. Office membership, roles,
+    audit lines: never a reason."""
+    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid) and not dmp_listed(con, uid):
         return False
     # ponytail: KBTU's directory field read as is; "student" anywhere in it wins (exact values unmeasured)
     return "student" not in str(((who or {}).get("profile") or {}).get("companyName") or "").lower()
+
+
+_DMP_MINE = "FROM dmp_list d JOIN users u ON u.id = ? WHERE d.tg_id = u.tg_id OR d.tg_username = u.tg_username"
+
+
+def dmp_listed(con, uid: int):
+    """This Telegram on DMP's list (kbtu.admin dmp), by its id or its username."""
+    # ponytail: a username can change hands; Microsoft's non-student account still gates the sign-in. Ids where known
+    return one(con, "SELECT d.* " + _DMP_MINE, uid)
+
+
+def dmp_greeted(con, v: Viewer) -> None:
+    """The one-time "Hi, DMP" left for Microsoft: never shown again to this Telegram."""
+    with tx(con):
+        con.execute(f"UPDATE dmp_list SET greeted_at = ? WHERE greeted_at IS NULL AND id IN (SELECT d.id {_DMP_MINE})", (core.now(), v.id))
 
 
 def ms_apply(con, uid: int, who: dict) -> bool:
@@ -540,6 +556,9 @@ def me(con, v: Viewer) -> dict:
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
         "office": org_ref(con, o) if not s and (o := one(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
             WHERE m.user_id = ? AND o.kind = 'office' AND o.status = 'active'""", v.id)) else None,
+        # on DMP's list, not signed in, not greeted yet: the office's one-time hello, then Microsoft (web App teamHi)
+        "dmpHi": org_ref(con, d) if not s and not relink and (x := dmp_listed(con, v.id)) and x["greeted_at"] is None
+                 and (d := one(con, "SELECT * FROM orgs WHERE slug = 'dmp' AND status = 'active'")) else None,
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
@@ -1424,6 +1443,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))
+        con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list (the users row is still there)
         credits.gone(con, tg)  # Keep the contribution while removing its link to the deleted account.
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet

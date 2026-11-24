@@ -351,6 +351,7 @@ export interface Me {
   settings: Settings;
   memberships: Membership[];
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
+  dmpHi?: OrgRef | null;        // on DMP's list (server kbtu.admin dmp), not signed in, not greeted yet: its hello, then Microsoft
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
    *  Badges as skins; never picked, a new club's comes by itself. */
