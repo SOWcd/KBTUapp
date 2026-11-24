@@ -104,7 +104,7 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert _run(cfg, con, _Http(admins={20}), _msg(20, text="\u044d\u0442\u043e\u0442 \u043a\u0430\u043b\u043b \u0431\u044b\u043b \u0434\u043e\u043b\u0433\u0438\u043c")) == [] and _run(cfg, con, _Http(admins={20}), _msg(20, text="give me a call")) == []
     assert _run(cfg, con, _Http(admins={20}), _msg(20, text="call me later")) == [] and _run(cfg, con, _Http(admins={20}), _msg(20, text="\u043a\u0430\u043b")) == []
     # as a reply: under the message replied to
-    sent = _run(cfg, con, _Http(admins={20}), _msg(21, reply_to_message={"message_id": 3}))
+    sent = _run(cfg, con, _Http(admins={20, 21}), _msg(21, reply_to_message={"message_id": 3}))
     assert {s["reply_parameters"]["message_id"] for s in sent} == {3}
 
 
@@ -172,7 +172,7 @@ def test_live_list_union_order_and_cap(env, monkeypatch):
     con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 36")
     caps = []
     _live(monkeypatch, [33, 600, 500, 601, 36, 20, 777000, 600], caps, skip={32})  # Telegram's list: the app's, seen, new, banned, the caller; 32 deleted
-    http = _Http(admins={20})
+    http = _Http(admins={20, 21})
     sent = _run(cfg, con, http, _msg(20))
     ids = [int(p.split('">')[0]) for s in sent for p in s["text"].split("tg://user?id=")[1:]]
     assert ids == [21, 31, 33, 34, 35, 37, 500, 600, 601] and caps == [50]          # the app's, the seen, then the rest; each once
@@ -203,7 +203,7 @@ def test_nobody_to_call_answers_once(env, monkeypatch):
     monkeypatch.setattr(bot, "ALL_AGAIN", 300)
     reads = []
     _live(monkeypatch, [20], reads)                                                # alone there
-    http = _Http(admins={20})
+    http = _Http(admins={20, 21})
 
     async def go():
         for m in (_msg(20, chat=-555), _msg(20, chat=-555, text="@all")):
@@ -400,7 +400,7 @@ def test_all_again_waits_and_cap(env, monkeypatch):
     con = _setup(c, cfg, monkeypatch)
     monkeypatch.setattr(bot, "ALL_AGAIN", 300)
     assert len(_tagged(_run(cfg, con, _Http(admins={20}), _msg(20)))) == 8
-    http = _Http(admins={20})
+    http = _Http(admins={20, 21})
     _run(cfg, con, http, _msg(21, text="/all"))                                    # a minute on: not again
     assert not _tagged(http.sent) and http.sent[0]["text"] == bot.texts.bot_message("ru", "all_soon")[0]
     assert {"chat_id": -100, "message_id": 7} in http.sent                         # the command and the answer deleted
