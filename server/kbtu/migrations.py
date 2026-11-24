@@ -2289,4 +2289,24 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # a club's YouTube channel in its news (youtube.py): each linked channel once resolved (path: the link's channel/UC...,
+    # @handle, c/ or user/ part; channel_id NULL: no channel there, tried again a day later) and how far its feed was taken;
+    # each video posted once (its id), with the post it became
+    (227, """CREATE TABLE IF NOT EXISTS yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS yt_videos_by_org ON yt_videos(org_id, channel_id);"""),
 ]
