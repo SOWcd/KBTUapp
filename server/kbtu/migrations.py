@@ -2290,7 +2290,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
     # Forum research: native student surveys and signed proposals; approval never creates a form.
-    (227,"""CREATE TABLE IF NOT EXISTS research_forms (
+    (228, """CREATE TABLE IF NOT EXISTS research_forms (
       form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
       about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
     ) STRICT;
