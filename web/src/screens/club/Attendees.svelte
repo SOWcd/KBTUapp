@@ -33,6 +33,8 @@
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import { checkinMessages } from './checkinMessages';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -40,7 +42,9 @@
   const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
   onMount(() => { void load(); });
   let q = $state('');
-  const found = $derived((list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick])));
+  // the server's: going first, then holds and the waitlist, flagged receipts on top
+  const ORDERS: Order<Attendee>[] = [usual(), byName((a) => a.fullName), newest((a) => a.at), { id: 'came', label: 'sort.came', by: (a) => a.checkedInAt, desc: true }];
+  const found = $derived(sorted('attendees', ORDERS, (list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick]))));
   // removed by the organizers after paying (server attendees): folded at the end, their receipt there for the refund;
   // outside every total
   const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
@@ -169,6 +173,7 @@
     {/if}
     {#if list.length > 8}<SearchField bind:value={q} placeholder={t('att.search')} />{/if}
     {#if shown.length}
+      {#if shown.length > 1}<SortChip list="attendees" orders={ORDERS} />{/if}
       <Group>{@render people(shown)}</Group>
     {:else}
       <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
