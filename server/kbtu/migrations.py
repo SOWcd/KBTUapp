@@ -2224,4 +2224,19 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS form_answers_by_form ON form_answers(form_id, created_at);"""),
     # /all in a club's group kept to its Telegram admins (Studio's switch); a group not here: its club roles call too
     (220, "CREATE TABLE IF NOT EXISTS chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;"),
+    # a cover per format (the Feed's tall slide, the event's card, a list's thumbnail): its own crop (focus) or its own
+    # photo over the event's one cover; and a member's draft waiting for the club's President or a Vice (organizing.py)
+    (221, """CREATE TABLE IF NOT EXISTS event_covers (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      format TEXT NOT NULL CHECK (format IN ('feed', 'card', 'list')),
+      file_id INTEGER REFERENCES files(id),
+      focus TEXT,
+      PRIMARY KEY (event_id, format)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS event_reviews (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      asked_at INTEGER,
+      reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
+      returned_at INTEGER
+    ) STRICT;"""),
 ]

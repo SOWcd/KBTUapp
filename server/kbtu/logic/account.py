@@ -943,7 +943,7 @@ def _drop_photo(con, fid: int | None) -> list[str]:
 
 _FILE_REFS = (("users", "avatar_file_id"), ("orgs", "logo_file_id"), ("events", "cover_file_id"),
               ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
-              ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"))
+              ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"), ("event_covers", "file_id"))
 _FILE_USED = " UNION ALL ".join(f"SELECT 1 FROM {table} WHERE {col} = {{fid}}" for table, col in _FILE_REFS)
 UNUSED_COVERS = 20  # room for an editor's unsaved cover and slides
 

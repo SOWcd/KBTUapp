@@ -335,8 +335,9 @@ def _rights(con, v: Viewer) -> dict[int, frozenset[str]]:
 
 
 def organizes(con, v: Viewer) -> bool:
-    """Runs events in some club: may upload covers and photos. Or the admin making a club's event (X-Staff-Org)."""
-    return bool(v.staff_org) or any("events" in r for r in _rights(con, v).values())
+    """In some club's team: may upload covers and photos (any member makes a draft, organizing.create_event). Or the
+    admin making a club's event (X-Staff-Org)."""
+    return bool(v.staff_org) or bool(_rights(con, v))
 
 
 def _roles(con, v: Viewer) -> dict[int, str]:
@@ -506,10 +507,22 @@ def photo(con, file_id: int | None) -> dict | None:
     return media_shape(f) if f else None
 
 
-def _event_cover(con, e: sqlite3.Row, files: dict | None = None) -> dict | None:
+def _focus_of(s: str | None) -> list[float] | None:
+    return [float(c) for c in s.split(",")] if s else None
+
+
+def _event_cover(con, e: sqlite3.Row, files: dict | None = None, by: list | None = None) -> dict | None:
+    """types.ts Media with its focus, and `by`: the formats that have their own crop ({focus}) or their own photo (a whole
+    Media) over it (event_covers). by: that event's rows when a list read them once for all its events."""
     cover = media_shape(files[e["cover_file_id"]]) if files and e["cover_file_id"] in files else photo(con, e["cover_file_id"])
     if cover:
-        cover["focus"] = [float(c) for c in e["cover_focus"].split(",")] if e["cover_focus"] else None
+        cover["focus"] = _focus_of(e["cover_focus"])
+        own = {}
+        for r in rows(con, "SELECT * FROM event_covers WHERE event_id = ?", e["id"]) if by is None else by:
+            f = files[r["file_id"]] if files and r["file_id"] in files else one(con, "SELECT * FROM files WHERE id = ?", r["file_id"]) if r["file_id"] else None
+            own[r["format"]] = {**(media_shape(f) if f else {}), "focus": _focus_of(r["focus"])}
+        if own:
+            cover["by"] = own
     return cover
 
 
@@ -624,8 +637,11 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
     slides: dict[int, list] = {}
     for r in rows(con, f"SELECT event_id, file_id FROM event_slides WHERE event_id IN ({q}) ORDER BY pos", *ids):
         slides.setdefault(r["event_id"], []).append(r["file_id"])
+    covers: dict[int, list] = {}  # a format's own crop or photo (event_covers)
+    for r in rows(con, f"SELECT * FROM event_covers WHERE event_id IN ({q})", *ids):
+        covers.setdefault(r["event_id"], []).append(r)
     files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in [*orgs.values(), *co.values()]),
-                                  *(i for s in slides.values() for i in s)])
+                                  *(i for s in slides.values() for i in s), *(r["file_id"] for c in covers.values() for r in c)])
     videos = _by_id(con, "videos", (e["video_id"] for e in evs))
     santas = santa.parts(con, ids)  # Secret Santa is on: sign-up asks a wishlist (santa.py)
     return {e["id"]: {
@@ -633,7 +649,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "status": e["status"], "title": e["title"],
         "startsAt": e["starts_at"], "endsAt": e["ends_at"], "publishedAt": e["published_at"], "place": e["place"], "placeUrl": e["place_url"],
         "online": e["online"] is not None, "onlineUrl": e["online"] or None,  # validated when saved (online_url)
-        "cover": _event_cover(con, e, files),
+        "cover": _event_cover(con, e, files, covers.get(e["id"], [])),
         "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
         "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
         "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
@@ -660,6 +676,9 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     lent = v.staff_org == e["org_id"] and not v.lent_full  # the creator sees it as its President does
     pay = head and not lent or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
     out = _full(con, v, e, c, head, pay)
+    if e["status"] == "draft":  # a member's draft and its way to the club's yes (organizing.submit_event)
+        r = one(con, "SELECT asked_at, reason FROM event_reviews WHERE event_id = ?", e["id"])
+        out["review"] = {"mine": e["created_by"] == v.id, "askedAt": r["asked_at"] if r else None, "reason": r["reason"] if r else None}
     if v.lent_full and v.staff_org == e["org_id"]:
         out["lentFull"] = True  # the editor shows him its President's rows (app.viewer decided)
     if lent:

@@ -22,7 +22,7 @@ from functools import cache
 from pathlib import Path
 
 from ..db import tx
-from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, can, club_rights, meet_link, need_student, now, one, person_ref, rows
+from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, at_least, can, club_rights, meet_link, need_student, now, one, person_ref, role_in, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -814,7 +814,7 @@ def _date(v: object) -> bool:
 
 def fill_prompt(con, v: Viewer, org: int, text: object, have: object = None, question: object = None) -> tuple[list[dict], str, dict]:
     """Prepare the model messages, their source text and any payment details handled inside the app."""
-    if not can(con, v, org, "events"):
+    if not can(con, v, org, "events") and not at_least(role_in(con, v, org), "member"):  # a member's draft too (organizing.create_event)
         raise ApiError("forbidden")
     # the announcement's own lines kept (its paragraphs and lists help the model shape the description), spaces tidied
     if not isinstance(text, str) or question is not None and (not isinstance(question, str) or question not in CHAT_QUESTIONS):

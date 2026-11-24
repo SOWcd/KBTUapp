@@ -61,7 +61,7 @@ from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUEST_DAY
     _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo,
     attendee_ask, attendee_contact, attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
     admin_delete_event, clean_event, create_event, decline, delete_event, events_gone, undo_delete_event, delete_update, door, event_invites, invite_friend,
-    kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,
+    kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, review_event, submit_event, rate_event,
     remove_album_photo, screen_came, shade, staff_create_event, undo_checkin, update_event, set_reg_until, open_door, door_round)  # noqa: F401
 from .organizing import DOC_BYTES, DOC_PAGES, doc_check, drop_doc, put_doc, render_doc  # noqa: F401
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
