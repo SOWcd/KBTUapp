@@ -668,6 +668,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
+        if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username
+            logic.account.dmp_bind(con, request.state.tg)
         return me_payload(request, con, v, report_log=report_log)
 
     @app.patch("/api/me")
