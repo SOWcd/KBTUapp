@@ -1,6 +1,7 @@
 import dataclasses
 import inspect
 import os
+import re
 
 import pytest
 from fastapi import routing
@@ -8,7 +9,8 @@ from fastapi.dependencies import models
 
 from kbtu import app as server, db
 
-_ROUTES: dict = {}  # (path, endpoint code) -> (its defaults and route arguments, the route's FastAPI analysis)
+_ROUTES: dict = {}  # (path, endpoint code) -> (its defaults, annotations and route arguments, the route's FastAPI analysis)
+_NAMES: dict = {}  # an endpoint's annotations -> the global names they read
 
 
 class _Handler:
@@ -33,23 +35,31 @@ def _route_cache():
     own Depends: json_body) misses the cache and is analysed afresh.
     ponytail: leans on FastAPI keeping a route's state in its instance attributes and Dependant being a dataclass
     (fastapi==0.162.2), as _forget_apps leans on its private endpoint caches; the assert below catches a new
-    attribute tied to the old endpoint, and dropping both fixtures is the way back if an upgrade changes that."""
+    attribute tied to the endpoint, and dropping both fixtures is the way back if an upgrade changes that."""
     real = server._Route.__init__
 
     def init(self, path, endpoint, *, dependency_overrides_provider=None, **kw):
         fn = inspect.unwrap(endpoint)
-        key = (repr(fn.__defaults__), repr(fn.__kwdefaults__), repr(sorted(kw.items())))
+        notes = tuple(fn.__annotations__.items())  # strings (kbtu.app has `from __future__ import annotations`)
+        if (names := _NAMES.get(notes)) is None:
+            names = _NAMES[notes] = tuple({n for _, a in notes if isinstance(a, str) for n in re.findall(r"[A-Za-z_]\w*", a)})
+        # what those names stand for now: a test that patches one (server.Me) before create() misses the cache
+        key = (repr(fn.__defaults__), repr(fn.__kwdefaults__), repr(sorted(kw.items())), notes,
+               tuple(id(fn.__globals__.get(n)) for n in names))
         at = (path, endpoint.__code__, fn.__code__)
         if (kept := _ROUTES.get(at)) is None or kept[0] != key:
             real(self, path, endpoint, dependency_overrides_provider=dependency_overrides_provider, **kw)
-            _ROUTES[at] = key, dict(vars(self))  # one per route: a missed one replaces it, so old apps aren't kept
+            # one per route, a missed one replacing it; nothing of this app kept (its endpoint, pool, connections)
+            seen = {k: v for k, v in vars(self).items() if k not in ("endpoint", "app", "dependency_overrides_provider")}
+            seen["dependant"] = dataclasses.replace(self.dependant, call=None)
+            assert not any(v is endpoint for v in seen.values()), "a route attribute holds the endpoint: copy it per app"
+            _ROUTES[at] = key, seen
             return
         seen = kept[1]
         vars(self).update(seen)
         self.endpoint, self.dependency_overrides_provider = endpoint, dependency_overrides_provider
         self.dependant = dataclasses.replace(seen["dependant"], call=endpoint, dependencies=list(seen["dependant"].dependencies))
         self.app = _Handler(self)
-        assert not any(v is seen["endpoint"] for v in vars(self).values()), "a route attribute still holds the first app's endpoint"
 
     server._Route.__init__ = init
     yield
