@@ -127,7 +127,17 @@ export function boot(bg: string): void {
 
 /** Telegram's own surfaces (under the webview, the bottom bar) follow the app background, so nothing flashes white. */
 export function paint(bg: string): void {
-  if (!inTelegram) { document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bg)); return; } // (one per system theme, index.html)
+  // (one per system theme, index.html) iOS's home-screen status bar ignores a changed content: it repaints only for a new
+  // meta, so each is swapped for a fresh copy (a theme switch left the strip black over the light page; owner, Nov 24)
+  if (!inTelegram) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+      if (m.getAttribute('content') === bg) return;
+      const n = m.cloneNode() as HTMLMetaElement;
+      n.content = bg;
+      m.replaceWith(n);
+    });
+    return;
+  }
   if (can('6.1')) { tgTry((w) => w.setBackgroundColor?.(bg)); tgTry((w) => w.setHeaderColor?.(bg)); }
   if (can('7.10')) tgTry((w) => w.setBottomBarColor?.(bg));
 }
