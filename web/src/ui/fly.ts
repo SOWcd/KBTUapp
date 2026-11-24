@@ -50,9 +50,11 @@ function launch(from: Element, to: HTMLElement, panel: HTMLElement, focus?: [num
   const src = from as HTMLElement;
   src.style.visibility = to.style.visibility = 'hidden';
   // the details arrive mid-flight and the sheet grows taller: aim again, so the copy still lands on the header
+  // (watched from the next frame: a new target begun inside the first observer's delivery, the panel being an ancestor
+  // of the header, can't be delivered in it, and WebKit logs "ResizeObserver loop completed with undelivered notifications")
   const ro = new ResizeObserver(() => anim?.effect instanceof KeyframeEffect && anim.effect.setKeyframes(aim()));
-  ro.observe(panel);
-  const stop = () => { ro.disconnect(); anim?.cancel(); copy.remove(); src.style.visibility = to.style.visibility = ''; };
+  const watch = requestAnimationFrame(() => ro.observe(panel));
+  const stop = () => { cancelAnimationFrame(watch); ro.disconnect(); anim?.cancel(); copy.remove(); src.style.visibility = to.style.visibility = ''; };
   anim = copy.animate(frames, { duration: ms, easing: ease, fill: 'both' });
   // the header's chips were not on the small poster: they come in on the way
   copy.querySelectorAll(':scope > :not(.poster)').forEach((c) => c.animate([{ opacity: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1 }], { duration: ms }));
