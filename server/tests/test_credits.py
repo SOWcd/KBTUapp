@@ -455,3 +455,54 @@ def test_github_login(env, capsys, monkeypatch):
     assert f"#{a}  2026-11-02  idea  gh Octo-Cat, no answer" in capsys.readouterr().out
     delete_now(c, cfg, tma(7000702))
     assert con.execute("SELECT COUNT(*) FROM credits WHERE gh IS NOT NULL").fetchone()[0] == 3
+
+
+def test_telegram_and_github(env, capsys, monkeypatch):
+    """One person known by both: after their yes one card, their name and face with the login (and that login's own
+    lines) in it; without a yes the login's card and the nameless rows as ever, nothing tying the two."""
+    c, cfg = env
+    con = _con(cfg)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 900, "viewer")
+    login(c, 7000801, "alpha")
+    login(c, 7000802, "bee")
+
+    def cid(word):
+        return con.execute("SELECT id FROM credits WHERE en = ?", (f"en {word}",)).fetchone()[0]
+
+    admin.main(["credit", "add", "7000801", "code", "ru a-both", "kk a-both", "en a-both", "--gh", "Octo"])
+    credits.ship(con, cid("a-both"), "2026-11-03")
+    _line(con, "gh:octo", kind="code", day="2026-11-02", word="a-gh")
+    _line(con, 7000801, day="2026-11-01", word="a-plain")
+    _line(con, 7000802, kind="find", day="2026-11-04", word="b-both")
+    admin.main(["credit", "gh", str(cid("b-both")), "bee-dev"])
+    _line(con, 7000802, day="2026-11-01", word="b-plain")
+    assert con.execute("SELECT tg_id, gh FROM credits WHERE id = ?", (cid("a-both"),)).fetchone() == (7000801, "Octo")
+    for bad in (["credit", "gh", "999999", "x"], ["credit", "gh", str(cid("b-plain")), "-bad"], ["credit", "gh", "1"],
+                ["credit", "add", "gh:x", "code", "a", "b", "c", "--gh", "y"], ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "a_b"],
+                ["credit", "add", "7000801", "code", "a", "b", "c", "--x", "y"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    capsys.readouterr()
+    admin.main(["credit", "list"])
+    assert f"#{cid('a-both')}  2026-11-03  code  tg 7000801 + gh Octo, no answer" in capsys.readouterr().out
+
+    def cards(got):
+        return sorted(((p["person"] or {}).get("name", ""), p.get("gh", ""), [i["text"]["en"] for i in p["items"]]) for p in got["people"])
+
+    before = [("", "", ["en a-plain"]), ("", "", ["en b-plain"]),
+              ("", "Octo", ["en a-both", "en a-gh"]), ("", "bee-dev", ["en b-both"])]
+    got = _get(c)
+    assert cards(got) == before
+    raw = json.dumps(got, ensure_ascii=False)
+    assert not any(x in raw for x in ("7000801", "7000802", "Alpha T", "Bee T"))
+
+    assert _yes(c, 7000801).status_code == 200
+    got = _get(c)
+    assert cards(got) == [("", "", ["en b-plain"]), ("", "bee-dev", ["en b-both"]),
+                          ("Alpha T", "Octo", ["en a-both", "en a-gh", "en a-plain"])]
+    raw = json.dumps(got, ensure_ascii=False)
+    assert not any(x in raw for x in ("7000801", "7000802", "Bee T"))  # the other one: untouched, unnamed
+
+    assert _no(c, 7000801).status_code == 200  # taken back: the login's card and the nameless row again
+    assert cards(_get(c)) == before

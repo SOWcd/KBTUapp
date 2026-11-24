@@ -3,9 +3,9 @@
 The honor medal also qualifies a holder for the consent sheet. Only a current yes adds their medal to this list.
 The inscription stays on the profile. Revoking the medal leaves any shipped lines and their consent intact.
 
-A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet)
-or a GitHub login (`gh`: a pull request's author; such a line is never tied to an account, so publishing it ties no
-login to a profile here), a kind and one line in ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
+A contribution (`credits`, written by the team with `kbtu.admin credit ...`) is a Telegram id (an account or not yet),
+a GitHub login (`gh`: a pull request's author), or both (the team knows them as one person), a kind and one line in
+ru, kk, en: OUR words about what shipped, never the person's message, gender-neutral and with
 no name, handle, link or identifying detail (it is shown under "Student"). It is listed once shipped, newest first by
 the day it shipped: no order by amount, nothing to argue about.
 
@@ -13,8 +13,10 @@ The feature's own consent (CONSENT, as evteams'): a name and a face stand next t
 yes to the text in force, and only while they could give it now (`_CAN`: a signed-in student, not banned). Otherwise
 (no answer, a no, a withdrawal, a ban, no account, a deleted or unlinked account) every line stays, each as its own
 "Student" row: no name, face, id or link, and nothing that says two nameless lines are one person's. The one exception:
-a line with a GitHub login stands under that login (any case), its lines together (the login is public on GitHub). A yes covers the
-lines shown and those added later (the sheet says so). Every answer is a row of `credit_consents` (who, when, yes or
+a line with a GitHub login stands under that login (any case), its lines together (the login is public on GitHub),
+and that card shows no name or face: a login is tied to a person here ONLY by their yes. A named person's card shows
+the login any of their lines has (the newest spelling) and takes in that login's lines that have no Telegram id: one
+card. A yes covers the lines shown and those added later (the sheet says so). Every answer is a row of `credit_consents` (who, when, yes or
 no, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
 refused if a newer answer exists: a late or repeated yes never undoes a withdrawal. Asked by the bot's template once
 per person and text version (`ask`), answered in the app, changed in Settings.
@@ -23,7 +25,8 @@ The creator alone is named without a consent row: on purpose, he is public as th
 (`person.founder`, /api/me's support), and nothing else of his is shown here. The idea's author follows the rule.
 
 Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id (`gone`): what the app got stays
-in the list as nameless "Student" rows, and nothing left behind points at the person. An account moved to another
+in the list as nameless "Student" rows (a line with a login: under that login, as any such line), and nothing left
+behind points at the account. An account moved to another
 Telegram (`kbtu.admin move`) takes its lines along and its yes ends (`moved`): the new profile is previewed afresh.
 """
 from __future__ import annotations
@@ -95,6 +98,10 @@ def listing(con, v: Viewer) -> dict:
         WHERE c.shipped_on IS NOT NULL ORDER BY c.shipped_on DESC, c.id DESC""")
     people: dict[object, dict] = {}
     idea_items, my_items = [], []
+    aside = {founder and founder["tg_id"], _named(idea) and idea["tg_id"]}  # the creator's and the idea's author's lines
+    # who is named here, and a named person's GitHub login (from any line of theirs; only their yes ties the two)
+    refs = {r["whose"]: person_ref(r) for r in got if r["whose"] not in aside and _named(r)}
+    own = {r["gh"].lower(): r["whose"] for r in reversed(got) if r["gh"] and r["whose"] in refs}
     for r in got:
         if r["whose"] is not None and r["whose"] == me["tg_id"]:
             my_items.append(_item(r))
@@ -103,11 +110,13 @@ def listing(con, v: Viewer) -> dict:
         if _named(idea) and r["whose"] == idea["tg_id"]:
             idea_items.append(_item(r))
             continue
-        named = _named(r)
-        # a named person's lines together, where their newest stands; a GitHub login's too; a nameless line alone
-        gh = None if named else r["gh"]  # newest first: the row shows its newest line's spelling
-        row = people.setdefault(r["whose"] if named else ("gh", gh.lower()) if gh else ("line", r["cid"]),
-                                {"person": person_ref(r) if named else None, "gh": gh, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
+        # a named person's lines together (with a login-only line of their login), where their newest stands; a GitHub
+        # login's too; a nameless line alone. A line of a Telegram id without a yes never joins a named card
+        gh = r["gh"]
+        whose = r["whose"] if r["whose"] in refs else own.get(gh.lower()) if gh and r["whose"] is None else None
+        row = people.setdefault(whose if whose is not None else ("gh", gh.lower()) if gh else ("line", r["cid"]),
+                                {"person": refs.get(whose), "gh": None, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
+        row["gh"] = row["gh"] or gh  # newest first: the card shows its newest line's spelling
         row["items"].append(_item(r))
     # Only a named holder gets a medal entry. A shipped credit keeps its own anonymity and sort order.
     for r in top:
@@ -207,19 +216,35 @@ def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
 GH = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}")  # GitHub's own login rule, near enough
 
 
-def add(con, who: int | str, kind: str, ru: str, kk: str, en: str) -> int:
-    """who: a Telegram id, or "gh:<login>" (never tied to an account: no binding, so no login is linked to a profile)."""
-    lines = [" ".join(x.split()) for x in (ru, kk, en)]
-    gh = who[3:] if isinstance(who, str) and who.startswith("gh:") else None
-    if gh is not None and not GH.fullmatch(gh):
+def _login(gh: str) -> str:
+    if not GH.fullmatch(gh):
         raise ValueError("gh:<a GitHub login>")
-    tg_id = None if gh is not None else int(who)
+    return gh
+
+
+def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None) -> int:
+    """who: a Telegram id, or "gh:<login>" alone; gh: the same person's login beside a Telegram id (`--gh`), shown
+    with their name only after their yes (listing)."""
+    lines = [" ".join(x.split()) for x in (ru, kk, en)]
+    alone = isinstance(who, str) and who.startswith("gh:")
+    if alone and gh is not None:
+        raise ValueError("gh:<login> or a Telegram id with --gh <login>, not both")
+    gh = _login(who[3:] if alone else gh) if alone or gh is not None else None
+    tg_id = None if alone else int(who)
     if (tg_id is not None and tg_id <= 0) or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
     if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
         return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (tg_id, gh, kind, *lines, core.now())).lastrowid
+
+
+def set_gh(con, cid: int, gh: str) -> None:
+    """`credit gh <id> <login>`: the line's author's GitHub login, on a line already written (a Telegram id's too)."""
+    gh = _login(gh)
+    with tx(con):
+        if not con.execute("UPDATE credits SET gh = ? WHERE id = ?", (gh, cid)).rowcount:
+            raise ValueError(f"no credit {cid}")
 
 
 def ship(con, cid: int, day: str | None = None) -> str:

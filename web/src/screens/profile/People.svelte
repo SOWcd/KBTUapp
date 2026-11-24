@@ -3,7 +3,7 @@
   // everyone's, newest first by the day it shipped: never by amount. A name and a face only after that person's own
   // yes (server credits.py); without it a line goes in the last card, "Students", each line on its own under its kind:
   // no face, nothing to tap, nothing that ties two such lines together. A pull request's lines stand under its GitHub
-  // login, its card opens the profile there.
+  // login, its card opens the profile there; a named person known there too has the login as a link in their card.
   // The numbers count lines, never people: nameless lines say nothing of how many people they are.
   // The list comes with the app (data.credits): the page never waits.
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -31,6 +31,7 @@
   // this session made seconds ago, the bot's link, is that word)
   void loadCredits(5000);
   const open = (p: PersonRef) => { haptic.tap(); sheets.person(p.id); };
+  const github = (login: string) => { haptic.tap(); openLink(`https://github.com/${login}`); };
   // his Telegram with the app's draft
   const tgOf = $derived(session.support.find((x) => x.founder)?.username);
   const realOf = (p: PersonRef) => p.realName ?? p.name;
@@ -98,14 +99,17 @@
              nothing there says two of them are one person's -->
         {#each named as row, i (i)}
           {@const p = row.person}
-          {@const gh = !p && row.gh}
-          <div class="one up" style:--d={Math.min(4 + i, 9)}><Card onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
+          {@const login = row.gh}
+          {@const gh = !p && login}
+          <div class="one up" style:--d={Math.min(4 + i, 9)}><Card onclick={p ? () => open(p) : gh ? () => github(gh) : undefined}>
             <span class="hd">
               {#if p}<Avatar person={p} size={36} tappable={false} /><b class="wn">{p.name}</b><span class="mk"><ChevronRight size={18} /></span>
               {:else if gh}<span class="gh"><GitHubMark size={24} /></span><b class="wn">{gh}</b><span class="mk"><ArrowUpRight size={18} /></span>{/if}
             </span>
             {#if row.honor}<span>{t('ach.honor.name')}</span>{/if}
             {#if row.items.length}<CreditLines items={row.items} />{/if}
+            <!-- their GitHub too: a link of its own in their card (their yes ties the two) -->
+            {#if p && login}<button class="link gl press" onclick={() => github(login)}><GitHubMark size={16} /><span>{login}</span><ArrowUpRight size={15} /></button>{/if}
           </Card></div>
         {/each}
         {#if anon.length}
@@ -143,7 +147,7 @@
   .nm.big { font: 700 var(--fs-t1)/1.05 var(--font-display); letter-spacing: -0.03em; }
   .more { display: block; margin-top: var(--s-4); }
   .link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
-  .crown .link { margin: var(--s-2) 0 calc(-1 * var(--s-3)); }
+  .crown .link, .gl { margin: var(--s-2) 0 calc(-1 * var(--s-3)); }
   .code { align-self: center; margin: var(--s-8) 0 0; padding: 0 var(--s-3); }
 
   .cap { margin: var(--s-10) var(--s-1) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }

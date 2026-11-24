@@ -249,7 +249,7 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own (their yes ties them) */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
