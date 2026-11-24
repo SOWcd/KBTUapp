@@ -98,8 +98,12 @@ def test_post_publish_and_limits(env, monkeypatch):
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
     held = lambda: [x["body"] for x in c.get("/api/forum-posts/mod", headers=tma(3)).json()["held"]]  # noqa: E731
     assert held() == ["The tall guy from room 305 is rude", "Prof. Abenov takes bribes"]
+    # and its author sees it still being checked meanwhile, then waiting for a moderator (never "checking" for good)
+    unanswered = lambda: next(x for x in c.get("/api/forum-posts/feed/page?order=new", headers=A).json()["posts"] if x["body"] == "Anyone selling a calculator?")  # noqa: E731
+    assert not unanswered()["human"]
     set_clock(monkeypatch, lambda: int(time.time()) + 86401 + 61)
     assert held() == ["The tall guy from room 305 is rude", "Anyone selling a calculator?", "Prof. Abenov takes bribes"]
+    assert unanswered()["human"]
     con.close()
 
 
