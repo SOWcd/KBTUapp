@@ -406,7 +406,7 @@ def test_all_again_waits_and_cap(env, monkeypatch):
     assert {"chat_id": -100, "message_id": 7} in http.sent                         # the command and the answer deleted
     bot._tagged[-100] -= 301
     monkeypatch.setattr(bot, "TAG_MAX", 7)
-    sent = _run(cfg, con, _Http(admins={20}), _msg(21))
+    sent = _run(cfg, con, _Http(admins={20, 21}), _msg(21))
     assert [s["text"].count("tg://") for s in sent] == [5, 2]                      # the cap: the rest not called this run
 
 
