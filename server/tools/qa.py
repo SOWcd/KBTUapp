@@ -39,7 +39,7 @@ def seed(path: str) -> None:
     now, day = int(time.time()), 86400
     for uid, tg, first, last in PEOPLE:
         con.execute("""INSERT INTO users (id, tg_id, tg_username, tg_first_name, tg_last_name, lang, can_dm, created_at, seen_at, qr_code, card_no)
-            VALUES (?, ?, ?, ?, ?, 'ru', 1, ?, ?, ?, ?)""", (uid, tg, first.lower(), first, last, now - 30 * day, now, f"QA{uid:06d}", uid))
+            VALUES (?, ?, ?, ?, ?, 'ru', 1, ?, ?, ?, ?)""", (uid, tg, first.lower(), first, last, now - 30 * day, now, f"QABADGE{'ABC'[uid - 1]}AA", uid))  # a badge's code: 10 of A-Z2-7, as the app makes them (core.PROFILE_QR)
         con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, email, course, school, consent_version, consent_at, verified_at, synced_at)
             VALUES (?, ?, ?, ?, ?, 2, 'SITE', 'qa', ?, ?, ?)""", (uid, f"24B{100000 + uid}", first, last, f"{first.lower()}@kbtu.kz", now, now, now))
     con.execute("""INSERT INTO orgs (id, slug, kind, name, short, description, emoji, official, created_at)
@@ -58,7 +58,7 @@ def seed(path: str) -> None:
             ?, ?, ?)""", (start - day, start - day + 3 * 3600, now - day, now - day, now - day))
     for uid in (2, 3):
         con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
-            VALUES (2, ?, 'going', ?, ?, ?)""", (uid, f"QA-T{uid}", now, now))
+            VALUES (2, ?, 'going', ?, ?, ?)""", (uid, f"2-QAT{uid}", now, now))  # '<event>-<code>', as seats._ticket_code stores it: the door reads it
     # appeals to SG (APPEALS): the third person has SG's queue; an anonymous appeal overdue, a named one answered
     con.execute("INSERT INTO appeal_staff (user_id, at) VALUES (3, ?)", (now,))
     con.execute("INSERT INTO help_staff (user_id, at) VALUES (3, ?)", (now,))  # and the help desk (ASK)
@@ -85,7 +85,7 @@ def seed(path: str) -> None:
     shots = [(2 if n % 3 else 3, tuple(int(c * 255) for c in colorsys.hsv_to_rgb(n / 22, 0.65, 0.9)), ((1200, 900), (900, 1200), (1000, 1000))[n % 3]) for n in range(22)]
     for n, (uid, rgb, size) in enumerate(shots):
         con.execute("""INSERT OR IGNORE INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at, checked_in_at)
-            VALUES (3, ?, 'going', ?, ?, ?, ?)""", (uid, f"QA-K{uid}", now - 2 * day, now - 2 * day, now - day - 3 * 3600))
+            VALUES (3, ?, 'going', ?, ?, ?, ?)""", (uid, f"3-QAK{uid}", now - 2 * day, now - 2 * day, now - day - 3 * 3600))
         im = Image.linear_gradient("L").resize(size).convert("RGB")
         im = Image.composite(Image.new("RGB", im.size, rgb), Image.new("RGB", im.size, (20, 20, 30)), Image.linear_gradient("L").resize(im.size))
         f = media.store(im, f"qa-photo-{n}".encode(), Path(path).resolve().parent / "media")
@@ -101,6 +101,13 @@ def seed(path: str) -> None:
             VALUES (?, 'event_photo', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (f["sha256"], f["bytes"], f["width"], f["height"], f["path"], uid, now, f["color"])).lastrowid
         con.execute("INSERT INTO gallery_photos (file_id, user_id, created_at, place) VALUES (?, ?, ?, ?)",
                     (fid, uid, now - n * 20 * 3600, ("main", "main", "b2", "dorm", "main", "away", "b2", None)[n]))
+    # tonight's 18+ party off a guest list (the operator's import makes these), its door open (T-30): Ali is on it, so the
+    # door's "18+?" question has someone to ask about
+    party = now + 20 * 60
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, created_by, created_at,
+            updated_at, published_at, guest_list, age_check) VALUES (6, 1, 'published', 'Afterparty 18+', 'Atrium', ?, ?, 'microphone_3d', '#7A2253',
+            '#5C193E', 60, 1, ?, ?, ?, 1, 1)""", (party, party + 3 * 3600, now - 3600, now - 3600, now - 3600))
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (6, 2, 'going', '6-QAT6', ?, ?)", (now, now))
     # a draft next week asking DMP for a room, guests and a speaker: Studio's memo card has a week to show
     memo = {"room": {"any": True, "projector": True, "board": True}, "guests": {"side": "tole", "list": "Ivanov Ivan, Satbayev University"},
             "provide": {"jbl": True, "chairs": 20}}
