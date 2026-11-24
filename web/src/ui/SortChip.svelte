@@ -20,7 +20,7 @@
 
 <style>
   .sort { position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 0 var(--s-1);
-    font: 550 var(--fs-sub)/1.2 var(--font-text); letter-spacing: -0.006em; white-space: nowrap; color: var(--text-2); transition: opacity var(--t-fast); }
+    font: 500 var(--fs-sub)/1.2 var(--font-text); letter-spacing: -0.006em; white-space: nowrap; color: var(--text-2); transition: opacity var(--t-fast); }
   .sort::after { content: ''; position: absolute; inset: -13px -6px; } /* 44 to the finger */
   .sort:active { opacity: 0.5; transform: none; }
 </style>
