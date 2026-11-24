@@ -197,7 +197,8 @@
   }
   .toast:global(.going) { pointer-events: none; }
   /* the web app's dock sits lower than Telegram's (Nav): the toast keeps its distance above it */
-  :global(html[data-web]) .toast { bottom: calc(max(0px, var(--safe-bottom) - 14px) + 82px); }
+  /* :not(.top): a toast dropping from the top (over a sheet) keeps bottom: auto, or it stretched from top to bottom (owner, Nov 24) */
+  :global(html[data-web]) .toast:not(.top) { bottom: calc(max(0px, var(--safe-bottom) - 14px) + 82px); }
   /* the exit's blur rides on the line and the emoji, never on the glass (a filter there flattens its backdrop) */
   /* the line only fades: a blur under the pill's moving clip-path drew a magenta seam over the text on iOS (owner, Nov 24) */
   .toast:global(.going) .tx, .toast:global(.going) .undo { opacity: var(--xo, 1); }
