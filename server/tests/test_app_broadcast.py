@@ -123,7 +123,7 @@ def test_broadcast_votes(audience, capsys):
     tap(12, 0)
     tap(12, 1)                                                     # changed their mind
     tap(999, 0)                                                    # not in the app: nothing kept
-    assert sorted(con.execute("SELECT vote FROM broadcast_votes WHERE name = ?", (NAME,)).fetchall()) == [(1,), (1,)]
+    assert sorted(r[0] for r in con.execute("SELECT vote FROM broadcast_votes WHERE name = ?", (NAME,))) == [1, 1]
     tap(11, 0)                                                     # "don't send these": broadcasts off for them
     assert con.execute("SELECT n_broadcasts FROM users WHERE tg_id = 11").fetchone()[0] == 0
     admin.main(["broadcast", NAME, URL, "--dry"])
