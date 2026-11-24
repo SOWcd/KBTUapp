@@ -1443,7 +1443,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""INSERT OR IGNORE INTO tgc_undel (chat_id, msg_id, at) SELECT chat_id, msg_id, ? FROM tgc_comments
             WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
-        con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))        credits.gone(con, tg)  # Keep the contribution while removing its link to the deleted account.
+        con.execute("DELETE FROM swear_hits WHERE tg_id = ?", (tg,))
+        credits.gone(con, tg)  # Keep the contribution while removing its link to the deleted account.
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         con.execute("DELETE FROM meta WHERE key = ?", (f"chpick:{tg}",))  # a club chat pick not used yet
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"qrshow:%:{v.id}",))  # the door QRs I showed (checkin.mark's "own")
