@@ -926,6 +926,15 @@ def test_guard_join(env):
     finally:
         logic.seats.chat_join = real
     con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ann["id"],))
+    calls = []  # a plain join request (no guard query) in that linked chat: a student approved, a stranger left alone
+
+    class Http:
+        async def post(self, url, json):
+            calls.append((url.rsplit("/", 1)[1], json["user_id"]))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -100}, "from": {"id": 20}}))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -100}, "from": {"id": 999}}))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -200}, "from": {"id": 20}}))   # a chat the app doesn't know
+    assert calls == [("approveChatJoinRequest", 20)]
     key = bot.guard_key(cfg)
     t = logic.guard_token(key, -100, 20, "q:1")
     assert logic.guard_read(key, t) == (-100, 20, "q:1")

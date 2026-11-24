@@ -2094,7 +2094,9 @@ def guard_key(cfg: Config) -> bytes:
 
 
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
-    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. In a chat
+    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. A club's
+    chat linked in the app (the bot an admin that may add members): a confirmed student in, a banned person out, anyone
+    else left to the chat's admins. In a chat
     whose guard bot we are (a query_id, answered within 10 s): a student in at once, a stranger gets the app to sign up
     (POST /api/guard lets them in after), a banned person out."""
     if qid := req.get("query_id"):
@@ -2107,8 +2109,11 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
             log.warning("guard: %s", str(r.json().get("description"))[:200])
         return
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
-    if ok is None:
-        return
+    if ok is None:  # not an event's chat: a chat linked in the app lets a confirmed student in (owner, Nov 24)
+        d = logic.guard_join(con, req["chat"]["id"], req["from"]["id"])
+        if d not in ("approve", "decline"):  # someone we don't know, or a chat we don't know: its admins decide
+            return
+        ok = d == "approve"
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{'approve' if ok else 'decline'}ChatJoinRequest",
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 
