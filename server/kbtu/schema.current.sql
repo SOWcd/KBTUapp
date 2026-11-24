@@ -560,11 +560,17 @@ CREATE TABLE friendships (
   PRIMARY KEY (a, b),
   CHECK (a < b)
 ) STRICT;
+CREATE TABLE gallery_consents (
+        user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+        at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE gallery_photos (
       file_id    INTEGER PRIMARY KEY REFERENCES files(id),
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       event_id   INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- its event gone: still the student's, a plain KBTU photo
-      created_at INTEGER NOT NULL, topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other'))) STRICT;
+      created_at INTEGER NOT NULL, topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other')), place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'))) STRICT;
 CREATE TABLE grant_link_uses (
       id      INTEGER PRIMARY KEY,
       token   TEXT NOT NULL REFERENCES grant_links(token) ON DELETE CASCADE,

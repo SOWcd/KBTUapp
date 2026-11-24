@@ -1279,6 +1279,7 @@ _DEL_GONE = {
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"), ("vol_hands", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it, a session's door handed to me
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
+    ("gallery_consents", "user_id"),
     ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
     ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my marks, their comments and my consent; nullable author and editor links are cleared below
     ("event_team_members", "user_id"), ("team_consents", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next), my consent to teams

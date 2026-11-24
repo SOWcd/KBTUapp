@@ -56,6 +56,47 @@ def save(data: bytes, root: Path, key: bytes | None = None) -> dict:
         return {**store(_decode(data), key or data, root), "taken": taken(data)}
 
 
+_JPEG_MARKER = re.compile(rb"\xff([^\x00\xff\xd0-\xd7])")  # skip stuffed bytes and restart markers in a scan
+_JPEG_IMAGE = frozenset((0xc0, 0xc1, 0xc2, 0xc4, 0xda, 0xdb, 0xdd))
+
+
+def _gallery_jpeg(data: bytes) -> bool:
+    """Only JPEG image segments and a thumbnail-free JFIF header, across every scan."""
+    if not data.startswith(b"\xff\xd8"):
+        return False
+    pos, scan = 2, False
+    while pos < len(data):
+        while not scan and data[pos:pos + 2] == b"\xff\xff":
+            pos += 1
+        m = _JPEG_MARKER.search(data, pos) if scan else _JPEG_MARKER.match(data, pos)
+        if m is None:
+            return False
+        marker, pos = m[1][0], m.end()
+        if marker == 0xd9:
+            return scan and pos == len(data)
+        if pos + 2 > len(data):
+            return False
+        length = int.from_bytes(data[pos:pos + 2], "big")
+        end = pos + length
+        if length < 2 or end > len(data):
+            return False
+        if marker == 0xe0:
+            if length != 16 or data[pos + 2:pos + 7] != b"JFIF\x00" or data[end - 2:end] != b"\x00\x00":
+                return False
+        elif marker not in _JPEG_IMAGE:
+            return False
+        pos, scan = end, marker == 0xda
+    return False
+
+
+def save_gallery(data: bytes, root: Path) -> dict:
+    """The Gallery accepts canvas JPEGs and never reads an EXIF capture time."""
+    if not _gallery_jpeg(data):
+        raise BadImage("gallery metadata or format")
+    with _busy:
+        return store(_decode(data), data, root)
+
+
 ALMATY = timezone(timedelta(hours=5))  # a camera's clock without an offset tag: the campus's
 # (time, its sub-seconds, its offset): DateTimeOriginal, then DateTimeDigitized (Exif IFD), then DateTime (IFD0)
 _WHEN = ((0x9003, 0x9291, 0x9011), (0x9004, 0x9292, 0x9012), (0x0132, 0x9290, 0x9010))
