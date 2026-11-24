@@ -2199,6 +2199,8 @@ const en: Dict = {
   'cr.show': "Show me",
   'cr.hide': "Don't show",
   'cr.setRow': "Me in “People of the app”",
+  'cr.meT': "Your work is here",
+  'cr.meShow': "Show me by name",
   'app.codeSub': "open code",
   'set.homeDone': "On your home screen now",
   'set.calShort': "Events in Calendar",

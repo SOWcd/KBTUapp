@@ -23,7 +23,7 @@
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe, saveSwitch } from '../../lib/state/session.svelte';
   import { onMount } from 'svelte';
-  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
+  import { data, phrase, loadMyCard, loadCredits } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
@@ -213,6 +213,7 @@
     if (!(await copyText(session.donate, t('pay.copied')))) return; // the number is selectable too
     copied = true; clearTimeout(copiedT); copiedT = setTimeout(() => (copied = false), 2000);
   }
+  void loadCredits(60000); // People of the app's switch below shows only once the list is known (it isn't loaded at launch)
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
