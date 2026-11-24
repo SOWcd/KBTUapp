@@ -1,8 +1,56 @@
+import dataclasses
+import inspect
 import os
 
 import pytest
+from fastapi import routing
 
-from kbtu import db
+from kbtu import app as server, db
+
+_ROUTES: dict = {}  # a route's FastAPI analysis, by the endpoint's code, path and route arguments
+
+
+class _Handler:
+    """A route's request handler, built when the route is first asked (a test asks a few of the ~430)."""
+
+    def __init__(self, route) -> None:
+        self.route = route
+
+    async def __call__(self, scope, receive, send) -> None:
+        if self.route.app is self:
+            self.route.app = routing.request_response(self.route.get_route_handler())
+        await self.route.app(scope, receive, send)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _route_cache():
+    """Most tests build their own app (server.create), and FastAPI analyses each of its ~430 endpoints again: their
+    signatures, string annotations and pydantic adapters (0.1-1 s an app, most of a test's setup). An endpoint is a
+    fresh closure per app, but its code, defaults, path and route arguments are the same, so the analysis is too: the
+    first app's is kept, and a later route takes a copy with its own endpoint and overrides provider, and builds its
+    handler from them the way FastAPI's constructor does, on its first request. A default that differs (a closure's
+    own Depends: json_body) misses the cache and is analysed afresh.
+    ponytail: leans on FastAPI keeping a route's state in its instance attributes and Dependant being a dataclass
+    (fastapi==0.162.2); the assert below catches a new attribute tied to the old endpoint, and dropping this fixture
+    is the way back if an upgrade changes that."""
+    real = server._Route.__init__
+
+    def init(self, path, endpoint, *, dependency_overrides_provider=None, **kw):
+        fn = inspect.unwrap(endpoint)
+        key = (path, endpoint.__code__, fn.__code__, repr(fn.__defaults__), repr(fn.__kwdefaults__), repr(sorted(kw.items())))
+        if (seen := _ROUTES.get(key)) is None:
+            real(self, path, endpoint, dependency_overrides_provider=dependency_overrides_provider, **kw)
+            _ROUTES[key] = dict(vars(self))
+            return
+        vars(self).update(seen)
+        self.endpoint, self.dependency_overrides_provider = endpoint, dependency_overrides_provider
+        self.dependant = dataclasses.replace(seen["dependant"], call=endpoint, dependencies=list(seen["dependant"].dependencies))
+        self.app = _Handler(self)
+        assert not any(v is seen["endpoint"] for v in vars(self).values()), "a route attribute still holds the first app's endpoint"
+
+    server._Route.__init__ = init
+    yield
+    server._Route.__init__ = real
 
 
 @pytest.fixture
@@ -27,6 +75,21 @@ def no_receipt_audit(monkeypatch):
     """A clean receipt's random spot-check (seats._audit, 1 in 5) is off; its own tests switch it on."""
     from kbtu.logic import seats
     monkeypatch.setattr(seats, "_audit", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def fresh_process_memory(monkeypatch):
+    """A worker's in-memory state starts empty in every test, so a test passes the same in any order and on any
+    worker: chatlist._unheld (a chat with no club, kept 10 min: an earlier test's chat -100 made
+    test_live_list_union_order_and_cap's club chat count as unheld now and then), llm._rest (a provider resting after
+    another test's 502s) and the usage counters' per-day budget and uniques (logic.stats)."""
+    from kbtu import llm
+    from kbtu.logic import chatlist, stats
+    monkeypatch.setattr(chatlist, "_unheld", {})
+    monkeypatch.setattr(llm, "_rest", {})
+    monkeypatch.setattr(stats, "_spent", {})
+    monkeypatch.setattr(stats, "_spent_day", 0)
+    monkeypatch.setattr(stats, "_uniq", set())
 
 
 @pytest.fixture
