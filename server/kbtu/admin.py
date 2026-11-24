@@ -50,6 +50,7 @@
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
@@ -482,6 +483,9 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "broadcast-votes" and len(args) == 2:
+        yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
+        print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
         _broadcast(con, *args[1:])
     elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)

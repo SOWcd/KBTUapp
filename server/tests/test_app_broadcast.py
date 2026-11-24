@@ -70,7 +70,8 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
     assert [m["chat_id"] for m in messages] == [10, 10, 11, 12]
     for message, lang, button in zip(messages[1:], ("en", "kk", "ru"), ("\U0001f3ac Watch", "\U0001f3ac \u041a\u04e9\u0440\u0443", "\U0001f3ac \u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c")):
         assert message["text"] == texts.bot_message(lang, NAME)[0]
-        assert message["reply_markup"] == {"inline_keyboard": [[{"text": button, "url": URL}]]}
+        votes = [{"text": texts.bot_message(lang, f"vote_{v}")[0], "callback_data": f"bv:{v}:{NAME}"} for v in (1, 0)]
+        assert message["reply_markup"] == {"inline_keyboard": [[{"text": button, "url": URL}], votes]}
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE sent_at IS NOT NULL").fetchone()[0] == 3
 
 
@@ -105,3 +106,24 @@ def test_a_failed_preview_can_go_again(audience, capsys):
     con.execute("UPDATE bot_outbox SET error = 'gone'")
     admin.main(["broadcast", NAME, URL, "@reader"])
     assert capsys.readouterr().out.split() == ["queued", "1", "queued", "1"]
+
+
+def test_broadcast_votes(audience, capsys):
+    """Interesting / Not interesting under a broadcast: one vote per person, changeable, the link row stays, counts for the owner."""
+    con, cfg = audience
+    calls = []
+
+    class Http:
+        async def post(self, url, json):
+            calls.append((url.rsplit("/", 1)[1], json))
+    kb = [[{"text": "x", "url": URL}], [{"text": "y", "callback_data": "bv:1:" + NAME}]]
+    tap = lambda tg, v: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": tg}, "data": f"bv:{v}:{NAME}",  # noqa: E731
+                                                                    "message": {"message_id": 5, "chat": {"id": tg}, "reply_markup": {"inline_keyboard": kb}}}))
+    tap(11, 1)
+    tap(12, 0)
+    tap(12, 1)                                                     # changed their mind
+    tap(999, 0)                                                    # not in the app: nothing kept
+    assert sorted(con.execute("SELECT vote FROM broadcast_votes WHERE name = ?", (NAME,)).fetchall()) == [(1,), (1,)]
+    assert ("editMessageReplyMarkup", {"chat_id": 11, "message_id": 5, "reply_markup": {"inline_keyboard": kb[:1]}}) in calls
+    admin.main(["broadcast-votes", NAME])
+    assert capsys.readouterr().out.strip() == f"{NAME}: 2 interested, 0 not"

@@ -156,7 +156,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "app_broadcast":  # the creator's CLI announcement, with a Telegram URL button
         msg = texts.broadcast_message(lang, m["ref"])
         url = json.loads(m["payload"]).get("url")
-        return (msg[0], None, [[{"text": msg[1], "url": url}]]) if msg and url else None
+        votes = [{"text": texts.bot_message(lang, f"vote_{v}")[0], "callback_data": f"bv:{v}:{m['ref']}"} for v in (1, 0)]
+        return (msg[0], None, [[{"text": msg[1], "url": url}], votes]) if msg and url else None
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
@@ -1445,6 +1446,14 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
+        return
+    if v := re.fullmatch(r"bv:([01]):([a-z0-9_]{1,40})", data):  # a broadcast's Interesting / Not interesting: the tapper's own vote, changeable
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if u:
+            con.execute("INSERT OR REPLACE INTO broadcast_votes (name, user_id, vote, at) VALUES (?, ?, ?, ?)", (v[2], u["id"], int(v[1]), int(time.time())))
+        if msg.get("message_id") and (kb := (msg.get("reply_markup") or {}).get("inline_keyboard")):  # the vote row says thanks, the link stays
+            await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageReplyMarkup", json={
+                "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
         return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
