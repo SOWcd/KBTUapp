@@ -39,7 +39,7 @@ def seed(path: str) -> None:
     now, day = int(time.time()), 86400
     for uid, tg, first, last in PEOPLE:
         con.execute("""INSERT INTO users (id, tg_id, tg_username, tg_first_name, tg_last_name, lang, can_dm, created_at, seen_at, qr_code, card_no)
-            VALUES (?, ?, ?, ?, ?, 'ru', 1, ?, ?, ?, ?)""", (uid, tg, first.lower(), first, last, now - 30 * day, now, f"QA{uid:06d}", uid))
+            VALUES (?, ?, ?, ?, ?, 'ru', 1, ?, ?, ?, ?)""", (uid, tg, first.lower(), first, last, now - 30 * day, now, f"QAQAQAQAQ{'ABC'[uid - 1]}", uid))  # a badge code as the app makes them (10 of A-Z2-7: core.PROFILE_QR), so the door can scan it
         con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, email, course, school, consent_version, consent_at, verified_at, synced_at)
             VALUES (?, ?, ?, ?, ?, 2, 'SITE', 'qa', ?, ?, ?)""", (uid, f"24B{100000 + uid}", first, last, f"{first.lower()}@kbtu.kz", now, now, now))
     con.execute("""INSERT INTO orgs (id, slug, kind, name, short, description, emoji, official, created_at)
