@@ -803,7 +803,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         "username": u["tg_username"] if team else None,
         # a badge picked to be shown, shows; the one that came by itself from a club would tell a stranger the club
         "frame": u["frame"] if u["frame"] in FRAMES else None,  # on the lanyard, as the photo under it: seen by anyone who sees the card
-        "skin": _skin(con, uid) if close else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
+        "skin": _skin(con, uid) if close or uid in PERSON_LANYARDS else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
                 else u["skin_org"] if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]) else None,
         **({} if close else {"limited": True}),
         **({"closed": True} if state == "none" and not u["can_friend"] else {}),  # no "Add friend" for them (their setting)
@@ -1015,7 +1015,7 @@ def friend_joined(con, v: Viewer, since: int) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
-from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
+from .account import FRAMES, PERSON_LANYARDS, _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402

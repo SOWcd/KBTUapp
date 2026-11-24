@@ -1,6 +1,6 @@
 // Awards as the profile shows them (SPEC §4.11): names, tiers, and the hero's data — one place for Me and the
 // person sheet.
-import type { Achievement, Badge, GrantItem, Id, OrgRef, PersonCard } from './api';
+import type { Achievement, Badge, GrantItem, Id, OrgRef, PersonCard, PersonSkin } from './api';
 import { i18n, t, tn } from './i18n/index.svelte';
 import { cityName } from './i18n/cities';
 import { RANK, roleName, titleOf } from './perms';
@@ -42,6 +42,8 @@ import ddDragon from '../assets/lanyards/dd-dragon.webp';
 import bhDrop from '../assets/lanyards/bh-drop.webp';
 // Qoloner's frog face, redrawn from their logo (.claude/reports/lanyard-qoloner/gen.py's face_mark)
 import qolonerFrog from '../assets/lanyards/qoloner-mark.webp';
+// ANCIENT, one student's own (PERSON_LOOKS): a warding rune, original (.claude/reports/personal-lanyard/gen)
+import ancientMark from '../assets/lanyards/ancient-mark.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -396,8 +398,16 @@ export const SCHOOL_LOOKS = {
   smsgt: { strap: 'SMSGT', strip: 'SMSGT', bg: ['#107A50', '#0B6542', '#053824'], straps: ['#08523A', '#14905E', '#FFFFFF'], holo: ['#E4F5EC', '#B4DEC6', '#0B6542'], role: '#BDF2D3', qr: ['#0B6542', '#053824'], plate: ['#0B6542', '#053824'], mark: shield('smsgt') },
   sss: { strap: 'SSS', strip: 'SSS', bg: ['#386052', '#2C4D42', '#182C26'], straps: ['#203A32', '#3E6A5A', '#FFFFFF'], holo: ['#E6F2EC', '#B9D6C8', '#2C4D42'], role: '#CDEBDD', qr: ['#2C4D42', '#182C26'], plate: ['#2C4D42', '#182C26'], mark: shield('sss') },
 } satisfies Record<string, ClubLook>;
-export type ClubSlug = keyof typeof CLUB_LOOKS | keyof typeof SCHOOL_LOOKS;
-const CLUBS: Record<string, ClubLook> = { ...CLUB_LOOKS, ...SCHOOL_LOOKS };
+// one person's own lanyard, worn over their clubs' (server: logic.PERSON_LANYARDS, by user id; no club, no picker swatch)
+export const PERSON_LOOKS = {
+  // ANCIENT (Nov 25, for one student who loves a certain strategy game; original art, no game's marks): dark basalt
+  // and ember, deep red and old gold; the strip obsidian with gold leaf and an ember lip (LanyardHolo)
+  ancient: { strap: 'ANCIENT', strip: 'DEFEND THE ANCIENT', bg: ['#2B1714', '#170C0B', '#080405'], straps: ['#4A0E0B', '#8E1A14', '#E6C27A'],
+    holo: ['#E2C07A', '#A87C36', '#E8C27A'], ring: 'linear-gradient(135deg, #F4DC9C, #C9A15A 45%, #8E1A14)', role: '#E8B867', qr: ['#7A1410', '#2A0806'],
+    plate: ['#2E120E', '#0C0505'], mark: ancientMark },
+} satisfies Record<PersonSkin, ClubLook>;
+export type ClubSlug = keyof typeof CLUB_LOOKS | keyof typeof SCHOOL_LOOKS | PersonSkin;
+const CLUBS: Record<string, ClubLook> = { ...CLUB_LOOKS, ...SCHOOL_LOOKS, ...PERSON_LOOKS };
 /** a school's lanyard (ui/SchoolScene), not a club's */
 export const isSchool = (look: Look) => look in SCHOOL_LOOKS;
 export const clubLook = (look: Look): ClubLook | undefined => CLUBS[look];
@@ -412,7 +422,7 @@ export const skinOf = (o?: OrgRef | null): Skin | null => (o && (o.kind === 'sch
   : (SKINS as Record<string, Hand>)[o.slug] ?? (lookKey(o) as ClubSlug | null))) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
-export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
+export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower' : typeof p.skin === 'string' && p.skin in PERSON_LOOKS ? p.skin
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin) ?? comingLooks().find((o) => o.id === p.skin)) ?? 'kbtu';
 /** a drawn lanyard whose club isn't in the app yet (kbtu.mag, Nov 4): shown in the picker to try on, never worn; a
  *  negative id the server never sees (the try-on is local) */

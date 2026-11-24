@@ -36,4 +36,5 @@
   .faces img { width: 100%; height: 100%; }
   .japanesecultureclub img { width: 70%; height: 70%; } /* their sakura alone (the loose petal cut off), a middle size: edge to edge is too much */
   .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
+  .ancient img { width: 92%; height: 92%; } /* the rune in its own gold ring: near the plate's edge */
 </style>

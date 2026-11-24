@@ -18,6 +18,21 @@ def test_lanyards_match_the_web():
     assert set(re.findall(r"^  (\w+): \{", schools, re.M)) == set(logic.SCHOOL_LANYARDS)
 
 
+def test_person_lanyard(env, monkeypatch):
+    """One person's own lanyard (PERSON_LANYARDS) is worn over their school's and clubs', seen by anyone; it is theirs
+    alone, sent back with a frame changed it saves; the web draws every key (awards.ts PERSON_LOOKS)."""
+    c, cfg = env
+    ann, bob = login(c, 80, "ann"), login(c, 81, "bob")
+    monkeypatch.setitem(logic.account.PERSON_LANYARDS, ann["id"], "ancient")
+    A, B = tma(80, "Ann"), tma(81, "Bob")
+    assert c.get("/api/me", headers=A).json()["skin"] == "ancient"
+    assert c.get(f"/api/users/{ann['id']}", headers=B).json()["skin"] == "ancient"    # a stranger sees it too
+    assert c.patch("/api/me", headers=A, json={"skin": "ancient", "frame": "gold"}).json()["frame"] == "gold"
+    assert c.patch("/api/me", headers=B, json={"skin": "ancient"}).status_code == 400   # nobody else's
+    looks = re.search(r"export const PERSON_LOOKS = \{(.*?)\n\} satisfies", AWARDS.read_text(), re.S).group(1)
+    assert set(logic.account.PERSON_LANYARDS.values()) <= set(re.findall(r"^  (\w+): \{", looks, re.M))
+
+
 def test_school_slug():
     """A student's school as prod writes it (the portal's full names and abbreviations, Settings' names) to its org."""
     cases = {"\u0428\u0418\u0422\u0438\u0418": "site", "\u0428\u043a\u043e\u043b\u0430 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u043e\u043d\u043d\u044b\u0445 \u0442\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0438\u0439 \u0438 \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u0438": "site",

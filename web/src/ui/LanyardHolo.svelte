@@ -109,6 +109,14 @@
       linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 111.5px, rgba(150, 146, 140, 0.55) 111.5px 112px, transparent 112px),
       linear-gradient(180deg, rgb(238, 241, 243), rgb(214, 218, 221) 55%, rgb(198, 202, 206));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85), inset 0 1px 0 rgb(255, 255, 255), inset 0 -1.5px 2px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 4px 12px -6px rgba(0, 0, 0, 0.8); }
+  /* ANCIENT: obsidian in an old-gold rim, the words in gold leaf, an ember's lip glowing along its foot, a warm light
+     sliding with the tilt */
+  .ancient { color: rgb(232, 194, 122); text-shadow: 0 0 6px rgba(255, 106, 34, 0.35);
+    background: linear-gradient(100deg, transparent 38%, rgba(255, 230, 176, 0.16) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      linear-gradient(rgb(255, 106, 34), rgb(255, 106, 34)) 50% calc(100% - 1px) / calc(100% - 18px) 1.2px no-repeat,
+      linear-gradient(180deg, rgb(46, 20, 17), rgb(17, 7, 7));
+    box-shadow: inset 0 0 0 1px rgba(217, 178, 106, 0.7), inset 0 1px 0 rgba(255, 236, 200, 0.12), 0 0 10px -2px rgba(255, 90, 30, 0.35), 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
+  .ancient .w.long { letter-spacing: 0.08em; } /* the three words whole beside the number at 320 px */
   /* CyberSport: dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);

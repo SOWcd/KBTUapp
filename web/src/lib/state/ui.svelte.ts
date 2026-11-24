@@ -1,6 +1,7 @@
 // Navigation and overlays. One stack for every sheet and full-screen view: Telegram's Back button
 // closes the top one (the prototype had a hand-written chain of 15 ifs for this).
 import { untrack, type Component } from 'svelte';
+import type { Me } from '../api/types';
 import { haptic, onShareBusy } from '../tg';
 import { t } from '../i18n/index.svelte';
 import { count, type Screen } from '../stats';
@@ -15,7 +16,7 @@ export const ui = $state({
   tab: 'afisha' as Tab,
   club: null as number | null,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one)
   tryOn: null as { id: number; name: string; school?: boolean } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
-  look: null as { skin: number | 'sower' | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
+  look: null as { skin: Me['skin']; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
   gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
   gate: false,             // the new policy's gate is up (App, ConsentGate): the app waits behind it

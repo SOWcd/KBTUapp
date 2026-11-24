@@ -618,6 +618,11 @@ SCHOOL_LANYARDS = ("site", "seogi", "geology", "business", "ise", "kma", "law", 
 # how prod's students.school writes a school beyond schools.json's names (the portal's older abbreviations)
 _SCHOOL_ALIAS = {"\u0448\u044d\u0438\u043d\u0433\u0438": "seogi"}  # ShEiNGI
 
+# one person's own lanyard, worn over any club's or school's (the owner's gift; no setting picks it): user id -> its key
+# in the web's awards.ts PERSON_LOOKS. ponytail: a constant for a handful of people; with many, a table (user_id, look)
+# and an admin command to set it
+PERSON_LANYARDS = {126: "ancient"}
+
 
 def _norm(s: str) -> str:
     return " ".join(s.lower().replace("\u0451", "\u0435").split())
@@ -648,10 +653,13 @@ def _my_school_org(con, uid: int) -> int | None:
 
 
 def _skin(con, uid: int) -> int | str | None:
-    """The badge I show (badges as skins): a club's id, "sower" (the creator's own), None for KBTU's.
+    """The badge I show (badges as skins): a club's id, "sower" (the creator's own), a personal one's key
+    (PERSON_LANYARDS: over everything), None for KBTU's.
     My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the creator's own for the
     creator; else the club I joined that has a badge (of several, where my role is highest, then the newest); else my
     school's; else KBTU's. A new club's badge or a school set comes by itself."""
+    if uid in PERSON_LANYARDS:
+        return PERSON_LANYARDS[uid]
     u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
         return None
@@ -862,6 +870,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
             sets.update(skin_pick="sower", skin_org=None)
         elif type(val) is int and _skin_ok(con, v.id, val):
             sets.update(skin_pick="org", skin_org=val)
+        elif val == PERSON_LANYARDS.get(v.id):
+            pass  # my own lanyard sent back with a frame changed: nothing to keep, it is worn anyway
+
         else:
             raise ApiError("bad_input")
     if "frame" in patch:  # a frame over my photo (FRAMES), null for none; combined with any lanyard

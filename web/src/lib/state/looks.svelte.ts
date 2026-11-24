@@ -1,12 +1,12 @@
 // The lanyard picker's facts, shared by the settings row (its value) and its page (screens/profile/LookPage.svelte);
 // call inside a $derived. And my card as the hero shows it (Me, the page's preview).
-import type { PersonCard } from '../api';
+import type { PersonCard, PersonSkin } from '../api';
 import { session } from './session.svelte';
 import { data } from './data.svelte';
 import { ui } from './ui.svelte';
 import { byRank } from '../perms';
 import { nameOf, schoolOf } from '../short';
-import { skinOf, skinned, STRAP, comingLooks } from '../awards';
+import { skinOf, skinned, STRAP, comingLooks, PERSON_LOOKS } from '../awards';
 
 export function lookData() {
   const me = session.me;
@@ -35,7 +35,9 @@ export function lookData() {
   const rows = ([['look.gClubs', sorted], ['look.gSchools', swatches.filter((k) => kindOf(k) === 'school')]] as const).filter(([, ks]) => ks.length);
   // a locked one can be tried on: the lanyard wears it, the check then says it isn't mine (Me) and turns it back
   const worn = skinNow();
-  return { skins, swatches, rows, kindOf, worn, wornName: swatches.find((k) => k.id === (worn ?? null))?.name ?? 'KBTU' };
+  // my own lanyard (PERSON_LOOKS) has no swatch: the settings row names it by its strap
+  const personal = typeof worn === 'string' && worn in PERSON_LOOKS ? PERSON_LOOKS[worn as PersonSkin].strap : null;
+  return { skins, swatches, rows, kindOf, worn, wornName: swatches.find((k) => k.id === (worn ?? null))?.name ?? personal ?? 'KBTU' };
 }
 
 // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
