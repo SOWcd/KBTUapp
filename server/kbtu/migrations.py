@@ -2255,4 +2255,5 @@ MIGRATIONS: list[tuple[int, str]] = [
       DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND NOT EXISTS (SELECT 1 FROM santa_msgs r
         WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
     END;"""),
+    (222, "ALTER TABLE posts ADD COLUMN tg_fmt TEXT;"),
 ]

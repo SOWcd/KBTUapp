@@ -735,7 +735,7 @@ CREATE TABLE posts (
   created_at     INTEGER NOT NULL,
   edited_at      INTEGER,
   hidden_at      INTEGER
-, tg_channel INTEGER, tg_url TEXT, tg_views INTEGER, tg_reactions TEXT, tg_media TEXT, i18n TEXT, lang TEXT, tr_by TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, casting_from INTEGER, casting_to INTEGER, casting_place TEXT, casting_cancelled_at INTEGER) STRICT;
+, tg_channel INTEGER, tg_url TEXT, tg_views INTEGER, tg_reactions TEXT, tg_media TEXT, i18n TEXT, lang TEXT, tr_by TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, casting_from INTEGER, casting_to INTEGER, casting_place TEXT, casting_cancelled_at INTEGER, tg_fmt TEXT) STRICT;
 CREATE TABLE prefill (
       email       TEXT PRIMARY KEY,
       student_id  TEXT NOT NULL,

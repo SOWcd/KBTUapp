@@ -2826,6 +2826,7 @@ const kk: Dict = {
   'news.emptyText': "Мұнда клубтардың, ЖСД мен университеттің жаңалықтары шығады.",
   'news.new': "жаңа",
   'news.more': "тағы",
+  'news.revealSpoiler': "Спойлерді ашу",
   'story.next': 'Келесі',
   'story.openEvent': "Іс-шараны ашу",
   'story.join': "Топқа қосылу",

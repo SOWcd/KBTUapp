@@ -717,12 +717,17 @@ export type CheckinResult =
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
   names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in */ }
 
+export type TextEntity = [kind: 'bold' | 'italic' | 'underline' | 'strike' | 'spoiler' | 'code' | 'pre' | 'blockquote' | 'text_link' | 'url',
+  offset: number, length: number, url?: string | null];
+
 export interface Post {
   id: Id;
   org: OrgRef;
   audience: 'public' | 'clubs';
   title: string;
   body: string;
+  titleFmt?: TextEntity[] | null;
+  fmt?: TextEntity[] | null;
   tag: string | null;
   photo: Media | null;
   pinned: boolean;
@@ -740,7 +745,8 @@ export interface Post {
    *  there; `media`: a video plays in Telegram's post widget (News), a file is only linked to; a tap opens the post in Telegram */
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
   /** a channel's post in the other languages: the channel's own (folded posts, its comments) or our AI's; applied by api/client.ts */
-  i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; body?: string }>>; orig?: Record<string, string>;
+  i18n?: Partial<Record<'ru' | 'kk' | 'en', Partial<Pick<Post, 'title' | 'body' | 'titleFmt' | 'fmt'>>>>;
+  orig?: Record<string, string | TextEntity[] | null>;
   /** an offline casting: people just come (no sign-up); its state is computed (lib/posts castingState). A club's page may
    *  hold one its club deleted before the end: no title then, cancelled */
   casting?: Casting | null;

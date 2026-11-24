@@ -2826,6 +2826,7 @@ const en: Dict = {
   'news.emptyText': "News from clubs, DMP and the university will show here.",
   'news.new': "new",
   'news.more': "more",
+  'news.revealSpoiler': "Reveal spoiler",
   'story.next': 'Next',
   'story.openEvent': "Open the event",
   'story.join': "Join the group",

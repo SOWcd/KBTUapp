@@ -2848,6 +2848,7 @@ const ru = {
   'news.emptyText': "Здесь появятся новости клубов, ДМП и университета.",
   'news.new': "новое",
   'news.more': "ещё",
+  'news.revealSpoiler': "Показать спойлер",
   'story.next': 'Дальше',
   'story.openEvent': "Открыть событие",
   'story.join': "Вступить в группу",
