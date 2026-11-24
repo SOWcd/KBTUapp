@@ -4,10 +4,11 @@ import os
 
 import pytest
 from fastapi import routing
+from fastapi.dependencies import models
 
 from kbtu import app as server, db
 
-_ROUTES: dict = {}  # a route's FastAPI analysis, by the endpoint's code, path and route arguments
+_ROUTES: dict = {}  # (path, endpoint code) -> (its defaults and route arguments, the route's FastAPI analysis)
 
 
 class _Handler:
@@ -31,17 +32,19 @@ def _route_cache():
     handler from them the way FastAPI's constructor does, on its first request. A default that differs (a closure's
     own Depends: json_body) misses the cache and is analysed afresh.
     ponytail: leans on FastAPI keeping a route's state in its instance attributes and Dependant being a dataclass
-    (fastapi==0.162.2); the assert below catches a new attribute tied to the old endpoint, and dropping this fixture
-    is the way back if an upgrade changes that."""
+    (fastapi==0.162.2), as _forget_apps leans on its private endpoint caches; the assert below catches a new
+    attribute tied to the old endpoint, and dropping both fixtures is the way back if an upgrade changes that."""
     real = server._Route.__init__
 
     def init(self, path, endpoint, *, dependency_overrides_provider=None, **kw):
         fn = inspect.unwrap(endpoint)
-        key = (path, endpoint.__code__, fn.__code__, repr(fn.__defaults__), repr(fn.__kwdefaults__), repr(sorted(kw.items())))
-        if (seen := _ROUTES.get(key)) is None:
+        key = (repr(fn.__defaults__), repr(fn.__kwdefaults__), repr(sorted(kw.items())))
+        at = (path, endpoint.__code__, fn.__code__)
+        if (kept := _ROUTES.get(at)) is None or kept[0] != key:
             real(self, path, endpoint, dependency_overrides_provider=dependency_overrides_provider, **kw)
-            _ROUTES[key] = dict(vars(self))
+            _ROUTES[at] = key, dict(vars(self))  # one per route: a missed one replaces it, so old apps aren't kept
             return
+        seen = kept[1]
         vars(self).update(seen)
         self.endpoint, self.dependency_overrides_provider = endpoint, dependency_overrides_provider
         self.dependant = dataclasses.replace(seen["dependant"], call=endpoint, dependencies=list(seen["dependant"].dependencies))
@@ -51,6 +54,16 @@ def _route_cache():
     server._Route.__init__ = init
     yield
     server._Route.__init__ = real
+
+
+@pytest.fixture(autouse=True)
+def _forget_apps():
+    """FastAPI's caches of what kind each endpoint is (fastapi.dependencies.models, up to 4096 each) hold the endpoint,
+    and through its closure the whole app and its open database connections: emptied after each test, a worker no
+    longer carries every earlier test's app (a bigger heap to collect, slower to exit)."""
+    yield
+    for cached in (models._is_gen_callable_cached, models._is_async_gen_callable_cached, models._is_coroutine_callable_cached):
+        cached.cache_clear()
 
 
 @pytest.fixture
