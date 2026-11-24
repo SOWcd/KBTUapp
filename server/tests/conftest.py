@@ -33,7 +33,8 @@ def no_receipt_audit(monkeypatch):
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""DROP TABLE fchan_feed_pages;
+        con.executescript("""ALTER TABLE posts DROP COLUMN tg_fmt;
+            DROP TABLE fchan_feed_pages;
             DROP TRIGGER web_sessions_revoke;
             DROP TABLE web_login_used;
             DROP TABLE web_sessions;

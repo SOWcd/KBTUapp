@@ -104,17 +104,22 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
 // club's description and an event's title and description (ai.py). The text as typed stays in `orig`, so a second pass
 // (another language, a copy from the cache) starts from it and the editors save it, never a translation.
 const SHOWN = ['name', 'realName', 'title', 'description', 'body'] as const; // body: a channel's post (PLAN 86); realName: a person's Latin short name
+const POST_FORMAT = [['title', 'titleFmt'], ['body', 'fmt']] as const;
 export function localize(x: unknown): unknown {
   if (Array.isArray(x)) x.forEach(localize);
   else if (x && typeof x === 'object') {
     const o = x as Record<string, unknown>;
     if (o.i18n && typeof o.i18n === 'object') {
-      const orig = (o.orig ??= Object.fromEntries(SHOWN.filter((k) => typeof o[k] === 'string').map((k) => [k, o[k]]))) as Record<string, string>;
-      const tr = (o.i18n as Record<string, Record<string, string> | undefined>)[i18n.lang] ?? {};
+      const orig = (o.orig ??= Object.fromEntries(SHOWN.filter((k) => typeof o[k] === 'string').map((k) => [k, o[k]]))) as Record<string, unknown>;
+      const tr = (o.i18n as Record<string, Record<string, unknown> | undefined>)[i18n.lang] ?? {};
       for (const k of SHOWN) if (k in orig) o[k] = tr[k] || orig[k];
+      if (o.tg) for (const [field, fmt] of POST_FORMAT) {
+        if (!(fmt in orig)) orig[fmt] = o[fmt] ?? null;
+        o[fmt] = tr[field] ? tr[fmt] : orig[fmt] ?? undefined;
+      }
       if (tr.abbr) o.abbr = tr.abbr;
     }
-    for (const [k, v] of Object.entries(o)) if (k !== 'orig' && k !== 'i18n' && v && typeof v === 'object') localize(v);
+    for (const [k, v] of Object.entries(o)) if (k !== 'orig' && k !== 'i18n' && k !== 'fmt' && k !== 'titleFmt' && v && typeof v === 'object') localize(v);
   }
   return x;
 }
