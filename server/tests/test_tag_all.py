@@ -318,7 +318,7 @@ def test_seen_stranger_is_called_and_forgotten_on_leaving(env, monkeypatch):
     _clean(monkeypatch)
     _run(cfg, con, _Http(), _msg(500, text="hi"), _msg(20, text="ok", new_chat_members=[{"id": 501}, {"id": 502, "is_bot": True}]))
     assert _seen(con) == [20, 500, 501]                                      # no app account needed; never a bot
-    sent = _run(cfg, con, _Http(), _msg(21))
+    sent = _run(cfg, con, _Http(admins={21}), _msg(21))
     assert {500, 501} <= set(_tagged(sent)) and 21 not in _tagged(sent)
     _run(cfg, con, _Http(), _msg(500, text="", left_chat_member={"id": 501}))  # 501 left
     assert _seen(con) == [20, 21, 500]                                        # 21 wrote too (its /all)
