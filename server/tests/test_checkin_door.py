@@ -33,6 +33,31 @@ def _reg(con, eid, uid, code):
                        (eid, uid, f"{eid}-{code}")).lastrowid
 
 
+def test_moved_event_reminds_only_ticket_holders(env):
+    """Moving a full event re-arms its ticket's reminder, never the waitlist's."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    start = int(time.time()) + 86400
+    eid = _ev(con, org, start)
+    con.execute("UPDATE events SET seats = 1 WHERE id = ?", (eid,))
+    ann, bob = login(c, 1, "ann"), login(c, 2, "bob")
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(1), json={}).json()["my"]["status"] == "going"
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(2), json={}).json()["my"]["status"] == "waitlist"
+    reminders = lambda: [tuple(r) for r in con.execute("""SELECT user_id, send_after FROM bot_outbox
+        WHERE kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL""", (f"event:{eid}:%",))]  # noqa: E731
+    assert reminders() == [(ann["id"], start - 7200)]
+
+    moved = start + 86400
+    body = {"title": "Party", "place": "Hall", "startsAt": moved, "endsAt": moved + 3600,
+            "emoji": "trophy_3d", "color": "#3B6BFF", "seats": 1}
+    assert c.patch(f"/api/events/{eid}", headers=tma(9), json=body).status_code == 200
+    assert reminders() == [(ann["id"], moved - 7200)]
+    assert {r[0] for r in con.execute("""SELECT user_id FROM bot_outbox
+        WHERE kind = 'event_changed' AND ref LIKE ? AND sent_at IS NULL""", (f"event:{eid}:%",))} == {ann["id"], bob["id"]}
+    con.close()
+
+
 def test_member_cant_check_themselves_in(env):
     """The member showing the QR can't scan it for themselves (as the scanner); a guest still can, and the door sees who."""
     c, cfg = env
