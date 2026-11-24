@@ -186,7 +186,14 @@
     return () => stop(id);
   });
   function flip(to: boolean) {
-    if (spinning || flipped === to) return;
+    if (flipped === to) return;
+    if (spinning) {
+      // a turn under way (Back right after "show my QR"): it goes back from where it is, never lost; a lanyard's
+      // change (no turn of the card) still has the badge to itself
+      const run = card.getAnimations({ subtree: true });
+      if (run.length) { flipped = side = to; haptic.soft(); run.forEach((a) => a.reverse()); }
+      return;
+    }
     backed = true;
     haptic.soft();
     flipped = to;
