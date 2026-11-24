@@ -2275,4 +2275,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     # where a Gallery photo was taken, as one of four words the phone itself picked from the photo's EXIF (gallery.PLACES);
     # the coordinates never arrive
     (224, "ALTER TABLE gallery_photos ADD COLUMN place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'));"),
+    (225, """CREATE TABLE IF NOT EXISTS gallery_consents (
+        user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+        at INTEGER NOT NULL
+    ) STRICT;"""),
 ]

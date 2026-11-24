@@ -16,7 +16,9 @@ A_DAY = 30               # uploads one person starts in a day (attempts: deletin
 TOPICS = ("campus", "study", "life", "other")  # what a photo of no event is about (gallery_photos.topic); "events": the feed's filter for the rest
 ALBUMS = 60              # the albums the Gallery lists
 PLACES = ("main", "b2", "dorm", "away")  # where a photo was taken (gallery_photos.place): the phone names it from the EXIF, no coordinates come here
-MY_EVENTS = 5            # the events a photo may go to (the newest): the app attaches one taken at an event held elsewhere
+CONSENT = "place1"       # the privacy policy's Gallery place-label clause, asked before the first upload
+DECLINE = f"{CONSENT}-no"
+MY_EVENTS = 5            # the events offered by older clients' album picker
 
 
 def on(v: Viewer) -> bool:
@@ -88,46 +90,55 @@ def feed(con, v: Viewer, before: int | None = None, limit: int = PAGE, topic: st
     if before is None and topic is None:
         out["albums"] = albums(con, v)
     if before is None and on(v):
-        out["post"] = {"events": my_events(con, v)}
+        out["post"] = {"events": my_events(con, v), "placeConsent": _place_consent(con, v.id)}
     return out
 
 
 def my_events(con, v: Viewer) -> list[dict]:
     """The events my photo may go to: their albums take one from me now (_album_room: I came or I'm the team, from
-    the start to a week after the end, my share not used up). When and where each is held: the app puts a photo taken
-    off campus during one held elsewhere into its album (web lib/place.ts eventFor)."""
+    the start to a week after the end, my share not used up)."""
     # ponytail: _album_room per candidate (a few queries each, MY_EVENTS * 2 candidates at most); one query if it grows
     found = rows(con, """SELECT e.* FROM events e WHERE e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at <= ? AND e.starts_at > ?
         AND (e.id IN (SELECT event_id FROM registrations WHERE user_id = ? AND checked_in_at IS NOT NULL)
              OR e.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?))
         ORDER BY e.starts_at DESC LIMIT ?""", now(), now() - 60 * 86400, v.id, v.id, MY_EVENTS * 2)
-    return [{"id": e["id"], "title": e["title"], "at": e["starts_at"], "end": e["ends_at"], "place": e["place"], "away": bool(e["place_url"])}
-            for e in found if _album_room(con, v, e) > 0][:MY_EVENTS]
+    roles, hidden = _roles(con, v), _hidden_orgs(con)
+    return [{"id": e["id"], "title": e["title"]} for e in found
+            if _visible(con, v, e, roles, hidden) and _album_room(con, v, e) > 0][:MY_EVENTS]
+
+
+def _place_consent(con, uid: int) -> bool | None:
+    choice = one(con, "SELECT allowed FROM gallery_consents WHERE user_id = ? AND version = ?", uid, CONSENT)
+    return bool(choice[0]) if choice else None
 
 
 def _day_key(v: Viewer) -> str:
     return f"gal:{v.id}:{now() // 86400}"
 
 
-def check(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None) -> None:
+def check(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None,
+          consent: str | None = None) -> None:
     """May I post to the Gallery (to this event's album, or about this topic)? Asked before the upload is decoded, and
     again as it is saved. The app sends no topic any more (it sorts by place); an old bundle's still counts, never
     with an event."""
-    if not on(v):
+    if not on(v) or not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
         raise ApiError("not_found")
     if place is not None and place not in PLACES:
         raise ApiError("bad_input", "place")
+    if consent is not None and consent not in (CONSENT, DECLINE):
+        raise ApiError("bad_input", "consent")
     if topic is not None and (eid is not None or topic not in TOPICS):  # never both
         raise ApiError("bad_input", "topic")
     if eid is not None and _album_room(con, v, _event(con, v, eid)) <= 0:
         raise ApiError("forbidden")
 
 
-def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None) -> None:
+def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None, place: str | None = None,
+            consent: str | None = None) -> None:
     """One more upload today, counted before the work (a deleted photo or a refused one still counts: a person can't
     keep the picture workers busy for everyone, receipts included)."""
     with tx(con):
-        check(con, v, eid, topic, place)
+        check(con, v, eid, topic, place, consent)
         k = _day_key(v)
         if int((one(con, "SELECT value FROM meta WHERE key = ?", k) or ["0"])[0]) >= A_DAY:
             raise ApiError("rate_limited", "gallery")
@@ -135,11 +146,18 @@ def attempt(con, v: Viewer, eid: int | None = None, topic: str | None = None, pl
         con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (k,))
 
 
-def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None = None, place: str | None = None) -> dict:
-    """A processed upload (media.save) into the Gallery under my name, and into the event's album when given; place:
+def post(con, v: Viewer, saved: dict, eid: int | None = None, topic: str | None = None, place: str | None = None,
+         consent: str | None = None) -> dict:
+    """A processed upload into the Gallery under my name, and into the event's album when given; place:
     where the phone says it was taken (PLACES)."""
     with tx(con):
-        check(con, v, eid, topic, place)
+        check(con, v, eid, topic, place, consent)
+        if consent is not None:
+            con.execute("""INSERT INTO gallery_consents (user_id, version, allowed, at) VALUES (?, ?, ?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET version = excluded.version, allowed = excluded.allowed, at = excluded.at
+                WHERE gallery_consents.version != excluded.version""", (v.id, CONSENT, int(consent == CONSENT), now()))
+        if place is not None and (consent == DECLINE or not _place_consent(con, v.id)):
+            place = None
         fid = event_photo_file(con, v.id, saved)
         if con.execute("INSERT OR IGNORE INTO gallery_photos (file_id, user_id, event_id, created_at, topic, place) VALUES (?, ?, ?, ?, ?, ?)",
                        (fid, v.id, eid, now(), topic, place)).rowcount and eid is not None:  # the same photo again: the one I posted
@@ -217,4 +235,4 @@ def mine_gone(con, uid: int) -> list[int]:
 
 from .account import _drop_unused  # noqa: E402
 from .organizing import PHOTO_SHOWN, _album_room, _photo_by, attach_album_photo, event_photo_file  # noqa: E402
-from .seats import _event, afisha_ok, on_afisha, on_afisha_args  # noqa: E402
+from .seats import _event, _hidden_orgs, _roles, _visible, afisha_ok, on_afisha, on_afisha_args  # noqa: E402

@@ -94,8 +94,8 @@ def test_attach_on_the_albums_rules(env):
                 (ahead, c.ids[AL]))
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'G-4', 0, 0)",
                 (went, c.ids[BO]))  # signed up, never came
-    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {"events": [  # its album open now
-        {"id": went, "title": "Went", "at": NOW - 7200, "end": NOW - 3600, "place": "Hall", "away": False}]}
+    assert c.get("/api/gallery", headers=tma(AL)).json()["post"] == {
+        "events": [{"id": went, "title": "Went"}], "placeConsent": None}  # its album is open now
     for eid in (ahead, old):  # not yet open, or closed; any student may add to an open album (owner)
         assert _post(c, AL, 1, event=eid).status_code == 403
     p = _post(c, AL, 1, event=went).json()
@@ -392,17 +392,44 @@ def test_account_deletion_leaves_no_topic_photo(env):
 
 
 def test_place_is_one_of_four_words_and_nothing_finer(env):
-    c, con, oid = _app(env)
-    assert _post(c, AL, seed=1, topic=None, place="b2").json()["place"] == "b2"
-    assert "place" not in _post(c, AL, seed=2, topic=None).json()  # no GPS in the photo: no word
+    c, con, _ = _app(env)
+    assert "place" not in _post(c, AL, seed=2, topic=None, place="main").json()  # no consent: still uploads
+    p = _post(c, AL, seed=1, topic=None, place="b2", consent=logic.gallery.CONSENT).json()
+    assert p["place"] == "b2"
+    assert c.get("/api/gallery", headers=tma(AL)).json()["post"]["placeConsent"] is True
+    assert c.get("/api/gallery", headers=tma(BO)).json()["post"]["placeConsent"] is None
     for bad in ("43.25,76.94", "Main", ""):  # coordinates never fit
         assert _post(c, AL, seed=3, topic=None, place=bad).status_code == 400, bad
-    assert [p.get("place") for p in c.get("/api/gallery", headers=tma(CY)).json()["photos"]] == [None, "b2"]
+    assert [p.get("place") for p in c.get("/api/gallery", headers=tma(CY)).json()["photos"]] == ["b2", None]
     assert {"place"} == {r[1] for r in con.execute("PRAGMA table_info(gallery_photos)")} - {"file_id", "user_id", "event_id", "created_at", "topic"}
-    # an event I came to says when and where it is held: the app attaches a photo taken there (off campus)
-    eid = _event(con, c, oid)
-    con.execute("UPDATE events SET place = 'Mad Murphy', place_url = 'https://2gis.kz/almaty/geo/1' WHERE id = ?", (eid,))
-    _came(con, c, eid, AL, "T-1")
-    mine = c.get("/api/gallery", headers=tma(AL)).json()["post"]["events"]
-    assert mine == [{"id": eid, "title": mine[0]["title"], "at": NOW - 7200, "end": NOW - 3600, "place": "Mad Murphy", "away": True}]
-    assert _post(c, AL, seed=4, event=eid, place="away").json()["event"]["id"] == eid
+    assert _post(c, AL, seed=1, place="dorm").json()["place"] == "b2"  # a retry never changes the original label
+    q = _post(c, BO, seed=1, place="away", consent=logic.gallery.DECLINE).json()
+    assert q["id"] != p["id"] and "place" not in q  # same bytes, separate author, no label after declining
+    assert c.get("/api/gallery", headers=tma(BO)).json()["post"]["placeConsent"] is False
+    assert "place" not in _post(c, BO, seed=4, place="away").json()
+    assert "place" not in _post(c, AL, seed=6, place="main", consent=logic.gallery.DECLINE).json()
+    assert _post(c, AL, seed=5, place="dorm").json()["place"] == "dorm"  # stored consent also works
+    logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
+    assert not con.execute("SELECT 1 FROM gallery_consents WHERE user_id = ?", (c.ids[AL],)).fetchone()
+    assert {p["id"], q["id"]} & set(_feed(c, CY)) == {q["id"]}
+
+
+def test_gallery_rejects_original_metadata(env):
+    c, con, _ = _app(env)
+    raw = io.BytesIO()
+    exif = Image.Exif()
+    exif[0x0132] = "2024:06:01 12:00:00"
+    exif[0x8825] = {1: "N", 2: (1, 2, 3), 3: "E", 4: (1, 2, 3)}
+    Image.new("RGB", (64, 48)).save(raw, "JPEG", exif=exif)
+    for data in (raw.getvalue(), _jpeg() + b"trailing bytes"):
+        assert c.post("/api/gallery", headers=tma(AL), content=data).status_code == 400
+    assert not con.execute("SELECT 1 FROM files").fetchone()
+    fid = _post(c, AL).json()["id"]
+    assert con.execute("SELECT taken_at FROM files WHERE id = ?", (fid,)).fetchone()[0] is None
+
+
+def test_legacy_picker_observes_event_visibility(env):
+    c, con, oid = _app(env)
+    eid = _event(con, c, oid, visibility="members")
+    _came(con, c, eid, AL, "T-1")  # still checked in after leaving the club
+    assert c.get("/api/gallery", headers=tma(AL)).json()["post"]["events"] == []

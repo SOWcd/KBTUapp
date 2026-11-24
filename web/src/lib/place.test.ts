@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AlbumPhoto, GalleryMyEvent } from './api';
-import { bySite, eventFor, exif, placeOf } from './place';
+import type { AlbumPhoto } from './api';
+import { bySite, exifGps, placeOf, sited } from './place';
 
 /** A JPEG's head with an EXIF block: taken at `when`, at lat/lon (degrees, minutes, seconds as the camera writes them). */
 function jpeg(lat: number, lon: number, when = '2026:11:20 19:30:00'): ArrayBuffer {
@@ -19,8 +19,6 @@ function jpeg(lat: number, lon: number, when = '2026:11:20 19:30:00'): ArrayBuff
   dms(130, lat); dms(154, lon);
   return new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 186, 0x45, 0x78, 0x69, 0x66, 0, 0, ...new Uint8Array(tiff.buffer), 0xff, 0xd9]).buffer;
 }
-const ev = (over: Partial<GalleryMyEvent> = {}): GalleryMyEvent => ({ id: 7, title: 'Pub quiz', at: 1795185000, end: 1795192200, place: 'Room 305', away: true, ...over });
-
 describe('place', () => {
   it('names the campus by the spot, anything else is away', () => {
     expect(placeOf(43.2553, 76.9431)).toBe('main');
@@ -29,21 +27,17 @@ describe('place', () => {
     expect(placeOf(43.2385, 76.9456)).toBe('away'); // two kilometres south
     expect(placeOf(51.5, -0.12)).toBe('away');
   });
-  it('reads the spot and the time from a photo, nothing from one without them', () => {
-    const got = exif(jpeg(43.25345, 76.90935));
-    expect(got.gps![0]).toBeCloseTo(43.25345, 4);
-    expect(got.gps![1]).toBeCloseTo(76.90935, 4);
-    expect(got.taken).toBe(Date.UTC(2026, 10, 20, 14, 30, 0) / 1000); // 19:30 in Almaty
-    expect(exif(jpeg(-33.8568, -151.2153)).gps![0]).toBeLessThan(0);
-    expect(exif(new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0, 4, 1, 2]).buffer)).toEqual({});
-    expect(exif(jpeg(43.25, 76.9).slice(0, 60))).toEqual({}); // cut short: no throw
+  it('reads a GPS spot from EXIF and lets photos without one through', () => {
+    const got = exifGps(jpeg(43.25345, 76.90935));
+    expect(got?.[0]).toBeCloseTo(43.25345, 4);
+    expect(got?.[1]).toBeCloseTo(76.90935, 4);
+    expect(exifGps(jpeg(-33.8568, -151.2153))?.[0]).toBeLessThan(0);
+    expect(exifGps(new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0, 4, 1, 2]).buffer)).toBeUndefined();
+    expect(exifGps(jpeg(43.25, 76.9).slice(0, 60))).toBeUndefined();
   });
-  it('an away photo goes to my event held elsewhere at that time', () => {
-    const taken = exif(jpeg(43.2385, 76.9456)).taken!;
-    expect(eventFor(taken, [ev()])?.id).toBe(7);
-    expect(eventFor(taken, [ev({ away: false })])).toBeUndefined(); // held on campus
-    expect(eventFor(taken, [ev({ away: false, place: 'Abay Ave 10' })])?.id).toBe(7); // a street address
-    expect(eventFor(taken + 86400, [ev()])).toBeUndefined(); // another day
+  it('returns only the place label from a file with GPS and a capture time', async () => {
+    expect(await sited(new Blob([jpeg(43.2385, 76.9456)]))).toBe('away');
+    expect(await sited(new Blob([jpeg(0, 0)]))).toBeUndefined();
   });
   it('sorts by place, the unnamed last', () => {
     const p = (id: number, place?: AlbumPhoto['place']) => ({ id, place }) as AlbumPhoto;

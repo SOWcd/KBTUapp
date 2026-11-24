@@ -1,12 +1,12 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryMyEvent, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import type { MyRegistration, SantaChats } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
 import { t, tn, type Key, subjectOf, i18n } from '../i18n/index.svelte';
-import { shrink } from '../photo';
+import { galleryJpeg } from '../photo';
 import { sited, type Place } from '../place';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
@@ -33,7 +33,7 @@ export const data = $state({
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
   galleryAlbums: [] as GalleryAlbum[], // the events' albums on its strip, the newest first (with the first page)
-  galleryPost: null as { events: GalleryMyEvent[] } | null, // I may post (GALLERY), and to which of my events
+  galleryPost: null as NonNullable<GalleryPage['post']> | null, // I may post (GALLERY), and my answer to the place-label ask
   galleryState: 'new' as 'new' | 'ready' | 'failed', // the Gallery's first page: not here yet, here, or the load failed with nothing to show
   galleryPosted: 0, // my posts started (postGallery): the Gallery scrolls to where they land
   orgs: [] as Org[],
@@ -100,7 +100,7 @@ export async function loadGallery(all = false): Promise<void> {
   if (data.galleryState === 'failed') data.galleryState = 'new';
   try {
     let page = await api.gallery();
-    data.galleryPost = page.post ?? null;
+    data.galleryPost = page.post ? { placeConsent: page.post.placeConsent } : null;
     data.galleryAlbums = page.albums ?? [];
     const got = [...page.photos];
     while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
@@ -117,7 +117,9 @@ export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.galler
  *  (one after another); the server's then takes its tile over (key: the same element, no flash). A refused one goes,
  *  with a toast; one the network dropped stays with Retry and Remove. */
 let pendingId = -1;
-const waiting = new Map<Id, { file: File; event?: Id; place?: Place }>(); // my uploads not landed yet, by their tile
+const GALLERY_CONSENT = 'place1'; // gallery.CONSENT: the policy's place-label clause
+let galleryChoice: { uid: Id; answer: Promise<boolean> } | undefined;
+const waiting = new Map<Id, { file: File; place?: Place; consent?: string }>(); // my uploads not landed yet, by their tile
 const size = (url: string) => new Promise<{ w: number; h: number }>((done) => {
   const img = new Image();
   img.onload = () => done({ w: img.naturalWidth, h: img.naturalHeight });
@@ -125,13 +127,21 @@ const size = (url: string) => new Promise<{ w: number; h: number }>((done) => {
   img.src = url;
 });
 export async function postGallery(files: File[]): Promise<void> {
-  const events = data.galleryPost?.events ?? [];
+  const uid = session.me?.id, stored = data.galleryPost?.placeConsent;
+  if (uid === undefined) return;
+  if (stored == null && galleryChoice?.uid !== uid) {
+    galleryChoice = { uid, answer: sheets.ask({ title: t('gallery.consentTitle'), text: t('gallery.consentText'),
+      ok: t('gallery.consentYes'), cancel: t('gallery.consentNo') }) };
+  }
+  const choice = stored == null ? await galleryChoice?.answer : undefined;
+  if (session.me?.id !== uid) return;
+  const consent = choice === undefined ? undefined : choice ? GALLERY_CONSENT : `${GALLERY_CONSENT}-no`;
   const mine = await Promise.all(files.slice(0, 10).map(async (file) => {
-    const { place, event } = await sited(file, events); // the file's first 256 KB, no decode: the tile is up a few ms after the pick
+    const place = (stored ?? choice) ? await sited(file) : undefined;
     const url = URL.createObjectURL(file), id = pendingId--;
-    waiting.set(id, { file, event: event?.id, place });
+    waiting.set(id, { file, place, consent });
     return { id, key: id, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: session.me?.name ?? null, mine: true, pending: true,
-      ...(place ? { place } : {}), ...(event ? { event: { id: event.id, title: event.title } } : {}) } satisfies AlbumPhoto;
+      ...(place ? { place } : {}) } satisfies AlbumPhoto;
   }));
   data.gallery = [...[...mine].reverse(), ...data.gallery]; // the last one uploads last: the newest, on top
   data.galleryPosted++;
@@ -154,11 +164,8 @@ async function send(p: AlbumPhoto): Promise<'ok' | 'failed' | 'stop' | 'gone'> {
   const w = waiting.get(p.id);
   if (!w) return 'gone';
   try {
-    const body = await shrink(w.file);
-    // ponytail: a webview that can't redraw the photo (iOS 14, a format it can't read) can't post: the original would
-    // carry its EXIF, the GPS spot with it, off the phone. Strip the EXIF bytes by hand if such phones matter.
-    if (body === w.file) throw new ApiErr('bad_input', 'image');
-    const got = await api.postGalleryPhoto(body, w.event, w.place);
+    const body = await galleryJpeg(w.file, p.url).catch(() => { throw new ApiErr('bad_input', 'image'); });
+    const got = await api.postGalleryPhoto(body, w.place, w.consent);
     await size(got.thumb); // fetched before it takes the tile over: the phone's copy never gives way to a blank
     data.gallery = data.gallery.filter((x) => x.id !== got.id).map((x) => (x.id === p.id ? { ...got, key: p.id } : x));
     waiting.delete(p.id);

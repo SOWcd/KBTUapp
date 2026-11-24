@@ -179,7 +179,7 @@ export const server = {
 
   events: (q: { from?: Ts; to?: Ts; org?: Id } = {}): Promise<EventCard[]> => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
   gallery: (before?: Id): Promise<GalleryPage> => call('GET', '/gallery' + query({ before })), // every photo I may see, newest first (students; before: the last id I have)
-  postGalleryPhoto: (file: Blob, event?: Id, place?: AlbumPhoto['place']): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ event, place }), file), // into the Gallery under my name (GalleryPage.post); event: its album too; place: the one word lib/place.ts read from the photo, never its coordinates
+  postGalleryPhoto: (file: Blob, place?: AlbumPhoto['place'], consent?: string): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ place, consent }), file),
   deleteGalleryPhoto: (id: Id): Promise<void> => call('DELETE', `/gallery/${id}`), // mine: from the Gallery and the albums I put it in
   pastEvents: (org?: Id, mine?: boolean): Promise<EventCard[]> => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })), // org: a club's latest few; mine: the ones I was signed up for or came to
   attendedEvents: (): Promise<EventCard[]> => call('GET', '/events/past?attended=1'), // my check-ins in the last month
