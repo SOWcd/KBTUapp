@@ -1269,7 +1269,7 @@ def replay_deletions(con) -> tuple[int, int]:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
-    ("fchan_feed_pages", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),

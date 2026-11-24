@@ -2281,9 +2281,19 @@ MIGRATIONS: list[tuple[int, str]] = [
         allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
         at INTEGER NOT NULL
     ) STRICT;"""),
-    # kbtu.admin dmp: DMP's staff by Telegram id or username, put in by the creator before they open the app: a one-time
-    # "Hi, DMP" leading to Microsoft (account.me dmpHi), and staff_ok's no-student-ID sign-in. No users link: no FK
-    (226, """CREATE TABLE IF NOT EXISTS dmp_list (  -- IF NOT EXISTS: tests rewind user_version
+    # a broadcast's Interesting / Not interesting (bot._tapped): one vote per person per broadcast, to learn what to send
+    (226, """CREATE TABLE IF NOT EXISTS broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;"""),
+    # kbtu.admin dmp: DMP's staff, put in by the creator before they open the app: a one-time "Hi, DMP" leading to
+    # Microsoft (account.me dmpHi), and staff_ok's no-student-ID sign-in. Only tg_id grants anything; a row added by
+    # username alone is an invitation that binds to the Telegram whose own signed data first shows it (account.dmp_bind).
+    # No users link: no FK
+    (227, """CREATE TABLE IF NOT EXISTS dmp_list (  -- IF NOT EXISTS: tests rewind user_version
       id INTEGER PRIMARY KEY,
       tg_id INTEGER UNIQUE,
       tg_username TEXT UNIQUE COLLATE NOCASE,
