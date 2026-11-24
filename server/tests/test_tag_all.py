@@ -622,18 +622,3 @@ def test_mtbot_session_per_database_and_bot(env, monkeypatch):
     paths = {mtbot._path(replace(cfg, db_path=d, bot_token=t)) for d in ("/v/a.db", "/v/b.db") for t in ("11:x", "22:x")}
     assert len(paths) == 4 and all("x" not in p.name.split("mtbot")[1] for p in paths)    # the id, never the secret
     assert mtbot._path(replace(cfg, bot_token="secret")) is None and mtbot._path(replace(cfg, db_path=":memory:")) is None
-
-
-def test_studio_keeps_all_to_group_admins(env, monkeypatch):
-    """Studio's switch (chat_call_admins): off, a club role (head 20) no longer calls; the group's admin still does."""
-    c, cfg = env
-    con = _setup(c, cfg, monkeypatch)
-    cid, oid = con.execute("SELECT id, org_id FROM chats WHERE tg_chat_id = -100").fetchone()
-    put = lambda tg, on: c.put(f"/api/orgs/{oid}/chats/{cid}/call", headers=tma(tg), json={"on": on})  # noqa: E731
-    assert _tagged(_run(cfg, con, _Http(), _msg(20)))
-    assert put(31, False).status_code == 403 and put(21, "no").status_code == 400  # a member; not a bool
-    r = put(21, False)  # the President
-    assert r.status_code == 200 and [x["callRoles"] for x in r.json()] == [False]
-    assert not _tagged(_run_fresh(cfg, con, _Http(), _msg(20), monkeypatch))
-    assert _tagged(_run_fresh(cfg, con, _Http(admins={20}), _msg(20), monkeypatch))
-    assert put(21, True).status_code == 200 and _tagged(_run_fresh(cfg, con, _Http(), _msg(20), monkeypatch))
