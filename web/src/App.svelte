@@ -44,7 +44,7 @@
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
-  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; start: string; onsettings: () => void }> } = $props();
+  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
@@ -444,30 +444,6 @@
   $effect(() => {
     if (!session.banned && !session.revoked) return;
     untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
-  });
-
-  const tabLink: Record<Tab, string> = { afisha: 'afisha', forum: 'fp', club: 'clubs', profile: 'me' };
-  const screenLink = $derived.by(() => {
-    // Links only describe destinations. Never forward launch tokens or private overlay props.
-    for (const o of [...overlays].reverse()) {
-      if (o.closing) continue;
-      const id = o.props.id;
-      switch (o.stat) {
-        case 'sheet.event': if (typeof id === 'number' && !o.props.preview) return `${o.props.album ? 'ph' : 'ev'}_${id}`; break;
-        case 'sheet.club': if (typeof id === 'number') return `cl_${id}`; break;
-        case 'sheet.person': if (typeof id === 'number') return `u_${id}`; break;
-        case 'sheet.ticket': if (typeof id === 'number') return `ev_${id}`; break;
-        case 'sheet.comments': if (typeof id === 'number') return `${o.props.kind === 'event' ? 'cm' : 'cp'}_${id}`; break;
-        case 'sheet.studio': if (typeof o.props.org === 'number') return `cl_${o.props.org}`; break;
-        case 'sheet.friends': return 'friends';
-        case 'sheet.map': return o.props.exit ? 'exit' : 'map';
-        case 'sheet.week': return 'sched';
-        case 'sheet.awards': return 'awards';
-        case 'sheet.news': return 'news';
-        case 'sheet.feed': return 'feed';
-      }
-    }
-    return tabLink[ui.tab];
   });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
@@ -1000,7 +976,7 @@
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
