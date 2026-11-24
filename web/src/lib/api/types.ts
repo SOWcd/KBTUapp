@@ -922,3 +922,19 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Native surveys; answer content and identities are never returned to the student list. */
+export interface ResearchQuestion {
+  id: string; type: 'text' | 'long' | 'choice' | 'multi' | 'scale'; label: string;
+  hint?: string; required?: boolean; options?: string[]; other?: boolean; low?: string; high?: string;
+}
+export interface ResearchSpec {
+  title: string; intro: string; thanks: string; lang: 'ru' | 'kk' | 'en';
+  sections: { title: string; questions: ResearchQuestion[] }[];
+}
+export type ResearchAnswers = Record<string, string | string[]>;
+export interface ResearchSurvey { slug: string; title: string; about: string; answers: number; answered: boolean; spec: ResearchSpec }
+export interface ResearchInput { title: string; goal: string; questions: string; organizer: string; consent: string }
+export interface ResearchRequest extends Omit<ResearchInput, 'consent'> {
+  id: Id; person: PersonRef; username: string | null; at: Ts; approved: boolean;
+}

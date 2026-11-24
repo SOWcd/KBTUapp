@@ -30,6 +30,7 @@
   import { menu } from '../../ui/menu';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import ChartNoAxesColumn from '@lucide/svelte/icons/chart-no-axes-column';
   import BookOpen from '@lucide/svelte/icons/book-open';
   import Avatar from '../../ui/Avatar.svelte';
   import { initials } from '../../ui/OrgLogo.svelte';
@@ -42,7 +43,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
   import { haptic, inTelegram, on, openLink, shareCard } from '../../lib/tg';
-  import { phrase } from '../../lib/state/data.svelte';
+  import { phrase, loadResearch } from '../../lib/state/data.svelte';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
   import { TAB_ICON } from '../../ui/icons';
@@ -114,7 +115,7 @@
     try { await loadOlder(); } catch (e) { fail(e); } finally { older = false; }
   }
 
-  $effect(() => { if (here) untrack(() => { void refreshChannel(); }); });
+  $effect(() => { if (here) untrack(() => { void refreshChannel(); void loadResearch(); }); });
   $effect(() => { if (here && channel.focus != null) untrack(() => { void seek(); }); });
   // Keep the divider at this visit's starting point. Prefetches, covered tabs and posts behind
   // the "N new" pill do not advance the server cursor.
@@ -270,14 +271,12 @@
     <span class="prompt ellipsis">{t('fc.share')}</span>
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
-  <!-- the tab's two side doors, small glass pills under the composer (two full cards here crowded the feed's head):
-       the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the Student Government alone) -->
-  {#if me?.subjects || me?.appeals}
-    <div class="doors">
-      {#if me?.subjects}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.subjects(); }}>{#snippet icon()}<BookOpen size={16} strokeWidth={2} />{/snippet}{t('sj.row')}</Button>{/if}
-      {#if me?.appeals}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.appeals(); }}>{#snippet icon()}<Megaphone size={16} strokeWidth={2} />{/snippet}{t('apl.chip')}</Button>{/if}
-    </div>
-  {/if}
+  <!-- Small side doors keep the feed's head compact. Research belongs to the students' voice. -->
+  <div class="doors">
+    <Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.research(); }}>{#snippet icon()}<ChartNoAxesColumn size={16} strokeWidth={2} />{/snippet}{t('research.title')}</Button>
+    {#if me?.subjects}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.subjects(); }}>{#snippet icon()}<BookOpen size={16} strokeWidth={2} />{/snippet}{t('sj.row')}</Button>{/if}
+    {#if me?.appeals}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.appeals(); }}>{#snippet icon()}<Megaphone size={16} strokeWidth={2} />{/snippet}{t('apl.chip')}</Button>{/if}
+  </div>
 
   <div class="order">
     <Segmented items={[{ value: 'for_you', label: t('fc.forYou') }, { value: 'new', label: t('fc.newOrder') }]}

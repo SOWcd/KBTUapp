@@ -2,11 +2,12 @@
 answers; the answers stay in our database. A form is a JSON spec made by hand (`admin form new`, no builder):
 
   {"title", "intro", "thanks", "lang": "ru" | "kk" | "en",
+   "research"?: true, "about"?: "one line for the Forum research list",
    "sections": [{"title", "questions": [{"id", "type": "text" | "long" | "choice" | "multi" | "scale", "label",
                  "hint"?, "options"? (choice, multi), "other"?: bool (choice, multi: a free line of their own),
                  "low"?, "high"? (scale: what 1 and 5 mean), "required"?: bool}]}]}
 
-Answers are anonymous: no IP, no user, no cookie is stored, only the answers and the time. The page is one HTML
+Public answers are anonymous. Research forms use the verified, signed-by-default app flow in research.py. The page is one HTML
 response with its CSS and a small script inline, so it opens at once anywhere; its colours, radii and sizes are
 copied from web/src/ui/tokens.css (a separate page: it can't import them)."""
 from __future__ import annotations
@@ -34,7 +35,7 @@ _SLUG = re.compile(r"[a-z0-9][a-z0-9-]{1,39}")
 _QID = re.compile(r"[a-z0-9_]{1,32}")
 # control and bidi characters out (answers are printed in the admin's terminal and opened in a spreadsheet); a long
 # answer keeps its line breaks
-_CTRL = re.compile("[\x00-\x09\x0b-\x1f\x7f-\x9f‪-‮⁦-⁩]")
+_CTRL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069\ud800-\udfff]")
 
 
 def _line(x: object, most: int) -> str:
@@ -89,11 +90,20 @@ def check_spec(spec: object) -> dict:
 def create(con, slug: str, spec: object) -> int:
     if not _SLUG.fullmatch(slug):
         raise ApiError("bad_input", "slug: a-z 0-9 -, 2 to 40")
-    body = json.dumps(check_spec(spec), ensure_ascii=False)
+    checked = check_spec(spec)
+    if type(spec.get("research", False)) is not bool:
+        raise ApiError("bad_input", "research: true or false")
+    about = _line(spec.get("about"), 200) if spec.get("research") else ""
+    if spec.get("research") and not about:
+        raise ApiError("bad_input", "research: about required")
+    body = json.dumps(checked, ensure_ascii=False)
     with tx(con):
         if one(con, "SELECT 1 FROM forms WHERE slug = ?", slug):
             raise ApiError("conflict", "slug taken")
-        return con.execute("INSERT INTO forms (slug, spec, created_at) VALUES (?, ?, ?)", (slug, body, core.now())).lastrowid
+        fid = con.execute("INSERT INTO forms (slug, spec, created_at) VALUES (?, ?, ?)", (slug, body, core.now())).lastrowid
+        if about:
+            con.execute("INSERT INTO research_forms (form_id, about) VALUES (?, ?)", (fid, about))
+        return fid
 
 
 def close(con, slug: str) -> None:
@@ -105,20 +115,12 @@ def _questions(spec: dict) -> list[dict]:
     return [q for s in spec["sections"] for q in s["questions"]]
 
 
-def submit(con, slug: str, body: object) -> None:
-    """One answer sheet. Unknown ids are dropped, texts cut to their caps; a choice outside the options, a missing
-    required answer or an empty sheet is bad_input."""
-    f = one(con, "SELECT id, spec, closed_at FROM forms WHERE slug = ?", slug)
-    if not f:
-        raise ApiError("not_found")
-    if f["closed_at"]:
-        raise ApiError("closed")
+def answers(spec: dict, body: object) -> dict:
+    """Shared answer validation for public forms and the native research sheet."""
     if not isinstance(body, dict):
         raise ApiError("bad_input")
-    if body.get("website"):  # the honeypot: a field no person sees. A bot gets its ok and nothing is kept
-        return
     out: dict[str, str | list[str]] = {}
-    for q in _questions(json.loads(f["spec"])):
+    for q in _questions(spec):
         got, kind = body.get(q["id"]), q["type"]
         vals = [x for x in (got if isinstance(got, list) else [got])[:40] if isinstance(x, str)]
         if kind in ("text", "long"):
@@ -143,7 +145,24 @@ def submit(con, slug: str, body: object) -> None:
             raise ApiError("bad_input", "required")
     if not out:
         raise ApiError("bad_input", "empty")
-    with tx(con):  # the count and the insert as one: parallel posts can't pass the day's cap
+    return out
+
+
+def submit(con, slug: str, body: object) -> None:
+    """Public forms only. Check the form and insert under one lock, including closure and research status."""
+    with tx(con):
+        f = one(con, "SELECT id, spec, closed_at FROM forms WHERE slug = ?", slug)
+        if not f:
+            raise ApiError("not_found")
+        if one(con, "SELECT 1 FROM research_forms WHERE form_id = ?", f["id"]):
+            raise ApiError("forbidden", "research_app")
+        if f["closed_at"] is not None:
+            raise ApiError("closed")
+        if not isinstance(body, dict):
+            raise ApiError("bad_input")
+        if body.get("website"):  # the public page's honeypot
+            return
+        out = answers(json.loads(f["spec"]), body)
         if one(con, "SELECT COUNT(*) FROM form_answers WHERE form_id = ? AND created_at > ?", f["id"], core.now() - 86400)[0] >= A_DAY:
             raise ApiError("rate_limited", "form_day")
         con.execute("INSERT INTO form_answers (form_id, answers, created_at) VALUES (?, ?, ?)", (f["id"], json.dumps(out, ensure_ascii=False), core.now()))
@@ -151,23 +170,34 @@ def submit(con, slug: str, body: object) -> None:
 
 def listing(con) -> list[tuple[str, bool, int]]:
     return [(r["slug"], r["closed_at"] is None, r["n"]) for r in rows(con, """SELECT f.slug, f.closed_at,
-        (SELECT COUNT(*) FROM form_answers a WHERE a.form_id = f.id) n FROM forms f ORDER BY f.id""")]
+        (SELECT COUNT(*) FROM form_answers a WHERE a.form_id = f.id)
+        + (SELECT COUNT(*) FROM research_answers a WHERE a.form_id = f.id) n FROM forms f ORDER BY f.id""")]
 
 
 def export(con, slug: str) -> str:
-    """The answers as CSV: the time (UTC), then a column per question under its label; a multi's picks joined by "; "."""
+    """Owner's CSV. Research adds account/name columns; anonymous rows have neither."""
     f = one(con, "SELECT id, spec FROM forms WHERE slug = ?", slug)
     if not f:
         raise ApiError("not_found")
     qs = _questions(json.loads(f["spec"]))
-    # a cell starting with = + - @ is a formula to a spreadsheet: an apostrophe makes it text
-    safe = lambda s: "'" + s if s[:1] in ("=", "+", "-", "@") else s  # noqa: E731
+    research = one(con, "SELECT 1 FROM research_forms WHERE form_id = ?", f["id"]) is not None
+    safe = lambda s: "'" + s if s.lstrip()[:1] in ("=", "+", "-", "@") else s  # noqa: E731
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["at"] + [q["label"] for q in qs])
-    for r in rows(con, "SELECT answers, created_at FROM form_answers WHERE form_id = ? ORDER BY id", f["id"]):
+    w.writerow(["at"] + (["user_id", "name"] if research else []) + [safe(q["label"]) for q in qs])
+    # Keep legacy public answers anonymous, including the live library's earlier answers.
+    records = [dict(r) | {"user_id": None, "name": "", "day_only": False} for r in rows(con,
+        "SELECT answers, created_at FROM form_answers WHERE form_id = ? ORDER BY id", f["id"])]
+    if research:
+        records += [dict(r) | {"day_only": True} for r in rows(con, """SELECT a.answers, a.day created_at, a.user_id,
+            trim(COALESCE(s.first_name, u.tg_first_name, '') || ' ' || COALESCE(s.last_name, u.tg_last_name, '')) name
+            FROM research_answers a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN students s ON s.user_id = a.user_id
+            WHERE a.form_id = ? ORDER BY a.id""", f["id"])]
+    for r in records:
         a = json.loads(r["answers"])
-        w.writerow([time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["created_at"]))]
+        stamp = "" if r["created_at"] is None else time.strftime(
+            "%Y-%m-%d" if r["day_only"] else "%Y-%m-%d %H:%M", time.gmtime(r["created_at"]))
+        w.writerow([stamp] + ([str(r["user_id"] or ""), safe(_line(r["name"], 300))] if research else [])
                    + [safe("; ".join(v) if isinstance(v := a.get(q["id"], ""), list) else v) for q in qs])
     return buf.getvalue()
 
@@ -197,16 +227,20 @@ def _question(q: dict, t: dict) -> str:
     return f'<fieldset{req}><legend>{e(q["label"])}{star}{hint}</legend>{field}<p class="e">{e(t["required"])}</p></fieldset>'
 
 
-def page(con, slug: str) -> tuple[int, str]:
+def page(con, slug: str, app_url: str = "/?startapp=research") -> tuple[int, str]:
     """(status, html) of /f/<slug>: the form, or a calm page saying there is none (404) or it is closed (410)."""
     e = html.escape
-    f = one(con, "SELECT spec, closed_at FROM forms WHERE slug = ?", slug)
+    f = one(con, "SELECT id, spec, closed_at FROM forms WHERE slug = ?", slug)
     spec = json.loads(f["spec"]) if f else {"lang": "ru"}
     t = texts.FORM_PAGE[spec["lang"]]
-    if not f or f["closed_at"]:
+    if not f or f["closed_at"] is not None:
         title, line = t["closed" if f else "none"]
         body = f'<section class="note"><h1>{e(title)}</h1><p class="intro">{e(line)}</p></section>'
         return (410 if f else 404), _fill(spec["lang"], e(title), body, e(t["made"]))
+    if one(con, "SELECT 1 FROM research_forms WHERE form_id = ?", f["id"]):
+        body = (f'<section class="note"><h1>{e(spec["title"])}</h1><p class="intro">{e(t["research"])}</p>'
+                f'<a href="{e(app_url, quote=True)}">{e(t["openApp"])}</a></section>')
+        return 200, _fill(spec["lang"], e(spec["title"]), body, e(t["made"]))
     n = len(spec["sections"])
     cards = "".join(f'<section class="card"><p class="step">{i} / {n}</p>' + (f'<h2>{e(s["title"])}</h2>' if s["title"] else "")
                     + "".join(_question(q, t) for q in s["questions"]) + "</section>" for i, s in enumerate(spec["sections"], 1))

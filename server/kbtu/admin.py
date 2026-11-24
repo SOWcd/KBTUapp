@@ -73,7 +73,9 @@
   .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
   .venv/bin/python -m kbtu.admin form new <slug> --gz <base64 gzip json>   a public form at /f/<slug>, open to anyone with no
                                 account (logic/forms.py has the spec's shape); answers are anonymous. form close <slug> stops it,
-                                form answers <slug> prints them as CSV (a column per question), form list counts them
+                                form answers <slug> prints them as CSV (a column per question), form list counts them.
+                                Spec research: true and about: "one line" makes an app-only student survey in Forum research.
+                                Research answers are signed by default, with an anonymous option; CSV includes user_id/name.
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
