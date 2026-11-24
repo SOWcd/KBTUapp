@@ -147,13 +147,14 @@
       haptic.soft();
       await tick();
       requestAnimationFrame(() => {
+        if (!swing) return; // the profile closed mid-turn (a sheet's hero, Back): nothing left to land
         const back = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
         out.cancel();
         shade.getAnimations().forEach((x) => x.cancel());
         shade.animate([{ opacity: 0.55, background: 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))' },
           { opacity: 0.5, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.22))', offset: 0.45 },
           { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 400, easing: LAND });
-        back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) change(); };
+        back.onfinish = () => { spinning = false; if (!swing) return; swing.style.willChange = ''; if (untrack(() => look) !== face) change(); };
       });
     };
   }
