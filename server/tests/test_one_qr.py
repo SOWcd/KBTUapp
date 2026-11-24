@@ -9,7 +9,7 @@ import pytest
 
 from kbtu import checkin, db
 from test_checkin_door import _ev, _mem, _qr, _reg
-from test_club_checkin import _mail
+from test_club_checkin import _badge, _mail
 from test_core import _club_runs, env, login, tma  # noqa: F401
 from test_review_checkin import _scan, _signed
 
@@ -55,6 +55,39 @@ def test_member_to_the_team_guests_as_before(env):
     assert c.post(f"/api/screens/{g}/finish", headers=tma(9)).status_code == 200
     csv = c.get(c.post(f"/api/screens/{g}/csv", headers=tma(9)).json()["url"]).text
     assert "Testov Cat" in csv and "Testov Ann" not in csv
+    con.close()
+
+
+@pytest.mark.parametrize("audience,tg,team", [(None, 1, True), (None, 3, False), ("team", 3, True), ("guests", 1, False)])
+def test_badge_uses_the_same_list_as_a_scan(env, audience, tg, team):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    _, ann, eid = _setup(c, con)
+    cat = login(c, 3, "cat")
+    person = ann if tg == 1 else cat
+    con.execute("UPDATE events SET door_audience = ? WHERE id = ?", (audience, eid))
+    g, _ = _qr(c, 9, eid)  # the organizer starts the team session too
+    sid = _crew(con, eid)["id"] if team else g
+    qr = "u_" + person["qr"]
+    assert _badge(c, 9, g, qr).json()["done"]
+    mark = con.execute("SELECT done_at, marked_by FROM qr_marks WHERE session_id = ? AND user_id = ?", (sid, person["id"])).fetchone()
+    assert mark["done_at"] and mark["marked_by"] == c.get("/api/me", headers=tma(9)).json()["id"]
+    reg = con.execute("SELECT walk_in, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", (eid, person["id"])).fetchone()
+    if team:
+        assert reg is None and _marks(con, g, False) == 0
+    else:
+        assert reg["walk_in"] and reg["checked_in_at"]
+    again = _badge(c, 9, g, qr)
+    assert again.status_code == 409 and again.json()["message"] == "already"
+    assert c.put(f"/api/events/{eid}/audience", headers=tma(9), json={"audience": "team"}).status_code == 200
+    assert c.post(f"/api/events/{eid}/screen", headers=tma(9)).json()["session"] == g
+    again = _badge(c, 9, g, qr)  # changing the audience must not count an existing guest again
+    assert again.status_code == 409 and again.json()["message"] == "already"
+    assert _marks(con, sid) == 1
+    assert con.execute("SELECT COUNT(*) FROM qr_marks WHERE user_id = ?", (person["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_badge'").fetchone()[0] == 1
+    csv = c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]).text.splitlines()
+    assert csv[0].endswith(",by_hand") and csv[1].rsplit(",", 1)[1].startswith("Dana")
     con.close()
 
 
