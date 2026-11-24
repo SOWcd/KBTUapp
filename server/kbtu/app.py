@@ -1522,8 +1522,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return casting.showed(con, v, aid, body)
 
     @app.post("/api/rounds/{rid}/send")
-    def round_send(rid: int, con: Con, v: Me, body: dict | None = Body(None)):
-        return casting.send(con, v, rid, (body or {}).get("final", True) is not False)  # no body: an older app's final send
+    def round_send(rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return casting.send(con, v, rid, body.get("final", True) is not False)
 
     @app.get("/api/orgs/{oid}/memo")
     def org_memo(oid: int, con: Con, v: Me, later: bool = False):
@@ -2719,11 +2719,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             start = f"ev_{ref}_{logic.seats.ev_ref(v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
-        elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
+        elif kind in ("rf", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's award link (logic.grant_link): up to `uses` people (null: no cap) for `days`
                 code = body.get("code")
-                # an older app's "many": no cap, 14 days
-                uses, days = (None, 14) if body.get("many") is True else (body.get("uses", 1), body.get("days", 7))
+                uses, days = body.get("uses", 1), body.get("days", 7)
                 token = logic.grant_link(con, v, code, uses, days)
                 start = f"gl_{token}"
                 fields = {"award": texts.pick(texts.BADGE_TITLES if code in logic.BADGE_OF else texts.ACH_NAMES, lang)[code],
@@ -2736,10 +2735,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
-            elif kind in ("rf", "fr"):  # my one invite link (referral and friends; "fr" an older app's): my link code, never my ID nor my badge's secret
+            elif kind == "rf":  # my one invite link (referral and friends): my link code, never my ID nor my badge's secret
                 if not v.student:
                     raise ApiError("need_student")
-                kind, start = "rf", f"r_{logic._qr_code(con, v.id, 'link_code')}"
+                start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
             elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link; many: the team's 7-day link
                 link = logic.team_link(con, v, ref) if body.get("many") is True else logic.invite(con, v, ref)

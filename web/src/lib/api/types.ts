@@ -21,7 +21,7 @@ export interface ClubApplication {
 export type PathStep = 'profile' | 'round' | 'channel' | 'collab' | 'top';
 export interface OfficialRequest { id: Id; status: 'pending' | 'approved' | 'rejected'; reason: string | null; createdAt: Ts; decidedAt: Ts | null; againAt: Ts | null }
 export interface OfficialPath { steps: Record<PathStep, boolean>; members: number; events: number; guests: number /* the most different outside guests two of those events drew */; request: OfficialRequest | null }
-export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
+export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean;
