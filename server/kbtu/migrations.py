@@ -2294,7 +2294,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
     ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
     ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));
-    CREATE TABLE qr_meet_scans (
+    CREATE TABLE IF NOT EXISTS qr_meet_scans (
       id INTEGER PRIMARY KEY,
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2302,8 +2302,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
       flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
     ) STRICT;
-    CREATE INDEX qr_meet_scans_session ON qr_meet_scans(session_id, id);
-    CREATE INDEX qr_meet_scans_user ON qr_meet_scans(user_id);
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_session ON qr_meet_scans(session_id, id);
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_user ON qr_meet_scans(user_id);
     UPDATE qr_sessions SET meetup = 1 WHERE crew_event_id IS NOT NULL OR (org_id IS NOT NULL AND event_id IS NULL);
     """),
 ]

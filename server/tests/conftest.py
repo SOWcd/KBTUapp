@@ -119,7 +119,12 @@ def fresh_process_memory(monkeypatch):
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""DROP TABLE gallery_consents;
+        con.executescript("""DROP TABLE qr_meet_scans;
+            ALTER TABLE qr_marks DROP COLUMN meetup_review;
+            ALTER TABLE qr_sessions DROP COLUMN department_name;
+            ALTER TABLE qr_sessions DROP COLUMN department_id;
+            ALTER TABLE qr_sessions DROP COLUMN meetup;
+            DROP TABLE gallery_consents;
             ALTER TABLE gallery_photos DROP COLUMN place;
             ALTER TABLE posts DROP COLUMN tg_fmt;
             DROP TABLE fchan_feed_pages;
