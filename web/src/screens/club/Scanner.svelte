@@ -96,8 +96,9 @@
   $effect(() => { overlay.title = qr ? t('mk.title') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
   // one of our own QRs (the door's own check-in QR, a club's link...) read by this scanner: opened as if tapped, so a
-  // team member scanning the door's QR here is marked himself (people scanned it with this scanner)
-  const ours = (raw: string) => raw.trim().match(/^(?:https?:\/\/)?t\.me\/KBTUappBot(?:\/\w+)?\?startapp=([\w-]{1,64})$/i)?.[1];
+  // team member scanning the door's QR here is marked himself (people scanned it with this scanner). Not a badge
+  // (u_<id>_<code>, Profile's QR): that one is a walk-in, the server's to let in (organizing.checkin)
+  const ours = (raw: string) => raw.trim().match(/^(?:https?:\/\/)?t\.me\/KBTUappBot(?:\/\w+)?\?startapp=((?!u_\d+_[A-Z2-7]{10}$)[\w-]{1,64})$/i)?.[1];
   let last = ''; // the code just read: a flagged receipt is let in by it after a look (admit)
   async function check(raw: string, admit = false) {
     const p = ours(raw);
