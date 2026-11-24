@@ -50,6 +50,7 @@
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
@@ -206,15 +207,16 @@ def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
             if len(matches) != 1:
                 sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
             only = matches[0]["id"]
-        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
                 WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
         if dry:
-            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, name)[0]
+            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
                 SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), only, only, only, name)).rowcount
+                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
@@ -482,6 +484,9 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "broadcast-votes" and len(args) == 2:
+        yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
+        print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
         _broadcast(con, *args[1:])
     elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)

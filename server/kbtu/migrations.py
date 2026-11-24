@@ -2281,4 +2281,12 @@ MIGRATIONS: list[tuple[int, str]] = [
         allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
         at INTEGER NOT NULL
     ) STRICT;"""),
+    # a broadcast's Interesting / Not interesting (bot._tapped): one vote per person per broadcast, to learn what to send
+    (226, """CREATE TABLE IF NOT EXISTS broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;"""),
 ]

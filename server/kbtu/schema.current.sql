@@ -132,6 +132,13 @@ CREATE TABLE bot_outbox (
   error      TEXT,
   UNIQUE (user_id, kind, ref)
 ) STRICT;
+CREATE TABLE broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;
 CREATE TABLE campus_places (
       id          INTEGER PRIMARY KEY,
       kind        TEXT NOT NULL CHECK (kind IN ('place', 'dean', 'office')),
