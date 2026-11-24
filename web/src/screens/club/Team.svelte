@@ -37,6 +37,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Skeleton from '../../ui/Skeleton.svelte';
   import { menu } from '../../ui/menu';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   // at: that person's sheet opens (Studio → Chats → Roles and admins), once
   let { overlay, at }: { overlay: Overlay; at?: number } = $props();
@@ -69,7 +71,8 @@
   const vice = $derived(may(m, 'team'));  // roles, removing at once, probation off
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
-  const shown = $derived((list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))));
+  const ORDERS: Order<TeamMember>[] = [usual('sort.role'), byName((x) => x.fullName), newest((x) => x.joinedAt)]; // the server's: highest role first
+  const shown = $derived(sorted('team', ORDERS, (list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter)))));
   // one list, highest role first (the server's order); departments are their own chips (grouped, the
   // President would sit last under "no department" and the heads would scatter)
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
@@ -197,7 +200,6 @@
     {/if}
 
     {#if list}
-      {#if setup?.tags.length || onProbation}
         {#if depts.length}
           <div class="chips">
             <Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>
@@ -208,8 +210,8 @@
         {/if}
         <!-- one row whatever the count: the tags sit behind one chip that opens a menu, and the chosen one shows on it
              (long department names in a scrolling row hid the chosen one; wrapped, six of them took half the screen) -->
-        <div class="chips">
-          {#if !depts.length}<Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>{/if}
+        {#if setup?.tags.length || onProbation || list.length > 1}<div class="chips last">
+          {#if !depts.length && (setup?.tags.length || onProbation)}<Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>{/if}
           {#if otherTags.length}
             {@const g = typeof filter === 'number' && !dept ? tagOf.get(filter) : null}
             <Chip selected={!!g} onclick={tagMenu}>
@@ -218,8 +220,9 @@
             </Chip>
           {/if}
           {#if onProbation}<Chip selected={filter === 'probation'} onclick={() => (filter = filter === 'probation' ? null : 'probation')}>{t('team.probation')}<span class="n num">{onProbation}</span></Chip>{/if}
-        </div>
-      {/if}
+          <!-- the filters' row ends with the order (alone in it when the club has no tags) -->
+          {#if list.length > 1}<SortChip list="team" orders={ORDERS} />{/if}
+        </div>{/if}
       {#if dept && vice}<span class="deptinv"><Button kind="tinted" size="s" onclick={() => shareInvite(m.org, { id: dept.id, name: dept.name })}>{#snippet icon()}<LinkIcon size={16} />{/snippet}{t('team.inviteDept', { dept: dept.name })}</Button></span>{/if}
       <Group>
         {#each shown as x (x.person.id)}
@@ -254,6 +257,8 @@
   .chips { display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter); }
   .chips::-webkit-scrollbar { display: none; }
   .chips :global(.fc) { max-width: 75vw; }
+  .chips.last { align-items: center; }
+  .chips.last :global(.sort) { padding-left: var(--s-2); }
   .n { flex: none; font-weight: 700; opacity: 0.6; }
   .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
   .deptinv { align-self: flex-start; }
