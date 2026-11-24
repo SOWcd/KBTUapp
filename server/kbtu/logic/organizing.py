@@ -690,7 +690,6 @@ def review_event(con, v: Viewer, eid: int, ok: object, reason: object = None) ->
             raise ApiError("conflict")
         if ok is True:
             out = _publish(con, v, e, True)
-            con.execute("DELETE FROM event_reviews WHERE event_id = ?", (eid,))
             if e["created_by"] and e["created_by"] != v.id:
                 notify(con, e["created_by"], "event_approved", f"ea:{eid}")
             return out
@@ -716,6 +715,7 @@ def _publish(con, v: Viewer, e: sqlite3.Row, announce: bool) -> dict:
         raise ApiError("closed")
     con.execute("""UPDATE events SET status = 'published', published_at = ?, updated_at = ?, silent_publish = ?
         WHERE id = ?""", (core.now(), core.now(), int(not announce), eid))
+    con.execute("DELETE FROM event_reviews WHERE event_id = ?", (eid,))  # a member's draft: answered, whoever published it
     told = None
     if announce:
         if e["visibility"] == "leaders":  # §4.10: every invited leader hears at once (always on)

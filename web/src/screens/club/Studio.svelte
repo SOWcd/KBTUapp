@@ -50,7 +50,8 @@
   import BookUser from '@lucide/svelte/icons/book-user';
   import Network from '@lucide/svelte/icons/network';
   import FileDown from '@lucide/svelte/icons/file-down';
-  import { ApiErr } from '../../lib/api';
+  import { ApiErr, type ReviewReason } from '../../lib/api';
+  import { coverFor } from '../../lib/photo';
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
   import { withReportConsent } from '../../lib/reports';
@@ -186,6 +187,18 @@
       haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d');
     } finally { sendingLog = false; }
   }
+  // members' drafts sent for approval (server organizing.submit_event): the President's and the Vices' to answer; a
+  // member without the "events" right sees their own drafts and where each stands
+  let answered = $state<number[]>([]); // answered here: gone from the list at once
+  const reviewing = $derived(m?.role === 'president' || m?.role === 'vice' ? drafts.filter((e) => e.review?.askedAt && !e.review.mine && !answered.includes(e.id)) : []);
+  const myDrafts = $derived(staff ? [] : drafts.filter((e) => e.review?.mine));
+  const WHY: ReviewReason[] = ['details', 'when', 'cover', 'repeat', 'later'];
+  async function answer(e: EventCard, why?: ReviewReason) {
+    answered = [...answered, e.id];
+    try { await api.reviewEvent(e.id, !why, why); haptic.ok(); say(t(why ? 'rv.returnedSay' : 'rv.approved'), why ? 'sparkles_3d' : 'party_popper_3d'); studioChanged(); }
+    catch { answered = answered.filter((x) => x !== e.id); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  const giveBack = (ev: MouseEvent, e: EventCard) => { haptic.tap(); menu(ev.currentTarget as Element, WHY.map((r) => ({ label: t(`rv.why.${r}`), onselect: () => void answer(e, r) })), 'end'); };
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
   const guesting = $derived(events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e))); // our own people asking to come as guests
@@ -210,7 +223,7 @@
   ], 'end'); };
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
   const noUser = $derived(m?.role === 'president' && !!session.me && !session.me.tg.username);
-  const todo = $derived(noUser || coAsks.length > 0 || claims > 0 || alone || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0);
+  const todo = $derived(noUser || coAsks.length > 0 || claims > 0 || alone || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0 || found.length > 0 || reviewing.length > 0);
   // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -241,7 +254,7 @@
     if (santa) sheets.manage(santa.id); else sheets.santaHi(m.org.id);
   }
   const creates = $derived<MenuItem[]>([
-    ...(staff ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []),
+    ...(m ? [{ label: t('studio.newShort'), icon: Plus, onselect: () => sheets.editor(m!.org.id) }] : []), // any member: theirs is a draft the President or a Vice approves
     ...(may(m, 'posts') && !m?.storiesLocked ? [{ label: t('studio.postShort'), icon: PenLine, onselect: () => sheets.composer(m!.org.id) }] : []),
     ...(may(m, 'posts') ? [{ label: t('casting.mark'), icon: Megaphone, onselect: () => sheets.composer(m!.org.id, undefined, true) }] : []),
   ]);
@@ -322,6 +335,14 @@
               <Button kind="tinted" size="s" onclick={() => coAnswer(x, true)}>{t('co.yes')}</Button></span>{/snippet}
           </Row>
         {/each}
+        {#each reviewing as e (e.id)}
+          <!-- a member's draft: the picture opens it in the editor; a reason from the list sends it back, yes publishes it -->
+          <Row title={e.title} subtitle={t('rv.ask')}>
+            {#snippet lead()}<button onclick={() => openRow(e)} aria-label={t('studio.edit')}><Poster item={e} size={44} radius={12} /></button>{/snippet}
+            {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('rv.return')} onclick={(ev) => giveBack(ev, e)} />
+              <Button kind="tinted" size="s" onclick={() => { haptic.tap(); void answer(e); }}>{t('rv.approve')}</Button></span>{/snippet}
+          </Row>
+        {/each}
         {#if claims}<Row icon={UsersRound} title={t('ro.reqTitle')} count={claims} accessory="chevron" onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)} />{/if}
         {#if alone}<Row icon={Crown} title={t('studio.todoPres')} accessory="chevron" onclick={presMenu} />{/if}
         {#if memoDue}<Row icon={Mail} title={t('studio.todoMemo')} subtitle={t('studio.todoMemoBy', { n: nextWeek })} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
@@ -345,6 +366,17 @@
         {/each}
         {#each guesting as e (e.id)}
           <Row icon={UsersRound} title={e.title} subtitle={t('ta.caption')} count={e.teamAsks} accessory="chevron" onclick={() => sheets.manage(e.id)} />
+        {/each}
+      </Group>
+    {/if}
+
+    {#if myDrafts.length}
+      <Group caption={t('rv.mine')}>
+        {#each myDrafts as e (e.id)}
+          <Row dense title={e.title} accessory="chevron" onclick={() => openRow(e)}
+            subtitle={e.review?.reason ? t('rv.returned', { why: t(`rv.why.${e.review.reason}`) }) : e.review?.askedAt ? t('rv.wait') : t('rv.draft')}>
+            {#snippet lead()}<Poster item={e} size={44} radius={12} />{/snippet}
+          </Row>
         {/each}
       </Group>
     {/if}
@@ -390,10 +422,8 @@
           {:else}<EmptyState inline text={t('studio.empty')} />{/each}
         </div>
       </div>
-    {:else if staff}<!-- a club with no event yet: its first one is the screen's one main button -->
+    {:else}<!-- a club with no event yet: its first one is the screen's one main button (a member's: a draft for approval) -->
       <Button kind="primary" size="l" full onclick={() => sheets.editor(m.org.id)}>{#snippet icon()}<Plus size={20} />{/snippet}{t('ed.new')}</Button>
-    {:else}
-      <EmptyState inline text={t('studio.none')} />
     {/if}
 
     <!-- a club made by mistake: shown only while it can go (nobody else in it, no event out; the server checks too) -->
