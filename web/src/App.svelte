@@ -39,11 +39,11 @@
   import ListPage from './screens/afisha/List.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
-  import StandaloneBar from './ui/StandaloneBar.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
+  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; start: string; onsettings: () => void }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
@@ -109,8 +109,9 @@
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
   // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
-  // their chunks are warmed once the first data is in
+  // their chunks are warmed once the first tab is drawn
   const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
+    forum: channelPage,
     club: () => import('./screens/afisha/Clubs.svelte'),
     profile: () => import('./screens/profile/Me.svelte'),
   };
@@ -138,7 +139,7 @@
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void channelPage(); warmChannelFeeds(); };
+  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
@@ -781,8 +782,14 @@
     return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
   });
 
-  // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
-  $effect(() => { void i18n.lang; untrack(() => { localize(data); localize(session.me); }); });
+  // The API and cache already translate the first load. Walk the reactive stores only when the language changes.
+  let localizedLang = untrack(() => i18n.lang);
+  $effect(() => {
+    const lang = i18n.lang;
+    if (lang === localizedLang) return;
+    localizedLang = lang;
+    untrack(() => { localize(data); localize(session.me); });
+  });
 
   // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
@@ -808,6 +815,13 @@
     if (session.me?.appeals?.sg) void loadSg();
     if (session.me?.ask) void loadAsks();
     if (session.me?.ask?.staff) void loadHelpq();
+  }
+
+  function warmNavigation() {
+    if (session.banned || session.revoked) return;
+    warm(personSheet); warm(clubSheet);
+    if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
+    for (const tab of tabs) void loadPage(tab).catch(() => {});
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -900,6 +914,7 @@
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache(inTelegram ? tg.user?.id : session.me?.tg.id);
     if (snap) {
+      localize(snap); // translate the plain cache before assigning it to reactive state
       if (inTelegram) {
         session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       }
@@ -907,17 +922,16 @@
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
-      localize(data); if (inTelegram) localize(session.me); // cached in another language, maybe
       setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
     Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
-      // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
-      for (const load of [eventSheet, personSheet, clubSheet, ...(inTelegram && session.me && !session.me.canDm ? [dmSheet] : [])]) load().then((m) => loaded.set(load, m)).catch(() => {});
-      for (const k of TABS) loadPage(k).catch(() => {});
       if (session.banned || session.revoked) return;
+      // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
+      warm(eventSheet);
+      requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
       if (inTelegram && !tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
@@ -965,11 +979,10 @@
       <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
         {#if tab === 'afisha'}
           {#if built.afisha}<ListPage />{/if}
-        {:else if tab === 'forum'}
-          {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
-        {:else if tab === 'club'}
-          {#if built.club && pages.club}<pages.club />{/if}
-        {:else if built.profile && pages.profile}<pages.profile />{/if}
+        {:else}
+          {@const Page = pages[tab]}
+          {#if built[tab] && Page}<Page />{/if}
+        {/if}
       </section>
     {/each}
 
@@ -979,7 +992,7 @@
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
