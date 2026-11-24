@@ -102,14 +102,14 @@
       const [x, y, vx, vy] = fling, d = T.fling / 3;
       fling = null;
       return { duration: T.fling, easing: out3, css: (k: number) => { const u = 1 - k;
-        return `${at2(x + vx * d * u, y + vy * d * u)};opacity:${k * k};--xb:${u * 4}px;--eb:${u * 4}px`; } };
+        return `${at2(x + vx * d * u, y + vy * d * u)};opacity:${k * k};--xo:${k};--eb:${u * 4}px`; } };
     }
     if (calm()) return fade(T.fade);
     const r = node.offsetWidth - node.offsetHeight, h = node.offsetHeight / 2;
     return { duration: T.exit, css: (k: number) => {
       const u = 1 - k, c = Math.min(1, u / 0.6), q = Math.max(0, (u - 0.5) / 0.5);
       const s = c * c * (3 - 2 * c); // smoothstep: the wipe eases in and settles on the circle
-      return `clip-path:inset(0 ${s * r}px 0 0 round 999px);opacity:${1 - q * q};transform-origin:${h}px 50%;--xb:${c * 3}px;--eb:${q * 3}px;`
+      return `clip-path:inset(0 ${s * r}px 0 0 round 999px);opacity:${1 - q * q};transform-origin:${h}px 50%;--xo:${1 - c};--eb:${q * 3}px;`
         + `transform:translate(-50%, ${-q * 6}px) scale(${1 - 0.6 * q * q}) rotate(${q * 14}deg)`;
     } };
   }
@@ -196,8 +196,11 @@
     animation: pop var(--t-pop) var(--spring) backwards; /* backwards: once done, a swipe's translate moves it freely */
   }
   .toast:global(.going) { pointer-events: none; }
+  /* the web app's dock sits lower than Telegram's (Nav): the toast keeps its distance above it */
+  :global(html[data-web]) .toast { bottom: calc(max(0px, var(--safe-bottom) - 14px) + 82px); }
   /* the exit's blur rides on the line and the emoji, never on the glass (a filter there flattens its backdrop) */
-  .toast:global(.going) .tx, .toast:global(.going) .undo { filter: blur(var(--xb, 0px)); }
+  /* the line only fades: a blur under the pill's moving clip-path drew a magenta seam over the text on iOS (owner, Nov 24) */
+  .toast:global(.going) .tx, .toast:global(.going) .undo { opacity: var(--xo, 1); }
   .toast:global(.going) .em { filter: blur(var(--eb, 0px)); }
   /* a sheet's footer holds its buttons: there the toast drops from the top, under Telegram's header, like an iOS push */
   .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop; }
