@@ -10,7 +10,7 @@ from .core import one, rows
 CATEGORIES = {
     "nRemind": ("n_remind", ("remind_2h", "saved_tomorrow", "rate", "comment_question", "comment_answer",
                             "comment_reply", "photo_report", "photo_call", "round_iv_nudge", "round_iv_remind",
-                            "santa_soon", "santa_nudge", "santa_eve")),
+                            "santa_soon", "santa_nudge", "santa_eve", "santa_msg", "santa_reply")),
     "nNewEvents": ("n_new_events", ("new_event", "casting_open", "round_open")),
     "nForumComments": ("n_forum_comments", ("fch_comments",)),
     "nBroadcasts": ("n_broadcasts", ("broadcast", "santa_news", "santa_open")),

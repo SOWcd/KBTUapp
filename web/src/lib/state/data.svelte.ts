@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration } from '../api';
+import type { MyRegistration, SantaChats } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -57,10 +57,26 @@ export const data = $state({
   adminStats: null as AdminStats | null,      // the admins' Admin → stats card: with the inbox (moderators never see it)
   staffMutes: null as StaffMute[] | null,     // Admin → My notifications: with the inbox's first load, again as the page opens
   staffMutesFailed: false,
+  santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
+
+/** Secret Santa's chat of one game: read again whenever its page or a thread opens or the app comes back (the bot's
+ *  push leads there); no polling. One read at a time per game. false: there is no chat for me any more (over, retired,
+ *  out of the game): what the phone held of it is dropped at once. A network failure keeps what is shown. */
+const santaReads = new Map<Id, Promise<boolean>>();
+export function loadSantaChat(id: Id): Promise<boolean> {
+  let read = santaReads.get(id);
+  if (!read) {
+    read = api.santaChat(id).then((c) => { data.santaChat[id] = c; return true; })
+      .catch((e) => { if (!(e instanceof ApiErr) || (e.code !== 'not_found' && e.code !== 'forbidden')) return true; delete data.santaChat[id]; return false; })
+      .finally(() => santaReads.delete(id));
+    santaReads.set(id, read);
+  }
+  return read;
+}
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
 export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); }

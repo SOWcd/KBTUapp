@@ -6,7 +6,12 @@ Secrecy is the point: a pair and a wishlist are read in one place, view(), by th
 audit row has them (the wishlist lives here, not in registrations.answers, which the organizers read).
 A gift budget and the wishlists' deadline (the event's reg_until) set at the start; at the deadline the
 bot's round draws by itself through the same _draw (tick()); reminders before the deadline and on the eve of the
-gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day."""
+gifts day, each once per person (notify's unique refs); the organizer's "remind those not in yet", once a day.
+After the draw the two of a pair may write to each other (chat, write, report): one thread per pair, the receiver never
+told who their Santa is; no list, export, log or audit row has a message; gone 3 days after the gifts day. A report by
+either closes the thread and shows it, with its two people, to the app's staff alone (Admin: reports, report_done).
+The chat is only for a ring of MSG_RING or more that nobody left since the draw: in a smaller one a player works out
+their Santa, and a thread vanishing as someone leaves would name one, so the first departure retires it for everyone."""
 from __future__ import annotations
 
 import secrets
@@ -14,12 +19,16 @@ import sqlite3
 
 from ..db import tx
 
-from .core import PERSON, ApiError, Viewer, _may, full, now, one, person_ref, rights_of, rows
+from .core import PERSON, ApiError, Viewer, _may, full, log_action, now, one, person_ref, rights_of, rows
 
 WISH_MAX = 300
 MIN = 3
 BUDGET = (100, 1_000_000)  # tenge: a gift's sane bounds
 DAY = 86400
+MSG_MAX, MSG_DAY, MSG_KEEP = 500, 50, 3 * DAY  # the chat: a message's length, mine a day, how long after the gifts day it lives
+REPORT_KEEP, REPORT_MAX = 30 * DAY, 90 * DAY  # a reported thread: that long after the gifts day and until the staff handled it; unhandled, the second
+MSG_RING = 4  # the chat needs that many in the ring: with three, whom I give to leaves one possible Santa
+MSG_PAGE = 200  # a thread as read: its latest messages
 LEAD = 3600  # the wishlists close an hour before the gifts day at the latest: the round needs the moment to draw
 
 _GOING = """SELECT p.user_id FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
@@ -239,6 +248,7 @@ def _draw(con, e: sqlite3.Row) -> str | None:
     for uid in sorted(ids):  # by user id, never in the ring's order: the outbox's ids would spell out every pair
         notify(con, uid, "santa_drawn", f"event:{eid}")
     con.execute("UPDATE santa_events SET drawn_at = ? WHERE event_id = ?", (now(), eid))
+    con.execute("INSERT OR REPLACE INTO santa_chats (event_id, until) VALUES (?, ?)", (eid, e["starts_at"] + MSG_KEEP))  # fixed here: a moved gifts day revives nothing
     # the app shows "Registration closed" (wish() refuses whatever the deadline says later); updated_at: lists' cached cards see the draw at once
     shut = e["reg_until"] if e["reg_until"] and e["reg_until"] <= now() else min(now(), e["starts_at"])
     con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (shut, now(), eid))
@@ -369,8 +379,138 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
     me = one(con, """SELECT p.wish FROM santa_people p JOIN registrations r ON r.event_id = p.event_id AND r.user_id = p.user_id
         AND r.status = 'going' WHERE p.event_id = ? AND p.user_id = ?""", e["id"], v.id)
     if me:
-        out["mySanta"] = {"wish": me["wish"], **({"to": _to(con, e["id"], v.id)} if s["drawn_at"] else {})}
+        out["mySanta"] = {"wish": me["wish"], **({"to": _to(con, e["id"], v.id), "chat": chat_on(con, e["id"], v.id)} if s["drawn_at"] else {})}
     return out
+
+
+def chat_on(con, eid: int, uid: int) -> bool:
+    """The game has a chat for me now: drawn, published, its club live, before santa_chats.until (0: someone left the ring),
+    MSG_RING in the ring, and I'm still going, not banned and, in a team-only game, still in the club. One answer for
+    reading, writing, reporting and the bot's push."""
+    return bool(one(con, _GOING + """ AND p.user_id = ? AND EXISTS (SELECT 1 FROM santa_chats g JOIN events e ON e.id = g.event_id
+        JOIN orgs o ON o.id = e.org_id AND o.status = 'active' JOIN users u ON u.id = p.user_id AND u.banned_at IS NULL
+        WHERE g.event_id = p.event_id AND g.until > ? AND e.status = 'published' AND e.hidden_at IS NULL
+          AND (e.visibility = 'public' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = e.org_id AND m.user_id = p.user_id))
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = p.event_id) >= ?)""", eid, uid, now(), MSG_RING))
+
+
+def _thread(con, eid: int, uid: int, mine: bool) -> tuple[int, int] | None:
+    """A thread's two people (giver, receiver), read off the ring by my own row alone, never from the client, and inside
+    the caller's transaction when it writes. mine: the one where I am the Santa; else the one with my Santa. None: no
+    chat for me (chat_on): the same answer to an organizer and a stranger."""
+    r = chat_on(con, eid, uid) and one(con, f"SELECT user_id, gives_to FROM santa_people WHERE event_id = ? AND {'user_id' if mine else 'gives_to'} = ?"
+                                            " AND gives_to != user_id", eid, uid)
+    return (r[0], r[1]) if r else None
+
+
+_MSGS = "FROM santa_msgs WHERE event_id = ? AND giver_id = ? AND to_id = ?"
+
+
+def chat(con, v: Viewer, eid: int) -> dict:
+    """My two threads in a drawn game: `to`, where I write as the Santa of my person (named on the event's page), and
+    `from`, with my own Santa. A message says only whether it is mine: never an id or a name, so my Santa stays secret."""
+    out = {}
+    for side in ("to", "from"):
+        p = _thread(con, eid, v.id, side == "to")
+        if not p:
+            raise ApiError("not_found")
+        closed = bool(one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p))  # reported: shut for both, its words now the staff's to read
+        out[side] = {"closed": closed, "msgs": [] if closed else [
+            {"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]}
+            for m in reversed(rows(con, f"SELECT id, from_giver, text, created_at {_MSGS} ORDER BY id DESC LIMIT ?", eid, *p, MSG_PAGE))]}
+    return out
+
+
+def pushable(con, eid: int, uid: int, kind: str) -> bool:
+    """The bot's look as a chat push goes: the chat is still mine, the thread open, and it has words for me."""
+    p = _thread(con, eid, uid, kind == "santa_reply")
+    return bool(p) and not one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p) \
+        and bool(one(con, f"SELECT 1 {_MSGS} AND from_giver = ?", eid, *p, int(kind == "santa_msg")))
+
+
+def _side(body: dict) -> bool:
+    if body.get("side") not in ("to", "from"):
+        raise ApiError("bad_input")
+    return body["side"] == "to"
+
+
+def write(con, v: Viewer, eid: int, body: dict) -> dict:
+    """A message into one of my two threads: plain words, one line, up to MSG_MAX; MSG_DAY a day per person. The other
+    one hears it from the bot: a template with no words of mine, once an hour per thread at most."""
+    mine = _side(body)
+    text = " ".join(body["text"].split()) if isinstance(body.get("text"), str) else ""
+    if not 1 <= len(text) <= MSG_MAX:
+        raise ApiError("bad_input", "text")
+    with tx(con):  # the count and the insert as one: parallel taps can't pass the day's limit
+        p = _thread(con, eid, v.id, mine)
+        if not p:
+            raise ApiError("not_found")
+        if one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p):
+            raise ApiError("closed")
+        if one(con, "SELECT COUNT(*) FROM santa_sends WHERE user_id = ? AND at > ?", v.id, now() - DAY)[0] >= MSG_DAY:
+            raise ApiError("rate_limited", "santa_msgs")
+        con.execute("INSERT INTO santa_sends (user_id, at) VALUES (?, ?)", (v.id, now()))
+        mid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, text, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                          (eid, *p, int(mine), text, now())).lastrowid
+        other, kind = (p[1], "santa_msg") if mine else (p[0], "santa_reply")
+        if not one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = ? AND ref LIKE ? AND (send_after > ? OR sent_at IS NULL AND error IS NULL)""",
+                       other, kind, f"event:{eid}:%", now() - 3600):  # nor while one still waits: a bot back from an outage sends one
+            notify(con, other, kind, f"event:{eid}:{now()}")
+    return {"id": mid, "mine": True, "text": text, "at": now()}
+
+
+def report(con, v: Viewer, eid: int, body: dict) -> None:
+    """Report on a thread, by either of its two: nobody writes in it again, and it goes to the app's staff (Admin),
+    the only ones who then read it and see both its people. The staff hear it from the bot, a template."""
+    mine = _side(body)
+    with tx(con):
+        p = _thread(con, eid, v.id, mine)
+        if not p:
+            raise ApiError("not_found")
+        if one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p):
+            return
+        rid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?)",
+                          (eid, *p, int(mine), now())).lastrowid
+        notify_staff(con, _mods(con), "santa_reported", f"srp:{rid}")
+
+
+_OPEN = "FROM santa_msgs WHERE text IS NULL AND done_at IS NULL"
+
+
+def reports(con, v: Viewer) -> list[dict]:
+    """Admin → Santa reports, the app's staff alone (never a club's organizer): each open report with the whole thread
+    and both its people, oldest first."""
+    _mod(v)
+    out = []
+    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN} ORDER BY id"):
+        who = {p["id"]: person_ref(p) for p in rows(con, PERSON + " WHERE u.id IN (?, ?)", r["giver_id"], r["to_id"])}
+        e = one(con, "SELECT title FROM events WHERE id = ?", r["event_id"])
+        out.append({"id": r["id"], "at": r["created_at"], "title": e["title"], "giver": who.get(r["giver_id"]), "to": who.get(r["to_id"]),
+                    "byGiver": bool(r["from_giver"]),
+                    "msgs": [{"id": m["id"], "fromGiver": bool(m["from_giver"]), "text": m["text"], "at": m["created_at"]} for m in rows(
+                        con, f"SELECT id, from_giver, text, created_at {_MSGS} AND text IS NOT NULL ORDER BY id", r["event_id"], r["giver_id"], r["to_id"])]})
+    return out
+
+
+def report_done(con, v: Viewer, rid: int) -> None:
+    """The staff handled a report (whatever they did about it, with their own tools): it leaves the list; the audit
+    log keeps who and which report, never the pair or a word."""
+    _mod(v)
+    with tx(con):
+        if not con.execute("UPDATE santa_msgs SET done_at = ? WHERE id = ? AND text IS NULL AND done_at IS NULL", (now(), rid)).rowcount:
+            raise ApiError("not_found")
+        log_action(con, v.id, "santa_report_done", f"santa_report:{rid}")
+
+
+def forget(con) -> None:
+    """The nightly sweep (daily.stats_day): a thread goes at its game's santa_chats.until; a reported one REPORT_KEEP after the
+    gifts day once the staff handled it, REPORT_MAX after it whatever. The day's counts go with their day."""
+    con.execute("""DELETE FROM santa_msgs WHERE id IN (SELECT m.id FROM santa_msgs m JOIN events e ON e.id = m.event_id
+        LEFT JOIN santa_chats g ON g.event_id = m.event_id
+        LEFT JOIN santa_msgs r ON r.event_id = m.event_id AND r.giver_id = m.giver_id AND r.to_id = m.to_id AND r.text IS NULL
+        WHERE CASE WHEN r.id IS NULL THEN COALESCE(g.until, 0) <= ?
+                   ELSE COALESCE(e.ends_at, e.starts_at) + CASE WHEN r.done_at IS NULL THEN ? ELSE ? END <= ? END)""", (now(), REPORT_MAX, REPORT_KEEP, now()))
+    con.execute("DELETE FROM santa_sends WHERE at <= ?", (now() - DAY,))
 
 
 def gone(con, uid: int) -> None:
@@ -397,4 +537,6 @@ def drop(con, uid: int, oid: int | None = None) -> None:
 
 
 from .organizing import _staff_event, create_event, publish_event  # noqa: E402  (they import core, core imports this)
-from .seats import for_me, notify, promote  # noqa: E402
+from .tgcomments import _mods  # noqa: E402
+from .oversight import _mod  # noqa: E402
+from .seats import for_me, notify, notify_staff, promote  # noqa: E402

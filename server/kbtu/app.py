@@ -123,7 +123,8 @@ PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST
                                    ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
                                    ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
                                    ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/rating/dismiss"),
-                                   ("PUT", "/api/events/{eid}/santa/wish"),
+                                   ("PUT", "/api/events/{eid}/santa/wish"), ("GET", "/api/events/{eid}/santa/chat"),
+                                   ("POST", "/api/events/{eid}/santa/chat"), ("POST", "/api/events/{eid}/santa/chat/report"),
                                    ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites"),
                                    # his own application to a round and his own interview booking
                                    ("POST", "/api/rounds/{rid}/apply"), ("DELETE", "/api/rounds/{rid}/apply"), ("POST", "/api/rounds/{rid}/book")})
@@ -2622,6 +2623,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/events/{eid}/santa/wish")  # my own wishlist, changed while I'm in (before and after the draw)
     def santa_wish(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.santa.rewish(con, v, eid, body.get("wish"))
+
+    @app.get("/api/events/{eid}/santa/chat")  # my two threads (with my person, with my Santa): the pair's own people alone
+    def santa_chat(eid: int, con: Con, v: Me):
+        return logic.santa.chat(con, v, eid)
+
+    @app.post("/api/events/{eid}/santa/chat")
+    def santa_write(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.santa.write(con, v, eid, body)
+
+    @app.post("/api/events/{eid}/santa/chat/report", status_code=204)
+    def santa_report(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.santa.report(con, v, eid, body)
+
+    @app.get("/api/admin/santa-reports")  # the app's staff: the reported threads, whole, with both their people
+    def santa_reports(con: Con, v: Me):
+        return logic.santa.reports(con, v)
+
+    @app.post("/api/admin/santa-reports/{rid}/done", status_code=204)
+    def santa_report_done(rid: int, con: Con, v: Me):
+        logic.santa.report_done(con, v, rid)
 
     @app.post("/api/events/{eid}/santa/remind")  # "Remind those not in yet", once a day
     def santa_remind(eid: int, con: Con, v: Me):

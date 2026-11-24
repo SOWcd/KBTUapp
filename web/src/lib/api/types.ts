@@ -517,8 +517,8 @@ export interface EventFull extends EventCard {
    *  remind: how many "Remind those not in yet" would reach now; remindAt: when the button works again (null: now) */
   santaTeam?: { in: PersonRef[]; out: PersonRef[]; remind: number; remindAt: Ts | null };
   santaTold?: number;           // santa.start's answer: how many of the team the invite went to (0: they had it within a day, not repeated)
-  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left) */
-  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null };
+  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left), and `chat` */
+  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null; chat?: boolean }; // chat: the pair's chat is on (false: a ring under four, or someone left it)
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
   meetingTag?: Id | null;       // "for whom" on a team-only event: one of the club's tags; null = the whole team
@@ -799,7 +799,7 @@ export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; p
   cover: EventCard['cover']; emoji: string; color: string; tint?: string } // cover: the post's picture (server autoev.cover)
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
-export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }
+export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number; santa?: number } // santa: open Secret Santa chat reports (their own row)
 
 export interface PersonCard extends PersonRef {
   forum?: Pick<ForumMe, 'skills' | 'open'>;              // their skills and "open to projects", for those who see the forum
@@ -909,3 +909,11 @@ export interface SubjectPerson { ask: Id; person: PersonRef; name: string; cours
   offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
+
+/** Secret Santa's chat (server santa.chat): a message says only whether it is mine, never who wrote it */
+export interface SantaMsg { id: Id; mine: boolean; text: string; at: Ts }
+export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: one of the two reported it (its words are then the staff's to read)
+/** a reported thread, for the app's staff alone (Admin): whole, with both its people; byGiver: the Santa reported it */
+export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
+/** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
+export interface SantaChats { to: SantaThread | null; from: SantaThread | null }

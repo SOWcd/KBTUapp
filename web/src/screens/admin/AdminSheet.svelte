@@ -14,6 +14,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Users from '@lucide/svelte/icons/users';
   import Bell from '@lucide/svelte/icons/bell';
+  import Gift from '@lucide/svelte/icons/gift';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
   import { untrack, type Component } from 'svelte';
   import { api, staffEvents, type AdminOrg, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
@@ -169,6 +170,7 @@
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
       {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
+      {#if data.inbox?.santa}{@render place(Gift, t('santa.repTitle'), () => sheets.santaReports(), data.inbox.santa)}{/if}
       <!-- the map's flaws: quiet and last (a card on top pulled from moderation) -->
       {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>
