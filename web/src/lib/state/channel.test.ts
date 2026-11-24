@@ -1,5 +1,5 @@
 // The Forum feed's 30 s refresh against my own changes: a refresh asked before my delete must not bring the post back.
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 const { setChannelHeart, channelVisit, saveVisit } = vi.hoisted(() => ({
   setChannelHeart: vi.fn(), channelVisit: vi.fn(), saveVisit: vi.fn(),
@@ -8,10 +8,18 @@ let answer: (v: unknown) => void = () => {};
 vi.mock('../api', async () => ({ ApiErr: (await import('../api/errors')).ApiErr, api: { setChannelHeart, channelVisit, markChannelSeen: saveVisit, channelFeed: () => new Promise((done) => { answer = done; }) } }));
 import { channel, channelUnread, loadChannel, loadOlder, markChannelSeen, pendingHearts, refreshChannel, selectChannelOrder, toggleHeart, touched, watchChannelVisit } from './channel.svelte';
 import type { ChannelFeedPost, ChannelHeart, ChannelVisit } from '../api';
+import { hit } from '../search';
 
 const page = (posts: ChannelFeedPost[], cursor: string | null = null) => ({ posts, cursor });
 
 const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, nick: null, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos: [] });
+
+beforeEach(async () => {
+  for (const order of ['for_you', 'new'] as const) {
+    const reset = refreshChannel(order); answer(page([])); await reset;
+  }
+  channel.order = 'for_you';
+});
 
 it('drops a refresh that was asked before my delete', async () => {
   channel.feed = [post(1), post(2)];
@@ -35,6 +43,23 @@ it('keeps the ranked snapshot while paging and refreshes when the tab reopens', 
   next = refreshChannel(); answer(page([post(6), post(4)], 'rank.fresh')); await next;
   expect(channel.feed!.map((p) => p.id)).toEqual([6, 4]);
   expect(channel.more).toBe(true);
+});
+
+it.each(['for_you', 'new'] as const)('searches further pages with the same query in %s order', async (order) => {
+  channel.order = order;
+  const query = 'chess';
+  const matches = () => (channel.feed ?? []).filter((p) => hit(query, [p.body]));
+  const first = refreshChannel(); answer(page([{ ...post(6), body: 'Book club' }], 'search.next')); await first;
+  expect(matches()).toEqual([]);
+  expect(channel.more).toBe(true); // only the loaded posts have been searched
+  const more = loadOlder();
+  expect(matches()).toEqual([]);
+  answer(page([{ ...post(4), body: 'Chess tournament' }], 'search.last')); await more;
+  expect(matches().map((p) => p.id)).toEqual([4]);
+  const last = loadOlder(); answer(page([{ ...post(2), body: 'Chess practice' }])); await last;
+  expect(matches().map((p) => p.id)).toEqual([4, 2]);
+  expect(channel.more).toBe(false);
+  channel.order = 'for_you';
 });
 
 it('keeps each order and its cursor together when a request finishes after switching', async () => {
