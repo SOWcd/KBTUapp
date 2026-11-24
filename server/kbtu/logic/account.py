@@ -600,7 +600,8 @@ LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskb
             "kbtucinema", "nisalumnikbtuchapter",
             "cybersportkbtu",
             "diceanddestinykbtu",
-            "thebayharborsociety")
+            "thebayharborsociety",
+            "qoloner")
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug),
 # as the web's awards.ts lookKey
