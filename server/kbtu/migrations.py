@@ -2334,10 +2334,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       published_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS yt_videos_by_org ON yt_videos(org_id, channel_id);"""),
+    # Receipt IDs stay spent even if account/event cleanup deletes the newest pre-upgrade upload.
+    (230, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
+      ON CONFLICT(key) DO UPDATE SET value = CAST(MAX(CAST(meta.value AS INTEGER), CAST(excluded.value AS INTEGER)) AS TEXT);"""),
     # the iPhone app (logic/apple.py): one account, many sign-ins. Telegram stays users.tg_id; identities holds the
     # others (provider 'apple': Apple's "sub" for this app), each with its own consent (apple.CONSENT). push_devices: an
     # APNs token per signed-in web session, gone with the session (sign-out, expiry, a changed tg_id) or the account
-    (230, """CREATE TABLE IF NOT EXISTS identities (
+    (231, """CREATE TABLE IF NOT EXISTS identities (
       provider TEXT NOT NULL,
       subject TEXT NOT NULL,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2358,7 +2361,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # notifications on one channel per person (push.py): the app's push while a token is live, else the bot. provider:
     # who carries the token (apns now, fcm for the Android app); dead_at: its last push failed (the app's next launch
     # registers it again); users.notify_via: the person's pick in Settings, the app by default
-    (231, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
+    (232, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
     ALTER TABLE push_devices ADD COLUMN dead_at INTEGER;
     ALTER TABLE users ADD COLUMN notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'));"""),
 ]
