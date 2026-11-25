@@ -33,7 +33,7 @@
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import { APPLE_CONSENT, TG_LINK, appleToken, inApp, native, nonce } from '../../lib/native';
+  import { APPLE_CONSENT, TG_LINK, appleToken, inApp, native, nonce, telegramProof } from '../../lib/native';
   import { ApiErr } from '../../lib/api';
   import { loadMe } from '../../lib/state/session.svelte';
   import { api, type Settings } from '../../lib/api';
@@ -147,14 +147,24 @@
     if (linking) return;
     linking = true;
     try { await fn(); await loadMe(); haptic.ok(); say(done, 'sparkles_3d'); }
-    catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'apple_taken' ? 'logins.appleTaken' : 'common.error'), 'warning_3d'); }
+    catch (e) {
+      const why = e instanceof ApiErr ? e.message : '';
+      haptic.error(); say(t(why === 'apple_taken' ? 'logins.appleTaken' : why === 'telegram_taken' ? 'logins.tgTaken' : 'common.error'), 'warning_3d');
+    }
     finally { linking = false; }
   }
   // Telegram's own sign-in page, then back here (WebEntrance reads its #tgAuthResult and links it): only a return this
-  // tab started, marked by a one-time state for this account, gets linked
+  // tab started, marked by a one-time state for this account, gets linked. The iPhone app: the system's sign-in sheet
+  // instead, its return checked against the same state right here (native.ts telegramProof); closed: nothing to say
   async function linkTelegram() {
     haptic.tap();
     try {
+      if (native.has('tglink')) {
+        const state = nonce(), { url } = await api.telegramLinkStart(state, true);
+        const proof = await telegramProof(url, state);
+        if (proof) void linkWith(() => api.linkTelegram(proof), t('logins.tgDone'));
+        return;
+      }
       const state = nonce(), { url } = await api.telegramLinkStart(state);
       sessionStorage.setItem(TG_LINK, JSON.stringify({ state, uid: me?.id, at: Date.now() }));
       location.assign(url);

@@ -94,6 +94,8 @@
   --pill: clamp(78px, calc((var(--col) - 184px) / 2 - 22px), 92px);
 }
 @media (min-width: 600px) { :root[data-web]:not([data-wide]) { --col: 480px; } }
+/* the iPhone app's own tab bar (UITabBar, 49 pt above the home indicator) in place of Nav's: pages end above it */
+:root[data-ntabs] { --nav-h: 49px; }
 
 /* The look is Opal's: black first, near-black cards with a hair rim, neutral greys; light: Apple's grouped grey
    under white cards. */

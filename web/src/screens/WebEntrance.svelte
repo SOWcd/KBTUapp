@@ -19,7 +19,7 @@
   import { loadMe, session } from '../lib/state/session.svelte';
   import { onComputer, onIos } from '../lib/tg';
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
-  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken } from '../lib/native';
+  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken, tgAuthResult } from '../lib/native';
   import { say } from '../lib/state/ui.svelte';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
@@ -60,8 +60,7 @@
     const age = Date.now() - Number(mine.at);
     if (!state || mine.state !== state || mine.uid !== session.me?.id || !(age >= 0 && age < 600_000)) return;
     try {
-      const bytes = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-      await api.linkTelegram(JSON.parse(new TextDecoder().decode(bytes)));
+      await api.linkTelegram(tgAuthResult(m[1]));
       await loadMe();
       say(t('logins.tgDone'), 'sparkles_3d');
     } catch (e) {

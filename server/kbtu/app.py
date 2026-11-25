@@ -679,9 +679,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             logic.apple.unlink_apple(con, v.id, web_auth._digest(token) if token else None)
 
     @app.get("/api/me/logins/telegram")
-    def telegram_start(request: Request, v: Me, state: str = ""):
+    def telegram_start(request: Request, v: Me, state: str = "", ios: int = 0):
         web_only(request)
-        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state)}
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, bool(ios))}
+
+    @app.get("/tg-back")
+    def telegram_back():
+        """Telegram's return into the iPhone app's sign-in sheet (logic/apple.py APP_SCHEME); the proof stays in the
+        fragment, so no Referer or log carries it"""
+        return Response(logic.apple.TG_BACK_HTML, media_type="text/html; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.apple.TG_BACK_CSP})
 
     @app.post("/api/me/logins/telegram", status_code=204)
     def link_telegram(request: Request, con: Con, v: Me, body: dict = Body(...)):

@@ -180,15 +180,26 @@ def link_telegram(con, uid: int, tg: dict, now: int) -> None:
     core.log_action(con, uid, "login_link", f"user:{uid}", '{"provider": "telegram"}')
 
 
-def telegram_start(bot_token: str, domain: str, state: str) -> str:
+def telegram_start(bot_token: str, domain: str, state: str, app: bool = False) -> str:
     """Telegram's own sign-in page, back to us with #tgAuthResult (the widget's redirect mode, no popup). state: the
     tab's one-time mark (Settings put it in sessionStorage): the page links only a return it started itself, so a link
-    with someone else's proof in it can't put their Telegram on my account (WebEntrance.telegramBack)."""
+    with someone else's proof in it can't put their Telegram on my account (WebEntrance.telegramBack).
+    app: the iPhone app opened it in the system's sign-in sheet (ASWebAuthenticationSession), so it comes back through
+    /tg-back to the app's own scheme, where the tab that holds the state checks it (native.ts telegramProof)."""
     if not NONCE.fullmatch(state):
         raise ApiError("bad_input")
+    back = f"https://{domain}/tg-back?state={state}" if app else f"https://{domain}/?link=telegram&state={state}"
     return "https://oauth.telegram.org/auth?" + str(httpx.QueryParams({
-        "bot_id": bot_token.split(":")[0], "origin": f"https://{domain}", "request_access": "write",
-        "return_to": f"https://{domain}/?link=telegram&state={state}"}))
+        "bot_id": bot_token.split(":")[0], "origin": f"https://{domain}", "request_access": "write", "return_to": back}))
+
+
+# /tg-back: Telegram's return (its proof in the #fragment, which never reaches a server) handed to the iPhone app's sign-in
+# sheet, which closes on its callback scheme. The scheme is fixed here, never taken from the request: no open redirect.
+APP_SCHEME = "kbtuapp"
+_TG_BACK_JS = f"location.replace('{APP_SCHEME}://tglink'+location.search+location.hash)"
+TG_BACK_HTML = f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><script>{_TG_BACK_JS}</script>'
+TG_BACK_CSP = ("default-src 'none'; script-src 'sha256-" + base64.b64encode(hashlib.sha256(_TG_BACK_JS.encode()).digest()).decode()
+               + "'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
 def add_device(con, uid: int, session: bytes, body: dict, now: int) -> None:

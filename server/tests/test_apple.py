@@ -113,6 +113,20 @@ def test_link_telegram_to_an_apple_account(phone):
     assert c.post("/api/me/logins/telegram", headers=WRITE, json=widget(817)).json()["message"] == "telegram_linked"
 
 
+def test_link_telegram_through_the_app_sign_in_sheet(phone):
+    c, cfg = phone
+    assert apple_in(c).status_code == 204
+    state = secrets.token_hex(16)
+    url = c.get("/api/me/logins/telegram", params={"state": state, "ios": 1}, headers=WEB).json()["url"]
+    back = httpx.URL(url).params["return_to"]
+    assert url.startswith("https://oauth.telegram.org/auth?") and back == f"https://{cfg.domain}/tg-back?state={state}"
+    r = c.get("/tg-back", params={"state": "x\"'><script>"})
+    assert r.status_code == 200 and "x\"'><script>" not in r.text  # nothing from the request is written into the page
+    assert "location.replace('kbtuapp://tglink'+location.search+location.hash)" in r.text  # one fixed scheme
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'sha256-" in csp and "unsafe-inline" not in csp and r.headers["cache-control"] == "no-store"
+
+
 def test_link_and_unlink_apple_on_a_telegram_account(phone):
     c, cfg = phone
     assert c.post("/api/web/login", headers=WRITE, json=widget(715)).status_code == 204
