@@ -249,14 +249,14 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own (their yes ties them) */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
   team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; only who said yes
   people: CreditPerson[];          // newest shipped first, a named person's lines together
   /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
-  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[] } | null;
+  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
 /** at the door (Member+): the real short name beside a nick */
