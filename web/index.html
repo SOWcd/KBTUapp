@@ -41,13 +41,13 @@
   sb.name = 'apple-mobile-web-app-status-bar-style';
   sb.content = light ? 'default' : 'black-translucent';
   document.head.appendChild(sb);
-  // The home-screen app on an iPhone with the default strip (light): the launch picture covers the whole screen, the page
-  // begins under the status bar (the window is shorter by it), so 45% of the window would sit lower than the picture's 45%
-  // of the screen and the emblem would jump as the page takes over. There the emblem stands where the picture has it: 55%
-  // of the screen above the window's bottom edge, which is the screen's. The CSS works it out from the window's height at
-  // layout, never this script: this early innerHeight can still be the whole screen's (the emblem then sat a status bar
-  // lower). Translucent (dark): the window is the whole screen, 45% of it already is the picture's.
-  try { if (light && navigator.standalone && screen.width < 500) document.documentElement.style.setProperty('--kb-em', 'calc(100% - ' + screen.height * .55 + 'px)'); } catch (e) {}
+  // The home-screen app on an iPhone: the launch picture covers the whole screen, the window may not. With the default
+  // strip it begins under the status bar, and iOS may keep that strip in dark too (the style it had when the app was
+  // added: the owner's dark launch, Nov 25, the emblem 32 px under the picture's), so the window's 45% is never trusted.
+  // In every theme the emblem stands where the picture has it: 55% of the screen above the window's bottom edge, which is
+  // the screen's, whether the window is the whole screen (then this is 45% of it) or not. The CSS works it out from the
+  // window's height at layout, never this script: this early innerHeight can still be the whole screen's.
+  try { if (navigator.standalone && screen.width < 500) document.documentElement.style.setProperty('--kb-em', 'calc(100% - ' + screen.height * .55 + 'px)'); } catch (e) {}
 })();
 </script>
 <!-- The boot screen: the emblem on the ground, its centre at 45% of the height (the optical centre; --kb-em, set above,
