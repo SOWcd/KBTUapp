@@ -1177,8 +1177,10 @@ def comment_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
         raise ApiError("bad_input", "short")
     with tx(con):
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid)
-        if not p or not one(con, "SELECT 1 FROM meta WHERE key = ?", f"fchcopy:{p['tg_msg']}"):
-            raise ApiError("not_found")
+        if not p:
+            raise ApiError("not_found", "post")
+        if not one(con, "SELECT 1 FROM meta WHERE key = ?", f"fchcopy:{p['tg_msg']}"):
+            raise ApiError("not_found", "copy")
         if p["anon"] and p["user_id"] == v.id:
             raise ApiError("conflict", "own")
         mine = "FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE s.user_id = ?"
@@ -1215,7 +1217,7 @@ def reply_settle(con, v: Viewer, pid: int, rid: int, verdict: str | None) -> dic
     with tx(con):
         if not one(con, """SELECT 1 FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id LEFT JOIN fchan_signed s ON s.reply_id = r.id
                 WHERE r.id = ? AND p.id = ? AND (s.user_id = ? OR s.user_id IS NULL AND p.user_id = ?)""", rid, pid, v.id, v.id):
-            raise ApiError("not_found")
+            raise ApiError("not_found", "settle")
         if verdict == "ok":
             con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'", (_now(), rid))
         else:
@@ -1351,7 +1353,7 @@ def reply_drop_later(con, rid: int) -> None:
 def _reply_mod_shape(r) -> dict:
     signed = r["who"] is not None  # a signed comment: not an anonymous author's, whatever its post is
     return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]) and not signed,
-            "nick": None if signed else _nick(r), "signed": signed,
+            "nick": None if signed else _nick(r),
             "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
 
 
