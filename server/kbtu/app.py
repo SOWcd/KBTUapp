@@ -2376,6 +2376,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # Native research: verified students answer once; proposals are reviewed only in Admin.
+    research_body = Depends(json_body(logic.research.BODY_MOST))
+
+    @app.get("/api/research")
+    def research_surveys(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.surveys(con, v)
+
+    @app.post("/api/research/requests", status_code=204)
+    def research_propose(con: Con, v: Me, body: object = research_body):
+        logic.research.propose(con, v, body)
+
+    @app.post("/api/research/{slug}/answers", status_code=204)
+    def research_answer(slug: str, con: Con, v: Me, body: object = Depends(json_body(logic.forms.MOST))):
+        logic.research.answer(con, v, slug, body)
+
+    @app.get("/api/admin/research")
+    def research_requests(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.requests(con, v)
+
+    @app.post("/api/admin/research/{rid}", status_code=204)
+    def research_approve(rid: int, con: Con, v: Me, body: object = research_body):
+        logic.research.approve(con, v, rid, body)
+
     # to the creator (logic/helpus.py): an anonymous line (no author kept), a signed offer to help; the admin's list
     helpus_body = Depends(json_body(logic.helpus.BODY_MOST))
 
@@ -3251,7 +3276,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     # public forms (logic/forms.py): no account, nothing about the sender kept
     @app.get("/f/{slug}")
     def form_page(con: Con, slug: str):
-        status, body = logic.forms.page(con, slug)
+        status, body = logic.forms.page(con, slug, f"https://t.me/{cfg.bot_username}?startapp=research")
         return Response(body, status_code=status, media_type="text/html", headers={
             "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
 

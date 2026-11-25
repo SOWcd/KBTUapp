@@ -14,7 +14,7 @@
   import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -140,11 +140,26 @@
   $effect(() => { if (data.events.some((e) => e.teamMax) || data.past.some((e) => e.teamMax)) void eventTeamChunk().catch(() => {}); });
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
+  const researchSheet = () => import('./screens/forum/Research.svelte');
+  const researchForm = () => import('./screens/forum/ResearchForm.svelte');
+  const researchPropose = () => import('./screens/forum/ResearchPropose.svelte');
+  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); warm(researchSheet); warm(researchForm); warm(researchPropose); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
   sheets.deepLink = (p) => deepLink(p);
+  sheets.research = () => { void loadResearch(); void lazy(researchSheet, {}); };
+  const asResearchStudent = (action: () => void) => asStudent(() => {
+    const student = session.me?.student;
+    if (!student || student.manual || student.studentId.startsWith('staff') || student.consent === 'staff') {
+      say(t('research.studentOnly'), 'warning_3d');
+      return;
+    }
+    action();
+  }, 'research');
+  sheets.researchForm = (survey) => asResearchStudent(() => void lazy(researchForm, { survey }));
+  sheets.researchPropose = () => asResearchStudent(() => void lazy(researchPropose, {}));
+  sheets.adminResearch = () => { void loadResearchRequests(); void lazy(() => import('./screens/admin/AdminResearch.svelte'), {}); };
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, 'sheet.scanner', `${id}:${!!names}:${!!qr}`);
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, 'sheet.scanner', `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
@@ -320,6 +335,13 @@
   // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
   $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
+  $effect(() => {
+    const uid = session.me?.id, blocked = session.banned || session.revoked;
+    untrack(() => {
+      resetResearch();
+      if (uid && !blocked) { if (session.channel) void loadResearch(); void loadResearchRequests(); }
+    });
+  });
   const forumViewer = $derived(!session.banned && !session.revoked && session.boardKnown && session.channel ? session.me?.id : null);
   $effect(() => { if (forumViewer) return watchChannelVisit(); });
   // a role changes a tab's content, never its name
@@ -599,6 +621,7 @@
     }
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
+    if (p === 'research') { if (session.channel) ui.tab = 'forum'; sheets.research(); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
     if (fp) { channel.focus = fp[1] ? Number(fp[1]) : null; if (session.channel) ui.tab = 'forum'; return; }
     const sj = p.match(/^sj_([0-9a-f]{10})$/); // the bot: my listing on a subject was hidden: its card
@@ -780,7 +803,11 @@
     let leftAt = 0;
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
-      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits(); }
+      if (leftAt && Date.now() - leftAt >= 30_000) {
+        void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits();
+        if (session.channel || data.research) void loadResearch();
+        void loadResearchRequests();
+      }
       leftAt = 0;
     };
     const seen = () => (document.hidden ? left() : back());
