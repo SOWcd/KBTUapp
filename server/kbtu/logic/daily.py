@@ -32,10 +32,10 @@ def _memo(body: dict, keep: str | None) -> str | None:
     return out
 
 
-def _next_week(t: int | None = None) -> int:
+def _next_week() -> int:
     """Monday 00:00 (Almaty) of the week the coming Wednesday's memo covers: DMP takes next week's memos on Wednesdays,
     so from Thursday on it's the week after next (1970-01-01 was a Thursday: Monday = 0)."""
-    day = day_of(t or core.now())
+    day = day_of(core.now())
     return (day + (2 - (day + 3) % 7) % 7 + 5) * 86400 - TZ
 
 

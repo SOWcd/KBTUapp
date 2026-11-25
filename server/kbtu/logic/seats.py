@@ -499,10 +499,11 @@ def afisha_ok(o: str) -> str:
     return f"({o}.official = 1 OR {o}.kind != 'club' OR {o}.top_at IS NOT NULL)"
 
 
-def on_afisha(e: str = "e") -> str:
-    """SQL: the event `e` is on the general afisha (no club asked) for the viewer (on_afisha_args): its host or an
-    accepted, active co-host is afisha_ok, or it's mine whoever hosts it (my club's, signed up for, saved). The rest
-    open on their club's page and by link. In the query, so a LIMIT counts only these."""
+def on_afisha() -> str:
+    """SQL: the event `e` (every caller's alias) is on the general afisha (no club asked) for the viewer (on_afisha_args): its
+    host or an accepted, active co-host is afisha_ok, or it's mine whoever hosts it (my club's, signed up for, saved). The
+    rest open on their club's page and by link. In the query, so a LIMIT counts only these."""
+    e = "e"
     mine = "SELECT org_id FROM org_members WHERE user_id = ?"
     return f"""(EXISTS (SELECT 1 FROM orgs h WHERE h.id = {e}.org_id AND {afisha_ok('h')}) OR {e}.org_id IN ({mine})
         OR EXISTS (SELECT 1 FROM event_cohosts x JOIN orgs c ON c.id = x.org_id WHERE x.event_id = {e}.id AND x.status = 'accepted'
