@@ -152,7 +152,7 @@ MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 def _staff_event_id(con, request: Request, route: tuple[str, str]) -> str:
     if route == ("PUT", MATCH_SCORE_ROUTE):
         mid = request.path_params["mid"]
-        if mid.isascii() and mid.isdigit() and len(mid) <= 19 and (eid := logic.evmatches.match_event(con, int(mid))):
+        if mid.isascii() and mid.isdigit() and len(mid) <= 19 and (eid := logic.tournament.match_event(con, int(mid))):
             return str(eid)
         return ""
     return str(request.path_params.get("eid", ""))
@@ -1226,37 +1226,37 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/events/{eid}/groups")
     def event_groups(eid: int, con: Con, v: Me):
-        return logic.evgroups.board(con, v, eid)
+        return logic.tournament.groups_board(con, v, eid)
 
     @app.post("/api/events/{eid}/groups")
     def draw_groups(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evgroups.draw(con, v, eid, body)
+        return logic.tournament.groups_draw(con, v, eid, body)
 
     @app.put("/api/events/{eid}/groups/{gid}/teams")
     def move_group_teams(eid: int, gid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evgroups.move(con, v, eid, gid, body)
+        return logic.tournament.groups_move(con, v, eid, gid, body)
 
     @app.put(MATCH_SCORE_ROUTE)
     async def score_match(mid: int, request: Request, con: Con, v: Me, body: dict | None = Body(None)):
         if body is None and not await request.body():
             raise ApiError("bad_input")
-        return await run_in_threadpool(logic.evmatches.score, con, v, mid, body)
+        return await run_in_threadpool(logic.tournament.score, con, v, mid, body)
 
     @app.delete("/api/events/{eid}/groups", status_code=204)
     def remove_groups(eid: int, con: Con, v: Me):
-        logic.evgroups.remove(con, v, eid)
+        logic.tournament.groups_remove(con, v, eid)
 
     @app.get("/api/events/{eid}/bracket")
     def event_bracket(eid: int, con: Con, v: Me):
-        return logic.evbracket.board(con, v, eid)
+        return logic.tournament.bracket_board(con, v, eid)
 
     @app.post("/api/events/{eid}/bracket")
     def draw_bracket(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evbracket.draw(con, v, eid, body)
+        return logic.tournament.bracket_draw(con, v, eid, body)
 
     @app.put("/api/events/{eid}/bracket/swap")
     def swap_bracket_teams(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evbracket.swap(con, v, eid, body)
+        return logic.tournament.bracket_swap(con, v, eid, body)
 
     @app.get("/api/events/{eid}/people/{uid}/contact")
     def attendee_contact(eid: int, uid: int, con: Con, v: Me, response: Response):

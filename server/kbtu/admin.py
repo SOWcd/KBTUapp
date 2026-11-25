@@ -432,12 +432,12 @@ def main(args: list[str]) -> None:
             sys.exit("guest CSV must be UTF-8")
         print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
     elif cmd == "groups-draw" and len(args) == 4 and all(re.fullmatch(r"[0-9]{1,4}", a) for a in args[1:]):
-        from .logic import evgroups
+        from .logic import tournament
         boss, e = one(con, "SELECT id FROM users WHERE is_founder = 1"), one(con, "SELECT org_id FROM events WHERE id = ?", int(args[1]))
         if not boss or not e:
             sys.exit("needs the creator (`founder`) and an existing event")
         try:
-            got = evgroups.draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
+            got = tournament.groups_draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
         except ApiError as exc:
             sys.exit(f"refused: {exc.code}")
         print("groups", " ".join(f"{g['name']}:{len(g['standings'])}" for g in got["groups"]))

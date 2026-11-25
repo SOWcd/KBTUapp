@@ -40,7 +40,7 @@ once a day), never a consent. Withdrawing it takes me out of my teams on events 
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
 an invite link's holder sees the team it invites to. Other event viewers see the team settings and the names in a drawn
-stage (evgroups.py and evbracket.py).
+stage (tournament.py).
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ import unicodedata
 
 from .. import texts
 from ..db import tx
-from . import evmatches
+from . import tournament
 from .core import PERSON_COLS, ApiError, Viewer, full, need_student, one, person_ref, rows
 
 SIZE = (2, 10)    # the editor's bounds for a team's min and max
@@ -133,7 +133,7 @@ def settings_ok(con, f: dict, e: sqlite3.Row | None = None) -> None:
         raise ApiError("closed", "locked")
     if get("team_max") is None:
         con.execute("DELETE FROM ev_groups WHERE event_id = ?", (e["id"],))
-        evmatches.remove_bracket(con, e["id"])
+        tournament.remove_bracket(con, e["id"])
         con.execute("DELETE FROM event_teams WHERE event_id = ?", (e["id"],))
     elif one(con, "SELECT 1 FROM event_team_members WHERE event_id = ? GROUP BY team_id HAVING COUNT(*) > ?", e["id"], get("team_max")):
         raise ApiError("conflict", "team_size")
@@ -587,7 +587,7 @@ def left(con, eid: int, uid: int) -> None:
 def cancelled(con, eid: int) -> None:
     """The event is called off: its teams go (the sign-ups stay, as for every cancelled event)."""
     con.execute("DELETE FROM ev_groups WHERE event_id = ?", (eid,))
-    evmatches.remove_bracket(con, eid)
+    tournament.remove_bracket(con, eid)
     con.execute("DELETE FROM event_teams WHERE event_id = ?", (eid,))
 
 

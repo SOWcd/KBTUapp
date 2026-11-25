@@ -64,5 +64,5 @@ from .forum import (add_skill, ask_people, asks, block, close_ask, contact, cont
     hide_ask, mod_hide_ask, mod_queue, my_forum, release_ask, reported_enough, search_people, set_my_forum, skill_mod,
     skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evbracket, evgroups, evmatches, evreports, evteams, fchannel, forms, gallery, helpus, inbox, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evreports, evteams, fchannel, forms, gallery, helpus, inbox, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, tournament, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers take these from kbtu.logic)
