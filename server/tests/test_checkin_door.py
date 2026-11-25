@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import checkin, db, logic
+from kbtu import bot, checkin, db, logic
 from test_club_checkin import _badge
 from test_core import _club_runs, env, login, tma  # noqa: F401
 from test_review_checkin import _scan
@@ -55,6 +55,26 @@ def test_moved_event_reminds_only_ticket_holders(env):
     assert reminders() == [(ann["id"], moved - 7200)]
     assert {r[0] for r in con.execute("""SELECT user_id FROM bot_outbox
         WHERE kind = 'event_changed' AND ref LIKE ? AND sent_at IS NULL""", (f"event:{eid}:%",))} == {ann["id"], bob["id"]}
+    con.close()
+
+
+def test_reminder_rechecks_seat_at_send_time(env, monkeypatch):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    start = int(time.time()) + 86400
+    eid = _ev(con, org, start)
+    uid = login(c, 1, "ann")["id"]
+    con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (uid,))
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(1), json={}).json()["my"]["status"] == "going"
+
+    monkeypatch.setattr(bot, "now", lambda: start - 7200)
+    m = next(m for m in bot._due(con) if m["kind"] == "remind_2h")
+    assert bot._render(con, m)[2] == f"tk_{eid}"
+    # Leave the queued reminder in place when the seat changes.
+    con.execute("UPDATE registrations SET status = 'cancelled' WHERE event_id = ? AND user_id = ?", (eid, uid))
+    assert bot._take(con, m, False) is None
+    assert tuple(con.execute("SELECT sent_at, error FROM bot_outbox WHERE id = ?", (m["id"],)).fetchone()) == (None, "gone")
     con.close()
 
 

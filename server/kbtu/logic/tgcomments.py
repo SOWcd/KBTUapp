@@ -67,7 +67,7 @@ def stranger(con, tg_id: int, body: str, link: str | None, msg_id: int = 0) -> t
 # ---- the app's card: my own words, to me alone
 
 _REMOVED = """SELECT c.id, c.body, c.status, c.review, c.clause FROM tgc_comments c JOIN users u ON u.id = c.author_id WHERE c.author_id = ?
-    AND u.can_dm = 0 AND c.status IN ('deleting', 'deleted', 'restored') AND c.shown = 0 ORDER BY c.id"""
+    AND u.can_dm = 0 AND c.status IN ('deleted', 'restored') AND c.shown = 0 ORDER BY c.id"""
 RULES = ("abuse", "fake", "spam", "pdata", "disrupt", "other")  # the clause of the terms' section 3 a removed comment broke (ai.COMMENT_PROMPT)
 
 
@@ -102,6 +102,13 @@ def take_saved(con, v: Viewer) -> dict | None:
 
 # ---- reports
 
+def report_closed(con, uid: int) -> bool:
+    if not one(con, "SELECT 1 FROM tgc_closed WHERE user_id = ?", uid):
+        return False
+    notify(con, uid, "tgc_closed", f"rc:{now() // 86400}")
+    return True
+
+
 def report(con, reporter_tg: int, chat: int, msg_id: int, author_tg: int, body: str, link: str | None) -> tuple[str, int | None]:
     """A student's /report on a comment (its text as he saw it). ('ok', id): counted, the AI looks next (tgc.py), the
     reporter hears in DM; 'dup': his again; 'kept': a moderator kept it (counted, not judged again until an edit);
@@ -109,16 +116,17 @@ def report(con, reporter_tg: int, chat: int, msg_id: int, author_tg: int, body: 
     u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
     if not u:
         return "self", None
-    if one(con, "SELECT 1 FROM tgc_closed WHERE user_id = ?", u["id"]):
-        notify(con, u["id"], "tgc_closed", f"rc:{now() // 86400}")
-        return "closed", None
     if author_tg == reporter_tg:
         return "self", None
     author = one(con, "SELECT id FROM users WHERE tg_id = ?", author_tg)
     with tx(con):
-        c = one(con, """INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+        if report_closed(con, u["id"]):
+            return "closed", None
+        # Leave legacy rowids behind, including those already purged while an old moderation card was open.
+        cid = core.next_id(con, "tgc_comments", floor=1 << 32)
+        c = one(con, """INSERT INTO tgc_comments (id, chat_id, msg_id, author_id, author_tg, body, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (chat_id, msg_id) DO UPDATE SET body = CASE WHEN status IN ('open', 'queued') THEN excluded.body ELSE body END
-            RETURNING id, status""", chat, msg_id, author["id"] if author else None, author_tg, body[:4096], link, now())
+            RETURNING id, status""", cid, chat, msg_id, author["id"] if author else None, author_tg, body[:4096], link, now())
         if c["status"] not in (*LIVE, "kept"):
             return "gone", c["id"]
         new = con.execute("INSERT OR IGNORE INTO tgc_reports (comment_id, reporter_id, body, at) VALUES (?, ?, ?, ?)",
@@ -155,19 +163,13 @@ def looked(con, cid: int) -> tuple[bool | None, str | None] | None:
     return (True, None) if c["ai"] == "ok" else (False, c["clause"])
 
 
-def look(con, cid: int, body: str, verdict: bool | None) -> None:
-    """The AI looked at this text (an answer only: no answer is asked again next time)."""
-    if verdict is not None:
-        con.execute("UPDATE tgc_comments SET ai_hash = ? WHERE id = ?", (_hash(body), cid))
-
-
 def banned(con, tg_id: int) -> None:
     """Banned in the app, so banned in the group: on record, so the app's unban lifts it here too (unban_due)."""
     con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, banned_at) VALUES (?, ?, ?)
         ON CONFLICT (tg_id) DO UPDATE SET seen_at = excluded.seen_at, banned_at = excluded.banned_at""", (tg_id, now(), now()))
 
 
-def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str | None:
+def judge(con, cid: int, verdict: bool | None, rule: str | None = None, *, body: str) -> str | None:
     """The AI's look at a reported comment (True clean, False a violation of `rule`, None no answer), then the rule:
     'delete' with DELETE_AT reporters verified over two weeks ago and a violation (the bot deletes it, its author gets
     his words, a moderator confirms or restores); 'queue' with that many but no violation found (or no answer), or a
@@ -176,8 +178,9 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
     author's text, so two people must agree with it."""
     with tx(con):
         c = one(con, "SELECT * FROM tgc_comments WHERE id = ?", cid)
-        if not c or c["status"] not in LIVE:
+        if not c or c["status"] not in LIVE or c["body"] != body:
             return None
+        con.execute("UPDATE tgc_comments SET ai_hash = ? WHERE id = ?", (_hash(body) if verdict is not None else None, cid))
         n = one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN students s ON s.user_id = r.reporter_id AND s.manual = 0
             WHERE r.comment_id = ? AND s.verified_at < ? AND (SELECT COUNT(*) FROM tgc_reports w JOIN tgc_comments x ON x.id = w.comment_id
                 WHERE w.reporter_id = r.reporter_id AND x.author_tg = ? AND w.outcome IN ('overturned', 'abuse')) < ?""",
@@ -190,8 +193,6 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
         if verdict is False and n >= DELETE_AT and not cleared:
             con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
-            if c["author_id"]:  # he hears at once, while the thread is still about it
-                notify(con, c["author_id"], "tgc_removed", f"tr:{cid}")
             return "delete"
         if reports >= ALERT_AT:  # many at once: the moderators now, not in the hour's digest
             notify_staff(con, _mods(con), "tgc_queue", f"ta:{cid}")
@@ -205,31 +206,44 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
 def edited(con, chat: int, msg_id: int, body: str) -> int | None:
     """A reported comment edited (edit-to-abuse after a check, or edit-to-clean before the second report): the new text
     is the one judged again; one a moderator kept goes back to the checks."""
-    c = one(con, "SELECT id, body FROM tgc_comments WHERE chat_id = ? AND msg_id = ? AND status IN ('open', 'queued', 'kept')", chat, msg_id)
-    if not c or c["body"] == body[:4096]:  # the same words (only a formatting change): nothing new to judge
-        return None
-    con.execute("UPDATE tgc_comments SET body = ?, status = CASE WHEN status = 'kept' THEN 'open' ELSE status END WHERE id = ?",
-                (body[:4096], c["id"]))
-    return c["id"]
+    c = one(con, """UPDATE tgc_comments SET body = ?, ai = NULL, ai_hash = NULL, clause = NULL,
+        status = CASE WHEN status = 'kept' THEN 'open' ELSE status END
+        WHERE chat_id = ? AND msg_id = ? AND status IN ('open', 'queued', 'kept') AND body != ? RETURNING id""",
+        body[:4096], chat, msg_id, body[:4096])
+    return c["id"] if c else None
 
 
 def to_delete(con) -> list[tuple[int, int, int]]:
     """(id, chat, message) the bot takes out of Telegram now; a deleted account's (tgc_undel) with id 0."""
     return [tuple(r) for r in rows(con, """SELECT id, chat_id, msg_id FROM tgc_comments WHERE status = 'deleting'
-        UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel""")]
+        UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel WHERE at <= ?""", now())]
 
 
-def deleted(con, cid: int, chat: int = 0, msg_id: int = 0, out: bool = False) -> None:
-    """Out of Telegram (or Telegram refused: its author deleted it first, mostly; a 48 h limit if there is one).
-    `out`: Telegram said it deleted it. A moderator's keep landed while the delete was on its way (_restore saw it
-    still up): it's gone after all, so it's restored as a deleted one is, its author gets his words back."""
-    if not con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ? AND status = 'deleting'", (cid,)).rowcount and out:
-        c = one(con, "SELECT author_id FROM tgc_comments WHERE id = ? AND status = 'kept'", cid)
-        if c:
-            con.execute("UPDATE tgc_comments SET status = 'restored' WHERE id = ?", (cid,))
-            if c["author_id"]:
-                notify(con, c["author_id"], "tgc_back", f"tb:{cid}")
-    con.execute("DELETE FROM tgc_undel WHERE chat_id = ? AND msg_id = ?", (chat, msg_id))
+def deleted(con, cid: int, chat: int, msg_id: int) -> None:
+    """Out of Telegram: a successful delete or a confirmed missing message.
+    A moderator's keep landed while the delete was on its way (_restore saw it still up): it's gone after all,
+    so it's restored as a deleted one is, its author gets his words back."""
+    with tx(con):
+        c = one(con, "UPDATE tgc_comments SET status = 'deleted' WHERE id = ? AND status = 'deleting' RETURNING author_id, review", cid)
+        if c and c["author_id"]:
+            notify(con, c["author_id"], "tgc_removed" if c["review"] else "tgc_confirmed", f"{'tr' if c['review'] else 'tc'}:{cid}")
+        if not c:
+            c = one(con, "SELECT author_id FROM tgc_comments WHERE id = ? AND status = 'kept'", cid)
+            if c:
+                con.execute("UPDATE tgc_comments SET status = 'restored' WHERE id = ?", (cid,))
+                if c["author_id"]:
+                    notify(con, c["author_id"], "tgc_back", f"tb:{cid}")
+        con.execute("DELETE FROM tgc_undel WHERE chat_id = ? AND msg_id = ?", (chat, msg_id))
+
+
+def delete_failed(con, cid: int, chat: int, msg_id: int) -> None:
+    """Telegram refused removal: back to the moderators with its thread link."""
+    with tx(con):
+        # An erased account's cleanup stores only Telegram message IDs. Retry those separately.
+        con.execute("UPDATE tgc_undel SET at = ? WHERE chat_id = ? AND msg_id = ?", (now() + 86400, chat, msg_id))
+        if con.execute("UPDATE tgc_comments SET status = 'queued', review = 0, decided_at = ? WHERE id = ? AND status = 'deleting'", (now(), cid)).rowcount:
+            notify_staff(con, _mods(con), "tgc_delete_failed", f"tf:{cid}")
+            log_action(con, None, "tg_delete_failed", f"tgc:{cid}")
 
 
 # ---- the moderators' side (moderation.report_queue / taken_down / restore, app.py's resolve route)
@@ -259,7 +273,7 @@ def queue_items(con, v: Viewer) -> list[dict]:
             continue
         seen = {r["body"]: r["at"] for r in reps if r["body"] != c["body"]}
         out.append({"target": "tgc", "id": c["id"], "text": c["body"], "where": {"kind": "tgc", "id": c["id"], "link": c["link"]},
-                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["clause"], "removed": bool(c["review"]),
+                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["clause"], "removed": c["status"] == "deleted",
                     "reporters": [{"right": r["ok"] or 0, "wrong": r["bad"] or 0,
                                    "days": (now() - r["verified_at"]) // 86400 if r["verified_at"] else None} for r in reps],
                     "notes": [{"reason": "other", "note": b, "at": a} for b, a in list(seen.items())[:5]], "at": reps[-1]["at"]})
@@ -286,7 +300,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
             con.execute("""UPDATE tgc_comments SET status = CASE WHEN status = 'deleted' THEN 'deleted' ELSE 'deleting' END, review = 0,
                 clause = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["clause"] or "other", now(), cid))
             con.execute("UPDATE tgc_reports SET outcome = 'confirmed' WHERE comment_id = ?", (cid,))
-            if c["author_id"]:  # the verdict: the "under review" message edited, or a new one
+            if c["author_id"] and c["status"] == "deleted":  # only confirmed removals are announced
                 notify(con, c["author_id"], "tgc_confirmed", f"tc:{cid}")
             log_action(con, v.id, "tg_confirm", f"tgc:{cid}")
             for (uid,) in rows(con, "SELECT reporter_id FROM tgc_reports WHERE comment_id = ?", cid):
@@ -394,7 +408,10 @@ def sweep(con) -> None:
         return
     con.execute("DELETE FROM tgc_saved WHERE at <= ?", (now() - SAVE_FOR,))
     con.execute("DELETE FROM tgc_strangers WHERE seen_at < ?", (now() - STRANGER_KEEP,))
-    con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (now() - KEEP,))
+    with tx(con):
+        con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (now() - KEEP,))
+        con.execute("""DELETE FROM bot_outbox WHERE (kind IN ('tgc_removed', 'tgc_confirmed', 'tgc_back', 'tgc_delete_failed') OR kind = 'tgc_report_ok' AND ref LIKE 'ro:%')
+            AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM tgc_comments)""")
     # key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key
     con.execute("DELETE FROM meta WHERE key >= 'tgcok:' AND key < 'tgcok;' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
     con.execute("DELETE FROM meta WHERE key >= 'tgcedit:' AND key < 'tgcedit;' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))

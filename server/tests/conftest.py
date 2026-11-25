@@ -129,6 +129,19 @@ def before_notification_migration():
             CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
                 DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
             END;
+            ALTER TABLE sponsor_consents DROP COLUMN amount;
+            ALTER TABLE event_guests DROP COLUMN walk_in;
+            DROP TABLE qr_meet_scans;
+            ALTER TABLE qr_marks DROP COLUMN meetup_review;
+            ALTER TABLE qr_sessions DROP COLUMN department_name;
+            ALTER TABLE qr_sessions DROP COLUMN department_id;
+            ALTER TABLE qr_sessions DROP COLUMN meetup;
+            DROP INDEX one_contact;
+            DROP INDEX contacts_by_sender;
+            DROP INDEX withdrawn_offer_messages;
+            ALTER TABLE contacts DROP COLUMN offer_message;
+            ALTER TABLE contacts DROP COLUMN withdrawn_at;
+            CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
             DROP TABLE gallery_consents;
             ALTER TABLE gallery_photos DROP COLUMN place;
             ALTER TABLE posts DROP COLUMN tg_fmt;

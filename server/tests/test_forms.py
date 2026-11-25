@@ -130,7 +130,7 @@ def test_cli_csv(form, capsys):
     capsys.readouterr()
     admin.main(["form", "answers", "abroad"])
     got = list(csv.reader(io.StringIO(capsys.readouterr().out)))
-    assert got[0] == ["at", "Age", "Program", "Why", "Paid by", "Ties", "=Story"] and len(got) == 3
+    assert got[0] == ["at", "Age", "Program", "Why", "Paid by", "Ties", "'=Story"] and len(got) == 3  # a label is a cell too
     assert got[1][1:] == ["21", "", "Quality; Prestige", "", "", "'=SUM(A1)\nsecond, line"] and got[2][1:] == ["30", "", "", "", "", ""]
     admin.main(["form", "list"])
     assert capsys.readouterr().out.split() == ["open", "2", "/f/abroad"]
@@ -139,6 +139,28 @@ def test_cli_csv(form, capsys):
     assert capsys.readouterr().out.split() == ["closed", "/f/abroad", "closed", "2", "/f/abroad"]
     with pytest.raises(SystemExit):
         admin.main(["form", "answers", "nothing"])
+
+
+def test_closed_answers_expire_from_exports_and_nightly_storage(form, monkeypatch):
+    c, con = form
+    now = logic.now()
+    deadline = (now // 86400 + 366) * 86400 - 5 * 3600 + 600  # nightly retention window
+    clock = [deadline - forms.KEEP]
+    set_clock(monkeypatch, lambda: clock[0])
+    assert c.post("/api/f/abroad", json={"age": "21", "story": "Example private answer"}).status_code == 200
+    forms.close(con, "abroad")
+    forms.create(con, "open", SPEC)
+    forms.submit(con, "open", {"age": "22"})
+    forms.create(con, "recent", SPEC)
+    forms.submit(con, "recent", {"age": "23"})
+    clock[0] = deadline - 1
+    forms.close(con, "recent")
+    assert "Example private answer" in forms.export(con, "abroad")
+    clock[0] = deadline
+    assert len(list(csv.reader(io.StringIO(forms.export(con, "abroad"))))) == 1
+    assert len(_answers(con)) == 3  # export is safe even before the scheduled sweep
+    logic.stats_day(con)
+    assert _answers(con) == [{"age": "22"}, {"age": "23"}]
 
 
 def test_csp_hashes(form):  # the inline script and style run by their hashes; an injected tag wouldn't

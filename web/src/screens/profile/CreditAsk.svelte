@@ -11,6 +11,7 @@
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import CreditLines from '../../ui/CreditLines.svelte';
+  import GitHubMark from '../../ui/GitHubMark.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const me = $derived(session.me);
@@ -38,6 +39,8 @@
           {#if mine.team}<span class="role">{t('cr.team')}</span>{/if}
           {#if mine.honor}<span class="role">{t('ach.honor.name')}</span>{/if}
           <CreditLines items={mine.items} />
+          <!-- the login a yes shows beside my name (server credits.listing): seen before it is given -->
+          {#if mine.gh}<span class="gh"><GitHubMark size={16} />{mine.gh}</span>{/if}
         </span>
       </div>
     {/if}
@@ -60,6 +63,7 @@
   .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
   .txt b { font: 600 var(--fs-row)/1.25 var(--font-text); overflow-wrap: anywhere; }
   .role { font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
+  .gh { display: inline-flex; align-items: center; gap: 6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
   .note { margin-top: var(--s-4); color: var(--text-3); }
   .acts { display: flex; flex-direction: column; gap: var(--s-1); }
 </style>

@@ -187,7 +187,7 @@ def queue(con) -> list[dict]:
         FROM auto_events a JOIN events e ON e.id = a.event_id AND e.status = 'draft' AND e.hidden_at IS NULL
         JOIN posts p ON p.id = a.post_id JOIN orgs o ON o.id = e.org_id AND o.status = 'active' ORDER BY a.at""")
     return [{"id": r["ev"], "title": r["ev_title"], "startsAt": r["ev_at"], "place": r["ev_place"], "at": r["found_at"], "url": r["ev_url"],
-             "org": org_ref(con, r), "cover": _event_cover(con, r), "emoji": r["ev_emoji"], "color": r["ev_color"], "tint": r["ev_tint"]} for r in found]
+             "org": org_ref(con, r), "cover": _event_cover(con, r, by=[]), "emoji": r["ev_emoji"], "color": r["ev_color"], "tint": r["ev_tint"]} for r in found]
 
 
 from . import assistant, organizing  # noqa: E402  (they import the other domains last too)

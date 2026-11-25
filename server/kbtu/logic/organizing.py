@@ -34,6 +34,15 @@ def _staff_event(con, v: Viewer, eid: int, right: str, cohost: bool = False, hel
     return e
 
 
+def _draft_event(con, v: Viewer, eid: int) -> sqlite3.Row:
+    """The event to edit: the "events" right's; or a member's own draft, theirs until the club approves it (published:
+    the organizers' alone)."""
+    e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+    if e and e["status"] == "draft" and e["created_by"] == v.id and not e["hidden_at"] and at_least(role_in(con, v, e["org_id"]), "member"):
+        return e
+    return _staff_event(con, v, eid, "events")
+
+
 def org_events(con, v: Viewer, oid: int) -> list[dict]:
     """Studio's list; for the club's Head+ each event also says how many questions wait for them (`_asking`) and how
     many receipts to check, so they show on top of Studio."""
@@ -71,7 +80,11 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
         GROUP BY c.event_id""", oid, *own, v.id)) if head and own else {}
     # drafts found in the club's channel (autoev.py): Studio's To do asks to check and publish them
     posts = autoev.from_posts(con, [e["id"] for e in found if e["org_id"] == oid and e["status"] == "draft"]) if head else {}
-    return [{**c, "questions": questions.get(e["id"], 0), "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
+    # members' drafts and where each stands (submit_event): the author's own, and the President's and Vices' to answer
+    asks = {r["event_id"]: r for r in rows(con, "SELECT r.* FROM event_reviews r JOIN events e ON e.id = r.event_id WHERE e.org_id = ? AND e.status = 'draft'", oid)}
+    review = {e["id"]: {"mine": e["created_by"] == v.id, "askedAt": a["asked_at"] if a else None, "reason": a["reason"] if a else None}
+              for e in found if e["org_id"] == oid and e["status"] == "draft" and ((a := asks.get(e["id"])) or e["created_by"] == v.id)}
+    return [{**c, **({"review": review[e["id"]]} if e["id"] in review else {}), "questions": questions.get(e["id"], 0), "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
              "volunteersAsked": asked.get(e["id"], 0), "teamAsks": guests.get(e["id"], 0), **({"fromPost": posts[e["id"]]} if e["id"] in posts else {})}
             for e, c in zip(found, cards(con, v, found))]
 
@@ -354,6 +367,38 @@ def _focus(body: dict, keep: str | None) -> str | None:
     return f"{x:.3f},{y:.3f}"
 
 
+FORMATS = ("feed", "card", "list")
+
+
+def _cover_by(con, v: Viewer, body: dict, eid: int, cover: int | None, was: int | None) -> None:
+    """The editor's coverFormats: {format: {focus} | {id, focus} | null}, a format's own crop or its own photo over the one
+    cover (the Feed's tall slide, the event's card, a list's thumbnail). Absent keeps them, a format's null goes back to
+    the cover; a photo must be on that format already (a co-organizer's) or the caller's upload. No cover: none; another
+    cover and nothing said: the crops made for the old one go."""
+    if cover is None:
+        con.execute("DELETE FROM event_covers WHERE event_id = ?", (eid,))
+    elif body.get("coverFormats") is None:
+        if cover != was:
+            con.execute("DELETE FROM event_covers WHERE event_id = ? AND file_id IS NULL", (eid,))
+    else:
+        by = body["coverFormats"]
+        if not isinstance(by, dict) or set(by) - set(FORMATS):
+            raise ApiError("bad_input")
+        for k, x in by.items():
+            if x is not None and not isinstance(x, dict):
+                raise ApiError("bad_input")
+            fid, focus = (x.get("id"), _focus({"coverFocus": x.get("focus")}, None)) if x else (None, None)
+            if fid is not None and (not isinstance(fid, int) or isinstance(fid, bool) or fid == cover or not one(
+                    con, """SELECT 1 FROM event_covers WHERE event_id = ? AND format = ? AND file_id = ?
+                    UNION ALL SELECT 1 FROM files WHERE id = ? AND kind = 'event_cover' AND owner_id = ?""", eid, k, fid, fid, v.id)):
+                raise ApiError("bad_input")
+            if fid is None and focus is None:
+                con.execute("DELETE FROM event_covers WHERE event_id = ? AND format = ?", (eid, k))
+            else:
+                con.execute("INSERT OR REPLACE INTO event_covers (event_id, format, file_id, focus) VALUES (?, ?, ?, ?)", (eid, k, fid, focus))
+    core._SHARED.pop(("event", eid), None)  # the Afisha's card shows them
+
+
 def kz_phone(raw: object) -> str | None:
     """A Kazakhstan number as typed (8 701..., +7 701..., 701...) kept as +7XXXXXXXXXX; None if it isn't one."""
     t = str(raw or "")
@@ -389,10 +434,9 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
         raise ApiError("conflict", "paid")  # someone has paid by these details already
     if v.lent_full and v.staff_org == org["id"] and price is not None and (new["pay_to_name"], new["pay_phone"]) != (old["pay_to_name"], old["pay_phone"]):
-        # the creator from Admin sets or changes the club's payee as its President would: the owner's log
-        # keeps what it was and what it became, so a payment sent elsewhere can be traced
-        log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None, "was": {"name": old["pay_to_name"], "phone": old["pay_phone"]},
-                                                                            "now": {"name": name, "phone": phone}}, ensure_ascii=False))
+        # Record the change without copying the payee's personal details into a permanent log.
+        log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None,
+            "changed": [label for label, key in (("name", "pay_to_name"), ("phone", "pay_phone")) if new[key] != old[key]]}))
     return new
 
 
@@ -465,8 +509,15 @@ def _own_tr(body: dict, f: dict) -> dict:
     return {"i18n": json.dumps(out, ensure_ascii=False), "lang": tr["lang"]}
 
 
+DRAFTS_A_DAY = 5  # a member's own (without the "events" right): each one is the President's and the Vices' to read
+
+
 def create_event(con, v: Viewer, oid: int, body: dict, *, guest_list: bool = False) -> dict:
-    _may(con, v, oid, "events")
+    """A draft. The "events" right publishes it; any other member of the club sends theirs to its President and Vices
+    (submit_event), and it stays theirs to edit until one of them approves it."""
+    member = not can(con, v, oid, "events")
+    if member and not at_least(role_in(con, v, oid), "member"):
+        raise ApiError("forbidden")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org), **evteams.settings(body)}
     f |= online_fields(body, None)
@@ -481,10 +532,13 @@ def create_event(con, v: Viewer, oid: int, body: dict, *, guest_list: bool = Fal
     if guest_list:
         f.update(guest_list=1, age_check=1)
     with tx(con):  # bad slides leave no draft behind
+        if member and one(con, "SELECT COUNT(*) FROM events WHERE org_id = ? AND created_by = ? AND created_at > ?", oid, v.id, core.now() - 86400)[0] >= DRAFTS_A_DAY:
+            raise ApiError("rate_limited", "drafts")
         cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
             VALUES (?, 'draft', {', '.join('?' * len(f))}, ?, ?, ?, ?)""", (oid, *f.values(), shade(f["color"]), v.id, core.now(), core.now()))
         e = one(con, "SELECT * FROM events WHERE id = ?", cur.lastrowid)
         _slides(con, v, body, e, f["cover_file_id"])
+        _cover_by(con, v, body, e["id"], f["cover_file_id"], None)
         if "santa" in body:
             santa.set_on(con, e["id"], body["santa"])
         santa.check_event(con, e["id"], f)
@@ -548,7 +602,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
     org = one(con, "SELECT o.* FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", eid)
     f = clean_event(body, bool(org and org["can_oversee"]))
     with tx(con):
-        e = _staff_event(con, v, eid, "events")
+        e = _draft_event(con, v, eid)
         if e["status"] == "cancelled":
             raise ApiError("closed")
         f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e) | evteams.settings(body) | online_fields(body, e["online"])
@@ -568,6 +622,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"]) if org and (org["official"] or org["top_at"]) and (v.lent_full or not v.staff_org) else e["memo"]  # the admin from Admin never touches the club's memo (the creator as its President)
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
+        _cover_by(con, v, body, eid, f["cover_file_id"], e["cover_file_id"])
         if "santa" in body:  # Secret Santa's switch (santa.py); left out: kept
             santa.set_on(con, eid, body["santa"])
         santa.check_event(con, eid, f)
@@ -635,30 +690,78 @@ def change_place(con, v: Viewer, eid: int, place: object) -> dict:
     return full(con, v, after)
 
 
-def publish_event(con, v: Viewer, eid: int, *, announce: bool = True) -> dict:
+REVIEW_REASONS = ("details", "when", "cover", "repeat", "later")  # why a member's draft comes back: a list, never typed words
+
+
+def submit_event(con, v: Viewer, eid: int) -> dict:
+    """A member's own draft goes to the club's President and Vices: the bot tells each, Studio shows it on top."""
     with tx(con):
-        e = _staff_event(con, v, eid, "events")
-        if e["status"] != "draft":
-            raise ApiError("conflict")
+        e = _draft_event(con, v, eid)
+        if e["status"] != "draft" or e["created_by"] != v.id or can(con, v, e["org_id"], "events"):
+            raise ApiError("conflict")  # an organizer publishes theirs
         if e["starts_at"] <= core.now():
             raise ApiError("closed")
-        con.execute("""UPDATE events SET status = 'published', published_at = ?, updated_at = ?, silent_publish = ?
-            WHERE id = ?""", (core.now(), core.now(), int(not announce), eid))
-        told = None
-        if announce:
-            if e["visibility"] == "leaders":  # §4.10: every invited leader hears at once (always on)
-                for (uid,) in _invited_leaders(con, e, exclude=v.id):
-                    notify(con, uid, "leaders_invite", f"li:{eid}")
-            if e["meeting"]:  # §2b: everyone expected hears at once (always on)
-                for uid in _expected(con, e):
-                    if uid != v.id:
-                        notify(con, uid, "meeting_invite", f"mi:{eid}")
-            if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
-                after = _tell_after(con, e)
-                told = after is None
-                if told:
-                    tell_followers(con, e, e["org_id"], v.id)
-            cohost_tell(con, one(con, "SELECT * FROM events WHERE id = ?", eid), v.id)  # an accepted co-host's followers, by its own week
+        con.execute("""INSERT INTO event_reviews (event_id, asked_at) VALUES (?, ?)
+            ON CONFLICT (event_id) DO UPDATE SET asked_at = excluded.asked_at, reason = NULL, returned_at = NULL""", (eid, core.now()))
+        for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('president', 'vice') AND user_id != ?", e["org_id"], v.id):
+            notify(con, uid, "event_review", f"er:{eid}:{core.now() // 86400}")  # sent again after a return: one ping a day
+    return full(con, v, e)
+
+
+def review_event(con, v: Viewer, eid: int, ok: object, reason: object = None) -> dict:
+    """The club's President or a Vice answers a member's draft: yes publishes it as their own Publish would, no sends it
+    back with a reason from the list."""
+    with tx(con):
+        e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+        if not e or e["hidden_at"]:
+            raise ApiError("not_found")
+        if role_in(con, v, e["org_id"]) not in ("president", "vice"):
+            raise ApiError("forbidden")
+        if e["status"] != "draft" or not one(con, "SELECT 1 FROM event_reviews WHERE event_id = ? AND asked_at IS NOT NULL", eid):
+            raise ApiError("conflict")
+        if ok is True:
+            out = _publish(con, v, e, True)
+            if e["created_by"] and e["created_by"] != v.id:
+                notify(con, e["created_by"], "event_approved", f"ea:{eid}")
+            return out
+        if ok is not False or reason not in REVIEW_REASONS:
+            raise ApiError("bad_input")
+        con.execute("UPDATE event_reviews SET asked_at = NULL, reason = ?, returned_at = ? WHERE event_id = ?", (reason, core.now(), eid))
+        if e["created_by"] and e["created_by"] != v.id:
+            notify(con, e["created_by"], "event_returned", f"eb:{eid}:{core.now() // 86400}")
+    return full(con, v, e)
+
+
+def publish_event(con, v: Viewer, eid: int, *, announce: bool = True) -> dict:
+    with tx(con):
+        return _publish(con, v, _staff_event(con, v, eid, "events"), announce)
+
+
+def _publish(con, v: Viewer, e: sqlite3.Row, announce: bool) -> dict:
+    """A draft goes out (inside the caller's transaction): who hears it, and whether the club's followers did."""
+    eid = e["id"]
+    if e["status"] != "draft":
+        raise ApiError("conflict")
+    if e["starts_at"] <= core.now():
+        raise ApiError("closed")
+    con.execute("""UPDATE events SET status = 'published', published_at = ?, updated_at = ?, silent_publish = ?
+        WHERE id = ?""", (core.now(), core.now(), int(not announce), eid))
+    con.execute("DELETE FROM event_reviews WHERE event_id = ?", (eid,))  # a member's draft: answered, whoever published it
+    told = None
+    if announce:
+        if e["visibility"] == "leaders":  # §4.10: every invited leader hears at once (always on)
+            for (uid,) in _invited_leaders(con, e, exclude=v.id):
+                notify(con, uid, "leaders_invite", f"li:{eid}")
+        if e["meeting"]:  # §2b: everyone expected hears at once (always on)
+            for uid in _expected(con, e):
+                if uid != v.id:
+                    notify(con, uid, "meeting_invite", f"mi:{eid}")
+        if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
+            after = _tell_after(con, e)
+            told = after is None
+            if told:
+                tell_followers(con, e, e["org_id"], v.id)
+        cohost_tell(con, one(con, "SELECT * FROM events WHERE id = ?", eid), v.id)  # an accepted co-host's followers, by its own week
     out = full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
     # Studio's toast says whether the followers heard, and if not, from when a next event may tell them
     return out if told is None else {**out, "told": told, "tellAfter": after}
@@ -718,7 +821,7 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
     button is in Admin only, its confirm names what goes). Returns the receipt images and photos to delete from disk:
     a receipt is personal and nobody could open it any more."""
     if v.role != "admin":
-        e = _staff_event(con, v, eid, "events")
+        e = _draft_event(con, v, eid)  # a member's own draft too
         if e["status"] not in ("draft", "cancelled"):
             raise ApiError("conflict")
         if one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", eid):
@@ -736,7 +839,8 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
             WHERE r.event_id = ?""", eid)]
         pics = [r[0] for r in rows(con, """SELECT file_id FROM event_photos WHERE event_id = ?
             UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL
-            UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
+            UNION SELECT file_id FROM event_slides WHERE event_id = ?
+            UNION SELECT file_id FROM event_covers WHERE event_id = ? AND file_id IS NOT NULL""", eid, eid, eid, eid)]
         pics += [f for f in gallery.album_gone(con, eid) if f not in pics]  # a closed event's Gallery posts never turn public
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
         doc = _doc_paths(con, eid)
@@ -894,10 +998,15 @@ def events_gone(con) -> tuple[list[str], list[str]]:
     return receipts, photos
 
 
+def _attendee_receipt(p) -> dict:
+    return {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
+            "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
+            "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
+
+
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team; the co-host's sees short names only, no receipts or answers. Someone
-    the organizers removed who had paid stays at the end ('cancelled'), their receipt a tap away for the refund, until
-    they sign up again; a receipt counts only for the seat it was sent for (since the seat's created_at)."""
+    """The host's event team; the co-host's sees short names only, no receipts or answers. Cancelled paid seats stay
+    for refunds. Earlier seats' receipts remain accessible separately, without counting as the current seat's payment."""
     e = _staff_event(con, v, eid, "events", cohost=True)
     paid = can(con, v, e["org_id"], "events")
     order = {"going": 0, "hold": 1, "waitlist": 2, "cancelled": 3}
@@ -908,7 +1017,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
         WHERE r.event_id = ? AND (s.user_id IS NOT NULL OR ? AND u.tg_id > 0 AND r.status = 'going')
-        AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid, e["guest_list"])
+        AND (r.status != 'cancelled' OR EXISTS (SELECT 1 FROM receipts WHERE registration_id = r.id AND status = 'accepted'))""", eid, e["guest_list"])
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
@@ -916,10 +1025,18 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
     out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": " ".join(n for n in (p["last_name"], p["first_name"]) if n) or short_name(p), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
-            "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
-                        "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
-                        "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
+            "receipt": _attendee_receipt(p)
             if p["rid"] and paid and not v.staff_org else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
+    if paid and not v.staff_org:
+        previous: dict[int, list[dict]] = {}
+        for p in rows(con, """SELECT r.user_id, c.id AS rid, c.*, c.created_at AS sent_at, ac.receipt_id IS NOT NULL AS auto
+                FROM receipts c JOIN registrations r ON r.id = c.registration_id
+                LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
+                WHERE r.event_id = ? AND c.status = 'accepted' AND c.id != COALESCE((SELECT MAX(id) FROM receipts
+                    WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at), 0) ORDER BY c.id DESC""", eid):
+            previous.setdefault(p["user_id"], []).append(_attendee_receipt(p))
+        for a in out:
+            a["previousReceipts"] = previous.get(a["person"]["id"], [])
     if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
         out = [{**a, "person": _door_ref(p), "fullName": short_name(p), "by": None, "byCame": False, "answers": None} for a, p in zip(out, found)]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
@@ -1187,10 +1304,10 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 
 def flagged(con, rid: int) -> bool:
     """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
-    A spot check or a receipt read in part ('spot', 'partial') isn't a warning: nothing wrong was found, the student walks in."""
+    Only a clean receipt selected for a spot check is exempt; partial evidence needs approval too."""
     # only this seat's receipts: one from before a removal or a cancel (the seat's created_at restarts on a new sign-up) is the old seat's
     return one(con, """SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.registration_id = ? AND c.status = 'accepted'
-        AND c.flags NOT IN ('', 'spot', 'partial') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
+        AND c.flags NOT IN ('', 'spot') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
@@ -1476,6 +1593,60 @@ def tick_pending(con, v: Viewer, eid: int, key: object, adult: object = None, ca
         if not e["guest_list"] or _admission_shut(con, e, core.now()):
             raise ApiError("closed")
         return guests.tick(con, eid, key, core.now(), adult if e["age_check"] else None, came is not False)
+
+
+class _Preview(Exception):
+    """Carries a dry run's answer out of its transaction, which then rolls back."""
+
+
+LISTS_A_DAY = 30  # saved guest lists per event per day (each one rewrites the door's list)
+
+
+def guest_list(con, v: Viewer, eid: int, table: object, save: object) -> dict:
+    """The organizers' own guest list from Studio (guests.load), for whoever has the door (the door list's right).
+    Without `save` the same work runs and is rolled back: the preview's numbers are exactly what saving does."""
+    try:
+        with tx(con):
+            e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+            if e["status"] == "cancelled" or e["hidden_at"] or e["memo_only"] or end_of(e) <= core.now():
+                raise ApiError("closed")
+            if save is True and one(con, """SELECT COUNT(*) FROM audit_log WHERE action = 'guest_list' AND target = ?
+                    AND at > ?""", f"event:{eid}", core.now() - 86400)[0] >= LISTS_A_DAY:
+                raise ApiError("rate_limited", "guest_lists")
+            out = guests.load(con, eid, table)
+            if save is not True:
+                raise _Preview(out)
+            log_action(con, v.id, "guest_list", f"event:{eid}", json.dumps({"rows": out["rows"], "removed": out["removed"]}))
+            return out
+    except _Preview as p:
+        return p.args[0]
+
+
+def add_walk_in(con, v: Viewer, eid: int, name: object, team: object = None, adult: object = None) -> dict:
+    """The door's «+ Add a guest»: someone not on the list, let in now (their 18+ if the event checks age)."""
+    if adult is not None and not isinstance(adult, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+        if not e["guest_list"]:
+            raise ApiError("not_found")
+        t = core.now()
+        if e["status"] != "published" or e["hidden_at"] or door_shut(e, t):
+            raise ApiError("closed")
+        return guests.walk_in(con, eid, name, team, int(adult) if adult is not None and e["age_check"] else None, t)
+
+
+def guest_list_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[dict]]:
+    """The list after the event, for the same people (the door's right): the organizers' rows and the app's tickets,
+    named as the door list names them (§3: a Member sees short names only). Into the audit log, as every export."""
+    e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+    if not e["guest_list"]:
+        raise ApiError("not_found")
+    out = [{**g, "app": False} for g in guests.export(con, eid)]
+    out += [{"name": d["person"]["realName"] or d["person"]["name"], "team": d.get("team"), "at": d["checkedInAt"], "walkIn": d["walkIn"], "app": True}
+            for d in door(con, v, eid)]
+    log_action(con, v.id, "guest_list_export", f"event:{eid}", json.dumps({"rows": len(out)}))
+    return e, sorted(out, key=lambda x: (x["team"] or "", x["name"]))
 
 
 def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:

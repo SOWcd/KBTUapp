@@ -16,6 +16,7 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+  import FileSpreadsheet from '@lucide/svelte/icons/file-spreadsheet';
   import { api, ApiErr, staffEvents, type EventFull, type DoorAudience, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
@@ -343,6 +344,11 @@
           {#if e.needsVolunteers && e.volunteersAsked}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         </Group>
         {/if}
+      {/if}
+
+      <!-- the organizers' own guest list (server organizing.guest_list): whoever has the door, as the door's list -->
+      {#if !staff && !e.guestHost && e.status !== 'cancelled' && (co ? coCrew : may(mem, 'door'))}
+        <Group><Row icon={FileSpreadsheet} title={t('mk.guestList')} accessory="chevron" onclick={() => { haptic.tap(); sheets.guestList(id); }} /></Group>
       {/if}
 
       {#if head && e.santa}

@@ -61,7 +61,7 @@
   import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, eventTeamChunk, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -69,7 +69,7 @@
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets, registration } from '../../lib/state/sheets';
-  import { focusPos } from '../../lib/photo';
+  import { coverFor, focusPos } from '../../lib/photo';
   import { nameOf, schoolName, shortOf } from '../../lib/short';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
@@ -77,6 +77,7 @@
   import Notice from '../../ui/Notice.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
@@ -103,7 +104,7 @@
   let pic = $state(0); // which of the header's photos is on screen
   let hero = $state<HTMLDivElement>();
   let land = () => {};
-  onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
+  onMount(() => { if (from && hero) land = fly(from, hero, coverFor(e?.cover, 'card')?.focus); return () => land(); });
   let soon = $state(false), later = $state(false);
   // each a task after a frame was drawn (a frame's own requestAnimationFrame runs before that same frame is drawn when
   // the tap was a touch): the header first, the first screen next, then what is below it
@@ -332,7 +333,7 @@
   function share() {
     if (!e) return; // the Button gives the tap
     // absolute date: the card is read later, when "tomorrow" is wrong
-    shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place, e.online), img: e.cover?.url ?? e.video?.poster?.url ?? '' },
+    shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place, e.online), img: coverFor(e.cover, 'card')?.url ?? e.video?.poster?.url ?? '' },
       'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
@@ -362,8 +363,8 @@
         <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
       {:else if !e.video?.url && e.cover && e.slides?.length}
         <div class="strip" onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
-          {#each [e.cover, ...e.slides] as p, i (p.id)}
-            <button class="pic" aria-label={t('fc.photo')} onclick={() => sheets.photos([e.cover!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
+          {#each [coverFor(e.cover, 'card')!, ...e.slides] as p, i (p.id)}
+            <button class="pic" aria-label={t('fc.photo')} onclick={() => sheets.photos([coverFor(e.cover, 'card')!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
               <img src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>
           {/each}
         </div>
@@ -530,8 +531,12 @@
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
     {#if detail?.teams && !preview && !cancelled}
-      {#await import('./EventTeam.svelte') then { default: EventTeam }}
+      {#await eventTeamChunk()}
+        <Skeleton n={1} />
+      {:then { default: EventTeam }}
         <EventTeam {detail} {going} onchange={(d) => (detail = d)} />
+      {:catch}
+        <Notice text={t('common.offline')} />
       {/await}
     {/if}
     {#if e.teamMax && !preview}<TournamentRows {id} manage={head} standalone />{/if}

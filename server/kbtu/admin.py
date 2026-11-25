@@ -29,6 +29,10 @@
                                 Microsoft sign-in, then the policy, makes the staff row with the directory's names (no ID asked;
                                 not if Microsoft calls them a student). staff-ok list | staff-ok revoke <@username | telegram id>
                                 (revoke also takes back a row it made; `unlink` and deleting the account clear it too)
+  .venv/bin/python -m kbtu.admin dmp add <@username | telegram id> [...]   DMP's staff, before they open the app: unverified,
+                                they get a one-time "Hi, DMP" leading to Microsoft, and sign in as staff-ok does (a username
+                                binds to the Telegram that first opens the app with it: check `dmp list`; ids are safer).
+                                dmp list | dmp del <@username | telegram id> [...] (del, staff-ok revoke, unlink: its sign-in goes too)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
                                 student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
@@ -54,9 +58,11 @@
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
-                                gh:login: a pull request's author, listed under the public login, never tied to an account);
+                                gh:login: a pull request's author, listed under the public login; --gh: the same person's
+                                login beside a Telegram id, shown on their named card only after their yes);
+                                credit gh <id> <login> puts a login on a line already written;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
                                 `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
@@ -74,7 +80,9 @@
   .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
   .venv/bin/python -m kbtu.admin form new <slug> --gz <base64 gzip json>   a public form at /f/<slug>, open to anyone with no
                                 account (logic/forms.py has the spec's shape); answers are anonymous. form close <slug> stops it,
-                                form answers <slug> prints them as CSV (a column per question), form list counts them
+                                form answers <slug> prints them as CSV (a column per question), form list counts them.
+                                Spec research: true and about: "one line" makes an app-only student survey in Forum research.
+                                Research answers are signed by default, with an anonymous option; CSV includes user_id/name.
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
@@ -85,6 +93,8 @@
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
   .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
+  .venv/bin/python -m kbtu.admin play-demo [revoke]   Google Play's reviewer link to the made-up demo account (PLAY_DEMO on;
+                                android/README.md); revoke signs every demo session out (after changing PLAY_DEMO)
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -187,6 +197,11 @@ def _user(con, who: str):
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _staff_undo(con, uid: int) -> int:
+    """The row a staff-ok or DMP's-list sign-in made (a policy version, not 'staff': `staff` typed by hand stays)."""
+    return con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (uid, f"staff{uid}")).rowcount
 
 
 def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
@@ -439,6 +454,16 @@ def main(args: list[str]) -> None:
                 sys.exit("no such event with an outside link")
             log_action(con, None, "event_link", f"event:{args[1]}", json.dumps({"url": args[2]}))
         print("link", args[2])
+    elif cmd == "play-demo" and args[1:] in ([], ["revoke"]):
+        from .logic import web_auth
+        if not args[1:] and not cfg.play_demo:
+            sys.exit("PLAY_DEMO is off: set it to 32+ random characters (python -c 'import secrets;print(secrets.token_urlsafe(32))')")
+        with db.tx(con):
+            if args[1:]:
+                web_auth.revoke_demo(con)  # never refused: an odd demo row is when it's needed most
+            else:
+                web_auth.demo_user(con, now())
+        print("demo sessions signed out" if args[1:] else f"https://{cfg.domain}/play-demo?k={cfg.play_demo}")
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
@@ -497,11 +522,14 @@ def main(args: list[str]) -> None:
         print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
         _broadcast(con, *args[1:])
-    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
+    elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if args[1] == "add" and len(args) == 7:
-                print(f"credit {credits.add(con, *args[2:])} (suggested; `credit ship` lists it)")
+            if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):
+                print(f"credit {credits.add(con, *args[2:7], *args[8:])} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
+            elif args[1] == "gh" and len(args) == 4:
+                credits.set_gh(con, int(args[2]), args[3])
+                print(f"credit {int(args[2])}: gh {args[3]}")
             elif args[1] == "ship" and len(args) in (3, 4):
                 print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
             elif args[1] == "del" and len(args) == 3:
@@ -512,7 +540,8 @@ def main(args: list[str]) -> None:
             elif args[1] == "list" and len(args) == 2:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
-                    who = f"gh {r['gh']}" if r["gh"] else "deleted account" if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
@@ -731,7 +760,9 @@ def main(args: list[str]) -> None:
     elif cmd == "move" and (len(args) == 3 or args[3:] == ["--merge-credits"]):  # the owner checked both Telegrams with the student: no in-app proof to phish
         a, b = _user(con, args[1]), _user(con, args[2])
         why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
-               else "the target is banned" if b["banned_at"] else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
+               else "the target is banned" if b["banned_at"]
+               else "both Telegrams are on DMP's list (dmp del one first)" if one(con, "SELECT COUNT(*) FROM dmp_list WHERE tg_id IN (?, ?)", a["tg_id"], b["tg_id"])[0] == 2
+               else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
                if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads", "web_sessions")
                if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
         if why:
@@ -743,7 +774,9 @@ def main(args: list[str]) -> None:
             con.execute("UPDATE users SET tg_id = (SELECT min(tg_id) FROM users) - 1 WHERE id = ?", (a["id"],))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
-            con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            con.execute("UPDATE tgc_comments SET author_tg = ?, dm_id = NULL WHERE author_tg = ?", (rb[0], ra[0]))  # comments move; DMs stay in the old chat
+            # a DMP grant follows the account to its Telegram (both listed: refused above, so tg_id's UNIQUE holds)
+            con.execute("UPDATE dmp_list SET tg_id = CASE tg_id WHEN ? THEN ? ELSE ? END WHERE tg_id IN (?, ?)", (ra[0], rb[0], ra[0], ra[0], rb[0]))
             try:  # his lines in People of the app go too, his yes there ends; the target's own lines: refused unless --merge-credits
                 credits.moved(con, a["id"], ra[0], rb[0], merge=len(args) == 4)
             except ValueError as exc:
@@ -756,9 +789,43 @@ def main(args: list[str]) -> None:
         with db.tx(con):
             n = con.execute("DELETE FROM students WHERE user_id = ?", (u["id"],)).rowcount
             con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (u["id"],))
-            if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount:  # a fresh start: staff again only by staff-ok
+            # a fresh start: staff again only by staff-ok (or DMP's list, added again)
+            if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount + con.execute(
+                    "DELETE FROM dmp_list WHERE tg_id = ?", (u["tg_id"],)).rowcount:
                 log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"by": "unlink"}))
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("unlinked, signing in with KBTU links again" if n else "wasn't linked"))
+    elif cmd == "dmp" and args[1:] == ["list"]:  # by the id alone (a username can be stale); signed in: confirmed by Microsoft
+        for r in rows(con, """SELECT d.*, u.tg_first_name, s.user_id AS signed FROM dmp_list d LEFT JOIN users u ON u.tg_id = d.tg_id
+                LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0 ORDER BY d.id"""):
+            who = " = ".join(x for x in ("@" + r["tg_username"] if r["tg_username"] else "", str(r["tg_id"] or "")) if x)
+            print(who + (f" ({r['tg_first_name']})" if r["tg_first_name"] else "") + ": "
+                  + ("waiting: binds to whoever opens the app with this username first" if r["tg_id"] is None
+                     else "signed in" if r["signed"] else "greeted" if r["greeted_at"] else "not greeted yet"))
+    elif cmd == "dmp" and len(args) > 2 and args[1] in ("add", "del"):
+        keys = []
+        for w in (a.strip() for a in args[2:]):  # the whole batch checked before anything is written
+            if re.fullmatch(r"[1-9][0-9]{0,15}", w):
+                keys.append(("tg_id", int(w)))
+            elif re.fullmatch(r"@?[A-Za-z][A-Za-z0-9_]{3,31}", w):
+                keys.append(("tg_username", w.lstrip("@")))
+            else:
+                sys.exit(f"not a Telegram id or @username: {w!r}")
+        undone = 0
+        with db.tx(con):
+            if args[1] == "add":
+                n = sum(con.execute(f"INSERT OR IGNORE INTO dmp_list ({c}, added_at) VALUES (?, ?)", (x, now())).rowcount for c, x in keys)
+            else:  # by id: its waiting username row too (one person, one removal)
+                gone = [t for c, x in keys for (t,) in con.execute(
+                    "DELETE FROM dmp_list WHERE tg_id = ? OR tg_id IS NULL AND tg_username = (SELECT tg_username FROM users WHERE tg_id = ?) RETURNING tg_id"
+                    if c == "tg_id" else "DELETE FROM dmp_list WHERE tg_username = ? RETURNING tg_id", (x, x) if c == "tg_id" else (x,)).fetchall()]
+                n, ids = len(gone), [t for t in gone if t is not None]
+                # the sign-in the list let in goes with it, unless staff-ok still says so
+                for (uid,) in rows(con, f"""SELECT id FROM users WHERE tg_id IN ({','.join('?' * len(ids))})
+                        AND id NOT IN (SELECT user_id FROM staff_ok)""", *ids) if ids else []:
+                    undone += _staff_undo(con, uid)
+            log_action(con, None, f"dmp_{args[1]}", "dmp_list", json.dumps({"n": n, **({"undone": undone} if undone else {})}))
+        print(f"{n} {'added' if args[1] == 'add' else 'removed'}" + (f" ({undone} sign-in undone)" if undone else "")
+              + f", {one(con, 'SELECT COUNT(*) FROM dmp_list')[0]} on the list")
     elif cmd == "staff-ok" and args[1:] == ["list"]:
         for r in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, k.granted_at, s.student_id FROM staff_ok k JOIN users u ON u.id = k.user_id
                 LEFT JOIN students s ON s.user_id = u.id ORDER BY k.granted_at"""):
@@ -778,8 +845,8 @@ def main(args: list[str]) -> None:
         else:
             with db.tx(con):
                 n = con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount
-                # the row its sign-in made (a policy version, not 'staff': `staff` typed by hand stays): the next sign-in is a student's
-                gone = con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (u["id"], f"staff{u['id']}")).rowcount
+                n += con.execute("DELETE FROM dmp_list WHERE tg_id = ?", (u["tg_id"],)).rowcount  # DMP's list says the same: off it too
+                gone = _staff_undo(con, u["id"])  # the next sign-in is a student's
                 if n or gone:
                     log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"row": bool(gone)}))
             print(f"{who}: " + ("revoked" + (", its sign-in undone" if gone else "") if n or gone else "had no staff-ok"))
@@ -855,7 +922,7 @@ def main(args: list[str]) -> None:
         came = [c for c in counts if c["regular"]]
         print(f"{len(counts)} students, {len(came)} came to an event at least once; each level: share of all / of those who came")
         for code, _, needs, _ in ACHIEVEMENTS:
-            if code in ("first50", "creator_laugh", "creator_found", "bugs", "dmp", "init26", "init26f"):
+            if code in ("first50", "creator_laugh", "creator_found", "bugs", "dmp", "init26", "init26f", "sponsor"):
                 continue  # given by hand or at sign-in: no counter to tune
             vals = sorted(c[code] for c in counts)
             at = lambda q: vals[min(len(vals) - 1, int(q * len(vals)))] if vals else 0  # noqa: E731

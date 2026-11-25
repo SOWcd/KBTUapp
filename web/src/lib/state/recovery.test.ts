@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { draftRecord } from '../draft';
-import { ACCOUNT_KEY, DRAFT_AGE, recoveryStore } from './recovery';
+import { ACCOUNT_KEY, DRAFT_AGE, TICKETS_AGE, recoveryStore } from './recovery';
 
 function device() {
   let at = 100_000;
@@ -119,6 +119,56 @@ describe('account-scoped storage', () => {
     expect(window.verify(100, 1)).toBe(true);
     expect(window.scope()).toBeNull();
     expect(window.lost()).toBe(false);
+  });
+});
+
+describe('offline tickets in the account scope', () => {
+  const TICKETS = '[{"id":1}]';
+
+  it('outlive a draft\'s week, then go after a month without a launch', () => {
+    const d = device(), first = d.open();
+    first.verify(100, 1);
+    first.write(first.scope(), 'tickets', TICKETS);
+    first.write(first.scope(), 'kb-ask', '"draft"');
+
+    d.time(DRAFT_AGE + 1);
+    const second = d.open();
+    second.verify(100, 1);
+    expect(second.read(second.scope(), 'kb-ask', DRAFT_AGE)).toBeNull();
+    expect(second.read(second.scope(), 'tickets', TICKETS_AGE)).toEqual([{ id: 1 }]);
+    d.time(TICKETS_AGE - DRAFT_AGE);
+    const third = d.open();
+    third.verify(100, 1);
+    expect([...d.values.keys()].some((k) => k.endsWith(':tickets'))).toBe(false);
+  });
+
+  it('read before the server answers: the same Telegram user only; outside Telegram the last signed-in account', () => {
+    const d = device(), mini = d.open(), web = d.open(true);
+    mini.verify(100, 1);
+    mini.write(mini.scope(), 'tickets', TICKETS);
+    web.verify(200, 2);
+    web.write(web.scope(), 'tickets', '[{"id":2}]');
+
+    const mine = d.open(), theirs = d.open(), browser = d.open(true);
+    expect(mine.read(mine.last(100), 'tickets', TICKETS_AGE)).toEqual([{ id: 1 }]);
+    expect(theirs.last(300)).toBeNull(); // another Telegram account on this phone gets no scope: keptTickets reads nothing
+    expect(browser.read(browser.last(), 'tickets', TICKETS_AGE)).toEqual([{ id: 2 }]);
+  });
+
+  it('go with signing out, and with a drop before any answer', () => {
+    const d = device(), a = d.open(true);
+    a.verify(200, 2);
+    a.write(a.scope(), 'tickets', TICKETS);
+    a.invalidate(200);
+    expect(d.open(true).last()).toBeNull();
+    expect([...d.values.keys()].some((k) => k.endsWith(':tickets'))).toBe(false);
+
+    const b = d.open(true);
+    b.verify(200, 2);
+    b.write(b.scope(), 'tickets', TICKETS);
+    const cold = d.open(true);
+    cold.drop('tickets'); // the server said this browser is signed out
+    expect(cold.read(cold.last(), 'tickets', TICKETS_AGE)).toBeNull();
   });
 });
 
