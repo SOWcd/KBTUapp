@@ -229,13 +229,13 @@ def test_group_video_not_sent_twice(env, monkeypatch):
     def link(msg):
         bot.stop()  # SIGTERM right as the batch came in
         return "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None
-    monkeypatch.setattr(bot.tiktok, "link", link)
+    monkeypatch.setattr(bot_groups.tiktok, "link", link)
     grp = {"update_id": 100, "message": {"message_id": 7, "chat": {"id": -100, "type": "supergroup"}, "from": {"id": 10},
                                          "date": int(time.time()), "text": "vid"}}
     tg = Telegram([grp, _hi(101, 11)])
     asyncio.run(_ears(cfg, tg))
     assert videos == [7] and tg.said() == [] and _state(cfg)["next"] == 100
-    monkeypatch.setattr(bot.tiktok, "link", lambda msg: "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None)
+    monkeypatch.setattr(bot_groups.tiktok, "link", lambda msg: "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None)
     asyncio.run(_ears(cfg, tg))
     assert videos == [7] and tg.said() == [11]
 
@@ -270,7 +270,7 @@ def test_no_new_group_video_while_stopping(env, monkeypatch):
     async def video(cfg_, http, msg, url, started):
         sent.append(msg["message_id"])
     monkeypatch.setattr(bot_groups, "_group_video", video)
-    monkeypatch.setattr(bot.tiktok, "link", lambda m: "https://www.tiktok.com/@a/video/1" if "vid" in str(m.get("text")) else None)
+    monkeypatch.setattr(bot_groups.tiktok, "link", lambda m: "https://www.tiktok.com/@a/video/1" if "vid" in str(m.get("text")) else None)
     grp = {"update_id": 101, "message": {"message_id": 7, "chat": {"id": -100, "type": "supergroup"}, "from": {"id": 10},
                                          "date": int(time.time()), "text": "vid"}}
 

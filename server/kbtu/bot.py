@@ -12,27 +12,22 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
-import html
 import json
 import fcntl
 import logging
 import os
-import random
 import re
-import secrets
 import sqlite3
 import time
-from collections import OrderedDict, deque
+from collections import deque
 from pathlib import Path
 
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, checkin, db, download, instagram, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
+from . import ai, db, llm, logic, mtbot, receipt, texts, tgc, userbot, video
 from .config import Config
-from .logic import notifications, now, one, rows
-from .logic.account import _Taken
-from .logic.core import ApiError
+from .logic import now, one, rows
 
 log = logging.getLogger("kbtu.bot")
 
