@@ -16,7 +16,7 @@
   {:else if look === 'moments'}<b class="w mo">MOMENTS</b>
   {:else if look === 'faces'}<b class="w fa">FACES FAMILY</b>
   {:else}<b class="w">KBTU APP</b>{/if}
-  <span>№ {no}</span>
+  <span>{#if look === 'sower'}<em>№</em>{:else}№{/if} {no}</span>
 </div>
 
 <style>
@@ -37,14 +37,14 @@
     background-size: 260% 100%, 200% 100%, 100% 100%; background-position: calc(50% + var(--gx, 0) * 110%) 0, calc(50% + var(--gx, 0) * 40%) 0, 0 0;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(23, 48, 100, 0.16), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .studex span { font-variant-numeric: tabular-nums; }
-  /* SOWER: the white paper his photo's hand is cut from, one light sliding with the tilt, the name in graphite ink */
-  .sower { color: rgba(30, 30, 30, 0.72); background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.7) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
-    linear-gradient(180deg, rgb(242, 242, 240), rgb(222, 222, 219));
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), inset 0 -1px 2px rgba(0, 0, 0, 0.14), 0 4px 12px -6px rgba(0, 0, 0, 0.6); }
-  .sower .sw { color: rgb(30, 30, 30); }
+  /* SOWER (.claude/reports/sower-badge, card C): dark glass, the name in white, the number grey, its № the one red */
+  .sower { height: 32px; padding: 0 14px; border-radius: var(--r-s); color: rgb(245, 245, 247); background: linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.14); }
+  .sower > span { font-weight: 600; letter-spacing: 0.18em; color: rgb(134, 134, 139); }
+  .sower em { font-style: normal; color: rgb(255, 59, 48); }
   .sx { gap: 0; font: 900 16px/1 var(--font-display); letter-spacing: -0.03em; color: #173064; }
   .sx i { font-style: normal; color: rgb(214, 38, 27); }
-  .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; }
+  .sw { font: 900 12px/1 var(--font-display); letter-spacing: 0.42em; }
   /* Cheerleading: brushed gold, one specular sliding with the tilt (Knights' mechanism in their gold), their navy on it
      (5.5:1 on the darkest stop) */
   .cheer { background: linear-gradient(100deg, transparent 38%, rgba(255, 248, 228, 0.45) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,

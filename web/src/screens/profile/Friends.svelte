@@ -7,11 +7,12 @@
   // already there (loaded with the app, kept for the next launch); coming into view only refreshes it quietly.
   import X from '@lucide/svelte/icons/x';
   import QrCode from '@lucide/svelte/icons/qr-code';
-  import { api, type EventCard, type FriendRow } from '../../lib/api';
+  import { api, ApiErr, type EventCard, type FriendRow, type Suggestion } from '../../lib/api';
+  import { asked, offerDue, offerLater, restored, without } from '../../lib/pymk';
   import Sheet from '../../ui/Sheet.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadFriends, prefetchPerson, forgetPeople, phrase } from '../../lib/state/data.svelte';
+  import { session, loadMe, saveSwitch } from '../../lib/state/session.svelte';
+  import { data, loadFriends, prefetchPerson, forgetPeople, friendsChanged, phrase } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { onMount, type Snippet } from 'svelte';
@@ -38,7 +39,7 @@
   const f = $derived(data.friends);
   onMount(() => { if (me?.student) void loadFriends(); });
 
-  const line = (r: FriendRow) => [r.course ? t('person.course', { n: r.course }) : '', schoolShort(r.school)].filter(Boolean).join(' · ');
+  const line = (r: Pick<FriendRow, 'course' | 'school'>) => [r.course ? t('person.course', { n: r.course }) : '', schoolShort(r.school)].filter(Boolean).join(' · ');
   /** The next event this friend goes to, if any (the cards are sorted by start). */
   const nextOf = (r: FriendRow): EventCard | undefined => f?.going.find((e) => e.friends.some((p) => p.id === r.person.id));
   const today = $derived(dayNo(nowTs()));
@@ -59,6 +60,36 @@
       forgetPeople(); void loadMe(); } // the dot on the Profile tab
     catch { const c = data.friends; if (c) data.friends = { ...c, incoming: was.incoming.some((x) => x.person.id === r.person.id) && !c.incoming.some((x) => x.person.id === r.person.id) ? [r, ...c.incoming] : c.incoming, friends: yes ? c.friends.filter((x) => x.person.id !== r.person.id) : c.friends }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // People you may know (lib/pymk.ts): the card goes first, the server follows; a no puts it back where it was
+  let offer = $state(offerDue(nowTs()));
+  async function suggestAdd(s: Suggestion) {
+    const was = data.friends; if (!was?.suggest) return;
+    const at = was.suggest.findIndex((x) => x.person.id === s.person.id);
+    data.friends = asked(was, s, nowTs()); haptic.tap();
+    try {
+      const r = await api.askFriend(s.person.id);
+      if (r.friendship === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: s.person.name }), 'partying_face_3d'); friendsChanged(); }
+      else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); forgetPeople(); }
+    } catch (e) {
+      const c = data.friends; if (c) data.friends = restored(c, s, at);
+      haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : e instanceof ApiErr && e.code === 'closed' ? t('fr.closed') : t('common.error'), 'warning_3d');
+    }
+  }
+  async function suggestHide(s: Suggestion) {
+    const was = data.friends; if (!was?.suggest) return;
+    const at = was.suggest.findIndex((x) => x.person.id === s.person.id);
+    data.friends = without(was, s.person.id); haptic.soft(); say(t('pymk.hidden'), 'waving_hand_3d_default');
+    try { await api.dismissSuggestion(s.person.id); }
+    catch { const c = data.friends; if (c) data.friends = restored(c, s, at); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  async function turnOn() {
+    const was = data.friends; if (!was) return;
+    data.friends = { ...was, suggest: [] }; haptic.ok();
+    try { await saveSwitch('suggestMe', true); say(t('pymk.turnedOn'), 'sparkles_3d'); void loadFriends(); }
+    catch { const c = data.friends; if (c) data.friends = { ...c, suggest: null }; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  function notNow() { haptic.soft(); offerLater(nowTs()); offer = false; }
+
   async function takeBack(r: FriendRow) {
     const was = data.friends; if (!was) return;
     data.friends = { ...was, outgoing: was.outgoing.filter((x) => x.person.id !== r.person.id) };
@@ -98,6 +129,36 @@
           {/each}
         </Group>
       </Section>
+    {/if}
+
+    {#if f.suggest?.length}
+      <!-- clubmates who turned it on too: how many clubs we share, never which (server logic/pymk.py) -->
+      <Section title={t('pymk.title')}>
+        <div class="strip">
+          {#each f.suggest as s (s.person.id)}
+            <div class="sg">
+              <span class="hide"><IconButton icon={X} label={t('pymk.hide')} size="s" onclick={() => suggestHide(s)} /></span>
+              <button class="who" onclick={() => sheets.person(s.person.id)} onpointerdown={(e) => touchAhead(e, () => prefetchPerson(s.person.id))}>
+                <span class="pic"><Avatar person={s.person} size={64} tappable={false} /></span>
+                <span class="nm">{s.person.name}</span>
+                <span class="sub">{line(s) || '\u00a0'}</span>
+                <span class="why">{tn('pymk.clubs', s.clubs)}</span>
+              </button>
+              <Button kind="primary" size="s" full onclick={() => suggestAdd(s)}>{t('fr.add')}</Button>
+            </div>
+          {/each}
+        </div>
+      </Section>
+    {:else if f.suggest === null && offer}
+      <!-- the offer, inline (its own consent: the words are the switch's, Settings has it too) -->
+      <section class="offer">
+        <h3 class="t-h3">{t('pymk.askTitle')}</h3>
+        <p class="t-callout">{t('pymk.askText')}</p>
+        <div class="acts">
+          <Button kind="primary" size="m" onclick={turnOn}>{t('pymk.on')}</Button>
+          <Button kind="secondary" size="m" onclick={notNow}>{t('pymk.later')}</Button>
+        </div>
+      </section>
     {/if}
 
     {#if f.friends.length}
@@ -150,6 +211,24 @@
   /* going somewhere today: a green ring, like a story */
   .av.live::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 0 2px var(--success); }
   .empty { display: flex; flex-direction: column; align-items: center; }
+
+  /* People you may know: a row of cards the width of the page, swiped sideways */
+  .strip { display: flex; gap: var(--s-3); overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter);
+    scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter); overscroll-behavior-x: contain; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .sg { position: relative; flex: none; width: 148px; scroll-snap-align: start; display: flex; flex-direction: column; gap: var(--s-3);
+    padding: var(--s-4) var(--s-3) var(--s-3); border-radius: var(--r-group); background: var(--surface); box-shadow: var(--card-rim, none); }
+  .hide { position: absolute; top: var(--s-1); right: var(--s-1); }
+  .who { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+  .pic { display: flex; margin-bottom: var(--s-2); }
+  .nm, .sub, .why { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm { font: 600 var(--fs-row)/1.25 var(--font-text); color: var(--text); }
+  .sub { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .why { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--accent-text); }
+  .offer { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-5) var(--s-4) var(--s-4); border-radius: var(--r-group);
+    background: var(--surface); box-shadow: var(--card-rim, none); }
+  .offer p { color: var(--text-2); }
+  .acts { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
 
   /* a guest: the sign-in card (Me's) */
   .hello { display: flex; flex-direction: column; gap: 12px; padding: 22px 18px 18px; border-radius: var(--r-xl); color: #fff;

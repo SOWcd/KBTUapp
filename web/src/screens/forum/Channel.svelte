@@ -362,14 +362,16 @@
         {/if}
         </div>
       {/each}
-      {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
+      {#if searching && !matched.length}<EmptyState inline text={t(channel.more ? 'fc.searchLoaded' : 'clubs.nothing')} />{/if}
     </div>
     {/key}
+  {:else if searching && channel.feed}
+    <EmptyState inline text={t(channel.more ? 'fc.searchLoaded' : 'clubs.nothing')} />
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
 
-  {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t(channel.order === 'new' ? 'fc.earlier' : 'fc.more')}</Button></div>{/if}
+  {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t(searching && !matched.length ? 'fc.searchMore' : channel.order === 'new' ? 'fc.earlier' : 'fc.more')}</Button></div>{/if}
   <div class="tail"></div>
 </div>
 

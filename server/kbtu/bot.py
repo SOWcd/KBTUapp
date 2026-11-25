@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
+from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -220,9 +220,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
         if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
             return None
-        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
-            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        return (*texts.bot_message(lang, kind, skill=sk["name"] if sk else ""), f"fa_{a['id']}")
+        return (*texts.bot_message(lang, kind), f"fa_{a['id']}")
     if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
         # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
         # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
@@ -247,9 +245,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not p:
             return None
         a = one(con, "SELECT title, subject FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
-        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         k = f"ct:{c['id']}:{tok}"
         return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
@@ -566,6 +563,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if not e or (kind != "event_cancelled" and (e["status"] != "published" or e["hidden_at"] or e["org_status"] == "hidden")):
         return None
     if not logic.seats.sees_school(con, m["user_id"], e):  # a school's own event: only to whom it shows (its signed-up keep theirs)
+        return None
+    if kind == "remind_2h" and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], m["user_id"]):
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
@@ -952,6 +951,7 @@ def _chores(cfg: Config, con) -> None:
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on
+    logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
@@ -1027,6 +1027,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
+        if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
+            await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
@@ -1042,6 +1044,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if to is None:
                     _mark(con, m, False, "gone")
                     continue
+            if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
+                continue  # the account moved after the batch was read; the retry will use the new chat
             body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
             if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
                 body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
@@ -1866,6 +1870,8 @@ async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str
 
 async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, started: float | None = None) -> None:
     started = time.monotonic() if started is None else started
+    # whose link it is: the Instagram session's own caps per chat and per person (tiktok._session_take)
+    asker = tiktok.asker.set((msg["chat"]["id"], int((msg.get("from") or {}).get("id") or 0)))
     chat = {"chat_id": msg["chat"]["id"]}
     if msg.get("is_topic_message") and msg.get("message_thread_id"):
         chat["message_thread_id"] = msg["message_thread_id"]
@@ -1885,7 +1891,10 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, sta
             route = type(exc).__name__
         _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
 
-    await asyncio.gather(action(), reply())
+    try:
+        await asyncio.gather(action(), reply())  # its tasks copy the context: they see the asker
+    finally:
+        tiktok.asker.reset(asker)
 
 
 async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, url: str) -> str:

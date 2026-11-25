@@ -16,7 +16,7 @@ from .. import media, portal
 from .. import db
 from ..db import tx
 
-from . import notifications
+from . import notifications, pymk
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
@@ -534,7 +534,7 @@ def me(con, v: Viewer) -> dict:
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
-        "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
+        "settings": {**{k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()}, "suggestMe": pymk.is_on(con, v.id)},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [_membership(con, m, mains, logos) for m in members],
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
@@ -851,6 +851,11 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets[col] = val if k in ("lang", "theme") else int(bool(val))
     if "bio" in patch or "showcase" in patch or "nick" in patch:
         need_student(v)
+    if "suggestMe" in patch:  # People you may know: my yes to its text, or gone both ways (logic/pymk.py)
+        need_student(v)
+        if not isinstance(patch["suggestMe"], bool):  # a consent: an explicit yes only
+            raise ApiError("bad_input")
+        pymk.switch(con, v.id, patch["suggestMe"])
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
     if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
@@ -1275,6 +1280,7 @@ _DEL_GONE = {
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
+    ("credit_team", "user_id"),  # my place in People of the app's Team
     ("credit_consents", "user_id"),  # my answers to "shall we name you?" (credits.py); my lines stay nameless (credits.gone)
     ("fchan_photos", "user_id"),  # my photos picked for a post and never posted (posted ones go with their post)
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
@@ -1287,6 +1293,7 @@ _DEL_GONE = {
     ("subject_holds", "user_id"),  # a moderator's take-down of my listing on a subject (logic/subjects.py)
     ("kri_consents", "user_id"),  # my yes to Google answering the assistant first (assistant.GOOGLE_YES)
     ("appeal_ai_consents", "user_id"),  # my last opt-in to send an appeal draft abroad
+    ("pymk_consents", "user_id"), ("pymk", "user_id"), ("pymk", "other_id"), ("pymk_dismissed", "user_id"), ("pymk_dismissed", "other_id"),  # People you may know: my switch, suggestions to me and of me, dismissals both ways
     ("swear_hits", "user_id"),  # the bot's swear warnings to me in clubs' groups (chatmod.py; by my Telegram id too, below)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
@@ -1356,8 +1363,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # is rewritten (fch_resign), an anonymous one stays as it was, so nothing tells which posts were one person's
         # my anonymous replies (fchan_replies: no user id, through my posts): sent ones under a post that stays live
         # follow it to the placeholder; those under a post that goes now (held, hidden, deleted) leave the group too
-        # (the bot's round, tgcdel: as tgc.later_delete), and what never went out goes now
-        con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+        # (the bot's round, with an edit fallback for old messages), and what never went out goes now
+        con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'fchdrop:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
             WHERE p.user_id = ? AND p.status != 'live' AND r.tg_msg > 0""", (core.now(), v.id))
         con.execute("DELETE FROM fchan_replies WHERE tg_msg IS NULL AND post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
@@ -1448,6 +1455,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
+        con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"upload:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fchup:{v.id}:%",))  # this hour's count of my forum photo uploads

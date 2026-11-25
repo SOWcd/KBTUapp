@@ -89,6 +89,9 @@ img { max-width: 100%; }
   backdrop-filter: blur(24px) saturate(190%);
   box-shadow: var(--glass-shadow);
 }
+/* the sheen and rim are drawn on the glass itself: an unpositioned .glass (a round button) hung them on the nearest positioned
+   ancestor, a huge oval over the sheet's footer. :where keeps it weakest, so any component's own position wins */
+:where(.glass) { position: relative; }
 .glass::before, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .glass::before {
   z-index: -1;
