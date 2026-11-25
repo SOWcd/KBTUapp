@@ -595,6 +595,7 @@
     if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer (old messages)
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
+    if (p === 'android') { void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}); return; } // the bot's android_test broadcast: become a tester of the app on Google Play
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
     if (p === 'voices') { sheets.adminVoices(); return; }                       // the bot, to the creator: a line or an offer to help came

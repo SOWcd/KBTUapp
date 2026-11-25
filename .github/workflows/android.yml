@@ -55,6 +55,8 @@ jobs:
           mkdir -p app/src/main/res/values-night
           printf '<resources>\n    <color name="backgroundColor">#000000</color>\n</resources>\n' > app/src/main/res/values-night/colors.xml
           grep -nE "targetSdkVersion|compileSdkVersion|versionCode|applicationId" app/build.gradle
+          # Play takes new apps and updates only at API 36 since 31 Aug 2026 (it rises each August: then a newer Bubblewrap)
+          grep -qE "targetSdkVersion[ =]+36\b" app/build.gradle || { echo "::error::targetSdkVersion isn't 36: Play refuses the upload"; exit 1; }
       - name: Build the bundle
         run: |
           chmod +x gradlew

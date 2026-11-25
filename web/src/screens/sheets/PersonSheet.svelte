@@ -99,8 +99,8 @@
     keepPerson(p);
   }
   // the card moves first; the server's answer settles it (rolled back on an error) and the card refetches quietly
-  async function act<R>(job: () => Promise<R>, done: (r: R) => void, to: Friendship, stranger = false) {
-    if (acting) return;
+  async function act<R>(job: () => Promise<R>, done: (r: R) => void, to: Friendship, stranger = false): Promise<boolean> {
+    if (acting) return false;
     acting = true; next = to; haptic.tap();
     try { done(await job()); }
     catch (e) {
@@ -108,10 +108,11 @@
       const closed = e instanceof ApiErr && e.code === 'closed';  // they switched requests off just now
       if (closed && p) p = { ...p, closed };
       say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : closed ? t('fr.closed') : t('common.error'), 'warning_3d');
-      return;
+      return false;
     } finally { acting = false; }
     friendsChanged();
     reload(stranger).catch(() => {}).finally(() => (next = null));
+    return true;
   }
   const welcome = () => { haptic.ok(); burst(); say(t('fr.accepted', { name: shown!.name }), 'partying_face_3d'); };
   const asked = (r: { friendship: Friendship }) => { if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); } };
@@ -131,6 +132,16 @@
   async function unfriend() {
     if (!shown || !(await sheets.ask({ title: t('fr.removeAsk', { name: shown.name }), text: t('fr.removeText'), ok: t('fr.remove'), cancel: t('common.cancel'), danger: true }))) return;
     await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); }, 'none', true);
+  }
+  // block (the stores' UGC rule: wherever two people meet, and every avatar opens this card): friends no more, no
+  // requests either way, gone from each other's forum. Asked first; Unblock undoes it in one tap
+  async function block(on: boolean) {
+    if (!shown || on && !(await sheets.ask({ title: t('person.blockAsk', { name: shown.name }), text: t('person.blockText', { name: shown.name }),
+      ok: t('person.block'), cancel: t('common.cancel'), danger: true }))) return;
+    const before = p;
+    if (p) p = { ...p, blocked: on, closed: on || undefined };  // the card moves at once; rolled back on an error
+    if (!await act(() => api.block(id, on), () => { haptic.soft(); say(t(on ? 'person.blocked' : 'person.unblocked'), 'waving_hand_3d_default'); },
+      on ? 'none' : shown.friendship, true)) p = before;
   }
 </script>
 
@@ -237,6 +248,8 @@
         <div class="rep quiet">
           <Button kind="plain" size="s" onclick={() => sheets.report('user', id, shown.name)}>{t('person.report')}</Button>
           {#if shown.friendship === 'friends'}<Button kind="plain" size="s" destructive disabled={acting} onclick={unfriend}>{t('fr.remove')}</Button>{/if}
+          {#if shown.blocked}<Button kind="plain" size="s" disabled={acting} onclick={() => block(false)}>{t('person.unblock')}</Button>
+          {:else}<Button kind="plain" size="s" destructive disabled={acting} onclick={() => block(true)}>{t('person.block')}</Button>{/if}
         </div>
       {/if}
     </div>

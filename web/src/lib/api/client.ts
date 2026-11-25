@@ -19,7 +19,7 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
 type ApplePass = { token: string; nonce: string; consent: string; lang?: string };
 
-async function changeWebSession(path: '/web/login' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
   await call('POST', path, body);
   if (!tg.initData && (path === '/web/logout' || path === '/web/logout-all')) dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
@@ -196,6 +196,7 @@ export const server = {
   // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
+  webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
   // the iPhone app (logic/apple.py): Apple's identity token for this tap's nonce, with the consent of the policy's clause

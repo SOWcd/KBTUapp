@@ -181,9 +181,10 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `IOS_BUNDLE_ID`: the iPhone app's bundle ID, `kz.sow.kbtu` ([ios/README.md](ios/README.md)); set, Sign in with Apple and its push
   tokens are on (`logic/apple.py`). `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (the APNs .p8's text, `\n` allowed): push
   through Apple instead of the bot's message for people with the app's notifications on (`kbtu/apns.py`); any empty: the bot alone.
-- `PLAY_DEMO=<32+ random characters>`: Google Play's reviewer signs in at the link `admin play-demo` prints, as one
-  made-up, read-only account that is never a student or staff (`android/README.md`). Unset: the link is a 404 and every
-  demo session ends. Only while a review is due.
+- `PLAY_DEMO=<32+ random characters>`: the store reviewers' code (Google Play and the App Store): typed in "Sign in with
+  a code" on the sign-in page, or the link `admin play-demo` prints, it opens one made-up, read-only account that is
+  never a student or staff (`android/README.md`); `admin play-demo seed <event id>...` gives it tickets. Unset: a 404
+  and every demo session ends. Only while a review is due.
 - `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
   (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
 - No switch changes the policy or the consent version.

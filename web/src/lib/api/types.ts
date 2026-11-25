@@ -858,7 +858,8 @@ export interface PersonCard extends PersonRef {
   frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
-  closed?: boolean;             // they take no friend requests (their setting): no "Add friend"
+  closed?: boolean;             // they take no friend requests (their setting, or a block either way): no "Add friend"
+  blocked?: boolean;            // I blocked them (the card's Unblock)
 }
 
 /** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the

@@ -200,13 +200,15 @@ def test_consent_again(env):
 
 
 def test_legal_pages(env):
-    """The privacy policy and the terms: public pages in three languages, linked to each other."""
+    """The privacy policy, the terms and how to delete an account (the stores' deletion link): public pages in three
+    languages, linked to each other."""
     c, _ = env
-    for doc in ("privacy", "terms"):
+    for doc in ("privacy", "terms", "delete"):
         for lang in ("ru", "kk", "en"):
             r = c.get(f"/{doc}?lang={lang}")
             assert r.status_code == 200 and f'lang="{lang}"' in r.text and "@Sowers" in r.text
             assert "{{" not in r.text and "<!--" not in r.text and 'class="ver"' in r.text  # the unified texts: no flag markers, nothing to fill in
+    assert 'href="privacy?lang=kk"' in c.get("/delete?lang=kk").text
     assert 'href="privacy?lang=en"' in c.get("/terms?lang=en").text and c.get("/privacy?lang=xx").text.count('lang="ru"') == 1
 
 
