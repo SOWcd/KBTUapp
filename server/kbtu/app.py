@@ -1454,6 +1454,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def unfriend(uid: int, con: Con, v: Me):
         logic.unfriend(con, v, uid)
 
+    @app.post("/api/pymk/dismiss", status_code=204)  # People you may know: the card's x (logic/pymk.py)
+    def pymk_dismiss(con: Con, v: Me, body: dict = Body(...)):
+        logic.pymk.dismiss(con, v, body.get("id"))
+
     @app.get("/api/friends/joined")  # my invite QR on screen: who has just become my friend
     def friend_joined(con: Con, v: Me, since: int = 0):
         return logic.friend_joined(con, v, since)

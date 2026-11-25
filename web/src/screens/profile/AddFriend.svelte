@@ -10,7 +10,7 @@
   import { friendsChanged } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
-  import { inviteUrl, shareInvite } from '../../lib/friends';
+  import { inviteUrl, shareInvite, watchFriends } from '../../lib/friends';
   import { session } from '../../lib/state/session.svelte';
   import { QR_TONE } from '../../lib/awards';
   import { burst } from '../../ui/burst';
@@ -33,21 +33,14 @@
   // svelte-ignore state_referenced_locally
   if (share) void send(); // opened to share at once (the Friends sheet's invite)
 
-  let since: number | null = null; // the server's clock: the first round only notes my newest friend so far
   let quiet: ReturnType<typeof setTimeout> | undefined;
-  const watch = setInterval(async () => {
-    if (joined || document.hidden) return;
-    try {
-      const r = await api.friendJoined(since ?? 0), first = since === null;
-      since = r.at;
-      if (!r.usedBy || first) return;
-      joined = r.usedBy;
-      haptic.ok(); burst(); say(t('fr.accepted', { name: r.usedBy.name }), 'partying_face_3d');
-      friendsChanged();
-      quiet = setTimeout(() => { joined = null; }, 3200);
-    } catch { /* offline for a moment: the next round asks again */ }
-  }, 2500);
-  onDestroy(() => { clearInterval(watch); clearTimeout(quiet); });
+  const stop = watchFriends((person) => {
+    joined = person;
+    haptic.ok(); burst(); say(t('fr.accepted', { name: person.name }), 'partying_face_3d');
+    friendsChanged();
+    quiet = setTimeout(() => { joined = null; }, 3200);
+  }, () => !!joined || overlay.closing);
+  onDestroy(() => { stop(); clearTimeout(quiet); });
 
   async function send() {
     try { if (code) await shareInvite(code); } catch { say(t('common.error'), 'warning_3d'); }

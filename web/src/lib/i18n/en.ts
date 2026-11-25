@@ -1073,6 +1073,7 @@ const en: Dict = {
   'look.noSchool': "Not set",
   'set.showGoing': "Friends see where I'm going",
   'set.canFriend': "Others can add me as a friend",
+  'set.suggestMe': "Suggest me to clubmates",
   'person.report': "Report this profile",
 
   'say.going': "You're in — see you there!|Nice, it's going to be fun|Booked. Don't be late|Great pick|The seat is yours",
@@ -2860,6 +2861,15 @@ const en: Dict = {
   'fr.invitesYou': "Invites you to be friends",
   'fr.tooMany': "Too many requests today — try tomorrow",
   'fr.closed': "Not taking requests",
+  'pymk.title': "People you may know",
+  'pymk.clubs': { one: "{n} club in common", other: "{n} clubs in common" },
+  'pymk.hide': "Don't suggest",
+  'pymk.hidden': "We won't suggest them again. Nobody is told",
+  'pymk.askTitle': "Find people from your clubs",
+  'pymk.askText': "We'll suggest people from your clubs to you, and you to them. Only to those who turned it on too, and only how many clubs you share, never which. Turn it off in Privacy.",
+  'pymk.on': "Turn on",
+  'pymk.later': "Not now",
+  'pymk.turnedOn': "Done. New faces will show up here",
   // the Awards page (§4.11)
   'awp.showcase': "Showcase",
   'awp.next': "Almost there",

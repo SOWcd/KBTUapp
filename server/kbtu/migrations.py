@@ -2295,7 +2295,26 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       added_at INTEGER NOT NULL
     ) STRICT;"""),
+    # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
+    # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
+    (228, """CREATE TABLE IF NOT EXISTS pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_other ON pymk (other_id);
+    CREATE TABLE IF NOT EXISTS pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_dismissed_other ON pymk_dismissed (other_id);"""),
     # Receipt IDs stay spent even if account/event cleanup deletes the newest pre-upgrade upload.
-    (228, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
+    (229, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
       ON CONFLICT(key) DO UPDATE SET value = CAST(MAX(CAST(meta.value AS INTEGER), CAST(excluded.value AS INTEGER)) AS TEXT);"""),
 ]
