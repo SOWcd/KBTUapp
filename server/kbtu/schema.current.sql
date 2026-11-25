@@ -1384,6 +1384,12 @@ CREATE TABLE usage_days (
       key TEXT NOT NULL,
       n INTEGER NOT NULL,
       PRIMARY KEY (day, key)) WITHOUT ROWID;
+CREATE TABLE user_platforms (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL CHECK (kind IN ('android', 'ios', 'desktop', 'web')),
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, kind)
+    ) STRICT;
 CREATE TABLE user_skills (
         user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
@@ -1708,6 +1714,7 @@ CREATE INDEX thread_replies_by_thread ON thread_replies(thread_id, id);
 CREATE INDEX thread_replies_by_user ON thread_replies(user_id, created_at);
 CREATE INDEX threads_by_user ON threads(user_id, created_at);
 CREATE INDEX threads_feed ON threads(status, bumped_at);
+CREATE INDEX user_platforms_by_kind ON user_platforms(kind, user_id);
 CREATE INDEX user_skills_by_skill ON user_skills(skill_id);
 CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;
 CREATE UNIQUE INDEX users_cal_token ON users(cal_token);

@@ -513,6 +513,20 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
                 "rights": lent(r["level"], r["rights"])} for r in sorted(own, key=lambda r: -RANK[r["level"]])]}
 
 
+PLATFORMS = ("android", "ios", "desktop", "web")  # the coarse device kinds kept (user_platforms); the web app picks one
+
+
+def seen_platform(con, uid: int, kind: str | None) -> None:
+    """The device kind someone opened the app on, from /api/me: a read first, then a write (never waited for) at most
+    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform)."""
+    if kind not in PLATFORMS:
+        return
+    at = one(con, "SELECT seen_at FROM user_platforms WHERE user_id = ? AND kind = ?", uid, kind)
+    if at is None or at[0] <= core.now() - 86400:
+        db.maybe(con, con.execute, """INSERT INTO user_platforms (user_id, kind, seen_at) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, kind) DO UPDATE SET seen_at = excluded.seen_at""", (uid, kind, core.now()))
+
+
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
     if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
@@ -1323,7 +1337,7 @@ def replay_deletions(con) -> tuple[int, int]:
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
-    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),

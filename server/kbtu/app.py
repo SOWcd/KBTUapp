@@ -681,7 +681,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
     @app.get("/api/me")
-    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
+    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True,
+               platform: str | None = None):
+        logic.account.seen_platform(con, v.id, platform)  # no extra request: the app's own /api/me says it
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
         if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username
