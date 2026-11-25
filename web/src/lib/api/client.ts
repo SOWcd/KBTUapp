@@ -538,7 +538,7 @@ export const server = {
   channelReplyWhy: (id: Id): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-replies/${id}/why`), // the same for my held reply
   deleteChannelPost: (id: Id): Promise<void> => call('DELETE', `/forum-posts/${id}`), // mine: the bot takes it out of the channel
   channelMod: (): Promise<import('./types').ChannelMod> => call('GET', '/forum-posts/mod'), // moderators: held, and this week's live
-  channelModDecide: (id: Id, ok: boolean): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok }), // held: out or removed; live: only removed
+  channelModDecide: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok, again }), // held: out or removed; live: only removed; again: a lost send, re-sent
   channelModRestore: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/restore`), // a moderator's take-down undone: published anew
   channelModRepublish: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/republish`), // a live post sent anew (its message lost in Telegram)
   revealChannelPost: (id: Id): Promise<PersonRef> => call('POST', `/forum-posts/${id}/reveal`), // the owner alone; audited

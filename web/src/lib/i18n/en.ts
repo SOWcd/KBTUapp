@@ -122,6 +122,8 @@ const en: Dict = {
   'fc.whyCheck': "KRI didn't answer",
   'fc.whyBusy': "Many posts this hour",
   'fc.whyLost': "May be in the channel already: check there",
+  'fc.againAsk': "Send the post again?",
+  'fc.againText': "The bot can't tell whether it arrived. Check the channel first: if it's there, a second one is a copy the app can't remove.",
   'fc.signature': "The last line looks like a signature: drop the dash at its start",
   'fc.release': "Publish",
   'fc.takeDown': "Remove",

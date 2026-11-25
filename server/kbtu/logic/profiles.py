@@ -680,8 +680,8 @@ def achievements(con, uid: int, *, own: bool = True) -> list[dict]:
                 "levels": [{"need": n, "reached": i < level, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                 "at": reached[code]["reached_at"] if code in reached else None,
                 **({"now": mine["streak_now"]} if code == "streak" else {})}
-        if code == "sponsor":
-            item["at"] = None  # no payment timestamp on a medal
+        if code in PRIVATE:
+            item["at"] = None  # no payment timestamp on a medal (Fuel's grant is the Stars payment's second)
         if code == "activist":
             stored = reached.get(code)
             item["at"] = stored["reached_at"] if stored and stored["level"] == level else _unlock_activist(con, uid, stored["level"] if stored else 0, level)
