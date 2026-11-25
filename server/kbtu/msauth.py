@@ -1,7 +1,7 @@
 """Signing in with the KBTU Microsoft account (PLAN item 44). The app "KBTU App" lives in the owner's own
 Entra directory (not KBTU's), as a single-page app with PKCE and no secret. The Mini App asks start() for a link and
-opens it outside Telegram; Microsoft sends the student back to /ms.html, which takes this server's PKCE verifier for
-the state, trades the code for tokens in the browser (Microsoft redeems a single-page app's code only from a browser)
+opens it outside Telegram (/ms/go puts a random PKCE verifier into that browser's cookie); Microsoft sends the student
+back to /ms.html, which takes the verifier from its cookie, trades the code for tokens in the browser (Microsoft redeems a single-page app's code only from a browser)
 and hands the access token to finish(). We check it by calling Graph with it (Graph checks the signature, so no crypto
 package here), then that it was issued to our app in KBTU's directory. We keep the fields below (ms_profile)."""
 from __future__ import annotations
@@ -23,6 +23,7 @@ CLIENT = "7487a9a6-fe85-4d01-882b-ac48b42f45e4"   # "KBTU App" in the owner's di
 KBTU = "57081b5e-e66a-4993-8eaf-15b0b309293f"     # kbtu.kz's directory: the only one let in
 SCOPE = "openid profile email User.Read"
 TTL = 15 * 60  # a link is good for 15 minutes
+COOKIE = "__Host-kb-ms"  # PKCE's verifier, set by /ms/go in the browser that will trade the code
 # exactly what the privacy policy lists and KBTU fills in (all 35 profiles checked): companyName is the account type
 # ("student"), for roles later. Asking for more (phone, department...) would collect what the policy doesn't name the
 # day KBTU fills it: a new field goes into the policy first
@@ -52,14 +53,15 @@ def state_uid(key: bytes, state: str) -> int | None:
         return None
 
 
-def verifier(key: bytes, state: str) -> str:
-    """PKCE's verifier, derived from the state: nothing to store between the link and the way back"""
-    return _b64(_mac(key, "ms-pkce " + state))
+def start(key: bytes, uid: int, domain: str) -> str:
+    """The app's link: our /ms/go first, which keeps a random verifier in that browser (COOKIE) and goes on to link()"""
+    return f"https://{domain}/ms/go?" + urlencode({"state": state_for(key, uid)})
 
 
-def link(key: bytes, uid: int, domain: str) -> str:
-    state = state_for(key, uid)
-    challenge = _b64(hashlib.sha256(verifier(key, state).encode()).digest())
+def link(state: str, verifier: str, domain: str) -> str:
+    """Microsoft's sign-in for a state. The verifier is random and lives only in the browser's cookie: was derived from
+    the state, which is in this address, so whoever saw the code could take the verifier too (Aldiyar's report)"""
+    challenge = _b64(hashlib.sha256(verifier.encode()).digest())
     return f"https://login.microsoftonline.com/{KBTU}/oauth2/v2.0/authorize?" + urlencode({
         "client_id": CLIENT, "response_type": "code", "redirect_uri": f"https://{domain}/ms.html", "scope": SCOPE,
         "state": state, "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "select_account",
