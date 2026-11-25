@@ -8,7 +8,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from . import notifications
-from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, evdel, one, rows, shown_name
+from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, day_of, evdel, one, rows, shown_name
 
 
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
@@ -185,11 +185,6 @@ def tba_day(con) -> None:
             AND id NOT IN (SELECT event_id FROM santa_events)""", core.now()):  # a Santa game (santa.start) has no room to confirm
         if (e["starts_at"] + 5 * 3600) // 86400 - day in (7, 3, 1, 0):
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
-
-
-def day_of(ts: int) -> int:
-    """The Almaty day number of a moment."""
-    return (ts + 5 * 3600) // 86400
 
 
 def visit(con, uid: int, t: int) -> None:

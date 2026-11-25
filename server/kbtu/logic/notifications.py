@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ..db import tx
 from . import core
-from .core import one, rows
+from .core import day_of, one, rows
 
 # An allowlist of private outbox templates. Tickets, door alerts, changes to bookings, and
 # account, payment and moderation messages never enter this list.
@@ -71,20 +71,15 @@ def switch_from_chat(con, tg: int, key: str, turn_on: bool, undo: str, sent_at: 
         return u["lang"], enabled, can_undo
 
 
-def _day(at: int) -> int:
-    from .daily import day_of
-    return day_of(at)
-
-
 def delivered(con, key: str, at: int) -> None:
     con.execute("""INSERT INTO notification_days (day, category, sent) VALUES (?, ?, 1)
-        ON CONFLICT (day, category) DO UPDATE SET sent = sent + 1""", (_day(at), key))
+        ON CONFLICT (day, category) DO UPDATE SET sent = sent + 1""", (day_of(at), key))
 
 
 def feedback(con, key: str, sent_at: int, action: str) -> None:
     # Put feedback on the delivery day so the numerator and denominator describe the same messages.
     col = {"off": "turned_off"}[action]
-    day, today = _day(sent_at), _day(core.now())
+    day, today = day_of(sent_at), day_of(core.now())
     if today - WINDOW < day <= today:
         # A tap can arrive while the postman is still waiting for the send response.
         con.execute(f"""INSERT INTO notification_days (day, category, {col}) VALUES (?, ?, 1)
@@ -92,7 +87,7 @@ def feedback(con, key: str, sent_at: int, action: str) -> None:
 
 
 def summary(con, at: int) -> list[dict]:
-    today = _day(at)
+    today = day_of(at)
     totals = {r[0]: tuple(r)[1:] for r in rows(con, """SELECT category, SUM(sent), SUM(turned_off)
         FROM notification_days WHERE day BETWEEN ? AND ? GROUP BY category""", today - WINDOW + 1, today)}
     out = []
@@ -103,4 +98,4 @@ def summary(con, at: int) -> list[dict]:
 
 
 def forget(con) -> None:
-    con.execute("DELETE FROM notification_days WHERE day < ?", (_day(core.now()) - WINDOW + 1,))
+    con.execute("DELETE FROM notification_days WHERE day < ?", (day_of(core.now()) - WINDOW + 1,))

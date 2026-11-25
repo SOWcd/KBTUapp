@@ -131,6 +131,11 @@ def now() -> int:
     return int(time.time())
 
 
+def day_of(ts: int) -> int:
+    """The Almaty day number of a moment."""
+    return (ts + 5 * 3600) // 86400
+
+
 def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
     return con.execute(sql, args).fetchone()
 

@@ -53,7 +53,7 @@ def skills(con, v: Viewer, q: object = "") -> list[dict]:
         WHERE s.name LIKE ? AND (s.approved = 1 OR s.created_by = ?
             OR (SELECT COUNT(*) FROM user_skills x WHERE x.skill_id = s.id) >= {PUBLIC_AT})
         ORDER BY n DESC, s.name LIMIT 12""", f"%{q}%", v.id)
-    return [_skill(con, s) for s in found if s["approved"] or s["n"] or s["used_at"] > _now() - STALE or s["created_by"] == v.id]
+    return [_skill(con, s) for s in found if s["approved"] or s["n"] or s["used_at"] > core.now() - STALE or s["created_by"] == v.id]
 
 
 def skill_lookup(con, v: Viewer, raw: object, force: bool = False) -> dict:
@@ -80,16 +80,16 @@ def add_skill(con, v: Viewer, name: str) -> dict:
         core.need_current_student(con, v)
         if s := one(con, "SELECT * FROM skills WHERE name = ?", name):  # two people at once
             return _skill(con, s)
-        if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, _now() - 86400)[0] >= NEW_SKILLS_A_DAY:
+        if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= NEW_SKILLS_A_DAY:
             raise ApiError("rate_limited")
-        sid = con.execute("INSERT INTO skills (name, created_by, created_at, used_at) VALUES (?, ?, ?, ?)", (name, v.id, _now(), _now())).lastrowid
+        sid = con.execute("INSERT INTO skills (name, created_by, created_at, used_at) VALUES (?, ?, ?, ?)", (name, v.id, core.now(), core.now())).lastrowid
     return _skill(con, one(con, "SELECT * FROM skills WHERE id = ?", sid))
 
 
 def _screen_room(con, v: Viewer) -> None:
     """Reserve a paid look inside the caller's transaction, including when screening rejects the words."""
     core.need_current_student(con, v)
-    key = f"flook:{v.id}:{_now() // 3600}"
+    key = f"flook:{v.id}:{core.now() // 3600}"
     n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0])
     if n >= SCREENS_AN_HOUR:
         raise ApiError("rate_limited", "forum")
@@ -100,7 +100,7 @@ def reserve_skill(con, v: Viewer, raw: object, force: bool) -> dict:
     found = skill_lookup(con, v, raw, force)
     if "name" in found:
         with tx(con):
-            if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, _now() - 86400)[0] >= NEW_SKILLS_A_DAY:
+            if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= NEW_SKILLS_A_DAY:
                 raise ApiError("rate_limited")
             _screen_room(con, v)
     return found
@@ -139,7 +139,7 @@ def set_my_forum(con, v: Viewer, body: dict) -> dict:
                 raise ApiError("bad_input")
             con.execute("DELETE FROM user_skills WHERE user_id = ?", (v.id,))
             con.executemany("INSERT INTO user_skills (user_id, skill_id) VALUES (?, ?)", [(v.id, i) for i in ids])
-            con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(_now(), i) for i in ids])
+            con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(core.now(), i) for i in ids])
         for key in ("open", "pings"):
             if key in body and not isinstance(body[key], bool):
                 raise ApiError("bad_input")
@@ -225,7 +225,7 @@ def _cards(con, uids: list[int], *, with_skills: bool = True) -> dict[int, dict]
 def search_people(con, v: Viewer, skill: object = None, q: object = None) -> list[dict]:
     """People by a skill (its id) or by words in their skills' names; open to projects only; 30 searches an hour."""
     need_student(v)
-    key = f"fsearch:{v.id}:{_now() // 3600}"
+    key = f"fsearch:{v.id}:{core.now() // 3600}"
     with tx(con):
         n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0])
         if n >= SEARCHES_AN_HOUR:
@@ -287,7 +287,7 @@ def asks(con, v: Viewer, skill: object = None) -> list[dict]:
     found = con.execute(f"""SELECT a.* FROM asks a WHERE a.expires_at > :now AND (a.user_id = :me OR (a.status = 'live'
             AND {_UNBLOCKED.format(u='a.user_id')} AND a.id NOT IN (SELECT target_id FROM reports WHERE target = 'ask'
                 AND reporter_id = :me AND status = 'open'))) AND a.subject IS NULL {by}
-        ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": _now(), "me": v.id, "skill": skill}).fetchall()
+        ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": core.now(), "me": v.id, "skill": skill}).fetchall()
     return _ask_shapes(con, v, found)
 
 
@@ -304,15 +304,15 @@ def create_ask(con, v: Viewer, body: dict, verdict: bool | None, *, screening: b
     with tx(con):
         if ids and len(rows(con, f"SELECT id FROM skills WHERE id IN ({','.join('?' * len(ids))})", *ids)) != len(ids):
             raise ApiError("bad_input")
-        if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ? AND subject IS NULL", v.id, _now())[0] >= OPEN_ASKS:
+        if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ? AND subject IS NULL", v.id, core.now())[0] >= OPEN_ASKS:
             raise ApiError("rate_limited", "asks")
         if screening:
             _screen_room(con, v)
         status, why = ("live", None) if verdict else ("held", "ai" if verdict is False else "check")
         aid = con.execute("INSERT INTO asks (id, user_id, kind, title, body, status, why, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                          (core.next_id(con, "asks"), v.id, kind, title, text, status, why, _now(), _now() + days * 86400)).lastrowid
+                          (core.next_id(con, "asks"), v.id, kind, title, text, status, why, core.now(), core.now() + days * 86400)).lastrowid
         con.executemany("INSERT INTO ask_skills (ask_id, skill_id) VALUES (?, ?)", [(aid, i) for i in ids])
-        con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(_now(), i) for i in ids])
+        con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(core.now(), i) for i in ids])
         if status == "live":
             _ping(con, aid)
         return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
@@ -341,10 +341,10 @@ def _ping(con, aid: int) -> None:
         if sent >= PING_TOP:
             break
         if not one(con, "SELECT ask_pings FROM users WHERE id = ?", uid)[0] \
-                or one(con, "SELECT COUNT(*) FROM ask_pings WHERE user_id = ? AND at > ?", uid, _now() - 86400)[0] >= PING_DAY \
-                or one(con, "SELECT COUNT(*) FROM ask_pings WHERE user_id = ? AND at > ?", uid, _now() - 7 * 86400)[0] >= PING_WEEK:
+                or one(con, "SELECT COUNT(*) FROM ask_pings WHERE user_id = ? AND at > ?", uid, core.now() - 86400)[0] >= PING_DAY \
+                or one(con, "SELECT COUNT(*) FROM ask_pings WHERE user_id = ? AND at > ?", uid, core.now() - 7 * 86400)[0] >= PING_WEEK:
             continue
-        if con.execute("INSERT OR IGNORE INTO ask_pings (ask_id, user_id, at) VALUES (?, ?, ?)", (aid, uid, _now())).rowcount:
+        if con.execute("INSERT OR IGNORE INTO ask_pings (ask_id, user_id, at) VALUES (?, ?, ?)", (aid, uid, core.now())).rowcount:
             notify(con, uid, "ask_match", f"am:{aid}")
             sent += 1
 
@@ -381,9 +381,9 @@ def mod_queue(con, v: Viewer, catalog: bool = True, subjects_only: bool = False)
     _mod(v)
     only = _SUBJ if subjects_only else ""
     held = [_ask_shape(con, v, a) | {"status": "held", "why": a["why"], "dueAt": a["created_at"] + DECIDE_IN}
-            for a in rows(con, f"SELECT * FROM asks WHERE status = 'held' AND expires_at > ?{only} ORDER BY id", _now())]
+            for a in rows(con, f"SELECT * FROM asks WHERE status = 'held' AND expires_at > ?{only} ORDER BY id", core.now())]
     # reported enough without the AI's agreement: a moderator decides within a day of the report that made it enough
-    for a in rows(con, f"SELECT * FROM asks WHERE status = 'live' AND expires_at > ?{only} AND id IN (SELECT target_id FROM reports WHERE target = 'ask' AND status = 'open') ORDER BY id", _now()):
+    for a in rows(con, f"SELECT * FROM asks WHERE status = 'live' AND expires_at > ?{only} AND id IN (SELECT target_id FROM reports WHERE target = 'ask' AND status = 'open') ORDER BY id", core.now()):
         if at := _enough_at(con, a["id"]):
             held.append(_ask_shape(con, v, a) | {"status": "reported", "why": "reports", "dueAt": at + DECIDE_IN})
     held.sort(key=lambda a: a["dueAt"])
@@ -430,7 +430,7 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
     need_student(v)
     with tx(con):  # whose the request is, read in the same write as the offer: never a row that changed hands meanwhile
         if isinstance(aid, int) and not isinstance(aid, bool):
-            a = one(con, "SELECT user_id FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", aid, _now())
+            a = one(con, "SELECT user_id FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", aid, core.now())
             if not a:
                 raise ApiError("not_found")
             to = a["user_id"]
@@ -442,11 +442,11 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
             raise ApiError("bad_input")
         if to == v.id or one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", to, v.id, v.id, to):
             raise ApiError("not_found")
-        if one(con, "SELECT COUNT(*) FROM contacts WHERE from_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= CONTACTS_A_DAY:
+        if one(con, "SELECT COUNT(*) FROM contacts WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= CONTACTS_A_DAY:
             raise ApiError("rate_limited")
         token = secrets.token_hex(4)  # the offer's own, beside an id that never comes back (core.next_id)
         cur = con.execute("INSERT OR IGNORE INTO contacts (id, from_id, to_id, ask_id, created_at, token) VALUES (?, ?, ?, ?, ?, ?)",
-                          (core.next_id(con, "contacts"), v.id, to, aid, _now(), token))
+                          (core.next_id(con, "contacts"), v.id, to, aid, core.now(), token))
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
         # Give tokenless offers a fresh card so its buttons can identify the exact offer.
@@ -468,7 +468,7 @@ def decide_contact(con, uid: int, cid: int, yes: bool, token: str | None = None)
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", cid, uid, token)
         if not c:
             return None
-        con.execute("UPDATE contacts SET status = ?, decided_at = ?, offer_message = NULL WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
+        con.execute("UPDATE contacts SET status = ?, decided_at = ?, offer_message = NULL WHERE id = ?", ("accepted" if yes else "declined", core.now(), cid))
         if yes:
             notify(con, c["from_id"], "contact_ok", f"co:{cid}:to:{token}")    # to the one who offered: the other's contact
             notify(con, c["to_id"], "contact_ok", f"co:{cid}:from:{token}")
@@ -507,10 +507,10 @@ def block(con, v: Viewer, uid: object, on: object = True) -> None:
     if not isinstance(uid, int) or isinstance(uid, bool) or uid == v.id or not isinstance(on, bool):
         raise ApiError("bad_input")
     if on:
-        con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, _now()))
+        con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, core.now()))
         pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
         con.execute("UPDATE contacts SET status = 'declined', decided_at = ?, offer_message = NULL WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
-                    (_now(), v.id, uid, uid, v.id))
+                    (core.now(), v.id, uid, uid, v.id))
     else:
         con.execute("DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?", (v.id, uid))
 
@@ -520,14 +520,14 @@ def block(con, v: Viewer, uid: object, on: object = True) -> None:
 def reported_enough(con, aid: int) -> bool:
     """Three open reports from accounts at least two weeks old: worth the AI's look (app.py), else a moderator's."""
     return one(con, """SELECT COUNT(DISTINCT r.reporter_id) FROM reports r JOIN users u ON u.id = r.reporter_id
-        WHERE r.target = 'ask' AND r.target_id = ? AND r.status = 'open' AND u.created_at <= ?""", aid, _now() - REPORTER_AGE)[0] >= HIDE_AT
+        WHERE r.target = 'ask' AND r.target_id = ? AND r.status = 'open' AND u.created_at <= ?""", aid, core.now() - REPORTER_AGE)[0] >= HIDE_AT
 
 
 def _enough_at(con, aid: int) -> int | None:
     """When the open reports from old enough accounts reached three: the moderators' day starts then."""
     at = [r[0] for r in con.execute("""SELECT MIN(r.created_at) FROM reports r JOIN users u ON u.id = r.reporter_id
         WHERE r.target = 'ask' AND r.target_id = ? AND r.status = 'open' AND u.created_at <= ? GROUP BY r.reporter_id ORDER BY 1""",
-        (aid, _now() - REPORTER_AGE))]
+        (aid, core.now() - REPORTER_AGE))]
     return at[HIDE_AT - 1] if len(at) >= HIDE_AT else None
 
 
@@ -539,26 +539,22 @@ def hide_ask(con, aid: int, why: str, by: int | None = None, close_reports: bool
     guard = " AND user_id = ? AND created_at = ?" if made else ""
     with tx(con):  # one write (joins the caller's): a leave in between finds it whole or not at all
         a = one(con, "UPDATE asks SET status = 'hidden', why = ? WHERE id = ? AND status IN ('live', 'held') AND expires_at > ?" + guard
-                + " RETURNING user_id, subject, expires_at", why, aid, _now(), *(made or ()))
+                + " RETURNING user_id, subject, expires_at", why, aid, core.now(), *(made or ()))
         if a:
             if a["subject"]:
                 subjects.hold(con, a["user_id"], a["subject"], by, why, a["expires_at"])
             notify(con, a["user_id"], "ask_hidden", f"ah:{aid}")
         if close_reports:
             con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
-                        (by, _now(), aid))
+                        (by, core.now(), aid))
 
 
 def forum_sweep(con) -> None:
     """What the privacy policy promises: a request goes 30 days after it ran out (its skills, offers and pings with
     it), and the record of who was pinged after 30 days (the caps look back a week)."""
-    con.execute("DELETE FROM asks WHERE expires_at < ?", (_now() - KEEP,))
-    con.execute("DELETE FROM ask_pings WHERE at < ?", (_now() - KEEP,))
+    con.execute("DELETE FROM asks WHERE expires_at < ?", (core.now() - KEEP,))
+    con.execute("DELETE FROM ask_pings WHERE at < ?", (core.now() - KEEP,))
     subjects.sweep_counters(con)  # the hourly search and listing counters past their hour
-
-
-def _now() -> int:
-    return core.now()
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
