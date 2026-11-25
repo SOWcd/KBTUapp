@@ -69,16 +69,40 @@ export const data = $state({
 /** Secret Santa's chat of one game: read again whenever its page or a thread opens or the app comes back (the bot's
  *  push leads there); no polling. One read at a time per game. false: there is no chat for me any more (over, retired,
  *  out of the game): what the phone held of it is dropped at once. A network failure keeps what is shown. */
-const santaReads = new Map<Id, Promise<boolean>>();
+const santaReads = new Map<Id, { result: Promise<boolean>; invalidate: () => void }>();
+const santaWrites = new Map<Id, Promise<unknown>>();
+export function changeSantaChat(id: Id, change: () => Promise<void>): Promise<void> {
+  santaReads.get(id)?.invalidate();
+  const written = change();
+  const pending = Promise.allSettled([santaWrites.get(id), written]);
+  santaWrites.set(id, pending);
+  void pending.then(() => { if (santaWrites.get(id) === pending) santaWrites.delete(id); });
+  return written;
+}
+
 export function loadSantaChat(id: Id): Promise<boolean> {
-  let read = santaReads.get(id);
-  if (!read) {
-    read = api.santaChat(id).then((c) => { data.santaChat[id] = c; return true; })
-      .catch((e) => { if (!(e instanceof ApiErr) || (e.code !== 'not_found' && e.code !== 'forbidden')) return true; delete data.santaChat[id]; return false; })
-      .finally(() => santaReads.delete(id));
-    santaReads.set(id, read);
-  }
-  return read;
+  const read = santaReads.get(id);
+  if (read) return read.result;
+  let stale = false;
+  const result = (async () => {
+    do {
+      // Keep the optimistic message or local closure until a read started after the writes settled.
+      while (santaWrites.has(id)) await santaWrites.get(id);
+      stale = false;
+      try {
+        const chat = await api.santaChat(id);
+        if (!stale) data.santaChat[id] = chat;
+      } catch (e) {
+        if (e instanceof ApiErr && (e.code === 'not_found' || e.code === 'forbidden')) {
+          delete data.santaChat[id];
+          return false;
+        }
+      }
+    } while (stale);
+    return true;
+  })().finally(() => santaReads.delete(id));
+  santaReads.set(id, { result, invalidate: () => { stale = true; } });
+  return result;
 }
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
@@ -463,20 +487,31 @@ function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened
 /** The app's card, or the server's for one it doesn't hold yet (kept: opened) */
 export const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
 
+let teamChunk: Promise<typeof import('../../screens/sheets/EventTeam.svelte')> | undefined;
+export function eventTeamChunk() {
+  return teamChunk ??= import('../../screens/sheets/EventTeam.svelte').catch((e) => { teamChunk = undefined; throw e; });
+}
+
+function readEvent(id: Id): Promise<EventFull> {
+  const detail = api.event(id);
+  if (!teamChunk && eventById(id)?.teamMax) void eventTeamChunk().catch(() => {});
+  return detail;
+}
+
 // An event's details (the text, album, updates), asked for as a finger touches its card (lib/touch.ts: not for a flick
 // that only starts on it): the sheet opens a beat later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
 const ahead = new Map<Id, { at: number; p: Promise<EventFull> }>();
 export function prefetchEvent(id: Id): void {
   const a = ahead.get(id);
   if (a && Date.now() - a.at < 10_000) return;
-  const p = api.event(id);
+  const p = readEvent(id);
   p.catch(() => ahead.delete(id));
   ahead.set(id, { at: Date.now(), p });
 }
 export function eventDetails(id: Id): Promise<EventFull> {
   const a = ahead.get(id);
   ahead.delete(id);
-  return (a && Date.now() - a.at < 10_000 ? a.p : api.event(id)).then(keepOpened);
+  return (a && Date.now() - a.at < 10_000 ? a.p : readEvent(id)).then(keepOpened);
 }
 
 // a person's card, fetched from the touch (B4: the card opened as a plain one, then jumped into its skin) and kept for
