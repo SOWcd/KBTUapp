@@ -513,9 +513,23 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
                 "rights": lent(r["level"], r["rights"])} for r in sorted(own, key=lambda r: -RANK[r["level"]])]}
 
 
+PLATFORMS = ("android", "ios", "desktop", "web")  # the coarse device kinds kept (user_platforms); the web app picks one
+
+
+def seen_platform(con, uid: int, kind: str | None) -> None:
+    """The device kind someone opened the app on, from /api/me: a read first, then a write (never waited for) at most
+    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform)."""
+    if kind not in PLATFORMS:
+        return
+    at = one(con, "SELECT seen_at FROM user_platforms WHERE user_id = ? AND kind = ?", uid, kind)
+    if at is None or at[0] <= core.now() - 86400:
+        db.maybe(con, con.execute, """INSERT INTO user_platforms (user_id, kind, seen_at) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, kind) DO UPDATE SET seen_at = excluded.seen_at""", (uid, kind, core.now()))
+
+
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
-    if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
+    if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
@@ -763,7 +777,7 @@ class _Taken(ApiError):
 
 
 def sid_tries(con, uid: int) -> int:
-    """Student IDs tried on this account in a day, from Settings or a schedule page (bot._page_sid): one count of 5, or
+    """Student IDs tried on this account in a day, from Settings or a schedule page (bot_dm._page_sid): one count of 5, or
     "taken" would tell anyone which IDs are registered. Read it and add to it under one write lock."""
     return one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_try', 'sid_page_taken', 'sid_page_year', 'sid_page_fixed')
         OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", core.now() - 86400)[0]
@@ -1021,7 +1035,7 @@ def set_photo(con, v: Viewer, saved: dict) -> list[str]:
         VALUES (?, 'avatar', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
                                                                 saved["path"], v.id, core.now(), saved["color"])).lastrowid
     con.execute("UPDATE users SET avatar_file_id = ?, avatar_tg = 0 WHERE id = ?", (fid, v.id))
-    return _drop_photo(con, old) if old and old != fid else []
+    return _drop_unused(con, old) if old and old != fid else []  # a take-down's undo may still hold it
 
 
 def drop_my_photo(con, v: Viewer) -> list[str]:
@@ -1030,7 +1044,7 @@ def drop_my_photo(con, v: Viewer) -> list[str]:
     need_student(v)
     old = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]
     con.execute("UPDATE users SET avatar_file_id = NULL, avatar_tg = 1 WHERE id = ?", (v.id,))
-    return _drop_photo(con, old) if old else []
+    return _drop_unused(con, old) if old else []  # a take-down's undo may still hold it
 
 
 DELETE_WAIT = 7 * 86400
@@ -1323,7 +1337,7 @@ def replay_deletions(con) -> tuple[int, int]:
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
-    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
@@ -1542,8 +1556,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key LIKE 'rclaim:%' AND value = ?", (str(v.id),))  # a roster claim that let me in
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
-        con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
-                    (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
+        con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref = ? OR ref LIKE ? OR ref LIKE ?)""",
+                    (f"pf:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
         con.execute("DELETE FROM bot_outbox WHERE kind = 'sid_page_clash' AND ref LIKE ?", (f"sp:{v.id}:%",))  # so does his schedule-page alert
         # other people's queues that name me by id, sent or not; who he was in the role history
         for kind, ref in (("friend_invite", f"fi:%:{v.id}"), ("friend_new", f"fn:{v.id}:%"), ("friend_request", f"fq:{v.id}:%"), ("join_request", f"jr:%:{v.id}:%"),
@@ -1713,9 +1727,8 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, fchannel, guests, inbox, profiles, santa  # noqa: E402
-from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
-from .moderation import _about  # noqa: E402
+from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402

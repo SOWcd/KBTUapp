@@ -1073,7 +1073,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;"""),
     # Keep club-written next steps in the app so recruitment instructions can vary while bot notifications stay templated.
     (108, "ALTER TABLE rounds ADD COLUMN next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300);"),
-    # Index only waiting messages so bot._due can poll without scanning failed rows.
+    # Index only waiting messages so outbox._due can poll without scanning failed rows.
     (109, "CREATE INDEX IF NOT EXISTS outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;"),
     # Index the join-request, pinned-feed and event-date queries that run on list views.
     (110, """CREATE INDEX IF NOT EXISTS join_requests_by_user ON join_requests(user_id);
@@ -2281,7 +2281,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
         at INTEGER NOT NULL
     ) STRICT;"""),
-    # a broadcast's Interesting / Not interesting (bot._tapped): one vote per person per broadcast, to learn what to send
+    # a broadcast's Interesting / Not interesting (bot_dm._tapped): one vote per person per broadcast, to learn what to send
     (226, """CREATE TABLE IF NOT EXISTS broadcast_votes (
       name TEXT NOT NULL,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2523,4 +2523,13 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
         DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;
     END;"""),
+    # The kind of device someone opens the app on (account.seen_platform from /api/me): one row per kind, its last day
+    # at most once a day, so the creator can write to Android users alone (admin broadcast --platform). Gone after 90 days
+    (243, """CREATE TABLE IF NOT EXISTS user_platforms (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL CHECK (kind IN ('android', 'ios', 'desktop', 'web')),
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, kind)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS user_platforms_by_kind ON user_platforms(kind, user_id);"""),
 ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import string
 
-from kbtu import bot, casting, logic, texts
+from kbtu import casting, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 from test_round_place import ANN, BOB, CAT, EVE, HOUR, PRES, T0, _setup
 
@@ -49,7 +49,7 @@ def test_who_is_called(env, monkeypatch):
     assert sorted(int(x["ref"].split(":")[1]) for x in _calls(con)) == sorted(apps[t] for t in (ANN, BOB, CAT, FAY))
     assert next(s for s in r.json()["slots"] if s["id"] == slot["a"])["call"] == {"told": 0, "waiting": 4, "tried": 4, "left": 0}  # queued, none sent yet
     for x in _calls(con):
-        text, button, start = bot._render(con, x)
+        text, button, start = outbox._render(con, x)
         assert "Room 305" in text and "14:00–16:00" in text and "<b>Chess" in text and start.startswith("iv_")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'round_call'").fetchone()[0] == 1
 
@@ -84,9 +84,9 @@ def test_quiet_once_it_no_longer_holds(env, monkeypatch):
     by = {int(x["ref"].split(":")[1]): x for x in _calls(con)}
     con.execute("UPDATE round_apps SET came = 1 WHERE id = ?", (apps[ANN],))
     con.execute("UPDATE round_apps SET sent_at = ? WHERE id = ?", (T0, apps[BOB]))
-    assert bot._render(con, by[apps[ANN]]) is None and bot._render(con, by[apps[BOB]]) is None and bot._render(con, by[apps[CAT]])
+    assert outbox._render(con, by[apps[ANN]]) is None and outbox._render(con, by[apps[BOB]]) is None and outbox._render(con, by[apps[CAT]])
     clock[0] = T0 + 4 * HOUR
-    assert bot._render(con, by[apps[CAT]]) is None  # the window is over
+    assert outbox._render(con, by[apps[CAT]]) is None  # the window is over
 
 
 def test_a_dropped_slot_takes_its_waiting_calls(env, monkeypatch):

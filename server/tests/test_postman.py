@@ -6,7 +6,7 @@ import time
 import httpx
 import pytest
 
-from kbtu import bot, db, texts
+from kbtu import db, outbox, texts
 from test_core import env  # noqa: F401  (env: the fixture)
 
 URL = "https://t.me/example_channel/42"
@@ -17,7 +17,7 @@ LATENCY = 0.15  # each fake answer takes this long: one at a time would be ~7 a 
 def queue(env, monkeypatch):
     """40 people with one broadcast each, and person 1 with three (queued in this order)."""
     _, cfg = env
-    monkeypatch.setattr(bot, "_chores", lambda *_: None)
+    monkeypatch.setattr(outbox, "_chores", lambda *_: None)
     con = db.connect(cfg.db_path)
     try:
         for tg in range(1, 41):
@@ -63,7 +63,7 @@ class Telegram:
 def _round(cfg, tg: Telegram) -> None:
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
     asyncio.run(go())
 
 
@@ -80,7 +80,7 @@ def test_side_by_side_under_the_cap(queue):
     took = time.monotonic() - began
     assert _state(con) == {"sent": 42}
     assert sorted(c for _, c, _ in tg.starts) == sorted([1, 1, 1, *range(2, 41)])  # each once
-    assert 1 < tg.most <= bot.SENDERS  # side by side, not one at a time
+    assert 1 < tg.most <= outbox.SENDERS  # side by side, not one at a time
     starts = [t for t, _, _ in tg.starts]
     assert all(b - a >= 1 for a, b in zip(starts, starts[30:]))  # never Telegram's 30 in a second (25 planned: room for the database's turns)
     assert took < 42 * LATENCY / 2  # far faster than one at a time

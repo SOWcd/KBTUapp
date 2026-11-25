@@ -332,7 +332,7 @@ def chats_gone(con) -> list[str]:
 # whose a chat is (a catalog row shows on the page too; one linked only from Studio waits as status 'org', out of the
 # catalog); one public channel is the MAIN one, with the big Subscribe button (and later the userbot mirror's source).
 # A closed chat shows with a lock, its title, photo and members, and no way in: its invite link never leaves Studio.
-# The cards come from the chat's t.me page, and once its President adds our bot, from Telegram itself (bot.py
+# The cards come from the chat's t.me page, and once its President adds our bot, from Telegram itself (chores.py
 # refresh_chats: getChat, getChatMemberCount); the bot never reads or keeps a message.
 
 ORG_CHATS = 12  # a club's chats on its page at most
@@ -652,7 +652,7 @@ def may_call(con, chat: int, tg: int, admin: bool) -> bool:
 
 
 def tag_all(con, tg_chat: int, tg_from: int, live: list[int] | tuple = ()) -> list[int]:
-    """/all in a group (bot._tag_all checks the caller): whom to mention, each once, in this order:
+    """/all in a group (bot_groups._tag_all checks the caller): whom to mention, each once, in this order:
     as far as the app knows (a club's chat: a synced department chat its department, a club chat the club's members, an
     event's chat its going people), then whom the bot saw there (chat_seen; a chat no club holds: chat_seen_free), then
     `live`: the chat's participants Telegram just listed (mtbot.members). Never the caller, Telegram's service accounts or

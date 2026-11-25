@@ -1,7 +1,7 @@
 """A club's group moderated for swearing, as the popular group bots do, but ours and reported in Studio.
 
 Off by default. A linked group's switch (chats.swear) is its club's President's or Vice's; on only when our bot may delete
-and restrict there (app.py asks Telegram). Then the bot (bot._swear) reads each new or edited message's text and caption
+and restrict there (app.py asks Telegram). Then the bot (bot_groups._swear) reads each new or edited message's text and caption
 for a word of swear.py's lists: the message goes, a template warning naming nobody is said (never their words, no count),
 and the third within 7 days mutes them for an hour; the count starts over. A chat's admins are left alone. A hit is one
 row: chat, Telegram id (and app id when known), the matched stem, when, its warning number, whether it muted. Nothing for

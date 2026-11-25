@@ -9,7 +9,7 @@ import time
 
 from PIL import Image
 
-from kbtu import bot, logic
+from kbtu import logic, outbox
 from test_core import env, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import _event, _go, _list, _mine, _people, _sheet
 from test_team_guests import PAID, _club, _uid
@@ -254,9 +254,9 @@ def test_link_team_filled_while_paying(env):
     assert _sheet(c, eid, late)["teams"]["missed"] is True
     # the bot's "your ticket is yours" only while it is (review, Nov 15)
     row = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'team_missed' AND user_id = ?", (_uid(con, late),)).fetchone()
-    assert bot._render(con, row) is not None
+    assert outbox._render(con, row) is not None
     c.delete(f"/api/events/{eid}/registration", headers=tma(late))
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
 
 
 def test_review_unpaid_ticket_then_teams_on(env):

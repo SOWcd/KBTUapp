@@ -156,7 +156,7 @@ async def _resolve(http: httpx.AsyncClient, path: str) -> str | None:
 
 
 async def sweep(cfg, http: httpx.AsyncClient, con) -> int:
-    """One pass over every linked channel (bot.send_due, hourly): resolve what is new, read each feed, post what is new.
+    """One pass over every linked channel (outbox.send_due, hourly): resolve what is new, read each feed, post what is new.
     A feed that fails is skipped till the next hour. The posts made."""
     root = Path(cfg.db_path).resolve().parent / "media"
     await asyncio.to_thread(forget, con, root)

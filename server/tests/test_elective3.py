@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from kbtu import admin, bot, config, db, texts
+from kbtu import admin, bot_dm, config, db, texts
 from test_core import env, login  # noqa: F401  (env: the fixture)
 
 
@@ -42,12 +42,12 @@ def test_announce_taps(env, monkeypatch):
 
     async def edit(cfg, http, method, body, files=None):
         edits.append(body)
-    monkeypatch.setattr(bot, "_tg", edit)
+    monkeypatch.setattr(bot_dm, "_tg", edit)
 
     class Http:
         async def post(self, *a, **k):
             return None
-    tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
+    tap = lambda who, data: asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": 30}, "text": "post",
                                                                                 "reply_markup": {"inline_keyboard": rows}}}))
     ok = lambda: {r[0]: r[1] for r in con.execute("SELECT id, announce_ok FROM users")}  # noqa: E731
