@@ -106,10 +106,9 @@
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.13);
   --separator: rgba(255, 255, 255, 0.1); /* 0.5 px between rows */
-  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed; the segmented thumb */
+  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed */
   --fill: rgba(235, 235, 245, 0.12);
   --fill-2: rgba(235, 235, 245, 0.2);
-  --thumb: rgba(235, 235, 245, 0.24);
   /* the tab bar (Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
      icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 28, 30, 0.45);
@@ -171,7 +170,6 @@
   --separator: rgba(60, 60, 67, 0.16);
   --fill: rgba(11, 20, 51, 0.075);
   --fill-2: rgba(11, 20, 51, 0.13);
-  --thumb: #FFFFFF;
   --dock: rgba(250, 251, 255, 0.62);
   --lens: rgba(255, 255, 255, 0.92);
   --lens-top: rgba(255, 255, 255, 0);

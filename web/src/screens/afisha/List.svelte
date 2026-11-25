@@ -532,20 +532,28 @@
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
   /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
-     the one solid disc, a day with events on a soft one (it reads as a button), a quiet day dimmed and not a button; the
-     accent dot: I'm going */
+     on the one selected pill (the tab bar's lens), a day with events bold with a dot under it, a quiet day dimmed and
+     not a button; the accent dot: I'm going */
   .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
   .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
   .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .wd b { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
+  .wd b { position: relative; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
     transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
   .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
-  .wd.has b { background: var(--fill); font-weight: 700; }
-  .wd.today b { background: var(--text); color: var(--bg); }
+  .wd.has b { font-weight: 700; }
+  .wd.today b { background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); }
+  .wd.today b::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 150% at 24% 0%, var(--lens-rim), transparent 72%),
+      radial-gradient(ellipse 50% 140% at 76% 100%, var(--lens-rim-low), transparent 72%);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude; }
   .wd:disabled:not(.today) { opacity: 0.6; }
-  .wd:disabled b { color: var(--text-3); font-weight: 450; }
-  .wd.today:disabled b { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3); color: var(--text); } /* nothing on today: a ring, not a button */
+  .wd:disabled:not(.today) b { color: var(--text-3); font-weight: 450; }
   .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
+  .wd.has i { background: var(--text-3); }
   .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
