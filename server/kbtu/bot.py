@@ -395,7 +395,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             JOIN reg_age a ON a.registration_id = r.id WHERE e.id = ? AND e.age_check = 1 AND e.status = 'published'
             AND e.hidden_at IS NULL AND r.user_id = ? AND r.status = 'going' AND r.checked_in_at IS NOT NULL AND a.adult = 0""",
                 int(ref[1]), m["user_id"])
-        return (*texts.bot_message(lang, kind), f"ev_{e['id']}") if e and now() < logic.end_of(e) and not logic.door_shut(e, now()) else None
+        return (*texts.bot_message(lang, kind), f"ev_{e['id']}") if e and not logic.door_shut(e, now()) else None
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
         e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))

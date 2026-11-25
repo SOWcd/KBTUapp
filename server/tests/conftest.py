@@ -119,7 +119,17 @@ def fresh_process_memory(monkeypatch):
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""DROP TABLE gallery_consents;
+        con.executescript("""DROP TRIGGER event_guests_key;
+            DROP INDEX event_guests_door_key;
+            ALTER TABLE event_guests DROP COLUMN door_key;
+            DROP TRIGGER roster_pending_key;
+            DROP INDEX roster_pending_door_key;
+            DROP TRIGGER qr_hand_roster_gone;
+            ALTER TABLE roster_pending DROP COLUMN door_key;
+            CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
+                DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
+            END;
+            DROP TABLE gallery_consents;
             ALTER TABLE gallery_photos DROP COLUMN place;
             ALTER TABLE posts DROP COLUMN tg_fmt;
             DROP TABLE fchan_feed_pages;

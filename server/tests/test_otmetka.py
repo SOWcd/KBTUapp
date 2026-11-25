@@ -58,21 +58,22 @@ def test_team_list_by_department_and_hand_marks(env):
     con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (tag, ann["id"]))
     rid = con.execute("INSERT INTO roster_pending (key, org_id, sheet, role, dept, full_name, tg, created_at) VALUES ('k1', ?, 's', 'member', 'Media', 'Petrov Zhan', 'zhan', 0)",
                       (oid,)).lastrowid
+    rkey = "r" + con.execute("SELECT door_key FROM roster_pending WHERE id = ?", (rid,)).fetchone()[0]
     lst = c.get(f"/api/events/{eid}/door-team", headers=tma(9)).json()
     assert lst["session"] is None and len(lst["rows"]) == 3                                # dana, ann, the roster row
-    zhan = _row(c, 9, eid, f"r{rid}")
-    assert zhan == {"key": f"r{rid}", "name": "Petrov Zhan", "group": "Media", "at": None, "manual": False, "app": False}
+    zhan = _row(c, 9, eid, rkey)
+    assert zhan == {"key": rkey, "name": "Petrov Zhan", "group": "Media", "at": None, "manual": False, "app": False}
     assert _row(c, 9, eid, f"u{ann['id']}")["group"] == "Media"
 
-    m = c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"r{rid}"}).json()  # before the QR: its organizer opens the team session
+    m = c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": rkey}).json()  # before the QR: its organizer opens the team session
     assert m["session"] == _crew(con, eid)["id"]
-    zhan = next(r for r in m["rows"] if r["key"] == f"r{rid}")
+    zhan = next(r for r in m["rows"] if r["key"] == rkey)
     assert zhan["at"] and zhan["manual"]
     c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}"})
     assert _row(c, 9, eid, f"u{ann['id']}")["manual"]
     c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})  # undo
     assert _row(c, 9, eid, f"u{ann['id']}")["at"] is None and _marks(con, _crew(con, eid)["id"]) == 0
-    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": "r999999"}).status_code == 404
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": "r" + "0" * 32}).status_code == 404
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_hand'").fetchone()[0] == 2
 
     # a scan stays (it proves they came): undo takes back hand marks only
@@ -128,14 +129,15 @@ def test_a_markers_account_deleted_keeps_the_mark(env):
     con = db.connect(cfg.db_path)
     oid, ann, eid = _setup(c, con)
     rid = con.execute("INSERT INTO roster_pending (key, org_id, sheet, role, full_name, created_at) VALUES ('k3', ?, 's', 'member', 'Petrov Zhan', 0)", (oid,)).lastrowid
+    rkey = "r" + con.execute("SELECT door_key FROM roster_pending WHERE id = ?", (rid,)).fetchone()[0]
     h = login(c, 4, "hel")
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, h["id"], oid))
     _qr(c, 9, eid)
-    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"r{rid}"}).status_code == 200
+    assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": rkey}).status_code == 200
     assert c.post(f"/api/events/{eid}/door-team", headers=tma(4), json={"key": f"u{ann['id']}"}).status_code == 200
     delete_now(c, cfg, tma(4))
     assert con.execute("SELECT marked_by FROM qr_hand_marks").fetchone()[0] is None        # the mark stays, its marker gone
-    assert _row(c, 9, eid, f"r{rid}")["manual"] and _row(c, 9, eid, f"u{ann['id']}")["manual"]  # still a hand mark, not a "scan"
+    assert _row(c, 9, eid, rkey)["manual"] and _row(c, 9, eid, f"u{ann['id']}")["manual"]  # still a hand mark, not a "scan"
     c.post(f"/api/events/{eid}/door-team", headers=tma(9), json={"key": f"u{ann['id']}", "on": False})
     assert _row(c, 9, eid, f"u{ann['id']}")["at"] is None                                  # and still undone by an organizer
     con.close()
@@ -150,9 +152,10 @@ def test_review_attacks(env):
     sid = _crew(con, eid)["id"]
     post = lambda tg, key, on=True: c.post(f"/api/events/{eid}/door-team", headers=tma(tg), json={"key": key, "on": on})  # noqa: E731
     rid = con.execute("INSERT INTO roster_pending (key, org_id, sheet, role, full_name, tg, created_at) VALUES ('k9', ?, 's', 'member', 'Petrov Zhan', 'zhan', 0)", (oid,)).lastrowid
+    rkey = "r" + con.execute("SELECT door_key FROM roster_pending WHERE id = ?", (rid,)).fetchone()[0]
     for k in ("u\u00b2", f"r0{rid}", f"r\u0661", "r", "q1", "", 5, None, f"u{ann['id']} "):        # strict keys: 400, never a 500 or a twin row
         assert post(9, k).status_code == 400, k
-    assert post(9, f"r{rid}").status_code == 200 and con.execute("SELECT COUNT(*) FROM qr_hand_marks").fetchone()[0] == 1
+    assert post(9, rkey).status_code == 200 and con.execute("SELECT COUNT(*) FROM qr_hand_marks").fetchone()[0] == 1
 
     # a hidden expected row (the club's own frozen one) can't be marked
     con.execute("""INSERT INTO qr_expected (session_id, email, full_name, extra) VALUES (?, 'hid@kbtu.kz', 'Hidden One', '{"club": 1}')""", (sid,))
@@ -175,14 +178,14 @@ def test_review_attacks(env):
     # a door helper undoes only their own hand marks
     h = login(c, 4, "hel")
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'door', 1, 0)", (eid, h["id"], oid))
-    post(4, f"r{rid}", False)
-    assert _row(c, 9, eid, f"r{rid}")["at"]
+    post(4, rkey, False)
+    assert _row(c, 9, eid, rkey)["at"]
 
     # a roster row whose person is a member already is listed once; a roster row gone takes its hand marks
     con.execute("UPDATE users SET tg_username = 'zhan' WHERE id = ?", (bob["id"],))
-    assert not [r for r in c.get(f"/api/events/{eid}/door-team", headers=tma(9)).json()["rows"] if r["key"] == f"r{rid}"]
+    assert not [r for r in c.get(f"/api/events/{eid}/door-team", headers=tma(9)).json()["rows"] if r["key"] == rkey]
     con.execute("DELETE FROM roster_pending WHERE id = ?", (rid,))
-    assert not con.execute("SELECT 1 FROM qr_hand_marks WHERE who = ?", (f"r{rid}",)).fetchone()
+    assert not con.execute("SELECT 1 FROM qr_hand_marks WHERE who = ?", (rkey,)).fetchone()
     con.close()
 
 

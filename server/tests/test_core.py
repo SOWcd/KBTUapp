@@ -5758,7 +5758,7 @@ def test_roster_load_and_join(env):
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
     orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
     got = roster.load(con, items, orgmap)
-    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 2)
+    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
     assert con.execute("SELECT official FROM orgs WHERE name = 'Chess'").fetchone()[0] == 1          # no "KBTU" in a name
 
@@ -5778,8 +5778,9 @@ def test_roster_load_and_join(env):
     welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
     assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"
 
-    me = c.get("/api/me", headers=h(72)).json()                                         # Bek: the username, another name: in all the same
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"]["name"] == "Aktau"
+    me = c.get("/api/me", headers=h(72)).json()  # A handle alone requires the President's confirmation.
+    assert not me["memberships"] and me["city"] is None
+    assert roster.asks(con, bek["id"]) and not con.execute("SELECT phone FROM students WHERE user_id = ?", (bek["id"],)).fetchone()[0]
 
 
 def test_roster_app_wins(env):
@@ -7179,7 +7180,7 @@ def test_qr_checkin(env, monkeypatch):
     forged = p[:-1] + ("1" if p[-1] == "0" else "0")
     assert c.post("/api/checkin", headers=tma(1), json={"p": forged}).json()["message"] == "qr"   # forged
     _, s, slot, _ = p.split("_")
-    old = f"ci_{s}_{int(slot) - 40}_{checkin._sig(cfg.token_key, f'ci.{s}.{int(slot) - 40}')}"
+    old = f"ci_{s}_{int(slot) - 40}_{checkin._sig(cfg.token_key, f'ci.{s}.{int(slot) - 40}.in')}"
     assert c.post("/api/checkin", headers=tma(1), json={"p": old}).json()["message"] == "qr_old"  # 400 s ago
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]           # a student: at once
     assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]       # not yet: waits
@@ -7218,7 +7219,7 @@ def test_qr_checkin_edges(env, monkeypatch):
     for u in (2, 4):
         assert not c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["done"]  # scanned, not signed in yet
     c.post(f"/api/screens/{sid}/finish", headers=tma(9))
-    assert c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"] is None    # finished stays finished
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(9)).status_code == 409         # finished stays finished
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # new after Finish: no
     import csv
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
@@ -7250,7 +7251,7 @@ def test_screen_pairing(env, monkeypatch):
     sid = checkin.new(con, "Initiation", [{"email": "x@kbtu.kz", "name": "X Person", "phone": "+7 (700) 000 00 00"}], vol)
     scr = c.post("/api/screen/pair").json()
     me = {"X-Screen": scr["secret"]}
-    assert set(c.get("/api/screen", headers=me).json()) == {"code", "left"}                 # waiting: just its QR
+    assert set(c.get("/api/screen", headers=me).json()) == {"code", "left", "bot"}          # waiting: just its QR
     for uid in (1, 8, 3):                                                                    # a student, another club, a guest
         assert c.post("/api/screens/bind", headers=tma(uid), json={"code": scr["code"]}).status_code == 403
         assert c.post("/api/screens/bind", headers=tma(uid), json={"code": scr["code"], "session": sid}).status_code == 403
@@ -7612,7 +7613,7 @@ def test_checkin_way_out(env, monkeypatch):
     p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
     for u in (1, 2):
         assert c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["left"] is False
-    con.execute("UPDATE qr_marks SET done_at = done_at - 7200")                                # came two hours ago
+    con.execute("UPDATE qr_marks SET scanned_at = scanned_at - 7200, done_at = done_at - 7200")  # came two hours ago
     assert c.post(f"/api/screens/{sid}/out", headers=tma(1)).status_code == 403              # a student can't switch it
     assert c.post(f"/api/screens/{sid}/out", headers=tma(9)).json()["phase"] == "out"
     p = c.get("/api/screen", headers=k).json()["param"]
@@ -7624,7 +7625,7 @@ def test_checkin_way_out(env, monkeypatch):
     r = c.post("/api/checkin", headers=tma(3), json={"p": p})
     assert (r.status_code, r.json()["message"]) == (400, "qr_not_in") and not con.execute("SELECT 1 FROM qr_marks WHERE user_id = ?", (cleo["id"],)).fetchone()
     was = int(time.time()) // checkin.SLOT - 20
-    stale = f"ci_{sid}_{was}_{checkin._sig(cfg.token_key, f'ci.{sid}.{was}')}"
+    stale = f"ci_{sid}_{was}_{checkin._sig(cfg.token_key, f'ci.{sid}.{was}.out')}"
     assert c.post("/api/checkin", headers=tma(2), json={"p": stale}).json()["message"] == "qr_old"
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
     ann_row = next(r for r in rows_[1:] if r[7] == "24Bann")

@@ -68,8 +68,8 @@ def _carry_door(con, g, uid: int) -> None:
     con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?",
                 (g["team"], g["event_id"], uid))
     if g["came_at"] is not None:
-        con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
-            WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+        con.execute("""UPDATE registrations SET checked_in_at = ?, checkin_manual = 1
+            WHERE event_id = ? AND user_id = ? AND checked_in_at IS NULL""", (g["came_at"], g["event_id"], uid))
 
 
 def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int]:
@@ -254,19 +254,20 @@ def door_names(con, eid: int, lines) -> tuple[int, int]:
     return named, added
 
 
-def door_list(con, eid: int) -> list[dict]:
-    return [{"key": r["student_id"], "name": r["name"], "adult": None if r["adult"] is None else bool(r["adult"]), "came": bool(r["came_at"]), "at": r["came_at"], "team": r["team"]}
-            for r in rows(con, "SELECT student_id, name, adult, came_at, team FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
+def door_list(con, eid: int, full: bool = False) -> list[dict]:
+    from ..checkin import _short
+    return [{"key": r["door_key"], "name": r["name"] if full else _short(r["name"]), "adult": None if r["adult"] is None else bool(r["adult"]), "came": bool(r["came_at"]), "at": r["came_at"], "team": r["team"]}
+            for r in rows(con, "SELECT door_key, name, adult, came_at, team FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
 
 
 def tick(con, eid: int, key: object, t: int, adult: object = None, came: bool = True) -> dict:
     """The door taps a name on its list: let in (the door saw the ID card), 18+ there if given."""
-    if not isinstance(key, str) or not 0 < len(key) <= 20 or (adult is not None and not isinstance(adult, bool)):
+    if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{32}", key) or (adult is not None and not isinstance(adult, bool)):
         raise ApiError("bad_input")
-    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ? AND name IS NOT NULL", eid, key)
+    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND door_key = ? AND name IS NOT NULL", eid, key)
     if not g:
         raise ApiError("not_found")
-    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND student_id = ?",
+    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND door_key = ?",
                 (int(came), t, None if adult is None else int(adult), eid, key))
     return pending_count(con, eid)
 

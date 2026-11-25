@@ -671,6 +671,8 @@ def cancel_event(con, v: Viewer, eid: int) -> dict:
         if e["status"] != "published":
             raise ApiError("conflict")
         con.execute("UPDATE events SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?", (core.now(), core.now(), eid))
+        from .. import checkin as qr
+        qr.cancelled(con, eid)
         evteams.cancelled(con, eid)
         for r in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going','hold','waitlist')", eid):
             notify(con, r[0], "event_cancelled", f"event:{eid}")
@@ -695,6 +697,8 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
 
 def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
     with tx(con):
+        from .. import checkin as qr
+        qr.cancelled(con, eid)
         con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"evdel:{eid}", f"u18:{eid}"))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'u18_leave' AND ref LIKE ?", (f"u18:{eid}:%",))
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
@@ -869,16 +873,17 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.reviewed_by, ac.receipt_id IS NOT NULL AS auto,
             c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
-        FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
+        FROM registrations r JOIN users u ON u.id = r.user_id LEFT JOIN students s ON s.user_id = u.id
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
-        WHERE r.event_id = ? AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid)
+        WHERE r.event_id = ? AND (s.user_id IS NOT NULL OR ? AND u.tg_id > 0 AND r.status = 'going')
+        AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid, e["guest_list"])
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
                                                one(con, "SELECT org_id FROM events WHERE id = ?", eid)[0], *ids)} if ids else {}
     # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
-    out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "status": p["status"],
+    out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": " ".join(n for n in (p["last_name"], p["first_name"]) if n) or short_name(p), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
@@ -896,12 +901,13 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     need_student(v)
     e = _staff_event(con, v, eid, "events")
     # the phone only where this event asked for it (else one club's ask reaches every club's list)
-    found = rows(con, """SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.student_id, s.course, s.school, s.email,
+    found = rows(con, """SELECT COALESCE(s.last_name, u.tg_last_name) AS last_name, COALESCE(s.first_name, u.tg_first_name) AS first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.student_id, s.course, s.school, s.email,
             CASE WHEN e.needs_phone AND r.phone_shared THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual, r.answers
-        FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
+        FROM registrations r JOIN users u ON u.id = r.user_id LEFT JOIN students s ON s.user_id = u.id
         JOIN events e ON e.id = r.event_id
-        WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", eid)
+        WHERE r.event_id = ? AND r.status != 'cancelled' AND (s.user_id IS NOT NULL OR e.guest_list AND u.tg_id > 0 AND r.status = 'going')
+        ORDER BY last_name, first_name""", eid)
     log_action(con, v.id, "attendees_export", f"event:{eid}", json.dumps({"rows": len(found)}))
     return e, found
 
@@ -995,13 +1001,28 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
         return "cancelled" if r else "not_found"
     if e["price"]:
         return "paid"
+    if e["visibility"] == "leaders" and not one(con, "SELECT 1 FROM orgs WHERE id = ? AND slug = 'dmp'", e["org_id"]):
+        return "not_found"
     if r and r["cancel_reason"] == "removed" and r["status"] == "cancelled":
         return "cancelled"  # the organizers took them off: back only by signing up again
-    return _walk_in_seat(con, e["id"], uid, r, t)
+    return _walk_in_seat(con, e, uid, r, t) or "closed"
 
 
-def _walk_in_seat(con, eid: int, uid: int, r: sqlite3.Row | None, t: int) -> sqlite3.Row:
-    """A walk-in's seat: renew an old row, or create one."""
+def _walk_in_seat(con, e: sqlite3.Row, uid: int, r: sqlite3.Row | None, t: int) -> sqlite3.Row | None:
+    """A walk-in's seat, under the caller's write lock: honor existing seats and the queue first."""
+    eid = e["id"]
+    if r and r["status"] == "hold":
+        return None
+    if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status = 'waitlist'", eid):
+        promote(con, e)
+        if r and r["status"] == "waitlist":
+            r = one(con, "SELECT * FROM registrations WHERE id = ?", r["id"])
+            if r["status"] == "going":
+                return r
+        if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status = 'waitlist'", eid):
+            return None
+    if e["seats"] is not None and taken(con, eid) >= e["seats"]:
+        return None
     if r:
         renew_cancelled_ticket(con, eid, r)
         con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
@@ -1019,14 +1040,20 @@ def _admission_shut(con, e: sqlite3.Row, t: int) -> str | None:
     return door_shut(e, t)
 
 
-def screen_came(con, eid: int, uid: int, t: int) -> dict:
+def _audience_ok(con, e, uid: int) -> bool:
+    # Public guest tickets may belong to someone without a university account.
+    return e["visibility"] == "public" and (not e["school"] or e["guest_list"]) or _visible(con, Viewer(uid, "user", bool(one(
+        con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", uid))), e)
+
+
+def screen_came(con, eid: int, uid: int, t: int, physical: bool = True) -> dict:
     """A counted scan of an event's big-screen QR (checkin.py): that person came, as the door scanner would say. A ticket
     they hold is checked in; a free public event registers them on the spot (walk_in); a paid one needs a ticket and a
     team-only one counts its members only, a leaders' meeting only those already on its list, except the DMP office's: whoever is invited comes in, and someone in the hall who isn't
     counts by the scan alone (no registration: it would hand them the event). Only within the door's window (as the scanner): a session started days off counts no one,
     nor does a hidden or a partner's event. Duplicate and flagged tickets are reported to the door."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-    if not e or _admission_shut(con, e, t):
+    if not e or e["age_check"] or _admission_shut(con, e, t):
         return {"done": False}
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r or r["status"] != "going":
@@ -1039,8 +1066,14 @@ def screen_came(con, eid: int, uid: int, t: int) -> dict:
             return {"done": False}  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp:
             return {"done": False}
-        r = _walk_in_seat(con, eid, uid, r, t)
+        r = _walk_in_seat(con, e, uid, r, t)
+    elif not _audience_ok(con, e, uid):
+        return {"done": False}
+    if not r:
+        return {"done": False}
     if r["checked_in_at"] is not None:
+        if physical and r["checkin_manual"]:
+            con.execute("UPDATE registrations SET checkin_manual = 0 WHERE id = ?", (r["id"],))
         return {"done": False, "already": r["checked_in_at"]}
     if not e["guest_list"] and e["price"] and flagged(con, r["id"]):
         return {"done": False, "flagged": True}
@@ -1073,6 +1106,8 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
                 con.execute("INSERT OR REPLACE INTO door_misses (event_id, user_id, misses, last_at) VALUES (?, ?, ?, ?)",
                             (eid, v.id, misses["misses"] + 1 if recent else 1, t))
                 return {"result": "cancelled" if r else "not_found"}
+        if not _audience_ok(con, e, r["user_id"]):
+            return {"result": "not_found"}
         if r["user_id"] == v.id and not runs(con, v, e):  # as checkin_by_name (a walk-in rolls back)
             raise ApiError("forbidden")
         if (held := _held(con, v, e, r, admit)) is not None:
@@ -1082,6 +1117,8 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
                 con.execute("DELETE FROM door_misses WHERE event_id = ? AND user_id = ?", (eid, v.id))
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
                                                            (t, v.id, t, r["id"])))
+        if r["checkin_manual"]:
+            con.execute("UPDATE registrations SET checkin_manual = 0 WHERE id = ?", (r["id"],))
         return _door_answer(con, v, e, r, t)
 
 
@@ -1091,7 +1128,7 @@ def _door_answer(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, t: int) -> dict
     came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", e["id"])[0]
     return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
             "at": at, "came": came, "going": taken(con, e["id"]), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-            "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, e["id"])) and flagged(con, r["id"]),
+            "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "events") or co_runs(con, v, e["id"])) and flagged(con, r["id"]),
             **_checkin_age(con, e, r["id"])}
 
 
@@ -1358,7 +1395,7 @@ def _age_event(con, v: Viewer, eid: int, helper: tuple[str, ...]) -> sqlite3.Row
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=helper))
     if not e["age_check"] or e["hidden_at"]:
         raise ApiError("not_found")
-    if e["status"] != "published" or end_of(e) <= core.now():
+    if e["status"] != "published" or door_shut(e, core.now()) == "closed":
         raise ApiError("closed")
     return e
 
@@ -1387,7 +1424,7 @@ def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult
         if not e["guest_list"]:
             raise ApiError("not_found")
         t = core.now()
-        if door_shut(e, t):
+        if _admission_shut(con, e, t):
             raise ApiError("closed")
         out = guests.let_in(con, eid, sid, surname, t)
         if adult is not None and e["age_check"]:
@@ -1397,15 +1434,15 @@ def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult
 
 
 def pending_count(con, v: Viewer, eid: int) -> dict:
-    _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-    return {**guests.pending_count(con, eid), "list": guests.door_list(con, eid)}
+    e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+    return {**guests.pending_count(con, eid), "list": guests.door_list(con, eid, can(con, v, e["org_id"], "events"))}
 
 
 def tick_pending(con, v: Viewer, eid: int, key: object, adult: object = None, came: object = True) -> dict:
     """The door taps a name on the organizers' list (guests.tick), within the door's window."""
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-        if door_shut(e, core.now()):
+        if not e["guest_list"] or _admission_shut(con, e, core.now()):
             raise ApiError("closed")
         return guests.tick(con, eid, key, core.now(), adult if e["age_check"] else None, came is not False)
 
@@ -1428,6 +1465,8 @@ def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:
 def notify_minors(con, v: Viewer, eid: int) -> dict:
     with tx(con):
         e = _age_event(con, v, eid, ("door",))
+        if v.role != "admin" and role_in(con, v, e["org_id"]) not in ("president", "vice"):
+            raise ApiError("forbidden")
         if door_shut(e, core.now()):
             raise ApiError("closed")
         t, key = core.now(), f"u18:{eid}"
@@ -1447,12 +1486,13 @@ def door(con, v: Viewer, eid: int) -> list[dict]:
     the ones still to come first."""
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual, r.door_team, a.adult FROM registrations r
-        JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id LEFT JOIN reg_age a ON a.registration_id = r.id
-        WHERE r.event_id = ? AND r.status = 'going'""", eid)
+        JOIN users u ON u.id = r.user_id LEFT JOIN students s ON s.user_id = u.id LEFT JOIN reg_age a ON a.registration_id = r.id
+        WHERE r.event_id = ? AND r.status = 'going' AND (s.user_id IS NOT NULL OR ? AND u.tg_id > 0)""", eid, e["guest_list"])
     out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "team": p["door_team"],
             **({"adult": None if p["adult"] is None else bool(p["adult"])} if e["age_check"] else {})} for p in found]
     if _team_door(e):  # §2b: everyone expected is on the list, answered or not
-        rest = [u for u in _expected(con, e) if u not in {p["id"] for p in found}]
+        registered = {p["id"] for p in found}
+        rest = [u for u in _expected(con, e) if u not in registered]
         out += [{"person": _door_ref(p), "checkedInAt": None, "walkIn": False, "manual": False,
                  **({"adult": None} if e["age_check"] else {})}
                 for p in (rows(con, PERSON + f" WHERE u.id IN ({_qs(rest)})", *rest) if rest else [])]
@@ -1472,15 +1512,15 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> 
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
         if e["guest_list"] and (not r or r["status"] != "going"):
             raise ApiError("guest_list")
-        if _team_door(e) and (not r or r["status"] != "going") and (uid in _expected(con, e) or (e["meeting_tag"] or e["for_board"]) and one(  # §2b: came anyway
-                con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", e["org_id"], uid)):  # a department's: its Vice+ too
-            if r:
-                renew_cancelled_ticket(con, eid, r)
-                con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, walk_in = 1, updated_at = ? WHERE id = ?", (t, r["id"]))
-            else:
-                con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                            (eid, uid, _ticket_code(con, eid), t, t))
-            r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+        if r and r["status"] == "cancelled" and r["cancel_reason"] == "removed":
+            return {"result": "cancelled"}
+        if not _audience_ok(con, e, uid):
+            return {"result": "not_found"}
+        if _team_door(e) and (not r or r["status"] != "going") and (uid in _expected(con, e) or (e["meeting_tag"] or e["for_board"]) and one(
+                con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", e["org_id"], uid)):
+            r = _walk_in_seat(con, e, uid, r, t)
+            if not r:
+                return {"result": "closed"}
         if not r:
             return {"result": "not_found"}
         if r["status"] != "going":
@@ -1527,6 +1567,8 @@ def link_door_guests(con, uid: int) -> None:
     if not s or not s["first_name"] or not s["last_name"]:
         return
     norm = _norm_name(f"{s['first_name']} {s['last_name']}")
+    if not one(con, "SELECT 1 FROM door_guests WHERE norm = ? AND user_id IS NULL AND created_at > ?", norm, core.now() - GUEST_DAYS):
+        return
     twins = sum(_norm_name(f"{r[0]} {r[1]}") == norm for r in rows(con, """SELECT first_name, last_name FROM students
         WHERE user_id != ? AND first_name IS NOT NULL AND last_name IS NOT NULL""", uid))  # ponytail: a scan per confirmation, a norm column if it grows
     if twins:
