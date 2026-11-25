@@ -127,6 +127,15 @@ def test_link_telegram_through_the_app_sign_in_sheet(phone):
     assert "script-src 'sha256-" in csp and "unsafe-inline" not in csp and r.headers["cache-control"] == "no-store"
 
 
+def test_sign_in_with_telegram_through_the_app_sign_in_sheet(phone):
+    c, cfg = phone
+    state = secrets.token_hex(16)
+    url = c.get("/api/web/telegram", params={"state": state}, headers=WEB).json()["url"]  # signed out: the entrance
+    assert httpx.URL(url).params["return_to"] == f"https://{cfg.domain}/tg-back?state={state}"
+    assert c.get("/api/web/telegram", params={"state": "short"}, headers=WEB).status_code == 400
+    assert c.post("/api/web/login", headers=WRITE, json=widget(818)).status_code == 204  # the proof signs in as the widget's
+
+
 def test_link_and_unlink_apple_on_a_telegram_account(phone):
     c, cfg = phone
     assert c.post("/api/web/login", headers=WRITE, json=widget(715)).status_code == 204

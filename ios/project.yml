@@ -47,6 +47,7 @@ targets:
         UIViewControllerBasedStatusBarAppearance: true
         NSCameraUsageDescription: The door scanner reads tickets' and badges' QR codes.
         KBHome: https://kbtu.sow.kz/
-        # the web view goes only here (WebController limitsNavigationsToAppBoundDomains): our site, and Telegram's sign-in
-        # page for the entrance's Telegram button (its popup); the bridge answers our site's main frame alone
-        WKAppBoundDomains: [kbtu.sow.kz, oauth.telegram.org]
+        # the web view goes only here (WebController limitsNavigationsToAppBoundDomains): our site, and t.me for the news'
+        # embedded Telegram posts (frames; no script of ours runs there). Telegram's sign-in opens in the system's sheet
+        # (TelegramLink.swift); the bridge answers our site's main frame alone
+        WKAppBoundDomains: [kbtu.sow.kz, t.me]

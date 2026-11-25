@@ -9,6 +9,7 @@
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import SquareArrowUp from '@lucide/svelte/icons/square-arrow-up';
   import LockKeyhole from '@lucide/svelte/icons/lock-keyhole';
+  import Send from '@lucide/svelte/icons/send';
   import App from '../App.svelte';
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
@@ -19,7 +20,7 @@
   import { loadMe, session } from '../lib/state/session.svelte';
   import { onComputer, onIos } from '../lib/tg';
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
-  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken, tgAuthResult } from '../lib/native';
+  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken, telegramProof, tgAuthResult } from '../lib/native';
   import { say } from '../lib/state/ui.svelte';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
@@ -86,6 +87,18 @@
     bootOver();
     try { await enter(8000); }
     catch (e) { view = e instanceof ApiErr && e.code === 'unauthorized' ? 'signin' : 'offline'; }
+  }
+
+  // the iPhone app: Telegram's page in the system's sign-in sheet (its popup inside the web view loses window.opener on
+  // iOS 17.5+), its proof checked against this tap's state (native.ts telegramProof); closed: nothing happens
+  async function telegramSheet() {
+    if (busy) return;
+    loginFailed = false;
+    try {
+      const state = nonce(), { url } = await api.telegramSignInStart(state);
+      const proof = await telegramProof(url, state);
+      if (proof) await login(proof);
+    } catch { loginFailed = true; }
   }
 
   async function login(user: unknown) {
@@ -185,7 +198,12 @@
                its slot too: one size before, while and after the button loads, so nothing under it moves. It floats
                (sticky) at the bottom of a short window, the page passing under it: the way in is always in sight -->
           <div class="enter in" class:stuck style:--i={8} {@attach float}>
-            {#if !widgetFailed}
+            {#if native.has('tglink')}
+              <div class="dock glass glass-pill">
+                <button class="apple tg fs-body" onclick={telegramSheet} disabled={busy}><Send size={18} />{t('logins.telegram')}</button>
+                {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
+              </div>
+            {:else if !widgetFailed}
               <div class="dock glass glass-pill">
                 {#key retry}<div class="widget" class:ready class:busy {@attach attachWidget} inert={busy}></div>{/key}
                 {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
@@ -266,6 +284,8 @@
   .apple { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 238px; max-width: 100%; height: 40px;
     border-radius: var(--r-full); background: var(--text); color: var(--bg); font-weight: 600; }
   .apple:disabled { opacity: 0.35; }
+  /* the iPhone app's Telegram button (the system's sign-in sheet, not Telegram's iframe): the app's own blue */
+  .tg { background: var(--accent); color: var(--on-accent); }
   /* color-scheme: else Chromium paints white corners behind the button in dark */
   .widget :global(iframe) { position: relative; display: block; max-width: 100%; border-radius: var(--r-full); color-scheme: light;
     opacity: 0; transition: opacity var(--t-slow) var(--ease); }

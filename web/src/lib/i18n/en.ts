@@ -1652,6 +1652,7 @@ const en: Dict = {
   'logins.appleTaken': 'This Apple ID already signs in to another account',
   'logins.tgDone': 'Telegram linked',
   'logins.tgTaken': 'This Telegram has its own account: sign in with it instead',
+  'logins.telegram': 'Sign in with Telegram',
   'logins.apple': 'Sign in with Apple',
   'logins.appleNote': 'Bot messages come through Telegram: you can link it later in Settings.',
   'logins.delete': 'Delete account',

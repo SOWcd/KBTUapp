@@ -1674,6 +1674,7 @@ const ru = {
   'logins.appleTaken': 'Этот Apple ID уже входит в другой аккаунт',
   'logins.tgDone': 'Telegram привязан',
   'logins.tgTaken': 'У этого Telegram уже есть свой аккаунт: войдите через него',
+  'logins.telegram': 'Войти через Telegram',
   'logins.apple': 'Войти через Apple',
   'logins.appleNote': 'Сообщения от бота приходят в Telegram: его можно привязать позже в настройках.',
   'logins.delete': 'Удалить аккаунт',

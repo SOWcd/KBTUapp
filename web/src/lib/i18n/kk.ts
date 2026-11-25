@@ -1652,6 +1652,7 @@ const kk: Dict = {
   'logins.appleTaken': 'Бұл Apple ID басқа аккаунтқа кіреді',
   'logins.tgDone': 'Telegram байла­ныстырылды',
   'logins.tgTaken': 'Бұл Telegram-ның өз аккаунты бар: сол арқылы кіріңіз',
+  'logins.telegram': 'Telegram арқылы кіру',
   'logins.apple': 'Apple арқылы кіру',
   'logins.appleNote': 'Бот хабарлары Telegram арқылы келеді: оны кейін баптауларда байланыстыруға болады.',
   'logins.delete': 'Аккаунтты жою',

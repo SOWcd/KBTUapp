@@ -169,6 +169,7 @@ export const server = {
   linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
   unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
   // Telegram's sign-in page, back with #tgAuthResult (app: to the iPhone app's sign-in sheet through /tg-back)
+  telegramSignInStart: (state: string): Promise<{ url: string }> => call('GET', '/web/telegram' + query({ state })), // the iPhone app's entrance
   telegramLinkStart: (state: string, app?: boolean): Promise<{ url: string }> => call('GET', '/me/logins/telegram' + query({ state, ios: app ? 1 : undefined })),
   linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
   pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),

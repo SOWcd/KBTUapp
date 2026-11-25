@@ -9,12 +9,21 @@ guideline 4.2 asks for more than a website in a frame):
 | **Sign in with Apple** (guideline 4.8), and one account reachable by Telegram or Apple | `AppleSignIn.swift`, server `logic/apple.py` |
 | **Notifications** through Apple (APNs): the bot's own messages, sent to the phone instead of a second copy in Telegram | `Push.swift`, server `apns.py` |
 | **A native QR scanner** at the door (a half sheet, the result above it) | `Scanner.swift` |
+| **A native tab bar** (`UITabBar`, SF Symbols): the web's tabs, titles and dots; a tap switches the web's tab through the bridge, the web's own bar hides (`data-ntabs`) | `WebController.swift`, web `lib/native.ts` `nativeTabs` |
+| **A bundled offline screen** when the site can't load (no network, our server down), with **my tickets' QR codes** drawn natively, so the door scans them with no network | `OfflineView.swift`, `Tickets.swift`, web `nativeTickets` |
+| **Telegram sign-in and linking** in the system's sign-in sheet (`ASWebAuthenticationSession`), back through the server's `/tg-back` | `TelegramLink.swift`, server `logic/apple.py` |
 | **The session in the Keychain** (iOS may clear a web view's storage) | `Keychain.swift`, `WebController.swift` |
 
 The web talks to the shell through a versioned bridge: `window.kbNative = { v, caps }` and
 `webkit.messageHandlers.kb.postMessage({ cmd, ... })`, which answers with a promise (`WebController.swift`,
-`web/src/lib/native.ts`). The web checks capabilities (`apple`, `push`, `scan`), never the version, and without the
-bridge (Telegram, a browser) everything keeps its web way. Bump `WebController.version` with a new capability.
+`web/src/lib/native.ts`). The web checks capabilities (`apple`, `push`, `scan`, `tabs`, `tickets`, `tglink`), never the version, and
+without the bridge (Telegram, a browser) everything keeps its web way. Bump `WebController.version` with a new
+capability.
+
+**The bridge is bound to our domain** (App Store 4.7.2): `WKAppBoundDomains` is `kbtu.sow.kz` (and `t.me`, only for the
+news' embedded Telegram posts) with `limitsNavigationsToAppBoundDomains`, so the web view never navigates elsewhere
+(other links open in Safari's sheet or their own app, `window.open` never makes a second web view), and the bridge
+answers only our site's main frame over https in this one web view. `tglink` opens only `https://oauth.telegram.org`.
 
 The app is never built on a laptop: `.github/workflows/ios.yml` does it on GitHub's Mac. XcodeGen makes the project from
 `project.yml` there; the app icon is drawn from `web/public/favicon.svg`.
@@ -85,8 +94,11 @@ Not linked to the user: anonymous feedback, aggregate usage counters. Privacy po
 **App Review notes** (App Store Connect → the version → App Review Information). Sign-in required: yes. Paste, adjusted:
 
 > KBTU App is an unofficial student app for Kazakh-British Technical University: events and tickets, clubs, news,
-> friends, the class timetable, the campus map. It is also a Telegram Mini App; this iPhone app adds Sign in with Apple,
-> push notifications, a native QR scanner for event check-in, and keeps the session in the Keychain.
+> friends, the class timetable, the campus map. It is also a Telegram Mini App; this iPhone app adds a native tab bar,
+> Sign in with Apple, push notifications, a native QR scanner for event check-in, a native offline screen that keeps
+> the person's own event tickets (their QR codes) usable with no network, Telegram sign-in through the system's
+> sign-in sheet, and keeps the session in the Keychain. Content loads from our own server (kbtu.sow.kz); the native
+> bridge is limited to that domain.
 >
 > **Demo login:** tap **Sign in with Apple** on the first screen; no other account is needed. This makes a guest
 > account: events, clubs, news, the map and Settings are open to it. Features for verified KBTU students (tickets,
@@ -111,5 +123,9 @@ reviewer gets one (`PLAY_DEMO`, PR #322), is not wired into the iPhone app yet.
 - ponytail: Sign in with Apple's token isn't revoked at Apple when an account is deleted (Apple asks for it with its
   REST API; that needs a client secret). The upgrade: `POST https://appleid.apple.com/auth/revoke` from `delete_me`.
 - ponytail: Apple's "credential revoked" notice isn't checked at launch; the session just lives out its time.
-- The Telegram sign-in button inside the app opens Telegram's page as a sheet; linking Telegram from Settings uses
-  Telegram's page directly. Both need a phone check after the first build.
+- Telegram's sign-in (the entrance) and linking (Settings → Sign-ins) open Telegram's page in the system's sign-in sheet;
+  both need a phone check after the first build. The offline screen: turn on Airplane mode with a ticket, kill and
+  reopen the app.
+- The tab bar is the classic 49 pt `UITabBar` of the iOS 18 SDK (`macos-15` runner); the web's `--nav-h` in the app is
+  49 px to match (`tokens.css` `data-ntabs`). A build with the iOS 26 SDK draws Apple's floating bar: check that the
+  pages still end above it.

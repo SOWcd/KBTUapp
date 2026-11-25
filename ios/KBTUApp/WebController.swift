@@ -25,7 +25,6 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
     private let apple = AppleSignIn()
     private let telegram = TelegramLink()
     private weak var scanner: Scanner?
-    private weak var popup: UIViewController?
     private let tabBar = UITabBar()
     private var tabIds: [String] = []
     private var tabsShown = false
@@ -47,7 +46,7 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
 
     override func loadView() {
         let config = WKWebViewConfiguration()
-        config.limitsNavigationsToAppBoundDomains = true  // Info.plist WKAppBoundDomains: our site and Telegram's sign-in
+        config.limitsNavigationsToAppBoundDomains = true  // Info.plist WKAppBoundDomains: our site (and t.me's post frames)
         let caps = WebController.caps.map { "\"\($0)\"" }.joined(separator: ",")
         config.userContentController.addUserScript(WKUserScript(
             source: "window.kbNative={v:\(WebController.version),caps:[\(caps)]};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -138,6 +137,11 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
         web.evaluateJavaScript("dispatchEvent(new CustomEvent('kb:open', { detail: '\(start)' }))")
     }
 
+    // a new page (a reload after signing out, the entrance): no tabs until it sends its own
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if webView === web { showTabs(false) }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true
         hideOffline()
@@ -146,27 +150,31 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
     // the site didn't come (no network, a captive portal, our server down): the bundled screen instead of a blank one
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         let e = error as NSError
-        if e.domain == NSURLErrorDomain && e.code != NSURLErrorCancelled { showOffline() }
+        if webView === web && e.domain == NSURLErrorDomain && e.code != NSURLErrorCancelled { showOffline() }
+    }
+
+    // the connection went after the page began (a retry on a weak network): the offline screen again, not a spinner forever
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        let e = error as NSError
+        if webView === web && offline != nil && e.domain == NSURLErrorDomain && e.code != NSURLErrorCancelled { showOffline() }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        if response.isForMainFrame, let http = response.response as? HTTPURLResponse, http.statusCode >= 500 {
+        if webView === web, response.isForMainFrame, let http = response.response as? HTTPURLResponse, http.statusCode >= 500 {
             decisionHandler(.cancel)
             return showOffline()
         }
         decisionHandler(.allow)
     }
 
+    // shown again after a retry that failed: the new one replaces the old in place (the same screen, its spinner gone)
     private func showOffline() {
         loaded = false
         showTabs(false)
         offline?.removeFromSuperview()
         let saved = Tickets.load()
-        let o = OfflineView(lang: saved.lang, tickets: saved.tickets) { [weak self] in
-            self?.hideOffline()
-            self?.load(start: "")
-        }
+        let o = OfflineView(lang: saved.lang, tickets: saved.tickets) { [weak self] in self?.load(start: "") }
         o.frame = view.bounds
         o.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(o)
@@ -187,10 +195,10 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
         load(start: "")
     }
 
-    // ---- where links go: our site and Telegram's sign-in page here, everything else outside ----
+    // ---- where links go: our site here, everything else outside (Telegram's sign-in: the system's sheet, TelegramLink) ----
 
     private func ours(_ url: URL?) -> Bool {
-        url?.scheme == "https" && (url?.host == home.host || url?.host == "oauth.telegram.org")
+        url?.scheme == "https" && url?.host == home.host
     }
 
     private func outside(_ url: URL) {
@@ -210,23 +218,11 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
         outside(url)
     }
 
-    // window.open: Telegram's sign-in button (the entrance) opens its page as a popup and hears back through
-    // window.opener, so that one is a web view on top sharing this one's process; any other new window is a link going outside
+    // window.open: a link going outside; no second web view (no popup ever shares this one's bridge)
     func webView(_ webView: WKWebView, createWebViewWith config: WKWebViewConfiguration, for action: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
-        guard let url = action.request.url else { return nil }
-        guard url.host == "oauth.telegram.org" else { outside(url); return nil }
-        let child = WKWebView(frame: .zero, configuration: config)
-        child.uiDelegate = self
-        let sheet = UIViewController()
-        sheet.view = child
-        popup = sheet
-        present(sheet, animated: true)
-        return child
-    }
-
-    func webViewDidClose(_ webView: WKWebView) {
-        if webView !== web { popup?.dismiss(animated: true) }
+        if let url = action.request.url { outside(url) }
+        return nil
     }
 
     // the page's alert/confirm (rare: the app has its own sheets) as the system's

@@ -44,7 +44,12 @@ final class OfflineView: UIView {
         config.cornerStyle = .capsule
         config.baseBackgroundColor = WebController.accent
         config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 28, bottom: 12, trailing: 28)
-        let button = UIButton(configuration: config, primaryAction: UIAction { _ in retry() })
+        // the tap answers at once (a spinner in the button); the screen stays until the site comes, or comes back anew
+        let button = UIButton(configuration: config, primaryAction: UIAction { action in
+            guard let b = action.sender as? UIButton, b.configuration?.showsActivityIndicator == false else { return }
+            b.configuration?.showsActivityIndicator = true
+            retry()
+        })
         stack.addArrangedSubview(button)
         stack.setCustomSpacing(28, after: button)
 

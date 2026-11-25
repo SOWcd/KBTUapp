@@ -683,6 +683,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         web_only(request)
         return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, bool(ios))}
 
+    @app.get("/api/web/telegram")
+    def telegram_sign_in_start(state: str = ""):
+        """The iPhone app's entrance: Telegram's sign-in page in the system's sign-in sheet (a popup in the web view loses
+        window.opener on iOS 17.5+), back through /tg-back; the proof then signs in at /api/web/login like the widget's"""
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, True)}
+
     @app.get("/tg-back")
     def telegram_back():
         """Telegram's return into the iPhone app's sign-in sheet (logic/apple.py APP_SCHEME); the proof stays in the

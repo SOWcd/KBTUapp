@@ -59,7 +59,7 @@ export const TG_LINK = 'kb:telegram-link';
 export const tgAuthResult = (b64: string): unknown =>
   JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))));
 
-/** Link Telegram in the iPhone app: Telegram's page in the system's sign-in sheet (ASWebAuthenticationSession; a page or
+/** Sign in with or link Telegram in the iPhone app (WebEntrance, Settings): Telegram's page in the system's sign-in sheet (ASWebAuthenticationSession; a page or
  *  popup inside the web view loses window.opener on iOS 17.5+), back through the server's /tg-back. The proof, or null
  *  when the sheet was closed or the return isn't this tap's (its state) */
 export async function telegramProof(url: string, state: string): Promise<unknown> {
