@@ -46,3 +46,20 @@ def test_signed_comment_held_and_deleted(env, monkeypatch):
     assert w.c.delete(f"/api/forum-replies/{r['id']}", headers=tma(1)).status_code == 404  # not the post's author's to delete
     assert w.c.delete(f"/api/forum-replies/{r['id']}", headers=tma(2)).status_code == 204
     assert w.c.get(f"/api/forum-posts/{w.pid}/thread", headers=tma(2)).json() == []
+
+
+def test_anon_author_answers_a_signed_comment(env, monkeypatch):
+    """The bot's message is never in fchan_comments: the anonymous author still answers it by its link, and it counts
+    toward their day's replies as a comment from Telegram does."""
+    from kbtu.logic import fchannel as F
+    w = world(env, monkeypatch)
+    t = clock(monkeypatch)
+    p = w.con.execute("SELECT * FROM fchan_posts WHERE id = ?", (w.pid,)).fetchone()
+    cap = F.reply_cap(w.con, p)
+    r = w.c.post(f"/api/forum-posts/{w.pid}/thread", headers=tma(2), json={"body": "The soup was fine today"}).json()
+    tick(w.cfg, w.tg, w.con)
+    msg = w.con.execute("SELECT tg_msg FROM fchan_replies WHERE id = ?", (r["id"],)).fetchone()[0]
+    assert msg and F.reply_cap(w.con, p) == cap + 1
+    t[0] += 61
+    a = w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "Glad you liked it", "link": f"https://t.me/KBTUappForum/{w.mid}?comment={msg}"})
+    assert a.status_code == 200 and a.json()["comment"] == msg, a.text

@@ -1141,7 +1141,9 @@ def reply_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
         comment = None
         if link:
             m = COMMENT_LINK.fullmatch(link)
-            if not m or int(m[2]) != p["tg_msg"] or not one(con, "SELECT 1 FROM fchan_comments WHERE msg_id = ? AND post_id = ? AND gone = 0", int(m[3]), pid):
+            # a student's comment from Telegram, or one signed in the app (the bot's message: fchan_comments never sees it)
+            if not m or int(m[2]) != p["tg_msg"] or not (one(con, "SELECT 1 FROM fchan_comments WHERE msg_id = ? AND post_id = ? AND gone = 0", int(m[3]), pid)
+                    or one(con, "SELECT 1 FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE r.tg_msg = ? AND r.post_id = ? AND r.status = 'live'", int(m[3]), pid)):
                 raise ApiError("bad_input", "comment")
             comment = int(m[3])
         last = one(con, """SELECT MAX(r.created_at) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
@@ -1161,7 +1163,9 @@ def reply_cap(con, p) -> int:
     comments deleted in Telegram still count (no delete event reaches the bot); each reply still has its AI look and
     REPLY_GAP. Count DISTINCT user_id if friends ever farm it."""
     return one(con, """SELECT COUNT(*) FROM fchan_comments c JOIN students s ON s.user_id = c.user_id
-                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE
+                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE + \
+        one(con, """SELECT COUNT(*) FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id
+                    WHERE r.post_id = ? AND s.user_id != ? AND r.status != 'held'""", p["id"], p["user_id"])[0]  # the signed ones from the app, past their check
 
 
 COMMENTS_DAY = 60  # a person's signed comments a day, all posts (their own rows counted: deleting one buys nothing back)

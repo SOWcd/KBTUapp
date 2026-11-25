@@ -36,15 +36,16 @@
   const HINT: Record<Rule, Key> = { link: 'fc.noLink', mention: 'fc.noMention', phone: 'fc.noPhone', signature: 'fc.signature' };
 
   // "goes out in a few seconds": looked at again until none of mine is on its way
-  let again: ReturnType<typeof setTimeout> | undefined;
+  let again: ReturnType<typeof setTimeout> | undefined, closed = false;
   function load() {
     api.channelThread(pid).then((l) => {
       items = [...(items ?? []).filter((c) => c.id < 0), ...l];
       clearTimeout(again);
+      if (closed) return; // an answer after the sheet closed: no new timer
       if (l.some((c) => c.mine && (c.state === 'soon' || c.state === 'checking'))) again = setTimeout(load, 12_000);
     }).catch(() => (items ??= []));
   }
-  $effect(() => { untrack(load); return () => clearTimeout(again); });
+  $effect(() => { untrack(load); return () => { closed = true; clearTimeout(again); }; });
 
   function reason(e: unknown): string {
     const k: Key = !(e instanceof ApiErr) ? 'common.error' : e.code === 'rate_limited' ? 'fct.slow'
@@ -62,7 +63,7 @@
       items = (items ?? []).map((c) => (c.id === temp.id ? { ...temp, id: r.id, state: r.state } : c));
       haptic.ok();
       if (r.state === 'held') say(t('fcr.heldSay'), 'thinking_face_3d');
-      else setTimeout(load, 22_000);
+      else if (!closed) { clearTimeout(again); again = setTimeout(load, 22_000); } // one timer, cleared as the sheet closes
     } catch (e) {
       items = (items ?? []).filter((c) => c.id !== temp.id);
       draft = text; why = reason(e); haptic.error();
