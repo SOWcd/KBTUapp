@@ -183,6 +183,7 @@ def test_hours_from_check_in_and_out(zz):
     assert mine["mine"]["minutes"] == 0 and mine["mine"]["open"] == 1 and not mine["ledger"]   # never checked out: 0 minutes
     con.execute("UPDATE vol_shifts SET in_at = in_at - 5400 WHERE id = ?", (h["id"],))       # arrived 1.5 h ago
     c.post(f"/api/screens/{sid}/out", headers=tma(P))
+    p = c.post(f"/api/screens/{sid}/show", headers=tma(P)).json()["param"]  # the way out's own code (phase-bound)
     assert _scan(c, 3, p).status_code == 200
     _agree(c, 3)
     mine = c.get("/api/vol/mine", headers=tma(3)).json()
