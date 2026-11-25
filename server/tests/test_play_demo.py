@@ -239,9 +239,15 @@ def test_seed_gives_the_demo_tickets(demo, monkeypatch, capsys):
         for eid, at in ((1, t + 86400), (2, t - 86400)):
             con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at)
                 VALUES (?, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (eid, at, org["id"]))
+        # a full event: its last seat a student's, another waiting
+        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, seats, emoji, color, tint, created_by, created_at, updated_at)
+            VALUES (3, 1, 'published', 'Talk', '305', ?, 1, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (t + 86400, org["id"]))
+        con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (3, ?, 'going', '3-AAAA', 0, 0)", (org["id"],))
         outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
     with pytest.raises(SystemExit):
         admin.main(["play-demo", "seed", "2"])  # a past event: nothing seeded
+    with pytest.raises(SystemExit):
+        admin.main(["play-demo", "seed", "3"])  # full: the seat stays a student's
     admin.main(["play-demo", "seed", "1"])
     admin.main(["play-demo", "seed", "1"])  # again: the same ticket, no error
     enter(c)

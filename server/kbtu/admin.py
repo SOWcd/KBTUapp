@@ -291,15 +291,19 @@ def _event_time(value: object, field: str) -> int:
 def _demo_seed(con, eids: list[int]) -> None:
     """The stores' reviewers see the app with something in it (android/README.md): the demo account gets a ticket with
     its QR to each event given (a coming, published, free one the owner's own club runs; its door list shows the made-up
-    name). No seat check and no bot message: nobody real is told. `play-demo unseed` takes them all back."""
-    from .logic import seats, web_auth
+    name). Only into a free seat, never one a student is waiting for; no bot message: nobody real is told.
+    `play-demo unseed` takes them all back."""
+    from .logic import seats, taken, web_auth
     t = now()
     with db.tx(con):
         uid = web_auth.demo_user(con, t)
         for eid in eids:
-            e = one(con, "SELECT starts_at, status, price, hidden_at FROM events WHERE id = ?", eid)
+            e = one(con, "SELECT starts_at, status, price, hidden_at, seats FROM events WHERE id = ?", eid)
             if not e or e["status"] != "published" or e["hidden_at"] or e["starts_at"] <= t or e["price"]:
                 sys.exit(f"event {eid}: not a coming, published, free event (nothing seeded)")
+            if e["seats"] is not None and taken(con, eid) >= e["seats"] and not one(
+                    con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", eid, uid):
+                sys.exit(f"event {eid}: full, the seat is a student's (nothing seeded)")
             con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
                 VALUES (?, ?, 'going', ?, ?, ?) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', cancel_reason = NULL""",
                         (eid, uid, seats._ticket_code(con, eid), t, t))
@@ -488,9 +492,15 @@ def main(args: list[str]) -> None:
     elif cmd == "play-demo" and args[1:2] == ["seed"] and len(args) >= 3 and all(re.fullmatch(r"[0-9]{1,9}", a) for a in args[2:]):
         _demo_seed(con, [int(a) for a in args[2:]])
     elif cmd == "play-demo" and args[1:] == ["unseed"]:
-        from .logic import web_auth
+        from .logic import promote, web_auth
         with db.tx(con):
-            n = con.execute("DELETE FROM registrations WHERE user_id IN (SELECT id FROM users WHERE tg_id = ?)", (web_auth.DEMO_TG_ID,)).rowcount
+            demo = "SELECT id FROM users WHERE tg_id = ?"
+            coming = rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+                WHERE r.user_id IN ({demo}) AND e.starts_at > ?""", web_auth.DEMO_TG_ID, now())
+            n = con.execute(f"DELETE FROM registrations WHERE user_id IN ({demo})", (web_auth.DEMO_TG_ID,)).rowcount
+            for e in coming:  # the seat it held goes to whoever waits (as a deleted account's, account.delete_me)
+                if e["status"] == "published" and not e["hidden_at"]:
+                    promote(con, e)
             log_action(con, None, "demo_unseed", "demo", json.dumps({"tickets": n}))
         print(n, "demo tickets removed")
     elif cmd == "event-new" and len(args) == 2:
