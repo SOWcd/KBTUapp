@@ -64,7 +64,7 @@ jobs:
           fi
           jarsigner -keystore "$ks" -storepass:env PW -keypass:env PW -sigalg SHA256withRSA -digestalg SHA-256 \
             -signedjar "kbtuapp-$CODE.aab" app/build/outputs/bundle/release/app-release.aab upload
-          jarsigner -verify "kbtuapp-$CODE.aab" | grep -q "jar verified."
+          [[ "$(jarsigner -verify "kbtuapp-$CODE.aab")" == *"jar verified."* ]]
           # the upload certificate's fingerprint is public: one of the two for ANDROID_CERT_SHA256 on the server
           keytool -list -v -keystore "$ks" -storepass:env PW -alias upload | grep -m1 "SHA256:"
           rm -f "$ks"
