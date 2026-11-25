@@ -19,10 +19,11 @@
   import { QR_TONE, QR_LOOK, skinOf } from '../../lib/awards';
   import LookMark from '../../ui/LookMark.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id, type TeamList } from '../../lib/api';
+  import { api, ApiErr, type CheckinResult, type DoorPerson, type EventFull, type Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
@@ -37,6 +38,7 @@
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import EventQr from './EventQr.svelte';
   import { checkinMessages } from './checkinMessages';
@@ -69,7 +71,8 @@
   // the door's count from its list (who's going, who came) and the team's list (server checkin.team), read as the screen
   // opens, as the QR counts someone and after a hand mark; a scan's answer brings the guests' count itself. Either list
   // refused (a scanner-only helper): no count of it, and no «People»
-  let team = $state<TeamList | null>(null);
+  const { state: teamRoster, load: loadTeam } = readState(() => api.teamList(id), true);
+  const team = $derived(teamRoster.value);
   const aud = $derived(team?.audience ?? detail?.audience ?? 'both');
   const teamCame = $derived(team ? team.rows.filter((r) => r.at).length : 0);
   // let in by the helper's QR, or named for the scanner only: the QR and the camera, said so plainly (no lists)
@@ -83,8 +86,11 @@
   let pend = $state<{ pending: number; pendingCame: number } | null>(null);
   function recount() {
     if (detail?.myCrew === 'scan') return;
-    api.door(id).then((l) => { people = l; count = { came: l.filter((d) => d.checkedInAt).length, going: l.length }; }).catch(() => {});
-    api.teamList(id).then((x) => (team = x)).catch(() => {});
+    void loadPeople().then(() => {
+      if (doorRoster.status === 'ready' && people) count = { came: people.filter((d) => d.checkedInAt).length, going: people.length };
+      else if (!people) count = null;
+    });
+    void loadTeam();
   }
   function toMode(m: 'scan' | 'qr' | 'entry') { haptic.tap(); if (m !== 'scan') closeScanner(); else if (live === 'failed' && camera) scan(); }
   function openPeople() { haptic.tap(); sheets.doorPeople(id, recount); }
@@ -101,7 +107,8 @@
   let last = ''; // the code just read: a flagged receipt is let in by it after a look (admit)
   async function check(raw: string, admit = false) {
     const p = ours(raw);
-    if (p) { haptic.tap(); leave(); sheets.deepLink(p); return; }
+    // our own QRs open as if tapped (the door's check-in QR marks a team member), but a badge (u_) is a walk-in: checked in
+    if (p && !p.startsWith('u_')) { haptic.tap(); leave(); sheets.deepLink(p); return; }
     if (busy || !raw.trim()) return;
     busy = true; last = raw;
     try {
@@ -123,16 +130,17 @@
 
   // ---- no QR (a dead phone): find them among the people going and check in by hand (§4.4) ----
   let byName = $state(untrack(() => names));
-  let people = $state<DoorPerson[] | null>(null);
+  const { state: doorRoster, load: loadPeople } = readState(() => api.door(id));
+  const people = $derived(doorRoster.value);
   const minors = $derived((people ?? []).filter((d) => d.adult === false && d.checkedInAt).length);
   const lists = $derived(!!team || (aud !== 'team' && !!people));
   let who = $state('');
   let undoFor = $state<number | null>(null); // just checked in by hand: "Undo" on the result for a few seconds
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
   const found = $derived((people ?? []).filter((d) => !who.trim() || hit(who, [withNick(d.person.realName, d.person)])).slice(0, 40));
-  async function openByName() {
+  function openByName() {
     byName = true;
-    try { people = await api.door(id); } catch { people = []; }
+    void loadPeople();
   }
   let pendingAdmit = $state<DoorPerson | null>(null); // a flagged receipt by name: let in by it after a look
   async function mark(d: DoorPerson, admit = false) {
@@ -146,7 +154,7 @@
         haptic.ok(); who = '';
         undoFor = d.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);
       } else haptic.error();
-      people = await api.door(id);
+      await loadPeople();
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = false; }
   }
   async function undo() {
@@ -157,7 +165,7 @@
       undoFor = null; res = null;
       if (count) count = { ...count, came: count.came - 1 };
       haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default');
-      people = await api.door(id);
+      await loadPeople();
     } catch { say(t('common.error'), 'warning_3d'); }
   }
 
@@ -278,6 +286,13 @@
 
     {#if qr}
       <!-- one line: only whom this door records (the event's audience); a tap opens the lists -->
+      {#if detail && !scanOnly}
+        {#if (aud !== 'guests' && teamRoster.status === 'error') || (aud !== 'team' && doorRoster.status === 'error')}
+          <EmptyState onretry={recount} />
+        {:else if (aud !== 'guests' && teamRoster.status === 'loading' && !team) || (aud !== 'team' && doorRoster.status === 'loading' && !count)}
+          <Skeleton n={1} />
+        {/if}
+      {/if}
       {#if (aud !== 'guests' && team) || (aud !== 'team' && count)}
         <button class="tally" disabled={!lists} onclick={openPeople}>{[aud !== 'guests' && team && t('mk.team', { n: teamCame, m: team.rows.length }), aud !== 'team' && count && t('mk.guests', { n: count.came })].filter(Boolean).join(' · ')}</button>
       {/if}
@@ -310,8 +325,8 @@
     {:else}
       <section class="door">
         <SearchField bind:value={who} placeholder={t('door.search')} />
-        {#if people}
-          {#if found.length}
+        {#if doorRoster.status === 'error'}<EmptyState onretry={loadPeople} />{:else if doorRoster.status === 'loading' && !found.length}<Skeleton />{/if}
+        {#if found.length}
             <Group>
               {#each found as d (d.person.id)}
                 {#snippet end()}
@@ -324,9 +339,8 @@
                 </Row>
               {/each}
             </Group>
-          {:else}
-            <EmptyState inline text={t('door.none')} />
-          {/if}
+        {:else if doorRoster.status === 'ready'}
+          <EmptyState inline text={t('door.none')} />
         {/if}
       </section>
     {/if}

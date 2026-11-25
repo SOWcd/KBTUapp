@@ -129,10 +129,10 @@
     <img class="l z far anb" src={animeBack} alt="" /><i class="mist"></i><i class="ash"></i>
   {:else if look === 'qoloner'}
     <!-- Qoloner (Nov 25, their logo): cream paper, their badge's dashed ring round the medallion, a few of their sparkles
-         and dots; on the card their frog peeks over the strip under the medallion, on the badge's band it sits in the ring
-         between their logo's side diamonds -->
+         and dots; the frog only on the badge's band, in the ring between their logo's side diamonds (on the card the
+         medallion already shows it: a second one read as a duplicate, owner) -->
     <i class="paper"></i><i class="qring"></i><i class="qsp"></i><i class="qtw"></i>
-    {#if wide}<span class="fig qfr"><img src={qoFrog} alt="" /></span>{:else}<img class="word bw qoloner" src={qoFrog} alt="" />{/if}
+    {#if !wide}<img class="word bw qoloner" src={qoFrog} alt="" />{/if}
   {:else if look === 'kbtumag'}
     <!-- kbtu.mag (new3 r2, the same grammar): cream paper lit from the top right, a halftone screen far fading toward the
          name, the desk in layers under the strip; two issues leaning on each other (the cover a halftone portrait under
@@ -377,7 +377,6 @@
   .qtw { right: 2px; top: 70px; width: 12px; height: 12px; opacity: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M10 3C11.26 8.74 11.26 8.74 17 10C11.26 11.26 11.26 11.26 10 17C8.74 11.26 8.74 11.26 3 10C8.74 8.74 8.74 8.74 10 3Z' fill='rgb(233,180,76)'/%3E%3C/svg%3E") 0 0 / 100% 100%; animation: qotw 6s 1.5s ease-in-out infinite; }
   .sc:not(.wide) .qtw { right: auto; left: calc(50% + 40px); top: 12px; }
   @keyframes qotw { 0%, 70% { opacity: 0; transform: scale(0.4) rotate(0deg); } 82% { opacity: 1; transform: scale(1) rotate(45deg); } 94%, 100% { opacity: 0; transform: scale(0.5) rotate(90deg); } }
-  .sc.wide .qfr { bottom: 30px; height: 50px; } /* on the QR's axis, its chin behind the strip; on anyone's card (not .fig's 64) */
   .bw.qoloner { top: 16px; height: 92px; filter: drop-shadow(0 3px 8px rgba(90, 75, 194, 0.18)); }
   .qoloner .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.4), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(90, 75, 194, 0.14); }
 

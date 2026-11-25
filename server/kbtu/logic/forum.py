@@ -507,6 +507,7 @@ def block(con, v: Viewer, uid: object, on: object = True) -> None:
         raise ApiError("bad_input")
     if on:
         con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, _now()))
+        pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
         con.execute("UPDATE contacts SET status = 'declined', decided_at = ? WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
                     (_now(), v.id, uid, uid, v.id))
     else:
@@ -561,7 +562,7 @@ def _now() -> int:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core, subjects  # noqa: E402
+from . import core, pymk, subjects  # noqa: E402
 from .account import me  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import notify  # noqa: E402

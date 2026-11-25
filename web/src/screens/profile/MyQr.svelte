@@ -148,7 +148,7 @@
   .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
   .ph { position: relative; flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }
-  .banded .ph, .studex .ph, .sower .ph { background: #fff; }
+  .banded .ph, .studex .ph { background: #fff; }
   .ph :global(.av), .ph :global(.av img), .ph :global(.ini) { border-radius: 13px; }
   .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 6px; font: 780 19px/1.15 var(--font-display); letter-spacing: -0.02em; }
@@ -183,11 +183,13 @@
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .pass { background: linear-gradient(180deg, #13295C, #081633); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER: as on the card (Hero) */
-  .sower { --role: rgb(192, 193, 190); }
-  .sower .pass { background: rgb(30, 30, 30); }
-  .sower .strap { background: linear-gradient(90deg, rgb(206, 206, 202), rgb(246, 246, 244) 50%, rgb(206, 206, 202)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); } /* the strip's white paper: graphite vanished on the dark page */
-  .sower .strap span { color: rgb(30, 30, 30); letter-spacing: 0.3em; }
+  /* SOWER: as on the card (Hero): matte black, a red stitch on the strap */
+  .sower { --role: rgb(245, 245, 247); }
+  .sower .pass { background: rgb(10, 10, 11); }
+  .sower .ph { background: rgba(255, 255, 255, 0.12); }
+  .sower .strap { background: linear-gradient(rgba(255, 59, 48, 0.9), rgba(255, 59, 48, 0.9)) 3px 0 / 1px 100% no-repeat, linear-gradient(90deg, rgb(17, 17, 17), rgb(29, 29, 31) 45%, rgb(29, 29, 31) 55%, rgb(12, 12, 12)); }
+  .sower .strap span { color: rgb(161, 161, 166); letter-spacing: 0.28em; }
+  .sower .clip { background: linear-gradient(180deg, rgb(58, 58, 60), rgb(28, 28, 30)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 5px rgba(0, 0, 0, 0.7); }
   /* the template's clubs (CLUB_LOOKS as CSS variables, Hero's): the body goes on from the band's last colour, no seam */
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }

@@ -53,9 +53,12 @@
   .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
+  .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
-                                gh:login: a pull request's author, listed under the public login, never tied to an account);
+                                gh:login: a pull request's author, listed under the public login; --gh: the same person's
+                                login beside a Telegram id, shown on their named card only after their yes);
+                                credit gh <id> <login> puts a login on a line already written;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
                                 `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
@@ -496,11 +499,14 @@ def main(args: list[str]) -> None:
         print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
         _broadcast(con, *args[1:])
-    elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
+    elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if args[1] == "add" and len(args) == 7:
-                print(f"credit {credits.add(con, *args[2:])} (suggested; `credit ship` lists it)")
+            if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):
+                print(f"credit {credits.add(con, *args[2:7], *args[8:])} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
+            elif args[1] == "gh" and len(args) == 4:
+                credits.set_gh(con, int(args[2]), args[3])
+                print(f"credit {int(args[2])}: gh {args[3]}")
             elif args[1] == "ship" and len(args) in (3, 4):
                 print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
             elif args[1] == "del" and len(args) == 3:
@@ -511,13 +517,19 @@ def main(args: list[str]) -> None:
             elif args[1] == "list" and len(args) == 2:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
-                    who = f"gh {r['gh']}" if r["gh"] else "deleted account" if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
+                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
                 sys.exit(__doc__)
         except ValueError as exc:
             sys.exit(str(exc))
+    elif cmd == "team" and len(args) == 3 and args[1] in ("add", "del"):  # People of the app's Team (logic/credits.py)
+        u = _user(con, args[2])
+        changed = credits.team(con, u["id"], args[1] == "add")
+        print(f"@{u['tg_username'] or u['tg_id']}: " + ("on the Team (shown after their yes; `credit ask` asks)" if args[1] == "add" else "off the Team")
+              + ("" if changed else " already"))
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))

@@ -3,6 +3,16 @@ import { close, type Overlay } from '../lib/state/ui.svelte';
 import { sheets } from '../lib/state/sheets';
 import { t } from '../lib/i18n/index.svelte';
 
+/** Keep repeat taps from opening another confirmation or write while the first is still pending. */
+export function singleAction(action: () => Promise<void>): () => Promise<void> {
+  let busy = false;
+  return async () => {
+    if (busy) return;
+    busy = true;
+    try { await action(); } finally { busy = false; }
+  };
+}
+
 /** Listen to `focusin` on the view; `typed()` when a close comes in, `ask()` instead of closing then. */
 export function unsent(get: () => Overlay) {
   // each text field's value when first focused: a changed one is unsent text (a sent draft is cleared, so it doesn't ask);

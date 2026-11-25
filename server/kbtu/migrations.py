@@ -2289,4 +2289,52 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # People of the app's Team: the core developers the creator picked (`kbtu.admin team add|del`, credits.py), shown
+    # only after their own yes. Not users.mark: that goes out with every person_ref, consent or not
+    (227, """CREATE TABLE IF NOT EXISTS credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;"""),
+    # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
+    # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
+    (228, """CREATE TABLE IF NOT EXISTS pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_other ON pymk (other_id);
+    CREATE TABLE IF NOT EXISTS pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_dismissed_other ON pymk_dismissed (other_id);"""),
+    # a club's YouTube channel in its news (youtube.py): each linked channel once resolved (path: the link's channel/UC...,
+    # @handle, c/ or user/ part; channel_id NULL: no channel there, tried again a day later) and how far its feed was taken;
+    # each video posted once (its id), with the post it became
+    (229, """CREATE TABLE IF NOT EXISTS yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS yt_videos_by_org ON yt_videos(org_id, channel_id);"""),
+    # Receipt IDs stay spent even if account/event cleanup deletes the newest pre-upgrade upload.
+    (230, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
+      ON CONFLICT(key) DO UPDATE SET value = CAST(MAX(CAST(meta.value AS INTEGER), CAST(excluded.value AS INTEGER)) AS TEXT);"""),
 ]

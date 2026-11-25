@@ -211,6 +211,32 @@ def clean_questions(raw: object) -> str | None:
     return json.dumps(out, ensure_ascii=False)
 
 
+# Main-building sides and the floors on each. Keep the aliases in sync with web/src/lib/campusPlace.ts.
+_CAMPUS_SIDES = (
+    (r"\u0442\u0431|tb|t[oö]le(?: bi)?|\u0442[\u043e\u04e9]\u043b\u0435(?: \u0431\u0438)?", "\u0422\u0411", 0, 5),
+    (r"\u0430\u0431|ab|ab[yi]la[yi](?: khan)?|\u0430\u0431\u044b\u043b\u0430\u0439(?: \u0445\u0430\u043d\u0430?)?", "\u0410\u0411", 0, 4),
+    (r"\u043f\u0444|pf|panfilov(?:a)?|\u043f\u0430\u043d\u0444\u0438\u043b\u043e\u0432\u0430?", "\u041f\u0424", 0, 4),
+    (r"\u043a\u0431|kb|[kq]azybek(?: bi)?|[\u043a\u049b]\u0430\u0437\u044b\u0431\u0435\u043a(?: \u0431\u0438)?", "\u041a\u0411", 1, 4),
+)
+_CAMPUS_PLACE = re.compile(
+    r"([^0-9·,]+?)\s*(?:[·,]\s*)?(?:floor\s+)?([0-9])(?:st|nd|rd|th)?"
+    r"(?:\s*-?\s*(?:floor|\u044d\u0442\u0430\u0436|\u049b\u0430\u0431\u0430\u0442))?(?:\s*·\s*(.+))?", re.I,
+)
+
+
+def campus_place(place: str) -> str | None:
+    """Canonical main-building side and floor, optionally followed by a room."""
+    m = _CAMPUS_PLACE.fullmatch(" ".join(place.split()))
+    if not m:
+        return None
+    floor, room = int(m[2]), m[3]
+    for aliases, code, low, high in _CAMPUS_SIDES:
+        if low <= floor <= high and re.fullmatch(aliases, m[1], re.I):
+            label = f"{code} · {floor} \u044d\u0442\u0430\u0436"
+            return f"{label} · {room}" if room else label
+    return None
+
+
 def clean_event(i: dict, oversee: bool = False) -> dict:
     """The editor's input, checked. A leaders meeting (§4.10) only from an oversight org
     (DMP), with the lowest role invited."""
@@ -238,6 +264,9 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
+    campus = campus_place(place) if len(place) <= 80 else None
+    if campus:
+        place, url = campus, None
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
           and (ends is None or starts < ends <= starts + 31 * 86400)  # Cap the span in days because the door stays open for the whole event.
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
@@ -591,6 +620,8 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
 def change_place(con, v: Viewer, eid: int, place: object) -> dict:
     """Studio's "Change room" during an event (rooms change on the spot): a KBTU room in one tap, the rules above."""
     text = " ".join(str(place or "").split())
+    if len(text) <= 80:
+        text = campus_place(text) or text
     if not 0 < len(text) <= 80:
         raise ApiError("bad_input")
     with tx(con):
@@ -859,10 +890,15 @@ def events_gone(con) -> tuple[list[str], list[str]]:
     return receipts, photos
 
 
+def _attendee_receipt(p) -> dict:
+    return {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
+            "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
+            "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
+
+
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team; the co-host's sees short names only, no receipts or answers. Someone
-    the organizers removed who had paid stays at the end ('cancelled'), their receipt a tap away for the refund, until
-    they sign up again; a receipt counts only for the seat it was sent for (since the seat's created_at)."""
+    """The host's event team; the co-host's sees short names only, no receipts or answers. Cancelled paid seats stay
+    for refunds. Earlier seats' receipts remain accessible separately, without counting as the current seat's payment."""
     e = _staff_event(con, v, eid, "events", cohost=True)
     paid = can(con, v, e["org_id"], "events")
     order = {"going": 0, "hold": 1, "waitlist": 2, "cancelled": 3}
@@ -872,7 +908,8 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
         LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
-        WHERE r.event_id = ? AND (r.status != 'cancelled' OR r.cancel_reason = 'removed' AND c.id IS NOT NULL)""", eid)
+        WHERE r.event_id = ? AND (r.status != 'cancelled' OR EXISTS
+            (SELECT 1 FROM receipts WHERE registration_id = r.id AND status = 'accepted'))""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
@@ -880,10 +917,18 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
     out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
-            "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
-                        "auto": bool(p["auto"]) and p["reviewed_at"] is not None and p["reviewed_by"] is None,
-                        "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
+            "receipt": _attendee_receipt(p)
             if p["rid"] and paid and not v.staff_org else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
+    if paid and not v.staff_org:
+        previous: dict[int, list[dict]] = {}
+        for p in rows(con, """SELECT r.user_id, c.id AS rid, c.*, c.created_at AS sent_at, ac.receipt_id IS NOT NULL AS auto
+                FROM receipts c JOIN registrations r ON r.id = c.registration_id
+                LEFT JOIN receipt_auto_checks ac ON ac.receipt_id = c.id
+                WHERE r.event_id = ? AND c.status = 'accepted' AND c.id != COALESCE((SELECT MAX(id) FROM receipts
+                    WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at), 0) ORDER BY c.id DESC""", eid):
+            previous.setdefault(p["user_id"], []).append(_attendee_receipt(p))
+        for a in out:
+            a["previousReceipts"] = previous.get(a["person"]["id"], [])
     if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
         out = [{**a, "person": _door_ref(p), "fullName": short_name(p), "by": None, "byCame": False, "answers": None} for a, p in zip(out, found)]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
@@ -1119,10 +1164,10 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 
 def flagged(con, rid: int) -> bool:
     """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
-    A spot check or a receipt read in part ('spot', 'partial') isn't a warning: nothing wrong was found, the student walks in."""
+    Only a clean receipt selected for a spot check is exempt; partial evidence needs approval too."""
     # only this seat's receipts: one from before a removal or a cancel (the seat's created_at restarts on a new sign-up) is the old seat's
     return one(con, """SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.registration_id = ? AND c.status = 'accepted'
-        AND c.flags NOT IN ('', 'spot', 'partial') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
+        AND c.flags NOT IN ('', 'spot') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long

@@ -3,7 +3,7 @@
   // waitlist; a check-in shows its time. A tap opens the person's card. "Export" has the bot send the list as a CSV
   // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
-  // Someone the organizers removed (⋯) who had paid waits folded at the end, their receipt there for the refund.
+  // Cancelled paid seats wait folded at the end, their receipts there for refunds even after signing up again.
   // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
   import { onMount } from 'svelte';
   import FileDown from '@lucide/svelte/icons/file-down';
@@ -15,12 +15,13 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic, inTelegram, openLink } from '../../lib/tg';
   import { eventById, studioChanged } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
-  import { time } from '../../lib/time';
+  import { time, whenLine } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardList from '@lucide/svelte/icons/clipboard-list';
   import Avatar from '../../ui/Avatar.svelte';
@@ -32,20 +33,21 @@
   import Notice from '../../ui/Notice.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import { checkinMessages } from './checkinMessages';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
-  let list = $state<Attendee[] | null>(null);
-  const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
+  const { state: roster, load } = readState(() => api.attendees(id));
+  const list = $derived(roster.value);
   onMount(() => { void load(); });
   let q = $state('');
   // the server's: going first, then holds and the waitlist, flagged receipts on top
   const ORDERS: Order<Attendee>[] = [usual(), byName((a) => a.fullName), newest((a) => a.at), { id: 'came', label: 'sort.came', by: (a) => a.checkedInAt, desc: true }];
   const found = $derived(sorted('attendees', ORDERS, (list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick]))));
-  // removed by the organizers after paying (server attendees): folded at the end, their receipt there for the refund;
+  // cancelled after paying (server attendees): folded at the end, their receipt there for the refund;
   // outside every total
   const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
   const removed = $derived(found.filter((a) => a.status === 'cancelled'));
@@ -96,9 +98,9 @@
     if (!list || !(await sheets.ask({ title: t('att.removeAsk', { name: a.fullName }), text: t(a.receipt ? 'att.removePaid' : 'att.removeText'),
       ok: t('att.remove'), cancel: t('common.cancel'), danger: true }))) return;
     const was = list;
-    list = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
+    roster.value = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
     try { await api.removePerson(id, a.person.id); haptic.ok(); say(t('att.removed'), 'waving_hand_3d_default'); void load(); studioChanged(); } // the waitlist moved in
-    catch (e) { list = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
+    catch (e) { roster.value = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
   }
 
   // a seat on this event (a ticket, or a hold waiting on its receipt) until a week after the end: the host's own
@@ -156,6 +158,10 @@
       {#if removable(a) || writable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
         onclick={(e) => menu(e.currentTarget as Element, more(a))} />{/if}
     {/snippet}
+    {#if !staff}{#each a.previousReceipts ?? [] as old (old.id)}
+      <Row dense icon={ReceiptIcon} title={t('rc.title')} subtitle={whenLine(old.at)} value={old.amount ? money(old.amount) : undefined}
+        accessory="chevron" onclick={() => sheets.receipt(old, a.fullName, load)} />
+    {/each}{/if}
     <!-- engine: Row needs content under it (the answers to the event's questions) -->
     {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
   {/each}
@@ -163,6 +169,7 @@
 
 <Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
+  {#if roster.status === 'error'}<EmptyState onretry={load} />{:else if roster.status === 'loading' && !shown.length}<Skeleton />{/if}
   {#if list}<div class="col">
     <div class="bar"><p class="stats">{t('att.stats', { going, came })}</p>
       {#if list.length && host}<Button kind="secondary" size="s" loading={sending} onclick={exportList}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('att.export')}</Button>{/if}</div>
@@ -175,7 +182,7 @@
     {#if shown.length}
       {#if shown.length > 1}<SortChip list="attendees" orders={ORDERS} />{/if}
       <Group>{@render people(shown)}</Group>
-    {:else}
+    {:else if roster.status === 'ready'}
       <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
     {/if}
     {#if removed.length && !staff}
