@@ -19,6 +19,11 @@ bridge (Telegram, a browser) everything keeps its web way. Bump `WebController.v
 The app is never built on a laptop: `.github/workflows/ios.yml` does it on GitHub's Mac. XcodeGen makes the project from
 `project.yml` there; the app icon is drawn from `web/public/favicon.svg`.
 
+The launch screen is the web boot screen's bare ground, no logo (owner, Nov 25): the `Ground` colour (`#F2F2F7` light,
+`#000000` dark, the very `#boot` colours in `web/index.html`; change them together), which also lies under the page
+until it paints, so the web's own boot screen, a different one each launch, comes up on it with no seam. iOS draws it
+in the phone's theme: someone who picked the other one in the app sees the ground change as the page paints.
+
 ## What the account holder does, once
 
 You need the Apple Developer Program (99 USD a year; an organisation account shows the organisation as the seller,

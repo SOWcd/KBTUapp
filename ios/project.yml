@@ -40,6 +40,7 @@ targets:
         CFBundleLocalizations: [en, ru, kk]
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
+        # only the web boot screen's ground, never a logo: the web's own boot screen comes up on it (README.md)
         UILaunchScreen:
           UIColorName: Ground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
