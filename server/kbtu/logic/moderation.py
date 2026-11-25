@@ -165,6 +165,8 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
         raise ApiError("rate_limited")
     con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (v.id, target, tid, reason, note, core.now()))
+    if target == "user":  # never suggested to each other (People you may know), the report resolved later included
+        pymk.forget(con, v.id, tid)
     if target == "event":
         _urgent_event(con, tid)
     if target == "fpost":  # one with photos leaves the channel at two people's reports
@@ -374,7 +376,7 @@ def purge_takedowns(con) -> list[str]:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, pymk  # noqa: E402
 from .account import _drop_unused  # noqa: E402
 from .clubs import org  # noqa: E402
 from .forum import hide_ask, may_touch_ask  # noqa: E402
