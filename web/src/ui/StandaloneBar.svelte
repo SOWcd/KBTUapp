@@ -11,11 +11,12 @@
   import { data } from '../lib/state/data.svelte';
   import { irisFrom, openMapFrom, sheets } from '../lib/state/sheets';
   import { goTab, ui } from '../lib/state/ui.svelte';
-  import { backButton } from '../lib/tg';
+  import { backButton, onAndroid } from '../lib/tg';
   import { glass } from './glass';
   import { tabSearches, type TabSearch } from './PullSearch.svelte';
 
-  let { back }: { back: boolean } = $props();
+  // tint: the page on top is tinted (as the capsule's): wherever the side pills go solid they take its colour
+  let { back, tint = null }: { back: boolean; tint?: string | null } = $props();
 
   // Quick launch (owner, Nov 24): the right pill holds the four things students open from anywhere (the Afisha's own
   // shortcuts), two taps from any tab. Closed it shows four dots; they are the tiles themselves, small. A tap drops
@@ -79,11 +80,11 @@
   });
 </script>
 
-<header class="bar">
+<header class="bar" style:--chrome-tint={tint}>
   <!-- always there (owner, Nov 22): the capsule's glass, a step smaller than it. Its face changes, Search <-> Back: the
        old one leaves a few px towards where it came from, the new one settles in from the other side, the word a beat
        behind its icon. Or it becomes the search field (above). -->
-  <div class="glass glass-pill side left" class:back class:field={shown} use:glass={{ bloom: true }}>
+  <div class="glass glass-pill side left" class:back class:field={shown} class:tinted={!!tint} class:flat={onAndroid} use:glass={{ bloom: true }}>
     <span class="tone-base" aria-hidden="true"></span>
     <button class="face" type="button" inert={shown} aria-label={back ? t('web.back') : t('web.search')} onclick={() => (back ? backButton.click() : void search())}>
       <span class="ico" aria-hidden="true"><i class="a"><Search size={15} strokeWidth={2.4} /></i><i class="b"><ChevronLeft size={18} strokeWidth={2.4} /></i></span>
@@ -98,7 +99,7 @@
   </div>
   {#if launching}<div class="catch" role="presentation" onclick={() => (launching = false)}></div>{/if}
   <div class="glass glass-pill shelf" class:open={launching} aria-hidden="true"><span class="tone-base"></span></div>
-  <button class="glass glass-pill side more" class:open={launching} class:away={shown} type="button" inert={shown} aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={launching}
+  <button class="glass glass-pill side more" class:open={launching} class:away={shown} class:tinted={!!tint} class:flat={onAndroid} type="button" inert={shown} aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={launching}
     onpointerdown={warm} onclick={() => (launching ? (launching = false) : unfold())} onkeydown={esc} use:glass={{ bloom: true }}>
     <span class="tone-base" aria-hidden="true"></span><X size={17} strokeWidth={2.4} />
   </button>
@@ -123,6 +124,12 @@
     transition: transform 200ms var(--ease), opacity 180ms var(--ease), width 460ms var(--ease-spring); }
   .side > .tone-base { background: var(--glass-clear); }
   :global(html[data-theme='light'][data-sheet]) .side > .tone-base { background: var(--glass-solid); }
+  /* the capsule's twins (ui/Capsule.svelte): no live blur on Android, and solid over a tinted page takes the page's mix */
+  .side.flat { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .side.flat > .tone-base { background: var(--glass-solid); }
+  :global(html:is(.lowfx, .vt-solid, .glass-wake)) .side.tinted > .tone-base, .side.flat.tinted > .tone-base,
+  :global(html[data-theme='light'][data-sheet]) .side.tinted > .tone-base {
+    background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--chrome-tint); }
   .side:active { transform: scale(.94); }
   .side :global(svg) { flex: none; }
   .more { position: absolute; right: 12px; top: 2px; display: flex; align-items: center; justify-content: center; }
@@ -160,7 +167,11 @@
   .tile:active, .tile:disabled { opacity: 1; }
   .chip { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full);
     background: var(--text); transition: background-color 200ms var(--ease) 140ms, transform 200ms var(--ease-bounce); }
-  .open .chip { background: var(--fill-2); transition-delay: calc(var(--i) * 30ms), 0s; }
+  /* a small lens of the panel's own glass (owner: flat grey discs read as old iOS): clear fill, a sheen from the top, the
+     lens rim light above and low below */
+  .open .chip { background: radial-gradient(120% 90% at 50% 0%, var(--glass-sheen), transparent 60%), var(--glass-clear);
+    box-shadow: inset 0 1px 0 var(--lens-rim), inset 0 -1px 0 var(--lens-rim-low), inset 0 0 0 1px var(--lg-rim-base);
+    transition-delay: calc(var(--i) * 30ms), 0s; }
   .open .tile:active:not(:disabled) .chip { transform: scale(.9); background: var(--fill); }
   .open .tile:focus-visible { outline: none; }
   .open .tile:focus-visible .chip { box-shadow: 0 0 0 2px var(--accent); }

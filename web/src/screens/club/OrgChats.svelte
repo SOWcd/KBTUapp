@@ -145,11 +145,6 @@
     api.chatRoles(org, c.id).then((r) => { if (mine === asked) roles = r; }).catch(() => { if (mine === asked) roles = { state: 'unavailable' }; });
   }
   // who may call everyone (/all) in a group: its club roles too, or its Telegram admins alone
-  async function callRoles(c: StudioChat, on: boolean) {
-    c.callRoles = on;
-    try { chats = keep(await api.callOrgChat(org, c.id, on)); haptic.select(); }
-    catch { c.callRoles = !on; haptic.error(); }
-  }
   const toTeam = (id: Id | null) => { ui.club = org; sheets.team(id ?? undefined); };
   const lacks = (miss: StudioChat['swearMiss']) => t('oc.swearRights', { rights: miss.map((r) => t(`oc.right.${r}`)).join(', ') });
   const mask = (s: string) => (s.length < 3 ? s : s[0] + '*'.repeat(s.length - 2) + s.at(-1));
@@ -207,9 +202,6 @@
   {#if groups.length}
     <Group caption={t('oc.swear')} footnote={t('oc.swearNote')}>
       {#each groups as c (c.id)}<Row title={c.title} subtitle={c.swear && c.swearMiss.length ? lacks(c.swearMiss) : undefined} accessory="switch" checked={c.swear} onchange={(on) => swear(c, on)} />{/each}
-    </Group>
-    <Group caption={t('oc.call')} footnote={t('oc.callNote')}>
-      {#each groups as c (c.id)}<Row title={c.title} accessory="switch" checked={c.callRoles} onchange={(on) => callRoles(c, on)} />{/each}
     </Group>
     <Group caption={t('oc.roles')} footnote={t('oc.rolesNote')}>
       {#each groups as c (c.id)}<Row title={c.title} accessory="chevron" onclick={() => rolesOf(c)} />{/each}

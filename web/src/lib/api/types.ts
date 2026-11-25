@@ -33,7 +33,7 @@ export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 's
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
 export interface WaitingChat { id: Id; title: string; kind: 'group' | 'channel' }  // a chat I made our bot an admin in, no club's yet (ten minutes)
-export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */; callRoles: boolean /* /all by its club roles too, else the group's admins alone */; swearMiss: ('delete' | 'ban')[] /* the bot's rights it lacks there: the filter paused */ }
+export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */; swearMiss: ('delete' | 'ban')[] /* the bot's rights it lacks there: the filter paused */ }
 /** A person's swear warnings in the club's groups, 30 days: the club's own people by name, anyone else null ("a chat member"). */
 // Studio → Chats → Roles and admins: app names only (an app id for the club's own people), never a Telegram id
 export interface ChatRoles { state: 'ok' | 'gone' | 'notAdmin' | 'unavailable'; admins?: { id: Id | null; name: string }[]; others?: number;
@@ -106,6 +106,9 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
 export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts; ai?: boolean }
+/** A comment written in the app under a channel post (server fchannel.thread): signed with a name, or an anonymous
+ *  author's mark (anon, nick); mine: only for my own signed ones, with state (where it stands; others' are all 'sent'). */
+export interface ChannelComment { id: Id; body: string; at: Ts; state: ChannelReply['state']; mine: boolean; anon: boolean; nick: [number, number] | null; name: string | null }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
@@ -249,13 +252,14 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own (their yes ties them) */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
+  team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; only who said yes
   people: CreditPerson[];          // newest shipped first, a named person's lines together
   /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
-  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; items: CreditItem[] } | null;
+  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
 /** at the door (Member+): the real short name beside a nick */
@@ -274,6 +278,7 @@ export interface Settings {
   nProjectPings: boolean;
   showGoing: boolean;
   canFriend: boolean;           // others may send me a friend request
+  suggestMe: boolean;           // People you may know: suggested to clubmates who turned it on, and they to me (server logic/pymk.py)
   hideFirstYear: boolean;
 }
 
@@ -664,7 +669,7 @@ export interface EventInput {
 /** One registration as the organizer sees it (§3: full name for organizers). */
 /** An event's own question at sign-up (server clean_questions): text, or a choice of 2-8 options. */
 export interface Question { label: string; kind: 'text' | 'choice'; options?: string[]; required: boolean }
-export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
+export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null; previousReceipts?: AttendeeReceipt[] }
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */
@@ -838,10 +843,16 @@ export interface PersonCard extends PersonRef {
 export interface FriendRow { person: PersonRef; fullName: string; course: number | null; school: string | null; at: Ts }
 /** The Friends page (§4.7): requests both ways, and the coming events friends go to (only those who let friends see
  *  it; each card's `friends` says who). A quietly declined request of mine stays in `outgoing` for 30 days. */
-export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing: FriendRow[]; going: EventCard[] }
+/** People you may know: a clubmate who turned it on too; `clubs` is how many we share, never which (server logic/pymk.py). */
+export interface Suggestion { person: PersonRef; course: number | null; school: string | null; clubs: number }
+/** `suggest`: null while I haven't turned "Suggest me" on (the page offers it), else up to 5 to show. */
+export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing: FriendRow[]; going: EventCard[]; suggest: Suggestion[] | null }
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
+/** The global search's server half (GET /api/search/more, server logic/search.more): people who made themselves
+ *  findable (an exact @username; "open to projects" where the find-people forum is open to me), the channel's live posts. */
+export interface SearchMore { people: { person: PersonRef; course: number | null }[]; posts: ChannelFeedPost[] }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
@@ -912,7 +923,7 @@ export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; 
 export interface Subject { id: string; names: Record<'ru' | 'kk' | 'en', string>; alt: string[] /* other spellings, searched */; codes: string[]; credits: number | null; school: string | null }
 export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
 export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
-  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
+  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; offerId: Id | null; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
 
@@ -923,3 +934,16 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Private support data; never embedded in another person's card. */
+export interface Support {
+  total: number; tier: number; thresholds: number[]; starRate: number;
+  version: string; receiptConsent: string; show: boolean; rev: number | null;
+  receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
+}
+export interface Sponsor { name: string; tier: number }
+export interface DonationReview {
+  id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
+  readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
+  flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
+}

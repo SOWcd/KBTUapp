@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -44,7 +44,7 @@
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
-  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean }> } = $props();
+  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; tint?: string | null }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
@@ -61,8 +61,7 @@
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
     return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
-  // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
-  // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
+  // The event, person and club sheets are chunks warmed during startup so subsequent taps open in the same frame.
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
@@ -137,6 +136,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
+  $effect(() => { if (data.events.some((e) => e.teamMax) || data.past.some((e) => e.teamMax)) void eventTeamChunk().catch(() => {}); });
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
@@ -287,11 +287,13 @@
   sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
   sheets.newAsk = (onmade) => lazy(() => import('./screens/forum/NewAsk.svelte'), { onmade });
   sheets.channelReply = (post) => lazy(() => import('./screens/forum/ChannelReply.svelte'), { post });
+  sheets.channelThread = (post) => lazy(() => import('./screens/forum/ChannelThread.svelte'), { post });
   sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.clubList = (view) => lazy(clubListPage, { view });
   sheets.myClubs = (rows, title) => lazy(() => import('./screens/afisha/MyClubs.svelte'), { rows, title });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
+  sheets.adminDonations = () => lazy(() => import('./screens/admin/AdminDonations.svelte'), {});
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
@@ -442,7 +444,10 @@
   $effect(() => { if (showBack) backButton.show(); else backButton.hide(); });
   $effect(() => {
     if (!session.banned && !session.revoked) return;
-    untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
+    untrack(() => {
+      want++; overlays.splice(0); backTo.fn = null;
+      data.support = null; data.sponsors = null; data.donations = null;
+    });
   });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
@@ -497,6 +502,7 @@
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
   // friends (Profile with the Friends sheet: the bot's request message) ----
   function deepLink(p = tg.startParam, afterSignIn = false) {
+    if (p === 'donate') { ui.tab = 'profile'; sheets.settings('donate'); return; }
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -603,7 +609,14 @@
         .catch(() => say(t('fr.linkDead'), 'pleading_face_3d'));
       return;
     }
-    if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
+    if (p === 'sched') {
+      asStudent(() => {
+        const schedule = loadSchedule(true);
+        if (data.scheduleReady || data.schedule.length) void sheets.week();
+        else void schedule.then(() => sheets.week());
+      }, p);
+      return;
+    }
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"
     if (ce) { asStudent(() => sheets.clubEdit(Number(ce[1]), 'chats')); return; }
@@ -907,18 +920,22 @@
         session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       }
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
+      data.scheduleReady = !!snap.schedule.length; data.postsReady = !!snap.posts.length;
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
-    Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
+    const account = inTelegram ? loadMe(false, true) : Promise.resolve();
+    const afisha = loadAfisha();
+    // Warm the first event while the lists are on their way.
+    warm(eventSheet);
+    void account.then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
       if (session.banned || session.revoked) return;
-      // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
-      warm(eventSheet);
+      void loadSupport();
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
@@ -931,7 +948,10 @@
           msBack(true);
         }, () => {});
       }
-      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) moment(greet); // in the queue: never over a launch sheet (the install offer), after it closes
+      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) {
+        // The greeting names the next class or event, so it still waits for the agenda.
+        void afisha.then(() => { if (!session.banned && !session.revoked) moment(greet); });
+      }
       if (tg.startParam) deepLink();
       else if (session.me?.msPending) msBack();
       void credits.then(() => {
@@ -974,13 +994,12 @@
       </section>
     {/each}
 
-    <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
-         the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-    <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+    <!-- the feed's posters go full height (the top's fade is the tab's own mask, .tab below) -->
+    <div class="botfade" aria-hidden="true" use:unfeed></div>
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
@@ -1015,20 +1034,13 @@
   .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
-  .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
-    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
-    -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
-      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
-    mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
-      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
-  /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
-     --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
-  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: calc(var(--top) + min(var(--top), 12px)); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
+  /* Telegram fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes
+     it read as ours. It ends with Telegram's row (--top: 0 outside fullscreen); the home-screen app has no such scrim (its
+     --top is the bar's room, and this ran 60 px past the bar there) */
+  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: var(--top); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
     background: linear-gradient(var(--bg), transparent); }
+  :global(html[data-web]) .tgfade { display: none; }
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }
@@ -1039,7 +1051,18 @@
      breathing in place ("they look sealed, they should float") */
   /* a tab away sits under the one shown (same box), so it never takes a tap: `pointer-events` is inherited, and
      flipping it restyled every node of the tab on each switch (the Forum: 1100 nodes, ~100 ms at 4x CPU) */
-  .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1; }
+  .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1;
+    /* scrolled content fades out under the clock and Telegram's buttons instead of running into them: a mask on the tab,
+       never a strip of --bg over it (that was a band over any other ground, and iOS < 16.2 dropped its colour mix).
+       To 12% up there, the strip's old depth. Eased, not linear: a linear fade ends in a kink the eye reads as a hard
+       line under the head (owner, Nov 23) */
+    --a: var(--edge-from); --d: calc(var(--edge-to) - var(--a));
+    -webkit-mask-image: linear-gradient(rgba(0, 0, 0, 0.12) var(--a), rgba(0, 0, 0, 0.19) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.34) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.56) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.76) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.91) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.98) calc(var(--a) + var(--d) * 0.92), #000 var(--edge-to));
+    mask-image: linear-gradient(rgba(0, 0, 0, 0.12) var(--a), rgba(0, 0, 0, 0.19) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.34) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.56) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.76) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.91) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.98) calc(var(--a) + var(--d) * 0.92), #000 var(--edge-to)); }
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
   @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }

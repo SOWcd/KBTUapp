@@ -30,7 +30,7 @@ def test_a_new_stars_gift_gives_fuel_once_and_quietly(env):
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ?", (ali["id"],)).fetchone()[0] == 0  # no push
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'grant'").fetchone()[0] == 0
     assert {r[1] for r in con.execute("PRAGMA table_info(star_gifts)")} == {"charge_id", "amount", "created_at"}  # still payer-less
-    assert c.get("/api/me", headers=tma(7, "Ali")).json()["unlocked"] == [{"code": "supporter", "level": 1}]
+    assert {a["code"]: a["level"] for a in c.get("/api/me", headers=tma(7, "Ali")).json()["unlocked"]} == {"supporter": 1, "sponsor": 1}
 
 
 def test_only_the_creator_gives_fuel_by_hand_and_never_by_link(env):

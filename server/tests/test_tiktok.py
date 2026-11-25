@@ -6,9 +6,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import itertools
 import json
 import math
 import os
+import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -39,6 +42,11 @@ def _fresh(monkeypatch):
     monkeypatch.setattr(tiktok, "_files", OrderedDict())
     monkeypatch.setattr(tiktok, "_health", {})
     monkeypatch.setattr(tiktok, "_flights", {})
+    monkeypatch.setattr(tiktok, "_told", {})
+    monkeypatch.setattr(tiktok, "_session_uses", OrderedDict())
+    monkeypatch.setattr(tiktok, "_session_misses", OrderedDict())
+    monkeypatch.setattr(tiktok, "_checked", None)
+    monkeypatch.delenv(tiktok.COOKIES, raising=False)  # stories off unless a test sets its own made-up cookies
     monkeypatch.setattr(bot, "_video_seen", set())
     monkeypatch.setattr(bot, "_swore", {})
     monkeypatch.setattr(logic.chatlist, "_unheld", {})
@@ -1774,3 +1782,502 @@ def test_album_items_follow_the_breaker_rules(monkeypatch):
     album = tiktok.Album("ig:x", [_ig_clip(_ig_format("a")), _ig_clip(_ig_format("b")), f"{IG}/p.jpg"])
     parts = _gather(album, {f"{IG}/p.jpg": _image()}, monkeypatch)
     assert [p.tracks for p in parts] == [None] and [name for name, _ in tried] == ["a"]
+
+
+# --- Instagram stories with the owner's cookies (issue #170, task 3): nothing without INSTAGRAM_COOKIES, the session
+# only to Instagram's own hosts, never written back, and its path and values in no log, error or reply. The cookies
+# here are made up at run time: the repo holds no cookies-file line and no session value (test_no_cookies_in_the_repo).
+
+STORY = "https://www.instagram.com/stories/some.one_1/3141592653589793238/"
+_story_ids = itertools.count(1)
+# the pinned extractor's refusal when Instagram sends an anonymous reader to its login page
+WALL = ("The webpage request was redirected to the login page. "
+        "You have exceeded the rate-limit for accessing posts anonymously")
+
+
+def _another_story() -> str:
+    """A story link not asked before (a link the session found nothing behind is not asked again for an hour)."""
+    return f"https://www.instagram.com/stories/x/{next(_story_ids)}/"
+
+
+def _ig_refusal(msg: str):
+    """A refusal as the pinned Instagram extractor raises it (its login hint added), wrapped as yt-dlp wraps it."""
+    import sys
+    from yt_dlp.extractor.instagram import InstagramIE
+    from yt_dlp.utils import DownloadError, ExtractorError
+    try:
+        InstagramIE().raise_login_required(msg)
+    except ExtractorError:
+        return DownloadError("ERROR", sys.exc_info())
+
+
+def _line(domain, name, value, *, expires=0, subdomains="TRUE", secure="TRUE", path="/"):
+    """One line of a browser's cookies export, put together at run time."""
+    return "\t".join((domain, subdomains, path, secure, str(expires), name, value))
+
+
+@pytest.fixture
+def jar(tmp_path, monkeypatch):
+    """A made-up cookies file, read-only, and INSTAGRAM_COOKIES naming it; `secrets`: what nothing may ever show."""
+    mark = secrets.token_hex(6)
+    path = tmp_path / f"owner-{mark}" / "cookies.txt"
+    path.parent.mkdir()
+    values = {name: f"{name}{secrets.token_hex(10)}" for name in ("sessionid", "csrftoken", "elsewhere", "cdn")}
+    path.write_text("\n".join((
+        "# a header and comments are skipped",
+        _line(".instagram.com", "sessionid", values["sessionid"], expires=int(time.time()) + 86400),
+        "#HttpOnly_" + _line("www.instagram.com", "csrftoken", values["csrftoken"], subdomains="FALSE", secure="FALSE"),
+        _line(".facebook.com", "c_user", values["elsewhere"]), _line(".cdninstagram.com", "cdn", values["cdn"]),
+        "not a cookie line", "")))
+    path.chmod(0o400)
+    monkeypatch.setenv(tiktok.COOKIES, str(path))
+    return SimpleNamespace(path=path, values=values, secrets=(mark, str(path), *values.values()))
+
+
+def _no_extraction(monkeypatch):
+    calls = []
+
+    async def threaded(*args, **kw):
+        calls.append(args)
+    monkeypatch.setattr(tiktok, "_threaded", threaded)
+    return calls
+
+
+def test_story_links_only_with_the_cookies(env, tmp_path, monkeypatch):
+    say = lambda text: tiktok.link({"text": text, "from": {"id": 1}})  # noqa: E731
+    shared = STORY + "?utm_source=ig_story_item_share&igsh=abc"
+    # unset: exactly as before (a story is no link; a link after it still is), no request
+    assert say(f"look {shared}") is None and say(f"{STORY} {REEL}") == REEL
+    calls = _no_extraction(monkeypatch)
+    assert asyncio.run(tiktok.fetch(None, STORY)) is None and not calls
+    # set, but no readable file there (missing, a folder, a FIFO, no permission): the same
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    locked = tmp_path / "locked.txt"
+    locked.write_text("x")
+    locked.chmod(0)
+    for path in (tmp_path / "missing.txt", tmp_path, fifo, *([locked] if os.geteuid() else [])):
+        monkeypatch.setenv(tiktok.COOKIES, str(path))
+        assert say(shared) is None and say(f"{STORY} {REEL}") == REEL
+        assert asyncio.run(tiktok.fetch(None, STORY)) is None and not calls
+    # a readable file: a story is a link (its query, the sharer's tracking id, left out)
+    ok = tmp_path / "cookies.txt"
+    ok.write_text("x")
+    monkeypatch.setenv(tiktok.COOKIES, f" {ok} ")
+    for url in (STORY, STORY.rstrip("/"), "https://instagram.com/stories/x/1/"):
+        assert say(f"look {url}?igsh=abc wow") == url and say(f"({url})") == url
+    assert say(f"{STORY} {REEL}") == STORY and tiktok.key(STORY) == "igs:3141592653589793238"
+    for url in ("https://www.instagram.com/stories/highlights/18090946048123978/", "https://www.instagram.com/stories/someone/",
+                "https://www.instagram.com/stories/someone/12ab/", "https://www.instagram.com/stories/some\u043eone/1/",
+                "https://www.instagram.com/stories/someone/\u0661\u0662/", "https://www.instagram.com.example/stories/x/1/",
+                "https://www.instagram.com/stories/a/b/1/", "https://m.instagram.com/stories/x/1/"):
+        assert say(url) is None, url
+    assert "(?<" not in tiktok.LINK.pattern
+    # the bot, unset: the story is heard as no link at all, not even "sending a video..."
+    monkeypatch.delenv(tiktok.COOKIES)
+    _, cfg = env
+    http, asked = _hear(dataclasses.replace(cfg, tiktok=True), monkeypatch, _msg(31, f"look {shared}"))
+    assert asked == [] and not http.said("sendChatAction")
+
+
+def test_the_poller_looks_at_the_file_rarely(tmp_path, monkeypatch):
+    """link() runs on the event loop: unset costs no file lookup at all; a set variable's file is looked at once per
+    CHECK_SECONDS (a stalled network mount would hold up the poller on every story link), again when the value changes."""
+    now = [1000.0]
+    monkeypatch.setattr(tiktok, "_clock", lambda: now[0])
+    looks = []
+    real = tiktok._cookie_path
+
+    def look():
+        looks.append(1)
+        return real()
+    monkeypatch.setattr(tiktok, "_cookie_path", look)
+    say = lambda: tiktok.link({"text": f"look {STORY}", "from": {"id": 1}})  # noqa: E731
+    assert say() is None and not looks
+    ok = tmp_path / "cookies.txt"
+    ok.write_text("x")
+    monkeypatch.setenv(tiktok.COOKIES, str(ok))
+    assert [say() for _ in range(5)] == [STORY] * 5 and len(looks) == 1
+    ok.unlink()
+    now[0] += tiktok.CHECK_SECONDS
+    assert say() is None and len(looks) == 2
+    ok.write_text("x")
+    monkeypatch.setenv(tiktok.COOKIES, f"{ok} ")
+    assert say() == STORY and len(looks) == 3
+
+
+def test_the_cookies_file_is_read_strictly():
+    """instagram.com's cookies only, each made secure (never over plain HTTP); expired, malformed, or another site's
+    lines skipped without a word."""
+    now = int(time.time())
+    text = "\r\n".join((
+        "# comment", "", _line(".instagram.com", "sessionid", "v1"),
+        "#HttpOnly_" + _line("I.Instagram.COM", "ds_user_id", "42", expires=now + 60, secure="FALSE", subdomains="FALSE"),
+        _line(".instagram.com", "old", "x", expires=now - 1), _line(".instagram.com", "soon", "x", expires="soon"),
+        _line(".instagram.com.evil.example", "a", "x"), _line("evilinstagram.com", "b", "x"), _line(".facebook.com", "c", "x"),
+        _line("instagram.com:443", "d", "x"), _line("", "e", "x"), _line("..instagram.com", "f", "x"),
+        _line(".instagram.com", "g", "x", expires="1e9"), _line(".instagram.com", "h", "x", expires="\u0661"),
+        _line(".instagram.com", "semi", "a;b"),
+        _line(".instagram.com", "bad name", "x"), _line(".instagram.com", "ctl", "a\x0bb"),
+        "\t".join((".instagram.com", "TRUE", "/", "TRUE", "0", "six"))))
+    got = {c.name: c for c in tiktok._netscape(text)}
+    assert set(got) == {"sessionid", "ds_user_id"}
+    session, user = got["sessionid"], got["ds_user_id"]
+    assert session.secure and user.secure and session.domain == ".instagram.com" and user.domain == "i.instagram.com"
+    assert session.expires is None and session.discard and user.expires == now + 60 and user.has_nonstandard_attr("HttpOnly")
+    assert not user.domain_specified and session.domain_specified
+
+
+def test_a_story_through_the_session(jar, monkeypatch):
+    """The session goes to yt-dlp as a jar (never a cookie file it would save to on close), scoped to Instagram and to
+    HTTPS; the extraction's connections reach Instagram only; the owner's read-only file is never written, whatever
+    Instagram's answers set; the story's video is fetched by us without the session and uploaded, never sent by URL."""
+    from yt_dlp import YoutubeDL
+    before = (jar.path.read_bytes(), jar.path.stat().st_mtime_ns, jar.path.stat().st_mode)
+    seen = []
+    leak = "sessionid=" + jar.values["sessionid"]
+
+    def extract(dl, url, *, download, process):
+        header = dl.cookiejar.get_cookie_header
+        seen.append({"url": url, "params": dict(dl.params), "hosts": tiktok._bound.get().hosts,
+                     "www": header("https://www.instagram.com/api/v1/feed/reels_media/"), "i": header("https://i.instagram.com/"),
+                     "away": [header(u) for u in ("https://scontent.cdninstagram.com/v.mp4", "https://www.facebook.com/",
+                                                  "https://www.instagram.com.evil.example/", "https://evil.example/",
+                                                  "http://www.instagram.com/")]})
+        dl.cookiejar.set_cookie(tiktok._netscape(_line(".instagram.com", "rur", "rotated"))[0])  # Instagram's Set-Cookie
+        headers = {"Referer": "https://www.instagram.com/", "X-IG-App-ID": "936619743392459", "Cookie": leak}
+        return {"extractor": "fixture", "id": "story", "title": "story", "duration": 5, "thumbnail": f"{IG}/cover.jpg",
+                "formats": [_file_format("s", host="scontent.cdninstagram.com", protocol="https",
+                                         cookies=leak + "; Domain=.instagram.com", http_headers=headers)]}
+    monkeypatch.setattr(YoutubeDL, "extract_info", extract)
+    got = asyncio.run(tiktok.fetch(None, STORY))
+    (call,) = seen
+    assert call["url"] == STORY and call["hosts"] == tiktok.SESSION_HOSTS
+    assert "cookiefile" not in call["params"] and call["params"]["allowed_extractors"] == ["instagram:story"]
+    assert jar.values["sessionid"] in call["www"] and jar.values["csrftoken"] in call["www"]
+    assert jar.values["sessionid"] in call["i"] and jar.values["csrftoken"] not in call["i"]  # www's own cookie
+    assert not any(jar.values[k] in call["www"] + call["i"] for k in ("elsewhere", "cdn"))  # other sites' lines dropped
+    assert call["away"] == [None] * 5  # a CDN, another site, a look-alike, plain HTTP: no cookie
+    assert (jar.path.read_bytes(), jar.path.stat().st_mtime_ns, jar.path.stat().st_mode) == before
+    assert set(tiktok._health) == {tiktok.SIGNED}  # its own breaker
+    assert isinstance(got, tiktok.Clip) and got.key == "igs:3141592653589793238" and got.private and got.cover == ""
+    assert got.source == "instagram" and got.hosts == tiktok.INSTAGRAM_FILES
+    (f,) = got.formats
+    assert "cookies" not in f and {k.lower() for k in f["http_headers"]} <= tiktok._PLAIN_HEADERS
+    assert f["http_headers"]["Referer"] == "https://www.instagram.com/"
+    (version,) = asyncio.run(tiktok.versions(None, got))
+    assert version.private and not version.direct  # Telegram never gets a URL found with the session
+    # the reply: uploaded by us, no URL, no cover, no caption
+    asked = _uploads(monkeypatch, {"s": 100})
+
+    async def fetch(http, url):
+        return got
+    monkeypatch.setattr(tiktok, "fetch", fetch)
+    http = _Telegram()
+    asyncio.run(bot._tiktok(CFG, http, _msg(31, STORY), STORY))
+    ((body, files),) = http.said("sendVideo")
+    assert asked == [("s", 0)] and set(files) == {"video", "thumbnail"} and "caption" not in body
+    assert not any(isinstance(v, str) and "cdninstagram" in v for v in body.values()) and "cover" not in body
+
+
+def test_a_signed_in_downloader_reaches_instagram_only(jar, monkeypatch):
+    """Even a redirect from Instagram itself can't take the signed-in downloader elsewhere (Task 1's guard with the
+    session's hosts), and the session never goes over plain HTTP, not even to Instagram."""
+    import http.server
+    import threading
+    hits = []
+
+    class Hop(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append((self.headers.get("Host").split(":")[0], self.headers.get("Cookie")))
+            self.send_response(302)
+            self.send_header("Location", self.server.location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    servers = [http.server.ThreadingHTTPServer(("127.0.0.1", 0), Hop) for _ in range(2)]
+    for s in servers:
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    first, inner = (s.server_port for s in servers)
+    real_resolve, real_public = socket.getaddrinfo, download.public
+    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **kw: real_resolve(
+        "127.0.0.1" if host in ("www.instagram.com", "scontent.cdninstagram.com", "evil.example") else host, *a, **kw))
+    monkeypatch.setattr(download, "public", lambda a: a == "127.0.0.1" or real_public(a))
+
+    def get(url):
+        with tiktok._signed_in(tiktok._cookies()) as dl:
+            dl.urlopen(url).read()
+
+    async def run(url):
+        with pytest.raises(Exception) as caught:
+            await tiktok._threaded(asyncio.Semaphore(1), 10, get, url, hosts=tiktok.SESSION_HOSTS, source=tiktok.SIGNED)
+        return caught.value
+    try:
+        for away in ("scontent.cdninstagram.com", "evil.example"):
+            servers[0].location = f"http://{away}:{inner}/v.mp4"
+            hits.clear()
+            error = asyncio.run(run(f"http://www.instagram.com:{first}/stories/x/1/"))
+            assert "host not allowed" in str(error) and hits == [("www.instagram.com", None)]
+        hits.clear()
+        assert "host not allowed" in str(asyncio.run(run(f"http://evil.example:{inner}/"))) and not hits
+    finally:
+        for s in servers:
+            s.shutdown()
+            s.server_close()
+
+
+def test_only_the_login_wall_tries_the_session():
+    """The session is asked only when Instagram sent an anonymous reader to its login page. Never for a missing post
+    (404), an empty answer, a private account, an age or sensitivity gate ("Restricted Video": the adult spare account
+    would see it), or a failure of the source. The wording it relies on is the pinned extractor's own."""
+    import inspect
+    from yt_dlp.extractor.instagram import InstagramIE
+    from yt_dlp.utils import ExtractorError
+    source = inspect.getsource(InstagramIE._real_extract)
+    assert "redirected to the login page" in source and "Restricted Video" in source
+    assert tiktok._login_wall(_ig_refusal(WALL))
+    for msg in ("Restricted Video: This video is only available to users 18 and over", "Restricted Video. " + WALL,
+                "This content is only available for registered users who follow this account",
+                "You need to log in to access this content", "This content is unreachable"):
+        assert not tiktok._login_wall(_ig_refusal(msg)), msg
+    empty = "Instagram sent an empty media response. If it is not, then use --cookies-from-browser or --cookies"
+    assert not tiktok._login_wall(ExtractorError(empty, expected=True))
+    assert not tiktok._login_wall(ExtractorError(WALL + ". Use --cookies"))  # not expected: a broken extractor
+    gone = _ytdlp_error("404")
+    gone.exc_info[1].orig_msg = WALL + ". Use --cookies"
+    assert not tiktok._login_wall(gone)
+    assert not any(tiktok._login_wall(_ytdlp_error(k)) for k in ("private", "403", "429", "network", "broken"))
+
+
+def test_a_post_only_signed_in_readers_see(jar, monkeypatch):
+    """A post first as today, without the session; once more with it only behind Instagram's login wall for anonymous
+    readers. A missing post, a "Restricted Video" or an outage is no reason to try the session; unset: as before."""
+    from yt_dlp import YoutubeDL
+    from yt_dlp.networking.exceptions import TransportError
+    calls, outcome = [], []
+
+    def extract(dl, url, *, download, process):
+        signed = any(c.name == "sessionid" for c in dl.cookiejar)
+        calls.append((url, signed, tiktok._bound.get().hosts))
+        if not signed and outcome[0]:
+            raise outcome[0]
+        return {"extractor": "fixture", "id": "post", "title": "post", **_reel("v1")}
+    monkeypatch.setattr(YoutubeDL, "extract_info", extract)
+    canonical = "https://www.instagram.com/p/Re_123-4/"
+    outcome[:] = [_ig_refusal(WALL)]
+    got = asyncio.run(tiktok.fetch(None, REEL))
+    assert calls == [(canonical, False, ()), (canonical, True, tiktok.SESSION_HOSTS)]
+    assert isinstance(got, tiktok.Clip) and got.private and got.key == "ig:Re_123-4" and "cookies" not in got.formats[0]
+    assert tiktok._health == {"instagram": (0, 0.0), tiktok.SIGNED: (0, 0.0)}
+    calls.clear()
+    outcome[:] = [None]  # anonymous readers see it: the session is never used
+    got = asyncio.run(tiktok.fetch(None, REEL))
+    assert calls == [(canonical, False, ())] and not got.private
+    for refusal in (_ig_refusal("Restricted Video: 18+"), _ytdlp_error("404"), _ytdlp_error("private")):
+        calls.clear()
+        outcome[:] = [refusal]
+        assert asyncio.run(tiktok.fetch(None, REEL)) is None and calls == [(canonical, False, ())]
+    calls.clear()
+    outcome[:] = [TransportError("reset")]
+    with pytest.raises(TransportError):
+        asyncio.run(tiktok.fetch(None, REEL))
+    assert calls == [(canonical, False, ())] and tiktok._health["instagram"][0] == 1
+    calls.clear()
+    monkeypatch.delenv(tiktok.COOKIES)
+    outcome[:] = [_ig_refusal(WALL)]
+    assert asyncio.run(tiktok.fetch(None, REEL)) is None and calls == [(canonical, False, ())]
+
+
+def test_a_dead_session_never_rests_reels(jar, monkeypatch, caplog):
+    """Signed-in extractions have their own breaker. An expired session (Instagram signs it out, yt-dlp sees the
+    login page) is no outage at all: no reply, one hint an hour for the owner. An outage of the signed-in requests
+    (a checkpoint, a 429 for the account) rests stories alone, for REST, then a story tries again; reels never wait."""
+    from yt_dlp import YoutubeDL
+    from yt_dlp.networking.exceptions import TransportError
+    from yt_dlp.utils import ExtractorError
+    now = [1000.0]
+    monkeypatch.setattr(tiktok, "_clock", lambda: now[0])
+    mode = ["expired"]
+
+    def extract(dl, url, *, download, process):
+        if not any(c.name == "sessionid" for c in dl.cookiejar):
+            return {"extractor": "fixture", "id": "post", "title": "post", **_reel("v1")}
+        if mode[0] == "expired":
+            dl.cookiejar.clear(".instagram.com", "/", "sessionid")
+            raise ExtractorError("You need to log in to access this content", expected=True)
+        raise TransportError("checkpoint")
+    monkeypatch.setattr(YoutubeDL, "extract_info", extract)
+    for _ in range(tiktok.FAILURES + 2):
+        assert asyncio.run(tiktok.fetch(None, _another_story())) is None
+    assert tiktok._health[tiktok.SIGNED] == (0, 0.0)
+    hints = [m for m in caplog.messages if "Instagram cookies" in m]
+    assert hints == ["group video: the Instagram cookies were signed out; stories wait for new ones (README)"]
+    mode[0] = "outage"
+    for _ in range(tiktok.FAILURES):
+        with pytest.raises(TransportError):
+            asyncio.run(tiktok.fetch(None, _another_story()))
+    used = len(tiktok._session_uses[("all",)])
+    with pytest.raises(tiktok.Paused):
+        asyncio.run(tiktok.fetch(None, _another_story()))
+    assert len(tiktok._session_uses[("all",)]) == used  # resting: refused before a slot is taken
+    assert isinstance(asyncio.run(tiktok.fetch(None, REEL)), tiktok.Clip)  # reels go on
+    assert tiktok._health["instagram"] == (0, 0.0)
+    now[0] += tiktok.REST + 1
+    mode[0] = "expired"
+    assert asyncio.run(tiktok.fetch(None, _another_story())) is None and tiktok._health[tiktok.SIGNED] == (0, 0.0)
+    now[0] += 3600
+    asyncio.run(tiktok.fetch(None, _another_story()))
+    assert len([m for m in caplog.messages if "were signed out" in m]) == 2  # once an hour
+
+
+def test_the_session_is_used_sparingly(jar, monkeypatch, caplog):
+    """Signed-in extractions an hour: SESSION_USER_CAP for one person (all chats), SESSION_CHAT_CAP for one chat,
+    SESSION_CAP for all. A link the session found nothing behind isn't asked again for MISS_SECONDS. A resting breaker
+    or a file with no session takes no slot. Past a cap: no request, no reply; one hint an hour for the global one."""
+    now = [1000.0]
+    monkeypatch.setattr(tiktok, "_clock", lambda: now[0])
+    calls, answers = [], {}
+
+    def signed(match):
+        calls.append(match["story"])
+        return answers.get(match["story"], "clip")
+    monkeypatch.setattr(tiktok, "_signed", signed)
+
+    def ask(user, chat=-1, story=None):
+        token = tiktok.asker.set((chat, user))
+        try:
+            return asyncio.run(tiktok.fetch(None, story or _another_story()))
+        finally:
+            tiktok.asker.reset(token)
+    # one person: SESSION_USER_CAP, whichever chats; the others in the chat still get theirs
+    assert [ask(1, chat=-1 - i % 2) for i in range(tiktok.SESSION_USER_CAP)] == ["clip"] * tiktok.SESSION_USER_CAP
+    assert ask(1) is None and ask(1, chat=-3) is None and len(calls) == tiktok.SESSION_USER_CAP
+    # one chat: SESSION_CHAT_CAP (3 of person 1's went to chat -1)
+    users = iter(range(100, 200))
+    while len(tiktok._session_uses[("chat", -1)]) < tiktok.SESSION_CHAT_CAP:
+        assert ask(next(users)) == "clip"
+    assert ask(next(users)) is None and ask(next(users), chat=-2) == "clip"
+    # a file with no session, or a resting breaker: nothing asked, the slots given back
+    before = {k: list(v) for k, v in tiktok._session_uses.items()}
+    answers["777"] = tiktok._NO_SESSION
+    assert ask(2, story="https://www.instagram.com/stories/x/777/") is None
+    assert {k: list(v) for k, v in tiktok._session_uses.items()} == before
+    tiktok._health[tiktok.SIGNED] = (tiktok.FAILURES, now[0] + tiktok.REST)
+    asked = len(calls)
+    with pytest.raises(tiktok.Paused):
+        ask(2)
+    assert len(calls) == asked and {k: list(v) for k, v in tiktok._session_uses.items()} == before
+    tiktok._health.clear()
+    # a link with nothing behind it: asked once an hour, whoever posts it again
+    answers["888"] = None
+    gone = "https://www.instagram.com/stories/x/888/"
+    assert ask(3, chat=-9, story=gone) is None and ask(4, chat=-9, story=gone) is None and calls.count("888") == 1
+    # an hour later the person's own cap is free again, and the gone link is asked once more
+    now[0] += 3600
+    assert ask(1) == "clip" and ask(5, story=gone) is None and calls.count("888") == 2
+    # all chats together: SESSION_CAP (direct calls, no asker: only this cap)
+    monkeypatch.setattr(tiktok, "SESSION_CAP", len(tiktok._session_uses[("all",)]) + 2)
+    assert [asyncio.run(tiktok.fetch(None, _another_story())) for _ in range(4)] == ["clip", "clip", None, None]
+    assert len([m for m in caplog.messages if "hourly cap" in m]) == 1
+
+
+def test_story_failures_are_silent_and_show_no_path_or_cookie(env, jar, monkeypatch, caplog, capfd):
+    """Every way a story can fail, with every log at DEBUG and the process's own output captured: the bot says
+    nothing, and the cookies' path and values appear in no log line, no traceback, no output, no request to Telegram
+    and no database row, even when yt-dlp's errors carry them."""
+    from yt_dlp import YoutubeDL
+    from yt_dlp.networking.exceptions import TransportError
+    from yt_dlp.utils import DownloadError, ExtractorError
+    caplog.set_level("DEBUG")
+    caplog.set_level("DEBUG", logger="uvicorn.error")
+    _, cfg = env
+    leak = " ".join(jar.secrets)
+    errors = [ExtractorError(f"login required {leak}", expected=True),
+              ExtractorError(f"Unable to download {leak}", cause=TransportError(f"reset {leak}")),
+              DownloadError(f"ERROR: {leak}"), OSError(leak), ExtractorError(f"broken {leak}")]
+    extracted = []
+
+    def extract(dl, url, *, download, process):
+        extracted.append(url)
+        raise errors[len(extracted) - 1]
+    monkeypatch.setattr(YoutubeDL, "extract_info", extract)
+    replies = []
+
+    monkeypatch.setattr(tiktok, "SESSION_USER_CAP", 100)  # the caps have their own test
+    monkeypatch.setattr(tiktok, "SESSION_CHAT_CAP", 100)
+
+    def ask():
+        http = _Telegram()
+        msg = _msg(31, f"look {_another_story()}")
+        if url := tiktok.link(msg):
+            asyncio.run(bot._tiktok(CFG, http, msg, url))
+        replies.extend(c for c in http.calls if c[0] != "sendChatAction")
+        return http
+    for _ in errors:
+        ask()
+    assert len(extracted) == len(errors)
+
+    def rewrite(data: bytes):
+        jar.path.chmod(0o600)
+        jar.path.write_bytes(data)
+    rewrite(_line(".instagram.com", "csrftoken", jar.values["csrftoken"]).encode())  # no session in it
+    ask()
+    # past COOKIE_BYTES, though a real session follows the padding: refused whole
+    session = _line(".instagram.com", "sessionid", jar.values["sessionid"]).encode()
+    rewrite(b"#" * tiktok.COOKIE_BYTES + b"\n" + session)
+    tiktok._told.clear()
+    ask()
+    assert [w for w in tiktok._told if "Instagram cookies" in w] == [
+        "the Instagram cookies can't be read; stories wait for new ones (README)"]
+    rewrite(b"#" * (tiktok.COOKIE_BYTES - len(session) - 1) + b"\n" + session)  # just within it: read
+    assert tiktok._cookies()
+    rewrite(b"\xff\xfe" + leak.encode() + b"\x00\t\t\t")
+    ask()
+    if os.geteuid():
+        jar.path.chmod(0)
+        tiktok._told.clear()
+        ask()
+    jar.path.unlink()  # gone between the message and the extraction: the call-time check finds nothing
+    asyncio.run(bot._tiktok(CFG, _Telegram(), _msg(31, STORY), STORY))
+    # gone, or a FIFO, between that check and the read itself: the read's own error (it names the path) is dropped
+    monkeypatch.setattr(tiktok, "_cookie_path", lambda: str(jar.path))
+    for make in (lambda: None, lambda: os.mkfifo(jar.path)):
+        make()
+        tiktok._told.clear()
+        http = _Telegram()
+        asyncio.run(bot._tiktok(CFG, http, _msg(31, STORY), STORY))
+        assert any("can't be read" in m for m in tiktok._told) and [m for m, _, _ in http.calls] == ["sendChatAction"]
+    assert len(extracted) == len(errors) and replies == []  # no reply, no words, ever
+    out, err = capfd.readouterr()
+    import logging
+    shown = [caplog.text, out, err, *(r.getMessage() for r in caplog.records),
+             *(logging.Formatter().formatException(r.exc_info) for r in caplog.records if r.exc_info)]
+    con = db.connect(cfg.db_path)
+    shown.append("\n".join(con.iterdump()))
+    con.close()
+    assert not [s for s in jar.secrets for text in shown if s in text]
+    hints = {m for m in caplog.messages if "Instagram cookies" in m}
+    assert hints == {f"group video: the Instagram cookies {why}; stories wait for new ones (README)"
+                     for why in ("hold no session", "can't be read")}
+    assert any(m.startswith("group video ") for m in caplog.messages)  # the routes are still logged (types only)
+
+
+def test_no_cookies_in_the_repo():
+    """`git grep`'s view: no tracked file holds a line of a cookies export or an Instagram session value."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    try:
+        listed = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("not a git checkout")
+    line = re.compile(rb"^(?:#HttpOnly_)?[^\s#]+\t(?:TRUE|FALSE)\t[^\t\n]*\t(?:TRUE|FALSE)\t\d*\t[^\t\n]+\t", re.M | re.I)
+    session = re.compile(rb"\d{5,}(?:%3A|:)[A-Za-z0-9]{8,}(?:%3A|:)\d+(?:%3A|:)")
+    bad = []
+    for name in filter(None, listed.stdout.split(b"\0")):
+        path = root / name.decode()
+        if path.is_file() and (line.search(data := path.read_bytes()) or session.search(data)):
+            bad.append(name.decode())
+    assert bad == []

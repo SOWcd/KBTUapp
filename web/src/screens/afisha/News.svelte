@@ -20,7 +20,7 @@
   import { videoLinks } from '../../lib/social';
   import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { cancelCasting, data, loadNews, loadPublicPosts, phrase } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -50,9 +50,8 @@
   // every public post, not only my clubs' (the circles on List keep those): the copy the app loads with the Afisha and
   // keeps for the next launch, so the page opens full, never waiting for its own request; each visit
   // refreshes it quietly
-  const posts = $derived(data.eventsReady ? data.posts : null);
-  const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
-  onMount(() => { if (student) void loadNews(); void loadAll(); }); // staff read the feed too
+  const posts = $derived(data.postsReady ? data.posts : null);
+  onMount(() => { if (student) void loadNews(); void loadPublicPosts(); }); // staff read the feed too
   $effect(() => { if (casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
   // (a sheet closed sooner: the marks still go, as Stories does)
@@ -90,6 +89,7 @@
     addEventListener('message', on);
     return { destroy: () => removeEventListener('message', on) };
   }
+  const bareVideo = (body: string) => { const v = videoLinks(body); return v.length === 1 && body.trim() === v[0].url; };
   const long = (p: Post) => p.body.length > 220 || p.body.split('\n').length > 4;
 
   async function react(p: Post, kind: 'fire' | 'heart') {
@@ -122,7 +122,7 @@
   }
   // the club's Head+: one pinned post per club, on top of its news; the lists reload in the server's order
   async function pin(p: Post) {
-    try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadAll(); }
+    try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadPublicPosts(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news
@@ -146,7 +146,8 @@
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{#if rich}<RichText text={p.title} entities={p.titleFmt} />{:else}{p.title}{/if}</h3>
-    {#if p.body}
+    <!-- a body that is only its video's link (a club's YouTube video, server youtube.py) shows as the button below, not the address -->
+    {#if p.body && (rich || !bareVideo(p.body))}
       <p class="bd" class:fold={long(p) && !open.has(p.id)}>{#if rich}<RichText text={p.body} entities={p.fmt} />{:else}<Linked text={p.body} />{/if}</p>
       {#if long(p) && !open.has(p.id)}<span class="unfold"><Button kind="plain" size="s" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</Button></span>{/if}
     {/if}

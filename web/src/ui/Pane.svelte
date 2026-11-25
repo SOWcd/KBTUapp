@@ -93,14 +93,21 @@
      (drifted left, dimmed) read through beside the capsule. Sticky offsets count from inside the pane's padding. */
   .edge { position: sticky; top: calc(-1 * var(--page-top)); z-index: calc(var(--z-sticky) + 1); height: var(--page-top);
     margin: calc(-1 * var(--page-top)) calc(-1 * var(--gutter)) 0; background: var(--bg); pointer-events: none; opacity: 0;
-    -webkit-mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent); }
+    -webkit-mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to)); mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to)); }
   .scrolled .edge { opacity: 1; }
   /* sizes in viewport units, not %: the pane and its scroll edge share a top and a width, so the edge's strip shows the
-     same glow it covers. A background on the scroller itself stays put while the content scrolls */
-  .glow, .glow .edge { --tint-b: rgba(124, 77, 255, 0.09);
-    background: radial-gradient(140vw 60vh at 15% -12vh, var(--accent-soft), transparent 70%),
+     same glow it covers. A background on the scroller itself stays put while the content scrolls.
+     The glow runs up under the clock wherever the page draws there (Telegram fullscreen, the home-screen app in dark).
+     Where a flat strip sits above the page instead (iOS's own status bar in light, an app installed before the
+     translucent style, Telegram's header: safe-top is 0), the cut glow was a hard edge under it (owner, Nov 25): the
+     first 64 px ease from the plain ground into the glow, so the strip and the page join; with any safe-top --seam is 0.
+     --g is --bg as a triple: rgba() stops, since a colour mix drops the whole declaration on iOS before 16.2 */
+  .glow, .glow .edge { --tint-b: rgba(124, 77, 255, 0.09); --g: 0, 0, 0; --seam: max(0px, calc(64px - var(--safe-top) * 100));
+    background: linear-gradient(rgba(var(--g), 1), rgba(var(--g), 0.7) calc(var(--seam) * 0.2), rgba(var(--g), 0.38) calc(var(--seam) * 0.45),
+                  rgba(var(--g), 0.12) calc(var(--seam) * 0.72), rgba(var(--g), 0) var(--seam)),
+                radial-gradient(140vw 60vh at 15% -12vh, var(--accent-soft), transparent 70%),
                 radial-gradient(110vw 55vh at 105% 110vh, var(--tint-b), transparent 70%), var(--bg); }
-  :global(.theme-light) .glow, :global(.theme-light) .glow .edge { --tint-b: rgba(124, 77, 255, 0.05); }
+  :global(.theme-light) .glow, :global(.theme-light) .glow .edge { --tint-b: rgba(124, 77, 255, 0.05); --g: 242, 242, 247; }
   .ttl { margin: 8px 4px 18px; font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; overflow-wrap: break-word; }
   .tail { height: calc(var(--safe-bottom) + 40px); }
 </style>

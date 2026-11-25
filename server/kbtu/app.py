@@ -36,7 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
-from .logic import ApiError, Viewer
+from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
 log = logging.getLogger("kbtu.app")
@@ -60,6 +60,7 @@ async def _picture(fn, *args):
 
 THREADS = 16               # see lifespan
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
+ANDROID_PACKAGE = "kz.sow.kbtu"  # the Play app (android/twa-manifest.json): fixed for good once published
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
 
 
@@ -181,6 +182,11 @@ def _lent_role(con, request: Request, org: int) -> dict:
     return {"lent_role": t["level"], "lent_rights": t["rights"]}
 
 
+def is_demo(request: Request) -> bool:
+    """Google Play's reviewer (web_auth.DEMO_TG_ID): its reads leave out people and change nothing (after viewer())"""
+    return request.state.tg["id"] == web_auth.DEMO_TG_ID
+
+
 def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     cfg = request.app.state.cfg
     head = request.headers.get("authorization")
@@ -196,12 +202,17 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
             raise ApiError("forbidden", "init_data")
         _web_csrf(request, cfg.domain)
         u = web_auth.lookup(con, token, cfg.admins)
+        demo = u["tg_id"] == web_auth.DEMO_TG_ID  # Google Play's reviewer: PLAY_DEMO on, the catalogue's reads alone
+        if demo and not cfg.play_demo:
+            raise ApiError("unauthorized", "web_session")
+        if demo and (request.method not in ("GET", "HEAD") or request.scope["route"].path not in web_auth.DEMO_READS):
+            raise ApiError("forbidden", "demo")
         request.state.tg = {"id": u["tg_id"], "username": u["tg_username"]}
         request.state.web_token = token
         request.state.renew_web_cookie = web_auth.touch(con, token, u, cfg.admins, SEEN_EVERY)
         if u["tg_id"] in cfg.admins and u["role"] != "admin":
             u = web_auth.lookup(con, token, cfg.admins)
-        v = _viewer_user(con, u)
+        v = Viewer(u["id"], "user", False) if demo else _viewer_user(con, u)  # whatever its row says: nobody in particular
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
         caller["uid"] = v.id  # forum.may_touch_ask reads whether I may see a subject's listings (subjects.may_read)
@@ -294,7 +305,8 @@ def _viewer_user(con, u) -> Viewer:
     if u["banned_at"]:
         raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
     # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (Microsoft only)
-    return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
+    s = logic.one(con, "SELECT verified_at FROM students WHERE user_id = ? AND manual = 0", u["id"])
+    return Viewer(u["id"], u["role"], s is not None, student_since=s[0] if s else None)
 
 
 Me = Annotated[Viewer, Depends(viewer)]
@@ -510,6 +522,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     def after(con) -> None:
+        if not cfg.play_demo:
+            web_auth.revoke_demo(con)  # PLAY_DEMO off ends the reviewer's sessions for good, not until it's back on
         logic.replay_deletions(con)
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
@@ -641,6 +655,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             and board_on(app.state.cfg, v) and current_ai_policy(con, app.state.policy, v.id)
 
     def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
+        demo = is_demo(request)  # the reviewer sees no real person: no support contacts, no donation number
         if not getattr(request.state, "web_token", ""):
             logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
@@ -650,7 +665,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 reports = {"reports": summary}
                 if report_log:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
-        return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
+        return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,
@@ -658,7 +673,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    # Google may answer my assistant first: absent, it can't; else my own yes (assistant.GOOGLE_YES)
                                    **({"kriGoogle": logic.assistant.google_yes(con, v.id)} if kri_google(con, v) else {}),
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
-                                   **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
+                                   **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone and not demo else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
@@ -696,9 +711,54 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.dm_on(con, v, (body or {}).get("event"))
 
     @app.post("/api/donate/stars")
-    async def donate_stars(con: Con, v: Me, body: dict = Body(...)):
+    async def donate_stars(request: Request, con: Con, v: Me, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
-        return {"url": await logic.stars.invoice(app.state.cfg, ai_http(), v.id, lang, body.get("amount"))}
+        return {"url": await logic.stars.invoice(cfg, ai_http(), request.state.tg["id"], lang, body.get("amount"))}
+
+    @app.get("/api/donate")
+    def donate_mine(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.mine(con, v)
+
+    @app.get("/api/sponsors")
+    def sponsors(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.listing(con)
+
+    @app.put("/api/donate/consent")
+    def sponsor_consent(request: Request, con: Con, v: Me, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.answer(con, v, request.state.tg["id"], body)
+
+    @app.post("/api/donate/receipt")
+    async def donate_receipt(request: Request, con: Con, v: Me, response: Response, consent: str = ""):
+        response.headers["Cache-Control"] = "private, no-store"
+        payer = request.state.tg["id"]
+        await run_in_threadpool(donations.receipt_open, con, v, payer, cfg, consent)
+        data = await read_upload(request)
+        saved, read = await _picture(receipt.take, data, receipts, secrets.token_bytes(32))
+
+        def keep():
+            try:
+                return donations.add_receipt(con, v, payer, cfg, saved, read, consent)
+            except Exception:
+                media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ? AND kind = 'receipt'", saved["path"]) else [saved["path"]])
+                raise
+        return await run_in_threadpool(keep)
+
+    @app.get("/api/donate/receipts/{did}/image")
+    def donation_image(did: int, con: Con, v: Me):
+        return FileResponse(receipts / f"{donations.image_path(con, v, did)}.webp", media_type="image/webp",
+                            headers={"Cache-Control": "private, no-store"})
+
+    @app.get("/api/admin/donations")
+    def donation_queue(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.queue(con, v)
+
+    @app.post("/api/admin/donations/{did}/review", status_code=204)
+    def donation_review(did: int, con: Con, v: Me, body: dict = Body(...)):
+        donations.review(con, v, did, body)
 
     @app.post("/api/me/dmp-hi", status_code=204)  # DMP's one-time hello left for Microsoft (me.dmpHi)
     def dmp_hi(con: Con, v: Me):
@@ -980,9 +1040,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ events
 
     @app.get("/api/events")
-    def list_events(con: Con, v: Me, frm: int | None = Query(None, alias="from"), to: int | None = None,
+    def list_events(request: Request, con: Con, v: Me, frm: int | None = Query(None, alias="from"), to: int | None = None,
             org: int | None = None):
-        return logic.events(con, v, frm, to, org)
+        return logic.events(con, v, frm, to, org, sweep=not is_demo(request))
 
     @app.get("/api/events/past")
     def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False, attended: bool = False):
@@ -1071,8 +1131,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                         headers={"Content-Disposition": f'inline; filename="kbtu-event-{eid}.ics"', "Cache-Control": "no-store"})
 
     @app.get("/api/events/{eid}")
-    def get_event(eid: int, con: Con, v: Me):
-        return logic.event(con, v, eid)
+    def get_event(request: Request, eid: int, con: Con, v: Me):
+        return logic.event(con, v, eid, sweep=not is_demo(request))
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
@@ -1217,8 +1277,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.orgs(con, v)
 
     @app.get("/api/orgs/{oid}")
-    def get_org(oid: int, con: Con, v: Me):
-        return logic.org(con, v, oid)
+    def get_org(request: Request, oid: int, con: Con, v: Me):
+        return logic.org(con, v, oid, demo=is_demo(request))
 
     @app.get("/api/orgs/{oid}/lent")  # the creator's Studio of a club he isn't in (X-Staff-Org): its President's membership
     def lent_studio(oid: int, con: Con, v: Me):
@@ -1296,9 +1356,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def mirror_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
 
-    @app.put("/api/orgs/{oid}/chats/{cid}/call")
-    def call_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.chatlist.call_org_chat(con, v, oid, cid, body.get("on"))
 
     @app.put("/api/orgs/{oid}/chats/{cid}/swear")
     async def swear_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -1459,6 +1516,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/friends/{uid}", status_code=204)
     def unfriend(uid: int, con: Con, v: Me):
         logic.unfriend(con, v, uid)
+
+    @app.post("/api/pymk/dismiss", status_code=204)  # People you may know: the card's x (logic/pymk.py)
+    def pymk_dismiss(con: Con, v: Me, body: dict = Body(...)):
+        logic.pymk.dismiss(con, v, body.get("id"))
 
     @app.get("/api/friends/joined")  # my invite QR on screen: who has just become my friend
     def friend_joined(con: Con, v: Me, since: int = 0):
@@ -2055,10 +2116,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
         def file_it():
-            logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
-            # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
-            if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
-                return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ?", body["id"])
+            target, tid = body.get("target"), body.get("id")
+            ask = target == "ask" and type(tid) is int
+            with db.tx(con):
+                enough = ask and logic.reported_enough(con, tid)
+                logic.report(con, v, target, tid, body.get("reason"), body.get("note"))
+                # Only crossing the threshold starts an AI look. The rest is for a moderator.
+                if ask and not enough and logic.reported_enough(con, tid):
+                    return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ? AND expires_at > ?", tid, logic.now())
         a = await run_in_threadpool(file_it)
         if a and await screen(con, a["user_id"], f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
             await run_in_threadpool(lambda: logic.hide_ask(con, body["id"], "reports", made=(a["user_id"], a["created_at"])))
@@ -2641,6 +2706,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def find_all(con: Con, v: Me, q: str = ""):
         return {"events": logic.search.events(con, v, q[:80]), "clubs": logic.search.clubs(con, v, q[:80])}
 
+    # the app's global search, what it doesn't hold: findable people and the forum channel's posts (logic/search.more)
+    @app.get("/api/search/more")
+    def find_more(request: Request, con: Con, v: Me, q: str = ""):
+        try:
+            forum = bool(forum_viewer(request, v, con))
+        except ApiError:
+            forum = False
+        return logic.search.more(con, v, q[:80], forum=forum, channel=request.app.state.cfg.forum_channel)
+
     @app.put("/api/events/{eid}/reg-until")
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_reg_until(con, v, eid, body.get("until"))
@@ -2848,7 +2922,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def forum_new_skill(con: Con, v: Forum, body: dict = Body(...)):
         """A skill by name: the one there is, close ones to pick ({didYouMean}), or a new one if the AI doesn't object
         (no answer: it's made, and stays the maker's own until three people have it or a moderator approves)."""
-        found = logic.skill_lookup(con, v, body.get("name"), body.get("force") is True)
+        found = await run_in_threadpool(logic.forum.reserve_skill, con, v, body.get("name"), body.get("force") is True)
         if "name" not in found:
             return found
         if await screen(con, v.id, found["name"]) is False:
@@ -2865,8 +2939,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum/asks")
     async def forum_new_ask(con: Con, v: Forum, body: dict = Body(...)):
-        verdict = await screen(con, v.id, f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
-        return await run_in_threadpool(logic.create_ask, con, v, body, verdict)
+        a = await run_in_threadpool(logic.create_ask, con, v, body, None, screening=True)
+        verdict = await screen(con, v.id, f"{a['title']}\n{a['body']}")  # no answer: held for a moderator
+        return await run_in_threadpool(logic.forum.settle_ask, con, v, a["id"], verdict)
 
     # ------------------------------------------------------------ the forum channel (logic/fchannel.py): posts from the app
     F = logic.fchannel
@@ -2984,6 +3059,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
         return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
 
+    # a signed comment written in the app (fchannel.comment_*): the same AI look and moderators as a reply, sent by the bot
+    # under the person's short name; the thread shows what was written in the app
+    @app.get("/api/forum-posts/{pid}/thread")
+    def fchan_thread(pid: int, con: Con, v: FChan):
+        return F.thread(con, v, pid)
+
+    @app.post("/api/forum-posts/{pid}/thread")  # not /comments: /api/{kind}s/{tid}/comments takes that path
+    async def fchan_comment(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        rid, text = await run_in_threadpool(F.comment_reserve, con, v, pid, body)
+        verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
+        return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}
+
     @app.delete("/api/forum-replies/{rid}", status_code=204)
     def fchan_reply_drop(rid: int, con: Con, v: FChan):
         F.reply_delete(con, v, rid)
@@ -3065,6 +3152,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.subjects.catalogue(cfg.subjects_file)
         return logic.subjects.offer(con, v, body.get("ask"))
 
+    @app.delete("/api/subjects/offer/{cid}", status_code=204)
+    def subject_withdraw_offer(cid: int, con: Con, v: Me):
+        logic.subjects.withdraw(con, v, cid)
+
     @app.post("/api/forum/blocks", status_code=204)
     def forum_block(con: Con, v: Me, body: dict = Body(...)):  # every student: the student forum hides blocked people too
         logic.block(con, v, body.get("user"), body.get("on", True))
@@ -3074,6 +3165,37 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/healthz")
     def health():
         return Response("ok", media_type="text/plain")
+
+    @app.get("/.well-known/assetlinks.json")
+    def assetlinks():
+        """The Android app (android/) opens this site full screen only while its signing certificates are listed here
+        (Digital Asset Links): ANDROID_CERT_SHA256, the upload key's and Play's app signing key's"""
+        if not cfg.android_certs:
+            raise ApiError("not_found")
+        return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                              "target": {"namespace": "android_app", "package_name": ANDROID_PACKAGE,
+                                         "sha256_cert_fingerprints": list(cfg.android_certs)}}],
+                            headers={"Cache-Control": "public, max-age=300"})
+
+    @app.get("/play-demo")
+    def play_demo(request: Request, con: Con, k: str = ""):
+        """Google Play's reviewer signs in without Telegram: PLAY_DEMO's secret link (admin play-demo) opens the
+        made-up demo account (web_auth.demo_user) in this browser; a wrong or missing key is a plain 404"""
+        if not cfg.play_demo or not hmac.compare_digest(k.encode(), cfg.play_demo.encode()):
+            raise ApiError("not_found")
+        old = request.cookies.get(web_auth.COOKIE, "")
+        try:  # a real person signed in here keeps their session: a leaked link mustn't sign them out (a new profile for the reviewer)
+            if web_auth.lookup(con, old, cfg.admins)["tg_id"] != web_auth.DEMO_TG_ID:
+                return RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        except ApiError as e:
+            if e.code != "unauthorized":
+                raise
+        t = logic.now()
+        with db.tx(con):
+            token = web_auth.issue(con, web_auth.demo_user(con, t), old, t)
+        response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        _web_cookie(response, token)
+        return response
 
     @app.get("/exit")
     def exit_link():

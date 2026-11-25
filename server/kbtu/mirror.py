@@ -176,7 +176,15 @@ def needs_photo(con, channel: int, m_id: int, grouped: int | None) -> bool:
     return not p or p["photo_file_id"] is None and p["hidden_at"] is None
 
 
-def take(con, channel: int, m: Msg) -> int | None:
+def legacy_album_siblings(con, channel: int, m: Msg) -> list[int] | None:
+    """The other mirrored members of an album whose caption source was never recorded."""
+    p = one(con, """SELECT p.id FROM tg_post_msgs t JOIN posts p ON p.id = t.post_id
+        WHERE t.channel = ? AND t.msg_id = ? AND t.lang IS NULL AND p.tg_fmt IS NULL AND p.hidden_at IS NULL""", channel, m.id)
+    return [r[0] for r in rows(con, """SELECT msg_id FROM tg_post_msgs WHERE post_id = ? AND channel = ?
+        AND grouped = ? AND lang IS NULL AND msg_id != ? ORDER BY msg_id DESC""", p[0], channel, m.grouped, m.id)] if p else None
+
+
+def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
     """A new channel post, an edit of one, or one more piece of an album: the org's post for it (a post without text
     is titled by the channel). The post's id; None when the channel is no mirror now."""
     oid = source(con, channel)
@@ -225,8 +233,8 @@ def take(con, channel: int, m: Msg) -> int | None:
             return into
         t, b = post["title"], post["body"]
         fmt = {k: post[k] for k in ("titleFmt", "fmt") if k in post}
-        # Keep the source of a formatted album caption so only its own edit can clear it.
-        tg_fmt = json.dumps({"msg": m.id, **fmt}, ensure_ascii=False) if fmt else None
+        # An album's caption source survives formatting changes and caption removal.
+        tg_fmt = json.dumps({"msg": m.id, **fmt}, ensure_ascii=False) if fmt or m.grouped else None
         if pid is None:
             if not stories_open(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid)):
                 return None  # a student initiative below the Ascent's collab step posts no stories, mirrored ones neither
@@ -237,7 +245,7 @@ def take(con, channel: int, m: Msg) -> int | None:
         else:
             p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
             sets = {}
-            caption = p["tg_fmt"] and json.loads(p["tg_fmt"])["msg"] == m.id
+            caption = json.loads(p["tg_fmt"])["msg"] == m.id if p["tg_fmt"] else album_empty
             if m.text.strip() or (had and (not m.grouped or caption)):
                 text_changed = (t, b) != (p["title"], p["body"])
                 if text_changed or tg_fmt != p["tg_fmt"]:

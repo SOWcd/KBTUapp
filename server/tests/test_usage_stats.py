@@ -145,3 +145,15 @@ def test_drops_repeated_uniques_and_admin_counters(env):
     for _ in range(5):
         post(c, 7, {"uniq.sheet.map": 1})
     assert totals(con) == {"uniq.sheet.map": 1}                            # a repeat is dropped; the admin sheet isn't counted at all
+
+
+def test_hero_kinds_counted_without_an_item(env):
+    c, _ = env
+    stats._spent.clear()
+    con = db.connect(DB[0])
+    src = (Path(__file__).parents[2] / "web/src/lib/hero.ts").read_text(encoding="utf-8")
+    kinds = re.search(r"KINDS = \[(.*?)\]", src).group(1)
+    assert tuple(re.findall(r"'([a-z]+)'", kinds)) == stats.HERO_KINDS    # the app's names are the allowlist's
+    post(c, 8, {"hero.show.news": 3, "hero.tap.news": 1, "hero.tap.e12": 1, "hero.show.news.p7": 1})
+    assert totals(con) == {"hero.show.news": 3, "hero.tap.news": 1}       # a kind, never an item or a person
+    assert "news 1/3" in stats.fields(con, 1)["hero"].split("\n")

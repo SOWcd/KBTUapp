@@ -222,10 +222,9 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = T
                 WHERE c.id = ?""", cid)
             only = ai.PUBLIC_PROVIDERS if logic.agreed(s) else ai.EU_ONLY
             verdict, rule = await ai.screen_comment(cfg, http, body, con, only=only)
-            rules.look(con, cid, body, verdict)
         else:
             verdict, rule = None, None
-        rules.judge(con, cid, verdict, rule)
+        rules.judge(con, cid, verdict, rule, body=body)
     except Exception:  # noqa: BLE001 - one comment's look must not stop the next
         log.exception("tgc judge")
     finally:
@@ -241,8 +240,10 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         await _call(cfg, http, "deleteMessages", {"chat_id": cfg.tgc_chat, "message_ids": gone})
     for cid, chat, mid in rules.to_delete(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
-        if r.get("ok") or r.get("error_code") == 400:  # gone, or never to be (its author deleted it first; too old)
-            rules.deleted(con, cid, chat, mid, bool(r.get("ok")))
+        if r.get("ok") or _gone(r):
+            rules.deleted(con, cid, chat, mid)
+        elif r.get("error_code") == 400:
+            rules.delete_failed(con, cid, chat, mid)
         else:
             break  # the network, a flood wait, lost rights: next round (the unbans below still go)
     for tg in rules.unban_due(con):
@@ -285,7 +286,8 @@ async def _send_photos(cfg: Config, http: httpx.AsyncClient, text: str, jpgs: li
 
 def _gone(r: dict) -> bool:
     """Telegram says the message isn't there (deleted already): nothing left to take down."""
-    return r.get("error_code") == 400 and "not found" in str(r.get("description")).lower()
+    return r.get("error_code") == 400 and any(s in str(r.get("description")).lower()
+        for s in ("message to delete not found", "message to edit not found"))
 
 
 async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
@@ -391,11 +393,11 @@ async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
             r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.tgc_chat, "message_id": mid,
                                                            "text": texts.bot_message("ru", "fch_reply_removed" if why == "moderator" else "fch_reply_deleted")[0]})
             if not (r.get("ok") or _gone(r) or "not modified" in str(r.get("description"))):
-                F.reply_drop_later(con, rid)
+                F.reply_drop_later(con, rid, mid)
                 continue
         elif not (r.get("ok") or _gone(r)):
             break  # the network, a flood wait: next round
-        F.reply_dropped(con, rid)
+        F.reply_dropped(con, rid, mid)
     for rid, body, to, sign in F.replies_to_send(con):
         if not F.reply_sending(con, rid):
             continue
@@ -415,8 +417,8 @@ async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
 
 # the author's messages about one comment, each said only while it's still true: "under review" while a moderator hasn't
 # decided, then the verdict; the verdict edits the first message in place, so the chat holds one
-AUTHOR = {"tgc_removed": "status IN ('deleting', 'deleted') AND review = 1",
-          "tgc_confirmed": "status IN ('deleting', 'deleted') AND review = 0",
+AUTHOR = {"tgc_removed": "status = 'deleted' AND review = 1",
+          "tgc_confirmed": "status = 'deleted' AND review = 0",
           "tgc_back": "status = 'restored'"}
 
 
@@ -425,7 +427,7 @@ async def edit_first(cfg: Config, http: httpx.AsyncClient, con, m, body: dict) -
     won't (too old, deleted by him, blocked): the postman sends it new then (a block: the app's card, take_saved)."""
     if m["kind"] not in ("tgc_confirmed", "tgc_back"):
         return None
-    mid = (one(con, "SELECT dm_id FROM tgc_comments WHERE id = ?", int(m["ref"].split(":")[1])) or [None])[0]
+    mid = (one(con, "SELECT dm_id FROM tgc_comments WHERE id = ? AND author_id = ?", int(m["ref"].split(":")[1]), m["user_id"]) or [None])[0]
     if not mid:
         return None
     r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageText",
@@ -436,19 +438,21 @@ async def edit_first(cfg: Config, http: httpx.AsyncClient, con, m, body: dict) -
 def sent(con, m, answer: dict) -> None:
     """The message to the author went out: its id, for the verdict to edit; he knows, so the app's card doesn't repeat it."""
     if m["kind"] in AUTHOR and isinstance(answer.get("result"), dict) and answer["result"].get("message_id"):
-        con.execute("UPDATE tgc_comments SET dm_id = ?, shown = 1 WHERE id = ?", (answer["result"]["message_id"], int(m["ref"].split(":")[1])))
+        con.execute("UPDATE tgc_comments SET dm_id = ?, shown = 1 WHERE id = ? AND author_id = ?", (answer["result"]["message_id"], int(m["ref"].split(":")[1]), m["user_id"]))
 
 
 def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
     """The postman's text for this feature's messages (bot._render)."""
     kind, ref = m["kind"], m["ref"].split(":")
+    if kind == "tgc_delete_failed":
+        return (*texts.bot_message(lang, kind), "capps") if one(con, "SELECT 1 FROM tgc_comments WHERE id = ? AND status = 'queued'", int(ref[1])) else None
     if kind == "tgc_queue":  # to admins and moderators (hourly, or at once for 3+ reports): comments waiting, the backlog
         q = "SELECT COUNT(*) FROM tgc_comments WHERE (status = 'queued' OR review = 1)"
         n, old = one(con, q)[0], one(con, q + " AND decided_at < ?", now() - 86400)[0]
         return (*texts.bot_message(lang, kind, n=n, old=old), "capps") if n else None
     if kind in AUTHOR:  # to the author: removed after reports (under review), then the verdict; his own words only with
         # "restored" (to post them again), to him alone (AGENTS.md's one exception for a user's own text)
-        c = one(con, "SELECT body, clause FROM tgc_comments WHERE id = ? AND " + AUTHOR[kind], int(ref[1]))
+        c = one(con, "SELECT body, clause FROM tgc_comments WHERE id = ? AND author_id = ? AND " + AUTHOR[kind], int(ref[1]), m["user_id"])
         rule = texts.pick(texts.TGC_RULES, lang).get(c["clause"] or "other") if c else ""
         words = "\n\n" + html.escape(c["body"]) if c and kind == "tgc_back" else ""
         return (texts.bot_message(lang, kind, rule=rule)[0] + words, None, "") if c else None
