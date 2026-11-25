@@ -178,9 +178,9 @@ def link_telegram(con, uid: int, tg: dict, now: int) -> None:
 
 def telegram_start(bot_token: str, domain: str) -> str:
     """Telegram's own sign-in page, back to us with #tgAuthResult (the widget's redirect mode, no popup)."""
-    return "https://oauth.telegram.org/auth?" + httpx.QueryParams({
+    return "https://oauth.telegram.org/auth?" + str(httpx.QueryParams({
         "bot_id": bot_token.split(":")[0], "origin": f"https://{domain}", "request_access": "write",
-        "return_to": f"https://{domain}/?link=telegram"})  # the page reads #tgAuthResult (WebEntrance.telegramBack)
+        "return_to": f"https://{domain}/?link=telegram"}))  # the page reads #tgAuthResult (WebEntrance.telegramBack)
 
 
 def add_device(con, uid: int, session: bytes, body: dict, now: int) -> None:

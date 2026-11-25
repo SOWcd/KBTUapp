@@ -975,7 +975,7 @@ def _due(con) -> list:
 def _pushes(cfg: Config, m, start) -> bool:
     """This message goes to the iPhone app instead of Telegram: a template with one way into the app (never a keyboard
     of votes or links, a forum comment's edits, or the credits' ask, which follow Telegram's own account)."""
-    return bool(m["pushable"]) and apns.on(cfg) and isinstance(start, str) and not m["kind"].startswith("tgc_") \
+    return apns.on(cfg) and bool(m["pushable"]) and isinstance(start, str) and not m["kind"].startswith("tgc_") \
         and m["kind"] not in ("fch_comments", "credit_ask")
 
 
@@ -1051,7 +1051,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         for m in await anyio.to_thread.run_sync(_due, con):
             if _stopping():  # between messages: one taken and cut mid-send would go again after its LEASE, maybe twice
                 return
-            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel), bool(m["pushable"]) and apns.on(cfg))
+            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel), apns.on(cfg) and bool(m["pushable"]))
             if msg is None:
                 continue
             text, button, start = msg

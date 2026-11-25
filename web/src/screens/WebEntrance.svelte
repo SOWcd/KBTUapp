@@ -35,7 +35,7 @@
     entered = true;
     void telegramBack();
     // the iPhone app: Apple's own prompt once, then this phone's token each launch (it can change); for this session only
-    void pushToken().then((token) => token && api.pushDevice(token, APPLE_CONSENT)).catch(() => {});
+    void pushToken().then((token) => { if (token) return api.pushDevice(token, APPLE_CONSENT); }).catch(() => {});
   }
 
   // back from Telegram's sign-in page (Settings → Link Telegram, logic/apple.py): its proof in #tgAuthResult
