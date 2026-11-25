@@ -35,7 +35,6 @@
   import jccPhoto from '../../assets/lanyards/jcc-top-photo.webp';
   import jccLeft from '../../assets/lanyards/jcc-top-left.webp';
   import jccRight from '../../assets/lanyards/jcc-top-right.webp';
-  import sowerHand from '../../assets/lanyards/sower/hand.webp'; // the creator's photo's horns hand, cut out (SOWER's photo)
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always). onphoto: my photo tapped (Me: settings, or
@@ -265,8 +264,8 @@
 <!-- JCC's top layer (their own split): their sakura over the photo, its frame and the strip, where their mock puts
      it; part of their lanyard, not a frame (a frame worn with it stays under it) -->
 {#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
-<!-- the photo; SOWER's is his hand on a dark tile (card C), the same on every phone and to everyone -->
-{#snippet pic(size: number)}{#if face === 'sower'}<span class="hand"><img src={sowerHand} alt="" draggable="false" /></span>{:else}<Avatar person={h.person} {size} tappable={false} />{/if}<Frame id={h.frame} />{@render sakura()}{/snippet}
+<!-- the photo: always the person's own, at the standard size (every look keeps the standard card) -->
+{#snippet pic(size: number)}<Avatar person={h.person} {size} tappable={false} /><Frame id={h.frame} />{@render sakura()}{/snippet}
 
 <section class="h">
 <div class="hang {face}" class:club={!!club} class:ink={!!club?.ink} style={lookVars(face) + halo} class:rest={!live || !seen || covered}>
@@ -287,7 +286,7 @@
         {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}>{@render pic(86)}</button>
         {:else}<span class="photo">{@render pic(86)}</span>{/if}
         <span class="id">
-          <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={face === 'sower' ? 16 : 20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
+          <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>
@@ -447,25 +446,17 @@
   .faces { --sh: 0, 0, 0; }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone, "matte black, one red" (.claude/reports/sower-badge, card C; the card's ground:
-     ui/SowerArt): his hand on a dark tile, a white KBTU tile, no halo, one red dot before the role, the meta on one line */
-  .sower .badge { padding: 40px 0 16px; border-radius: var(--r-xl); background: rgb(10, 10, 11); box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75); }
+  /* SOWER, the creator's alone, "matte black, one red" (card C's colours on the standard card: size, photo and
+     layout are every look's; the ground: ui/SowerArt), a white KBTU tile, no halo, one red dot before the role, the meta on one line */
   .sower .badge::after { opacity: 0.5; } /* matte: a fainter sheen */
-  .sower .back { border-radius: var(--r-xl); }
   .sower .slot { height: 7px; background: black; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08); }
-  .sower .photo { padding: 0; background: none; border-radius: 27%; }
-  .hand { position: relative; display: block; width: 82px; height: 82px; overflow: hidden; border-radius: 27%;
-    background: radial-gradient(90% 90% at 30% 15%, rgb(58, 58, 60), rgb(11, 11, 12) 75%);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 18px rgba(0, 0, 0, 0.55); }
-  .hand img { position: absolute; left: 50%; top: 52%; height: 86%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; -webkit-user-drag: none; }
-  .sower .medal { top: 16px; right: 16px; width: 44px; height: 44px; }
   .sower .qrhint { width: 17px; height: 17px; background: rgb(28, 28, 30); color: rgb(245, 245, 247); box-shadow: 0 0 0 1.5px rgb(245, 245, 247); }
   .sower .id { text-shadow: none; }
-  .sower .top .nm { gap: 6px; font-size: var(--fs-sec); font-weight: 700; color: rgb(245, 245, 247); } /* 22 on mine too */
+  .sower .top .nm { color: rgb(245, 245, 247); }
+  .sower .badge { background: rgb(10, 10, 11); }
   .sower .id > .role { display: flex; align-items: center; gap: 6px; margin-top: 8px; white-space: nowrap; font-weight: 600; font-size: calc(var(--fs-tab) * 0.86); letter-spacing: 0.16em; color: rgb(245, 245, 247); }
   .sower .id > .role::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 59, 48); box-shadow: 0 0 8px rgb(255, 59, 48); }
   .sower .id > .meta { display: block; margin-top: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 500; font-size: var(--fs-cap); color: rgb(134, 134, 139); }
-  .sower .foot { margin-top: 28px; }
   .sower .strap { background: linear-gradient(rgba(255, 59, 48, 0.9), rgba(255, 59, 48, 0.9)) 3px 0 / 1px 100% no-repeat, linear-gradient(90deg, rgb(17, 17, 17), rgb(29, 29, 31) 45%, rgb(29, 29, 31) 55%, rgb(12, 12, 12)); }
   .sower .strap span { color: rgb(161, 161, 166); letter-spacing: 0.28em; } /* a red stitch down its edge */
   .sower .clip { background: linear-gradient(180deg, rgb(58, 58, 60), rgb(28, 28, 30)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 5px rgba(0, 0, 0, 0.7); }

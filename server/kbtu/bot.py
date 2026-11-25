@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
+from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -567,6 +567,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if not logic.seats.sees_school(con, m["user_id"], e):  # a school's own event: only to whom it shows (its signed-up keep theirs)
         return None
+    if kind == "remind_2h" and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], m["user_id"]):
+        return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
     if kind.startswith("door_open") and (not one(con, "SELECT n_door FROM users WHERE id = ?", m["user_id"])[0] or not one(
@@ -952,6 +954,7 @@ def _chores(cfg: Config, con) -> None:
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on
+    logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
@@ -1046,6 +1049,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _withdrawn_offers(cfg, http, con)
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
+        if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
+            await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):

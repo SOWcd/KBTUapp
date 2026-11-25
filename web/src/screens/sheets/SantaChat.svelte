@@ -1,3 +1,7 @@
+<script module lang="ts">
+  let tmp = 0; // pending messages can outlive the sheet that sent them
+</script>
+
 <script lang="ts">
   // Secret Santa's chat (server santa.chat): one thread of a pair. side 'to': I write as the Santa of my person (named:
   // I know them); 'from': with my own Santa, who is only ever "Secret Santa" here. The thread lives in the store
@@ -6,7 +10,7 @@
   import { tick, untrack } from 'svelte';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import { api, ApiErr, type Id, type SantaMsg } from '../../lib/api';
-  import { data, loadSantaChat } from '../../lib/state/data.svelte';
+  import { changeSantaChat, data, loadSantaChat } from '../../lib/state/data.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -22,43 +26,47 @@
   const th = $derived(data.santaChat[event]?.[side]);
   let draft = $state('');
   let list = $state<HTMLDivElement>();
-  let tmp = 0;
+  let ended = false;
   const down = async () => { await tick(); list?.lastElementChild?.scrollIntoView({ block: 'end' }); };
   // no chat any more (over, or someone left the ring: the server then refuses every read and write): what was shown
   // goes and the sheet closes, so nothing is ever sent into a pair that changed under an open sheet
-  const gone = () => { delete data.santaChat[event]; say(t('santa.chatOff'), 'locked_3d'); close(overlay.id); };
+  const gone = () => { if (ended) return; ended = true; delete data.santaChat[event]; say(t('santa.chatOff'), 'locked_3d'); close(overlay.id); };
   const read = () => { if (!document.hidden) void loadSantaChat(untrack(() => event)).then((ok) => { if (!ok) gone(); }); };
   $effect(() => { read(); document.addEventListener('visibilitychange', read); return () => document.removeEventListener('visibilitychange', read); });
   $effect(() => { if (th?.msgs.length) void down(); });
 
-  async function send() {
+  function send() {
     const text = draft.split(/\s+/).filter(Boolean).join(' ');
-    if (!text || !th) return;
+    if (!text || !th || th.closed) return;
     const mine: SantaMsg = { id: --tmp, mine: true, text, at: nowTs() };
     th.msgs.push(mine); draft = ''; haptic.tap();
-    try {
-      const m = await api.santaWrite(event, side, text);
-      const now = data.santaChat[event]?.[side]?.msgs; // a refresh may have replaced the list meanwhile
-      const i = now?.findIndex((x) => x.id === mine.id) ?? -1;
-      if (i >= 0) now![i] = m; else if (now && !now.some((x) => x.id === m.id)) now.push(m);
-    } catch (e) {
-      const now = data.santaChat[event]?.[side];
-      if (now) now.msgs = now.msgs.filter((x) => x.id !== mine.id);
-      if (!draft) draft = text;
-      const code = e instanceof ApiErr ? e.code : '';
-      if (code === 'not_found') return gone();
-      if (code === 'closed' && now) { now.closed = true; now.msgs = []; }
-      haptic.error(); say(t(code === 'rate_limited' ? 'santa.chatLimit' : code === 'closed' ? 'santa.chatClosed' : 'common.error'), 'warning_3d');
-    }
+    void changeSantaChat(event, async () => {
+      try {
+        const m = await api.santaWrite(event, side, text);
+        const msgs = data.santaChat[event]?.[side]?.msgs;
+        const i = msgs?.findIndex((x) => x.id === mine.id) ?? -1;
+        if (msgs && i >= 0) msgs[i] = m;
+      } catch (e) {
+        const now = data.santaChat[event]?.[side];
+        if (now) now.msgs = now.msgs.filter((x) => x.id !== mine.id);
+        if (!draft) draft = text;
+        const code = e instanceof ApiErr ? e.code : '';
+        if (code === 'not_found') return gone();
+        if (code === 'closed' && now) { now.closed = true; now.msgs = []; }
+        haptic.error(); say(t(code === 'rate_limited' ? 'santa.chatLimit' : code === 'closed' ? 'santa.chatClosed' : 'common.error'), 'warning_3d');
+      }
+    });
   }
   async function report() {
     if (!(await sheets.ask({ title: t('santa.chatReportAsk'), text: t('santa.chatReportText'), ok: t('santa.chatReportGo'), cancel: t('common.cancel'), danger: true }))) return;
-    try {
-      await api.santaReport(event, side);
-      const now = data.santaChat[event]?.[side];
-      if (now) { now.closed = true; now.msgs = []; }
-      haptic.soft(); say(t('santa.chatClosed'), 'locked_3d');
-    } catch (e) { if (e instanceof ApiErr && e.code === 'not_found') return gone(); haptic.error(); say(t('common.error'), 'warning_3d'); }
+    await changeSantaChat(event, async () => {
+      try {
+        await api.santaReport(event, side);
+        const now = data.santaChat[event]?.[side];
+        if (now) { now.closed = true; now.msgs = []; }
+        haptic.soft(); say(t('santa.chatClosed'), 'locked_3d');
+      } catch (e) { if (e instanceof ApiErr && e.code === 'not_found') return gone(); haptic.error(); say(t('common.error'), 'warning_3d'); }
+    });
   }
   const more = (e: MouseEvent) => menu(e.currentTarget as Element, [{ label: t('cm.report'), destructive: true, onselect: report }], 'start');
 </script>
