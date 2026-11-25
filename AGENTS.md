@@ -42,6 +42,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; grep the key prefix and edit by anchor in all three |
 | Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
 | Test helpers | `env`, `login`, `tma`, `set_clock` in `server/tests/test_core.py` (import them from there) |
+| Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
 
 ## Run and check

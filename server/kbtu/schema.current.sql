@@ -287,7 +287,7 @@ CREATE TABLE contacts (                               -- "I can help" / "write t
         status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
         created_at INTEGER NOT NULL,
         decided_at INTEGER
-    , token TEXT) STRICT;
+    , token TEXT, withdrawn_at INTEGER, offer_message TEXT) STRICT;
 CREATE TABLE credit_consents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1460,6 +1460,22 @@ CREATE TABLE web_sessions (
       created_at INTEGER NOT NULL,
       last_used_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+CREATE TABLE yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
@@ -1488,7 +1504,9 @@ CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE 
 CREATE INDEX club_report_marks_by_user ON club_report_marks(user_id);
 CREATE INDEX comments_by_event ON comments(event_id, created_at);
 CREATE INDEX comments_by_post ON comments(post_id, created_at);
-CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
+CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;
 CREATE INDEX credit_consents_user ON credit_consents (user_id, id);
 CREATE INDEX credits_tg ON credits (tg_id);
 CREATE INDEX donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
@@ -1625,6 +1643,7 @@ CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
 CREATE INDEX web_login_used_expires ON web_login_used(expires_at);
 CREATE INDEX web_sessions_last_used ON web_sessions(last_used_at);
 CREATE INDEX web_sessions_user ON web_sessions(user_id);
+CREATE INDEX yt_videos_by_org ON yt_videos(org_id, channel_id);
 CREATE TRIGGER chat_seen_chat_sync_delete AFTER DELETE ON chat_sync BEGIN
   DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
       (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),

@@ -493,7 +493,8 @@ export const server = {
   subject: (id: string): Promise<SubjectCard> => call('GET', `/subjects/${encodeURIComponent(id)}`),
   joinSubject: (id: string, note: string): Promise<SubjectCard> => call('PUT', `/subjects/${encodeURIComponent(id)}/me`, { note }),
   leaveSubject: (id: string): Promise<void> => call('DELETE', `/subjects/${encodeURIComponent(id)}/me`),
-  subjectOffer: (ask: Id): Promise<{ status: 'pending' }> => call('POST', '/subjects/offer', { ask }),
+  subjectOffer: (ask: Id): Promise<{ id: Id; status: 'pending' | 'accepted' | 'declined' }> => call('POST', '/subjects/offer', { ask }),
+  withdrawSubjectOffer: (id: Id): Promise<void> => call('DELETE', `/subjects/offer/${id}`),
   releaseAsk: (id: Id): Promise<Ask> => call('POST', `/forum/asks/${id}/release`),
   hideAsk: (id: Id): Promise<void> => call('POST', `/forum/asks/${id}/hide`),
   liftHold: (id: Id): Promise<void> => call('POST', `/forum/holds/${id}`), // a subject take-down lifted (Done's Undo makes it again)
@@ -588,6 +589,7 @@ export const server = {
   staff: (): Promise<Staff> => call('GET', '/admin/staff'), // admin: the app's team and the banned
   staffSearch: (q: string): Promise<StaffRow[]> => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
   search: (q: string): Promise<{ events: EventCard[]; clubs: OrgRef[] }> => call('GET', '/search?q=' + encodeURIComponent(q)), // the one search: by any name, what I may see (the admin: all)
+  searchMore: (q: string): Promise<import('./types').SearchMore> => call('GET', '/search/more?q=' + encodeURIComponent(q)), // the global search: what the app doesn't hold
   staffMutes: (): Promise<import('./types').StaffMute[]> => call('GET', '/admin/notifications'), // staff: my work-item notifications
   setStaffMute: (kind: string, on: boolean): Promise<import('./types').StaffMute[]> => call('PUT', `/admin/notifications/${kind}`, { on }), // admin → People: by name, @username, student ID or id
   inbox: (): Promise<import('./types').Inbox> => call('GET', '/admin/inbox'), // staff: everything waiting, and what was done lately
@@ -624,7 +626,6 @@ export const server = {
   rosterDecide: (row: Id, ok: boolean): Promise<void> => call('POST', `/roster/requests/${row}`, { ok }), // the main channel's posts in the club's news
   mirrorOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
   swearOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }), // President or Vice; conflict rights: the bot can't delete and restrict there
-  callOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/call`, { on }), // President or Vice
   swearReport: (org: Id): Promise<SwearRow[]> => call('GET', `/orgs/${org}/chats/swear`), // President, Vice, Heads
   chatRoles: (org: Id, chat: Id): Promise<ChatRoles> => call('GET', `/orgs/${org}/chats/${chat}/roles`), // the group's admins against the club's roles, asked of Telegram now
   deleteChat: (id: Id): Promise<void> => call('DELETE', `/admin/chats/${id}`), // a suggestion declined too

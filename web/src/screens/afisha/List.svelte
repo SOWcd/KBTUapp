@@ -15,10 +15,13 @@
   import Star from '@lucide/svelte/icons/star';
   import X from '@lucide/svelte/icons/x';
   import { onMount, tick, untrack } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
+  import type { TransitionConfig } from 'svelte/transition';
+  import { calm } from '../../ui/fold';
   import type { ChannelFeedPost, ClassItem, EventCard, Media, Post } from '../../lib/api';
   import { channel } from '../../lib/state/channel.svelte';
   import { count } from '../../lib/stats';
-  import { load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
+  import { lead as leadHero, load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, stale as heroStale, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
@@ -52,8 +55,7 @@
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { hit as orgHit } from '../../lib/clubs';
-  import { hit, namesOf } from '../../lib/search';
+  import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
   import { afishaFilter, filterEvents, choices, active, pick, clearFilter } from '../../lib/state/afisha.svelte';
@@ -167,11 +169,15 @@
     if (nx) ev('next', nx);
     return out;
   });
+  // the first card is the moment's (lib/hero.ts lead): my ticket starting soon, else today's biggest, else the week's most
+  // popular. It follows the 30 s clock and the store, so it changes through the day on its own (crossfaded in the markup)
+  const top = $derived.by((): Card | null => { const x = leadHero(shown, now, heroStale(was, today)); return x && { key: 'e' + x.e.id, kind: x.kind, e: x.e }; });
   // the cards seen this visit keep their places: the forum's feed landing later never swaps one under the finger
   let held = $state({ d: 0, keys: [] as string[] });
   const cards = $derived.by(() => {
-    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x) : [];
-    return [...keep, ...rankHero(cands.filter((x) => !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
+    const lead = top ? [top] : [], taken = (x: Card) => lead.some((y) => y.key === x.key);
+    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x && !taken(x)) : [];
+    return [...lead, ...keep, ...rankHero(cands.filter((x) => !taken(x) && !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
   });
   let at = $state(0); // the card in view
   const atCard = $derived(Math.min(at, cards.length - 1));
@@ -179,7 +185,9 @@
     const i = atCard, c = cards[i];
     if (!c || !data.eventsReady || searching || ui.tab !== 'afisha') return;
     untrack(() => {
-      if (held.d !== today || held.keys.length <= i) held = { d: today, keys: cards.slice(0, i + 1).map((x) => x.key) };
+      // the lead isn't held (the clock moves it): a new one never shifts the swiped-to cards under the finger
+      const from = top ? 1 : 0;
+      if (held.d !== today || held.keys.length < i + 1 - from) held = { d: today, keys: cards.slice(from, i + 1).map((x) => x.key) };
       if (heroShown(mem, c, today, i === 0)) { count(`hero.show.${c.kind}`); saveHero(mem); }
     });
   });
@@ -187,6 +195,9 @@
     if (heroTapped(mem, c, today)) count(`hero.tap.${c.kind}`);
     saveHero(mem);
   }
+  // a new lead fades in on top; the old one stays whole under it as long, then goes (a plain crossfade dipped to the ground)
+  const into = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, easing: cubicOut, css: (k) => `opacity: ${k}; z-index: 1` });
+  const under = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, css: () => 'z-index: 0' });
   function slid(ev: Event) {
     const el = ev.currentTarget as HTMLElement, a = el.children[0] as HTMLElement, b = el.children[1] as HTMLElement | undefined;
     at = b ? Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)) : 0; // one card's step
@@ -243,7 +254,7 @@
     return [...events.values()].filter((e) => canAskRating(e, now)).sort((a, b) => endOf(b) - endOf(a))[0];
   });
 
-  // the pull-down search: the events held, upcoming and the last month's that ended, by title, place or club
+  // the pull-down search: the app's global one (events, clubs, people, news, the forum, places, subjects)
   let q = $state('');
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
@@ -251,7 +262,8 @@
     toTickets.fn = () => { q = ''; void tick().then(() => (document.querySelector('.tab.on .tix') ?? document.querySelector('.tab.on .heroes'))?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
     return () => { toTickets.fn = null; };
   });
-  const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
+  // the global search's events: the upcoming ones held, then the last month's that ended (screens/afisha/Everything)
+  const searchable = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))] : []);
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -309,50 +321,9 @@
   {/if}
 {/snippet}
 
-<div class="page scroll stagger">
-  <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <header class="hd">
-    <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
-    <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
-    <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
-      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
-      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
-      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
-    </span>
-  </header>
-  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
-  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
-  {#if searching}
-    <div class="past">
-      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
-      {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
-    </div>
-  {:else}
-  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
-    {@const e = ratePrompt}
-    <div class="rate-prompt">
-      <Card>
-        <div class="rate-head">
-          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
-          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
-        </div>
-        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
-          {#each [1, 2, 3, 4, 5] as score (score)}
-            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
-          {/each}
-        </div>
-      </Card>
-    </div>
-  {/if}
-  <StoryRow />
-  {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
-
-  {#if cards.length}
-    <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
-    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
-    {#each cards as c, i (c.key)}
-    {#if 'e' in c}
+<!-- one hero card, any kind: the lead's slot (i 0) and the swiped-to ones -->
+{#snippet heroCard(c: Card, i: number)}
+  {#if 'e' in c}
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
@@ -380,7 +351,7 @@
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
-    {:else}
+  {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
     <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
@@ -396,7 +367,54 @@
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
-    {/if}
+  {/if}
+{/snippet}
+
+<div class="page scroll stagger">
+  <PullSearch bind:value={q} placeholder={t('list.search')} />
+  <header class="hd">
+    <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
+    <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
+    <span class="tools">
+      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
+      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
+      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
+      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
+    </span>
+  </header>
+  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
+  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
+  {#if searching}
+    <Everything {q} events={searchable} />
+  {:else}
+  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
+    {@const e = ratePrompt}
+    <div class="rate-prompt">
+      <Card>
+        <div class="rate-head">
+          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
+          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
+        </div>
+        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
+          {#each [1, 2, 3, 4, 5] as score (score)}
+            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
+          {/each}
+        </div>
+      </Card>
+    </div>
+  {/if}
+  <StoryRow />
+  {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
+
+  {#if cards.length}
+    <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
+    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    {#each cards as c, i (i ? c.key : '')}
+      {#if i}{@render heroCard(c, i)}
+      {:else}
+        <!-- the lead's slot stays put; a new lead fades in over the old in the same cell (no jump, no dip to the ground) -->
+        <div class="lead">{#key c.key}<div class="face" in:into out:under>{@render heroCard(c, 0)}</div>{/key}</div>
+      {/if}
     {/each}
     </div>
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
@@ -580,7 +598,12 @@
   /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
      less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
   .heroes { scroll-padding-inline: var(--gutter); }
-  .heroes > .hero { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
+  .heroes > .hero, .lead { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
+  /* the lead's slot: one grid cell the old and the new card share while they crossfade, so the row never moves; minmax(0):
+     the cell, like the card, never grows to the meta's width */
+  .lead { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .face { grid-area: 1 / 1; display: flex; min-width: 0; }
+  .face > .hero { flex: 1; min-width: 0; }
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }

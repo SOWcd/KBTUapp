@@ -821,6 +821,36 @@ def test_chat_is_the_pair_alone(env):
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
 
 
+def test_report_ids_survive_transcript_sweep(env):
+    c, cfg = env
+    con, eid = _game(c, cfg, 4)
+    login(c, 30, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 30")
+    mod = tma(30)
+    queue = "/api/admin/santa-reports"
+
+    def report(event):
+        assert _draw(c, event).status_code == 200
+        assert _say(c, event, 10, "to").status_code == 200
+        assert c.post(f"/api/events/{event}/santa/chat/report", headers=tma(10), json={"side": "to"}).status_code == 204
+        return c.get(queue, headers=mod).json()[0]["id"]
+
+    old = report(eid)
+    con.execute("UPDATE bot_outbox SET sent_at = send_after WHERE kind = 'santa_reported'")
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (logic.now() - 91 * DAY, eid))
+    logic.santa.forget(con)
+    assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
+
+    next_event = _event(c, santa=True)
+    for tg in PLAYERS[:4]:
+        assert _go(c, next_event, tg, f"wish of {tg}").json()["my"]["status"] == "going"
+    fresh = report(next_event)
+    assert old != fresh
+    assert c.post(f"{queue}/{old}/done", headers=mod).status_code == 404
+    assert [r["id"] for r in c.get(queue, headers=mod).json()] == [fresh]
+    assert [r["ref"] for r in _out(con, "santa_reported") if r["sent_at"] is None] == [f"srp:{fresh}"]
+
+
 def test_chat_cap_end_and_retiring(env, monkeypatch):
     """Fifty messages a day per person, whatever becomes of them; the chat ends three days after the gifts day as it
     stood at the draw (an edit revives nothing) and the night's round deletes it; the first one to leave the ring
@@ -862,7 +892,7 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     assert _say(c, eid, x, "to", "kept for the staff").status_code == 200 and _say(c, eid, b, "to", "gone").status_code == 200
     assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(x), json={"side": "to"}).status_code == 204
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
-    assert [r["text"] for r in con.execute("SELECT text FROM santa_msgs ORDER BY id")] == ["kept for the staff", None]
+    assert [r["text"] for r in con.execute("SELECT text FROM santa_msgs ORDER BY abs(id)")] == ["kept for the staff", None]
     for tg in PLAYERS:
         assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
     assert _page(c, eid, b)["mySanta"]["chat"] is False and _page(c, eid, x)["mySanta"]["chat"] is False

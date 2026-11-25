@@ -68,8 +68,10 @@ def take(data: bytes, root: Path, donation_key: bytes | None = None) -> tuple[di
     got = read(im)
     if donation_key is None and got is not None and not got.get("amount") and not got.get("no"):
         raise NotReceipt
+    # Each upload owns its files: delayed cleanup can never unlink another upload of the same bytes.
     if donation_key is None:
-        return media.store(im, data, root), got
+        saved = media.store(im, os.urandom(32), root)
+        return {**saved, "sha256": hashlib.sha256(data).hexdigest()}, got
     saved = media.store(im, donation_key, root / DONATION_DIR)
     saved["path"] = f"{DONATION_DIR}/{saved['path']}"
     saved["sha256"] = hashlib.sha256(data).hexdigest()  # match reuploads even though each file has its own path

@@ -61,7 +61,7 @@
   import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, eventTeamChunk, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -77,6 +77,7 @@
   import Notice from '../../ui/Notice.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
@@ -530,8 +531,12 @@
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
     {#if detail?.teams && !preview && !cancelled}
-      {#await import('./EventTeam.svelte') then { default: EventTeam }}
+      {#await eventTeamChunk()}
+        <Skeleton n={1} />
+      {:then { default: EventTeam }}
         <EventTeam {detail} {going} onchange={(d) => (detail = d)} />
+      {:catch}
+        <Notice text={t('common.offline')} />
       {/await}
     {/if}
     {#if e.teamMax && !preview}<TournamentRows {id} manage={head} standalone />{/if}
