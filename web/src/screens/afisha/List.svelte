@@ -631,7 +631,7 @@
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
-     (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (#324, #328) */
+     (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
   .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
   .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
   /* one line: when (in the title's ink), how soon, where, whose. The club goes first and whole: it wraps to a hidden
