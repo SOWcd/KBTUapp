@@ -178,7 +178,8 @@
               {#snippet lead()}<span class="av" class:live={next && dayNo(next.startsAt) === today}><Avatar person={r.person} size={40} tappable={false} /></span>{/snippet}
             </Row>
           {/each}
-          <Row tone="add" title={t('fr.add')} onclick={() => sheets.addFriend()} />
+          <!-- once all are drawn: rows added in front of it restyled the whole group each frame (~120 ms at 4x CPU) -->
+          {#if draw.n >= list.length}<Row tone="add" title={t('fr.add')} onclick={() => sheets.addFriend()} />{/if}
         </Group>
       {/snippet}
       {#snippet sort()}<SortChip list="friends" orders={ORDERS} />{/snippet}

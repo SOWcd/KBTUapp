@@ -4,7 +4,7 @@
 import { build, type Rollup } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-/** Bytes of gzip (CompressionStream's level): 219,838 after issue 339 (227,605 before it), plus ~1.4% room. */
+/** Bytes of gzip (CompressionStream's level): 220,076 after issue 339 (227,870 before it), plus ~1.3% room. */
 const MAX_START_GZIP = 223_000;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
