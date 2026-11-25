@@ -7,7 +7,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic
+from kbtu import app as server, db, logic, outbox
 from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 
 EV = {"place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
@@ -132,13 +132,13 @@ def test_losing_the_tick(env):
     con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 70")
     assert c.post(f"/api/registry/orgs/{oid}/official", headers=D, json={"on": False}).json()["official"] is False
     told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'club_unofficial'").fetchall()
-    assert len(told) == 1 and bot._render(con, told[0])[2] == f"cl_{oid}"
+    assert len(told) == 1 and outbox._render(con, told[0])[2] == f"cl_{oid}"
     assert c.patch(f"/api/events/{e['id']}", headers=tma(20), json={**paid, "price": 3000}).status_code == 403
     assert c.patch(f"/api/events/{e['id']}", headers=tma(20), json={**paid, "price": None}).json()["price"] is None
     assert c.patch(f"/api/events/{p['id']}", headers=tma(20), json={**party, "guestHost": "Other Hub"}).status_code == 403
     assert c.patch(f"/api/events/{p['id']}", headers=tma(20), json={**party, "guestHost": None}).status_code == 200
     c.post(f"/api/registry/orgs/{oid}/official", headers=D, json={"on": True})
-    assert bot._render(con, told[0]) is None  # the ✓ is back before it went out: nothing to say
+    assert outbox._render(con, told[0]) is None  # the ✓ is back before it went out: nothing to say
 
 
 def test_review_fixes(env):

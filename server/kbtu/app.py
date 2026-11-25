@@ -35,8 +35,8 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
-from .logic import ApiError, Viewer
+from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
 log = logging.getLogger("kbtu.app")
@@ -59,7 +59,9 @@ async def _picture(fn, *args):
         raise ApiError("bad_input", "not_an_image") from None
 
 THREADS = 16               # see lifespan
+GUEST_LIST_BYTES = 2_000_000  # a guest list's JSON body (logic.guests.LIST_ROWS rows); bigger is refused before it is read
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
+ANDROID_PACKAGE = "kz.sow.kbtu"  # the Play app (android/twa-manifest.json): fixed for good once published
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
 
 
@@ -181,6 +183,11 @@ def _lent_role(con, request: Request, org: int) -> dict:
     return {"lent_role": t["level"], "lent_rights": t["rights"]}
 
 
+def is_demo(request: Request) -> bool:
+    """Google Play's reviewer (web_auth.DEMO_TG_ID): its reads leave out people and change nothing (after viewer())"""
+    return request.state.tg["id"] == web_auth.DEMO_TG_ID
+
+
 def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     cfg = request.app.state.cfg
     head = request.headers.get("authorization")
@@ -196,12 +203,17 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
             raise ApiError("forbidden", "init_data")
         _web_csrf(request, cfg.domain)
         u = web_auth.lookup(con, token, cfg.admins)
+        demo = u["tg_id"] == web_auth.DEMO_TG_ID  # Google Play's reviewer: PLAY_DEMO on, the catalogue's reads alone
+        if demo and not cfg.play_demo:
+            raise ApiError("unauthorized", "web_session")
+        if demo and (request.method not in ("GET", "HEAD") or request.scope["route"].path not in web_auth.DEMO_READS):
+            raise ApiError("forbidden", "demo")
         request.state.tg = {"id": u["tg_id"], "username": u["tg_username"]}
         request.state.web_token = token
         request.state.renew_web_cookie = web_auth.touch(con, token, u, cfg.admins, SEEN_EVERY)
         if u["tg_id"] in cfg.admins and u["role"] != "admin":
             u = web_auth.lookup(con, token, cfg.admins)
-        v = _viewer_user(con, u)
+        v = Viewer(u["id"], "user", False) if demo else _viewer_user(con, u)  # whatever its row says: nobody in particular
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
         caller["uid"] = v.id  # forum.may_touch_ask reads whether I may see a subject's listings (subjects.may_read)
@@ -511,6 +523,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
     logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
     def after(con) -> None:
+        if not cfg.play_demo:
+            web_auth.revoke_demo(con)  # PLAY_DEMO off ends the reviewer's sessions for good, not until it's back on
         logic.replay_deletions(con)
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
@@ -642,6 +656,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             and board_on(app.state.cfg, v) and current_ai_policy(con, app.state.policy, v.id)
 
     def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
+        demo = is_demo(request)  # the reviewer sees no real person: no support contacts, no donation number
         if not getattr(request.state, "web_token", ""):
             logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
@@ -651,7 +666,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 reports = {"reports": summary}
                 if report_log:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
-        return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": logic.account.support(con),
+        return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,
@@ -659,16 +674,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    # Google may answer my assistant first: absent, it can't; else my own yes (assistant.GOOGLE_YES)
                                    **({"kriGoogle": logic.assistant.google_yes(con, v.id)} if kri_google(con, v) else {}),
                                    # the voluntary support page's number: shown, never recorded (no env: no key, no row)
-                                   **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone else {}),
+                                   **({"donate": app.state.cfg.donate_phone} if app.state.cfg.donate_phone and not demo else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
     @app.get("/api/me")
-    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
+    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True,
+               platform: str | None = None):
+        logic.account.seen_platform(con, v.id, platform)  # no extra request: the app's own /api/me says it
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
+        if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username
+            logic.account.dmp_bind(con, request.state.tg)
         return me_payload(request, con, v, report_log=report_log)
 
     @app.patch("/api/me")
@@ -681,7 +700,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/delete")
     def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
-        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
+        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
@@ -695,9 +714,63 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.dm_on(con, v, (body or {}).get("event"))
 
     @app.post("/api/donate/stars")
-    async def donate_stars(con: Con, v: Me, body: dict = Body(...)):
+    async def donate_stars(request: Request, con: Con, v: Me, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
-        return {"url": await logic.stars.invoice(app.state.cfg, ai_http(), v.id, lang, body.get("amount"))}
+        return {"url": await logic.stars.invoice(cfg, ai_http(), request.state.tg["id"], lang, body.get("amount"))}
+
+    @app.get("/api/donate")
+    def donate_mine(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.mine(con, v)
+
+    @app.get("/api/sponsors")
+    def sponsors(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.listing(con)
+
+    @app.put("/api/donate/consent")
+    def sponsor_consent(request: Request, con: Con, v: Me, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.answer(con, v, request.state.tg["id"], body)
+
+    @app.put("/api/donate/amount")
+    def sponsor_amount(request: Request, con: Con, v: Me, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.answer(con, v, request.state.tg["id"], body, "amount")
+
+    @app.post("/api/donate/receipt")
+    async def donate_receipt(request: Request, con: Con, v: Me, response: Response, consent: str = ""):
+        response.headers["Cache-Control"] = "private, no-store"
+        payer = request.state.tg["id"]
+        await run_in_threadpool(donations.receipt_open, con, v, payer, cfg, consent)
+        data = await read_upload(request)
+        saved, read = await _picture(receipt.take, data, receipts, secrets.token_bytes(32))
+
+        def keep():
+            try:
+                return donations.add_receipt(con, v, payer, cfg, saved, read, consent)
+            except Exception:
+                media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ? AND kind = 'receipt'", saved["path"]) else [saved["path"]])
+                raise
+        return await run_in_threadpool(keep)
+
+    @app.get("/api/donate/receipts/{did}/image")
+    def donation_image(did: int, con: Con, v: Me):
+        return FileResponse(receipts / f"{donations.image_path(con, v, did)}.webp", media_type="image/webp",
+                            headers={"Cache-Control": "private, no-store"})
+
+    @app.get("/api/admin/donations")
+    def donation_queue(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.queue(con, v)
+
+    @app.post("/api/admin/donations/{did}/review", status_code=204)
+    def donation_review(did: int, con: Con, v: Me, body: dict = Body(...)):
+        donations.review(con, v, did, body)
+
+    @app.post("/api/me/dmp-hi", status_code=204)  # DMP's one-time hello left for Microsoft (me.dmpHi)
+    def dmp_hi(con: Con, v: Me):
+        logic.account.dmp_greeted(con, v)
 
     @app.post("/api/me/keep")
     def keep_me(con: Con, v: Me):
@@ -803,11 +876,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/screen/pair")
     def screen_pair(request: Request, con: Con):
         # the visitor's address through Cloudflare's tunnel (the socket's peer is the tunnel itself)
-        return qr.pair(con, cfg.token_key, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else ""))
+        return {**qr.pair(con, cfg.token_key, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")),
+                "bot": f"https://t.me/{cfg.bot_username}?startapp="}
 
     @app.get("/api/screen")
     def screen_show(con: Con, x_screen: str = Header("")):
-        return qr.screen(con, cfg.token_key, x_screen)
+        return {**qr.screen(con, cfg.token_key, x_screen), "bot": f"https://t.me/{cfg.bot_username}?startapp="}
 
     # the organizer's phone: pair a screen, run the session, the list
     @app.get("/api/screens")
@@ -860,6 +934,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/screens/{sid}/people")
     def screen_people(sid: int, con: Con, v: Me):
         return qr.people(con, v, sid)
+
+    @app.get("/api/screens/{sid}")
+    def meetup_session(sid: int, con: Con, v: Me):
+        return qr.meetup_session(con, cfg.token_key, v, sid)
+
+    @app.get("/api/screens/{sid}/scans")
+    def meetup_scans(sid: int, con: Con, v: Me, before: int | None = None):
+        return qr.meetup_scans(con, v, sid, before)
+
+    @app.post("/api/screens/{sid}/scans/{uid}")
+    def meetup_decide(sid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.meetup_decide(con, v, sid, uid, body.get("add"))
 
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
@@ -975,9 +1061,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ events
 
     @app.get("/api/events")
-    def list_events(con: Con, v: Me, frm: int | None = Query(None, alias="from"), to: int | None = None,
+    def list_events(request: Request, con: Con, v: Me, frm: int | None = Query(None, alias="from"), to: int | None = None,
             org: int | None = None):
-        return logic.events(con, v, frm, to, org)
+        return logic.events(con, v, frm, to, org, sweep=not is_demo(request))
 
     @app.get("/api/events/past")
     def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False, attended: bool = False):
@@ -1066,8 +1152,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                         headers={"Content-Disposition": f'inline; filename="kbtu-event-{eid}.ics"', "Cache-Control": "no-store"})
 
     @app.get("/api/events/{eid}")
-    def get_event(eid: int, con: Con, v: Me):
-        return logic.event(con, v, eid)
+    def get_event(request: Request, eid: int, con: Con, v: Me):
+        return logic.event(con, v, eid, sweep=not is_demo(request))
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
@@ -1212,8 +1298,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.orgs(con, v)
 
     @app.get("/api/orgs/{oid}")
-    def get_org(oid: int, con: Con, v: Me):
-        return logic.org(con, v, oid)
+    def get_org(request: Request, oid: int, con: Con, v: Me):
+        return logic.org(con, v, oid, demo=is_demo(request))
 
     @app.get("/api/orgs/{oid}/lent")  # the creator's Studio of a club he isn't in (X-Staff-Org): its President's membership
     def lent_studio(oid: int, con: Con, v: Me):
@@ -1302,7 +1388,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         tg = await run_in_threadpool(logic.chatmod.target, con, v, oid, cid)
         async with httpx.AsyncClient(timeout=10) as http:
             if on:
-                miss = await bot.swear_rights(cfg, http, tg)
+                miss = await bot_groups.swear_rights(cfg, http, tg)
                 if miss is None:
                     raise ApiError("unavailable", "telegram")
                 if miss:
@@ -1369,7 +1455,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/posts")
     def list_posts(con: Con, v: Me, scope: str = "all"):
-        if scope.startswith("org:") and not scope[4:].isdigit():
+        if scope.startswith("org:") and not (scope[4:].isascii() and scope[4:].isdigit()):  # a superscript two is a digit to isdigit, not to int()
             raise ApiError("bad_input")
         return logic.posts(con, v, scope)
 
@@ -1630,6 +1716,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def publish(eid: int, con: Con, v: Me):
         return logic.publish_event(con, v, eid)
 
+    # a member's own draft to the club's President and Vices, and their answer (organizing.submit_event)
+    @app.post("/api/events/{eid}/submit")
+    def submit_event(eid: int, con: Con, v: Me):
+        return logic.submit_event(con, v, eid)
+
+    @app.post("/api/events/{eid}/review")
+    def review_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.review_event(con, v, eid, body.get("ok"), body.get("reason"))
+
     @app.post("/api/events/{eid}/cancel")
     def cancel(eid: int, con: Con, v: Me):
         return logic.cancel_event(con, v, eid)
@@ -1756,6 +1851,29 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def door_tick(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.organizing.tick_pending(con, v, eid, body.get("key"), body.get("adult"), body.get("came", True))
 
+    @app.post("/api/events/{eid}/door-pending/walk-in")
+    def door_walk_in(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.add_walk_in(con, v, eid, body.get("name"), body.get("team"), body.get("adult"))
+
+    # the organizers' own guest list from Studio: {rows: [[name, student ID, 18+, username, team]], save}; a preview without save
+    @app.post("/api/events/{eid}/guest-list")
+    async def guest_list(eid: int, con: Con, v: Me, request: Request):
+        raw = await read_upload(request, GUEST_LIST_BYTES)
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            raise ApiError("bad_input") from None
+        if not isinstance(body, dict):
+            raise ApiError("bad_input")
+        return await run_in_threadpool(logic.organizing.guest_list, con, v, eid, body.get("rows"), body.get("save"))
+
+    @app.post("/api/events/{eid}/guest-list/export", status_code=204)
+    async def export_guest_list(eid: int, con: Con, v: Me):
+        """Like the attendees' CSV: the bot sends it to the asker's own chat."""
+        e, people = await run_in_threadpool(logic.organizing.guest_list_export, con, v, eid)
+        u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
+        await send_file(u["tg_id"], *texts.guest_list_csv(u["lang"], e["title"], people))
+
     @app.get("/api/events/{eid}/door-extra")
     def door_extra(eid: int, con: Con, v: Me):
         return logic.organizing.door_extra(con, v, eid)
@@ -1831,11 +1949,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         u = logic.one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)
         if not v.student or not u or u["tg_id"] != who or logic.guard_join(con, chat, who) != "approve":
             raise ApiError("forbidden")  # the same rule as at the door, again now (an event's group since, unlinked, banned)
-        tg = f"https://api.telegram.org/bot{cfg.bot_token}/"
         async with httpx.AsyncClient(timeout=15) as http:
-            r = (await http.post(tg + "answerChatJoinRequestQuery", json={"chat_join_request_query_id": qid, "result": "approve"})).json()
+            r = (await bot._tg(cfg, http, "answerChatJoinRequestQuery", {"chat_join_request_query_id": qid, "result": "approve"})).json()
             if not r.get("ok"):  # the query ran out: the request itself may still wait
-                r = (await http.post(tg + "approveChatJoinRequest", json={"chat_id": chat, "user_id": who})).json()
+                r = (await bot._tg(cfg, http, "approveChatJoinRequest", {"chat_id": chat, "user_id": who})).json()
         if not r.get("ok"):
             log.warning("guard: %s", str(r.get("description"))[:200])
             raise ApiError("conflict", "expired")
@@ -2305,6 +2422,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # Native research: verified students answer once; proposals are reviewed only in Admin.
+    research_body = Depends(json_body(logic.research.BODY_MOST))
+
+    @app.get("/api/research")
+    def research_surveys(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.surveys(con, v)
+
+    @app.post("/api/research/requests", status_code=204)
+    def research_propose(con: Con, v: Me, body: object = research_body):
+        logic.research.propose(con, v, body)
+
+    @app.post("/api/research/{slug}/answers", status_code=204)
+    def research_answer(slug: str, con: Con, v: Me, body: object = Depends(json_body(logic.forms.MOST))):
+        logic.research.answer(con, v, slug, body)
+
+    @app.get("/api/admin/research")
+    def research_requests(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.requests(con, v)
+
+    @app.post("/api/admin/research/{rid}", status_code=204)
+    def research_approve(rid: int, con: Con, v: Me, body: object = research_body):
+        logic.research.approve(con, v, rid, body)
+
     # to the creator (logic/helpus.py): an anonymous line (no author kept), a signed offer to help; the admin's list
     helpus_body = Depends(json_body(logic.helpus.BODY_MOST))
 
@@ -2411,8 +2553,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """A CSV into the person's own chat with the bot (asked for by them): it opens on any phone and can be forwarded."""
         try:
             async with httpx.AsyncClient(timeout=20) as http:
-                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendDocument", data={"chat_id": str(tg_id), "caption": caption},
-                                    files={"document": (name, data, "text/csv")})
+                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, "text/csv")})
             answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("file: %s", type(exc).__name__)
@@ -2467,7 +2608,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not url:
             return {"status": "bad", "title": ""}
         async with httpx.AsyncClient(timeout=10) as http:
-            status, title, _ = await bot.suggest(cfg, http, con, v.id, url)
+            status, title, _ = await bot_dm.suggest(cfg, http, con, v.id, url)
         return {"status": status, "title": title}
 
     @app.post("/api/chats/{cid}/opened", status_code=204)
@@ -2640,6 +2781,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/search")
     def find_all(con: Con, v: Me, q: str = ""):
         return {"events": logic.search.events(con, v, q[:80]), "clubs": logic.search.clubs(con, v, q[:80])}
+
+    # the app's global search, what it doesn't hold: findable people and the forum channel's posts (logic/search.more)
+    @app.get("/api/search/more")
+    def find_more(request: Request, con: Con, v: Me, q: str = ""):
+        try:
+            forum = bool(forum_viewer(request, v, con))
+        except ApiError:
+            forum = False
+        return logic.search.more(con, v, q[:80], forum=forum, channel=request.app.state.cfg.forum_channel)
 
     @app.put("/api/events/{eid}/reg-until")
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -2814,7 +2964,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"]}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/savePreparedInlineMessage", json={
+                r = (await bot._tg(cfg, http, "savePreparedInlineMessage", {
                     "user_id": request.state.tg["id"], "result": result,
                     "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True})).json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -2959,7 +3109,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum-posts/{pid}/mod", status_code=204)
     def fchan_mod_decide(pid: int, con: Con, v: FChan, body: dict = Body(...)):
-        F.mod_decide(con, v, pid, body.get("ok"))
+        F.mod_decide(con, v, pid, body.get("ok"), body.get("again", False))
 
     @app.post("/api/forum-posts/{pid}/restore", status_code=204)
     def fchan_mod_restore(pid: int, con: Con, v: FChan):
@@ -2984,6 +3134,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         rid, text = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
         verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
         return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
+
+    # a signed comment written in the app (fchannel.comment_*): the same AI look and moderators as a reply, sent by the bot
+    # under the person's short name; the thread shows what was written in the app
+    @app.get("/api/forum-posts/{pid}/thread")
+    def fchan_thread(pid: int, con: Con, v: FChan):
+        return F.thread(con, v, pid)
+
+    @app.post("/api/forum-posts/{pid}/thread")  # not /comments: /api/{kind}s/{tid}/comments takes that path
+    async def fchan_comment(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        rid, text = await run_in_threadpool(F.comment_reserve, con, v, pid, body)
+        verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
+        return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}
 
     @app.delete("/api/forum-replies/{rid}", status_code=204)
     def fchan_reply_drop(rid: int, con: Con, v: FChan):
@@ -3080,6 +3242,37 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def health():
         return Response("ok", media_type="text/plain")
 
+    @app.get("/.well-known/assetlinks.json")
+    def assetlinks():
+        """The Android app (android/) opens this site full screen only while its signing certificates are listed here
+        (Digital Asset Links): ANDROID_CERT_SHA256, the upload key's and Play's app signing key's"""
+        if not cfg.android_certs:
+            raise ApiError("not_found")
+        return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                              "target": {"namespace": "android_app", "package_name": ANDROID_PACKAGE,
+                                         "sha256_cert_fingerprints": list(cfg.android_certs)}}],
+                            headers={"Cache-Control": "public, max-age=300"})
+
+    @app.get("/play-demo")
+    def play_demo(request: Request, con: Con, k: str = ""):
+        """Google Play's reviewer signs in without Telegram: PLAY_DEMO's secret link (admin play-demo) opens the
+        made-up demo account (web_auth.demo_user) in this browser; a wrong or missing key is a plain 404"""
+        if not cfg.play_demo or not hmac.compare_digest(k.encode(), cfg.play_demo.encode()):
+            raise ApiError("not_found")
+        old = request.cookies.get(web_auth.COOKIE, "")
+        try:  # a real person signed in here keeps their session: a leaked link mustn't sign them out (a new profile for the reviewer)
+            if web_auth.lookup(con, old, cfg.admins)["tg_id"] != web_auth.DEMO_TG_ID:
+                return RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        except ApiError as e:
+            if e.code != "unauthorized":
+                raise
+        t = logic.now()
+        with db.tx(con):
+            token = web_auth.issue(con, web_auth.demo_user(con, t), old, t)
+        response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        _web_cookie(response, token)
+        return response
+
     @app.get("/exit")
     def exit_link():
         """kbtu.sow.kz/exit: the short "help me get out" link for posters and chats."""
@@ -3128,7 +3321,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     # public forms (logic/forms.py): no account, nothing about the sender kept
     @app.get("/f/{slug}")
     def form_page(con: Con, slug: str):
-        status, body = logic.forms.page(con, slug)
+        status, body = logic.forms.page(con, slug, f"https://t.me/{cfg.bot_username}?startapp=research")
         return Response(body, status_code=status, media_type="text/html", headers={
             "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
 
@@ -3149,10 +3342,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return None
         # Vite puts a content hash into every name under assets/, so those never change; nor do the map's tiles, whose
         # folder names their cut (map/u2/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
-        # video) changes rarely: a day, then revalidated in the background; a page (.html) and the manifest (the home-screen
-        # name iOS reads when adding; a stale one kept "KBTU" after the rename) are always asked again
+        # video) changes rarely: a day, then revalidated in the background; a page (.html), the manifest (the home-screen
+        # name iOS reads when adding; a stale one kept "KBTU" after the rename) and the service worker (a deploy reaches
+        # the next launch, web/src/sw.ts) are always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
-                 "no-cache" if f.suffix == ".html" or path == "manifest.json" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
+                 "no-cache" if f.suffix == ".html" or path in ("manifest.json", "sw.js") else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
         if f.suffix in (".mp4", ".webm", ".mov", ".m4a", ".mp3"):
             cache += ", no-transform"  # the CDN gzipped a video and dropped Range: iOS shows it black (owner, Nov 23)
         headers, send = {"Cache-Control": cache}, f
@@ -3199,6 +3393,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f
+        if path.startswith("assets/") or path == "sw.js":  # gone with a deploy: a 404, never the page under a .js name
+            raise ApiError("not_found")  # (the service worker would keep it as code; a build without sw.js stops its updates)
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
             with pool.conn() as con:  # only past the files (else every asset takes a connection)

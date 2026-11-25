@@ -69,7 +69,7 @@ def _scan(c, tg, p):
 
 
 def _signed(cfg, sid, slot):
-    return f"ci_{sid}_{slot}_{checkin._sig(cfg.token_key, f'ci.{sid}.{slot}')}"
+    return f"ci_{sid}_{slot}_{checkin._sig(cfg.token_key, f'ci.{sid}.{slot}.in')}"
 
 
 def _grants(con, uid):

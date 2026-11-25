@@ -9,7 +9,7 @@ import string
 
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, casting, db, logic, texts
+from kbtu import app as server, casting, db, logic, outbox, texts
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 PRES, ANN, BOB, CAT, DAN, EVE = 80, 81, 82, 83, 84, 85
@@ -82,12 +82,12 @@ def test_who_hears_it_once_and_the_last_place_wins(env, monkeypatch):
     assert sorted(_app_of(x) for x in rows) == sorted([apps[ANN], apps[BOB]])  # booked on it, invited with no time; not Cat, Dan, Eve
     assert all(x["send_after"] == T0 + 120 and x["ref"].split(":")[2] == str(slot["a"]) for x in rows)
     for x in rows:
-        text, button, start = bot._render(con, x)
+        text, button, start = outbox._render(con, x)
         assert "Main building, 2nd floor" in text and "Hall 1" not in text and start.startswith("iv_")
         assert "14:00\u201316:00" in text  # slot A, Almaty time, start to end
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'round_place'").fetchone()[0] == 2
     clock[0] = T0 + 4 * HOUR + 1
-    assert [bot._render(con, x) for x in _notices(con)] == [None, None]  # slot A ended
+    assert [outbox._render(con, x) for x in _notices(con)] == [None, None]  # slot A ended
 
 
 def test_the_notice_is_about_the_edited_slot(env, monkeypatch):
@@ -95,10 +95,10 @@ def test_the_notice_is_about_the_edited_slot(env, monkeypatch):
     _patch(c, slot["b"], "Hall 2")  # the later slot: Cat (on it) and Bob (no time yet) hear about B itself
     rows = {_app_of(x): x for x in _notices(con)}
     assert set(rows) == {apps[CAT], apps[BOB]}
-    assert "17:00\u201318:00" in bot._render(con, rows[apps[BOB]])[0] and "Hall 2" in bot._render(con, rows[apps[BOB]])[0]
+    assert "17:00\u201318:00" in outbox._render(con, rows[apps[BOB]])[0] and "Hall 2" in outbox._render(con, rows[apps[BOB]])[0]
     bob = con.execute("SELECT user_id FROM round_apps WHERE id = ?", (apps[BOB],)).fetchone()[0]
     casting.book(con, logic.Viewer(bob, "user", True), rid, {"slotId": slot["a"]})  # booked elsewhere before it went
-    assert bot._render(con, rows[apps[BOB]]) is None and bot._render(con, rows[apps[CAT]])
+    assert outbox._render(con, rows[apps[BOB]]) is None and outbox._render(con, rows[apps[CAT]])
 
 
 def test_a_dropped_slot_takes_its_waiting_notices(env, monkeypatch):
@@ -120,16 +120,16 @@ def test_a_full_slot_tells_only_its_own(env, monkeypatch):
     _patch(c, slot["b"], "Hall 3")
     bob = next(x for x in _notices(con) if _app_of(x) == apps[BOB])
     con.execute("UPDATE round_slots SET capacity = 1 WHERE id = ?", (slot["b"],))  # full again before it went
-    assert bot._render(con, bob) is None
+    assert outbox._render(con, bob) is None
 
 
 def test_edited_back_says_nothing(env, monkeypatch):
     c, con, clock, rid, apps, slot = _setup(env, monkeypatch)
     _patch(c, slot["a"], "Hall 1")
     _patch(c, slot["a"], "Room 305")  # back to what it was before the waiting notice
-    assert [bot._render(con, x) for x in _notices(con)] == [None, None]
+    assert [outbox._render(con, x) for x in _notices(con)] == [None, None]
     _patch(c, slot["a"], "Hall 7")
-    assert all("Hall 7" in bot._render(con, x)[0] for x in _notices(con))
+    assert all("Hall 7" in outbox._render(con, x)[0] for x in _notices(con))
 
 
 def test_decided_or_withdrawn_hear_nothing(env, monkeypatch):
@@ -139,7 +139,7 @@ def test_decided_or_withdrawn_hear_nothing(env, monkeypatch):
     casting.decide(con, boss, apps[BOB], {"stage": "no"})
     ann = con.execute("SELECT user_id FROM round_apps WHERE id = ?", (apps[ANN],)).fetchone()[0]
     casting.withdraw(con, logic.Viewer(ann, "user", True), rid)
-    assert [bot._render(con, x) for x in _notices(con)] == [None, None]
+    assert [outbox._render(con, x) for x in _notices(con)] == [None, None]
 
 
 def test_an_ended_slot_or_a_done_round_is_refused(env, monkeypatch):

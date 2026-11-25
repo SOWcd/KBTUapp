@@ -10,7 +10,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, bot, calpage, db, logic, app as server, texts
+from kbtu import ai, calpage, db, logic, outbox, app as server, texts
 from test_core import _board_on, _club_runs, delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -111,13 +111,13 @@ def test_event_updates(env):
     assert c.get("/api/events/1", headers=tma(82, "Ali")).json()["updates"][0]["canDelete"] is False
     msg = con.execute("SELECT user_id, kind, ref FROM bot_outbox WHERE kind = 'event_update'").fetchall()
     assert [(m[0], m[1]) for m in msg] == [(ali["id"], "event_update")]
-    text = bot._render(con, {"kind": "event_update", "ref": msg[0][2], "lang": "en", "user_id": ali["id"]})
+    text = outbox._render(con, {"kind": "event_update", "ref": msg[0][2], "lang": "en", "user_id": ali["id"]})
     assert text[2] == "ev_1" and "Side door" not in text[0] and "Hack" in text[0]          # the template, not the words
     c.post("/api/events/1/updates", headers=P, json={"body": "Bring a laptop"})
     c.post("/api/events/1/updates", headers=P, json={"body": "We start at 19:15"})
     assert c.post("/api/events/1/updates", headers=P, json={"body": "One more"}).status_code == 429   # three a day
     assert c.delete(f"/api/events/1/updates/{ups[0]['id']}", headers=P).status_code == 204
-    assert bot._render(con, {"kind": "event_update", "ref": msg[0][2], "lang": "en", "user_id": ali["id"]}) is None
+    assert outbox._render(con, {"kind": "event_update", "ref": msg[0][2], "lang": "en", "user_id": ali["id"]}) is None
 
 
 def test_ratings(env):
@@ -162,7 +162,7 @@ def test_ratings(env):
     assert s == {"avg": 4.7, "count": 3, "dist": [0, 0, 0, 1, 2], "comments": [{"score": 4, "body": "Great jury", "at": s["comments"][0]["at"]}]}
     assert "name" not in json.dumps(s) if (json := __import__("json")) else True        # anonymous
     m = {"kind": "rate", "ref": "rate:1", "lang": "en", "user_id": ali["id"]}
-    assert bot._render(con, m) is None                                                    # rated already: no question
+    assert outbox._render(con, m) is None                                                    # rated already: no question
 
 
 def test_calendar_file(env):
@@ -214,10 +214,10 @@ def test_bring_a_friend(env):
     assert c.post("/api/events/1/invites", headers=A, json={"userId": zhan["id"]}).json()[0]["state"] == "invited"
     c.post("/api/events/1/invites", headers=A, json={"userId": zhan["id"]})                            # twice: one card
     cards = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'friend_invite' AND user_id = ?", (zhan["id"],)).fetchall()
-    assert len(cards) == 1 and bot._render(con, cards[0])[2] == "ev_1"
+    assert len(cards) == 1 and outbox._render(con, cards[0])[2] == "ev_1"
     c.post("/api/events/1/registration", headers=Z)
     assert con.execute("SELECT invited_by FROM registrations WHERE user_id = ?", (zhan["id"],)).fetchone()[0] == ali["id"]
-    assert bot._render(con, cards[0]) is None                                                           # in already
+    assert outbox._render(con, cards[0]) is None                                                           # in already
     assert c.get("/api/events/1/invites", headers=A).json()[0]["state"] == "going"
 
 
@@ -241,15 +241,15 @@ def test_comments(env):
     assert c.get("/api/events/1", headers=Z).json()["comments"] == 1
     assert c.get("/api/orgs/1/events", headers=P).json()[0]["questions"] == 1                          # waits in Studio
     ping = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'comment_question'").fetchall()
-    assert [r["user_id"] for r in ping] == [pres["id"]] and bot._render(con, ping[0])[2] == "cm_1"     # the club's Head+
+    assert [r["user_id"] for r in ping] == [pres["id"]] and outbox._render(con, ping[0])[2] == "cm_1"     # the club's Head+
     assert c.get("/api/events/1/comments", headers=Z).json()["items"][0]["canDelete"] is False
     assert c.post("/api/events/1/comments", headers=Z, json={"body": "x", "asOrg": True}).status_code == 403  # not the club's Head+
     t = c.post("/api/events/1/comments", headers=P, json={"body": "Round the side", "asOrg": True}).json()
     assert t["items"][1]["person"] is None and t["items"][1]["org"]["id"] == 1 and t["canModerate"] is True
     assert c.get("/api/orgs/1/events", headers=P).json()[0]["questions"] == 0                          # answered
-    assert bot._render(con, ping[0]) is None                                                            # quiet once answered
+    assert outbox._render(con, ping[0]) is None                                                            # quiet once answered
     told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'comment_answer'").fetchall()
-    assert [r["user_id"] for r in told] == [ali["id"]] and "answered your question" in bot._render(con, told[0])[0]
+    assert [r["user_id"] for r in told] == [ali["id"]] and "answered your question" in outbox._render(con, told[0])[0]
     for bad in ("", " ", "x" * 501):
         assert c.post("/api/events/1/comments", headers=Z, json={"body": bad}).status_code == 400
     for n in range(10):
@@ -316,13 +316,13 @@ def test_question_badges(env):
     assert waiting(P) == 0 and waiting(V) == 0
     assert [r["user_id"] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'comment_question'")] == [pres["id"], vice["id"]]  # not for his
     told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'comment_answer'").fetchall()
-    assert [r["user_id"] for r in told] == [ali["id"]] and "answered your question" in bot._render(con, told[0])[0]
+    assert [r["user_id"] for r in told] == [ali["id"]] and "answered your question" in outbox._render(con, told[0])[0]
     say(A, "Can I bring a friend?")
     assert waiting(P) == 1 and waiting(V) == 1
     c.get("/api/events/1/comments", headers=V)                     # the Vice has read it: gone for her, not for the President
     assert waiting(V) == 0 and waiting(P) == 1
     asks = {r["user_id"]: r for r in con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'comment_question'")}
-    assert bot._render(con, asks[vice["id"]]) is None and bot._render(con, asks[pres["id"]])[2] == "cm_1"
+    assert outbox._render(con, asks[vice["id"]]) is None and outbox._render(con, asks[pres["id"]])[2] == "cm_1"
     c.get("/api/events/1/comments", headers=A)                     # a student reading changes nothing
     assert waiting(P) == 1
 
@@ -462,7 +462,7 @@ def test_teambuilding_thunder(env):
             assert c.post(f"/api/events/{e['id']}/registration", headers=M, json={}).json()["my"]["status"] == "going"
         if visibility == "members":
             ref = con.execute("SELECT kind, ref FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' ORDER BY id DESC", (mem["id"],)).fetchone()
-            text, button, link = bot._render(con, {"user_id": mem["id"], "kind": ref[0], "ref": ref[1], "lang": "ru"})
+            text, button, link = outbox._render(con, {"user_id": mem["id"], "kind": ref[0], "ref": ref[1], "lang": "ru"})
             assert "\u0411\u0438\u043b\u0435\u0442" not in text and link == f"ev_{e['id']}"   # no "Ticket": it opens the event
         con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 600, int(time.time()) + 600, e["id"]))
         assert c.post(f"/api/events/{e['id']}/checkin", headers=P, json={"userId": mem["id"]}).json()["result"] == "ok"
@@ -589,7 +589,7 @@ def test_comment_replies(env):
     c.post("/api/events/1/comments", headers=tma(11), json={"body": "Me too", "replyTo": first["id"]})
     told = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'comment_reply'").fetchall()
     assert [r["user_id"] for r in told] == [uid[10]]                                         # two replies, one message this hour
-    text, _, start = bot._render(con, told[0])
+    text, _, start = outbox._render(con, told[0])
     assert "Hack" in text and start == "cm_1"
     assert c.post("/api/events/1/comments", headers=tma(11), json={"body": "x", "replyTo": 999}).status_code == 400
     c.post("/api/events/1/comments", headers=tma(10), json={"body": "Self", "replyTo": first["id"]})
@@ -622,10 +622,10 @@ def test_saved_tomorrow(env, monkeypatch):
     logic.saved_day(con)
     logic.saved_day(con)
     rows_ = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'saved_tomorrow'").fetchall()
-    assert len(rows_) == 1 and "Quiz" in bot._render(con, rows_[0])[0]           # Ann only, once
+    assert len(rows_) == 1 and "Quiz" in outbox._render(con, rows_[0])[0]           # Ann only, once
     monkeypatch.undo()
     c.post(f"/api/events/{e['id']}/registration", headers=tma(10), json={})
-    assert bot._render(con, rows_[0]) is None                                     # she signed up meanwhile
+    assert outbox._render(con, rows_[0]) is None                                     # she signed up meanwhile
 
 
 def test_delete_cancelled_event(env):

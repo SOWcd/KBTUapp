@@ -9,8 +9,8 @@ import time
 import httpx
 import pytest
 
-from kbtu import bot, db, logic, texts
-from test_core import env, tma  # noqa: F401  (env: the fixture)
+from kbtu import bot, bot_dm, db, logic, texts
+from test_core import BOT, env, tma  # noqa: F401  (env: the fixture)
 
 
 class Telegram:
@@ -45,14 +45,15 @@ def hear(cfg, tg):
     return asyncio.run(go())
 
 
-def checkout(qid="q1", amount=50, payload="don:50", currency="XTR"):
-    return {"update_id": 1, "pre_checkout_query": {"id": qid, "from": {"id": 7, "language_code": "en"}, "currency": currency,
-                                                   "total_amount": amount, "invoice_payload": payload}}
+def checkout(qid="q1", amount=50, payload=None, currency="XTR", payer=7):
+    return {"update_id": 1, "pre_checkout_query": {"id": qid, "from": {"id": payer, "language_code": "en"}, "currency": currency,
+                                                   "total_amount": amount, "invoice_payload": payload or logic.stars._payload(BOT, 7, 50)}}
 
 
-def payment(uid=1, charge="c1", amount=50):
-    return {"update_id": uid, "message": {"message_id": 3, "chat": {"id": 7, "type": "private"}, "from": {"id": 7}, "date": 0, "successful_payment": {
-        "currency": "XTR", "total_amount": amount, "invoice_payload": f"don:{amount}", "telegram_payment_charge_id": charge, "provider_payment_charge_id": ""}}}
+def payment(uid=1, charge="c1", amount=50, payer=7):
+    return {"update_id": uid, "message": {"message_id": 3, "chat": {"id": payer, "type": "private"}, "from": {"id": payer}, "date": 0, "successful_payment": {
+        "currency": "XTR", "total_amount": amount, "invoice_payload": logic.stars._payload(BOT, payer, amount),
+        "telegram_payment_charge_id": charge, "provider_payment_charge_id": ""}}}
 
 
 @pytest.fixture(autouse=True)
@@ -73,8 +74,7 @@ def test_invoice_in_stars(env):
     r = c.post("/api/donate/stars", headers=tma(40, "Ann"), json={"amount": 100})
     assert r.json() == {"url": "https://t.me/$invoice"}
     b = tg.sent("createInvoiceLink")[0]
-    assert (b["currency"], b["provider_token"], b["prices"][0]["amount"], b["payload"]) == ("XTR", "", 100, "don:100")
-    assert "40" not in b["payload"]  # nothing of the payer
+    assert (b["currency"], b["provider_token"], b["prices"][0]["amount"], b["payload"]) == ("XTR", "", 100, logic.stars._payload(BOT, 40, 100))
 
 
 def test_invoice_refuses_a_bad_amount_and_strangers(env):
@@ -98,7 +98,9 @@ def test_texts_fit_telegram():
     assert all(1 <= len(t) <= 32 and 1 <= len(d) <= 255 for t, d in texts.STARS_INVOICE.values())
 
 
-@pytest.mark.parametrize("kw", [dict(payload="other"), dict(amount=51), dict(currency="USD"), dict(payload="don:20000", amount=20000), dict(payload="don:0", amount=0)])
+@pytest.mark.parametrize("kw", [dict(payload="other"), dict(payload="don:50"), dict(amount=51), dict(payer=8), dict(currency="USD"),
+                               dict(payload=logic.stars._payload(BOT, 7, 20000), amount=20000),
+                               dict(payload=logic.stars._payload(BOT, 7, 0), amount=0)])
 def test_checkout_refused(env, kw):
     _, cfg = env
     tg = Telegram([checkout(**kw)], [])
@@ -137,7 +139,7 @@ def test_a_pre_checkout_doesnt_wait_behind_a_slow_batch(env, monkeypatch):
                 break
         answered_in_batch.append(bool(tg.sent("answerPreCheckoutQuery")))
 
-    monkeypatch.setattr(bot, "_tapped", slow)
+    monkeypatch.setattr(bot_dm, "_tapped", slow)
     monkeypatch.setattr(bot, "PEEK", 0.01)
     hear(cfg, tg)
     assert answered_in_batch == [True] and tg.sent("answerPreCheckoutQuery")[0]["ok"] is True
@@ -183,7 +185,7 @@ def test_a_locked_database_keeps_the_payment_for_the_next_round(env, monkeypatch
     def locked(*_):
         raise sqlite3.OperationalError("database is locked")
 
-    monkeypatch.setattr(bot, "_tapped", on_tap)
+    monkeypatch.setattr(bot_dm, "_tapped", on_tap)
     monkeypatch.setattr(logic.stars, "paid", locked)
     batch = [tap(5), payment(6), tap(7)]
     assert hear(cfg, Telegram(batch, [])) == 6

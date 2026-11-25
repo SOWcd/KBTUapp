@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { activistBars, artOf, awardRatio, awardTier, coinOf, isCoin, isMedal, layersOf, legendOf, hero, leftLine, weakestBar, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, ARCHIVE_LOOKS, MANUAL, CATALOG, codesOf } from './awards';
+import { activistBars, artOf, awardRatio, awardTier, coinOf, isCoin, isMedal, layersOf, legendOf, hero, leftLine, weakestBar, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, ARCHIVE_LOOKS, MANUAL, CATALOG, codesOf, sponsorMedal, closest } from './awards';
 import type { Achievement, PersonCard } from './api';
 import { i18n, loadLang } from './i18n/index.svelte';
 
@@ -55,6 +55,13 @@ it('every medal layer and pin glyph is drawn', async () => {
   const fs = await import('node:fs' as string);
   const has = (n: string) => fs.existsSync(new URL(`../../public/medals/${n}.svg`, import.meta.url));
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
+  for (const level of [1, 2, 3]) {
+    const medal = sponsorMedal(level), art = artOf(medal);
+    expect(art).toBe(`layer_sp_${'bsg'[level - 1]}`);
+    expect(layersOf(art)!.every(([f]) => has(f))).toBe(true);
+    expect(legendOf(art)).toBeNull();
+    expect(closest([medal])).toBeUndefined(); // no suggestion to spend toward the next award
+  }
   for (const code of ['regular', 'streak', 'soul', 'team', 'season', 'bugs', 'dmp', 'critic', 'referral'])
     for (const n of [1, 4, 7]) {
       const art = artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }), leg = legendOf(art);

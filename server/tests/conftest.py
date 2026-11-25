@@ -120,6 +120,23 @@ def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
         con.executescript("""ALTER TABLE users DROP COLUMN skin_look;
+            DROP TRIGGER event_guests_key;
+            DROP INDEX event_guests_door_key;
+            ALTER TABLE event_guests DROP COLUMN door_key;
+            DROP TRIGGER roster_pending_key;
+            DROP INDEX roster_pending_door_key;
+            DROP TRIGGER qr_hand_roster_gone;
+            ALTER TABLE roster_pending DROP COLUMN door_key;
+            CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
+                DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
+            END;
+            ALTER TABLE sponsor_consents DROP COLUMN amount;
+            ALTER TABLE event_guests DROP COLUMN walk_in;
+            DROP TABLE qr_meet_scans;
+            ALTER TABLE qr_marks DROP COLUMN meetup_review;
+            ALTER TABLE qr_sessions DROP COLUMN department_name;
+            ALTER TABLE qr_sessions DROP COLUMN department_id;
+            ALTER TABLE qr_sessions DROP COLUMN meetup;
             DROP INDEX one_contact;
             DROP INDEX contacts_by_sender;
             DROP INDEX withdrawn_offer_messages;

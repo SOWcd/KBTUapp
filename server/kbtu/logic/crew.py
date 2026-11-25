@@ -23,7 +23,7 @@ _RUNNING = """SELECT e.org_id FROM events e JOIN orgs o ON o.id = e.org_id AND o
 
 def _open(e: sqlite3.Row) -> bool:
     """Ahead or under way: helpers can be given, and work, until the door closes (the scanner's own window)."""
-    return e["status"] != "cancelled" and core.now() <= (e["ends_at"] or e["starts_at"] + DOOR_LATE)
+    return e["status"] != "cancelled" and e["starts_at"] is not None and core.now() <= (e["ends_at"] or e["starts_at"] + DOOR_LATE)
 
 
 def kind(con, v: Viewer, e: sqlite3.Row) -> str | None:
@@ -108,7 +108,7 @@ def put(con, v: Viewer, eid: int, uid: object, what: object) -> list[dict]:
                     (eid, uid, oid, what, v.id, core.now()))
         log_action(con, v.id, "crew_put", f"user:{uid}", json.dumps({"event": eid, "org": oid, "kind": what}))
         if not was:
-            notify(con, uid, "crew_added", f"cw:{eid}")  # a template; quiet once the right is gone (bot._render)
+            notify(con, uid, "crew_added", f"cw:{eid}")  # a template; quiet once the right is gone (outbox._render)
         return view(con, v, e) or []
 
 

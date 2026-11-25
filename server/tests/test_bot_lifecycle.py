@@ -8,7 +8,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from kbtu import bot, db
+from kbtu import bot, chores, db
 from test_core import env  # noqa: F401  (env: the fixture)
 
 
@@ -67,14 +67,14 @@ def test_failing_child_cancels_siblings_under_lock(env, monkeypatch):
 def test_failed_backup_leaves_no_daily_marker(env, monkeypatch):
     _, cfg = env
     con = db.connect(cfg.db_path)
-    monkeypatch.setattr(bot.time, "time", lambda: 20000 * 86400 - 5 * 3600 + 5 * 3600)  # 05:00 Almaty
-    monkeypatch.setattr(bot, "_backup_retry", 0.0)
+    monkeypatch.setattr(chores.time, "time", lambda: 20000 * 86400 - 5 * 3600 + 5 * 3600)  # 05:00 Almaty
+    monkeypatch.setattr(chores, "_backup_retry", 0.0)
     root = Path(cfg.db_path).parent / "backups"
     root.mkdir()
     old, recent = root / "kbtu-old.db", root / "kbtu-recent.db"
     for path, days in ((old, 16), (recent, 1)):
         path.write_bytes(b"synthetic snapshot")
-        age = bot.time.time() - days * 86400
+        age = chores.time.time() - days * 86400
         os.utime(path, (age, age))
 
     class Full:  # the disk is full: VACUUM INTO fails, everything else goes through
@@ -82,30 +82,30 @@ def test_failed_backup_leaves_no_daily_marker(env, monkeypatch):
             if sql.startswith("VACUUM"):
                 raise sqlite3.OperationalError("database or disk is full")
             return con.execute(sql, *a)
-    bot.backup_day(cfg, Full())
+    chores.backup_day(cfg, Full())
     marker = lambda: con.execute("SELECT 1 FROM meta WHERE key = 'backup_day'").fetchone()  # noqa: E731
     assert not marker()
     assert not old.exists() and recent.exists()
     # The retry delay must not bypass retention either.
     old.write_bytes(b"synthetic snapshot")
-    age = bot.time.time() - 41 * 86400
+    age = chores.time.time() - 41 * 86400
     os.utime(old, (age, age))
-    bot.backup_day(cfg, Full())
+    chores.backup_day(cfg, Full())
     assert not old.exists() and recent.exists() and not marker()
-    bot._backup_retry = 0.0  # the hour is over
-    bot.backup_day(cfg, con)
+    chores._backup_retry = 0.0  # the hour is over
+    chores.backup_day(cfg, con)
     assert marker() and list((Path(cfg.db_path).resolve().parent / "backups").glob("kbtu-*.db"))
 
 
 def test_offsite_unset_tells_the_creator_once(env, monkeypatch):
     _, cfg = env
     con = db.connect(cfg.db_path)
-    monkeypatch.setattr(bot.time, "time", lambda: 20000 * 86400)  # 05:00 Almaty
-    monkeypatch.setattr(bot, "_backup_retry", 0.0)
-    monkeypatch.setattr(bot.offsite, "ready", lambda: False)
+    monkeypatch.setattr(chores.time, "time", lambda: 20000 * 86400)  # 05:00 Almaty
+    monkeypatch.setattr(chores, "_backup_retry", 0.0)
+    monkeypatch.setattr(chores.offsite, "ready", lambda: False)
     monkeypatch.setenv("DB_MUST_EXIST", "1")
     con.execute("INSERT INTO users (tg_id, role, is_founder, created_at, seen_at) VALUES (9002, 'admin', 1, 0, 0)")
-    bot.backup_day(cfg, con)
+    chores.backup_day(cfg, con)
     for _ in range(3):
-        bot.offsite_round(cfg, con)
+        chores.offsite_round(cfg, con)
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'backup_failed'").fetchone()[0] == 1

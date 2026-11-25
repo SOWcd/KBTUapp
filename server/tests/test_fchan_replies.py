@@ -305,13 +305,13 @@ def test_reply_report_answer_and_posing(env, monkeypatch):
     assert w.c.get("/api/forum-posts/mod", headers=tma(3)).json()["replies"]["live"][0]["reports"] == 0
     # The first eligible comment answers the bot's reply. Its specific template uses the post's shared cooldown.
     gate(w.cfg, w.tg, w.con, note(71, 2, to=msg, bot=True, text="who are you?"), note(72, 2, to=msg, bot=True, text="hello?"))
-    from kbtu import bot
-    m, = [m for m in bot._due(w.con) if m["kind"] == "fch_comments"]
+    from kbtu import outbox
+    m, = [m for m in outbox._due(w.con) if m["kind"] == "fch_comments"]
     assert m["user_id"] == w.ann["id"] and m["ref"] == f"fc:{w.pid}"
-    assert bot._take(w.con, m, True) == (*texts.bot_message("ru", "fch_reply_answer"), f"fp_{w.pid}")
-    bot._mark(w.con, m, True)
+    assert outbox._take(w.con, m, True) == (*texts.bot_message("ru", "fch_reply_answer"), f"fp_{w.pid}")
+    outbox._mark(w.con, m, True)
     gate(w.cfg, w.tg, w.con, note(79, 2))
-    assert not [m for m in bot._due(w.con) if m["kind"] == "fch_comments"]
+    assert not [m for m in outbox._due(w.con) if m["kind"] == "fch_comments"]
     # posing as the mark: the mark's words in the name (case, Latin look-alikes, invisible characters, with or without
     # the mask) or as the text's own signature line: deleted; the mask alone in a name, or the words inside a sentence, stay
     w.tg.calls.clear()
@@ -376,9 +376,9 @@ def test_reply_reports_reach_moderators(env, monkeypatch):
     assert [(x["id"], x["reports"]) for x in q["live"]] == [(rid, 1)]
     mods = w.con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'fch_reply_queue'").fetchall()
     assert [m[0] for m in mods] == [w.con.execute("SELECT id FROM users WHERE tg_id = 3").fetchone()[0]]
-    from kbtu import bot
+    from kbtu import outbox
     m = w.con.execute("SELECT *, 'ru' AS lang FROM bot_outbox WHERE kind = 'fch_reply_queue'").fetchone()
-    assert bot._render(w.con, m) == (*texts.bot_message("ru", "fch_reply_queue", n=1), "capps")
+    assert outbox._render(w.con, m) == (*texts.bot_message("ru", "fch_reply_queue", n=1), "capps")
     assert w.con.execute("SELECT COUNT(*) FROM meta WHERE key LIKE 'fchrrep:%'").fetchone()[0] == 0
     # the reporter deletes the account: their report goes with it
     delete_now(w.c, w.cfg, tma(2))

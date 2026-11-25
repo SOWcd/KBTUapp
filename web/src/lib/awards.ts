@@ -107,7 +107,7 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
 // tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
-const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc' };
+const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc', sponsor: 'sp' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code === 'honor' || a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
@@ -126,6 +126,8 @@ export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'
 const VECTOR: Record<string, string> = { face_with_tears_of_joy_3d: 'laugh', waving_hand_3d_default: 'hello' };
 /** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
 export function layersOf(art: string): [string, number][] | null {
+  const sponsor = /^layer_sp_([bsg])$/.exec(art);
+  if (sponsor) return [['fi-field', -1], [`sp-art-${sponsor[1]}`, 0.5], [`md-rim-${sponsor[1]}`, 0]];
   const vb = /^layer_vb_([a-z]+)$/.exec(art);
   if (vb) return [[`vb-${vb[1]}-field`, -1], [`vb-${vb[1]}-art`, 0.5], [`vb-${vb[1]}-near`, 1], [`vb-${vb[1]}-rim`, 0]];
   const rc = /^layer_rc(\d)$/.exec(art);
@@ -149,7 +151,7 @@ export function coinOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels
 }
 export const isCoin = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): boolean => coinOf(a) !== null;
 /** the full-size medal's engraved name round its band (ui/Medal from 160 px), for the round medals but Recruiter */
-export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o && o[1] !== 'ac' ? `${o[1]}-legend-${o[2]}` : null; };
+export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o && !['ac', 'sp'].includes(o[1]) ? `${o[1]}-legend-${o[2]}` : null; };
 /** a medal's metal letter at its level (its ribbon's): b, s, g, l */
 export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];
 /** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
@@ -240,7 +242,7 @@ export function awardRatio(a: Achievement): number {
 /** The closest medal to its next level (started ones first, else the nearest goal); secrets don't count, nor Bug
  *  hunter (the creator gives it by hand) or the pins (one time, nobody works toward them). */
 export function closest(ach: Achievement[]): Achievement | undefined {
-  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && !addsUp(a.code) && (a.code !== 'activist' || a.parts) && nextOf(a));
+  const open = ach.filter((a) => a.code !== 'sponsor' && !hiddenAch(a) && isMedal(a) && !addsUp(a.code) && (a.code !== 'activist' || a.parts) && nextOf(a));
   return [...open].filter((a) => a.parts ? a.parts.posts > 0 || a.parts.events > 0 : a.count > 0).sort((a, b) => awardRatio(b) - awardRatio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];
 }
 export function leftLine(a: Achievement): string {
@@ -469,3 +471,9 @@ export function lookVars(look: Look): string {
     .map(([k, v]) => `--${k}: ${v}`).join('; ');
 }
 export const banded = (look: Look) => look !== 'sower';
+
+/** Support's own card uses the same three-tier medal as the profile. */
+export const sponsorMedal = (level: number): Achievement => ({
+  code: 'sponsor', emoji: 'blue_heart_3d', secret: false, count: level, level, rarity: 0,
+  levels: [1, 2, 3].map((need) => ({ need, reached: need <= level, rarity: 0 })), at: null,
+});
