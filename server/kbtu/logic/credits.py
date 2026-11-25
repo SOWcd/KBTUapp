@@ -102,9 +102,11 @@ def listing(con, v: Viewer) -> dict:
     # who is named here, and a named person's GitHub login (from any line of theirs; only their yes ties the two)
     refs = {r["whose"]: person_ref(r) for r in got if r["whose"] not in aside and _named(r)}
     own = {r["gh"].lower(): r["whose"] for r in reversed(got) if r["gh"] and r["whose"] in refs}
+    my_gh = None  # the login my named card would show: the consent sheet shows it too, so a yes sees it
     for r in got:
         if r["whose"] is not None and r["whose"] == me["tg_id"]:
             my_items.append(_item(r))
+            my_gh = my_gh or r["gh"]
         if founder and r["whose"] == founder["tg_id"]:
             continue  # the creator's own work is the app itself
         if _named(idea) and r["whose"] == idea["tg_id"]:
@@ -134,7 +136,8 @@ def listing(con, v: Viewer) -> dict:
         "people": [{"person": p["person"], "items": p["items"], **({"honor": True} if p.get("honor") else {})} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
         # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
         # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
-        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {})}
+        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {}),
+                 **({"gh": my_gh} if my_gh else {})}
         if me["can"] and (my_items or is_idea or said or (me["honor"] and not me["is_founder"])) else None,
         "version": CONSENT,
     }
@@ -222,6 +225,16 @@ def _login(gh: str) -> str:
     return gh
 
 
+def _unseen(con, tg_id: int | None) -> None:
+    """A standing yes was given to a sheet that showed no login: putting one beside their Telegram id would name the
+    two together without their seeing it. Such a login goes on a line of its own (gh:<login>) instead."""
+    if tg_id is None:
+        return
+    r = one(con, f"SELECT k.id AS rev, k.show, k.version FROM users u {_LAST} WHERE u.tg_id = ? AND u.tg_id > 0", tg_id)
+    if r and _said(r) is True:
+        raise ValueError("they said yes to a sheet without this login: add it as gh:<login> on its own line")
+
+
 def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None) -> int:
     """who: a Telegram id, or "gh:<login>" alone; gh: the same person's login beside a Telegram id (`--gh`), shown
     with their name only after their yes (listing)."""
@@ -233,6 +246,8 @@ def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | Non
     tg_id = None if alone else int(who)
     if (tg_id is not None and tg_id <= 0) or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
+    if not alone and gh is not None:
+        _unseen(con, tg_id)
     if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
@@ -243,8 +258,11 @@ def set_gh(con, cid: int, gh: str) -> None:
     """`credit gh <id> <login>`: the line's author's GitHub login, on a line already written (a Telegram id's too)."""
     gh = _login(gh)
     with tx(con):
-        if not con.execute("UPDATE credits SET gh = ? WHERE id = ?", (gh, cid)).rowcount:
+        r = one(con, "SELECT tg_id FROM credits WHERE id = ?", cid)
+        if not r:
             raise ValueError(f"no credit {cid}")
+        _unseen(con, r["tg_id"])
+        con.execute("UPDATE credits SET gh = ? WHERE id = ?", (gh, cid))
 
 
 def ship(con, cid: int, day: str | None = None) -> str:

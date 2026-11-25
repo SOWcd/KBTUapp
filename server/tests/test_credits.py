@@ -497,7 +497,14 @@ def test_telegram_and_github(env, capsys, monkeypatch):
     raw = json.dumps(got, ensure_ascii=False)
     assert not any(x in raw for x in ("7000801", "7000802", "Alpha T", "Bee T"))
 
+    assert _get(c, 7000801)["mine"]["gh"] == "Octo"  # the consent sheet shows the login a yes will name them with
+    assert _get(c, 7000802)["mine"]["gh"] == "bee-dev"
     assert _yes(c, 7000801).status_code == 200
+    # a login put beside their Telegram id after a yes they gave without seeing it: refused
+    for bad in (["credit", "gh", str(cid("a-plain")), "other-login"],
+                ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "other-login"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
     got = _get(c)
     assert cards(got) == [("", "", ["en b-plain"]), ("", "bee-dev", ["en b-both"]),
                           ("Alpha T", "Octo", ["en a-both", "en a-gh", "en a-plain"])]
