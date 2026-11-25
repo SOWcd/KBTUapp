@@ -137,7 +137,7 @@ async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, fil
 
 
 async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Response:
-    return await _tg(cfg, http, "sendMessage", body)
+    return await _tg(cfg, http, "sendPhoto" if "photo" in body else "sendMessage", body)  # a photo: an event's share card (_share_start)
 
 
 def _appeal_kind(n: int) -> str:
@@ -973,7 +973,7 @@ def _chores(cfg: Config, con) -> None:
     logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
-    logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
+    logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day, held share cards after an hour
     backup_day(cfg, con)  # a nightly copy of the database, 14 kept
     optimize_day(con)     # the query planner's statistics, once a night
     userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
@@ -1128,12 +1128,31 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
     arg = words[1] if len(words) == 2 and words[0] == "/start" and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", words[1]) else ""
     if words[:1] == ["/exit"]:
         arg = "exit"
+    if arg.startswith("sh_"):  # a share card made outside the Mini App (core.share_hold)
+        return _share_start(cfg, con, chat["id"], arg[3:], u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2])
     if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "Suggest a chat" uses Telegram's own chat picker.
         return _chat_picker(con, cfg, msg)
     # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
     return {"chat_id": chat["id"], "text": text, "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
+
+
+def _share_start(cfg: Config, con, chat_id: int, secret: str, lang: str) -> dict:
+    """t.me/<bot>?start=sh_<secret>, from the app outside Telegram (a browser, the phone apps: tg.ts shareVia): the card
+    as it will look, with one button that opens Telegram's chat picker and drops the same card there (inline_answer).
+    Not the card's own button: the giver's tap on "Claim" would use up a one-time link."""
+    card = logic.share_card(con, chat_id, secret, start=True)
+    if not card:  # expired, opened already, or another person's link: one answer
+        text, button = texts.bot_message(lang, "share_gone")
+        return {"chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp"}]]}}
+    keys = {"inline_keyboard": [[{"text": texts.pick(texts.SHARE_SEND, lang), "switch_inline_query_chosen_chat": {
+        "query": f"sh_{secret}", "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True}}]]}
+    if card["type"] == "photo":
+        return {"chat_id": chat_id, "photo": card["photo_url"], "caption": card["caption"], "parse_mode": "HTML", "reply_markup": keys}
+    m = card["input_message_content"]
+    return {"chat_id": chat_id, "text": m["message_text"], "parse_mode": "HTML", "link_preview_options": m["link_preview_options"], "reply_markup": keys}
 
 
 def _student(con, tg_id: int | None) -> sqlite3.Row | None:
@@ -2197,6 +2216,9 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
     app. A student: my friend link, each club whose team link is live and that I may share (the "team" right; a typing
     pop-up never makes one), my recent signed forum posts live in the channel, and the afisha's upcoming events as an anonymous student sees them. Anyone else: one button."""
     tg = (q.get("from") or {}).get("id")
+    if held := re.fullmatch(r"sh_([\w-]{22})", str(q.get("query") or "").strip()):  # _share_start's button: that card alone, to its maker alone
+        card = logic.share_card(con, tg, held[1])
+        return {"inline_query_id": q["id"], "results": [card] if card else [], "is_personal": True, "cache_time": 0}
     me = _student(con, tg)
     lang = me["lang"] if me else str((q.get("from") or {}).get("language_code") or "")[:2]
     body: dict = {"inline_query_id": q["id"], "results": [], "is_personal": True, "cache_time": 10}

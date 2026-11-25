@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import sqlite3
 import time
 import unicodedata
@@ -260,6 +261,38 @@ def _once(con, key: str, value: str) -> bool:
         return False
     con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
     return True
+
+
+SHARE_TTL = 3600   # a card handed from the browser to the bot (share_hold): an hour to open Telegram and pick the chats
+SHARE_AN_HOUR = 30  # cards one person may hand over an hour (each may mint a link: an award's, a club's)
+
+
+def share_hold(con, uid: int, tg: int, card: dict) -> str:
+    """Outside the Mini App (a browser, the phone apps) there is no shareMessage: the card the server built waits here
+    for the bot under a one-time secret in its start link (t.me/<bot>?start=sh_<secret>). The secret carries nothing
+    itself; only the Telegram account signed in here gets the card, within SHARE_TTL (bot._share_start, inline_answer)."""
+    with tx(con):
+        if one(con, """SELECT COUNT(*) FROM meta WHERE key >= 'share:' AND key < 'share;'
+                AND json_extract(value, '$.uid') = ? AND json_extract(value, '$.at') >= ?""", uid, now() - SHARE_TTL)[0] >= SHARE_AN_HOUR:
+            raise ApiError("rate_limited", "share")
+        secret = secrets.token_urlsafe(16)
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"share:{secret}", json.dumps({"uid": uid, "tg": tg, "at": now(), "card": card})))
+    return secret
+
+
+def share_card(con, tg: int, secret: str, start: bool = False) -> dict | None:
+    """The card held for this Telegram account, or None (unknown, expired, someone else's: one answer for all).
+    start: the bot's /start, once per secret; the Share button's inline query may ask again until SHARE_TTL."""
+    if not re.fullmatch(r"[\w-]{22}", secret):
+        return None
+    r = one(con, "SELECT value FROM meta WHERE key = ?", f"share:{secret}")
+    held = json.loads(r[0]) if r else None
+    if not held or held["tg"] != tg or held["at"] < now() - SHARE_TTL:
+        return None
+    if start and not con.execute("UPDATE meta SET value = json_set(value, '$.started', 1) WHERE key = ? AND json_extract(value, '$.started') IS NULL",
+                                 (f"share:{secret}",)).rowcount:
+        return None
+    return held["card"]
 
 
 

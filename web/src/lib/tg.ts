@@ -222,8 +222,9 @@ export function shareMessage(preparedId: string): Promise<boolean | null> {
 
 /** Everything shared into chats is our bot's card — text and a button, never a bare link: the server
  *  prepares it from its own templates (savePreparedInlineMessage, initData-checked), then Telegram shows the chat
- *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
- *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */
+ *  picker. A failure throws (the caller says so) instead of falling back to a link. Outside Telegram (a browser, the
+ *  phone apps) the same card comes from our bot in Telegram; a plain t.me share link only where there are no cards at
+ *  all (Telegram older than Bot API 8.0, an account with no Telegram). */
 /** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
 /** the capsule's "Making the link…" for every share (ui.svelte.ts sets it: tg.ts can't import the state) */
 let shareBusy: (on: boolean) => void = () => {};
@@ -253,10 +254,17 @@ async function shareVia(card: Record<string, string | number | boolean | null>, 
     // a client without cards (a user on Telegram Desktop): Telegram's own picker with the link instead
   }
   if (!inTelegram) {
-    // the web app: the server makes the same link its card's button would carry (an award or club link is minted there)
-    const r = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...card, link: true }) });
-    const made = r.ok ? (await r.json()).link : null;
-    if (typeof made === 'string') link = made;
+    // a browser, the phone apps: the server holds the same card for our bot and gives its start link; Telegram opens on
+    // the bot's chat with the card and a "Send to a chat" button (bot.py _share_start). An account with no Telegram:
+    // the link its card's button would carry (an award or club link is minted there), for Telegram's own picker
+    const r = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...card, handoff: true }) });
+    const made: { open?: unknown; link?: unknown } = r.ok ? await r.json() : {};
+    if (typeof made.open === 'string') {
+      ready();
+      openLink(made.open);
+      return false; // the card goes out in Telegram: we never learn whether it was sent
+    }
+    if (typeof made.link === 'string') link = made.link;
   }
   ready();
   tgShare(link, text);

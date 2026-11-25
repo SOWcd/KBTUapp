@@ -85,6 +85,11 @@ SHARE_AWARD = {
     "kk": ("KBTU App-тағы марапатым", "🏅 <b>{name}</b>{tier}\nKBTU App-тағы жаңа марапатым\n\n💎 Студенттердің {p}%-ында бар. Сен де аласың ба?", "🏅 Марапатты көру"),
     "en": ("My award on KBTU App", "🏅 <b>{name}</b>{tier}\nMy new award on KBTU App\n\n💎 {p}% of students have it. Can you get one too?", "🏅 See the award"),
 }
+SHARE_SEND = {  # under a card the app made outside Telegram (bot._share_start): Telegram's chat picker, then the same card there
+    "ru": "📤 Отправить в чат",
+    "kk": "📤 Чатқа жіберу",
+    "en": "📤 Send to a chat",
+}
 ACH_NAMES = {
     "ru": {"activist": "Главный активист", "regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
            "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
@@ -209,6 +214,7 @@ BOT = {
         "paysupport": ("💬 <b>Поддержка по платежам</b>\nЗвёзды — добровольная поддержка приложения, взамен ничего не выдаётся.\nЕсли заплатил по ошибке и хочешь вернуть их, напиши в поддержку: @Sowers. Приложи чек Telegram и свой Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Ищешь выход?</b>\nНажми кнопку, введи номер ближайшей аудитории — приложение доведёт до открытого выхода.", "🚪 Найти выход"),
         "welcome": ("👋 Это <b>KBTU App</b>: мероприятия и клубы, твоё расписание и карта корпуса.\nВсё внутри приложения — открывай 👇", "🚀 Открыть KBTU App"),
+        "share_gone": ("⏳ Эта ссылка уже не работает.\nНажми «Поделиться» в приложении ещё раз 👇", "🚀 Открыть KBTU App"),
         "remind_2h": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}\nБилет уже в приложении.", "🎟 Открыть билет"),
         "remind_2h_team": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}", "Открыть событие"),
         "group_on": ("👋 Я на месте. Этот чат подключён к KBTU App, заявки на вход проверяю сам.", "Открыть KBTU App"),
@@ -437,6 +443,7 @@ BOT = {
         "paysupport": ("💬 <b>Төлем бойынша қолдау</b>\nЖұлдыздар — қосымшаны ерікті қолдау, орнына ештеңе берілмейді.\nҚателесіп төлеген болсаң және оларды қайтарғың келсе, қолдауға жаз: @Sowers. Telegram чегін және Telegram ID-іңді қоса жібер: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығу есігіне дейін апарады.", "🚪 Шығу жолын табу"),
         "welcome": ("👋 Бұл — <b>KBTU App</b>: іс-шаралар мен клубтар, сабақ кестең және корпус картасы.\nБәрі қосымшада — ашып көр 👇", "🚀 KBTU App ашу"),
+        "share_gone": ("⏳ Бұл сілтеме енді жұмыс істемейді.\nҚосымшада «Бөлісу» батырмасын қайта бас 👇", "🚀 KBTU App ашу"),
         "remind_2h": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}\nБилет қосымшада.", "🎟 Билетті ашу"),
         "remind_2h_team": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}", "Іс-шараны ашу"),
         "group_on": ("👋 Мен осындамын. Бұл чат KBTU App-қа қосылған, кіру өтінімдерін өзім тексеремін.", "KBTU App ашу"),
@@ -659,6 +666,7 @@ BOT = {
         "paysupport": ("💬 <b>Payment support</b>\nStars here are voluntary support for the app: nothing is given in return.\nIf you paid by mistake and want them back, write to support: @Sowers. Attach Telegram's receipt and your Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Looking for the way out?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
         "welcome": ("👋 This is <b>KBTU App</b>: events and clubs, your class schedule and the campus map.\nIt's all inside the app — open it 👇", "🚀 Open KBTU App"),
+        "share_gone": ("⏳ This link no longer works.\nTap Share in the app again 👇", "🚀 Open KBTU App"),
         "remind_2h": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}\nYour ticket is in the app.", "🎟 Open ticket"),
         "remind_2h_team": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}", "Open the event"),
         "group_on": ("👋 On duty. This chat is linked to KBTU App, I check join requests myself.", "Open KBTU App"),

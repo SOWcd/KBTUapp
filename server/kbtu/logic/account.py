@@ -451,8 +451,9 @@ def ms_apply(con, uid: int, who: dict) -> bool:
 
 
 def ms_sweep(con) -> None:
-    """Every 5 minutes (the bot's round): Microsoft sign-ins never finished (they hold the Graph profile) and the used-link
-    marks. Key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key."""
+    """Every 5 minutes (the bot's round): Microsoft sign-ins never finished (they hold the Graph profile), the used-link
+    marks, and share cards past their hour (core.share_hold). Key ranges, not LIKE: LIKE (case-blind, `_` a wildcard)
+    can't use meta's primary key."""
     if not core._once(con, "ms_sweep", str(core.now() // 300)):
         return
     con.execute("DELETE FROM meta WHERE key >= 'ms:' AND key < 'ms;' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
@@ -460,6 +461,7 @@ def ms_sweep(con) -> None:
     con.execute("DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.at') < ?", (core.now() - MS_CLAIM_TTL,))
     con.execute("DELETE FROM meta WHERE key >= 'chpick:' AND key < 'chpick;' AND CAST(substr(value, instr(value, ':') + 1) AS INTEGER) < ?", (core.now(),))
     con.execute("DELETE FROM chat_waits WHERE until < ?", (core.now(),))
+    con.execute("DELETE FROM meta WHERE key >= 'share:' AND key < 'share;' AND json_extract(value, '$.at') < ?", (core.now() - core.SHARE_TTL,))
 
 
 SID_WAIT = 30 * 86400  # how long the one turned away waits to hear the ID is free (then the parked message lapses)
@@ -1533,6 +1535,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
         con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))
+        con.execute("""DELETE FROM meta WHERE key >= 'share:' AND key < 'share;'
+            AND json_extract(value, '$.uid') = ?""", (v.id,))  # cards waiting for the bot (core.share_hold)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)
