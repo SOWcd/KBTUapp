@@ -5,6 +5,20 @@ import ru from './i18n/ru';
 import { DORM_2GIS, addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
 import uniqRooms from '../assets/map/uniq-rooms.json';
 
+it('opens campus sides and known rooms on the selected floor', () => {
+  const rooms = uniqRooms as unknown as Record<string, number[][]>[];
+  const stale = 'https://2gis.kz/almaty/geo/1';
+  const kazybek = '\u049a\u0430\u0437\u044b\u0431\u0435\u043a \u0431\u0438 1';
+  expect(addressGis(kazybek, stale)).toBeNull();
+  expect(addressGis('Kazybek 12', stale)).toBe(stale);
+  expect(floorOf(kazybek)).toBe(1);
+  expect(floorOf(' KB  0 ')).toBeNull();
+  expect(floorOf(' PF  0 ')).toBe(0);
+  expect(locate(kazybek, rooms, [], 1)).toMatchObject({ f: 1, room: '', u: 0.234, v: 0.269 });
+  expect(locate('KB · floor 1 · 158', rooms, [], 1)).toMatchObject({ f: 1, room: '158' });
+  expect(locate('KB · floor 2 · 158', rooms, [], 1)).toMatchObject({ f: 2, room: '' });
+});
+
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
     ['\u0410\u0443\u0434. 305', 3], ['\u0430\u0443\u0434 112', 1], ['\u041a\u0430\u0431\u0438\u043d\u0435\u0442 251', 2], ['305', 3], ['Room 412', 4],
