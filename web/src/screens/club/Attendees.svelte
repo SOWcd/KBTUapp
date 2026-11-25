@@ -37,6 +37,7 @@
   import { checkinMessages } from './checkinMessages';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
+  import { screenful } from '../../lib/screenful.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -51,6 +52,7 @@
   // outside every total
   const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
   const removed = $derived(found.filter((a) => a.status === 'cancelled'));
+  const draw = screenful(() => shown.length); // a big event's guests: a screenful with the sheet, the rest after it paints
   let removedOpen = $state(false);
   const going = $derived((list ?? []).filter((a) => a.status === 'going').length);
   const came = $derived((list ?? []).filter((a) => a.checkedInAt).length);
@@ -181,7 +183,7 @@
     {#if list.length > 8}<SearchField bind:value={q} placeholder={t('att.search')} />{/if}
     {#if shown.length}
       {#if shown.length > 1}<SortChip list="attendees" orders={ORDERS} />{/if}
-      <Group>{@render people(shown)}</Group>
+      <Group>{@render people(shown.slice(0, draw.n))}</Group>
     {:else if roster.status === 'ready'}
       <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
     {/if}
@@ -199,8 +201,7 @@
   .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .stats { font: 600 var(--fs-row)/1.3 var(--font-text); }
   .by { font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
-  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
-  /* the answers to the event's own questions, under the name, from where the name starts */
+  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }  /* the answers to the event's own questions, under the name, from where the name starts */
   .ans { display: grid; grid-template-columns: auto 1fr; gap: 3px var(--s-3); margin-left: calc(var(--s-4) + 36px + var(--s-3)); padding: 0 var(--s-4) var(--s-3) 0;
     font: 450 var(--fs-sub)/1.35 var(--font-text); }
   .ans:not(:last-child) { border-bottom: 0.5px solid var(--separator); }

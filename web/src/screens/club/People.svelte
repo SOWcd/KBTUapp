@@ -33,6 +33,7 @@
   import { checkinMessages } from './checkinMessages';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, usual, type Order } from '../../lib/sort.svelte';
+  import { screenful } from '../../lib/screenful.svelte';
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
@@ -84,6 +85,9 @@
     for (const g of by.values()) g.rows = sorted('door', ORDERS, g.rows);
     return [...by].filter(([, g]) => g.rows.length);
   });
+  // a big club's door: a screenful with the sheet, the rest after it paints; each group draws its share in the list's order
+  const draw = screenful(() => groups.reduce((n, [, g]) => n + g.rows.length, 0));
+  const drawn = $derived.by(() => { let left = draw.n; return groups.map(([, g]) => { const k = Math.min(left, g.rows.length); left -= k; return k; }); });
   const others = $derived((aud !== 'guests' ? team?.other ?? [] : []).filter(want));
 
   const err = (e: unknown) => { haptic.error(); say(e instanceof ApiErr && e.code === 'closed' ? t('mk.closed') : errorText(e), 'warning_3d'); };
@@ -207,19 +211,19 @@
       {:else if !loading && !failed}<EmptyState inline text={t('mk.none')} />{/if}
     {:else if groups.length}
       {#if items.length > 1}<SortChip list="door" orders={ORDERS} />{/if}
-      {#each groups as [name, g] (name)}
+      {#each groups as [name, g], i (name)}{#if drawn[i]}
         <Group caption={name} note={t('mk.ofN', { n: g.came, m: g.all })}>
           {@const rest = g.rows.filter((x) => !x.at && (x.pend || x.uid != null))}
           {#if rest.length > 1 && g.rows.every((x) => x.pend || x.uid != null) && name !== t('mk.guestsGroup')}
             <Row dense title={t('mk.markTeam', { n: rest.length })} accessory="chevron" onclick={() => { for (const x of rest) void mark(x); }} />
           {/if}
-          {#each g.rows as x (x.key)}
+          {#each g.rows.slice(0, drawn[i]) as x (x.key)}
             <Row dense title={x.name} subtitle={sub(x)} disabled={!x.at && shut(x)} onclick={x.at && !x.manual ? undefined : (ev) => tap(x, ev)}>
               {#snippet detail()}{#if x.adult != null}<span class="tg"><Tag tone={x.adult ? 'neutral' : 'warning'}>{t(x.adult ? 'age.adult' : 'age.u18')}</Tag></span>{/if}<span class="ck" class:on={!!x.at}>{#if x.at}<CircleCheck size={24} />{:else}<Circle size={24} />{/if}</span>{/snippet}
             </Row>
           {/each}
         </Group>
-      {/each}
+      {/if}{/each}
     {:else if !loading && !failed}<EmptyState inline text={t('mk.none')} />{/if}
   </div>
 </Sheet>
@@ -229,6 +233,5 @@
   .tg { margin-left: auto; }
   .tg + .ck { margin-left: var(--s-2); }
   .ck.on { color: var(--accent); }
-  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }
-  .add { display: flex; flex-direction: column; gap: var(--s-3); }
+  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }  .add { display: flex; flex-direction: column; gap: var(--s-3); }
 </style>

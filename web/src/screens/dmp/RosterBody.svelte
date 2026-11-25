@@ -26,6 +26,7 @@
   import IconButton from '../../ui/IconButton.svelte';
   import Contact from '@lucide/svelte/icons/contact';
   import { menu, type MenuItem } from '../../ui/menu';
+  import { screenful } from '../../lib/screenful.svelte';
 
   // the President's and Vices' contacts, a tap away (a small menu at their row)
   const contacts = (m: RosterMember): MenuItem[] => [
@@ -38,6 +39,7 @@
   let list = $state<RosterMember[] | null>(null);
   $effect(() => { api.registryRoster(org.id).then((l) => (list = l)).catch(() => { list = []; say(t('common.error'), 'warning_3d'); }); });
   const quiet = $derived((list ?? []).filter((m) => m.quiet).length);
+  const draw = screenful(() => list?.length ?? 0); // a big club: a screenful with the sheet, the rest after it paints
 
   let official = $state(untrack(() => org.official));
   let sw = $state(untrack(() => org.official)); // the switch as shown: back on while we ask, and if the answer is no
@@ -81,7 +83,7 @@
   {/if}
   {#if list}
     <Group>
-      {#each list as m (m.person.id)}
+      {#each list.slice(0, draw.n) as m (m.person.id)}
         {@const c = contacts(m)}
         {#snippet reach()}<IconButton icon={Contact} label={t('reg.contacts')} kind="plain" size="s" onclick={(e) => menu(e.currentTarget as Element, c)} />{/snippet}
         <Row dense title={withNick(m.fullName, m.person)} trailing={c.length ? reach : undefined}
@@ -100,6 +102,5 @@
 </div>
 
 <style>
-  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
-  .ok { display: inline-flex; color: var(--accent-text); }
+  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }  .ok { display: inline-flex; color: var(--accent-text); }
 </style>

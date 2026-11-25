@@ -38,8 +38,6 @@
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
-  import LoginSheet from './screens/sheets/LoginSheet.svelte';
-  import Ask from './ui/Ask.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   // after lib/map: imported before it, the map's place names (i18n/spots) became a chunk of their own at the start
@@ -90,13 +88,23 @@
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   // one sign-in sheet at a time, and none once Microsoft has confirmed me: a second one (Microsoft's return opening its
   // own over the waiting one) stayed under the first and asked a new student to sign in with Microsoft again (Nov 14)
+  // The sign-in sheet and the question sheet are chunks with the Sheet they draw on: the first Afisha frame needs neither
+  // (issue 339). They are fetched right after the first paint (warmNavigation), so a tap opens them in its frame.
+  let Login: Component<any> | null = null;
+  const loginSheet = () => import('./screens/sheets/LoginSheet.svelte').then((m) => (Login = m.default));
+  const askSheet = () => import('./ui/Ask.svelte').then((m) => m.default);
+  const offline = () => say(t('common.offline'), 'pleading_face_3d');
   sheets.login = (after, lock) => {
     if (session.me?.student?.ms) { after?.(); return; }
-    if (!overlays.some((o) => o.component === LoginSheet && !o.closing)) open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
+    // (asked twice while the chunk comes: the second finds the first open)
+    const go = () => { if (Login && !overlays.some((o) => o.component === Login && !o.closing)) open(Login, { after, why: after ? 'go' : 'other', lock }); };
+    if (Login) go(); else void loginSheet().then(go, offline);
   };
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
-  sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
-  sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
+  sheets.ask = (q) => new Promise((done) => { void askSheet().then((Ask) => open(Ask, { ...q, done }), () => { offline(); done(false); }); });
+  sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => {
+    void askSheet().then((Ask) => open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }), () => { offline(); done(null); });
+  });
   sheets.deepLink = (p) => deepLink(p);
   // the iPhone app already open: a tapped notification's "start" arrives as kb:open (ios/, its launch: ?startapp)
   $effect(() => {
@@ -539,6 +547,7 @@
 
   function warmNavigation() {
     if (session.banned || session.revoked) return;
+    void loginSheet().catch(() => {}); void askSheet().catch(() => {});
     warm(chunks.person); warm(chunks.club);
     if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
     for (const tab of tabs) void loadPage(tab).catch(() => {});

@@ -15,12 +15,14 @@
   import { t } from '../../lib/i18n/index.svelte';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, usual, type Order } from '../../lib/sort.svelte';
+  import { screenful } from '../../lib/screenful.svelte';
 
   let { overlay, org, title }: { overlay: Overlay; org: Id; title: string } = $props();
   let list = $state<Member[] | null>(null);
   let shut = $state(false);
   const ORDERS: Order<Member>[] = [usual('sort.role'), byName((m) => m.person.name)]; // the server's: highest role first
   const rows = $derived(sorted('club.people', ORDERS, list ?? []));
+  const draw = screenful(() => rows.length); // a big club: a screenful with the sheet, the rest after it paints
   $effect(() => { api.people(org).then((x) => (list = x)).catch(() => (shut = true)); });
 </script>
 
@@ -31,7 +33,7 @@
     <div class="col">
     {#if rows.length > 1}<SortChip list="club.people" orders={ORDERS} />{/if}
     <Group>
-      {#each rows as m (m.person.id)}
+      {#each rows.slice(0, draw.n) as m (m.person.id)}
         <Row dense title={m.person.name} value={m.role !== 'member' || m.title ? roleName(m.role, titleOf(m)) : undefined} accessory="chevron" onclick={() => sheets.person(m.person.id)}>
           {#snippet lead()}<Avatar person={m.person} size={36} tappable={false} />{/snippet}
         </Row>
@@ -44,5 +46,4 @@
 </Sheet>
 
 <style>
-  .col { display: flex; flex-direction: column; gap: var(--s-3); }
-</style>
+  .col { display: flex; flex-direction: column; gap: var(--s-3); }</style>
