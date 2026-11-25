@@ -404,9 +404,9 @@ def test_m24_retention_erases_only_expired_unlinked_walk_ins(door, monkeypatch):
     now = (int(time.time()) // 86400) * 86400 - 5 * 3600 + 60
     set_clock(monkeypatch, lambda: now)
     for name, at, uid in (("old", now - organizing.GUEST_DAYS, None), ("recent", now, None), ("linked", 0, ann["id"])):
-        con.execute("INSERT INTO door_guests (event_id, name, norm, added_by, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)", (eid, name, name, host.id, at, uid))
+        con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)", (eid, name, name, host.id, at, uid))
     logic.daily.stats_day(con)
-    assert {r[0] for r in con.execute("SELECT name FROM door_guests")} == {"recent", "linked"}
+    assert {r[0] for r in con.execute("SELECT full_name FROM door_guests")} == {"recent", "linked"}
 
 
 def test_m25_deletion_scrubs_the_manual_attendance_subject(door):

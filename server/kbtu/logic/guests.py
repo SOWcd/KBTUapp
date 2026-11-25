@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import hmac
+import re
 from collections.abc import Iterable
 
 from ..db import tx
