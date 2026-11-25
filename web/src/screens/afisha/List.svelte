@@ -243,7 +243,6 @@
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}{#if data.eventsReady && weekCount}<span class="wk">&nbsp;· {tn('list.week', weekCount)}</span>{/if}</p>
   <header class="hd">
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
@@ -254,6 +253,8 @@
       <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
     </span>
   </header>
+  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
+  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
   {#if searching}
     <div class="past">
       {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
@@ -429,11 +430,13 @@
   .hd > span:first-child { min-width: 0; }
   /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
      at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .hd > span:first-child { flex: 1 0 120px; }
-  .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
-  .wk { color: var(--accent-text); }
-  .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
+  /* a headline of two lines in two weights (display type): the day, then its date, light; the week's count is a quiet line under them */
+  .ttl { font: 600 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; }
+  .date { margin-bottom: var(--s-5); white-space: nowrap; font: var(--fw-light) var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.045em; color: var(--text-3); }
+  .date:has(+ .kick) { margin-bottom: var(--s-1); }
+  .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
@@ -449,8 +452,8 @@
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; }
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: var(--fw-light) var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.04em; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; padding-top: var(--s-5); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's light title */
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
@@ -462,8 +465,8 @@
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
   .day { margin: var(--s-6) calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
-  .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
-  .dh span { color: var(--text-3); font-weight: 600; }
+  .dh { margin: 0 var(--s-1) 10px; font: 600 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.025em; }
+  .dh span { color: var(--text-3); font-weight: var(--fw-light); }
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
