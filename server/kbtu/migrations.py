@@ -2295,10 +2295,29 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       added_at INTEGER NOT NULL
     ) STRICT;"""),
+    # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
+    # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
+    (228, """CREATE TABLE IF NOT EXISTS pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_other ON pymk (other_id);
+    CREATE TABLE IF NOT EXISTS pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_dismissed_other ON pymk_dismissed (other_id);"""),
     # A signed comment written in the app under a channel post (fchannel.comment_*) is a row of fchan_replies that this
     # table names a commenter for: the bot sends it under the person's short name. An anonymous author's reply has no row
     # here, and fchan_replies itself never gets a user id (its post is the only way to that author)
-    (228, """CREATE TABLE IF NOT EXISTS fchan_signed (
+    (229, """CREATE TABLE IF NOT EXISTS fchan_signed (
       reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;"""),

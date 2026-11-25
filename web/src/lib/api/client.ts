@@ -156,6 +156,8 @@ async function uploadVideo(file: Blob, progress: (done: number) => void, wide = 
   return call('POST', `/videos/${id}/done`);
 }
 
+let graphRead: Promise<Graph> | undefined;
+
 export const server = {
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
@@ -265,6 +267,7 @@ export const server = {
   answerFriend: (user: Id, accept: boolean): Promise<Friends> => call('POST', `/friends/requests/${user}/${accept ? 'accept' : 'decline'}`),
   takeBackRequest: (user: Id): Promise<void> => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user: Id): Promise<void> => call('DELETE', `/friends/${user}`),
+  dismissSuggestion: (user: Id): Promise<void> => call('POST', '/pymk/dismiss', { id: user }), // People you may know's x: never suggested to each other again
   linkCard: (code: string): Promise<LinkCard> => call('GET', `/invite/${code}`), // whose invite link it is (adds nobody; guests too)
   addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
@@ -280,10 +283,13 @@ export const server = {
   /** "Sent it to DMP?" -> Yes: these events leave the next memos */
   memoSent: (org: Id, ids: Id[]): Promise<void> => call('POST', `/orgs/${org}/memo/sent`, { ids }),
   memoAgain: (org: Id, event: Id): Promise<void> => call('POST', `/orgs/${org}/memo/again/${event}`),
-  /** one memo item written from the sheet's small form (no event needed) */
-  /** indoor routes' graph (PLAN item 22); the admin saves it from the version he edited (conflict: someone saved since) */
-  mapGraph: (): Promise<Graph> => call('GET', '/map/graph'),
+  // The route graph is static. The map, keypad and route panel share it, and a failed read can be retried.
+  mapGraph: (): Promise<Graph> => (graphRead ??= call<Graph>('GET', '/map/graph').catch((error) => {
+    graphRead = undefined;
+    throw error;
+  })),
   mapRooms: (): Promise<{ updated: string; rooms: Record<string, Record<string, number[]>> }> => call('GET', '/map/rooms'), // "free now" on the map; 404 when off (ROOMS_FILE)
+  /** one memo item written from the sheet's small form (no event needed) */
   memoItem: (org: Id, item: { kind: string; fields: object; place: string; startsAt: Ts; endsAt: Ts | null }): Promise<string> => call<{ text: string }>('POST', `/orgs/${org}/memo/item`, item).then((r) => r.text),
   /** my Latin name and positions, fixed once; empty = computed */
   memoSign: (org: Id, sign: MemoSign): Promise<MemoDraft> => call('PUT', `/orgs/${org}/memo/sign`, sign),

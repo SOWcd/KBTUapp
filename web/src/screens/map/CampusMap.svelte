@@ -86,20 +86,29 @@
   // which map (a list at the top left): ours, the newest and the default (owner, Nov 20), Uni-Q's, the 2023 plan.
   // Opened on a room or a place: Uni-Q's (its rooms are ringed there, the basement is only there)
   const VERS: Ver[] = ['kbtu', 'main', 'old'];
-  let ver = $state<Ver>(untrack(() => (place ? 'main' : 'kbtu')));
+  let ver = $state<Ver>(untrack(() => (place || exit ? 'main' : 'kbtu')));
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
   let routing = $state(false);
+  let openingRoute = $state(false);
   let routeUI = $state<ReturnType<typeof RouteUI>>();
   let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one
   async function openRoute() {
+    if (openingRoute || routing) return;
     haptic.tap();
     if (ver !== 'main') setVer('main');
-    if (!rt.graph) rt.graph = await api.mapGraph().catch(() => null);
+    if (!rt.graph) {
+      openingRoute = true;
+      await loadGraph();
+      openingRoute = false;
+    }
+    if (overlay.closing) return;
     if (!rt.graph) { say(t('route.noGraph'), 'pleading_face_3d'); return; }
     routing = true;
   }
-  if (untrack(() => exit)) void openRoute();
+  async function loadGraph() {
+    if (!rt.graph) rt.graph = await api.mapGraph().catch(() => null);
+  }
   /** show a step: its floor, framed */
   async function go(f: number, pts: { u: number; v: number }[]) {
     if (f !== cur) { halt(); cur = f; touched++; }
@@ -540,11 +549,11 @@
     return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
   }));
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
-  // the entrances on B too; the graph has them, fetched when the keypad opens
+  // The graph also gives the keypad the entrances on the basement floor.
   const doorNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
-  async function openPad() {
+  function openPad() {
     haptic.tap(); pad = true;
-    if (!rt.graph) rt.graph = await api.mapGraph().catch(() => null);
+    void loadGraph();
   }
   function checkFind(text: string): PadCheck {
     const dn = doorNamed(text);
@@ -737,6 +746,7 @@
     const d = document.documentElement.dataset;
     d.map = ''; // the toast drops under the floor row there (Toast.svelte)
     ro.observe(stage);
+    if (leaving) void openRoute(); else void loadGraph();
     const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
     return () => { clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); clearTimeout(scanT); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
   });
@@ -887,7 +897,7 @@
   <!-- the bottom, under the thumb: the way out small on the left, the search, and on the right
        the app's own map button, lit: a tap there closes the map, as the button opened it -->
   <div class="dock" class:away={pad || card || routing} inert={pad || card || routing}>
-    <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
+    <button class="exit glass glass-pill" use:glass disabled={openingRoute} aria-busy={openingRoute} onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
     <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} /><span class="ellipsis">{t('map.find')}</span></button>
     <button class="shut glass glass-pill" use:glass onclick={() => close(overlay.id)} aria-label={t('common.close')}><MapIcon size={22} strokeWidth={1.9} /></button>
   </div>
@@ -900,7 +910,7 @@
           <Search size={18} /></button>
         <button class="xb" onclick={clearFound} aria-label={t('common.close')}><X size={18} /></button></div>
       {#if roomLine}<p class="fl">{roomLine}</p>{/if}
-      <button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
+      <button class="go" disabled={openingRoute} aria-busy={openingRoute} onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
     </div>
   {/if}
   {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, ...placeGroups()]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
@@ -1073,5 +1083,6 @@
   .xb { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
   .go { width: 100%; margin-top: 12px; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 750 17px/1 var(--font-text); color: #fff;
     background: linear-gradient(180deg, #5c85ff, #3b6bff 55%, #3457e0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px -8px rgba(59, 107, 255, 0.8); }
+  .go:disabled, .exit:disabled { opacity: 0.65; }
   @media (prefers-reduced-motion: reduce) { .rcard { animation: none; } }
 </style>
