@@ -60,6 +60,7 @@ async def _picture(fn, *args):
 
 THREADS = 16               # see lifespan
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
+ANDROID_PACKAGE = "kz.kbtuapp"  # the Play app (android/twa-manifest.json): fixed for good once published
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
 
 
@@ -196,12 +197,17 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
             raise ApiError("forbidden", "init_data")
         _web_csrf(request, cfg.domain)
         u = web_auth.lookup(con, token, cfg.admins)
+        demo = u["tg_id"] == web_auth.DEMO_TG_ID  # Google Play's reviewer: PLAY_DEMO on, the catalogue's reads alone
+        if demo and not cfg.play_demo:
+            raise ApiError("unauthorized", "web_session")
+        if demo and (request.method not in ("GET", "HEAD") or request.scope["route"].path not in web_auth.DEMO_READS):
+            raise ApiError("forbidden", "demo")
         request.state.tg = {"id": u["tg_id"], "username": u["tg_username"]}
         request.state.web_token = token
         request.state.renew_web_cookie = web_auth.touch(con, token, u, cfg.admins, SEEN_EVERY)
         if u["tg_id"] in cfg.admins and u["role"] != "admin":
             u = web_auth.lookup(con, token, cfg.admins)
-        v = _viewer_user(con, u)
+        v = Viewer(u["id"], "user", False) if demo else _viewer_user(con, u)  # whatever its row says: nobody in particular
     if (caller := logic.core.CALLER.get()) is not None:
         caller["student"] = v.student  # person_ref: the real name beside a nick only for students
         caller["uid"] = v.id  # forum.may_touch_ask reads whether I may see a subject's listings (subjects.may_read)
@@ -3068,6 +3074,30 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/healthz")
     def health():
         return Response("ok", media_type="text/plain")
+
+    @app.get("/.well-known/assetlinks.json")
+    def assetlinks():
+        """The Android app (android/) opens this site full screen only while its signing certificates are listed here
+        (Digital Asset Links): ANDROID_CERT_SHA256, the upload key's and Play's app signing key's"""
+        if not cfg.android_certs:
+            raise ApiError("not_found")
+        return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                              "target": {"namespace": "android_app", "package_name": ANDROID_PACKAGE,
+                                         "sha256_cert_fingerprints": list(cfg.android_certs)}}],
+                            headers={"Cache-Control": "public, max-age=300"})
+
+    @app.get("/play-demo")
+    def play_demo(request: Request, con: Con, k: str = ""):
+        """Google Play's reviewer signs in without Telegram: PLAY_DEMO's secret link (admin play-demo) opens the
+        made-up demo account (web_auth.demo_user) in this browser; a wrong or missing key is a plain 404"""
+        if not cfg.play_demo or not hmac.compare_digest(k.encode(), cfg.play_demo.encode()):
+            raise ApiError("not_found")
+        t = logic.now()
+        with db.tx(con):
+            token = web_auth.issue(con, web_auth.demo_user(con, t), request.cookies.get(web_auth.COOKIE, ""), t)
+        response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        _web_cookie(response, token)
+        return response
 
     @app.get("/exit")
     def exit_link():
