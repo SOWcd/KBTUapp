@@ -9,27 +9,26 @@ ru, kk, en: OUR words about what shipped, never the person's message, gender-neu
 no name, handle, link or identifying detail (it is shown under "Student"). It is listed once shipped, newest first by
 the day it shipped: no order by amount, nothing to argue about.
 
-The feature's own consent (CONSENT, as evteams'): a name and a face stand next to the lines ONLY after that person's
-yes to the text in force, and only while they could give it now (`_CAN`: a signed-in student, not banned). Otherwise
-(no answer, a no, a withdrawal, a ban, no account, a deleted or unlinked account) every line stays, each as its own
-"Student" row: no name, face, id or link, and nothing that says two nameless lines are one person's. The one exception:
-a line with a GitHub login stands under that login (any case), its lines together (the login is public on GitHub),
-and that card shows no name or face: a login is tied to a person here ONLY by their yes. A named person's card shows
-the login any of their lines has (the newest spelling) and takes in that login's lines that have no Telegram id: one
-card. A yes covers the lines shown and those added later (the sheet says so). Every answer is a row of `credit_consents` (who, when, yes or
-no, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
+Shown by default (the owner, Nov 26): a name and a face stand next to the lines unless that person hid them (their
+latest answer is a no), while they are a signed-in student, not banned (`_CAN`). Otherwise (a no, a withdrawal, a ban,
+a deleted or unlinked account) every line stays, each as its own "Student" row: no name, face, id or link, and nothing
+that says two nameless lines are one person's. No account yet: the name the team gave on the line (`credits.name`,
+`credit add --name`), no face; none given: "Student". A line with a GitHub login and nobody shown stands under that
+login (any case), its lines together (the login is public on GitHub). A shown person's card shows the login any of
+their lines has (the newest spelling) and takes in that login's lines that have no Telegram id: one card. Every answer
+is a row of `credit_consents` (who, when, show or hide, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
 refused if a newer answer exists: a late or repeated yes never undoes a withdrawal. Asked by the bot's template once
 per person and text version (`ask`), answered in the app, changed in Settings.
 
 The Team (`credit_team`, `kbtu.admin team add|del`, audited): the core developers the creator picked, first added first,
-each a card with their lines under it (not again below). Being on it is something to say yes to, as a line is; without
-that yes a member is not in the block at all, their lines stay below as anyone's.
+each a card with their lines under it (not again below). Hidden, a member is not in the block at all, their lines
+stay below as anyone's.
 
-The creator alone is named without a consent row: on purpose, he is public as the creator everywhere already
-(`person.founder`, /api/me's support), and nothing else of his is shown here. The idea's author follows the rule.
+The creator is always named (he can't hide): he is public as the creator everywhere already (`person.founder`, /api/me's
+support), and nothing else of his is shown here. The idea's author follows the rule.
 
 Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id (`gone`): what the app got stays
-in the list as nameless "Student" rows (a line with a login: under that login, as any such line), and nothing left
+in the list as nameless "Student" rows (the team's name for it goes too) (a line with a login: under that login, as any such line), and nothing left
 behind points at the account. An account moved to another
 Telegram (`kbtu.admin move`) takes its lines along and its yes ends (`moved`): the new profile is previewed afresh.
 """
@@ -45,7 +44,7 @@ from .core import PERSON_COLS, ApiError, Viewer, one, person_ref, rows
 
 KINDS = ("idea", "find", "code")
 LINE_MAX = 90     # a line is a few words; the CLI refuses more
-CONSENT = "cr1"   # the consent sheet's text (web: cr.ask*); a reworded sheet is a new version, and old yeses ask again
+CONSENT = "cr2"   # the sheet's text (web: cr.ask*); a reworded sheet is a new version, the app shows it once again
 REMIND = "lines are OUR words: gender-neutral, no name, handle, link or identifying detail (shown under \"Student\")"
 
 # the one rule of who may be named, answer and be asked: a signed-in student (not a typed-in row), not banned.
@@ -60,7 +59,8 @@ _COLS = f"{PERSON_COLS}, u.tg_id, u.banned_at, {_CAN} AS can, k.id AS rev, k.sho
 
 
 def _said(r) -> bool | None:
-    """Their answer as it stands: a yes to this text, a no (to any text: never asked again), or none (an old yes too)."""
+    """Their answer as it stands: a yes to this text, a no (to any text: hidden, never asked again), or none (an old yes
+    too). Only a no hides."""
     return None if r["rev"] is None or (r["show"] and r["version"] != CONSENT) else bool(r["show"])
 
 
@@ -75,7 +75,7 @@ def _item(r) -> dict:
 
 
 def _named(r) -> bool:
-    return bool(r) and r["id"] is not None and bool(r["can"]) and _said(r) is True
+    return bool(r) and r["id"] is not None and bool(r["can"]) and _said(r) is not False
 
 
 def _tie(cid: int) -> str:
@@ -85,7 +85,7 @@ def _tie(cid: int) -> str:
 
 def listing(con, v: Viewer) -> dict:
     """GET /api/credits: the whole screen in four reads. Nobody's Telegram id, row id or answer leaves here; a line
-    without its person's yes is a row of its own with `person: null`."""
+    of a hidden person is a row of its own with `person: null`."""
     if not con.in_transaction:  # one snapshot for all the reads: an answer landing between them can't pair an old
         con.execute("BEGIN")    # yes with a newer line
         try:
@@ -97,13 +97,13 @@ def listing(con, v: Viewer) -> dict:
         WHERE (u.is_founder = 1 OR u.mark = 'idea' OR g.id IS NOT NULL) AND u.tg_id > 0""")
     founder = next((p for p in top if p["is_founder"]), None)
     idea = next((p for p in top if p["mark"] == "idea" and not p["is_founder"]), None)
-    # the Team: only who said yes; the creator and the idea's author have their own cards
+    # the Team: who didn't hide; the creator and the idea's author have their own cards
     team = [r for r in rows(con, f"""SELECT {_COLS}, {_HONOR} AS honored FROM credit_team t JOIN users u ON u.id = t.user_id
         LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE u.is_founder = 0 AND u.mark IS NOT 'idea' ORDER BY t.added_at, t.user_id""") if _named(r)]
     team_items: dict[int, list] = {r["tg_id"]: [] for r in team}
     me = _state(con, v.id)
-    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, {_COLS}
+    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, c.name AS given, {_COLS}
         FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE c.shipped_on IS NOT NULL ORDER BY c.shipped_on DESC, c.id DESC""")
     people: dict[object, dict] = {}
@@ -111,7 +111,9 @@ def listing(con, v: Viewer) -> dict:
     aside = {founder and founder["tg_id"], _named(idea) and idea["tg_id"], *team_items}  # the creator's, the idea's author's and the Team's lines
     # who is named here, and a named person's GitHub login (from any line of theirs; only their yes ties the two)
     refs = {r["whose"]: person_ref(r) for r in got if r["whose"] not in aside and _named(r)}
-    own = {r["gh"].lower(): r["whose"] for r in reversed(got) if r["gh"] and r["whose"] in refs}
+    # no account yet: the team's name for them (the newest line's), no face
+    given = {r["whose"]: r["given"] for r in reversed(got) if r["id"] is None and r["whose"] is not None and r["given"]}
+    own = {r["gh"].lower(): r["whose"] for r in reversed(got) if r["gh"] and (r["whose"] in refs or r["whose"] in given)}
     my_gh = None  # the login my named card would show: the consent sheet shows it too, so a yes sees it
     for r in got:
         if r["whose"] is not None and r["whose"] == me["tg_id"]:
@@ -126,11 +128,11 @@ def listing(con, v: Viewer) -> dict:
             team_items[r["whose"]].append(_item(r))
             continue
         # a named person's lines together (with a login-only line of their login), where their newest stands; a GitHub
-        # login's too; a nameless line alone. A line of a Telegram id without a yes never joins a named card
+        # login's too; a nameless line alone. A hidden person's line never joins a named card
         gh = r["gh"]
-        whose = r["whose"] if r["whose"] in refs else own.get(gh.lower()) if gh and r["whose"] is None else None
+        whose = r["whose"] if r["whose"] in refs or r["whose"] in given else own.get(gh.lower()) if gh and r["whose"] is None else None
         row = people.setdefault(whose if whose is not None else ("gh", gh.lower()) if gh else ("line", r["cid"]),
-                                {"person": refs.get(whose), "gh": None, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
+                                {"person": refs.get(whose), "name": given.get(whose), "gh": None, "items": [], "at": (r["shipped_on"], _tie(r["cid"]))})
         row["gh"] = row["gh"] or gh  # newest first: the card shows its newest line's spelling
         row["items"].append(_item(r))
     # Only a named holder gets a medal entry. A shipped credit keeps its own anonymity and sort order.
@@ -148,8 +150,8 @@ def listing(con, v: Viewer) -> dict:
         "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items,
                  **({"honor": True} if _named(idea) and idea["honored"] is not None else {})} if idea else None,
         "team": [{"person": person_ref(r), "items": team_items[r["tg_id"]], **({"honor": True} if r["honored"] else {})} for r in team],
-        "people": [{"person": p["person"], "items": p["items"], **({"honor": True} if p.get("honor") else {})} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
-        # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
+        "people": [{"person": p["person"], "items": p["items"], **({"honor": True} if p.get("honor") else {})} | ({"gh": p["gh"]} if p["gh"] else {}) | ({"name": p["name"]} if p.get("name") else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
+        # what is mine here, for the sheet and Settings' switch (kept while a yes stands, to take it back);
         # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
         "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {}),
                  **({"gh": my_gh} if my_gh else {}), **({"team": True} if is_team else {})}
@@ -212,7 +214,7 @@ def asking(con, uid: int) -> int | None:
 
 def gone(con, tg_id: int) -> None:
     """A deleted account: its lines stay, nameless for good (no Telegram id left on them)."""
-    con.execute("UPDATE credits SET tg_id = NULL WHERE tg_id = ?", (tg_id,))
+    con.execute("UPDATE credits SET tg_id = NULL, name = NULL WHERE tg_id = ?", (tg_id,))
 
 
 def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
@@ -240,19 +242,9 @@ def _login(gh: str) -> str:
     return gh
 
 
-def _unseen(con, tg_id: int | None) -> None:
-    """A standing yes was given to a sheet that showed no login: putting one beside their Telegram id would name the
-    two together without their seeing it. Such a login goes on a line of its own (gh:<login>) instead."""
-    if tg_id is None:
-        return
-    r = one(con, f"SELECT k.id AS rev, k.show, k.version FROM users u {_LAST} WHERE u.tg_id = ? AND u.tg_id > 0", tg_id)
-    if r and _said(r) is True:
-        raise ValueError("they said yes to a sheet without this login: add it as gh:<login> on its own line")
-
-
-def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None) -> int:
-    """who: a Telegram id, or "gh:<login>" alone; gh: the same person's login beside a Telegram id (`--gh`), shown
-    with their name only after their yes (listing)."""
+def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None, name: str | None = None) -> int:
+    """who: a Telegram id, or "gh:<login>" alone; gh: the same person's login beside a Telegram id (`--gh`), on their
+    named card; name: what to call a Telegram id with no account yet (`--name`), never used once it has one."""
     lines = [" ".join(x.split()) for x in (ru, kk, en)]
     alone = isinstance(who, str) and who.startswith("gh:")
     if alone and gh is not None:
@@ -261,12 +253,14 @@ def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | Non
     tg_id = None if alone else int(who)
     if (tg_id is not None and tg_id <= 0) or kind not in KINDS or not all(0 < len(x) <= LINE_MAX for x in lines):
         raise ValueError(f"a Telegram id, one of {KINDS}, three lines of 1..{LINE_MAX} characters")
-    if not alone and gh is not None:
-        _unseen(con, tg_id)
+    if name is not None:
+        name = " ".join(name.split())
+        if alone or not 0 < len(name) <= 60:
+            raise ValueError("--name: 1..60 characters, with a Telegram id (used only while it has no account)")
     if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
-        return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (tg_id, gh, kind, *lines, core.now())).lastrowid
+        return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (tg_id, gh, kind, *lines, core.now(), name)).lastrowid
 
 
 def set_gh(con, cid: int, gh: str) -> None:
@@ -276,7 +270,6 @@ def set_gh(con, cid: int, gh: str) -> None:
         r = one(con, "SELECT tg_id FROM credits WHERE id = ?", cid)
         if not r:
             raise ValueError(f"no credit {cid}")
-        _unseen(con, r["tg_id"])
         con.execute("UPDATE credits SET gh = ? WHERE id = ?", (gh, cid))
 
 

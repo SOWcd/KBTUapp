@@ -306,7 +306,7 @@ CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
       kk TEXT NOT NULL,
       en TEXT NOT NULL,
       shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
-      created_at INTEGER NOT NULL, gh TEXT) STRICT;
+      created_at INTEGER NOT NULL, gh TEXT, name TEXT) STRICT;
 CREATE TABLE dmp_list (  -- IF NOT EXISTS: tests rewind user_version
       id INTEGER PRIMARY KEY,
       tg_id INTEGER UNIQUE,

@@ -2559,4 +2559,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (245, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
     ALTER TABLE push_devices ADD COLUMN dead_at INTEGER;
     ALTER TABLE users ADD COLUMN notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'));"""),
+    # Made together shows contributors by default (logic/credits.py): the creator's name for a Telegram id with no
+    # account yet (`credit add --name`), used only while no account exists; gone with the line's Telegram id
+    (246, "ALTER TABLE credits ADD COLUMN name TEXT;"),
 ]

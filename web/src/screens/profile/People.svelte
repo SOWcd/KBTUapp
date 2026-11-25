@@ -3,10 +3,10 @@
   // gave. The creator, modestly; then Code (the Team first), Ideas and finds (the idea's author first), Support (the
   // sponsors who agreed to be named, biggest first as the server orders them; the total only with its own yes).
   // A person with lines of both kinds stands in both sections, each with its own lines.
-  // A name and a face only after that person's own yes (server credits.py); without it a line goes in its section's
-  // last row, "Students": no face, nothing to tap, nothing that ties two such lines together. A pull request's lines
-  // stand under its GitHub login, its row opens the profile there; a named person known there too has the login as a
-  // link under their lines.
+  // A name and a face unless that person hid them (server credits.py); a hidden person's line goes in its section's
+  // last row, "Students": no face, nothing to tap, nothing that ties two such lines together. No account yet: the
+  // name the team gave, with initials. A pull request's lines stand under its GitHub login, its row opens the profile
+  // there; a named person known there too has the login as a link under their lines.
   // The numbers count lines, never people: nameless lines say nothing of how many people they are.
   // Both lists come with the app (data.credits, data.sponsors): the page never waits.
   //   at   'support': it opens at the Support section (the `sponsors` link, the donate page's row)
@@ -54,7 +54,7 @@
     // role: the Team's label (always in Code) or the idea's author's (always first in Ideas and finds)
     const put = (r: CreditPerson, role?: string, home?: 'code' | 'ideas') => {
       const mine = r.items.filter((i) => i.kind === 'code'), rest = r.items.filter((i) => i.kind !== 'code');
-      if (!r.person && !r.gh && !home) { anonCode.push(...mine); anonIdeas.push(...rest); return; }
+      if (!r.person && !r.gh && !r.name && !home) { anonCode.push(...mine); anonIdeas.push(...rest); return; }
       const inCode = mine.length > 0 || home === 'code';
       if (inCode) code.push({ ...r, role: home === 'code' ? role : undefined, items: mine });
       // the medal's line once: with the code if they stand there
@@ -90,12 +90,13 @@
   {#snippet inner()}
       <span class="av">
         {#if p}<Avatar person={p} size={40} tappable={false} />
+        {:else if e.name}<Avatar person={{ name: e.name }} size={40} tappable={false} />
         {:else if login}<span class="ic"><GitHubMark size={22} /></span>
         {:else}<span class="ic"><UsersRound size={20} /></span>{/if}
       </span>
       <span class="bd">
         <span class="tx">
-          <b class="nm">{p ? (e.role ? realOf(p) : p.name) : login || t(e.role ? 'cr.student' : 'cr.students')}</b>
+          <b class="nm">{p ? (e.role ? realOf(p) : p.name) : e.name || login || t(e.role ? 'cr.student' : 'cr.students')}</b>
           {#if e.role}<span class="rl">{e.role}</span>{/if}
           {#if e.honor}<span class="ln"><span class="ki"><Award size={14} /></span><span>{t('ach.honor.name')}</span></span>{/if}
           {@render lines(e.items, marks)}
@@ -105,7 +106,7 @@
   {/snippet}
   <div class="it kb-row">
     {#if go}<button class="main tap" onclick={go}>{@render inner()}</button>{:else}<div class="main">{@render inner()}</div>{/if}
-    <!-- their GitHub too: a link of its own under their lines (their yes ties the two) -->
+    <!-- their GitHub too: a link of its own under their lines -->
     {#if p && login}<button class="gl press" onclick={() => github(login)}><GitHubMark size={15} /><span>{login}</span><ArrowUpRight size={14} /></button>{/if}
   </div>
 {/snippet}
@@ -116,8 +117,8 @@
     {#if !c || !lists}
       <Skeleton n={6} />
     {:else}
-      <!-- my lines are here, my name isn't: the yes one tap away, where I look for it (the sheet: what everyone would see) -->
-      {#if c.mine && c.mine.consent !== true}
+      <!-- I hid: my lines are here, my name isn't; showing it again one tap away (the sheet: what everyone would see) -->
+      {#if c.mine && c.mine.consent === false}
         <div class="up" style:--d="0"><Group footnote={t('cr.meT')}>
           <Row title={t('cr.meShow')} tone="action" accessory="chevron" onclick={() => { haptic.tap(); sheets.creditAsk(); }} />
         </Group></div>

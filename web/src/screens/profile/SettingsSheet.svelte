@@ -321,10 +321,10 @@
           onchange={async (on) => { if (on && !(await sheets.ask({ title: t('pymk.askTitle'), text: t('pymk.askText'), ok: t('pymk.on'), cancel: t('common.cancel') }))) { undo++; return; }
             await set('suggestMe', on, true); void loadFriends(); }} />{/key}
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
-        <!-- Made together, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
+        <!-- Made together (lib/credits.ts): shown unless I hid; only while something there is mine, or my yes stands.
              The switch shows what is SAVED: a tap on goes back at once and opens the sheet (what everyone would see, the
              yes or the no), and it turns on only when the server kept the yes; off: at once, my name gone from the list -->
-        {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent === true}
+        {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent !== false}
           onchange={(on) => { undo++; if (on) sheets.creditAsk(); else void answerCredits(false); }} />{/key}{/if}
         <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
         {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
