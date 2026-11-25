@@ -14,6 +14,7 @@ from . import core, seats
 from .core import ApiError, Viewer, one, rows, shown_name
 
 CONSENT = "sp1"
+AMOUNT_CONSENT = "sa1"  # a second switch: the total beside the name, only while sp1 is on too
 RECEIPT_CONSENT = "dn1"
 STAR_KZT = 10  # A fixed recognition rate, not a market price; owner confirms before rollout.
 TIERS = (1, 5000, 20000)
@@ -66,37 +67,52 @@ def mine(con, v: Viewer) -> dict:
     with tx(con, write=False):
         amount = total(con, v.id)
         consent = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
+        show = bool(consent and consent["show"] and consent["version"] == CONSENT)
         return {"total": amount, "tier": tier(amount), "thresholds": TIERS, "starRate": STAR_KZT,
-                "version": CONSENT, "receiptConsent": RECEIPT_CONSENT,
-                "show": bool(consent and consent["show"] and consent["version"] == CONSENT),
+                "version": CONSENT, "amountVersion": AMOUNT_CONSENT, "receiptConsent": RECEIPT_CONSENT,
+                "show": show, "showAmount": show and consent["amount"] == AMOUNT_CONSENT,
                 "rev": consent["id"] if consent else None,
                 "receipts": [{"id": r["id"], "status": r["status"], "amount": r["amount"], "at": r["created_at"]}
                              for r in rows(con, "SELECT * FROM donations WHERE user_id = ? AND source = 'receipt' ORDER BY id DESC LIMIT 30", v.id)]}
 
 
 def listing(con) -> list[dict]:
-    return [{"name": shown_name(r), "tier": r["level"]} for r in rows(con, f"""SELECT {_NAMES}, l.level
+    """The honour board. Tier first (already public), then the shown totals, largest first; a hidden total sorts after
+    the shown ones of its tier by name, so a place never hints at an amount nobody agreed to show."""
+    return [{"name": shown_name(r), "tier": r["level"], **({"amount": r["shown"]} if r["shown"] is not None else {})}
+            for r in rows(con, f"""SELECT {_NAMES}, l.level, CASE WHEN c.amount = ? THEN
+              (SELECT SUM(amount) FROM donations WHERE user_id = u.id AND status = 'confirmed') END AS shown
         FROM achievement_levels l JOIN users u ON u.id = l.user_id AND l.code = 'sponsor'
         LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE u.tg_id > 0 AND u.banned_at IS NULL AND c.show = 1 AND c.version = ?
-        ORDER BY COALESCE(u.nick, s.first_name, u.tg_first_name), u.id""", CONSENT)]
+        ORDER BY l.level DESC, shown IS NULL, shown DESC, COALESCE(u.nick, s.first_name, u.tg_first_name), u.id""",
+                              AMOUNT_CONSENT, CONSENT)]
 
 
-def answer(con, v: Viewer, payer: int, body: dict) -> dict:
+def answer(con, v: Viewer, payer: int, body: dict, field: str = "show") -> dict:
+    """One switch: field 'show' (the name, sp1) or 'amount' (the total beside it, sa1). Each row holds both."""
     if type(body.get("show")) is not bool:
         raise ApiError("bad_input")
-    show = body["show"]
+    on, version = body["show"], (CONSENT if field == "show" else AMOUNT_CONSENT)
     with tx(con):
         if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ? AND banned_at IS NULL", v.id, payer):
             raise ApiError("forbidden")
-        if show:
-            if body.get("consent") != CONSENT or not (body.get("rev") is None or type(body["rev"]) is int):
+        last = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
+        named = bool(last and last["show"] and last["version"] == CONSENT)
+        if on:
+            if body.get("consent") != version or not (body.get("rev") is None or type(body["rev"]) is int):
                 raise ApiError("bad_input", "consent")
-            last = one(con, "SELECT id FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
-            if body.get("rev") != (last[0] if last else None) or not total(con, v.id):
+            # The amount needs the name on: a figure beside nobody would be no honour, only a leak.
+            if body.get("rev") != (last["id"] if last else None) or not total(con, v.id) or (field == "amount" and not named):
                 raise ApiError("conflict")
-        # A late withdrawal always wins; a late yes must name the current revision.
-        con.execute("INSERT INTO sponsor_consents (user_id, version, show, at) VALUES (?, ?, ?, ?)", (v.id, CONSENT, int(show), core.now()))
+        # A late withdrawal always wins; a late yes must name the current revision. Hiding the name hides the
+        # amount too, so showing the name again later never brings the figure back unasked.
+        if field == "show":
+            show, amount = on, (last["amount"] if on and named else None)
+        else:
+            show, amount = named, (AMOUNT_CONSENT if on else None)
+        con.execute("INSERT INTO sponsor_consents (user_id, version, show, amount, at) VALUES (?, ?, ?, ?, ?)",
+                    (v.id, CONSENT, int(show), amount, core.now()))
     return mine(con, v)
 
 

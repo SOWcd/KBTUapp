@@ -731,6 +731,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         response.headers["Cache-Control"] = "private, no-store"
         return donations.answer(con, v, request.state.tg["id"], body)
 
+    @app.put("/api/donate/amount")
+    def sponsor_amount(request: Request, con: Con, v: Me, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.answer(con, v, request.state.tg["id"], body, "amount")
+
     @app.post("/api/donate/receipt")
     async def donate_receipt(request: Request, con: Con, v: Me, response: Response, consent: str = ""):
         response.headers["Cache-Control"] = "private, no-store"
