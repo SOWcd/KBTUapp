@@ -2347,4 +2347,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
     CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
     CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
+    # the creator's archived lanyard (logic.ARCHIVE), with skin_pick 'sower' (its CHECK can't take a new value): NULL is
+    # his own SOWER
+    (233, "ALTER TABLE users ADD COLUMN skin_look TEXT;"),
 ]

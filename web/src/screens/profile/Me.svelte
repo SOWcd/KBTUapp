@@ -42,6 +42,7 @@
   import { may } from '../../lib/perms';
   import Hero from './Hero.svelte';
   import { myShown } from '../../lib/state/looks.svelte';
+  import { isArchived } from '../../lib/awards';
   import Invite from './Invite.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
@@ -183,7 +184,7 @@
   const dirty = () => !!ui.look && !!me && (ui.look.skin !== me.skin || ui.look.frame !== (me.frame ?? null));
   // a locked lanyard tried on: said it isn't mine, and mine turns back
   function untry() {
-    if (ui.tryOn) { say(t(ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
+    if (ui.tryOn) { say(t(isArchived(ui.tryOn.id) ? 'look.archived' : ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
   }
   // Back (or Escape) in the editor: to the list; a change not saved asks first (iOS's "Discard changes?")
   async function unedit() {

@@ -109,6 +109,27 @@
       linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 111.5px, rgba(150, 146, 140, 0.55) 111.5px 112px, transparent 112px),
       linear-gradient(180deg, rgb(238, 241, 243), rgb(214, 218, 221) 55%, rgb(198, 202, 206));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85), inset 0 1px 0 rgb(255, 255, 255), inset 0 -1.5px 2px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 4px 12px -6px rgba(0, 0, 0, 0.8); }
+  /* the archive's Dota looks (KBTUapp-mocks/dota looks.css): the Ancient's obsidian with an ember glow under it and the
+     letters in old gold; black steel lit jade at one end and ember at the other; night glass with the rune's light
+     pooled under its right end. Each with the light sliding with the tilt */
+  .dota_ancient { color: transparent;
+    background: radial-gradient(60% 120% at 50% 130%, rgba(255, 110, 40, 0.45), transparent 70%),
+      linear-gradient(100deg, transparent 38%, rgba(255, 220, 160, 0.16) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      linear-gradient(180deg, rgb(42, 12, 11), rgb(18, 4, 5) 60%, rgb(10, 2, 3));
+    box-shadow: inset 0 0 0 1px rgba(226, 178, 96, 0.85), inset 0 1px 0 rgba(255, 236, 190, 0.35), inset 0 -1px 0 rgba(255, 120, 50, 0.55), 0 0 0 0.5px rgba(20, 4, 2, 0.9), 0 4px 12px -6px rgba(0, 0, 0, 0.8), 0 2px 10px -2px rgba(255, 90, 30, 0.35); }
+  .dota_ancient .w, .dota_ancient > span { color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, rgb(255, 240, 196), rgb(232, 184, 104) 55%, rgb(168, 113, 44)); }
+  .dota_clash { color: rgb(244, 255, 249);
+    background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.12) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      radial-gradient(45% 160% at 0% 50%, rgba(47, 174, 134, 0.55), transparent 70%), radial-gradient(45% 160% at 100% 50%, rgba(224, 69, 28, 0.6), transparent 70%),
+      linear-gradient(180deg, rgb(22, 26, 26), rgb(7, 8, 8));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 12px -6px rgba(0, 0, 0, 0.8); }
+  .dota_clash .w { color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(90deg, rgb(184, 255, 228), rgb(255, 255, 255) 50%, rgb(255, 201, 168)); }
+  .dota_clash > span { color: rgb(255, 210, 180); }
+  .dota_rune {
+    background: linear-gradient(100deg, transparent 38%, rgba(200, 250, 255, 0.14) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      radial-gradient(50% 160% at 82% 120%, rgba(90, 200, 255, 0.5), transparent 70%), linear-gradient(180deg, rgba(20, 28, 74, 0.92), rgba(5, 7, 26, 0.95));
+    box-shadow: inset 0 0 0 1px rgba(159, 232, 255, 0.45), inset 0 1px 0 rgba(232, 253, 255, 0.3), 0 4px 12px -6px rgba(0, 0, 0, 0.8), 0 2px 10px -2px rgba(90, 160, 255, 0.35); }
+  .dota_rune .w, .dota_rune > span { color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, rgb(255, 255, 255), rgb(159, 232, 255) 60%, rgb(106, 140, 255)); }
   /* CyberSport: dark glass, a neon edge, its letters glowing magenta, a magenta light sliding with the tilt */
   .cybersportkbtu { background: linear-gradient(100deg, transparent 38%, rgba(232, 90, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(180deg, rgb(36, 8, 60), rgb(14, 3, 26)); color: rgb(250, 178, 255); text-shadow: 0 0 6px rgba(232, 90, 255, 0.85);

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="144" height="144">
+<!-- V3's medallion: the rune itself, close, on night-blue glass -->
+<defs>
+  <radialGradient id="g" cx="24" cy="24" r="28" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2a4aa8"/><stop offset="0.45" stop-color="#101a52"/><stop offset="1" stop-color="#05061a"/></radialGradient>
+  <radialGradient id="h" cx="24" cy="24" r="14" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#c8faff" stop-opacity="0.8"/><stop offset="1" stop-color="#5a7bff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="fL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#9ff0ff"/></linearGradient>
+  <linearGradient id="fR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5fd8ff"/><stop offset="1" stop-color="#3a3cc8"/></linearGradient>
+  <linearGradient id="fB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ab8ff"/><stop offset="1" stop-color="#2a1a8a"/></linearGradient>
+  <linearGradient id="fBL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b0f4ff"/><stop offset="1" stop-color="#4a6cff"/></linearGradient>
+</defs>
+<rect width="48" height="48" fill="url(#g)"/>
+<circle cx="24" cy="24" r="14" fill="url(#h)"/>
+<g transform="translate(24 24)">
+  <g transform="scale(1 0.34)" fill="none"><path d="M-16 0 A16 16 0 0 1 16 0" stroke="#7a8cff" stroke-width="1.4" opacity="0.6"/></g>
+  <polygon points="0,-14 -6.3,0 -1,1.4" fill="url(#fL)"/><polygon points="0,-14 -1,1.4 6.3,0" fill="url(#fR)"/>
+  <polygon points="-6.3,0 -1,1.4 0,12.6" fill="url(#fBL)"/><polygon points="-1,1.4 6.3,0 0,12.6" fill="url(#fB)"/>
+  <path d="M0 -14 L-6.3 0 L0 12.6 L6.3 0 Z" fill="none" stroke="#e8fdff" stroke-width="0.35" stroke-linejoin="round"/>
+  <g transform="scale(1 0.34)" fill="none">
+    <path d="M16 0 A16 16 0 0 1 -16 0" stroke="#bff0ff" stroke-width="1.6"/>
+    <path d="M16 0 A16 16 0 0 1 -16 0" stroke="#fff" stroke-width="0.5" stroke-dasharray="3 1.6 0.6 1.6"/>
+  </g>
+</g>
+<path d="M14 41 H34" stroke="#9fe8ff" stroke-width="0.7" opacity="0.6"/>
+</svg>
