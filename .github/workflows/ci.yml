@@ -1,6 +1,7 @@
-# Runs on every push to main and every PR: English outside the UI strings, the server tests, the web types and the web unit tests.
+# Runs on every push to main and every PR: English outside the UI strings, the server tests, the web types and the web unit tests,
+# and the e2e suite (web/e2e: the flows and the screen snapshots).
 # A PR skips the server job when it changes only web/, *.md or issue templates, and the web job when only server/ (or docs);
-# a push to main runs everything.
+# e2e runs when either does. A push to main runs everything.
 name: CI
 on:
   push:
@@ -80,3 +81,45 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build  # incl. the old-iOS regex check
+  e2e:
+    # the built app on qa.py's seeded servers, in Chromium at 375x812 from Playwright's Linux image (web/e2e/linux.sh,
+    # the same pixels as on a Mac): the flows in two halves, the screen snapshots (both themes) beside them
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ["--project=chromium-375-dark --shard=1/2", "--project=chromium-375-dark --shard=2/2", "--project=snap-dark --project=snap-light"]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # the browser's image comes down while the rest installs
+      - run: docker pull -q "mcr.microsoft.com/playwright:v$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)-noble" &
+      - run: pip install -r ../server/requirements.txt
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: e2e/linux.sh ${{ matrix.part }}
+        env:
+          QA_PYTHON: python
+      # what changed, for the maintainer: each failing snapshot's expected, actual and diff pictures, and the traces
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ strategy.job-index }}
+          path: |
+            web/e2e/results
+            web/e2e/report
+          retention-days: 14

@@ -4,7 +4,10 @@ paid event, starts the real server on it with the postman off, and prints a link
 them: Telegram's initData rides in the link's hash, signed with a made-up bot token, the way Telegram passes it, so
 the real telegram-web-app.js reads it. Nothing leaves this machine.
 
-    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big]
+    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big] [--now 1795582800]
+
+--now sets the clock (the seed's and the server's) to that moment, running on from there: the same "in 2 days, 18:30"
+on every run, for the web's screen snapshots (web/e2e/snap.spec.ts).
 
 OCR of receipts runs if tesseract with the rus and kaz models is installed (TESSDATA_PREFIX for a local copy)."""
 from __future__ import annotations
@@ -213,11 +216,25 @@ ABOUT = ("\u0412\u0435\u0447\u0435\u0440 \u0441\u0442\u0435\u043d\u0434\u0430\u0
          "\u041d\u0430\u0447\u0438\u043d\u0430\u0435\u043c \u0440\u043e\u0432\u043d\u043e \u0432 18:30.")
 
 
+def shift_clock() -> None:
+    """--now: every time.time() runs QA_CLOCK seconds off the real one (the server's rules read time.time())."""
+    off, real = float(os.environ.get("QA_CLOCK", "0")), time.time
+    if off:
+        time.time = lambda: real() + off
+
+
+def real_app():
+    from kbtu import app
+    shift_clock()
+    return app.create()
+
+
 def fake_ai_app():
     """The app with a made-up assistant model (--fake-ai, no AI key here): it doesn't know, with a topic to vote on; a
     question the keyword backstop would catch comes back with the care flag, to see the help card."""
     from kbtu import app, llm
     from kbtu.logic import assistant
+    shift_clock()
 
     async def chat(cfg, http, msgs, **kw):
         q = msgs[-1]["content"]
@@ -247,7 +264,11 @@ def main() -> None:
     ap.add_argument("--db", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "kbtu-qa.db"))
     ap.add_argument("--fake-ai", action="store_true", help="a made-up assistant model (fake_ai_app)")
     ap.add_argument("--big", action="store_true", help="2000 more people on the long lists (big); Dana is the app's admin")
+    ap.add_argument("--now", type=int, help="the clock starts at this Unix time (stable screens for snapshots)")
     a = ap.parse_args()
+    if a.now:
+        os.environ["QA_CLOCK"] = str(a.now - time.time())
+        shift_clock()
     seed(a.db)
     if a.big:
         big(a.db)
@@ -258,7 +279,7 @@ def main() -> None:
            "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002"),
            "APPEALS": os.environ.get("APPEALS", "1"), "ASK": os.environ.get("ASK", "1"), "GALLERY": os.environ.get("GALLERY", "1"),  # the student forum on, as it will be after its policy part
            "VOLUNTEERS": os.environ.get("VOLUNTEERS", "openmic" if a.big else "")}  # --big: the volunteers' door (big)
-    subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
+    subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "tools.qa:real_app", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 
 
