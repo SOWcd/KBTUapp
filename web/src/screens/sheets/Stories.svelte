@@ -21,7 +21,7 @@
   import { ago, relDay, time } from '../../lib/time';
   import { haptic, onAndroid, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
-  import { focusPos } from '../../lib/photo';
+  import { coverFor, focusPos } from '../../lib/photo';
   import { castingOn, tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import CastingBlock from '../../ui/CastingBlock.svelte';
@@ -133,7 +133,7 @@
 <div class="st" class:flat={onAndroid} bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="dialog" aria-modal="true" tabindex="-1" aria-label={g?.org.name}>
   {#if g && ev}
-    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}<img class="haze" src={ev.cover.thumb} alt="" aria-hidden="true" /><img class="whole" src={ev.cover.url} alt="" decoding="async" style:aspect-ratio="{ev.cover.w} / {ev.cover.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
+    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}{@const c = coverFor(ev.cover, 'feed')!}<img class="haze" src={c.thumb} alt="" aria-hidden="true" /><img class="whole" src={c.url} alt="" decoding="async" style:aspect-ratio="{c.w} / {c.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
     <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
     <div class="top">
       <div class="bars">{#each g.items as _, i (i)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>

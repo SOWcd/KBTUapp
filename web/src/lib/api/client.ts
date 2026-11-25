@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg, SantaReport } from './types';
+import type { ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -336,6 +336,8 @@ export const server = {
   createEvent: (org: Id, input: EventInput): Promise<EventFull> => call('POST', `/orgs/${org}/events`, input), // a draft
   updateEvent: (id: Id, input: EventInput): Promise<EventFull> => call('PATCH', `/events/${id}`, input),
   publishEvent: (id: Id): Promise<EventFull & { told?: boolean; tellAfter?: number | null }> => call('POST', `/events/${id}/publish`), // told: the followers heard (a public event); else from when they may
+  submitEvent: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/submit`), // a member's own draft to the club's President and Vices
+  reviewEvent: (id: Id, ok: boolean, reason?: ReviewReason): Promise<EventFull & { told?: boolean; tellAfter?: number | null }> => call('POST', `/events/${id}/review`, { ok, reason }), // their answer: yes publishes it
   cancelEvent: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/cancel`),
   deleteEvent: (id: Id): Promise<void> => call('DELETE', `/events/${id}`), // drafts only
   attendees: (id: Id): Promise<Attendee[]> => call('GET', `/events/${id}/attendees`), // the co-host's event team too, without receipts

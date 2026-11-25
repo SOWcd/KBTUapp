@@ -1707,6 +1707,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def publish(eid: int, con: Con, v: Me):
         return logic.publish_event(con, v, eid)
 
+    # a member's own draft to the club's President and Vices, and their answer (organizing.submit_event)
+    @app.post("/api/events/{eid}/submit")
+    def submit_event(eid: int, con: Con, v: Me):
+        return logic.submit_event(con, v, eid)
+
+    @app.post("/api/events/{eid}/review")
+    def review_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.review_event(con, v, eid, body.get("ok"), body.get("reason"))
+
     @app.post("/api/events/{eid}/cancel")
     def cancel(eid: int, con: Con, v: Me):
         return logic.cancel_event(con, v, eid)
