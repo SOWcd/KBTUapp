@@ -129,19 +129,22 @@
   .more.away, .grid.away { opacity: 0; transform: translateX(12px) scale(.9); }
 
   /* quick launch. The shelf waits unseen in the pill's own box and comes down from under it on a spring (a 2% breath
-     past its size), 8 px under the bar: the capsule stays whole. Closing is shorter and has no overshoot (iOS's). */
+     past its size), 8 px under the bar: the capsule stays whole. Closing is the same gesture back, on one
+     curve for the glass and the tiles so they travel as one thing: the glass thins away as it draws up into the pill
+     (gone before it is small: no dark box around the dots), the tiles ride home in it, their icons going as they
+     shrink, and land as the dots, the x turning out under them. */
   .bar { --spring: var(--ease-spring); }
   @supports (transition-timing-function: linear(0, 1)) {
     .bar { --spring: linear(0, 0.083 4%, 0.26 8%, 0.503 13%, 0.707 18%, 0.875 24%, 0.967 30%, 1.011 37%, 1.02 45%, 1.011 55%, 1.003 67%, 1 80%, 1); }
   }
   .catch { position: fixed; inset: 0; pointer-events: auto; }
   .shelf { position: absolute; right: 12px; top: 2px; width: var(--pill); height: 34px; border-radius: var(--r-xl); opacity: 0; pointer-events: none;
-    transition: transform 260ms var(--ease), width 260ms var(--ease), height 260ms var(--ease), opacity 160ms var(--ease) 100ms; }
+    transition: transform 420ms var(--ease-spring), width 420ms var(--ease-spring), height 420ms var(--ease-spring), opacity 180ms linear; }
   .shelf > .tone-base { background: var(--menu-bg); }
   .shelf.open { width: 192px; height: 172px; transform: translateY(42px); opacity: 1; pointer-events: auto;
     transition: transform 520ms var(--spring), width 520ms var(--spring), height 520ms var(--spring), opacity 120ms var(--ease); }
   /* the pill's face: the dots leave it (they are the tiles, below), an x turns in where they were */
-  .more > :global(svg) { opacity: 0; transform: rotate(-90deg) scale(.5); transition: opacity 120ms var(--ease), transform 220ms var(--ease); }
+  .more > :global(svg) { opacity: 0; transform: rotate(-90deg) scale(.5); transition: opacity 180ms var(--ease) 80ms, transform 320ms var(--ease) 40ms; }
   .more.open > :global(svg) { opacity: 1; transform: none; transition: opacity 200ms var(--ease) 90ms, transform 460ms var(--spring) 60ms; }
   /* the tiles lie where they stand open, in the shelf's box; closed, each is drawn at an eighth with its chip's middle
      on its dot of the 2 x 2 on the pill (5 px dots, 9 px apart, about the pill's middle) */
@@ -150,18 +153,23 @@
   .grid.open { pointer-events: auto; }
   .tile { position: absolute; left: 8px; top: 8px; width: 86px; height: 76px; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px;
     color: var(--text); transform-origin: 50% 28px; transform: translate(var(--x), var(--y)) scale(.125);
-    --x: calc(136.5px - var(--pill) / 2); --y: -65.5px; transition: transform 280ms var(--ease); }
+    --x: calc(136.5px - var(--pill) / 2); --y: -65.5px; transition: transform 420ms var(--ease-spring) calc((3 - var(--i)) * 12ms); }
   .tile:nth-child(even) { left: 98px; --x: calc(55.5px - var(--pill) / 2); }
   .tile:nth-child(n + 3) { top: 88px; --y: -136.5px; }
   .open .tile { transform: none; transition: transform 560ms var(--spring) calc(var(--i) * 30ms); }
   .tile:active, .tile:disabled { opacity: 1; }
   .chip { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full);
-    background: var(--text); transition: background-color 200ms var(--ease), transform 200ms var(--ease-bounce); }
-  .open .chip { background: var(--fill-2); transition-delay: calc(var(--i) * 30ms), 0s; }
+    background: var(--text); transition: background-color 200ms var(--ease) 140ms, transform 200ms var(--ease-bounce); }
+  /* a small lens of the panel's own glass (owner: flat grey discs read as old iOS): clear fill, a sheen from the top, the
+     lens rim light above and low below */
+  .open .chip { background: radial-gradient(120% 90% at 50% 0%, var(--glass-sheen), transparent 60%), var(--glass-clear);
+    box-shadow: inset 0 1px 0 var(--lens-rim), inset 0 -1px 0 var(--lens-rim-low), inset 0 0 0 1px var(--lg-rim-base);
+    transition-delay: calc(var(--i) * 30ms), 0s; }
   .open .tile:active:not(:disabled) .chip { transform: scale(.9); background: var(--fill); }
   .open .tile:focus-visible { outline: none; }
   .open .tile:focus-visible .chip { box-shadow: 0 0 0 2px var(--accent); }
-  .chip :global(svg), .lb { opacity: 0; transition: opacity 120ms var(--ease); }
+  .chip :global(svg), .lb { opacity: 0; transition: opacity 80ms var(--ease); }
+  .chip :global(svg) { transition-duration: 200ms; }
   .open .chip :global(svg), .open .lb { opacity: 1; transition: opacity 240ms var(--ease) calc(90ms + var(--i) * 30ms); }
   .open .tile:disabled :global(svg), .open .tile:disabled .lb { opacity: .35; }
   .lb { max-width: 100%; font: 500 var(--fs-cap)/1.2 var(--font-text); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

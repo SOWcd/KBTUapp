@@ -1,7 +1,7 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
 import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '../api';
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { Overlay } from './ui.svelte';
@@ -102,10 +102,8 @@ export const sheets = {
   photos: (_photos: AlbumPhoto[], _start: number, _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _from?: Element | ((p: AlbumPhoto) => Element | null | undefined)) => {},
   /** every photo of an album at once, a grid as in the phone's Photos (live: `list` and `adding` are read as they change) */
   album: (_list: () => AlbumPhoto[], _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _add?: () => void, _adding?: () => number) => {},
-  /** the Gallery: the albums' shelf, the themes, the feed; `albums`: every album alone (the shelf's All) */
-  gallery: (_albums?: boolean) => {},
-  /** my chosen photos into the Gallery: the preview, where to, Publish (GALLERY); `topic`: chosen already (Add under that theme) */
-  galleryAdd: (_files: File[], _topic?: GalleryTopic) => {},
+  /** the Gallery: the albums' strip and every photo by place, one "+" to add mine */
+  gallery: () => {},
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id, _staff?: boolean) => {}, // staff: Admin's "an event for a club"

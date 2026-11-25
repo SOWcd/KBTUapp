@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import time
 
-from kbtu import admin, db
-from test_core import env, login, tma  # noqa: F401  (env is a fixture)
+from kbtu import admin, db, receipt
+from kbtu.logic import seats
+from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
+from test_review_seats import _paid, _shot
 
 
 def test_seat_by_hand(env, capsys, monkeypatch):
@@ -32,3 +34,28 @@ def test_seat_by_hand(env, capsys, monkeypatch):
     admin.main(["seat", "11", str(eid)])  # no seat of their own, and the event is full: seated past the cap
     assert "seated (was: no seat)" in capsys.readouterr().out
     assert c.get(f"/api/events/{eid}", headers=tma(11)).json()["my"]["status"] == "going"
+
+
+def test_old_receipt_rejection_keeps_hand_given_seat(env, capsys, monkeypatch):
+    c, cfg = env
+    clock = [int(time.time())]
+    set_clock(monkeypatch, lambda: clock[0])
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    monkeypatch.setattr(seats, "_audit", lambda: True)
+    monkeypatch.setattr(receipt, "read", lambda im: {"amount": 2000, "recipient": "Arman A.", "no": "123456789012345678", "paid_at": clock[0]})
+    con, eid = _paid(c, cfg, start_in=86400)
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={}).json()["my"]["status"] == "hold"
+    assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_shot()).json()["my"]["status"] == "going"
+    old = con.execute("SELECT id, flags, reviewed_at FROM receipts").fetchone()
+    assert old["flags"] == "spot" and old["reviewed_at"] is None
+    assert c.delete(f"/api/events/{eid}/registration", headers=tma(10)).json()["my"]["status"] == "cancelled"
+    clock[0] += 1
+    admin.main(["seat", "10", str(eid)])
+    assert "seated (was: cancelled)" in capsys.readouterr().out
+    assert c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()[0]["receipt"] is None
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(11), json={}).json()["my"]["status"] == "waitlist"
+    assert c.post(f"/api/receipts/{old['id']}/review", headers=tma(20), json={"reject": True, "why": "used"}).status_code == 204
+    assert con.execute("SELECT status FROM receipts WHERE id = ?", (old["id"],)).fetchone()[0] == "rejected"
+    assert c.get(f"/api/events/{eid}", headers=tma(10)).json()["my"]["status"] == "going"
+    assert c.get(f"/api/events/{eid}", headers=tma(11)).json()["my"]["status"] == "waitlist"
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'receipt_rejected'").fetchone()

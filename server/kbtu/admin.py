@@ -50,6 +50,7 @@
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
@@ -82,6 +83,7 @@
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
+  .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -206,15 +208,16 @@ def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
             if len(matches) != 1:
                 sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
             only = matches[0]["id"]
-        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
                 WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
         if dry:
-            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, name)[0]
+            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
                 SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), only, only, only, name)).rowcount
+                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
@@ -429,6 +432,12 @@ def main(args: list[str]) -> None:
             if not con.execute("UPDATE events SET reg_until = ?, late_signup = 0 WHERE id = ? AND starts_at > ?", (at, int(args[1]), at)).rowcount:
                 sys.exit("no such event, or it starts before that time")
         print("sign-up closes", args[2])
+    elif cmd == "event-link" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]) and re.fullmatch(r"https://\S{1,300}", args[2]):
+        with db.tx(con):  # the "register elsewhere" button's link (an organizer's ask), in the audit log
+            if not con.execute("UPDATE events SET external_url = ? WHERE id = ? AND external_url IS NOT NULL", (args[2], int(args[1]))).rowcount:
+                sys.exit("no such event with an outside link")
+            log_action(con, None, "event_link", f"event:{args[1]}", json.dumps({"url": args[2]}))
+        print("link", args[2])
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
@@ -482,6 +491,9 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "broadcast-votes" and len(args) == 2:
+        yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
+        print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
         _broadcast(con, *args[1:])
     elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)

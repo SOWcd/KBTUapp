@@ -574,11 +574,12 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
     quiet = not moved and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
-    for r in rows(con, """SELECT r.user_id, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
+    for r in rows(con, """SELECT r.user_id, r.status, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
             WHERE r.event_id = ? AND r.status IN ('going','hold','waitlist')""", eid):
         if moved:
             con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (r[0], f"event:{eid}:%"))
-            _remind(con, r[0], after)
+            if r["status"] == "going":  # holds and the waitlist get a reminder once paid or seated
+                _remind(con, r[0], after)
         if soon and r["checked_in_at"] or quiet and not soon and r["n_remind"]:
             continue
         if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'event_changed' AND ref LIKE ? AND sent_at IS NULL", r[0], f"event:{eid}:%"):
@@ -996,14 +997,19 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
         return "paid"
     if r and r["cancel_reason"] == "removed" and r["status"] == "cancelled":
         return "cancelled"  # the organizers took them off: back only by signing up again
-    if r:  # waitlisted or cancelled earlier, at the door now
-        renew_cancelled_ticket(con, e["id"], r)
+    return _walk_in_seat(con, e["id"], uid, r, t)
+
+
+def _walk_in_seat(con, eid: int, uid: int, r: sqlite3.Row | None, t: int) -> sqlite3.Row:
+    """A walk-in's seat: renew an old row, or create one."""
+    if r:
+        renew_cancelled_ticket(con, eid, r)
         con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                     (t, r["id"]))
     else:
         con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                    (e["id"], uid, _ticket_code(con, e["id"]), t, t))
-    return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
+                    (eid, uid, _ticket_code(con, eid), t, t))
+    return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
 
 
 def _admission_shut(con, e: sqlite3.Row, t: int) -> str | None:
@@ -1033,14 +1039,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> dict:
             return {"done": False}  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp:
             return {"done": False}
-        if r:
-            renew_cancelled_ticket(con, eid, r)
-            con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
-                        (t, r["id"]))
-        else:
-            con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                        (eid, uid, _ticket_code(con, eid), t, t))
-        r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+        r = _walk_in_seat(con, eid, uid, r, t)
     if r["checked_in_at"] is not None:
         return {"done": False, "already": r["checked_in_at"]}
     if not e["guest_list"] and e["price"] and flagged(con, r["id"]):
@@ -1083,12 +1082,17 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
                 con.execute("DELETE FROM door_misses WHERE event_id = ? AND user_id = ?", (eid, v.id))
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
                                                            (t, v.id, t, r["id"])))
-        at = r["checked_in_at"] or t
-        came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
-        return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
-                "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"]),
-                **_checkin_age(con, e, r["id"])}
+        return _door_answer(con, v, e, r, t)
+
+
+def _door_answer(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, t: int) -> dict:
+    """The scanner and by-name reply; r is the registration read before recording this check-in."""
+    at = r["checked_in_at"] or t
+    came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", e["id"])[0]
+    return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
+            "at": at, "came": came, "going": taken(con, e["id"]), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
+            "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, e["id"])) and flagged(con, r["id"]),
+            **_checkin_age(con, e, r["id"])}
 
 
 def _checkin_age(con, e: sqlite3.Row, rid: int) -> dict:
@@ -1486,12 +1490,7 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> 
         if not r["checked_in_at"]:
             _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE id = ?",
                                                   (t, v.id, t, r["id"])))
-        at = r["checked_in_at"] or t
-        came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
-        return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", uid)),
-                "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"]),
-                **_checkin_age(con, e, r["id"])}
+        return _door_answer(con, v, e, r, t)
 
 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:

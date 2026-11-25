@@ -2272,4 +2272,21 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS helper_offers_by_user ON helper_offers(user_id, created_at);
     CREATE INDEX IF NOT EXISTS anon_feedback_by_day ON anon_feedback(day);"""),
+    # where a Gallery photo was taken, as one of four words the phone itself picked from the photo's EXIF (gallery.PLACES);
+    # the coordinates never arrive
+    (224, "ALTER TABLE gallery_photos ADD COLUMN place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'));"),
+    (225, """CREATE TABLE IF NOT EXISTS gallery_consents (
+        user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+        at INTEGER NOT NULL
+    ) STRICT;"""),
+    # a broadcast's Interesting / Not interesting (bot._tapped): one vote per person per broadcast, to learn what to send
+    (226, """CREATE TABLE IF NOT EXISTS broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;"""),
 ]
