@@ -2334,4 +2334,23 @@ MIGRATIONS: list[tuple[int, str]] = [
       published_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS yt_videos_by_org ON yt_videos(org_id, channel_id);"""),
+    # a club's Instagram posts in its news (instagram.py): each linked handle with its account id (NULL: no business or
+    # creator account there, asked again a day later) and how far it was taken; each post brought once (its media id),
+    # with the app post it became. Only the club's own media: nothing about people
+    (230, """CREATE TABLE IF NOT EXISTS ig_accounts (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle     TEXT NOT NULL,
+      ig_id      TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, handle)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ig_media (
+      media_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle       TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ig_media_by_org ON ig_media(org_id, handle);"""),
 ]

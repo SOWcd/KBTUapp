@@ -101,6 +101,58 @@ expired on Instagram.
   that session out, or change the password to end every session; delete the file and unset `INSTAGRAM_COOKIES`.
   Story links are then ignored again.
 
+## Clubs' Instagram posts
+
+Off unless `IG_USER_ID` and `IG_TOKEN` are both set. Then every half hour the server asks Meta's Graph API (Business
+Discovery) for the latest posts of each club whose links include an Instagram account (`instagram.com/<handle>`, the
+club's existing social links), and each new post becomes one of the club's posts in News and on its page: the caption
+as the club's own text (its first line the title), the picture (a reel's cover), the post's link as an Instagram
+button (`kbtu/instagram.py`). No club signs in anywhere: the app reads through its own account. Only a club's public
+**business or creator** account can be read this way; a personal account (or a wrong handle) is asked again a day
+later. Nobody is notified; a link taken off the club takes its posts down. Only the club's own media is asked for
+(no followers, likes or comments): nothing about people is stored.
+
+What the owner does once:
+
+1. **An Instagram professional account for the app** (Instagram app: Settings, Account type and tools, Switch to
+   professional account, Business). It may stay empty; it only reads.
+2. **A Facebook Page linked to it**: on facebook.com create a Page for the app, then in the Page's settings (Linked
+   accounts, Instagram) connect the account from step 1. Business Discovery works only through an Instagram account
+   linked to a Page.
+3. **A Meta app**: on developers.facebook.com, My Apps, Create app, use case "Other", type **Business**. Add the
+   product **Instagram** with "API setup with Facebook login" (not "with Instagram login": that one has no Business
+   Discovery).
+4. **Permissions**: `instagram_basic`, `pages_show_list`, `business_management` (Meta may add `pages_read_engagement`
+   when it asks for them). In development mode they work at once for the app's own admins, and the app's own account
+   is all we use: the token is the owner's, as an admin of the app. If Meta ever asks for **App Review** (Advanced
+   Access): the use case is "read the public posts of student clubs' business accounts by their handle through
+   Business Discovery and show them in the club's feed in our Telegram Mini App; no user logs in with Facebook";
+   attach a screen recording of News showing such a post, and the privacy policy's address
+   (`https://kbtu.sow.kz/privacy`). Business verification of the app may be asked for too.
+5. **The token**: in Graph API Explorer (developers.facebook.com/tools/explorer) pick the app, "Get User Access Token"
+   with the permissions of step 4, and allow the Page and the Instagram account. That token lives an hour; make it a
+   long-lived one (60 days):
+   `curl "https://graph.facebook.com/v24.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app id>&client_secret=<app secret>&fb_exchange_token=<short token>"`.
+   Better, a **Page token that never expires**: with that long-lived user token,
+   `curl "https://graph.facebook.com/v24.0/me/accounts?access_token=<long-lived token>"` lists the Page with its
+   own `access_token`; use that one.
+6. **The account id**: `curl "https://graph.facebook.com/v24.0/<page id>?fields=instagram_business_account&access_token=<token>"`
+   gives `instagram_business_account.id` (digits, starts with 1784...).
+7. Set `IG_USER_ID=<that id>` and `IG_TOKEN=<the token>` in the app's environment (Coolify), never in the repo. The
+   token goes to graph.facebook.com in a request's body only and is never logged.
+8. Check: a club with its Instagram link shows its latest posts in News within half an hour.
+
+Limits: Meta allows the app 200 calls an hour per user (we are one user). A round makes at most 90 calls (one per
+club account, sent 50 to a request), the least recently read accounts first, so with more than 90 linked accounts each
+is read every hour or so. Usage headers past 80 %, a rate-limit error or a failed request pause the rounds (30 minutes,
+doubling up to 12 hours).
+
+- **Rotate** when the log says "IG_TOKEN was refused": make a token again (step 5) and replace `IG_TOKEN`. A user
+  token expires after 60 days; a Page token made from a long-lived one doesn't, but a password change or removing
+  the app from the Facebook account ends it.
+- **Revoke**: remove the app in Facebook's Settings, Business integrations, and unset `IG_TOKEN`. Posts already
+  brought in stay; a club's own Head+ can take any of them down in the app.
+
 ## Contributing
 
 Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
@@ -121,6 +173,8 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
   the posts Instagram keeps behind its login page for anonymous readers, through a spare account's cookies ("Instagram stories" above).
   Unset, or no readable file at the path: story links are ignored as before and nothing is requested. Read at each
   link; never logged.
+- `IG_USER_ID` + `IG_TOKEN`: the clubs' Instagram posts in their news through the app's own Instagram account
+  (`kbtu/instagram.py`, "Clubs' Instagram posts" above). Either unset: off, nothing is requested.
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.

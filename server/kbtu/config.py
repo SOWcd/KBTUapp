@@ -75,6 +75,10 @@ class Config:
     # TIKTOK=1: answer supported group links with the video (tiktok.py). INSTAGRAM_COOKIES (Instagram stories) is
     # deliberately not here: tiktok.py reads it from the environment at each call, so its path is in no Config, no repr
     tiktok: bool = False
+    # IG_USER_ID + IG_TOKEN: the app's own Instagram professional account and its long-lived token; the clubs' Instagram
+    # posts come into their news through Business Discovery (instagram.py, README "Clubs' Instagram posts"); either empty: off
+    ig_user_id: str = ""
+    ig_token: str = field(default="", repr=False)
     # REPORTS=1: clubs' event reports and personal attendance logs (logic/evreports.py, privacy policy section 3)
     reports: bool = False
     # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
@@ -165,6 +169,8 @@ def load() -> Config:
         docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
         reports=env.get("REPORTS", "").strip() == "1",
         tiktok=env.get("TIKTOK", "").strip() == "1",
+        ig_user_id=uid if (uid := env.get("IG_USER_ID", "").strip()).isdigit() else "",  # a typo: off, never a call with it
+        ig_token=env.get("IG_TOKEN", "").strip(),
         rooms_file=env.get("ROOMS_FILE") or str(Path(db_path).parent / "rooms.json"),
         subjects_file=env.get("SUBJECTS_FILE") or str(Path(db_path).parent / "subjects.json"),
     )
