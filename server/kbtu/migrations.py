@@ -2469,4 +2469,15 @@ MIGRATIONS: list[tuple[int, str]] = [
       reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
       returned_at INTEGER
     ) STRICT;"""),
+    # kbtu.admin dmp: DMP's staff, put in by the creator before they open the app: a one-time "Hi, DMP" leading to
+    # Microsoft (account.me dmpHi), and staff_ok's no-student-ID sign-in. Only tg_id grants anything; a row added by
+    # username alone is an invitation that binds to the Telegram whose own signed data first shows it (account.dmp_bind).
+    # No users link: no FK
+    (238, """CREATE TABLE IF NOT EXISTS dmp_list (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER UNIQUE,
+      tg_username TEXT UNIQUE COLLATE NOCASE,
+      added_at INTEGER NOT NULL,
+      greeted_at INTEGER,
+      CHECK (tg_id IS NOT NULL OR tg_username IS NOT NULL)) STRICT;"""),
 ]

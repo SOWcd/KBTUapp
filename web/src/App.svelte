@@ -500,15 +500,20 @@
   // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
   // seen once it mounts; a chunk that fails to load still runs the link's own step (Codex review, Nov 17)
-  function teamHi(then?: () => void): boolean {
-    const o = session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office, key = 'kb-hi2-o' + o?.id;
-    if (!o || seen(key)) return false;
-    const show = () => officeWelcome().then((m) => open(m.default, { org: o, ondone: then, shown: () => once(key) }), () => then?.());
-    if (then) void show(); else moment(show);
-    return true;
+  // DMP's list (me.dmpHi): the same hello, remembered on the server once they leave it (its button: Microsoft).
+  // From greet it is that moment itself (its promise holds the queue): ahead of the install offer on a first open
+  // Left here once but the server never heard it (offline): not again on this phone, and it's told again
+  function teamHi(then?: () => void): Promise<unknown> | false {
+    const d = session.me?.dmpHi, o = d ?? session.me?.memberships.find((m) => m.org.kind === 'office')?.org ?? session.me?.office, key = 'kb-hi2-o' + o?.id;
+    const left = 'kb-dmp-left' + session.me?.id;
+    if (d && seen(left)) { void api.dmpHi().catch(() => {}); return false; }
+    if (!o || !d && seen(key)) return false;
+    const done = d ? () => { once(left); void api.dmpHi().catch(() => {}); if (session.me) session.me.dmpHi = null; then?.(); } : then;
+    return officeWelcome().then((m) => open(m.default, { org: o, ondone: done, shown: () => once(key) }), () => then?.());
   }
   function greet() {
-    if (teamHi()) return;
+    const team = teamHi();
+    if (team) return team;
     const now = nowTs(), first = session.me?.student?.firstName;
     const slots = classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(dayNo(now), x.c)));
     const next = nextUp(now, slots, data.events, (c) => subjectOf(c) + (c.room ? ' · ' + c.room : ''), classEmoji);

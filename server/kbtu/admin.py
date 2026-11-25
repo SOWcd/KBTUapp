@@ -29,6 +29,10 @@
                                 Microsoft sign-in, then the policy, makes the staff row with the directory's names (no ID asked;
                                 not if Microsoft calls them a student). staff-ok list | staff-ok revoke <@username | telegram id>
                                 (revoke also takes back a row it made; `unlink` and deleting the account clear it too)
+  .venv/bin/python -m kbtu.admin dmp add <@username | telegram id> [...]   DMP's staff, before they open the app: unverified,
+                                they get a one-time "Hi, DMP" leading to Microsoft, and sign in as staff-ok does (a username
+                                binds to the Telegram that first opens the app with it: check `dmp list`; ids are safer).
+                                dmp list | dmp del <@username | telegram id> [...] (del, staff-ok revoke, unlink: its sign-in goes too)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
                                 student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
@@ -193,6 +197,11 @@ def _user(con, who: str):
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _staff_undo(con, uid: int) -> int:
+    """The row a staff-ok or DMP's-list sign-in made (a policy version, not 'staff': `staff` typed by hand stays)."""
+    return con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (uid, f"staff{uid}")).rowcount
 
 
 def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
@@ -751,7 +760,9 @@ def main(args: list[str]) -> None:
     elif cmd == "move" and (len(args) == 3 or args[3:] == ["--merge-credits"]):  # the owner checked both Telegrams with the student: no in-app proof to phish
         a, b = _user(con, args[1]), _user(con, args[2])
         why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
-               else "the target is banned" if b["banned_at"] else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
+               else "the target is banned" if b["banned_at"]
+               else "both Telegrams are on DMP's list (dmp del one first)" if one(con, "SELECT COUNT(*) FROM dmp_list WHERE tg_id IN (?, ?)", a["tg_id"], b["tg_id"])[0] == 2
+               else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
                if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads", "web_sessions")
                if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
         if why:
@@ -764,6 +775,8 @@ def main(args: list[str]) -> None:
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
             con.execute("UPDATE tgc_comments SET author_tg = ?, dm_id = NULL WHERE author_tg = ?", (rb[0], ra[0]))  # comments move; DMs stay in the old chat
+            # a DMP grant follows the account to its Telegram (both listed: refused above, so tg_id's UNIQUE holds)
+            con.execute("UPDATE dmp_list SET tg_id = CASE tg_id WHEN ? THEN ? ELSE ? END WHERE tg_id IN (?, ?)", (ra[0], rb[0], ra[0], ra[0], rb[0]))
             try:  # his lines in People of the app go too, his yes there ends; the target's own lines: refused unless --merge-credits
                 credits.moved(con, a["id"], ra[0], rb[0], merge=len(args) == 4)
             except ValueError as exc:
@@ -776,9 +789,43 @@ def main(args: list[str]) -> None:
         with db.tx(con):
             n = con.execute("DELETE FROM students WHERE user_id = ?", (u["id"],)).rowcount
             con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (u["id"],))
-            if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount:  # a fresh start: staff again only by staff-ok
+            # a fresh start: staff again only by staff-ok (or DMP's list, added again)
+            if con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount + con.execute(
+                    "DELETE FROM dmp_list WHERE tg_id = ?", (u["tg_id"],)).rowcount:
                 log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"by": "unlink"}))
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("unlinked, signing in with KBTU links again" if n else "wasn't linked"))
+    elif cmd == "dmp" and args[1:] == ["list"]:  # by the id alone (a username can be stale); signed in: confirmed by Microsoft
+        for r in rows(con, """SELECT d.*, u.tg_first_name, s.user_id AS signed FROM dmp_list d LEFT JOIN users u ON u.tg_id = d.tg_id
+                LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0 ORDER BY d.id"""):
+            who = " = ".join(x for x in ("@" + r["tg_username"] if r["tg_username"] else "", str(r["tg_id"] or "")) if x)
+            print(who + (f" ({r['tg_first_name']})" if r["tg_first_name"] else "") + ": "
+                  + ("waiting: binds to whoever opens the app with this username first" if r["tg_id"] is None
+                     else "signed in" if r["signed"] else "greeted" if r["greeted_at"] else "not greeted yet"))
+    elif cmd == "dmp" and len(args) > 2 and args[1] in ("add", "del"):
+        keys = []
+        for w in (a.strip() for a in args[2:]):  # the whole batch checked before anything is written
+            if re.fullmatch(r"[1-9][0-9]{0,15}", w):
+                keys.append(("tg_id", int(w)))
+            elif re.fullmatch(r"@?[A-Za-z][A-Za-z0-9_]{3,31}", w):
+                keys.append(("tg_username", w.lstrip("@")))
+            else:
+                sys.exit(f"not a Telegram id or @username: {w!r}")
+        undone = 0
+        with db.tx(con):
+            if args[1] == "add":
+                n = sum(con.execute(f"INSERT OR IGNORE INTO dmp_list ({c}, added_at) VALUES (?, ?)", (x, now())).rowcount for c, x in keys)
+            else:  # by id: its waiting username row too (one person, one removal)
+                gone = [t for c, x in keys for (t,) in con.execute(
+                    "DELETE FROM dmp_list WHERE tg_id = ? OR tg_id IS NULL AND tg_username = (SELECT tg_username FROM users WHERE tg_id = ?) RETURNING tg_id"
+                    if c == "tg_id" else "DELETE FROM dmp_list WHERE tg_username = ? RETURNING tg_id", (x, x) if c == "tg_id" else (x,)).fetchall()]
+                n, ids = len(gone), [t for t in gone if t is not None]
+                # the sign-in the list let in goes with it, unless staff-ok still says so
+                for (uid,) in rows(con, f"""SELECT id FROM users WHERE tg_id IN ({','.join('?' * len(ids))})
+                        AND id NOT IN (SELECT user_id FROM staff_ok)""", *ids) if ids else []:
+                    undone += _staff_undo(con, uid)
+            log_action(con, None, f"dmp_{args[1]}", "dmp_list", json.dumps({"n": n, **({"undone": undone} if undone else {})}))
+        print(f"{n} {'added' if args[1] == 'add' else 'removed'}" + (f" ({undone} sign-in undone)" if undone else "")
+              + f", {one(con, 'SELECT COUNT(*) FROM dmp_list')[0]} on the list")
     elif cmd == "staff-ok" and args[1:] == ["list"]:
         for r in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, k.granted_at, s.student_id FROM staff_ok k JOIN users u ON u.id = k.user_id
                 LEFT JOIN students s ON s.user_id = u.id ORDER BY k.granted_at"""):
@@ -798,8 +845,8 @@ def main(args: list[str]) -> None:
         else:
             with db.tx(con):
                 n = con.execute("DELETE FROM staff_ok WHERE user_id = ?", (u["id"],)).rowcount
-                # the row its sign-in made (a policy version, not 'staff': `staff` typed by hand stays): the next sign-in is a student's
-                gone = con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (u["id"], f"staff{u['id']}")).rowcount
+                n += con.execute("DELETE FROM dmp_list WHERE tg_id = ?", (u["tg_id"],)).rowcount  # DMP's list says the same: off it too
+                gone = _staff_undo(con, u["id"])  # the next sign-in is a student's
                 if n or gone:
                     log_action(con, None, "staff_ok_revoke", f"user:{u['id']}", json.dumps({"row": bool(gone)}))
             print(f"{who}: " + ("revoked" + (", its sign-in undone" if gone else "") if n or gone else "had no staff-ok"))
