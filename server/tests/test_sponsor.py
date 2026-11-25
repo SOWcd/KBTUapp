@@ -88,7 +88,7 @@ def test_only_telegram_confirmation_counts_once_and_upgrades(support):
     assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()[0] == 3
     assert {tuple(r) for r in con.execute("SELECT star_rate, consent FROM donations")} == {(donations.STAR_KZT, stars.CONSENT)}
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ?", (ids[7],)).fetchone()
-    assert c.get("/api/sponsors", headers=tma(8)).json() == []
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 3, "amount": 20000}]  # shown by default
 
 
 def test_old_invoices_keep_the_old_anonymous_promise(support):
@@ -602,4 +602,4 @@ def test_an_account_move_hides_a_donor_who_never_answered(support, monkeypatch, 
     c.get("/api/me", headers=tma(9, "Fresh"))
     admin.main(["move", "7", "9"])
     assert board(support) == []
-    assert [tuple(r) for r in con.execute("SELECT show, amount FROM sponsor_consents WHERE user_id = ?", (ids[7],))] == [(0, None)]
+    assert {tuple(r) for r in con.execute("SELECT show, amount FROM sponsor_consents WHERE user_id = ?", (ids[7],))} == {(0, None)}
