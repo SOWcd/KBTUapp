@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import { api, ApiErr, type ResearchAnswers, type ResearchSurvey, type ResearchRequest, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
 import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
@@ -33,6 +33,10 @@ export const data = $state({
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": every Afisha event of the last month, mine marked by `my`, newest first (with the Afisha)
   myPast: null as EventCard[] | null, // my recent check-ins, including events outside the Afisha
+  research: null as ResearchSurvey[] | null,
+  researchFailed: false,
+  researchRequests: null as ResearchRequest[] | null, // staff only, memory only
+  researchRequestsFailed: false,
   credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
@@ -462,7 +466,7 @@ export const decisions = (i: Inbox | null): number => i?.items.filter((x) => x.k
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
 onStaffLoss((has) => {
   if (!has('admin')) { data.adminStats = null; data.donations = null; }
-  if (!has('staff')) { data.inbox = null; data.staffMutes = null; }
+  if (!has('staff')) { data.inbox = null; data.staffMutes = null; data.researchRequests = null; }
   else if (!has('admin')) { data.inbox = null; void loadInbox(); } // a moderator's queue, without the admin's cards
 });
 let muteTaps = 0;
@@ -853,4 +857,62 @@ export async function dropSchedule(): Promise<void> {
     data.schedule = await api.schedule().then(joinClasses).catch(() => before);
     haptic.error(); say(t('common.error'), 'warning_3d');
   } finally { scheduleDeleting = false; }
+}
+
+// Specs and my participation arrive with the app, kept only in this account's memory.
+let researchFlight: Promise<void> | null = null, researchSeq = 0, researchSends = 0;
+export function resetResearch(): void {
+  researchSeq++; researchFlight = null;
+  researchRequestsSeq++;
+  data.research = null; data.researchFailed = false;
+  data.researchRequests = null; data.researchRequestsFailed = false;
+}
+export function loadResearch(): Promise<void> {
+  const uid = session.me?.id;
+  if (!uid || session.banned || session.revoked || researchSends) return Promise.resolve();
+  if (researchFlight) return researchFlight;
+  const seq = ++researchSeq;
+  const current = () => session.me?.id === uid && !session.banned && !session.revoked && seq === researchSeq;
+  data.researchFailed = false;
+  const flight = api.research().then((r) => { if (current()) data.research = r; })
+    .catch(() => { if (current()) data.researchFailed = true; })
+    .finally(() => { if (researchFlight === flight) researchFlight = null; });
+  researchFlight = flight;
+  return flight;
+}
+
+export async function answerResearch(survey: ResearchSurvey, answers: ResearchAnswers, anonymous: boolean, consent: string): Promise<void> {
+  const uid = session.me?.id;
+  researchSeq++; researchSends++; researchFlight = null;
+  survey.answered = true; survey.answers++;
+  try { await api.answerResearch(survey.slug, answers, anonymous, consent); }
+  catch (e) {
+    // A lost response may have committed already. A repeated send confirms that it was received.
+    if (!(e instanceof ApiErr && e.code === 'conflict' && e.message === 'answered')) {
+      if (session.me?.id === uid) { survey.answered = false; survey.answers--; }
+      throw e;
+    }
+  } finally { researchSends--; void loadResearch(); }
+}
+
+let researchRequestsSeq = 0, researchDecisions = 0;
+/** Invalidate reads before a decision; refresh only when all pending decisions have settled. */
+export function researchDecision(sending: boolean): void {
+  researchRequestsSeq++;
+  researchDecisions += sending ? 1 : -1;
+  if (!researchDecisions) void loadResearchRequests();
+}
+export async function loadResearchRequests(): Promise<void> {
+  const uid = session.me?.id, still = staffStill('staff');
+  if (!uid || session.banned || session.revoked || !still()) { data.researchRequests = null; return; }
+  if (researchDecisions) return;
+  const seq = ++researchRequestsSeq;
+  const current = () => session.me?.id === uid && !session.banned && !session.revoked && still() && seq === researchRequestsSeq;
+  data.researchRequestsFailed = false;
+  try { const r = await api.researchRequests(); if (current()) data.researchRequests = r; }
+  catch (e) {
+    if (!current()) return;
+    if (e instanceof ApiErr && e.code === 'forbidden') data.researchRequests = null;
+    data.researchRequestsFailed = true;
+  }
 }

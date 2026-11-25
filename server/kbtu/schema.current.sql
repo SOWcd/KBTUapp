@@ -982,6 +982,34 @@ CREATE TABLE "reports" (
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
     ) STRICT;
+CREATE TABLE research_answers (
+      id TEXT PRIMARY KEY NOT NULL,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      consent TEXT NOT NULL,
+      day INTEGER CHECK ((day IS NULL) = (user_id IS NULL))
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE research_forms (
+      form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+      about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
+    ) STRICT;
+CREATE TABLE research_participants (
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (form_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE research_requests (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+      goal TEXT NOT NULL CHECK (length(goal) BETWEEN 1 AND 1200),
+      questions TEXT NOT NULL CHECK (length(questions) BETWEEN 1 AND 4000),
+      organizer TEXT NOT NULL CHECK (length(organizer) BETWEEN 1 AND 200),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER
+    ) STRICT;
 CREATE TABLE retired_tickets (
         ticket_code TEXT PRIMARY KEY,
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE
@@ -1621,6 +1649,10 @@ CREATE INDEX regs_holds ON registrations(hold_until) WHERE status = 'hold';
 CREATE UNIQUE INDEX one_removal_ask ON removal_requests(org_id, user_id) WHERE status = 'pending';
 CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
 CREATE INDEX reports_by_target ON reports (target, target_id);
+CREATE INDEX research_answers_by_form ON research_answers(form_id);
+CREATE INDEX research_answers_by_user ON research_answers(user_id);
+CREATE INDEX research_participants_by_user ON research_participants(user_id);
+CREATE INDEX research_requests_by_user ON research_requests(user_id, created_at);
 CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
 CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
