@@ -44,6 +44,16 @@ jobs:
           mkdir -p ~/.bubblewrap
           echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
           bubblewrap update --skipVersionUpgrade --manifest=./twa-manifest.json
+          # The splash is the web boot screen's bare ground, never the icon (owner, Nov 25; README.md): an empty picture
+          # for Bubblewrap's icon-on-a-square, over backgroundColor (the light ground) or, in a dark phone, the dark one
+          n=0
+          for f in app/src/main/res/drawable-*/splash.png; do
+            echo iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII= | base64 -d > "$f"
+            n=$((n + 1))
+          done
+          [ "$n" -eq 5 ] || { echo "::error::expected Bubblewrap's 5 splash.png, found $n"; exit 1; }
+          mkdir -p app/src/main/res/values-night
+          printf '<resources>\n    <color name="backgroundColor">#000000</color>\n</resources>\n' > app/src/main/res/values-night/colors.xml
           grep -nE "targetSdkVersion|compileSdkVersion|versionCode|applicationId" app/build.gradle
       - name: Build the bundle
         run: |

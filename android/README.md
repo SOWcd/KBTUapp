@@ -9,7 +9,12 @@ colours) or Play asks for a newer target SDK.
 
 - Package id: `kz.kbtuapp`, fixed for good after the first upload. (Reverse-domain style would be `kz.sow.kbtu`, from
   kbtu.sow.kz; `kz.kbtuapp` is kept as the owner chose it. Play needs no proof of the domain.)
-- Icon: `web/public/icon-512.png`, also as the maskable (adaptive) icon. Colours: black, as the dark theme's ground.
+- Icon: `web/public/icon-512.png`, also as the maskable (adaptive) icon (the launcher's only; never on the splash).
+- Colours: each theme's ground, the `#boot` colours in `web/index.html` (`#F2F2F7` light, `#000000` dark; change them
+  together). The splash is that bare ground, no logo (owner, Nov 25): the workflow swaps Bubblewrap's icon picture for
+  an empty one and gives `backgroundColor` its dark twin (`values-night`, which the manifest has no field for), so the
+  web's own boot screen, a different one each launch, comes up on it with no seam. The phone's theme picks it: someone
+  who chose the other one in the app sees the ground change as the page paints.
 - Sign-in: Telegram Login in the browser, as on the web (`logic/web_auth.py`); students then verify with Microsoft.
 
 ## Once: the upload key and the two secrets
