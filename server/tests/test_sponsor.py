@@ -595,3 +595,10 @@ def test_admin_donation_add_by_hand_grants_the_medal_but_never_publishes(support
     admin.main(["donation", "list"])
     out = capsys.readouterr().out
     assert out.count("manual") == 2 and "2026-11-20" in out and "public no" in out and "Aidar" not in out
+    assert f"user {ids[7]}" in out and "tg 7" not in out
+    for did, in con.execute("SELECT id FROM donations WHERE flags = 'manual'").fetchall():
+        admin.main(["donation", "remove", str(did)])
+    assert mine(support)["tier"] == 0 and mine(support)["total"] == 0
+    assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()
+    with pytest.raises(SystemExit):
+        admin.main(["donation", "remove", str(did)])

@@ -191,6 +191,18 @@ def add_manual(con, uid: int, amount: int, day: str | None = None, again: bool =
     return did
 
 
+def remove_manual(con, did: int) -> int:
+    """`admin donation remove`: a hand-added row typed wrong; the medal follows. Only manual rows."""
+    with tx(con):
+        d = one(con, "SELECT user_id, amount FROM donations WHERE id = ? AND flags = 'manual'", did)
+        if not d:
+            raise ApiError("not_found")
+        con.execute("DELETE FROM donations WHERE id = ?", (did,))
+        sync_medal(con, d["user_id"])
+        core.log_action(con, None, "donation_by_hand_undo", f"user:{d['user_id']}", json.dumps({"donation": did, "amount": d["amount"]}))
+    return d["user_id"]
+
+
 def _notify(con, uid: int, did: int, revision: int, status: str) -> None:
     # Give the creator time to Undo. The bot rechecks the revision and decision before delivery.
     seats.notify(con, uid, "donation_" + status, f"dn:{did}:{revision}", after=core.now() + 45)
