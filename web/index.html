@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<!-- the iPhone's status bar (the home-screen app; iOS 26.1 lets no page draw under it) and the browser's own bars take
-     this colour: each theme's ground, the very colour of the page's top edge, so the bar and the page are one surface.
-     The system's theme until the script below and the app (lib/tg.ts paint) put the person's own -->
+<!-- the browser's own bars and the iPhone's status bar strip (the home-screen app in light; dark draws under it, the
+     status-bar-style meta the script below adds) take this colour: each theme's ground, the very colour of the page's
+     top edge, so the bar and the page are one surface. The system's theme until the script below and the app
+     (lib/tg.ts paint) put the person's own -->
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -28,13 +29,24 @@
   var v = ['', 'kb-arcs', 'kb-orbits', 'kb-dial'][Math.random() * 4 | 0];
   if (v) document.documentElement.classList.add(v);
   // the status bar's colour: this theme's ground, whichever the system's is
-  var c = document.documentElement.dataset.boot === 'light' ? '#F2F2F7' : '#000000', m = document.querySelectorAll('meta[name="theme-color"]');
+  var light = document.documentElement.dataset.boot === 'light', c = light ? '#F2F2F7' : '#000000', m = document.querySelectorAll('meta[name="theme-color"]');
   for (var i = 0; i < m.length; i++) m[i].content = c;
-  // The home-screen app on an iPhone: the launch picture covers the whole screen, the page begins under the status
-  // bar (the window is shorter by it), so 45% of the window would sit lower than the picture's 45% of the screen and
-  // the emblem would jump as the page takes over. There the emblem stands where the picture has it: 55% of the screen
-  // above the window's bottom edge, which is the screen's. The CSS works it out from the window's height at layout,
-  // never this script: this early innerHeight can still be the whole screen's (the emblem then sat a status bar lower).
+  // The home-screen app's status bar: iOS fixes its style at launch and never recolours its strip after (theme-color
+  // changed at runtime left a black band over the light page; owner, Nov 25). Dark: the page draws under it
+  // (black-translucent: the bar is our own ground, whatever the screen's, a sheet's blue too) with its white clock.
+  // Light: translucent would put that white clock on the light ground, so the default strip in theme-color, a dark clock.
+  // Chosen here from the kept theme, before the first paint; a switch takes the matching style from the next launch.
+  // Telegram never gets here (returned above).
+  var sb = document.createElement('meta');
+  sb.name = 'apple-mobile-web-app-status-bar-style';
+  sb.content = light ? 'default' : 'black-translucent';
+  document.head.appendChild(sb);
+  // The home-screen app on an iPhone: the launch picture covers the whole screen, the window may not. With the default
+  // strip it begins under the status bar, and iOS may keep that strip in dark too (the style it had when the app was
+  // added: the owner's dark launch, Nov 25, the emblem 32 px under the picture's), so the window's 45% is never trusted.
+  // In every theme the emblem stands where the picture has it: 55% of the screen above the window's bottom edge, which is
+  // the screen's, whether the window is the whole screen (then this is 45% of it) or not. The CSS works it out from the
+  // window's height at layout, never this script: this early innerHeight can still be the whole screen's.
   try { if (navigator.standalone && screen.width < 500) document.documentElement.style.setProperty('--kb-em', 'calc(100% - ' + screen.height * .55 + 'px)'); } catch (e) {}
 })();
 </script>
@@ -138,8 +150,8 @@ html[data-boot=light]{background:#F2F2F7}
 @keyframes kb-in{from{opacity:0;transform:rotate(-20deg) scale(.94)}}
 /* a shade crosses the colonnade: each column dims and clears a beat after its neighbour, ~0.5 s of the 3.9 s round */
 @keyframes kb-col{0%{opacity:1}3%{opacity:.38}9%,100%{opacity:1}}
-/* The iPhone's status bar (the home-screen app) is a strip in theme-color, the ground's colour, that no page draws
-   under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
+/* The iPhone's status bar (the home-screen app) is a strip in theme-color (light) or sits over the plain ground (dark):
+   the lights fade into that ground before the top edge, so the bar and the page are one surface. */
 #boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 160px);background:linear-gradient(#000000 12%,rgba(0,0,0,.62) 40%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0))}
 [data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 12%,rgba(242,242,247,.62) 40%,rgba(242,242,247,.2) 72%,rgba(242,242,247,0))}
 @media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot u:before,#boot u:after,#boot .dl,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot s,#boot u,#boot .lg{transition:none!important}}

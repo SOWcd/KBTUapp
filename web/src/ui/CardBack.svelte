@@ -21,6 +21,8 @@
     onmedal?: () => void; medalLabel?: string; // the medallion as a button (Hero: back to the face)
     mark?: Snippet;        // the QR's middle; the look's mark by default
   } = $props();
+  // the name's longest word in letters: its size is fitted so that word fits the column beside the medallion (.bnm)
+  const nw = $derived(Math.max(1, ...name.split(/[\s-]+/).map((w) => w.length)));
 </script>
 
 <div class="cb {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
@@ -33,7 +35,7 @@
   {#if onplate}<button class="plate" onclick={onplate} aria-label={plateLabel}>{@render code()}</button>
   {:else}<span class="plate">{@render code()}</span>{/if}
   <span class="bside">
-    <b class="bnm">{name}</b>
+    <b class="bnm" style:--nw={nw}>{name}</b>
     <span class="role">{title}</span>
     <span class="meta">{line}</span>
     <span class="bno">№ {no}</span>
@@ -44,13 +46,13 @@
 </div>
 
 <style>
-  .cb { --kb: linear-gradient(155deg, rgb(42, 79, 214), rgb(18, 26, 61) 72%); position: relative; isolation: isolate; height: 100%; display: flex; align-items: center; gap: 14px;
+  .cb { --kb: linear-gradient(155deg, rgb(42, 79, 214), rgb(18, 26, 61) 72%); position: relative; isolation: isolate; height: 100%; display: flex; align-items: center; gap: 12px;
     padding: 22px 14px 18px 18px; overflow: hidden; border-radius: var(--r-l); color: white;
     background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .faces { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
-  .sower { background: rgb(30, 30, 30); }
+  .sower { background: rgb(10, 10, 11); }
   .studex { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .cheer { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
   .knights { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
@@ -61,7 +63,14 @@
   .moments { --role: rgb(244, 217, 190); }
   .faces { --role: rgb(255, 155, 214); }
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .sower { --role: rgb(192, 193, 190); }
+  .sower { --role: rgb(245, 245, 247); }
+  /* no art behind any text (owner, Nov 25: the name sat on Case Club's laptop, the role on Business's king): the scene
+     shows only round the medallion in the top-right corner and a breath along the top, and is gone before the name's
+     column (68 px in from the card's edge, 30 px down at the highest) and the role (76 px down at the highest); the
+     rest is the card's own ground */
+  .cb > :global(:is(.band, .sa)) {
+    -webkit-mask: radial-gradient(76px 70px at 100% 0%, black 40%, transparent 94%), radial-gradient(190px 28px at 100% 0%, black 30%, transparent);
+    mask: radial-gradient(76px 70px at 100% 0%, black 40%, transparent 94%), radial-gradient(190px 28px at 100% 0%, black 30%, transparent); }
   /* no tilt reaches the back (the face's glass writes --gx): its depth layers stand still, so they are painted with the
      side, not each kept as a layer of its own */
   .cb :global(.z) { will-change: auto; }
@@ -71,34 +80,33 @@
   .plate { position: relative; z-index: 3; flex: none; display: block; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
     box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
   button.plate:active { transform: scale(0.96); }
-  /* the name and the rest under the medallion's corner, down to the number at the foot */
-  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1;
-    align-self: stretch; padding-top: 50px; }
-  .bside > * { flex: none; }
+  /* the name and the rest down to the number at the foot. At the most (a two-line name and course line) the name stands
+     beside the medallion, so its column stays clear of it; the role starts below the medallion, one line */
+  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1; align-self: stretch;
+    container-type: inline-size; }
+  .bnm { --pr: 64px; padding-right: var(--pr); } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a 12 px gap */
+  .bside > * { flex: none; max-width: 100%; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
-  .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
+  .sower .bmed { top: 16px; right: 16px; width: 44px; height: 44px; } /* as on the face */
+  .sower .bnm { --pr: 58px; } /* 16 + 44 in from the edge, less the side's 14, and a 12 px gap */
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
-  .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
+  /* a long word (Aleksandra, Nursultanbek) never splits mid-word: the size comes down so the longest word fits beside the
+     medallion (0.68 em a letter at this weight, measured on Cyrillic), to the micro size at the least; a name longer still
+     ends in an ellipsis on its second line */
+  .bnm { font: 780 var(--fs-card)/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: break-word;
+    font-size: clamp(var(--fs-micro), calc((100cqi - var(--pr)) / (var(--nw) * 0.68)), var(--fs-card));
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .role { display: -webkit-box; margin-top: 2px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  .role { margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     font: 760 var(--fs-tab)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--role, rgb(169, 192, 255)); }
-  .meta { display: block; margin-top: 1px; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
+  .meta { display: -webkit-box; margin-top: 1px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .moments .meta { color: rgba(255, 255, 255, 0.84); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
-  .sower .meta { color: rgba(232, 232, 231, 0.7); }
+  .sower .meta { color: rgb(134, 134, 139); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
-  /* the anime club's art where this side sets the name (mid-right): its mist moved under it, its swirl's ink haloed */
-  .klubanimeshnikov :global(.mist) { background: radial-gradient(34% 52% at 64% 56%, rgba(232, 232, 235, 0.72), transparent 80%); }
-  .klubanimeshnikov .bside { text-shadow: 0 0 3px rgba(226, 226, 230, 0.9), 0 0 9px rgba(226, 226, 230, 0.7); }
-  /* kbtu.mag: its issues stand where this side sets the name: quieter here, the name haloed in their cream */
-  .kbtumag :global(.near) { opacity: 0.45; }
-  .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
-  /* SOWER: the hand stands where this side sets the name: quieter here, the name lifted off it */
-  .sower :global(.near) { opacity: 0.45; }
-  .sower .bside { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.8), 0 0 10px rgba(14, 14, 14, 0.7); }
-  .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
-  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
+  /* a narrow phone: a smaller plate and medallion, so the name keeps 64 px beside it (the per-club halos main had for art
+     behind the name went: the mask above leaves no art there) */
+  @media (max-width: 359px) { .plate { width: 112px; height: 112px; } .bmed { top: 12px; right: 12px; width: 44px; height: 44px; } .bnm { --pr: 54px; } }
 </style>

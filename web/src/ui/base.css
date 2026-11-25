@@ -89,6 +89,9 @@ img { max-width: 100%; }
   backdrop-filter: blur(24px) saturate(190%);
   box-shadow: var(--glass-shadow);
 }
+/* the sheen and rim are drawn on the glass itself: an unpositioned .glass (a round button) hung them on the nearest positioned
+   ancestor, a huge oval over the sheet's footer. :where keeps it weakest, so any component's own position wins */
+:where(.glass) { position: relative; }
 .glass::before, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .glass::before {
   z-index: -1;
@@ -215,12 +218,6 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .appmark { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 26%; color: #fff;
   background: linear-gradient(135deg, #2A4FD6, #5B2BC0); box-shadow: 0 0 0 2px #fff; }
 .appmark svg { width: 64%; height: auto; }
-
-/* segmented switch (Clubs: all / mine; Studio: upcoming / drafts / past) */
-.seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--r-full); background: var(--surface); }
-.seg button { height: 32px; padding: 0 14px; border-radius: var(--r-full); font: 620 13px/1 var(--font-text); color: var(--text-2); white-space: nowrap; transition: background-color var(--t-base), color var(--t-base); }
-@media (max-width: 359px) { .seg button { padding: 0 10px; } } /* Studio's three Russian labels fit a 320-px phone */
-.seg button.on { background: var(--text); color: var(--bg); }
 
 /* the two background layers of the nav and the capsule, cross-faded over the Feed (chrome.ts) */
 .tone-base, .tone-feed { position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none; will-change: opacity; }
