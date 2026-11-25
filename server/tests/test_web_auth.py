@@ -242,5 +242,5 @@ def test_award_shared_from_a_browser_is_the_cards_words(browser, monkeypatch):
     # the Mini App's card, word for word: the same lines without the bold, the button's link below them
     assert c.post("/api/share", headers=tma(715), json=card).json() == {"id": "prep1"}
     html = sent[0]["input_message_content"]["message_text"]
-    assert "<b>" in html and web["text"] == html.replace("<b>", "").replace("</b>", "") and web["text"].startswith("\U0001f3c5 ")
+    assert "<b>" in html and web["text"] == html.replace("<b>", "").replace("</b>", "") and "<" not in web["text"]
     assert texts.plain("<b>A &amp; B</b> &lt;3") == "A & B <3"
