@@ -198,6 +198,8 @@ def test_team_order_and_consent(env, monkeypatch, capsys):
     assert "Ada" not in json.dumps(got) and "Bo T" not in json.dumps(got)
     # the Team is something of mine to answer for, lines or not
     assert _get(c, 7000802)["mine"] == {"consent": None, "rev": None, "idea": False, "items": [], "team": True}
+    con.execute("UPDATE users SET can_dm = 1")  # the bot can write to them (ask only queues reachable people)
+    con.commit()
     assert credits.ask(con, dry=True) == 4
     for tg in (7000801, 7000802, 7000804):
         assert _yes(c, tg).status_code == 200
@@ -421,7 +423,7 @@ def test_listing_is_one_snapshot(env, monkeypatch):
     real = credits.rows
     monkeypatch.setattr(credits, "rows", lambda con_, *a: (seen.append(con_.in_transaction), real(con_, *a))[1])
     credits.listing(con, logic.Viewer(me["id"], "user", True))
-    assert seen == [True, True] and not con.in_transaction
+    assert seen == [True, True, True] and not con.in_transaction  # the top, the Team, the lines
 
 
 def test_rev_is_never_reused(env):
