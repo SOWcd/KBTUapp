@@ -1,13 +1,15 @@
 <script lang="ts">
-  // Studio → a new event or an edit, full screen, laid out like Luma's create screen (not one long
-  // cluttered form): tinted by the event, a big cover, a big name, Start/End in one card, then a few
-  // grouped rows; each row opens a focused panel at the bottom (Telegram's Back closes the panel first), rare things
-  // under "More". Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text
-  // asked 7500 tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Save draft"; a published one:
-  // "Save" (the server tells registered people when the time or place moves). Leaving with changes asks.
-  // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
-  // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
-  // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
+  // Studio → a new event or an edit, full screen. One calm page does the common case: KRI's line on top (paste the
+  // announcement or say it in a few words: the card below fills in, and KRI asks only what is still missing, in that
+  // same line; no second mode), the event's card itself with the name typed on its cover, when, where, a few words,
+  // tickets, and Publish always under the thumb. Everything else is a named row that pushes its own page, as iOS
+  // Settings does (Telegram's Back pops it; one Back). The cover is one photo aimed by itself (lib/photo autoFocus);
+  // each format, the Feed's tall slide, the card and a list's thumbnail, can take its own crop or its own photo.
+  // Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text asked 7500
+  // tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Draft"; a published one: "Save" (the
+  // server tells registered people when the time or place moves). Leaving with changes asks. An official club's Vice+
+  // can make it paid (§4.3). A member without the "events" right makes a draft and sends it to the club's President
+  // and Vices, who approve (it goes out) or return it with a reason (server organizing.submit_event).
   import { keyboard } from '../../lib/state/keyboard.svelte';
   import { teamSize } from '../../lib/teams';
   import { onMount, untrack } from 'svelte';
@@ -43,17 +45,21 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import FileText from '@lucide/svelte/icons/file-text';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import ImageIcon from '@lucide/svelte/icons/image';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Segmented from '../../ui/Segmented.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Field from '../../ui/Field.svelte';
   import Notice from '../../ui/Notice.svelte';
-  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Tag from '../../ui/Tag.svelte';
   import IconButton from '../../ui/IconButton.svelte';
-  import type { MenuItem } from '../../ui/menu';
+  import Composer from '../../ui/Composer.svelte';
+  import { menu, type MenuItem } from '../../ui/menu';
   import { check, type Finding } from '../../lib/eventCheck';
-  import { api, ApiErr, original, staffEvents, staffOrg, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type OwnTr, type Video } from '../../lib/api';
+  import { api, ApiErr, original, staffEvents, staffOrg, type CoverFormat, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type OwnTr, type ReviewReason, type Video } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import { nameOf } from '../../lib/short';
@@ -68,20 +74,18 @@
   import { hit } from '../../lib/clubs';
   import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay, endTime } from '../../lib/time';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { shrink } from '../../lib/photo';
+  import { autoFocus, coverFor, shrink } from '../../lib/photo';
   import { shade, coverColor } from '../../lib/color';
-  import ImageIcon from '@lucide/svelte/icons/image';
   import { burst } from '../../ui/burst';
   import Poster from '../../ui/Poster.svelte';
-  import CoverFocus from './CoverFocus.svelte';
+  import CoverCrop from './CoverCrop.svelte';
   import { PICK_EMOJI } from '../../lib/emoji';
   import LookPick from '../../ui/LookPick.svelte';
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
-  import EventChat from './EventChat.svelte';
-  import { marked, merge, missing, type ChatFill, type Differs, type Marked } from '../../lib/eventFill';
-  import { linkFill, ONLINE_LINK } from '../../lib/meet';
+  import { marked, missing, nextQuestion, updateDraft, type ChatFill, type Differs, type Marked } from '../../lib/eventFill';
+  import { ONLINE_LINK } from '../../lib/meet';
 
   // staff: Admin's "an event for a club" (a new one only): the app's admin makes the club's draft with no role in it, the
   // save and the cover going as staff (api staffOrg), then runs it as any event opened from Admin (staffEvents); never
@@ -91,12 +95,13 @@
   const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
   // his covers and videos go as the club's too (X-Staff-Org)
   $effect(() => { if (!staff && !lent) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
-  const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
+  const club = $derived(data.orgs.find((o) => o.id === org));
+  const oversee = $derived(!!club?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
-  const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
-  const full = $derived(official || !!data.orgs.find((o) => o.id === org)?.top); // the Ascent's top: an official club's tools
+  const official = $derived(!!(club ?? mine?.org)?.official);
+  const full = $derived(official || !!club?.top); // the Ascent's top: an official club's tools
   // a student initiative: no @KBTUevents, its followers told once a week (KBTU's own offices are as official)
-  const initiative = $derived(!official && (data.orgs.find((o) => o.id === org) ?? mine?.org)?.kind === 'club');
+  const initiative = $derived(!official && (club ?? mine?.org)?.kind === 'club');
   // a choice question's options, typed with commas: "S, M, L"
   const opts = (s: string) => [...new Set(s.split(',').map((o) => o.trim()).filter(Boolean))];
   const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
@@ -109,19 +114,26 @@
   const BRAND = '#3B6BFF';
   // a 2GIS link anywhere in what was pasted into the place field (2GIS → Share → Copy gives name, address, link)
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
+  const FORMATS = ['feed', 'card', 'list'] as const;
+  const FMT_NAME = { feed: 'ed.inFeed', card: 'ed.inCard', list: 'ed.inList' } as const;
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
   // the creator alone gets its President's editor here (server core.can, lent_full): a new event, or any club's he opens
   // from Admin; `plain` is every other admin's, a plain public free event
   const lent = $derived(asStaff && !!session.me?.founder && (staff || !!saved?.lentFull));
   const plain = $derived(staff && !lent);
+  // a member without the "events" right: the draft is theirs, the publishing the club's President's or a Vice's
+  const member = $derived(!asStaff && !!mine && !may(mine, 'events'));
+  const review = $derived(saved?.review ?? null);
+  // a member's draft waiting for my answer (the club's President or a Vice): Publish here is the approval
+  const judge = $derived(!!review?.askedAt && !review.mine && (mine?.role === 'president' || mine?.role === 'vice'));
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
   const canPrice = $derived((lent || !staff && may(mine, 'money')) && (full || !!saved?.price));
   // a partner's event: an outside host's, posted by an official club or DMP; the link out instead of tickets
-  const canPartner = $derived(full || !plain && oversee || !!saved?.guestHost);
+  const canPartner = $derived(!member && (full || !plain && oversee) || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
-  const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
+  const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, formats: {} as NonNullable<Media['formats']>, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
     end: '', endDate: '', place: '', placeUrl: '', online: false, onlineUrl: '', description: '', cap: '' as '' | 'limited' | 'unlimited', seats: '', firstYear: false, needsPhone: false, santa: false, vol: false, volN: '5', volSenior: false, teams: false, teamMin: '2', teamMax: '5', teamCap: '', teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
@@ -139,14 +151,10 @@
   // form as it stands then (capture: before the change lands) as the base
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
-  let fillLeft = $state(''); // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
-  const dirty = $derived(!!fillLeft.trim() || touched && JSON.stringify(f) !== base);
+  let said = $state(''); // what is being written to KRI: kept with the text draft, so a failed try or a closed app loses nothing
+  const dirty = $derived(!!said.trim() || touched && JSON.stringify(f) !== base);
   const live = $derived(!!saved && saved.status !== 'draft');
-  let step = $state<'chat' | 'form'>(untrack(() => !id && !staff && session.board ? 'chat' : 'form'));
-  let draft = $state<ChatFill>({});
-  let chatDirty = $state(false);
-  $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); overlay.icon = live ? PencilLine : CalendarPlus; }); // the capsule's title (SPEC §8.2)
-  const tint = $derived(shade(step === 'chat' ? draft.color ?? f.color : f.color));
+  const tint = $derived(shade(f.color));
   $effect(() => { overlay.tint = tint; }); // the sheets it opens take its colour
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
@@ -160,6 +168,7 @@
   // "For whom": any team-only event, required or not; picking a department doesn't make it required
   let tagsRead = $state(false);
   let loadingTags: Promise<void> | undefined;
+  const tagNamed = (name?: string) => { const n = name?.toLowerCase(); return n ? tags.find((g) => g.name.toLowerCase() === n && (!deptOnly || ownDepts.includes(g.id))) : undefined; };
   const readTags = () => loadingTags ??= api.teamSetup(org).then((s) => {
     const first = !tagsRead;
     tags = s.tags;
@@ -167,9 +176,7 @@
     inDept = !!s.inDept;
     tagsRead = true;
     if (first && !saved) {
-      const department = draft.department?.toLowerCase();
-      const tag = tags.find(g => g.name.toLowerCase() === department && (!deptOnly || ownDepts.includes(g.id)));
-      f.meetingTag = tag?.id ?? (deptOnly ? ownDepts[0] ?? null : null);
+      f.meetingTag = tagNamed(known.department)?.id ?? (deptOnly ? ownDepts[0] ?? null : null);
       if (deptOnly) f.forBoard = false;
     }
   }).catch(() => {}).finally(() => { loadingTags = undefined; });
@@ -220,8 +227,6 @@
     reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
-  // a room from DMP: asked in the weekly memo (the block at the end), not in the app
-
   // An example instead of "e.g. …": a real place from the events in the app, another one each time
   // the editor opens; built-in ones until the app has events of its own.
   const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place && e.place.length <= 30).map((e) => e.place))];
@@ -238,22 +243,44 @@
   // the Kaspi number written as the phone shows it, as it's typed
   $effect(() => { const v = fmtPhone(f.payPhone); if (v !== f.payPhone) f.payPhone = v; });
 
-  // a photo cover: shrunk on the phone, re-encoded by the server; the emoji and colour stay as the fallback
-  let uploading = $state(false);
-  let photoIn = $state<HTMLInputElement>();
-  async function pickPhoto(ev: Event) {
+  // ---- the cover: one photo, shrunk on the phone and re-encoded by the server, aimed at its subject by itself; the emoji
+  // and colour stay as the fallback. A format's own crop or own photo lives in f.formats (as the server gives it)
+  let uploading = $state<'' | 'cover' | CoverFormat>('');
+  let photoIn = $state<HTMLInputElement>(), ownIn = $state<HTMLInputElement>();
+  async function upload(ev: Event): Promise<Media | null> {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
-    if (!file) return;
-    if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return; }
-    uploading = true;
-    try { f.cover = await api.uploadPhoto(await shrink(file)); haptic.ok(); void readColor(true); }
-    catch { haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d'); }
-    finally { uploading = false; }
+    if (!file) return null;
+    if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return null; }
+    try { const p = await api.uploadPhoto(await shrink(file)); return { ...p, focus: await autoFocus(p.thumb) }; }
+    catch { haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d'); return null; }
   }
+  async function pickPhoto(ev: Event) {
+    uploading = 'cover';
+    const p = await upload(ev);
+    uploading = '';
+    if (!p) return;
+    f.cover = p;
+    // the crops made for the old photo mean nothing on this one; a format's own photo stays
+    f.formats = Object.fromEntries(Object.entries(f.formats).filter(([, o]) => o.id));
+    haptic.ok(); void readColor(true);
+  }
+  async function pickOwn(ev: Event, k: CoverFormat) {
+    uploading = k;
+    const p = await upload(ev);
+    uploading = '';
+    if (!p) return;
+    if (p.id === f.cover?.id) { say(t('ed.fmtSame'), 'thinking_face_3d'); return; } // the cover itself: its crop is one drag away
+    f.formats = { ...f.formats, [k]: p }; haptic.ok();
+  }
+  const setCrop = (k: CoverFormat, focus: [number, number]) => { const o = f.formats[k]; f.formats = { ...f.formats, [k]: o?.id ? { ...o, focus } : { focus } }; };
+  function resetFormat(k: CoverFormat) { haptic.soft(); f.formats = Object.fromEntries(Object.entries(f.formats).filter(([x]) => x !== k)); }
+  // the event's picture as every Poster takes it: the cover with its formats
+  const art = $derived({ cover: f.cover ? { ...f.cover, formats: f.formats } : null, emoji: f.emoji, color: f.color });
+  const fmtTag = (k: CoverFormat) => (f.formats[k]?.id ? t('ed.fmtPhoto') : f.formats[k] ? t('ed.fmtCrop') : '');
 
   // the photo's own colour (around its focus) is the first dot and gets picked with a new photo; a dot chosen on
-  // purpose stays when the focus moves (SPEC §4.8b)
+  // purpose stays (SPEC §4.8b)
   let photoColor = $state<string | null>(null);
   async function readColor(pick: boolean) {
     if (!f.cover) return;
@@ -264,7 +291,7 @@
   }
   function dropPhoto() {
     if (f.color === photoColor) f.color = BRAND;
-    f.cover = null; photoColor = null;
+    f.cover = null; f.formats = {}; photoColor = null;
   }
 
   // the event's videos (server video.py): the vertical one plays in the Feed, the horizontal one behind the event's
@@ -362,7 +389,7 @@
         const e = original(got); // the text as typed, never a translation (PLAN 9)
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
-        f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
+        f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, formats: e.cover?.formats ?? {}, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: endTime(e.startsAt, e.endsAt), endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', online: !!e.online, onlineUrl: e.onlineUrl ?? '', description: e.description,
           cap: e.seats ? 'limited' : 'unlimited', seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, santa: !!e.santa, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior,
           teams: !!e.teamMax, teamMin: String(e.teamMin ?? 2), teamMax: String(e.teamMax ?? 5), teamCap: e.teamCap ? String(e.teamCap) : '', teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
@@ -392,12 +419,12 @@
   let asking = false;
   function discard(yes: boolean) {
     asking = false;
-    if (yes) { discardText(); base = JSON.stringify(f); chatDirty = false; close(overlay.id); }
+    if (yes) { discardText(); base = JSON.stringify(f); close(overlay.id); }
   }
   $effect(() => {
     if (!overlay.closing) return;
-    if (pick) { overlay.closing = false; pick = ''; return; } // an open panel goes first (one Back)
-    if (!dirty && !(step === 'chat' && chatDirty)) { leave(); return; }
+    if (stack.length) { overlay.closing = false; back(); return; } // an open page goes first (one Back)
+    if (!dirty) { leave(); return; }
     overlay.closing = false;
     if (asking) return;
     asking = true;
@@ -405,23 +432,25 @@
   });
 
   // "Only for <school>" (server organizing._school_only): a school's own org alone; sent once touched, else kept
-  const school = $derived([data.orgs.find((o) => o.id === org) ?? mine?.org].find((o) => o?.kind === 'school'));
+  const school = $derived([club ?? mine?.org].find((o) => o?.kind === 'school'));
   let schoolOnly = $state<boolean>();
   // the fill found the announcement in all three languages: sent with the save while its title and description stand
   let ownTr: { tr: OwnTr; title: string; description: string } | undefined;
+  const formatsOut = () => Object.fromEntries(FORMATS.map((k) => { const o = f.cover ? f.formats[k] : undefined; return [k, o ? { id: o.id ?? null, focus: o.focus ?? null } : null]; }));
   const input = (): EventInput => ({
     ...(ownTr && ownTr.title === f.title.trim() && ownTr.description === f.description.trim() ? { tr: ownTr.tr } : {}),
     ...(schoolOnly === undefined ? {} : { schoolOnly }),
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba || f.online ? '' : f.place.trim(),
-    ...(asStaff && !lent ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's alone, never the admin's from Admin
+    ...(asStaff && !lent || member ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's organizers' alone, never the admin's from Admin
     placeUrl: f.online ? null : f.placeUrl.trim() || null, online: f.online, onlineUrl: f.online ? f.onlineUrl.trim() || null : null, emoji: f.emoji, color: f.color, seats: !isMeeting ? seatsN : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, santa: f.santa && !isMeeting && !f.partner, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, ...(f.teams && teamsOk ? { teamMin: +f.teamMin, teamMax: +f.teamMax, teamCap: +f.teamCap > 0 ? +f.teamCap : null } : { teamMin: null, teamMax: null, teamCap: null }), visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
     ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
-    // only a changed photo or focus is sent: left out, the server keeps what the event has
+    // only a changed photo, crop or format is sent: left out, the server keeps what the event has
     ...(f.cover?.id !== saved?.cover?.id || !f.cover !== !saved?.cover ? { coverId: f.cover?.id ?? null } : {}),
     ...(String(f.cover?.focus ?? '') !== String(saved?.cover?.focus ?? '') ? { coverFocus: f.cover?.focus ?? null } : {}),
+    ...(JSON.stringify(f.cover ? f.formats : {}) !== JSON.stringify(saved?.cover?.formats ?? {}) ? { coverFormats: formatsOut() } : {}),
     ...(f.videoId !== (saved?.video?.id ?? null) ? { videoId: f.videoId } : {}),
     ...(f.wideVideoId !== (saved?.wideVideo?.id ?? null) ? { wideVideoId: f.wideVideoId } : {}),
     ...(String(f.cover ? f.slides.map((x) => x.id) : []) !== String((saved?.slides ?? []).map((x) => x.id)) ? { slideIds: f.cover ? f.slides.map((x) => x.id!) : [] } : {}),
@@ -432,20 +461,21 @@
   // the form as students will see it once published; what's still empty shows as a dash, never as an example
   function showPreview() {
     haptic.tap();
-    const o = session.me?.memberships.find((m) => m.org.id === org)?.org ?? data.orgs.find((x) => x.id === org)!;
+    const o = mine?.org ?? club!;
     const i = input();
     sheets.preview({
       ...i, santa: i.santa ? { drawn: false } : undefined, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, guestList: !!saved?.guestList, ageCheck: !!saved?.ageCheck, org: o, status: 'published', title: i.title || '—', place: i.online ? '' : i.place || '—', online: !!i.online, onlineUrl: i.onlineUrl ?? null,
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
-      cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
+      cover: art.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       coHost: saved?.coHost ?? null, my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
     });
   }
 
-  async function submit(kind: 'publish' | 'draft' | 'save') {
+  // publish: out now (a member's draft I answer: my yes); send: a member's own to the club's President and Vices
+  async function submit(kind: 'publish' | 'draft' | 'save' | 'send') {
     tried = true;
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
-    if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
+    if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp || uploading) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
     const sentAt = textDraft.stamp();
     busy = kind;
@@ -456,12 +486,12 @@
         if (!tagsRead) { say(t('common.error'), 'warning_3d'); return; }
       }
       const tag = tags.find(g => g.id === f.meetingTag);
-      if (draft.paid && (!f.paid || !tickets || !canPrice)
-        || draft.visibility === 'leaders' && !f.leaders || draft.visibility === 'members' && !f.teamOnly
-        || draft.forBoard && !f.forBoard || draft.schoolOnly && !schoolOnly
-        || draft.department && (f.forBoard || tag?.name.toLowerCase() !== draft.department.toLowerCase())
-        || draft.cohost && !coWant && !saved || draft.partner && !f.partner) {
-        const actual = [audienceVal, tickets && priceVal, f.partner && f.host, draft.cohost && t('co.invite') + ' · ' + coVal].filter(Boolean).join(' · ');
+      if (known.paid && (!f.paid || !tickets || !canPrice)
+        || known.visibility === 'leaders' && !f.leaders || known.visibility === 'members' && !f.teamOnly
+        || known.forBoard && !f.forBoard || known.schoolOnly && !schoolOnly
+        || known.department && (f.forBoard || tag?.name.toLowerCase() !== known.department.toLowerCase())
+        || known.cohost && !coWant && !saved || known.partner && !f.partner) {
+        const actual = [audienceVal, tickets && priceVal, f.partner && f.host, known.cohost && t('co.invite') + ' · ' + coVal].filter(Boolean).join(' · ');
         if (!await sheets.ask({ title: t('ed.chatReview'), text: actual, ok: t('common.save'), cancel: t('common.cancel') })) return;
       }
       // teams off on an event that has some: they break up (the server lets them go)
@@ -474,8 +504,9 @@
       if (first && staff) staffEvents.add(e.id); // from here on it is run as Admin runs any event
       if (first) saved = e; // a later step may fail: the retry is an edit of this one (a changed cover too), never a second event
       if (first && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
-      const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
+      const pub = kind === 'publish' ? await (judge ? api.reviewEvent(e.id, true) : api.publishEvent(e.id)) : null;
       if (pub) e = pub;
+      if (kind === 'send') e = await api.submitEvent(e.id);
       const moved = live && e.taken > 0 && (saved!.startsAt !== e.startsAt || saved!.place !== e.place);
       discardText(sentAt);
       base = JSON.stringify(f);
@@ -483,6 +514,7 @@
       haptic.ok();
       // a student initiative tells its followers once a week (the server's rule): the toast says if they heard, and when next
       if (kind === 'publish') { burst(); say(pub?.told === undefined || !initiative ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
+      else if (kind === 'send') say(t('rv.sent'), 'party_popper_3d');
       else say(kind === 'draft' ? phrase('say.draftSaved') : moved ? t('say.eventMoved') : phrase('say.eventSaved'), 'sparkles_3d');
       close(overlay.id);
       if (staff) { if (!eventById(e.id)) data.opened.push(e); sheets.manage(e.id, true); } // on to Admin's own view of it
@@ -490,20 +522,27 @@
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
         : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
+        : x instanceof ApiErr && x.message === 'drafts' ? t('rv.limit')
         : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.message === 'santa_signed' ? t('santa.locked') : x instanceof ApiErr && x.message === 'santa_until' ? t('santa.badUntil') : x instanceof ApiErr && x.message === 'santa_audience' ? t('santa.audience') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
+  // the club's President or a Vice sends a member's draft back: a reason from the list, never typed words
+  const REASONS: ReviewReason[] = ['details', 'when', 'cover', 'repeat', 'later'];
+  function giveBack(ev: MouseEvent) {
+    const eid = saved?.id;
+    if (!eid) return;
+    menu(ev.currentTarget as Element, REASONS.map((r) => ({ label: t(`rv.why.${r}`), onselect: async () => {
+      try { await api.reviewEvent(eid, false, r); haptic.ok(); studioChanged(); say(t('rv.returnedSay'), 'sparkles_3d'); base = JSON.stringify(f); discardText(); close(overlay.id); }
+      catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    } })), 'end');
+  }
 
-  // a new event from the announcement the club already wrote: the AI fills what the text says,
-  // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
-  let filling = $state(false);
-  // a new event starts with the announcement (the fill existed, nobody found it): a paste screen first,
-  // then the form, the AI's rows marked until touched and what it couldn't find listed on top; never a publish unseen
+  // ---- the text that must not be lost: the name, the description, the place and what was being written to KRI
   const textFields = ['title', 'description', 'place'] as const;
   type TextField = typeof textFields[number];
   type TextDraft = { fields: Partial<Record<TextField, { before: string; value: string }>>; announcement: string };
   const textDraft = useDraft<TextDraft>(untrack(() => `kb-editor-${org}-${id ?? 'new'}`));
-  const mayKeepText = $derived(!asStaff && !staffOrg.full && may(mine, 'events'));
+  const mayKeepText = $derived(!asStaff && !staffOrg.full && !!mine);
   let textBase = $state<Record<TextField, string> | null>(null);
 
   function restoreText() {
@@ -516,77 +555,116 @@
       // A newer server edit of this field takes precedence. Other unsaved fields still recover.
       if (field?.before === f[k] && typeof field.value === 'string') { f[k] = field.value; touched = true; }
     }
-    if (typeof draft.announcement === 'string') fillLeft = draft.announcement;
-    if (touched) step = 'form';
+    if (typeof draft.announcement === 'string') said = draft.announcement;
   }
   $effect(() => {
     if (!textBase || !mayKeepText) return;
     const fields: TextDraft['fields'] = {};
     for (const k of textFields) if (f[k] !== textBase[k]) fields[k] = { before: textBase[k], value: f[k] };
-    textDraft.track(fillLeft.trim() || Object.keys(fields).length ? { fields, announcement: fillLeft } : null);
+    textDraft.track(said.trim() || Object.keys(fields).length ? { fields, announcement: said } : null);
   });
   function discardText(at?: number) {
     if (textBase) textDraft.discard(at);
     textBase = null;
-    fillLeft = '';
+    said = '';
   }
 
-  let ai = $state<Marked[]>([]);
-  let fromAi = $state(false);
-  let fromChat = $state(false);
-  const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
-  const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
-  // "Add more": with something in the form, a second message merges into it (lib/eventFill merge);
-  // what the new text says otherwise than a filled field waits here for a tap
-  const more = $derived(fromAi || !!(f.title.trim() || f.description.trim()));
-  let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]); // the meeting link: the editor's own (lib/meet linkFill)
-  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price', onlineUrl: 'ed.onlineLink' } as const;
-  function take(d: { k: Differs | 'onlineUrl'; v: string }) {
-    haptic.tap();
-    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; } else f[d.k] = d.v;
-    differs = differs.filter((x) => x !== d);
+  // ---- KRI (with the forum's switch: its policy section names the AI host). One line, one flow: the first message is
+  // the announcement or a few words, the server fills what it says; then KRI's line asks the next thing the card still
+  // lacks (lib/eventFill nextQuestion over the form as it stands, so a row filled by hand is never asked) and the
+  // answer goes into the same field. The form is the conversation's memory and its preview; never a publish unseen.
+  const kriOn = $derived(!id && !!session.board);
+  let known = $state<ChatFill>({}); // what KRI was told that the form can't say by itself (free on purpose, no limit on purpose, a department's name)
+  let turns = $state(0);
+  let filling = $state(false);
+  const str = (v: string) => v.trim() || undefined;
+  // the form as facts (lib/eventFill ChatFill): only what is set; a default nobody chose is no fact
+  function facts(): ChatFill {
+    const d = known;
+    return {
+      ...d, title: str(f.title), description: str(f.description),
+      date: f.date && (f.date !== blank.date || d.date) ? f.date : undefined, start: f.start && (f.start !== blank.start || d.start) ? f.start : undefined,
+      end: f.end || undefined, endDate: f.endDate || undefined,
+      place: f.online || f.tba ? undefined : str(f.place), placeUrl: f.online || f.tba ? undefined : str(f.placeUrl),
+      online: f.online || undefined, onlineUrl: f.online ? str(f.onlineUrl) : undefined, tba: f.tba && !f.online || undefined,
+      paid: f.paid ? true : d.paid === false ? false : undefined, price: f.paid && +f.price > 0 ? +f.price : undefined,
+      payTo: f.paid ? str(f.payTo) : undefined, payPhone: f.paid ? str(f.payPhone) : undefined, freeFirst: f.paid && +f.freeFirst > 0 ? +f.freeFirst : undefined,
+      seats: f.cap === 'limited' && +f.seats > 0 ? +f.seats : f.cap === 'unlimited' ? 0 : undefined,
+      registration: f.late ? 'end' : f.deadline ? 'date' : d.registration === 'start' ? 'start' : undefined,
+      regDate: f.deadline ? f.regDate || undefined : undefined, regTime: f.deadline ? f.regTime || undefined : undefined,
+      teams: f.teams ? true : d.teams === false ? false : undefined, teamMin: f.teams ? +f.teamMin || undefined : undefined, teamMax: f.teams ? +f.teamMax || undefined : undefined,
+      teamCap: !f.teams ? undefined : +f.teamCap > 0 ? +f.teamCap : d.teamCap === 0 ? 0 : undefined,
+      visibility: f.leaders ? 'leaders' : f.teamOnly ? 'members' : d.visibility === 'public' ? 'public' : undefined,
+      meeting: f.teamOnly && f.meeting || undefined, partner: f.partner ? true : d.partner === false ? false : undefined,
+      guestHost: f.partner ? str(f.host) : undefined, externalUrl: f.partner ? str(f.link) : undefined,
+    };
   }
-  async function fillFromText() {
-    const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000, value: fillLeft });
-    if (text) await runFill(text);
-  }
-  async function runFill(text: string) {
-    fillLeft = text;
-    touch(); filling = true;
+  const kriNext = $derived(turns ? nextQuestion(facts(), canPrice) : 'event');
+  const num = (v?: number) => (v ? String(v) : '');
+  // a fact into the form, each by its own row's rules (what this person may not set stays as it is)
+  const PUT: { [K in keyof ChatFill]-?: (v: ChatFill[K] | undefined) => void } = {
+    title: (v) => { f.title = v ?? ''; }, description: (v) => { f.description = v ?? ''; },
+    date: (v) => { f.date = v ?? ''; }, start: (v) => { f.start = v ?? ''; }, end: (v) => { f.end = v ?? ''; }, endDate: (v) => { f.endDate = v ?? ''; },
+    emoji: (v) => { if (v && !f.cover) f.emoji = v; }, color: (v) => { if (v && !f.cover) f.color = v; }, // the look it picked, where no photo is
+    tr: () => {}, // after the name and the description are in (tell)
+    place: (v) => { f.place = v ?? ''; if (v) f.tba = false; }, placeUrl: (v) => { f.placeUrl = v ?? ''; },
+    online: (v) => { f.online = !!v; if (v) f.tba = false; }, onlineUrl: (v) => { f.onlineUrl = v ?? ''; }, tba: (v) => { f.tba = !!v; },
+    paid: (v) => { f.paid = canPrice && !!v; }, price: (v) => { if (canPrice) f.price = num(v); },
+    payTo: (v) => { if (canPrice && v) f.payTo = v; }, payPhone: (v) => { if (canPrice && v) f.payPhone = v; }, freeFirst: (v) => { if (canPrice) f.freeFirst = num(v); },
+    seats: (v) => { f.cap = v ? 'limited' : v === 0 ? 'unlimited' : ''; f.seats = num(v); },
+    registration: (v) => { f.late = v === 'end'; deadlineOn(v === 'date'); }, regDate: (v) => { if (v) f.regDate = v; }, regTime: (v) => { if (v) f.regTime = v; },
+    teams: (v) => { f.teams = !!v; }, teamMin: (v) => { f.teamMin = String(v ?? 2); }, teamMax: (v) => { f.teamMax = String(v ?? 5); }, teamCap: (v) => { f.teamCap = num(v); },
+    needsPhone: (v) => { f.needsPhone = !!v; }, santa: (v) => { f.santa = !!v; },
+    volunteers: (v) => { f.vol = !plain && !!v; f.volN = String(v ?? 5); }, volSenior: (v) => { f.volSenior = !plain && !!v; },
+    form: (v) => { f.form = (v ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })); },
+    visibility: (v) => { f.teamOnly = !plain && v === 'members'; f.leaders = !plain && oversee && v === 'leaders'; },
+    leadersFrom: (v) => { f.leadersFrom = v ?? 'president'; }, meeting: (v) => { f.meeting = !plain && !!v; }, forBoard: (v) => { f.forBoard = !plain && !!v; },
+    schoolOnly: (v) => { if (school) schoolOnly = v; },
+    cohost: (v) => {
+      const name = v?.toLowerCase(), clubs = name && coOk ? data.orgs.filter((o) => o.kind === 'club' && o.id !== org && [o.name, o.short, o.abbr].some((x) => x?.toLowerCase() === name)) : [];
+      if (clubs.length === 1) coWant = clubs[0];
+    },
+    department: (v) => { const g = tagNamed(v); if (g) { f.meetingTag = g.id; f.forBoard = false; } }, // not read yet: readTags takes it from `known`
+    memo: (v) => { if (v && full && !member && (!asStaff || lent)) f.memo = v; },
+    partner: (v) => { f.partner = canPartner && !!v; }, guestHost: (v) => { if (canPartner) f.host = v ?? ''; }, externalUrl: (v) => { if (canPartner) f.link = v ?? ''; },
+  };
+  // which question's answer may overwrite a row already filled; said in passing, it only waits in "differs" for a tap
+  const ANSWERS: Partial<Record<string, Differs>> = { date: 'date', start: 'start', place: 'place', price: 'price' };
+  async function tell() {
+    const text = said.trim();
+    if (!text || filling) return;
+    haptic.tap(); touch(); filling = true;
+    const asked = kriNext, was = facts();
     try {
-      const adding = more;
-      const now = { title: f.title, date: f.date, endDate: f.endDate, start: f.start, end: f.end, place: f.tba || f.online ? '' : f.place, description: f.description, price: f.paid ? f.price : '' };
-      const dflt = { date: blank.date, start: blank.start };
-      // the form so far, as data (the server bounds it): a default the organiser never set isn't sent
-      const have = adding ? { ...now, date: now.date === dflt.date ? '' : now.date, start: now.start === dflt.start ? '' : now.start, price: +now.price || undefined } : undefined;
-      const { onlineUrl, ...x } = await api.eventFill(org, text, have);
+      // only the message and the event's own facts: never the payment contacts
+      const { title, date, endDate, start, end, place, description, paid, price, seats, registration, regDate, regTime, teams, teamMin, teamMax, teamCap, online, tba, visibility, meeting, partner } = was;
+      const patch = await api.eventFill(org, text, { title, date, endDate, start, end, place, description, paid, price, seats, registration, regDate, regTime, teams,
+        teamMin, teamMax, teamCap, online, tba, visibility, meeting, partner }, asked);
       if (gone) return;
-      // a meeting link in the text (found in plain code): it fills an empty form; "Add more" over another link or a
-      // place already set only lists it for a tap, as any filled field said otherwise
-      const link = linkFill(onlineUrl, adding, f);
-      const linkDiff = link === 'ask' ? [{ k: 'onlineUrl' as const, v: onlineUrl! }] : [];
-      if (link === 'fill') { f.online = true; f.onlineUrl = onlineUrl!; f.tba = false; }
-      if (adding) {
-        const { set, differs: d } = merge(now, x, dflt);
-        const { price: p, ...rest } = set;
-        Object.assign(f, rest);
-        if (rest.place) f.tba = false;
-        if (p && canPrice) { f.paid = true; f.price = p; }
-        const got = Object.keys(set).length > 0 || d.length > 0 || !!onlineUrl;
-        differs = [...d.filter((y) => y.k !== 'price' || canPrice), ...linkDiff];
-        ai = [...new Set([...ai, ...marked({ ...rest, price: p ? +p : undefined }, canPrice)])];
-        if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
-        say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
-        return;
+      const next = updateDraft(was, patch);
+      // what the form already says is never overwritten in passing: the new value waits for a tap ("differs")
+      const wait: typeof differs = [];
+      for (const k of ['date', 'start', 'end', 'place', 'price'] as const) {
+        if (was[k] === undefined || next[k] === undefined || String(next[k]) === String(was[k]) || ANSWERS[asked] === k) continue;
+        wait.push({ k, v: String(next[k]) });
+        Object.assign(next, { [k]: was[k] });
       }
-      const { price, emoji, color, tr, ...rest } = x; // the server sends only the fields it found, named as the form's
-      Object.assign(f, rest);
-      ownTr = tr && { tr, title: f.title.trim(), description: f.description.trim() };
-      if (!f.cover) { if (emoji) f.emoji = emoji; if (color) f.color = color; } // the cover it picked, where no photo is
-      if (price && canPrice) { f.paid = true; f.price = String(price); }
-      const got = Object.keys(x).length > 0;
-      if (got) { haptic.ok(); fillLeft = ''; ai = marked(x, canPrice); fromAi = true; } else haptic.error();
-      say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
+      if (was.place && next.online && asked !== 'place') { // a meeting link over a place already set: the same
+        if (next.onlineUrl) wait.push({ k: 'onlineUrl', v: next.onlineUrl });
+        Object.assign(next, { online: was.online, onlineUrl: was.onlineUrl, tba: was.tba, place: was.place, placeUrl: was.placeUrl });
+      }
+      const keys = [...new Set([...Object.keys(was), ...Object.keys(next)])] as (keyof ChatFill)[];
+      const changed = keys.filter((k) => JSON.stringify(was[k]) !== JSON.stringify(next[k]));
+      for (const k of changed) (PUT[k] as ((v: unknown) => void) | undefined)?.(next[k]);
+      // the announcement came in all three languages: sent with the save while its name and description stand
+      if (changed.includes('tr')) ownTr = next.tr && { tr: next.tr, title: f.title.trim(), description: f.description.trim() };
+      known = next;
+      differs = [...differs.filter((d) => !wait.some((w) => w.k === d.k)), ...wait.filter((w) => w.k !== 'price' || canPrice)];
+      const got = (k: keyof ChatFill) => (changed.includes(k) ? next[k] : undefined);
+      ai = [...new Set([...ai, ...marked({ title: got('title') as string, date: got('date') as string, endDate: got('endDate') as string, start: got('start') as string,
+        end: got('end') as string, place: got('place') as string, description: got('description') as string, price: got('price') as number }, canPrice)])];
+      if (changed.length || wait.length) { haptic.ok(); said = ''; turns++; fromAi = true; fromChat = true; }
+      else { haptic.error(); say(t('ed.fillNone'), 'thinking_face_3d'); }
     } catch (e) {
       if (gone) return;
       haptic.error();
@@ -594,40 +672,19 @@
       say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
     } finally { filling = false; }
   }
-  // Both ways out of chat hydrate this same editor. Publishing then takes its usual checks and save path.
-  function byHand() {
+  let ai = $state<Marked[]>([]);
+  let fromAi = $state(false);
+  let fromChat = $state(false);
+  const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
+  const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
+  let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]);
+  const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price', onlineUrl: 'ed.onlineLink' } as const;
+  function take(d: { k: Differs | 'onlineUrl'; v: string }) {
     haptic.tap();
-    const d = draft;
-    if (Object.keys(d).length) {
-      touch();
-      Object.assign(f, {
-        title: d.title ?? '', description: d.description ?? '', date: d.date ?? '', start: d.start ?? '',
-        end: d.end ?? '', endDate: d.endDate ?? '', emoji: d.emoji ?? f.emoji, color: d.color ?? f.color,
-        place: d.place ?? '', placeUrl: d.placeUrl ?? '', online: !!d.online, onlineUrl: d.onlineUrl ?? '', tba: !!d.tba,
-        paid: canPrice && !!d.paid, price: canPrice && d.price ? String(d.price) : '', payTo: canPrice ? d.payTo ?? '' : '',
-        payPhone: canPrice ? d.payPhone ?? '' : '', freeFirst: canPrice && d.freeFirst ? String(d.freeFirst) : '',
-        cap: d.seats ? 'limited' : d.seats === 0 ? 'unlimited' : '', seats: d.seats ? String(d.seats) : '', deadline: d.registration === 'date', late: d.registration === 'end',
-        regDate: d.regDate ?? '', regTime: d.regTime ?? '', teams: !!d.teams, teamMin: d.teamMin ? String(d.teamMin) : '',
-        teamMax: d.teamMax ? String(d.teamMax) : '', teamCap: d.teamCap ? String(d.teamCap) : '',
-        needsPhone: !!d.needsPhone, santa: !!d.santa, vol: !plain && !!d.volunteers, volN: String(d.volunteers ?? 5),
-        volSenior: !plain && !!d.volSenior, teamOnly: !plain && d.visibility === 'members', leaders: !plain && oversee && d.visibility === 'leaders',
-        leadersFrom: d.leadersFrom ?? 'president', meeting: !plain && !!d.meeting, forBoard: !plain && !!d.forBoard,
-        partner: canPartner && !!d.partner, host: canPartner ? d.guestHost ?? '' : '', link: canPartner ? d.externalUrl ?? '' : '',
-        form: (d.form ?? []).map(q => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
-      });
-      if (school) schoolOnly = d.schoolOnly;
-      if (d.memo && full && (!asStaff || lent)) f.memo = $state.snapshot(d.memo);
-      if (d.cohost && coOk) {
-        const name = d.cohost.toLowerCase();
-        const clubs = data.orgs.filter(o => o.kind === 'club' && o.id !== org && [o.name, o.short, o.abbr].some(v => v?.toLowerCase() === name));
-        if (clubs.length === 1) coWant = clubs[0];
-      }
-      ownTr = d.tr && { tr: d.tr, title: f.title.trim(), description: f.description.trim() };
-      ai = marked(d, canPrice); fromAi = true; fromChat = true;
-    }
-    step = 'form';
+    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; } else f[d.k] = d.v;
+    differs = differs.filter((x) => x !== d);
   }
-  // a missing one tapped: its picker, or the place's panel
+  // a missing one tapped: its picker, or the place's page
   function jump(k: 'date' | 'time' | 'place') {
     haptic.tap();
     if (k === 'place') { open('place'); return; }
@@ -636,7 +693,6 @@
     try { el?.showPicker(); } catch { el?.focus(); }
   }
 
-  // the focused panel at the bottom: '' none, else which one
   // "Invite a club" (server cohosts.py): one club of the app hosts it with us once its Vice+ says yes. A saved event
   // invites at once; a new one after its first save. Only an open event (not the team's, a meeting, a partner's)
   let coWant = $state<OrgRef | null>(null);
@@ -670,11 +726,19 @@
     catch { saved = { ...saved, cohost: was }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
-  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'teams' | 'partner' | 'cohost' | 'memo' | 'check';
-  let pick = $state<Panel>('');
-  const open = (p: Panel) => { haptic.tap(); pick = p; if (p === 'place' || p === 'about' || p === 'price') unmark(p); };
-  const PANEL: Record<Exclude<Panel, ''>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
-    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
+  // ---- the pages: the main one, and a stack pushed over it ('more' and 'cover' push a second level)
+  type Page = 'cover' | `cover.${CoverFormat}` | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'who' | 'more' | 'video' | 'form' | 'vol' | 'teams' | 'partner' | 'cohost' | 'memo' | 'check';
+  let stack = $state<Page[]>([]);
+  const pick = $derived<Page | ''>(stack.at(-1) ?? '');
+  const fmt = $derived(pick.startsWith('cover.') ? pick.slice(6) as CoverFormat : null);
+  const open = (p: Page) => { haptic.tap(); stack = [...stack, p]; if (p === 'place' || p === 'about' || p === 'price') unmark(p); };
+  const back = () => { stack = stack.slice(0, -1); };
+  const only = (p?: Page) => { stack = p ? [p] : []; };
+  const PAGE: Record<Exclude<Page, `cover.${CoverFormat}`>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
+    reg: 'ex.regUntil', who: 'ex.who', more: 'ex.more', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
+  const pageTitle = $derived(!pick ? '' : fmt ? t(FMT_NAME[fmt]) : t(PAGE[pick as keyof typeof PAGE] as 'ed.cover'));
+  // the capsule's title (SPEC §8.2), between Telegram's Back and ⋯: the event, or the page that is open
+  $effect(() => { overlay.title = pageTitle || (live ? t('ed.edit') : t('ed.new')); overlay.icon = live ? PencilLine : CalendarPlus; });
 
   // the rows' values
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
@@ -691,10 +755,18 @@
   const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
   const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
   const audienceVal = $derived([whoVal, f.teamOnly && (f.forBoard ? t('ed.meetingBoard') : tags.find(g => g.id === f.meetingTag)?.name),
-    schoolOnly && school && t('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
+    (schoolOnly ?? !!saved?.school) && school && t('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
   const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;
   const memoN = $derived(Object.keys(f.memo).length);
   const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
+  const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
+  // the card's own line, as the Afisha writes it: the day, the time, the place
+  const placeVal = $derived(f.online ? t('event.online') : f.tba ? t('ed.tba') : f.place.trim());
+  const cardLine = $derived([dayText, f.start, placeVal].filter(Boolean).join(' · '));
+  // what "More" holds that is switched on, so the row says it without being opened
+  const moreBad = $derived(!!(err.form || err.teams || err.teamCap || err.host || err.link));
+  const moreVal = $derived([askVal !== t('ex.no') && tickets ? t('ed.form') : '', f.teams && teamsOk ? t('ed.teams') : '', f.vol && tickets ? t('ed.vol') : '', vidN ? t('ed.video') : '',
+    saved?.doc ? t('event.doc') : '', co && co.status !== 'declined' ? coShort(co.org) : '', f.partner ? t('ed.partner') : ''].filter(Boolean).join(', '));
 
   // the pull-downs (2-4 choices) on a row's value
   const whoMenu = $derived<MenuItem[]>([
@@ -710,12 +782,11 @@
     ...tags.filter((g) => !deptOnly || ownDepts.includes(g.id)).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
     ...(tags.length ? [] : [{ label: t('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
   ]);
-  const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
 
   // "Check my event": on the phone, at once, on every Publish/Save; a price or seats in a meeting's or a partner's
   // text aren't this event's to fix; a live event's Save stops only for a contradiction, never for a missing cover
   const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
-  const clubNames = $derived.by(() => { const o = data.orgs.find((x) => x.id === org) ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
+  const clubNames = $derived.by(() => { const o = club ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
   const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba || f.online,
     place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: own, club: clubNames })
     .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
@@ -727,23 +798,31 @@
   // a note's one-tap fix: it changes the form, or opens the one place that needs the person
   function fix(x: Finding) {
     haptic.tap(); touch();
-    if (x.id === 'priceText') { f.paid = true; f.price = String(x.n); pick = 'price'; }
+    if (x.id === 'priceText') { f.paid = true; f.price = String(x.n); only('price'); }
     else if (x.id === 'priceDiff') f.price = String(x.n);
     else if (x.id === 'seatsText') { f.cap = 'limited'; f.seats = String(x.n); }
-    else if (x.id === 'noPlace') { f.tba = false; pick = 'place'; }
-    else if (x.id === 'noAbout') pick = 'about';
-    else if (x.id === 'noCover') pick = 'cover';
-    else if (x.id === 'past') { pick = ''; try { panel.querySelector<HTMLInputElement>('.when input[type=date]')?.showPicker(); } catch { /* old webviews: the field is in sight */ } }
+    else if (x.id === 'noPlace') { f.tba = false; only('place'); }
+    else if (x.id === 'noAbout') only('about');
+    else if (x.id === 'noCover') only('cover');
+    else if (x.id === 'past') { only(); try { panel.querySelector<HTMLInputElement>('.when input[type=date]')?.showPicker(); } catch { /* old webviews: the field is in sight */ } }
     else if (x.id === 'clubInTitle') f.title = x.clean;
-    else if (x.id === 'longTitle') { pick = ''; panel.querySelector<HTMLElement>('.name')?.focus(); }
+    else if (x.id === 'longTitle') { only(); panel.querySelector<HTMLElement>('.name')?.focus(); }
   }
+  // the one main button: what it does for this person and this event
+  const goKind = $derived<'save' | 'publish' | 'send'>(live || member && !!review?.askedAt ? 'save' : member ? 'send' : 'publish');
+  const goLabel = $derived(goKind === 'save' ? t('common.save') : goKind === 'send' ? t(review?.reason ? 'rv.sendAgain' : 'rv.send') : judge ? t('rv.approve') : t('ed.publish'));
   // Publish/Save: the check first; nothing found goes straight on
   function publish() {
-    if (fromChat && Object.values(err).some(Boolean)) {
-      tried = true; haptic.error(); return;
+    if (Object.values(err).some(Boolean)) {
+      tried = true; haptic.error();
+      // the first row that stops it comes into sight, or its page opens
+      if (err.title) panel.querySelector<HTMLElement>('.name')?.focus();
+      else if (err.place) only('place'); else if (err.seats) only('seats'); else if (priceBad) only('price'); else if (err.reg) only('reg');
+      else if (err.form) only('form'); else if (err.teams || err.teamCap) only('teams'); else if (err.host || err.link) only('partner');
+      return;
     }
-    if (found.length || fromChat) { open('check'); return; }
-    void submit(live ? 'save' : 'publish');
+    if (goKind !== 'save' && (found.length || fromChat) || goKind === 'save' && found.length) { only('check'); return; }
+    void submit(goKind);
   }
 
   // the AI writes the description from a few words (the announcement fill, its description only): a card to take or leave
@@ -778,38 +857,27 @@
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" bind:this={panel} style:--tint={tint} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
-  <!-- the sheet tinted by the event (Luma): its colour, the cover blurred over it, the page's ground on top for contrast -->
+<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+  <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
   <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
     {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
 
-  {#if step === 'chat'}
-    <EventChat {org} bind:draft bind:dirty={chatDirty} {canPrice} emoji={blank.emoji} color={blank.color}
-      onhand={byHand} onpublish={() => { byHand(); publish(); }} />
-  {:else}
-  <div class="body scroll">
-    <button class="art" class:busy={uploading} onclick={() => open('cover')} aria-label={t('ed.cover')}>
-      <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
-      <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
-    </button>
-    <!-- the preview: a round eye beside the cover, clear of Telegram's own buttons in the bar above -->
-    <span class="pv"><IconButton icon={Eye} label={t('ed.preview')} onclick={showPreview} /></span>
-    <!-- whose event it is, one quiet line under the cover (the box took the form's room); the full
-         sentence on a tap -->
-    {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
-      <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
-    {#if !id && session.board}
-      <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t(more ? 'ed.fillMore' : 'ed.fill')}</Button></span>
+  <div class="body scroll" inert={!!pick}>
+    {#if kriOn}
+      <!-- KRI: one line that says what it needs next, one field to answer in; the card below is the result -->
+      <div class="kri" class:busy={filling}>
+        <p class="kq"><Sparkles size={15} strokeWidth={2.4} /><span>{filling ? t('as.thinking') : t(`ed.chat.${kriNext}`)}</span></p>
+        <Composer bind:value={said} placeholder={t(kriNext === 'payTo' ? 'ed.payTo' : kriNext === 'payPhone' ? 'ed.payPhone' : turns ? 'ed.chatPh' : 'ed.kriPh')}
+          maxlength={4000} sending={filling} onsend={tell} pill />
+      </div>
     {/if}
-
     {#if lacks.length}
       <!-- what the announcement didn't say: each one tapped goes to its field -->
       <div class="miss">
         <span>{t('ed.missing')}</span>
         {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{t(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
-        {#if lacks.includes('place')}<p class="hint">{t('ed.missPlace')}</p>{/if}
       </div>
     {/if}
     {#if differs.length}
@@ -819,16 +887,36 @@
         {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{t(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
       </div>
     {/if}
-    <!-- engine: Field size="title" with its label for screen readers only (the editor's big name has none in sight) -->
-    <textarea class="name" class:bad={tried && err.title} class:ai={ai.includes('title')} oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
+
+    {#if review?.reason && review.mine}<Notice tone="warning" text={t('rv.returned', { why: t(`rv.why.${review.reason}`) })} />
+    {:else if review?.askedAt && review.mine}<Notice tone="accent" text={t('rv.waiting')} />
+    {:else if judge}<Notice tone="accent" text={t('rv.from')} />{/if}
+
+    <!-- the event's card as the Afisha shows it, and the form's first field: the name is typed on the cover itself -->
+    <div class="card" class:bad={tried && err.title} class:busy={uploading === 'cover'}>
+      <button class="art" onclick={() => open('cover')} aria-label={t('ed.cover')}><Poster item={art} big radius={0} fmt="card" /></button>
+      <i class="veil" aria-hidden="true"></i>
+      <div class="tools">
+        <button class="tool glass glass-pill" onclick={showPreview} aria-label={t('ed.preview')}><Eye size={18} /></button>
+        <button class="tool glass glass-pill" onclick={() => open('cover')}><ImagePlus size={18} /><span>{t('ed.cover')}</span></button>
+      </div>
+      <div class="words">
+        <!-- engine: Field size="title" with its label for screen readers only (the card's big name has none in sight) -->
+        <textarea class="name" class:ai={ai.includes('title')} oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
+        <p class="line ellipsis">{cardLine}</p>
+      </div>
+    </div>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
+    <!-- whose event it is, one quiet line under the card; the full sentence on a tap -->
+    {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
+      <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
     {#if castLike}
       <!-- a casting made as an event (JCC): the club's recruitment does it properly -->
       <Notice tone="accent" text={t('ed.castHint')} action={{ label: t('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
     <div class="pill when" class:bad={tried && err.when} class:ai={ai.includes('when')} onchangecapture={() => unmark('when')}>
-      <i class="line" aria-hidden="true"></i>
+      <i class="rail" aria-hidden="true"></i>
       <!-- one line of text ("Mon, 9 Nov  18:00"); the phone's own pickers sit under each part -->
       <div class="wr"><span class="dot"></span><b>{t('ed.start')}</b>
         <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={t('ed.date')} /></label>
@@ -840,13 +928,13 @@
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
     <button class="pill go" class:bad={tried && err.place} class:ai={ai.includes('place')} onclick={() => open('place')}>{#if f.online}<VideoCall size={20} />{:else}<MapPin size={20} />{/if}
-      <span class="gt ellipsis" class:ph={!f.online && !f.place.trim()}>{f.online ? t('event.online') : f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
+      <span class="gt ellipsis" class:ph={!placeVal}>{placeVal || t('ex.placeAdd')}</span>
       {#if f.placeUrl && !f.tba && !f.online}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
     <button class="pill go" class:ai={ai.includes('about')} onclick={() => open('about')}><AlignLeft size={20} />
       <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
-      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting ? (full ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
+      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting && !member ? (full ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
         {#if canPrice}<Row icon={Ticket} title={t('ex.price')} value={tried && priceBad ? '' : priceVal} invalid={tried && priceBad} accessory="chevron" onclick={() => open('price')} />
         {:else}<Row icon={Ticket} title={t('ex.price')} value={t('ex.free')} />{/if}
         <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : t('ed.capPick')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
@@ -854,74 +942,53 @@
       </Group>
     {/if}
 
-    <!-- who it is for; "for first-years" is gone from the editor (an event that has it keeps it, sent back
-         as it is), the phone is asked in "Questions at sign-up" -->
-    {#if !f.partner && !plain}
-    <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
-        {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
-        {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
-        {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
-        {#if f.teamOnly && tagsRead}
-          <Row icon={TagIcon} title={t('ed.meetingWho')} menu={tagMenu}
-            value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
-        {/if}
-        <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
-        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
+    <Group>
+      {#if !f.partner && !plain || school}<Row icon={Globe} title={t('ex.who')} value={audienceVal} accessory="chevron" onclick={() => open('who')} />{/if}
+      <Row icon={SlidersHorizontal} title={t('ex.more')} value={tried && moreBad ? '' : moreVal} invalid={tried && moreBad} accessory="chevron" onclick={() => open('more')} />
     </Group>
+
+    {#if saved?.status === 'draft' && (!member || review?.mine)}
+      <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{t('ed.delete')}</Button>
     {/if}
-    {#if school}<Group footnote={t('ed.schoolOnlyHint')}>
-      <Row icon={GraduationCap} title={t('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
-    </Group>{/if}
-
-    <input class="doc-in" type="file" accept="application/pdf" bind:this={docPick} onchange={pickDoc} /><!-- outside: Rows' lines need them adjacent -->
-    <Group caption={t('ex.more')}>
-      {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
-      {#if saved && !plain}
-        {#if saved.doc && !docUp}<Row icon={FileText} title={saved.doc.title ?? t('event.doc')} value={tn('ed.docPages', saved.doc.pages.length)}
-          menu={[{ label: t('ed.docReplace'), onselect: () => docPick?.click() }, { label: t('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
-        {:else if docUp}<Row icon={FileText} title={docName} value={t('ed.docUp')} />
-        {:else}<Row icon={FileText} title={t('ed.docAdd')} accessory="chevron" onclick={() => docPick?.click()} />{/if}
-      {/if}
-      {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
-      {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
-      {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
-      {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
-      {#if canPartner && !isMeeting && (saved?.guestHost || draft.partner)}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
-        invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
-      {#if full && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
-    </Group>
-
-    <!-- the form's end, as Luma's Create (no floating bar over the form) -->
-    <div class="foot">
-      {#if live}
-        <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
-      {:else}
-        <Button kind="filled" size="l" full loading={busy === 'publish'} onclick={publish}>{t('ed.publish')}</Button>
-        <Button kind="plain" full loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>
-      {/if}
-      {#if saved?.status === 'draft'}
-        <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{t('ed.delete')}</Button>
-      {/if}
-    </div>
-    <div class="tail"></div>
   </div>
+
+  <!-- the main action, always under the thumb -->
+  {#if !pick}
+    <footer class="dock">
+      {#if member && goKind === 'send'}<p class="dh">{t('rv.sendHint')}</p>{/if}
+      <div class="acts glass glass-pill">
+        {#if !live && goKind !== 'save'}<Button kind="gray" size="l" loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>{/if}
+        {#if judge}<Button kind="gray" size="l" onclick={giveBack}>{t('rv.return')}</Button>{/if}
+        <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} disabled={goKind === 'save' && !dirty} onclick={publish}>{goLabel}</Button></span>
+      </div>
+    </footer>
   {/if}
 
-  <!-- the focused panel: one thing at a time; Telegram's Back, the scrim or Done closes it -->
+  <!-- a page pushed over the main one: one thing at a time; Telegram's Back or Done pops it -->
   {#if pick}
-    <button class="scrim" onclick={() => (pick = '')} aria-label={t('common.close')}></button>
-    <div class="pk glass glass-sheet" style:--kbh="{keyboard.h}px">
-      <header class="pkh"><b>{t(PANEL[pick] as 'ed.cover')}</b>
-        {#if pick !== 'check'}<Button kind="tinted" size="s" onclick={() => (pick = '')}>{t('ex.done')}</Button>{/if}</header>
-      <div class="pkb scroll">
+    {#key pick}
+    <div class="page">
+      <!-- the same ground as the main page: no seam between the two as one slides over the other -->
+      <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
+      <div class="pg scroll">
+        {#if !inTelegram}<h2 class="pt">{pageTitle}</h2>{/if}
         {#if pick === 'cover'}
+          <!-- one photo, three formats: each as it will look, each a tap from its own crop or its own photo -->
+          <div class="fmts">
+            {#each FORMATS as k (k)}
+              <button class="fm f-{k}" onclick={() => (f.cover ? open(`cover.${k}`) : photoIn?.click())}>
+                <span class="fr"><Poster item={art} big radius={0} fmt={k} /></span>
+                <b>{t(FMT_NAME[k])}</b>
+                <i class:set={!!fmtTag(k)}>{fmtTag(k) || ' '}</i>
+              </button>
+            {/each}
+          </div>
+          <p class="hint">{t(f.cover ? 'ed.fmtTip' : 'ed.coverTip')}</p>
           <div class="btns">
-            <Button kind="tinted" full loading={uploading} onclick={() => photoIn?.click()}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{f.cover ? t('ed.photoChange') : t('ed.photo')}</Button>
+            <Button kind="tinted" full loading={uploading === 'cover'} onclick={() => photoIn?.click()}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{f.cover ? t('ed.photoChange') : t('ed.photo')}</Button>
             {#if f.cover}<Button kind="gray" onclick={dropPhoto}>{#snippet icon()}<X size={16} />{/snippet}{t('ed.photoRemove')}</Button>{/if}
-            <input bind:this={photoIn} type="file" accept="image/*" onchange={pickPhoto} hidden />
           </div>
           {#if f.cover}
-            <CoverFocus cover={f.cover} onpick={(p) => { f.cover = { ...f.cover!, focus: p }; void readColor(false); }} />
             <div class="slides">
               {#each f.slides as p, k (p.id)}
                 <!-- engine: IconButton xs, a remove mark on a thumbnail -->
@@ -936,9 +1003,18 @@
             <LookPick bind:color={f.color} colors={COLORS} lead={photoColor ? tintPhoto : undefined} />
             <p class="hint">{t('ed.tint')}</p>
           {:else}
-            <p class="hint">{t('ed.coverTip')}</p>
             <LookPick bind:emoji={f.emoji} bind:color={f.color} colors={COLORS} />
           {/if}
+
+        {:else if fmt && f.cover}
+          <!-- one format at its real shape: drag the photo, or give this format a photo of its own -->
+          {@const k = fmt}
+          <CoverCrop photo={coverFor(art.cover, k) as Media} fmt={k} onpick={(p) => setCrop(k, p)} />
+          <Group>
+            <Row icon={ImagePlus} title={t(uploading === k ? 'ed.docUp' : 'ed.fmtOwn')} accessory="chevron" onclick={() => ownIn?.click()} />
+            {#if f.formats[k]}<Row icon={RotateCcw} title={t('ed.fmtReset')} onclick={() => resetFormat(k)} />{/if}
+          </Group>
+          <input bind:this={ownIn} type="file" accept="image/*" onchange={(ev) => pickOwn(ev, k)} hidden />
 
         {:else if pick === 'place'}
           <!-- online or a place: one or the other, and "place unknown" only for a place -->
@@ -1021,6 +1097,50 @@
             {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
             <p class="hint">{t('ed.deadlineHint')}</p>
           {/if}
+
+        {:else if pick === 'who'}
+          <!-- who it is for; "for first-years" is gone from the editor (an event that has it keeps it, sent back
+               as it is), the phone is asked in "Questions at sign-up" -->
+          {#if !f.partner && !plain}
+            <Group footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
+              {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
+              {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
+              {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
+              {#if f.teamOnly && tagsRead}
+                <Row icon={TagIcon} title={t('ed.meetingWho')} menu={tagMenu}
+                  value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
+              {/if}
+              <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
+              {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
+            </Group>
+          {/if}
+          {#if school}<Group footnote={t('ed.schoolOnlyHint')}>
+            <Row icon={GraduationCap} title={t('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
+          </Group>{/if}
+
+        {:else if pick === 'more'}
+          <!-- the rare things, each a row with its own page -->
+          {#if tickets || teamsOk || f.teams}
+            <Group caption={t('ex.tickets')}>
+              {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
+              {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
+              {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+            </Group>
+          {/if}
+          <input class="doc-in" type="file" accept="application/pdf" bind:this={docPick} onchange={pickDoc} /><!-- outside: Rows' lines need them adjacent -->
+          <Group>
+            {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
+            {#if saved && !plain && !member}
+              {#if saved.doc && !docUp}<Row icon={FileText} title={saved.doc.title ?? t('event.doc')} value={tn('ed.docPages', saved.doc.pages.length)}
+                menu={[{ label: t('ed.docReplace'), onselect: () => docPick?.click() }, { label: t('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
+              {:else if docUp}<Row icon={FileText} title={docName} value={t('ed.docUp')} />
+              {:else}<Row icon={FileText} title={t('ed.docAdd')} accessory="chevron" onclick={() => docPick?.click()} />{/if}
+            {/if}
+            {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
+            {#if canPartner && !isMeeting && (saved?.guestHost || known.partner)}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
+              invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
+            {#if full && !member && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
+          </Group>
 
         {:else if pick === 'video'}
           <!-- two real tiles shaped like their videos -->
@@ -1143,37 +1263,47 @@
           {:else}
             <p class="okay"><CircleCheck size={20} />{t('ex.checkOk')}</p>
           {/if}
-          <div class="pkfoot">
-            <Button kind="filled" size="l" full loading={busy === 'publish' || busy === 'save'} onclick={() => { pick = ''; void submit(live ? 'save' : 'publish'); }}>
-              {found.length ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : live ? t('common.save') : t('ed.publish')}</Button>
-          </div>
         {/if}
       </div>
+      <!-- the page's one button: Done, or on the check the action itself -->
+      <footer class="dock">
+        <div class="acts glass glass-pill">
+          {#if pick === 'check'}
+            <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} onclick={() => { only(); void submit(goKind); }}>
+              {found.length && goKind !== 'send' ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : goLabel}</Button></span>
+          {:else}
+            <span class="main"><Button kind="filled" size="l" full onclick={back}>{t('ex.done')}</Button></span>
+          {/if}
+        </div>
+      </footer>
     </div>
+    {/key}
   {/if}
+  <input bind:this={photoIn} type="file" accept="image/*" onchange={pickPhoto} hidden />
 </div>
 
 <style>
   .doc-in { display: none; }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
-    --pill: var(--surface-2); --surface-solid: transparent; } /* its buttons on the event's colour, not navy (Button's solid ground) */
+    --pill: var(--surface-2); --surface-solid: transparent; /* its buttons on the event's colour, not navy (Button's solid ground) */
+    --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); --dock-h: calc(var(--safe-bottom) + 84px); }
+  .panel.hinted { --dock-h: calc(var(--safe-bottom) + 108px); } /* the line over the bar: who publishes a member's draft */
   :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }
   .wash { position: absolute; inset: 0; background: var(--tint); overflow: hidden; pointer-events: none; }
   .wash img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(48px) saturate(1.3); }
   .wash i { position: absolute; inset: 0; background: var(--bg); opacity: 0.5; }
   :global(:root[data-theme='light']) .wash i { opacity: 0.72; }
-  .bar { position: absolute; left: 0; right: 0; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); height: 38px; z-index: 1;
+  .bar { position: absolute; left: 0; right: 0; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); height: 38px; z-index: 3;
     display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .x { position: absolute; left: var(--s-3); pointer-events: auto; }
 
-  /* the main page's lists on the event's tinted ground: the pills' glass, Settings' rows */
-  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); padding: calc(max(48px, var(--top)) + var(--s-2)) var(--gutter) 0; /* the page runs up to the screen's edge under Telegram's buttons, never cut at them */
+  /* the main page: the lists on the event's tinted ground, the pills' glass, Settings' rows */
+  .body, .pg { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3);
+    padding: calc(max(48px, var(--top)) + var(--s-2)) var(--gutter) calc(var(--dock-h) + var(--s-5) + var(--up)); /* up to the screen's edge under Telegram's buttons, never cut at them */
     --group-bg: var(--pill); }
-  .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
-  .body > :global(section) { margin-top: var(--s-4); }
-  .tail { height: calc(var(--safe-bottom) + 24px); }
+  .body > :global(*), .pg > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
+  .body > :global(section), .pg > :global(section) { margin-top: var(--s-2); }
   .ph { color: var(--text-3); }
-  .mid { align-self: center; margin-top: calc(-1 * var(--s-1)); }
   .err { margin: -6px var(--s-4) 0; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
   .capn { margin: -6px var(--s-4) 0; }
   .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); font-style: normal; color: var(--text-3); }
@@ -1183,21 +1313,39 @@
   .pill.ai::after { content: ''; position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .miss { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
   .miss > span { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .miss .hint { flex-basis: 100%; margin: 0; }
   .mk { padding: 6px var(--s-3); border-radius: var(--r-full); border: 1.5px dashed var(--text-3); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
   .mk:active { background: var(--fill); }
 
-  .who { align-self: center; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; margin-top: calc(-1 * var(--s-1)); padding: 2px var(--s-2);
+  /* KRI: its line, then the field (Composer's pill) */
+  .kri { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-2); border-radius: var(--r-l); background: var(--pill); box-shadow: var(--card-rim); }
+  .kq { display: flex; align-items: flex-start; gap: var(--s-2); padding: 0 var(--s-1); font: 500 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
+  .kq > :global(svg) { flex: none; margin-top: 3px; color: var(--accent-text); }
+  .kq span { animation: say 320ms var(--ease) backwards; }
+  .kri.busy .kq span { color: var(--text-2); animation: think 1.2s ease-in-out infinite; }
+  @keyframes say { from { opacity: 0; transform: translate3d(0, 4px, 0); } }
+  @keyframes think { 50% { opacity: 0.5; } }
+
+  /* the card: the cover in the Afisha card's shape, the name typed over it */
+  .card { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 216px;
+    border-radius: var(--r-xl); background: var(--tint); box-shadow: var(--shadow-card), var(--card-rim); transition: opacity var(--t-base) var(--ease); }
+  .card.busy { opacity: 0.6; }
+  .card.bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
+  .art { position: absolute; inset: 0; z-index: -2; }
+  .art:active { transform: none; }
+  .veil { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(to top, rgba(0, 0, 0, 0.74), rgba(0, 0, 0, 0.28) 48%, rgba(0, 0, 0, 0) 76%); }
+  .tools { position: absolute; top: var(--s-3); right: var(--s-3); display: flex; gap: var(--s-2); }
+  .tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 38px; height: 38px; padding: 0 var(--s-3); border-radius: var(--r-full);
+    color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .tool:active { transform: scale(0.94); }
+  .words { display: flex; flex-direction: column; gap: 2px; padding: 72px var(--s-4) var(--s-4); pointer-events: none; }
+  .name { pointer-events: auto; width: 100%; resize: none; field-sizing: content; min-height: 1.18em; padding: 0; background: none; border-radius: var(--r-xs);
+    color: var(--on-accent); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35); }
+  .name::placeholder { color: rgba(255, 255, 255, 0.62); }
+  .card:has(.name.ai):not(.bad) { box-shadow: inset 0 0 0 1.5px var(--accent-text); }
+  .line { font: 500 var(--fs-body)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.82); }
+
+  .who { align-self: center; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 2px var(--s-2);
     font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .pv { position: absolute; top: var(--s-3); right: var(--gutter); z-index: 1; }
-  .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
-  .art:active { transform: scale(0.98); }
-  .art.busy { opacity: 0.6; }
-  :global(html.lowfx) .artbtn { background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* no blur: the colour as the capsule's */
-  .artbtn { position: absolute; right: -8px; bottom: -8px; width: var(--tap); height: var(--tap); border-radius: 50%; display: grid; place-items: center; color: var(--text); }
-  .name { width: 100%; resize: none; field-sizing: content; min-height: 1.2em; padding: var(--s-3) var(--s-4); border-radius: var(--r-l); background: var(--pill);
-    color: var(--text); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  .name::placeholder { color: var(--text-3); }
 
   .pill { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 54px; padding: 0 var(--s-4);
     border-radius: var(--r-l); background: var(--pill); color: var(--text); text-align: left; font: var(--fw-row) var(--fs-row)/1.3 var(--font-text); }
@@ -1214,28 +1362,25 @@
   .tv.ph { color: var(--text-3); } /* nothing chosen: the end's day as it follows from the start */
   .dot { position: absolute; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-2); }
   .dot.o { background: none; box-shadow: inset 0 0 0 1.5px var(--text-2); }
-  .line { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }
+  .rail { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }
 
-  .foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); margin-top: var(--s-5); }
+  /* the action bar: glass over the page's end, above the home indicator; under the keyboard while one is up */
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: var(--s-2);
+    padding: 0 var(--s-3) calc(var(--safe-bottom) + var(--s-3)); pointer-events: none; }
+  .acts { display: flex; align-items: center; gap: var(--s-2); padding: 6px; border-radius: var(--r-xl); pointer-events: auto; }
+  .main { flex: 1; min-width: 0; display: flex; }
+  .dh { align-self: center; padding: 0 var(--s-4); text-align: center; font: 500 var(--fs-cap)/1.3 var(--font-text); color: var(--text-2); }
 
-  /* the panel */
-  .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
-  @keyframes fade { from { opacity: 0; } }
-  /* over the keyboard (lib/state/keyboard: the app's box stays full height): it rides up on the keyboard's own timing */
-  .pk { --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); translate: 0 calc(-1 * var(--up)); transition: translate 250ms cubic-bezier(.2, .8, .2, 1);
-    position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px - var(--up)); display: flex; flex-direction: column;
-    border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards;
-    background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy; Sheet's .ground the same */
-  @keyframes rise { from { transform: translate3d(0, 100%, 0); } }
-  .pkh { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-2) var(--s-5); }
-  .pkh b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.015em; }
-  .pkb { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-2) var(--s-4) var(--s-4); }
-  .pkb > :global(*) { flex-shrink: 0; }
+  /* a pushed page: the same tinted ground, in from the right as iOS pushes */
+  .page { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--bg);
+    animation: push 340ms var(--ease-spring) backwards; }
+  @keyframes push { from { transform: translate3d(100%, 0, 0); } }
+  :global(html.lowfx) .page { animation: none; }
+  .pt { padding: 0 var(--s-1); font: 700 var(--fs-t1)/1.15 var(--font-display); letter-spacing: -0.02em; }
   .lone { align-self: flex-start; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
   .sum { margin: 0 var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .okay { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--success-text); }
-  .pkfoot { display: flex; margin-top: var(--s-1); }
   .sugt { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-line; }
   .sugb { justify-content: flex-end; margin-top: var(--s-1); }
 
@@ -1247,7 +1392,19 @@
   .fl.bad { box-shadow: none; }
   .fl.bad > input { box-shadow: inset 0 0 0 1.5px var(--danger); }
 
-  /* the panels' own pieces: the pictures, the questions */
+  /* the cover's three formats, each at its own shape and all on one baseline */
+  .fmts { display: flex; align-items: flex-end; justify-content: center; gap: var(--s-3); padding: var(--s-2) 0; }
+  .fm { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .fm:active .fr { transform: scale(0.96); }
+  .fr { position: relative; display: block; overflow: hidden; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-card), var(--card-rim); transition: transform var(--t-fast) var(--ease); }
+  .f-feed .fr { width: 84px; aspect-ratio: 9 / 16; }
+  .f-card .fr { width: 148px; aspect-ratio: 16 / 10; }
+  .f-list .fr { width: 64px; aspect-ratio: 1; }
+  .fm b { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text); }
+  .fm i { font: 500 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
+  .fm i.set { color: var(--accent-text); }
+
+  /* the pages' own pieces: the pictures, the questions */
   .btns { display: flex; gap: var(--s-2); }
   .qc { display: flex; flex-direction: column; gap: var(--s-2); padding-bottom: var(--s-3); border-bottom: 0.5px solid var(--separator); }
   .qrow { display: flex; align-items: flex-end; gap: var(--s-1); }

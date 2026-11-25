@@ -684,6 +684,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True):
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
+        if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username
+            logic.account.dmp_bind(con, request.state.tg)
         return me_payload(request, con, v, report_log=report_log)
 
     @app.patch("/api/me")
@@ -758,6 +760,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/admin/donations/{did}/review", status_code=204)
     def donation_review(did: int, con: Con, v: Me, body: dict = Body(...)):
         donations.review(con, v, did, body)
+
+    @app.post("/api/me/dmp-hi", status_code=204)  # DMP's one-time hello left for Microsoft (me.dmpHi)
+    def dmp_hi(con: Con, v: Me):
+        logic.account.dmp_greeted(con, v)
 
     @app.post("/api/me/keep")
     def keep_me(con: Con, v: Me):
@@ -1701,6 +1707,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/publish")
     def publish(eid: int, con: Con, v: Me):
         return logic.publish_event(con, v, eid)
+
+    # a member's own draft to the club's President and Vices, and their answer (organizing.submit_event)
+    @app.post("/api/events/{eid}/submit")
+    def submit_event(eid: int, con: Con, v: Me):
+        return logic.submit_event(con, v, eid)
+
+    @app.post("/api/events/{eid}/review")
+    def review_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.review_event(con, v, eid, body.get("ok"), body.get("reason"))
 
     @app.post("/api/events/{eid}/cancel")
     def cancel(eid: int, con: Con, v: Me):

@@ -2454,6 +2454,32 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (form_id, user_id)
     ) STRICT, WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS research_participants_by_user ON research_participants(user_id);"""),
+    # a cover per format (the Feed's tall slide, the event's card, a list's thumbnail): its own crop (focus) or its own
+    # photo over the event's one cover; and a member's draft waiting for the club's President or a Vice (organizing.py)
+    (237, """CREATE TABLE IF NOT EXISTS event_covers (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      format TEXT NOT NULL CHECK (format IN ('feed', 'card', 'list')),
+      file_id INTEGER REFERENCES files(id),
+      focus TEXT,
+      PRIMARY KEY (event_id, format)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS event_reviews (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      asked_at INTEGER,
+      reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
+      returned_at INTEGER
+    ) STRICT;"""),
+    # kbtu.admin dmp: DMP's staff, put in by the creator before they open the app: a one-time "Hi, DMP" leading to
+    # Microsoft (account.me dmpHi), and staff_ok's no-student-ID sign-in. Only tg_id grants anything; a row added by
+    # username alone is an invitation that binds to the Telegram whose own signed data first shows it (account.dmp_bind).
+    # No users link: no FK
+    (238, """CREATE TABLE IF NOT EXISTS dmp_list (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER UNIQUE,
+      tg_username TEXT UNIQUE COLLATE NOCASE,
+      added_at INTEGER NOT NULL,
+      greeted_at INTEGER,
+      CHECK (tg_id IS NOT NULL OR tg_username IS NOT NULL)) STRICT;"""),
     # a guest added at the door, not on the organizers' list (guests.walk_in): a corrected list never removes it
     (239, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
 ]
