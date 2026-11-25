@@ -23,7 +23,7 @@ _RUNNING = """SELECT e.org_id FROM events e JOIN orgs o ON o.id = e.org_id AND o
 
 def _open(e: sqlite3.Row) -> bool:
     """Ahead or under way: helpers can be given, and work, until the door closes (the scanner's own window)."""
-    return e["status"] != "cancelled" and core.now() <= (e["ends_at"] or e["starts_at"] + DOOR_LATE)
+    return e["status"] != "cancelled" and e["starts_at"] is not None and core.now() <= (e["ends_at"] or e["starts_at"] + DOOR_LATE)
 
 
 def kind(con, v: Viewer, e: sqlite3.Row) -> str | None:

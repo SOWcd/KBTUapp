@@ -277,7 +277,9 @@ def test_refused_paid_arrivals_do_not_count(env):
     show = c.post(f"/api/screens/{sid}/show", headers=tma(9)).json()
     assert show["done"] == show["pending"] == 0 and show["last"] is None
     c.post(f"/api/screens/{sid}/out", headers=tma(9))
-    assert _scan(c, 3, q["param"]).json()["message"] == "qr_not_in"
+    assert _scan(c, 3, q["param"]).json()["message"] == "qr"  # the way-in code is bound to its phase
+    out = c.post(f"/api/screens/{sid}/show", headers=tma(9)).json()["param"]
+    assert _scan(c, 3, out).json()["message"] == "qr_not_in"
     con.close()
 
 

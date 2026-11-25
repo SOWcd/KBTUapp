@@ -1470,10 +1470,11 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        # Delete a claimed roster row and prevent reimport only if its email is verified. Release an unverified
-        # claim so a typo in the roster cannot keep the row from its owner.
-        for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
-                RETURNING key""", v.id, v.id):
+        # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
+        for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)
+                AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
+                RETURNING key""", v.id, v.id, v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
@@ -1549,6 +1550,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
                           ("team_ask", f"ta:%:{v.id}:%"), ("roster_claim", f"rq:%:{v.id}"), ("tgc_good", f"gr:{v.id}"), ("org_ask", f"oa:%:{v.id}")):
             con.execute("DELETE FROM bot_outbox WHERE kind = ? AND ref LIKE ?", (kind, ref))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
+        con.execute("""UPDATE audit_log SET data = json_remove(data, '$.who') WHERE action IN ('checkin_hand', 'checkin_unhand')
+            AND json_extract(data, '$.who') = ?""", (f"u{v.id}",))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
         con.execute("""UPDATE audit_log SET data = '{}' WHERE action IN ('checkin_hand', 'checkin_unhand')
             AND json_extract(data, '$.who') = ?""", (f"u{v.id}",))

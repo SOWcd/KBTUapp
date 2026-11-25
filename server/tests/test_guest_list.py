@@ -229,6 +229,7 @@ def test_guest_signup_and_walk_in_blocked_but_tickets_check_in(door_event):
 
 def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     c, cfg, con = door_event
+    con.execute("UPDATE org_members SET role = 'president' WHERE org_id = (SELECT org_id FROM events WHERE id = 1)")
     minor = _student(c, con, 1, "24B030001")
     adult = _student(c, con, 2, "24B030002")
     absent = _student(c, con, 3, "24B030003")
@@ -375,7 +376,7 @@ def test_door_list_by_name(door_event):
     assert out["adult"] is True and out["came"] is False
     assert c.post(f"{base}/tick", headers=door, json={"key": out["key"], "adult": False}).json()["pendingCame"] == 1
     assert c.post(f"{base}/tick", headers=tma(1), json={"key": out["key"]}).status_code == 403
-    assert c.post(f"{base}/tick", headers=door, json={"key": "x999"}).status_code == 404
+    assert c.post(f"{base}/tick", headers=door, json={"key": "0" * 32}).status_code == 404
     got = {x["name"]: x for x in c.get(base, headers=door).json()["list"]}
     assert got["Outsider Person"]["came"] is True and got["Outsider Person"]["adult"] is False and got["Outsider Person"]["at"]
 

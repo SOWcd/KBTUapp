@@ -11,85 +11,55 @@
   import '../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../ui/KbtuMark.svelte';
   import { QR_TONE } from '../lib/awards';
+  import { screenPoll, screenView, type ScreenState } from '../lib/screen';
   import { t } from '../lib/i18n/index.svelte';
 
-  type State = { code: string; left?: number; session?: number; title?: string; started?: number | null; ended?: number | null;
-    done?: number; pending?: number; expected?: number; param?: string | null; phase?: 'in' | 'out'; departed?: number };
-  const KEEP = 'kb-show';
-  let secret = '';
-  let st = $state<State | null>(null);
-  let pairing = false;
-
-  try { secret = sessionStorage.getItem(KEEP) ?? ''; localStorage.removeItem(KEEP); /* the old place: a closed tab's secret must not linger */ } catch { /* no storage: a new pairing after a reload */ }
-
-  async function pair() {
-    if (pairing) return;
-    pairing = true;
-    try {
-      const r = await fetch('/api/screen/pair', { method: 'POST' });
-      if (r.ok) {
-        const p = await r.json();
-        secret = p.secret;
-        try { sessionStorage.setItem(KEEP, secret); } catch { /* fine */ }
-        st = { code: p.code, left: p.ttl };
-      }
-    } catch { /* offline: the next poll */ } finally { pairing = false; }
-  }
-  async function poll() {
-    if (!secret) { await pair(); return; }
-    try {
-      const r = await fetch('/api/screen', { headers: { 'X-Screen': secret } });
-      // only our server's own no (unpaired from the app, or long gone): a campus proxy's 403 is a blip, not a lost pairing
-      if (r.status === 403 && (await r.json().catch(() => null))?.message === 'screen') { secret = ''; await pair(); return; }
-      if (!r.ok) return;
-      st = await r.json();
-      if (st && st.session == null && !st.left) await pair(); // nobody scanned it in time: a fresh code
-    } catch { /* offline: the next poll */ }
-  }
-  // whoever stands at the laptop starts over (another club's organizer bound it first, or the wrong session): this
-  // browser forgets its secret and shows a fresh pairing code; the old pairing goes with its session
-  async function again() {
-    try { sessionStorage.removeItem(KEEP); } catch { /* fine */ }
-    secret = ''; st = null;
-    await pair();
-  }
+  let st = $state<ScreenState | null>(null);
+  let now = $state(Date.now());
+  let again = $state(() => {});
   onMount(() => {
-    void poll();
-    const id = setInterval(poll, 2000); // the count and the QR: the code turns every 10 s, the screen catches it within 2
-    return () => clearInterval(id);
+    let expiry: ReturnType<typeof setTimeout> | undefined;
+    const polling = screenPoll((value) => {
+      st = value;
+      now = Date.now();
+      clearTimeout(expiry);
+      if (value && value.expires > now) expiry = setTimeout(() => { now = Date.now(); }, value.expires - now);
+    });
+    again = polling.again;
+    return () => { polling.stop(); clearTimeout(expiry); };
   });
-
-  const bot = 'https://t.me/KBTUappBot?startapp=';
-  const link = $derived(st?.param ? bot + st.param : '');
-  const pairLink = $derived(st ? bot + 'sh_' + st.code : '');
+  const view = $derived(screenView(st, now));
 </script>
 
 <div class="screen">
   <div class="glow" aria-hidden="true"></div>
-  {#if !st}
-    <p class="sub">…</p>
+  {#if !st || !view.fresh}
+    <p class="sub">{t('scr.reconnecting')}</p>
+    {#if st?.session != null}<div class="corner"><button class="again" onclick={again}>{t('scr.again')}</button></div>{/if}
   {:else if st.session == null}
     <section class="pair" in:fade>
       <h1>{t('scr.pairTitle')}</h1>
       <!-- a new code redraws in place (no key, no fade): the swap is seamless -->
-      <div class="code small"><Qr text={pairLink} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
+      <div class="code small"><Qr text={view.pair} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
       <p class="hint">{t('scr.pairHint')}</p>
       <p class="sub">{t('scr.pairWho')}</p>
     </section>
   {:else}
     <header><h1>{st.title}</h1></header>
-    {#if st.param}
+    {#if view.entry}
       <section class="live" class:out={st.phase === 'out'}>
-        <div class="code"><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
+        <div class="code"><Qr text={view.entry} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
         <aside>
           {#if st.phase === 'out'}
             <!-- the way out: the same QR marks leaving (the organizer switched it in the app) -->
             <p class="hint outh">{t('scr.outScan')}</p>
-            <p class="count"><b>{st.departed}</b><span> / {st.done}</span></p>
+            <p class="count"><b>{st.departed}</b><span> / {view.arrivals}</span></p>
             <p class="sub">{t('scr.outDone')}</p>
+          {:else if st.param?.startsWith('tk_')}
+            <p class="hint">{t('scr.ticket')}</p>
           {:else}
             <p class="hint">{t('scr.scan')}</p>
-            <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
+            <p class="count"><b>{view.arrivals}</b></p>
             <p class="sub">{t('scr.done')}</p>
           {/if}
           {#if st.pending}<p class="sub" transition:fade>{t('scr.joining', { n: st.pending })}</p>{/if}
@@ -98,7 +68,7 @@
     {:else}
       <section class="idle" in:scale={{ start: 0.96 }}>
         {#if st.ended}
-          <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
+          <p class="count"><b>{view.arrivals}</b></p>
           <p class="sub">{t('scr.closed')}</p>
           <p class="sub">{t('scr.listInApp')}</p>
         {:else}
@@ -107,7 +77,7 @@
       </section>
     {/if}
     <!-- the same pairing code: another organizer's way to the controls; anyone else's scan changes nothing -->
-    <div class="corner"><div class="mini"><Qr text={pairLink} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div><span>{t('scr.organizers')}</span>
+    <div class="corner"><div class="mini"><Qr text={view.pair} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div><span>{t('scr.organizers')}</span>
       <button class="again" onclick={again}>{t('scr.again')}</button></div>
   {/if}
 </div>

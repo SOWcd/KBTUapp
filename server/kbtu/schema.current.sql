@@ -426,7 +426,7 @@ CREATE TABLE event_guests (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       student_id TEXT NOT NULL,
       adult INTEGER CHECK (adult IN (0, 1)),
-      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120), username TEXT CHECK (username IS NULL OR length(username) <= 40), team TEXT CHECK (team IS NULL OR length(team) <= 80), walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1)),
+      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120), username TEXT CHECK (username IS NULL OR length(username) <= 40), team TEXT CHECK (team IS NULL OR length(team) <= 80), walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1)), door_key TEXT,
       PRIMARY KEY (event_id, student_id)
     ) STRICT;
 CREATE TABLE event_photos (
@@ -1056,7 +1056,7 @@ CREATE TABLE roster_pending (
         rejected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
         created_at INTEGER NOT NULL
-    ) STRICT;
+    , door_key TEXT) STRICT;
 CREATE TABLE roster_toasts (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1599,6 +1599,7 @@ CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);
 CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';
 CREATE INDEX crew_by_user ON event_crew(user_id);
 CREATE INDEX event_guests_by_student ON event_guests (student_id);
+CREATE UNIQUE INDEX event_guests_door_key ON event_guests(door_key);
 CREATE INDEX event_photos_by_file ON event_photos (file_id);
 CREATE INDEX event_team_members_by_team ON event_team_members(team_id);
 CREATE INDEX event_team_members_by_user ON event_team_members(user_id);
@@ -1680,6 +1681,7 @@ CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
 CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
 CREATE INDEX roster_by_tg ON roster_pending(tg);
+CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
@@ -1762,6 +1764,9 @@ CREATE TRIGGER chat_seen_chats_update AFTER UPDATE OF tg_chat_id, org_id ON chat
       (SELECT org_id FROM chats WHERE tg_chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
       (SELECT org_id FROM events WHERE chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
 END;
+CREATE TRIGGER event_guests_key AFTER INSERT ON event_guests WHEN new.door_key IS NULL BEGIN
+        UPDATE event_guests SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
 CREATE TRIGGER event_team_empty AFTER DELETE ON event_team_members BEGIN
       DELETE FROM event_teams WHERE id = OLD.team_id AND NOT EXISTS (SELECT 1 FROM event_team_members WHERE team_id = OLD.team_id);
     END;
@@ -1861,7 +1866,10 @@ CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations
         ORDER BY p.user_id;
     END;
 CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
-      DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
+        DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;
+    END;
+CREATE TRIGGER roster_pending_key AFTER INSERT ON roster_pending WHEN new.door_key IS NULL BEGIN
+        UPDATE roster_pending SET door_key = lower(hex(randomblob(16))) WHERE id = new.id;
     END;
 CREATE TRIGGER santa_msgs_gone AFTER DELETE ON santa_people BEGIN
       UPDATE santa_chats SET until = 0 WHERE event_id = OLD.event_id;

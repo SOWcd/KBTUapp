@@ -2504,4 +2504,23 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the Sponsors list's second switch (donations.AMOUNT_CONSENT): the total shown beside the name. The version agreed
     # to, NULL while off; only on a row that also shows the name. The tg_id-moved trigger's new row leaves it NULL
     (241, "ALTER TABLE sponsor_consents ADD COLUMN amount TEXT CHECK (amount IS NULL OR show = 1);"),
+    # Stable door keys: neither a university number nor a reusable roster row ID leaves the door API.
+    (242, """ALTER TABLE event_guests ADD COLUMN door_key TEXT;
+    UPDATE event_guests SET door_key = lower(hex(randomblob(16)));
+    CREATE UNIQUE INDEX event_guests_door_key ON event_guests(door_key);
+    CREATE TRIGGER event_guests_key AFTER INSERT ON event_guests WHEN new.door_key IS NULL BEGIN
+        UPDATE event_guests SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
+    ALTER TABLE roster_pending ADD COLUMN door_key TEXT;
+    UPDATE roster_pending SET door_key = lower(hex(randomblob(16)));
+    CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
+    CREATE TRIGGER roster_pending_key AFTER INSERT ON roster_pending WHEN new.door_key IS NULL BEGIN
+        UPDATE roster_pending SET door_key = lower(hex(randomblob(16))) WHERE id = new.id;
+    END;
+    UPDATE qr_hand_marks AS h SET who = 'r' || (SELECT r.door_key FROM roster_pending r WHERE h.who = 'r' || r.id)
+        WHERE EXISTS (SELECT 1 FROM roster_pending r WHERE h.who = 'r' || r.id);
+    DROP TRIGGER qr_hand_roster_gone;
+    CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
+        DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;
+    END;"""),
 ]

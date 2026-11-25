@@ -85,8 +85,8 @@ def test_roster_load_from_the_gate(env, monkeypatch, capsys):
     assert "rows 1, new 1, clubs made 1" in out
     admin.main(["roster", "load", "--gz", blob])  # again: nothing more
     assert "new 0" in capsys.readouterr().out
-def test_roster_reload_fills_only_whats_empty(env):
-    """A newer sheet with the same joined row: its phone and city fill an empty profile, never overwrite one."""
+def test_roster_reload_never_refills_consumed_rows(env):
+    """H2: a consumed row cannot restore cleared data or assign it to a recycled handle."""
     c, cfg = env
     pres, ali = login(c, 64, "pres"), login(c, 65, "ali")
     c.get("/api/me", headers=_tg(65, "ali_f"))
@@ -96,18 +96,21 @@ def test_roster_reload_fills_only_whats_empty(env):
     row = _row(full_name="Ali Testov", email="alif@kbtu.kz", tg="ali_f")
     roster.load(con, [row], {"S": "it"})
     assert _member(con, ali["id"]) == "member"
+    con.execute("UPDATE users SET city = NULL, tg_username = NULL WHERE id = ?", (ali["id"],))
+    new_owner = login(c, 67, "new")
+    c.get("/api/me", headers=_tg(67, "ali_f"))
     roster.load(con, [{**row, "phone": "+7 701 234 56 78", "city": "Almaty"}], {"S": "it"})
-    phone, city = con.execute("SELECT s.phone, u.city FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ?", (ali["id"],)).fetchone()
-    assert phone and phone.endswith("7012345678") or phone == "+77012345678", phone
-    assert city == "Shymkent"  # theirs stays
+    profiles = con.execute("SELECT s.phone, u.city FROM users u JOIN students s ON s.user_id = u.id WHERE u.id IN (?, ?)", (ali["id"], new_owner["id"]))
+    assert [tuple(r) for r in profiles] == [(None, None), (None, None)]
 
 
-def test_roster_row_for_a_seat_already_held_goes_without_a_claim(env):
-    """The club's President in the app, the sheet naming them by username only: no 'is this you' and no claim."""
+def test_roster_handle_only_match_still_requires_a_claim(env):
+    """An existing role does not identify the owner of a different person's roster row."""
     c, cfg = env
     pres = login(c, 66, "pres")
     c.get("/api/me", headers=_tg(66, "boss_u"))
     con = _club(cfg, pres["id"])
     roster.load(con, [_row(full_name="Someone Else", tg="boss_u", position="President")], {"S": "it"})
-    assert not con.execute("SELECT 1 FROM roster_pending").fetchone()
+    assert con.execute("SELECT 1 FROM roster_pending").fetchone()
+    assert roster.asks(con, pres["id"])
     assert _member(con, pres["id"]) == "president"
