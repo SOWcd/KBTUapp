@@ -3,7 +3,7 @@
   // waitlist; a check-in shows its time. A tap opens the person's card. "Export" has the bot send the list as a CSV
   // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
-  // Someone the organizers removed (⋯) who had paid waits folded at the end, their receipt there for the refund.
+  // Cancelled paid seats wait folded at the end, their receipts there for refunds even after signing up again.
   // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
   import { onMount } from 'svelte';
   import FileDown from '@lucide/svelte/icons/file-down';
@@ -21,7 +21,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
-  import { time } from '../../lib/time';
+  import { time, whenLine } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardList from '@lucide/svelte/icons/clipboard-list';
   import Avatar from '../../ui/Avatar.svelte';
@@ -47,7 +47,7 @@
   // the server's: going first, then holds and the waitlist, flagged receipts on top
   const ORDERS: Order<Attendee>[] = [usual(), byName((a) => a.fullName), newest((a) => a.at), { id: 'came', label: 'sort.came', by: (a) => a.checkedInAt, desc: true }];
   const found = $derived(sorted('attendees', ORDERS, (list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick]))));
-  // removed by the organizers after paying (server attendees): folded at the end, their receipt there for the refund;
+  // cancelled after paying (server attendees): folded at the end, their receipt there for the refund;
   // outside every total
   const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
   const removed = $derived(found.filter((a) => a.status === 'cancelled'));
@@ -158,6 +158,10 @@
       {#if removable(a) || writable(a)}<IconButton size="s" icon={Ellipsis} kind="plain" label={t('common.more')}
         onclick={(e) => menu(e.currentTarget as Element, more(a))} />{/if}
     {/snippet}
+    {#if !staff}{#each a.previousReceipts ?? [] as old (old.id)}
+      <Row dense icon={ReceiptIcon} title={t('rc.title')} subtitle={whenLine(old.at)} value={old.amount ? money(old.amount) : undefined}
+        accessory="chevron" onclick={() => sheets.receipt(old, a.fullName, load)} />
+    {/each}{/if}
     <!-- engine: Row needs content under it (the answers to the event's questions) -->
     {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
   {/each}

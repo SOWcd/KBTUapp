@@ -665,7 +665,7 @@ export interface EventInput {
 /** One registration as the organizer sees it (§3: full name for organizers). */
 /** An event's own question at sign-up (server clean_questions): text, or a choice of 2-8 options. */
 export interface Question { label: string; kind: 'text' | 'choice'; options?: string[]; required: boolean }
-export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
+export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null; previousReceipts?: AttendeeReceipt[] }
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */

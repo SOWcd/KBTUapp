@@ -6,6 +6,7 @@ them, since Kaspi may speak Kazakh. Nothing read here rejects a receipt: it only
 from __future__ import annotations
 
 import difflib
+import hashlib
 import io
 import logging
 import os
@@ -67,7 +68,9 @@ def take(data: bytes, root: Path) -> tuple[dict, dict | None]:
     got = read(im)
     if got is not None and not got.get("amount") and not got.get("no"):
         raise NotReceipt
-    return media.store(im, data, root), got
+    # Each upload owns its files: delayed cleanup can never unlink another upload of the same bytes.
+    saved = media.store(im, os.urandom(32), root)
+    return {**saved, "sha256": hashlib.sha256(data).hexdigest()}, got
 
 
 def read(im: Image.Image) -> dict | None:
