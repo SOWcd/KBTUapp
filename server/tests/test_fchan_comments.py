@@ -10,8 +10,8 @@ def test_signed_comment_flow(env, monkeypatch):
     w = world(env, monkeypatch)
     clock(monkeypatch)
     r = w.c.post(f"/api/forum-posts/{w.pid}/comments", headers=tma(2), json={"body": "The soup was fine today"}).json()
-    assert r["state"] == "soon"
-    row = w.con.execute("SELECT user_id, comment_msg FROM fchan_replies WHERE id = ?", (r["id"],)).fetchone()
+    assert r.get("state") == "soon", r
+    row = w.con.execute("SELECT s.user_id, r.comment_msg FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE r.id = ?", (r["id"],)).fetchone()
     assert row[0] is not None and row[1] is None                                    # signed: names its commenter, answers the thread
     tick(w.cfg, w.tg, w.con)
     s = group_sends(w.tg)
@@ -40,7 +40,7 @@ def test_signed_comment_held_and_deleted(env, monkeypatch):
     w = world(env, monkeypatch, word="person")
     clock(monkeypatch)
     r = w.c.post(f"/api/forum-posts/{w.pid}/comments", headers=tma(2), json={"body": "Ask the teacher about it"}).json()
-    assert r["state"] == "held"
+    assert r.get("state") == "held", r
     assert w.c.get(f"/api/forum-posts/{w.pid}/thread", headers=tma(1)).json() == []  # held: only its author sees it
     assert w.c.get(f"/api/forum-posts/{w.pid}/thread", headers=tma(2)).json()[0]["state"] == "held"
     assert w.c.delete(f"/api/forum-replies/{r['id']}", headers=tma(1)).status_code == 404  # not the post's author's to delete

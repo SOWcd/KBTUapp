@@ -2295,7 +2295,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       added_at INTEGER NOT NULL
     ) STRICT;"""),
-    # A signed comment written in the app under a channel post (fchannel.comment_*): the bot sends it under the person's
-    # short name, so its row names its commenter. An anonymous author's reply keeps NULL here (its post is the way to them)
-    (228, "ALTER TABLE fchan_replies ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"),
+    # A signed comment written in the app under a channel post (fchannel.comment_*) is a row of fchan_replies that this
+    # table names a commenter for: the bot sends it under the person's short name. An anonymous author's reply has no row
+    # here, and fchan_replies itself never gets a user id (its post is the only way to that author)
+    (228, """CREATE TABLE IF NOT EXISTS fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;"""),
 ]

@@ -1270,7 +1270,7 @@ _DEL_GONE = {
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
     ("fchan_hearts", "user_id"),
-    ("fchan_replies", "user_id"),  # my signed comments under channel posts (deleted above, with their messages in the group)
+    ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
@@ -1362,9 +1362,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
             WHERE p.user_id = ? AND p.status != 'live' AND r.tg_msg > 0""", (core.now(), v.id))
         con.execute("DELETE FROM fchan_replies WHERE tg_msg IS NULL AND post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
-        # my signed comments (fchan_replies.user_id, signed with my name): out of the group in the same round, then the rows go
-        con.execute("INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || tg_msg, ? FROM fchan_replies WHERE user_id = ? AND tg_msg > 0", (core.now(), v.id))
-        con.execute("DELETE FROM fchan_replies WHERE user_id = ?", (v.id,))
+        # my signed comments (fchan_signed, signed with my name): out of the group in the same round, then the rows go
+        signed = "FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE s.user_id = ?"
+        con.execute("INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? " + signed + " AND r.tg_msg > 0", (core.now(), v.id))
+        con.execute("DELETE FROM fchan_replies WHERE id IN (SELECT r.id " + signed + ")", (v.id,))
         con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):

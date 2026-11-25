@@ -516,12 +516,16 @@ CREATE TABLE fchan_replies (
       send_at     INTEGER,
       drop_at     INTEGER,
       created_at  INTEGER NOT NULL
-    , explained INTEGER, ai_reason TEXT, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE) STRICT;
+    , explained INTEGER, ai_reason TEXT) STRICT;
 CREATE TABLE fchan_reply_reports (
       reply_id INTEGER NOT NULL REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       at       INTEGER NOT NULL,
       PRIMARY KEY (reply_id, user_id)
+    ) STRICT;
+CREATE TABLE fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
