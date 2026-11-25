@@ -211,6 +211,32 @@ def clean_questions(raw: object) -> str | None:
     return json.dumps(out, ensure_ascii=False)
 
 
+# Main-building sides and the floors on each. Keep the aliases in sync with web/src/lib/campusPlace.ts.
+_CAMPUS_SIDES = (
+    (r"\u0442\u0431|tb|t[oö]le(?: bi)?|\u0442[\u043e\u04e9]\u043b\u0435(?: \u0431\u0438)?", "\u0422\u0411", 0, 5),
+    (r"\u0430\u0431|ab|ab[yi]la[yi](?: khan)?|\u0430\u0431\u044b\u043b\u0430\u0439(?: \u0445\u0430\u043d\u0430?)?", "\u0410\u0411", 0, 4),
+    (r"\u043f\u0444|pf|panfilov(?:a)?|\u043f\u0430\u043d\u0444\u0438\u043b\u043e\u0432\u0430?", "\u041f\u0424", 0, 4),
+    (r"\u043a\u0431|kb|[kq]azybek(?: bi)?|[\u043a\u049b]\u0430\u0437\u044b\u0431\u0435\u043a(?: \u0431\u0438)?", "\u041a\u0411", 1, 4),
+)
+_CAMPUS_PLACE = re.compile(
+    r"([^0-9·,]+?)\s*(?:[·,]\s*)?(?:floor\s+)?([0-9])(?:st|nd|rd|th)?"
+    r"(?:\s*-?\s*(?:floor|\u044d\u0442\u0430\u0436|\u049b\u0430\u0431\u0430\u0442))?(?:\s*·\s*(.+))?", re.I,
+)
+
+
+def campus_place(place: str) -> str | None:
+    """Canonical main-building side and floor, optionally followed by a room."""
+    m = _CAMPUS_PLACE.fullmatch(" ".join(place.split()))
+    if not m:
+        return None
+    floor, room = int(m[2]), m[3]
+    for aliases, code, low, high in _CAMPUS_SIDES:
+        if low <= floor <= high and re.fullmatch(aliases, m[1], re.I):
+            label = f"{code} · {floor} \u044d\u0442\u0430\u0436"
+            return f"{label} · {room}" if room else label
+    return None
+
+
 def clean_event(i: dict, oversee: bool = False) -> dict:
     """The editor's input, checked. A leaders meeting (§4.10) only from an oversight org
     (DMP), with the lowest role invited."""
@@ -238,6 +264,9 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
+    campus = campus_place(place) if len(place) <= 80 else None
+    if campus:
+        place, url = campus, None
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
           and (ends is None or starts < ends <= starts + 31 * 86400)  # Cap the span in days because the door stays open for the whole event.
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
@@ -591,6 +620,8 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
 def change_place(con, v: Viewer, eid: int, place: object) -> dict:
     """Studio's "Change room" during an event (rooms change on the spot): a KBTU room in one tap, the rules above."""
     text = " ".join(str(place or "").split())
+    if len(text) <= 80:
+        text = campus_place(text) or text
     if not 0 < len(text) <= 80:
         raise ApiError("bad_input")
     with tx(con):

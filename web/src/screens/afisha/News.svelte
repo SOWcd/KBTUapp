@@ -20,7 +20,7 @@
   import { videoLinks } from '../../lib/social';
   import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { cancelCasting, data, loadNews, loadPublicPosts, phrase } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -50,9 +50,8 @@
   // every public post, not only my clubs' (the circles on List keep those): the copy the app loads with the Afisha and
   // keeps for the next launch, so the page opens full, never waiting for its own request; each visit
   // refreshes it quietly
-  const posts = $derived(data.eventsReady ? data.posts : null);
-  const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
-  onMount(() => { if (student) void loadNews(); void loadAll(); }); // staff read the feed too
+  const posts = $derived(data.postsReady ? data.posts : null);
+  onMount(() => { if (student) void loadNews(); void loadPublicPosts(); }); // staff read the feed too
   $effect(() => { if (casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
   // (a sheet closed sooner: the marks still go, as Stories does)
@@ -123,7 +122,7 @@
   }
   // the club's Head+: one pinned post per club, on top of its news; the lists reload in the server's order
   async function pin(p: Post) {
-    try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadAll(); }
+    try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadPublicPosts(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news

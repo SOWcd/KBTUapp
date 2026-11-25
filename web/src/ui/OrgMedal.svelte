@@ -1,6 +1,6 @@
 <script lang="ts">
   // The organisation's medallion in the profile card's top right corner, where the QR was (the QR lives on
-  // the full-screen badge, MyQr): the club's logo, the school's shield, the KBTU mark, the creator's seal for SOWER,
+  // the full-screen badge, MyQr): the club's logo, the school's shield, the KBTU mark, a white KBTU tile for SOWER,
   // set in a rim in the look's own metal (its colours, lib/awards.ts lookVars), a light catching it as the phone tilts.
   // The organisation's own avatar, as the app shows it everywhere else, when it has one; our drawn
   // mark (LookMark) where it is clearly better this small, or the club has no logo: StudEx's arrow (their logo is a
@@ -12,7 +12,7 @@
   // Shade's own avatar (their prod upload), not our brush. Knights' official logo (.claude/reports/club-lanyards/knights-official.png) on white in a blue steel rim.
   import { clubLook, isSchool, type Look } from '../lib/awards';
   import LookMark from './LookMark.svelte';
-  import Founder from './Founder.svelte';
+  import KbtuMark from './KbtuMark.svelte';
   import aicheMedal from '../assets/lanyards/aiche-medal.svg?url';
   import studexLogo from '../assets/lanyards/studex-logo.webp';
   import momentsLogo from '../assets/lanyards/moments-logo.webp';
@@ -36,7 +36,7 @@
 </script>
 
 <span class="medal {look}" class:club={!!clubLook(look)} aria-hidden="true">
-  <span class="face">{#if look === 'sower'}<Founder size={44} />{:else if look === 'aichekbtu'}<img src={aicheMedal} alt="" draggable="false" />{:else if OFFICIAL[look]}<img src={OFFICIAL[look]} alt="" draggable="false" />{:else if own}<img src={own} alt="" draggable="false" />{:else}<LookMark {look} />{/if}</span>
+  <span class="face">{#if look === 'sower'}<KbtuMark size={20} />{:else if look === 'aichekbtu'}<img src={aicheMedal} alt="" draggable="false" />{:else if OFFICIAL[look]}<img src={OFFICIAL[look]} alt="" draggable="false" />{:else if own}<img src={own} alt="" draggable="false" />{:else}<LookMark {look} />{/if}</span>
   <i class="catch"></i>
 </span>
 
@@ -63,9 +63,9 @@
   .moments { --rim: linear-gradient(145deg, rgb(246, 231, 214), rgb(196, 109, 71) 45%, rgb(242, 222, 200) 62%, rgb(110, 51, 34)); }
   .faces { --rim: linear-gradient(145deg, rgb(110, 123, 255), rgb(192, 75, 255) 40%, rgb(255, 79, 154) 70%, rgb(255, 164, 61)); }
   .club { --rim: linear-gradient(145deg, rgba(255, 255, 255, 0.95), var(--s2) 42%, var(--h1) 62%, var(--s1)); }
-  /* the creator's seal is round: its own rim */
-  .sower { padding: 0; border-radius: 50%; background: none; box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.8); }
-  .sower .face { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: none; }
+  /* SOWER (.claude/reports/sower-badge, card C): a plain white tile, the colonnade in black, no metal rim */
+  .sower { padding: 0; border-radius: var(--r-s); background: rgb(245, 245, 247); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5); }
+  .sower .face { display: grid; place-items: center; border-radius: inherit; background: none; color: rgb(11, 11, 12); }
   .sower .face::after { content: none; }
-  .sower .catch { border-radius: 50%; }
+  .sower .catch { display: none; }
 </style>

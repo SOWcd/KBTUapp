@@ -163,7 +163,7 @@ export const homeScreen = {
   add: () => can('8.0') && tgTry((w) => w.addToHomeScreen?.()),
   /** Telegram's own alert: a hint too long for a toast */
   help: (text: string) => tgTry((w) => w.showAlert?.(text)),
-  android: () => W?.platform === 'android',
+  android: () => onAndroid, // Telegram X (android_x) too: its launchers swallow the dialog the same way
 };
 
 let webBack: (() => void) | undefined;
