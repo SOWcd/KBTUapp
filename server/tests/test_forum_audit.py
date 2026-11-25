@@ -224,7 +224,7 @@ def test_comment_ids_and_author_notices_survive_retention(env, monkeypatch):
     assert asyncio.run(tgc.edit_first(cfg, None, con, wrong, {})) is None
     tgc.sent(con, wrong, {"result": {"message_id": 88}})
     assert con.execute("SELECT dm_id FROM tgc_comments WHERE id = ?", (new,)).fetchone()[0] == 77
-    assert "Bob's words" in tgc.render(con, {**wrong, "user_id": bob}, "en")[0]
+    assert "Bob&#x27;s words" in tgc.render(con, {**wrong, "user_id": bob}, "en")[0]
     con.close()
 
 
