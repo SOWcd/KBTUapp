@@ -18,16 +18,17 @@ from test_team_guests import PAID, _club, _uid
 def paid(env, monkeypatch):
     c, cfg = env
     con = _club(c, cfg)
-    now = int(time.time())
+    now = int(time.time()) // 60 * 60 + 59
     set_clock(monkeypatch, lambda: now)
     eid = _event(c, **PAID, teamMin=2, teamMax=2)
-    con.execute("UPDATE events SET created_at = ? WHERE id = ?", (now - 3600, eid))  # receipts' minutes may differ (duplicate)
+    con.execute("UPDATE events SET created_at = ? WHERE id = ?", (now - 3600, eid))
     people = _people(c, 3)
     return c, con, eid, people, now
 
 
 def _fields(now, number="123456789012345678"):
-    return {"amount": 2000, "recipient": "Arman A.", "no": number, "paid_at": now - int(number) % 53 * 60 if number else now}
+    # Distinct synthetic timestamps stay within the hold's minute; duplicate cases explicitly share one.
+    return {"amount": 2000, "recipient": "Arman A.", "no": number, "paid_at": now - int(number) % 53 if number else now}
 
 
 def _send(paid, monkeypatch, tg, fields, shade=240):
@@ -132,7 +133,7 @@ def test_legacy_unread_receipt_requires_review(paid, monkeypatch):
     con.execute("UPDATE receipts SET flags = 'partial' WHERE id = ?", (unread["id"],))
     con.executescript(dict(db.MIGRATIONS)[201])
     assert logic.organizing.flagged(con, unread["registration_id"])
-    assert not logic.organizing.flagged(con, partial["registration_id"])
+    assert logic.organizing.flagged(con, partial["registration_id"])
 
 
 def test_empty_ocr_result_is_not_clean(paid, monkeypatch):
@@ -412,7 +413,7 @@ def test_cancel_and_sign_up_again_never_rerolls(paid, monkeypatch):
 
 def test_grey_receipt_reaches_the_organizer(paid, monkeypatch):
     # review P1-3: no warning but a field unread (the date cropped off): 'partial', in "Check receipts", the student
-    # isn't told, the door lets them in, never in the app's total
+    # isn't told, the door waits for a review, never in the app's total
     c, con, eid, (a, _, _), now = paid
     _go(c, eid, a)
     f = _fields(now, "444444444444444444")
@@ -422,7 +423,7 @@ def test_grey_receipt_reaches_the_organizer(paid, monkeypatch):
     got = _attendee(paid, a)
     assert got["flags"] == ["partial"] and got["reviewed"] is False and got["auto"] is False
     assert _tocheck(c, eid) == 1
-    assert logic.organizing.flagged(con, _rid_reg(con, eid, a)) is False
+    assert logic.organizing.flagged(con, _rid_reg(con, eid, a)) is True
 
 
 def _rid_reg(con, eid, tg):
@@ -457,7 +458,7 @@ def test_edited_number_is_a_duplicate(paid, monkeypatch):
 @pytest.mark.parametrize("second,flag", [("Petrov P.P.", "partial"), ("Ivanov I.I.", "duplicate")])
 def test_friends_paying_in_one_minute(paid, monkeypatch, second, flag):
     # review P2-4: the same minute, sum and payee from another sender is two friends paying together: a person looks
-    # ('partial': no warning, not held at the door); from the same sender (or one unread) a number edited: 'duplicate'
+    # ('partial': held at the door); from the same sender (or one unread) a number edited: 'duplicate'
     c, con, eid, (a, b, _), now = paid
     for tg in (a, b):
         _go(c, eid, tg)
@@ -465,4 +466,4 @@ def test_friends_paying_in_one_minute(paid, monkeypatch, second, flag):
     row = _send(paid, monkeypatch, b, {**_fields(now, "123456789012345678"), "no": "523456789012345678", "sender": second}, 241)
     assert row["flags"] == flag
     _unchecked(paid, b, row)
-    assert logic.organizing.flagged(con, row["registration_id"]) is (flag == "duplicate")
+    assert logic.organizing.flagged(con, row["registration_id"])

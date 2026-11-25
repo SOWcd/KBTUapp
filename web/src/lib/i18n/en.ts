@@ -1965,8 +1965,6 @@ const en: Dict = {
   'oc.swearLog': "Warnings, last 30 days",
   'oc.swearSomeone': "A chat member",
   'oc.swearMuted': "muted ×{n}",
-  'oc.call': "Who calls everyone",
-  'oc.callNote': "On: “call” and /all by the group's admins and the club's roles. Off: the group's admins only. The President or Vice sets it.",
   'oc.roles': "Roles and admins",
   'oc.rolesNote': "Group admins without a club role, and the other way round. View only: nothing changes in Telegram.",
   'oc.rolesAdmins': "Admin in the group, no role in the app",
