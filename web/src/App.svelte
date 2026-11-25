@@ -1026,7 +1026,7 @@
      flipping it restyled every node of the tab on each switch (the Forum: 1100 nodes, ~100 ms at 4x CPU) */
   .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1;
     /* scrolled content fades out under the clock and Telegram's buttons instead of running into them: a mask on the tab,
-       never a strip of --bg over it (that was a band over any other ground, and its color-mix() is dropped on iOS < 16.2).
+       never a strip of --bg over it (that was a band over any other ground, and iOS < 16.2 dropped its colour mix).
        To 12% up there, the strip's old depth. Eased, not linear: a linear fade ends in a kink the eye reads as a hard
        line under the head (owner, Nov 23) */
     --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
