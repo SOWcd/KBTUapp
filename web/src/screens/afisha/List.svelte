@@ -14,13 +14,16 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Star from '@lucide/svelte/icons/star';
   import X from '@lucide/svelte/icons/x';
-  import { onMount, tick } from 'svelte';
-  import type { ClassItem, EventCard, Post } from '../../lib/api';
+  import { onMount, tick, untrack } from 'svelte';
+  import type { ChannelFeedPost, ClassItem, EventCard, Media, Post } from '../../lib/api';
+  import { channel } from '../../lib/state/channel.svelte';
+  import { count } from '../../lib/stats';
+  import { load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
-  import { ui, toTickets } from '../../lib/state/ui.svelte';
+  import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
   import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
@@ -143,8 +146,73 @@
     const over = on.getBoundingClientRect().right - row.getBoundingClientRect().right;
     if (over > 0) row.scrollLeft += over + 16;
   }
-  const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
-  const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
+  // the hero, personal (owner, Nov 25; lib/hero.ts ranks): from what the app already holds, each kind in its own order:
+  // my ticket, where friends go, my clubs' and follows' events, their newest news, the forum's hottest post of the day,
+  // my next class, else the nearest event. The first card is the hero; a swipe brings #2 and #3
+  type Card = HeroPick & ({ e: EventCard } | { p: Post } | { f: ChannelFeedPost } | { cl: ClassItem; b: number; end: number });
+  // ranked by what was learned before this visit: a show or a tap now never reshuffles the cards in view
+  const mem = loadHero(), was: typeof mem = JSON.parse(JSON.stringify(mem));
+  const myOrgs = $derived(new Set([...(session.me?.memberships ?? []).map((m) => m.org.id), ...data.orgs.filter((o) => o.subscribed).map((o) => o.id)]));
+  const heat = (f: ChannelFeedPost) => f.hearts + f.reactions.reduce((n, r) => n + r.n, 0);
+  const cands = $derived.by(() => {
+    const out: Card[] = [], ev = (kind: Card['kind'], e: EventCard, pin = false) => out.push({ key: 'e' + e.id, kind, e, today: pin });
+    for (const e of going) ev('ticket', e, dayNo(e.startsAt) <= today);
+    const open = coming.filter((e) => e.status === 'published' && e.my?.status !== 'going');
+    for (const e of open.filter((x) => x.friends.length).sort((a, b) => b.friends.length - a.friends.length || a.startsAt - b.startsAt)) ev('friends', e);
+    for (const e of open) if (myOrgs.has(e.org.id) || (e.coHost && myOrgs.has(e.coHost.id))) ev('club', e);
+    for (const p of (data.news?.posts ?? []).filter((x) => x.createdAt > now - 3 * 86400).sort((a, b) => +a.read - +b.read || b.createdAt - a.createdAt)) out.push({ key: 'p' + p.id, kind: 'news', p });
+    if (session.channel) for (const f of (channel.feed ?? []).filter((x) => x.status === 'live' && x.at > now - 86400 && heat(x) > 0).sort((a, b) => heat(b) - heat(a))) out.push({ key: 'f' + f.id, kind: 'forum', f });
+    if (left[0]) out.push({ key: classKey(today, left[0].c), kind: 'class', cl: left[0].c, b: left[0].b, end: left[0].e });
+    const nx = coming.find((e) => e.cover || e.video?.poster) ?? coming[0];
+    if (nx) ev('next', nx);
+    return out;
+  });
+  // the cards seen this visit keep their places: the forum's feed landing later never swaps one under the finger
+  let held = $state({ d: 0, keys: [] as string[] });
+  const cards = $derived.by(() => {
+    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x) : [];
+    return [...keep, ...rankHero(cands.filter((x) => !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
+  });
+  let at = $state(0); // the card in view
+  const atCard = $derived(Math.min(at, cards.length - 1));
+  $effect(() => {
+    const i = atCard, c = cards[i];
+    if (!c || !data.eventsReady || searching || ui.tab !== 'afisha') return;
+    untrack(() => {
+      if (held.d !== today || held.keys.length <= i) held = { d: today, keys: cards.slice(0, i + 1).map((x) => x.key) };
+      if (heroShown(mem, c, today, i === 0)) { count(`hero.show.${c.kind}`); saveHero(mem); }
+    });
+  });
+  function tap(c: Card) {
+    if (heroTapped(mem, c, today)) count(`hero.tap.${c.kind}`);
+    saveHero(mem);
+  }
+  function slid(ev: Event) {
+    const el = ev.currentTarget as HTMLElement, a = el.children[0] as HTMLElement, b = el.children[1] as HTMLElement | undefined;
+    at = b ? Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)) : 0; // one card's step
+  }
+  // my soonest ticket as the hero: "Your events" below holds the rest; another card leads: all of them
+  const leadEv = $derived(cards[0] && 'e' in cards[0] && cards[0].e.my?.status === 'going' ? cards[0].e.id : null);
+  const rest = $derived(going.filter((e) => e.id !== leadEv));
+  type Look = { item: { cover: Media | null; emoji: string; color: null }; color: string; title: string; lead: string; line: string; by: string; room: string | null; open: () => void };
+  // a card that isn't an event, in the hero's own markup: its picture or a 3D mark on the accent, a title, one line
+  function look(c: Exclude<Card, { e: EventCard }>): Look {
+    const when = (ts: number) => (dayNo(ts) === today ? time(ts) : dayMonth(ts));
+    if ('p' in c) {
+      const p = c.p;
+      return { item: { cover: p.photo, emoji: p.org.emoji, color: null }, color: p.photo?.color ?? 'var(--accent)', title: p.title || p.body, lead: '',
+        line: t('page.news') + ' · ' + when(p.createdAt), by: shortOf(p.org), room: null, open: () => sheets.news() };
+    }
+    if ('f' in c) {
+      const f = c.f;
+      return { item: { cover: f.photos[0] ?? null, emoji: 'speech_balloon_3d', color: null }, color: f.photos[0]?.color ?? 'var(--accent)', title: f.body, lead: '',
+        line: t('tab.forum') + ' · ' + when(f.at), by: '', room: null, open: () => { channel.focus = f.id; goTab('forum'); } };
+    }
+    const x = c, live = x.b <= now;
+    return { item: { cover: null, emoji: 'books_3d', color: null }, color: 'var(--accent)', title: subjectOf(x.cl), lead: x.cl.begins + '–' + x.cl.ends,
+      line: [live ? t('list.nowLeft', { n: Math.max(1, Math.ceil((x.end - now) / 60)) }) : soon(x.b, now), x.cl.room].filter(Boolean).join(' · '), by: '',
+      room: floorOf(x.cl.room) != null ? x.cl.room : null, open: () => sheets.week() };
+  }
   // one tap signs up from the hero when there is nothing to ask first that this card can't say: a plain open event
   // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
   const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
@@ -180,7 +248,7 @@
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
   onMount(() => {
-    toTickets.fn = () => { q = ''; void tick().then(() => document.querySelector('.tab.on .hero')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
+    toTickets.fn = () => { q = ''; void tick().then(() => (document.querySelector('.tab.on .tix') ?? document.querySelector('.tab.on .heroes'))?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
     return () => { toTickets.fn = null; };
   });
   const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
@@ -280,11 +348,15 @@
   <StoryRow />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
-  {#if hero}
-    {@const e = hero}
+  {#if cards.length}
+    <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
+    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    {#each cards as c, i (c.key)}
+    {#if 'e' in c}
+    {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
-    <!-- the hero: my next event (its ticket and the way there), else the nearest -->
-    <section class="hero" class:nopic={!heroPic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint}>
+    <!-- an event: my ticket and the way there, else what it is and one tap to go -->
+    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
@@ -308,6 +380,26 @@
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
+    {:else}
+    {@const v = look(c)}
+    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
+    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+      <button class="hit" onclick={v.open} aria-label={v.title}></button>
+      <span class="art"><Poster item={v.item} big radius={0} /></span>
+      <div class="shade"></div>
+      <div class="slab">
+        <span class="hero-tx">
+          <b class="clamp-2">{v.title}</b>
+          <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
+        </span>
+        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
+      </div>
+      <span class="rim" aria-hidden="true"></span>
+    </section>
+    {/if}
+    {/each}
+    </div>
+    {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
   {/if}
   {#if data.eventsReady && days.length}
     <nav class="week" aria-label={t('list.title')}>
@@ -320,11 +412,11 @@
     </nav>
   {/if}
 
-  {#if going.length > 1}
-    <!-- the rest of my week: one grouped card, a ticket pill at each row's end -->
+  {#if rest.length}
+    <!-- the rest of my week (all of it when another card leads): one grouped card, a ticket pill at each row's end -->
     <h2 class="sec">{t('list.yours')}</h2>
-    <div class="list">
-      {#each going.slice(1) as e (e.id)}
+    <div class="list" class:tix={leadEv == null}>
+      {#each rest as e (e.id)}
         <div class="row mine">
           <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
           <Poster item={e} size={48} radius={12} />
@@ -478,6 +570,17 @@
   .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
+  /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
+     scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
+     back with its margins */
+  .heroes { display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
+  .heroes::-webkit-scrollbar { display: none; }
+  .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
+  .heroes > .hero { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
+  .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
+  .dots i.on { opacity: 1; }
   /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
      the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
      cover does), so the light can leave it */

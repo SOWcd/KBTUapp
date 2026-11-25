@@ -800,6 +800,7 @@ const en: Dict = {
   'list.classes': 'Classes',
   'list.title': 'Events',
   'list.yours': 'Your events',
+  'list.heroPicks': 'For you today',
   'list.moreSoon': "More events are coming",
   'list.moreSoonText': "Clubs are just starting to join KBTU App. Follow yours: the bot will message you as soon as there's something new.",
   'list.toClubs': "Go to clubs",
