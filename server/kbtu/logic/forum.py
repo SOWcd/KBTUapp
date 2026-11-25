@@ -263,7 +263,7 @@ def _ask_shapes(con, v: Viewer, found) -> list[dict]:
     for c in incoming:
         offers.setdefault(c["ask_id"], []).append({"id": c["id"], "status": c["status"], **cards[c["from_id"]]})
     others = [a["id"] for a in found if a["user_id"] != v.id]
-    offered = dict(rows(con, f"SELECT ask_id, status FROM contacts WHERE from_id = ? AND ask_id IN ({_qs(others)})",
+    offered = dict(rows(con, f"SELECT ask_id, status FROM contacts WHERE from_id = ? AND ask_id IN ({_qs(others)}) AND withdrawn_at IS NULL",
                         v.id, *others)) if others else {}
 
     out = []
@@ -450,7 +450,8 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
         # Give tokenless offers a fresh card so its buttons can identify the exact offer.
-        elif old := one(con, "SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0) AND token IS NULL",
+        elif old := one(con, """SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0)
+                        AND token IS NULL AND withdrawn_at IS NULL""",
                         v.id, to, aid):
             con.execute("UPDATE contacts SET token = ? WHERE id = ?", (token, old["id"]))
             notify(con, to, "contact_ask", f"ct:{old['id']}:{token}")
@@ -467,7 +468,7 @@ def decide_contact(con, uid: int, cid: int, yes: bool, token: str | None = None)
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", cid, uid, token)
         if not c:
             return None
-        con.execute("UPDATE contacts SET status = ?, decided_at = ? WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
+        con.execute("UPDATE contacts SET status = ?, decided_at = ?, offer_message = NULL WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
         if yes:
             notify(con, c["from_id"], "contact_ok", f"co:{cid}:to:{token}")    # to the one who offered: the other's contact
             notify(con, c["to_id"], "contact_ok", f"co:{cid}:from:{token}")
@@ -508,7 +509,7 @@ def block(con, v: Viewer, uid: object, on: object = True) -> None:
     if on:
         con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, _now()))
         pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
-        con.execute("UPDATE contacts SET status = 'declined', decided_at = ? WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
+        con.execute("UPDATE contacts SET status = 'declined', decided_at = ?, offer_message = NULL WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
                     (_now(), v.id, uid, uid, v.id))
     else:
         con.execute("DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?", (v.id, uid))

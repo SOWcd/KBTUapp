@@ -3271,6 +3271,7 @@ const en: Dict = {
   'sj.people': "Looking for study partners",
   'sj.none': "Nobody yet. Be the first to list yourself: others will see you",
   'sj.together': "Study together",
+  'sj.unoffer': "Cancel",
   'sj.sent': "Sent",
   'sj.write': "Write",
   'sj.sentSay': "Sent. Once they accept in the bot, you both get each other's contact",

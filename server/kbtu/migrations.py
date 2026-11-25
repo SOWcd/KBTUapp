@@ -2340,4 +2340,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Remove personal values copied into audit payloads; retain the action and nonpersonal context.
     (231, """UPDATE audit_log SET data = json_remove(data, '$.q') WHERE action = 'registry_search';
     UPDATE audit_log SET data = json_remove(data, '$.was', '$.now') WHERE action = 'staff_kaspi';"""),
+    # Withdrawn study offers still count toward the sender's daily limit.
+    (232, """ALTER TABLE contacts ADD COLUMN withdrawn_at INTEGER;
+    ALTER TABLE contacts ADD COLUMN offer_message TEXT;
+    DROP INDEX one_contact;
+    CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+    CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+    CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
 ]
