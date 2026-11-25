@@ -6,7 +6,7 @@
   import BookOpen from '@lucide/svelte/icons/book-open';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Flag from '@lucide/svelte/icons/flag';
-  import { ApiErr, api, type SubjectCard, type SubjectPerson } from '../../lib/api';
+  import { ApiErr, api, type Id, type SubjectCard, type SubjectPerson } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { subj, subjectCard, keepCard } from '../../lib/state/subjects.svelte';
@@ -27,6 +27,8 @@
 
   let { overlay, id }: { overlay: Overlay; id: string } = $props();
   let card = $state<SubjectCard | null>(null), note = $state(''), saving = $state(false);
+  let withdrawing = $state<Record<Id, boolean>>({});
+  const sending: Partial<Record<Id, ReturnType<typeof api.subjectOffer>>> = {};
   const base = $derived(card ?? subj.all?.subjects.find((s) => s.id === id) ?? null);
   const mine = $derived(card?.mine ?? null);
   const set = (c: SubjectCard) => { card = c; keepCard(c); note = c.mine?.note ?? ''; };
@@ -54,11 +56,51 @@
     saving = true;
     try { set(await api.joinSubject(id, note.trim())); haptic.ok(); } catch (e) { fail(e); } finally { saving = false; }
   }
+  async function refreshPerson(ask: Id) {
+    const fresh = (await api.subject(id)).people.filter((p) => p.ask === ask);
+    if (card) {
+      card.people = card.people.flatMap((p) => p.ask === ask ? fresh : [p]);
+      keepCard(card);
+    }
+  }
+  const currentPerson = (p: SubjectPerson) => card?.people.find((row) => row.ask === p.ask) ?? p;
   async function offer(p: SubjectPerson) {
+    if (sending[p.ask] || withdrawing[p.ask]) return;
     haptic.tap();
     p.offered = 'pending';
-    try { await api.subjectOffer(p.ask); haptic.ok(); say(t('sj.sentSay'), 'raising_hands_3d_default'); if (card) keepCard(card); }
-    catch (e) { p.offered = null; fail(e); }
+    const request = api.subjectOffer(p.ask);
+    sending[p.ask] = request;
+    try {
+      const sent = await request;
+      if (withdrawing[p.ask]) return;
+      if (sent.status !== 'pending') { await refreshPerson(p.ask); return; }
+      Object.assign(currentPerson(p), { offered: 'pending', offerId: sent.id });
+      haptic.ok();
+      say(t('sj.sentSay'), 'raising_hands_3d_default');
+      if (card) keepCard(card);
+    } catch (e) {
+      if (!withdrawing[p.ask]) { currentPerson(p).offered = null; fail(e); }
+    } finally { delete sending[p.ask]; }
+  }
+  async function withdraw(p: SubjectPerson) {
+    if (withdrawing[p.ask]) return;
+    haptic.tap();
+    withdrawing[p.ask] = true;
+    p.offered = null;
+    let cid = p.offerId;
+    try {
+      const sent = await sending[p.ask];
+      if (sent && sent.status !== 'pending') { await refreshPerson(p.ask); return; }
+      cid = sent?.id ?? cid;
+      if (cid == null) { await refreshPerson(p.ask); return; }
+      await api.withdrawSubjectOffer(cid);
+      Object.assign(currentPerson(p), { offered: null, offerId: null });
+      if (card) keepCard(card);
+    } catch (e) {
+      Object.assign(currentPerson(p), { offered: cid == null ? null : 'pending', offerId: cid });
+      if (e instanceof ApiErr && e.code === 'not_found') await refreshPerson(p.ask).catch(() => {});
+      else fail(e);
+    } finally { delete withdrawing[p.ask]; }
   }
   const more = (e: MouseEvent, p: SubjectPerson) => menu(e.currentTarget as Element,
     [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('ask', p.ask, p.note ?? p.name) }], 'end');
@@ -94,8 +136,9 @@
             {#if p.note}<p class="nt">{p.note}</p>{/if}
             <span class="act">
               {#if p.telegram}<Button kind="tinted" size="s" onclick={() => openLink(p.telegram!)}>{t('sj.write')}</Button>
+              {:else if p.offered === 'pending'}<Button kind="gray" size="s" disabled={!!withdrawing[p.ask]} onclick={() => withdraw(p)}>{t('sj.unoffer')}</Button>
               {:else if p.offered}<span class="sent">{t('sj.sent')}</span>
-              {:else}<Button kind="tinted" size="s" onclick={() => offer(p)}>{t('sj.together')}</Button>{/if}
+              {:else}<Button kind="tinted" size="s" disabled={!!withdrawing[p.ask]} onclick={() => offer(p)}>{t('sj.together')}</Button>{/if}
             </span>
           </div>
         {:else}

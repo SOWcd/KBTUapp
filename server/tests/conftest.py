@@ -122,6 +122,12 @@ def before_notification_migration():
         con.executescript("""ALTER TABLE users DROP COLUMN notify_via;
             ALTER TABLE push_devices DROP COLUMN dead_at;
             ALTER TABLE push_devices DROP COLUMN provider;
+            DROP INDEX one_contact;
+            DROP INDEX contacts_by_sender;
+            DROP INDEX withdrawn_offer_messages;
+            ALTER TABLE contacts DROP COLUMN offer_message;
+            ALTER TABLE contacts DROP COLUMN withdrawn_at;
+            CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
             DROP TABLE gallery_consents;
             ALTER TABLE gallery_photos DROP COLUMN place;
             ALTER TABLE posts DROP COLUMN tg_fmt;

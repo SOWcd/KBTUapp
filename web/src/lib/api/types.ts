@@ -918,7 +918,7 @@ export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; 
 export interface Subject { id: string; names: Record<'ru' | 'kk' | 'en', string>; alt: string[] /* other spellings, searched */; codes: string[]; credits: number | null; school: string | null }
 export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
 export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
-  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
+  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; offerId: Id | null; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
 

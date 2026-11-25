@@ -220,9 +220,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
         if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
             return None
-        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
-            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        return (*texts.bot_message(lang, kind, skill=sk["name"] if sk else ""), f"fa_{a['id']}")
+        return (*texts.bot_message(lang, kind), f"fa_{a['id']}")
     if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
         # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
         # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
@@ -247,9 +245,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not p:
             return None
         a = one(con, "SELECT title, subject FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
-        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         k = f"ct:{c['id']}:{tok}"
         return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
@@ -635,9 +632,9 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
 def purge(cfg: Config, con) -> None:
     """The accounts whose week ran out (logic.delete_due), and their files on disk (app.py keeps them in the same places)."""
     home = Path(cfg.db_path).resolve().parent
-    receipts, photos = logic.delete_due(con)
-    media.drop(home / "receipts", receipts)  # first: a failing step below mustn't leave the deleted accounts' receipts on disk
-    photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
+    logic.delete_due(con)
+    logic.drain_deleted_files(con)  # first: retry even when SQL erasure committed in an earlier round
+    photos = logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
     gone, pics = logic.events_gone(con)  # the admin's event deletes past their Undo's day
     media.drop(home / "receipts", gone)
     photos = photos + pics + logic.chats_gone(con)  # and chats removed from the catalog a week ago
@@ -835,12 +832,15 @@ def backup_day(cfg: Config, con) -> None:
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
         if bak.stat().st_mtime < time.time() - 14 * 86400:
             bak.unlink(missing_ok=True)
+    root = db_path.parent / "backups"
+    for old in root.glob("kbtu-*.db"):  # retention also runs when today's copy fails or is not due
+        if old.stat().st_mtime < time.time() - 15 * 86400:
+            old.unlink()
     global _backup_retry
     local = int(time.time()) + 5 * 3600
     day = str(local // 86400)
     if local % 86400 < 4 * 3600 or time.time() < _backup_retry or one(con, "SELECT 1 FROM meta WHERE key = 'backup_day' AND value = ?", day):
         return
-    root = db_path.parent / "backups"
     root.mkdir(exist_ok=True)
     out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
     tmp = out.with_suffix(".tmp")  # a copy cut short (a full disk) never counts among the 14
@@ -856,9 +856,6 @@ def backup_day(cfg: Config, con) -> None:
     con.execute("INSERT INTO meta (key, value) VALUES ('backup_day', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (day,))
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
-    for old in root.glob("kbtu-*.db"):  # by age too: skipped nights mustn't stretch a deleted account's life past 30 days
-        if old.stat().st_mtime < time.time() - 15 * 86400:
-            old.unlink()
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
@@ -1025,6 +1022,8 @@ def _pushed(con, m) -> None:
 
 def _answered(con, m, status: int, answer: dict) -> None:
     if answer.get("ok"):
+        if m["kind"] == "contact_ask" and (mid := (answer.get("result") or {}).get("message_id")):
+            logic.subjects.offer_delivered(con, int(m["ref"].split(":")[1]), m["user_id"], m["tg_id"], mid)
         if category := notifications.CATEGORY_OF.get(m["kind"]):
             with db.tx(con):
                 _mark(con, m, True)
@@ -1043,6 +1042,22 @@ def _answered(con, m, status: int, answer: dict) -> None:
 
 
 
+async def _withdrawn_offers(cfg: Config, http: httpx.AsyncClient, con) -> None:
+    """Replace a withdrawn study offer's Telegram card and remove its buttons."""
+    for c in rows(con, """SELECT c.id, c.offer_message, u.tg_id, u.lang FROM contacts c JOIN users u ON u.id = c.to_id
+            WHERE c.withdrawn_at IS NOT NULL AND c.offer_message IS NOT NULL ORDER BY c.id LIMIT 50"""):
+        target = json.loads(c["offer_message"])
+        if target["chat_id"] == c["tg_id"]:
+            try:
+                r = await _tg(cfg, http, "editMessageText", {**target, "parse_mode": "HTML",
+                              "text": texts.bot_message(c["lang"], "contact_withdrawn")[0], "reply_markup": {"inline_keyboard": []}})
+                if r.status_code == 429 or r.status_code >= 500:
+                    return  # try again next round
+            except (httpx.HTTPError, ValueError):
+                return
+        con.execute("UPDATE contacts SET offer_message = NULL WHERE id = ? AND offer_message = ?", (c["id"], c["offer_message"]))
+
+
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
     con = db.connect(cfg.db_path)  # one connection, used by one thread at a time (check_same_thread=False)
     try:
@@ -1051,6 +1066,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
+        await _withdrawn_offers(cfg, http, con)
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
             await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts
@@ -1076,6 +1092,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if to is None:
                     _mark(con, m, False, "gone")
                     continue
+            if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
+                continue  # the account moved after the batch was read; the retry will use the new chat
             body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
             if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
                 body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
@@ -1476,8 +1494,12 @@ async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bool = False) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:); and on the forum's
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
-    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
+    f = re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data)
+    callback = f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery"
+    ack = {"callback_query_id": cq["id"]}
+    if not f or f[1] != "ct":
+        await http.post(callback, json=ack)
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
         return
@@ -1491,9 +1513,11 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
                 "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
         return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
-    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
+    if f:
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
         if not u or not msg:
+            if f[1] == "ct":
+                await http.post(callback, json=ack)
             return
         if f[5]:
             con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[5] == "y"), u["id"]))
@@ -1504,6 +1528,11 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
             said = "ask_stopped"
         else:
             st = logic.decide_contact(con, u["id"], int(f[2]), f[4] == "y", f[3])  # f[3]: the offer's token
+            if not st and one(con, "SELECT 1 FROM contacts WHERE id = ? AND to_id = ? AND token = ? AND withdrawn_at IS NOT NULL",
+                              int(f[2]), u["id"], f[3]):
+                await http.post(callback, json={**ack, "text": texts.bot_message(u["lang"], "contact_withdrawn")[0]})
+                return
+            await http.post(callback, json=ack)
             said = {"accepted": "contact_yes", "declined": "contact_no"}.get(st or "", "contact_gone")
         chat, thanks = (msg.get("chat") or {}).get("id"), texts.bot_message(u["lang"], said)[0]
         if f[5]:  # the post stays with its link; the question's buttons give way to the thanks

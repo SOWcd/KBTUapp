@@ -296,7 +296,8 @@ def _viewer_user(con, u) -> Viewer:
     if u["banned_at"]:
         raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
     # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (Microsoft only)
-    return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
+    s = logic.one(con, "SELECT verified_at FROM students WHERE user_id = ? AND manual = 0", u["id"])
+    return Viewer(u["id"], u["role"], s is not None, student_since=s[0] if s else None)
 
 
 Me = Annotated[Viewer, Depends(viewer)]
@@ -2136,10 +2137,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
         def file_it():
-            logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
-            # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
-            if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
-                return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ?", body["id"])
+            target, tid = body.get("target"), body.get("id")
+            ask = target == "ask" and type(tid) is int
+            with db.tx(con):
+                enough = ask and logic.reported_enough(con, tid)
+                logic.report(con, v, target, tid, body.get("reason"), body.get("note"))
+                # Only crossing the threshold starts an AI look. The rest is for a moderator.
+                if ask and not enough and logic.reported_enough(con, tid):
+                    return logic.one(con, "SELECT title, body, user_id, created_at FROM asks WHERE id = ? AND expires_at > ?", tid, logic.now())
         a = await run_in_threadpool(file_it)
         if a and await screen(con, a["user_id"], f"{a['title']}\n{a['body']}") is False:  # the very row the AI read, or nothing
             await run_in_threadpool(lambda: logic.hide_ask(con, body["id"], "reports", made=(a["user_id"], a["created_at"])))
@@ -2929,7 +2934,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def forum_new_skill(con: Con, v: Forum, body: dict = Body(...)):
         """A skill by name: the one there is, close ones to pick ({didYouMean}), or a new one if the AI doesn't object
         (no answer: it's made, and stays the maker's own until three people have it or a moderator approves)."""
-        found = logic.skill_lookup(con, v, body.get("name"), body.get("force") is True)
+        found = await run_in_threadpool(logic.forum.reserve_skill, con, v, body.get("name"), body.get("force") is True)
         if "name" not in found:
             return found
         if await screen(con, v.id, found["name"]) is False:
@@ -2946,8 +2951,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum/asks")
     async def forum_new_ask(con: Con, v: Forum, body: dict = Body(...)):
-        verdict = await screen(con, v.id, f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
-        return await run_in_threadpool(logic.create_ask, con, v, body, verdict)
+        a = await run_in_threadpool(logic.create_ask, con, v, body, None, screening=True)
+        verdict = await screen(con, v.id, f"{a['title']}\n{a['body']}")  # no answer: held for a moderator
+        return await run_in_threadpool(logic.forum.settle_ask, con, v, a["id"], verdict)
 
     # ------------------------------------------------------------ the forum channel (logic/fchannel.py): posts from the app
     F = logic.fchannel
@@ -3145,6 +3151,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def subject_offer(con: Con, v: SubjWrite, body: dict = Body(...)):
         logic.subjects.catalogue(cfg.subjects_file)
         return logic.subjects.offer(con, v, body.get("ask"))
+
+    @app.delete("/api/subjects/offer/{cid}", status_code=204)
+    def subject_withdraw_offer(cid: int, con: Con, v: Me):
+        logic.subjects.withdraw(con, v, cid)
 
     @app.post("/api/forum/blocks", status_code=204)
     def forum_block(con: Con, v: Me, body: dict = Body(...)):  # every student: the student forum hides blocked people too
