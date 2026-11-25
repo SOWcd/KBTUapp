@@ -2393,6 +2393,13 @@ MIGRATIONS: list[tuple[int, str]] = [
           SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
           WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
     END;"""),
+    # A signed comment written in the app under a channel post (fchannel.comment_*) is a row of fchan_replies that this
+    # table names a commenter for: the bot sends it under the person's short name. An anonymous author's reply has no row
+    # here, and fchan_replies itself never gets a user id (its post is the only way to that author)
+    (234, """CREATE TABLE IF NOT EXISTS fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;"""),
     # Meetup scans keep each attempt, apart from attendance's one row.
     (235, """ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
     ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;

@@ -550,6 +550,10 @@ CREATE TABLE fchan_reply_reports (
       at       INTEGER NOT NULL,
       PRIMARY KEY (reply_id, user_id)
     ) STRICT;
+CREATE TABLE fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
   sha256     TEXT NOT NULL,
