@@ -1,6 +1,6 @@
 // Long lists of people open in the tap's frame: a screenful of rows is drawn at once, the rest join after the first
-// paint, a frame's worth at a time (2000 guests drawn in one go held the main thread 1-3 s at 4x CPU, issue 339). The
-// rows off screen also skip layout and paint: each list's CSS gives them content-visibility. A list needs one line:
+// paint, a frame's worth at a time (2000 guests drawn in one go held the main thread 1-3 s at 4x CPU, issue 339).
+// (content-visibility on the rows was tried first: it made each scroll frame slower at 4x CPU.) A list needs one line:
 //   const draw = screenful(() => rows.length);  +  {#each rows.slice(0, draw.n) as r (r.id)}
 import { flushSync } from 'svelte';
 

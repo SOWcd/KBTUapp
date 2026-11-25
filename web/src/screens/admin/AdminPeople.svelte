@@ -61,4 +61,5 @@
 </Pane>
 
 <style>
-  .page { display: flex; flex-direction: column; gap: var(--s-6); }</style>
+  .page { display: flex; flex-direction: column; gap: var(--s-6); }
+</style>

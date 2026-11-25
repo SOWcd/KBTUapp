@@ -214,7 +214,8 @@
 
 <style>
   .friends { display: flex; flex-direction: column; gap: var(--s-6); }
-  .friends > :global(*) { flex-shrink: 0; }  .av { position: relative; display: flex; }
+  .friends > :global(*) { flex-shrink: 0; }
+  .av { position: relative; display: flex; }
   /* going somewhere today: a green ring, like a story */
   .av.live::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 0 2px var(--success); }
   .empty { display: flex; flex-direction: column; align-items: center; }

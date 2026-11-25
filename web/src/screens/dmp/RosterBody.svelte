@@ -102,5 +102,6 @@
 </div>
 
 <style>
-  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }  .ok { display: inline-flex; color: var(--accent-text); }
+  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
+  .ok { display: inline-flex; color: var(--accent-text); }
 </style>

@@ -233,5 +233,6 @@
   .tg { margin-left: auto; }
   .tg + .ck { margin-left: var(--s-2); }
   .ck.on { color: var(--accent); }
-  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }  .add { display: flex; flex-direction: column; gap: var(--s-3); }
+  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-1); }
+  .add { display: flex; flex-direction: column; gap: var(--s-3); }
 </style>

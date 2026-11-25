@@ -138,7 +138,8 @@
 </Sheet>
 
 <style>
-  .body { display: flex; flex-direction: column; gap: var(--s-4); margin-top: var(--s-2); }  .blank { display: block; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); }
+  .body { display: flex; flex-direction: column; gap: var(--s-4); margin-top: var(--s-2); }
+  .blank { display: block; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); }
   /* a pair side by side while whole labels fit, else a line each (320 px) */
   .acts { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); }
   .acts :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }

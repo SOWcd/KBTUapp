@@ -46,4 +46,5 @@
 </Sheet>
 
 <style>
-  .col { display: flex; flex-direction: column; gap: var(--s-3); }</style>
+  .col { display: flex; flex-direction: column; gap: var(--s-3); }
+</style>
