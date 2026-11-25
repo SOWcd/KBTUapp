@@ -1356,8 +1356,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # is rewritten (fch_resign), an anonymous one stays as it was, so nothing tells which posts were one person's
         # my anonymous replies (fchan_replies: no user id, through my posts): sent ones under a post that stays live
         # follow it to the placeholder; those under a post that goes now (held, hidden, deleted) leave the group too
-        # (the bot's round, tgcdel: as tgc.later_delete), and what never went out goes now
-        con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+        # (the bot's round, with an edit fallback for old messages), and what never went out goes now
+        con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'fchdrop:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
             WHERE p.user_id = ? AND p.status != 'live' AND r.tg_msg > 0""", (core.now(), v.id))
         con.execute("DELETE FROM fchan_replies WHERE tg_msg IS NULL AND post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
@@ -1448,6 +1448,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"upload:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fchup:{v.id}:%",))  # this hour's count of my forum photo uploads

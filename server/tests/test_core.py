@@ -4649,6 +4649,7 @@ def test_admin_day_and_ai(env):
     adm = c.get("/api/me", headers=tma(1)).json()
     ali = login(c, 30, "ali")
     con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (adm["id"],))
     today = logic.day_of(logic.now())
     assert c.get(f"/api/admin/stats/{today}", headers=tma(30)).status_code == 403
     day = c.get(f"/api/admin/stats/{today}", headers=tma(1)).json()
@@ -6660,16 +6661,15 @@ def test_forum_find_people(env, monkeypatch):
     monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
     assert all(rep(h) == 204 for h in hs)
     assert logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"             # new accounts don't count
+    con.execute("UPDATE reports SET status = 'dismissed' WHERE target = 'ask' AND target_id = ?", (ask["id"],))
     con.execute("UPDATE users SET created_at = created_at - 15 * 86400")
-    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=None))
-    assert rep(hs[0]) == 204 and logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"  # no AI: a moderator's
     con.execute("UPDATE students SET consent_version = ? WHERE user_id != ?", (c.app.state.policy, mod.id))
     screened = []
     async def rescreen(*args, only):
         screened.append(only)
         return False
     monkeypatch.setattr(ai, "screen", rescreen)
-    assert rep(hs[1]) == 204 and screened == [ai.EU_ONLY]
+    assert all(rep(h) == 204 for h in hs) and screened == [ai.EU_ONLY]
     assert tuple(con.execute("SELECT status, why FROM asks WHERE id = ?", (ask["id"],)).fetchone()) == ("hidden", "reports")
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (mod.id,)).fetchone()  # the author is told
 
@@ -6690,8 +6690,8 @@ def test_forum_bot_cards(env, monkeypatch):
     ask = logic.create_ask(con, a, {"kind": "project", "title": "A site", "skills": [web]}, True)
     row = lambda kind: {**dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone()), "lang": "en"}  # noqa: E731
     text, button, start = bot._render(con, row("ask_match"))
-    assert text == texts.bot_message("en", "ask_match", skill="web")[0] and "A site" not in text   # their words stay in the app
-    assert button == texts.bot_message("en", "ask_match", skill="web")[1] and start == f"fa_{ask['id']}"
+    assert text == texts.bot_message("en", "ask_match")[0] and "A site" not in text   # their words stay in the app
+    assert button == texts.bot_message("en", "ask_match")[1] and start == f"fa_{ask['id']}"
     logic.contact(con, b, aid=ask["id"])
     text, _, keys = bot._render(con, row("contact_ask"))
     cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()

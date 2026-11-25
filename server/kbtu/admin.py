@@ -737,7 +737,7 @@ def main(args: list[str]) -> None:
             con.execute("UPDATE users SET tg_id = (SELECT min(tg_id) FROM users) - 1 WHERE id = ?", (a["id"],))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
-            con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            con.execute("UPDATE tgc_comments SET author_tg = ?, dm_id = NULL WHERE author_tg = ?", (rb[0], ra[0]))  # comments move; DMs stay in the old chat
             try:  # his lines in People of the app go too, his yes there ends; the target's own lines: refused unless --merge-credits
                 credits.moved(con, a["id"], ra[0], rb[0], merge=len(args) == 4)
             except ValueError as exc:

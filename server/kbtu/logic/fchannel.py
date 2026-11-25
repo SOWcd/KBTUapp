@@ -410,6 +410,7 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
     if not _meaningful(text):
         raise ApiError("bad_input", "short")
     with tx(con):
+        core.need_current_student(con, v)
         # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
         # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (a
         # delete refunds nothing, else post-delete-post floods the channel)
@@ -458,8 +459,10 @@ def photo_room(con, v: Viewer) -> None:
     pass the last one). Its own count: putting photos on a post, deleting them or a failed upload give
     nothing back. ponytail: an hour's bucket, so up to twice PHOTO_UPLOADS across its edge; a sliding window if abused"""
     need_student(v)
-    n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
-                    RETURNING CAST(value AS INTEGER)""", f"fchup:{v.id}:{_now() // 3600}")[0]
+    with tx(con):
+        core.need_current_student(con, v)
+        n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
+                        RETURNING CAST(value AS INTEGER)""", f"fchup:{v.id}:{_now() // 3600}")[0]
     if n > PHOTO_UPLOADS:
         raise ApiError("rate_limited", "photos")
 
@@ -473,8 +476,10 @@ def add_photo(con, v: Viewer, saved: dict) -> dict:
     need_student(v)
     if max(saved["width"], saved["height"]) > PHOTO_RATIO * min(saved["width"], saved["height"]):
         raise ApiError("bad_input", "photo_shape")
-    fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                      (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
+    with tx(con):
+        core.need_current_student(con, v)
+        fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                          (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
     return {"id": fid} | _pic(saved)
 
 
@@ -678,7 +683,8 @@ def delete(con, v: Viewer, pid: int) -> None:
             raise ApiError("not_found")
         con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
         _unpost(con, p, "author")
-        _post_off(con, pid)
+        con.execute("""UPDATE fchan_replies SET status = 'gone', why = 'author', body = '', ai_reason = NULL,
+            drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (_now(), pid))
         con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
                        ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
         con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
@@ -925,8 +931,13 @@ def sweep(con) -> None:
     if not core._once(con, "fch_sweep", str(_now() // 300)):
         return
     # (an appealed one stays its day from the appeal: appeals_left counts it)
-    con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?",
-                (_now() - 86400, _now() - 86400, _now() - 30 * 86400))
+    expired = "status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?"
+    cutoff = (_now() - 86400, _now() - 86400, _now() - 30 * 86400)
+    with tx(con):
+        con.execute(f"""INSERT OR IGNORE INTO meta (key, value) SELECT 'fchdrop:' || tg_msg,
+            ? || CASE WHEN status = 'hidden' THEN ':moderator' ELSE '' END FROM fchan_replies
+            WHERE tg_msg > 0 AND post_id IN (SELECT id FROM fchan_posts WHERE {expired})""", (_now(), *cutoff))
+        con.execute("DELETE FROM fchan_posts WHERE " + expired, cutoff)
     con.execute("DELETE FROM fchan_photos WHERE post_id IS NULL AND created_at < ?", (_now() - PHOTO_FRESH,))  # picked, never posted
     con.execute("DELETE FROM meta WHERE key >= 'fchup:' AND key < 'fchup;' AND CAST(substr(key, length(rtrim(key, '0123456789')) + 1) AS INTEGER) < ?",
                 (_now() // 3600 - 1,))  # the upload counts of past hours
@@ -1119,7 +1130,7 @@ def _reply_shape(r) -> dict:
 def replies(con, v: Viewer, pid: int) -> list[dict]:
     """My replies under my post, newest first (the author's own view, the only one that ties them to anyone)."""
     need_student(v)
-    if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1", pid, v.id):
+    if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1 AND status != 'gone'", pid, v.id):
         raise ApiError("not_found")
     return [_reply_shape(r) for r in rows(con, "SELECT * FROM fchan_replies WHERE post_id = ? AND status != 'gone' OR post_id = ? AND why = 'missing' ORDER BY id DESC LIMIT 30", pid, pid)]
 
@@ -1203,12 +1214,15 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
     """/report on the bot's reply in the group (tgc._report): once per reporter (fchan_reply_reports), the reporter told
     as for a comment, the moderators pinged at once (one note a reply, at its first report; the Admin sheet lists it). REPLY_HIDE_AT
     long-verified reporters take it down at once (as a moderator's take-down: Undo, Bring back). False: not ours."""
-    from .tgcomments import REPORTER_AGE, _mods
-    r = one(con, "SELECT r.*, p.user_id AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live'", msg_id)
-    u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
-    if not r or not u:
-        return bool(r)
+    from .tgcomments import REPORTER_AGE, _mods, report_closed
     with tx(con):
+        r = one(con, """SELECT r.*, p.user_id AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+            WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live' AND p.status = 'live'""", msg_id)
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
+        if not r or not u:
+            return bool(r)
+        if report_closed(con, u["id"]):
+            return True
         if u["id"] != r["author"] and con.execute("INSERT OR IGNORE INTO fchan_reply_reports (reply_id, user_id, at) VALUES (?, ?, ?)",
                                                   (r["id"], u["id"], _now())).rowcount:
             notify_staff(con, _mods(con), "fch_reply_queue", f"rq:{r['id']}")
@@ -1239,11 +1253,12 @@ def reply_sending(con, rid: int) -> bool:
 
 def reply_sent(con, rid: int, msg_id: int) -> None:
     """Its message id kept; it or its post deleted or taken down meanwhile, it leaves the group right away (a post's
-    take-down keeps its undo minute: _post_off stamped drop_at). ponytail: an account deleted while one is on its way
-    takes the row with a non-live post (cascade) and the message stays; a one-second window in the bot's one process"""
-    con.execute("UPDATE fchan_replies SET tg_msg = ? WHERE id = ? AND tg_msg = 0", (msg_id, rid))
-    con.execute("""UPDATE fchan_replies SET drop_at = COALESCE(drop_at, ?) WHERE id = ? AND (status != 'live'
-        OR post_id IN (SELECT id FROM fchan_posts WHERE status != 'live'))""", (_now(), rid))
+    take-down keeps its undo minute: _post_off stamped drop_at). An erased row still queues its delivered message."""
+    with tx(con):
+        if not con.execute("UPDATE fchan_replies SET tg_msg = ? WHERE id = ? AND tg_msg IN (0, ?)", (msg_id, rid, msg_id)).rowcount:
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"fchdrop:{msg_id}", _now()))
+        con.execute("""UPDATE fchan_replies SET drop_at = COALESCE(drop_at, ?) WHERE id = ? AND (status != 'live'
+            OR post_id IN (SELECT id FROM fchan_posts WHERE status != 'live'))""", (_now(), rid))
 
 
 def reply_unsend(con, rid: int) -> None:
@@ -1266,17 +1281,21 @@ def replies_lost(con) -> None:
 def reply_drops(con) -> list:
     """Replies to take out of the group now: (id, message, why) deleted by the author, taken down, or their post left."""
     return [tuple(r) for r in rows(con, """SELECT r.id, r.tg_msg, CASE WHEN r.status = 'hidden' THEN 'moderator' ELSE 'author' END FROM fchan_replies r
-        JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg > 0 AND r.drop_at <= ? AND (r.status != 'live' OR p.status != 'live') LIMIT 20""", _now())]
+        JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg > 0 AND r.drop_at <= ? AND (r.status != 'live' OR p.status != 'live')
+        UNION ALL SELECT 0, CAST(substr(key, 9) AS INTEGER), CASE WHEN value LIKE '%:moderator' THEN 'moderator' ELSE 'author' END FROM meta
+        WHERE key >= 'fchdrop:' AND key < 'fchdrop;' AND CAST(value AS INTEGER) <= ? LIMIT 20""", _now(), _now())]
 
 
-def reply_dropped(con, rid: int) -> None:
+def reply_dropped(con, rid: int, msg_id: int) -> None:
     """Out of the group: a live one whose post left is removed with it."""
     con.execute("""UPDATE fchan_replies SET tg_msg = NULL, drop_at = NULL, status = CASE WHEN status = 'live' THEN 'hidden' ELSE status END,
         why = CASE WHEN status = 'live' THEN 'post' ELSE why END WHERE id = ?""", (rid,))
+    con.execute("DELETE FROM meta WHERE key = ?", (f"fchdrop:{msg_id}",))
 
 
-def reply_drop_later(con, rid: int) -> None:
+def reply_drop_later(con, rid: int, msg_id: int) -> None:
     con.execute("UPDATE fchan_replies SET drop_at = ? WHERE id = ?", (_now() + 600, rid))
+    con.execute("UPDATE meta SET value = ? || CASE WHEN value LIKE '%:moderator' THEN ':moderator' ELSE '' END WHERE key = ?", (_now() + 600, f"fchdrop:{msg_id}"))
 
 
 # moderators (the Admin sheet): held replies, this week's live ones (reported first), this week's take-downs
@@ -1289,7 +1308,7 @@ def _reply_mod_shape(r) -> dict:
 def reply_mod_queue(con) -> dict:
     """Shown as anonymous posts are: the words and the post they answer, never whose (the author is the post's)."""
     q = """SELECT r.*, p.body AS pbody, p.anon, p.nick_a, p.nick_n, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
-        FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE """
+        FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE p.status != 'gone' AND """
     held = rows(con, q + "r.status = 'held' AND (r.why != 'check' OR r.created_at < ?) ORDER BY r.id", _now() - 60)
     # reported ones whatever their age (a report must reach someone), first; then this week's
     live = rows(con, q + """r.status = 'live' AND p.status = 'live' AND (r.created_at > ? OR EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id))

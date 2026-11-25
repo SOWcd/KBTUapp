@@ -1775,7 +1775,7 @@ const en: Dict = {
   'st.dayCame': { one: "{n} came in", other: "{n} came in" },
   'st.dayNew': { one: "{n} new", other: "{n} new" },
   'st.newOne': "new",
-  'st.dayOld': "People are listed from 21 October and kept for 30 days — for this day there's only the count.",
+  'st.dayOld': 'Only visit totals are available for this day.',
   'ai.title': "AI translation",
   'ai.on': "On",
   'ai.off': "Off: no AI keys",
