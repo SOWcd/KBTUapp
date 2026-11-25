@@ -389,10 +389,9 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
         raise ApiError("conflict", "paid")  # someone has paid by these details already
     if v.lent_full and v.staff_org == org["id"] and price is not None and (new["pay_to_name"], new["pay_phone"]) != (old["pay_to_name"], old["pay_phone"]):
-        # the creator from Admin sets or changes the club's payee as its President would: the owner's log
-        # keeps what it was and what it became, so a payment sent elsewhere can be traced
-        log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None, "was": {"name": old["pay_to_name"], "phone": old["pay_phone"]},
-                                                                            "now": {"name": name, "phone": phone}}, ensure_ascii=False))
+        # Record the change without copying the payee's personal details into a permanent log.
+        log_action(con, v.id, "staff_kaspi", f"org:{org['id']}", json.dumps({"event": e["id"] if e else None,
+            "changed": [label for label, key in (("name", "pay_to_name"), ("phone", "pay_phone")) if new[key] != old[key]]}))
     return new
 
 

@@ -3066,6 +3066,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.subjects.catalogue(cfg.subjects_file)
         return logic.subjects.offer(con, v, body.get("ask"))
 
+    @app.delete("/api/subjects/offer/{cid}", status_code=204)
+    def subject_withdraw_offer(cid: int, con: Con, v: Me):
+        logic.subjects.withdraw(con, v, cid)
+
     @app.post("/api/forum/blocks", status_code=204)
     def forum_block(con: Con, v: Me, body: dict = Body(...)):  # every student: the student forum hides blocked people too
         logic.block(con, v, body.get("user"), body.get("on", True))
