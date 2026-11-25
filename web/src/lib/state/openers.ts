@@ -1,7 +1,7 @@
 // The sheets' openers, each written once (sheets.ts holds `sheets`; this fills it as it loads, App imports it first), and
 // the deep links' table. Every sheet is its own chunk: a dynamic import here, never a static one.
 import type { Component } from 'svelte';
-import { api, ApiErr, type AlbumPhoto, type AttendeeReceipt, type Chat, type ClubTag, type EventBracket, type EventFull, type EventGroups, type GrantItem, type Id, type MemoAsks, type MyCheckin, type OrgCategory, type OrgRef, type PersonCard, type Post, type Question, type ResearchSurvey, type Round, type ScreenSession, type TeamMember, type TeamPick, type TeamSetup } from '../api';
+import { api, ApiErr, type AlbumPhoto, type AttendeeReceipt, type Chat, type ClubTag, type EventBracket, type EventFull, type EventGroups, type GrantItem, type Id, type MemoAsks, type MyCheckin, type OrgRef, type PersonCard, type Post, type Question, type ResearchSurvey, type Round, type ScreenSession, type TeamMember, type TeamPick, type TeamSetup } from '../api';
 import { achItem, type Manual, type ShelfItem } from '../awards';
 import { t } from '../i18n/index.svelte';
 import { warmMap } from '../map';
@@ -53,7 +53,6 @@ export const chunks = {
   // what used to be pages beside a tab's screen: warmed ahead, so their sheets open in the tap's frame
   feed: () => import('../../screens/afisha/Feed.svelte'),
   news: () => import('../../screens/afisha/News.svelte'),
-  clubList: () => import('../../screens/afisha/ClubList.svelte'),
   friends: () => import('../../screens/profile/Friends.svelte'),
   people: () => import('../../screens/profile/People.svelte'),
   screen: () => import('../../screens/club/ScreenSheet.svelte'),
@@ -275,8 +274,6 @@ export const openers = {
   /** a club of mine: its Studio pushed over the Clubs tab (the tab's Mine row, the bot's links) */
   studio: (org: Id, asCreator?: boolean) => lazy(chunks.studio, { org, asCreator }, 'sheet.studio', asCreator ? `creator:${org}` : org),
   /** all my clubs as rows (the Clubs tab's "All" circle, 3+ of them); role: mine there (a club I only follow: null) */
-  clubList: (view: 'all' | 'schools' | 'quiet' | OrgCategory) => lazy(chunks.clubList, { view }),
-  myClubs: (rows: { org: OrgRef; role: string | null; sub: string }[], title?: string) => lazy(() => import('../../screens/afisha/MyClubs.svelte'), { rows, title }),
   /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
   schedHowTo: () => lazy(() => import('../../screens/sheets/ScheduleHowTo.svelte'), {}),
   /** my whole week of classes */
