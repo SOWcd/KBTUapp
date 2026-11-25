@@ -167,6 +167,10 @@ export const sheets = {
   helpUs: () => {},
   feedback: () => {},
   adminVoices: () => {},
+  research: () => {},
+  researchForm: (_survey: import('../api').ResearchSurvey) => {},
+  researchPropose: () => {},
+  adminResearch: () => {},
   /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
   santaHi: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch

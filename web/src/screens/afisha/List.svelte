@@ -33,7 +33,8 @@
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
-  import { openLink, haptic } from '../../lib/tg';
+  import { openLink, haptic, inTelegram, tg } from '../../lib/tg';
+  import { endOf, keptTickets } from '../../lib/offlineTickets';
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
@@ -83,7 +84,6 @@
   });
   const today = $derived(dayNo(now));
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
-  const endOf = (e: EventCard) => e.endsAt ?? e.startsAt + 3 * 3600;
 
   const featured = $derived(data.posts.find((p) => p.featured));
   const shown = $derived(data.events.filter((e) => e.status !== 'cancelled'));
@@ -244,6 +244,9 @@
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
+  // opened without the network: my kept tickets first, their QR ready for the door (lib/offlineTickets)
+  // (with the clock: a ticket whose event ends while the app stays open offline leaves within 30 s)
+  const kept = $derived(data.offline ? keptTickets(inTelegram ? tg.user?.id : session.me?.tg.id, now) : []);
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
@@ -384,6 +387,7 @@
   </header>
   <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
+  {#if kept.length}{#await import('../../ui/OfflineTickets.svelte') then m}<div class="offline"><m.default tickets={kept} /></div>{/await}{/if}
   {#if searching}
     <Everything {q} events={searchable} />
   {:else}
@@ -547,6 +551,7 @@
   .date { margin-bottom: var(--s-5); white-space: nowrap; font: var(--fw-light) var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.045em; color: var(--text-3); }
   .date:has(+ .kick) { margin-bottom: var(--s-1); }
   .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .offline { margin-bottom: var(--s-6); }
   .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }

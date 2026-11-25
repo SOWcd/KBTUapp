@@ -130,7 +130,7 @@ def test_cli_csv(form, capsys):
     capsys.readouterr()
     admin.main(["form", "answers", "abroad"])
     got = list(csv.reader(io.StringIO(capsys.readouterr().out)))
-    assert got[0] == ["at", "Age", "Program", "Why", "Paid by", "Ties", "=Story"] and len(got) == 3
+    assert got[0] == ["at", "Age", "Program", "Why", "Paid by", "Ties", "'=Story"] and len(got) == 3  # a label is a cell too
     assert got[1][1:] == ["21", "", "Quality; Prestige", "", "", "'=SUM(A1)\nsecond, line"] and got[2][1:] == ["30", "", "", "", "", ""]
     admin.main(["form", "list"])
     assert capsys.readouterr().out.split() == ["open", "2", "/f/abroad"]

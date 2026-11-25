@@ -112,8 +112,10 @@ export interface ChannelComment { id: Id; body: string; at: Ts; state: ChannelRe
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; crew?: Id | null /* an event's team marked (not its guests) */; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; came?: number /* of the expected, who counted */; param: string | null; next: number; created?: Ts; screens: number; paired: number; vol?: boolean /* the volunteers ledger's session: its door (VolDoor) */; helpers?: number; last?: { name: string; at: Ts; team?: boolean /* marked on the event's team list (server checkin._team) */ } | null /* show: the last one counted */ }
+export interface ScreenSession { session: Id; org?: Id | null; meetup?: boolean; department?: string | null; flagged?: number; scans?: number; reviewOnly?: boolean; event: Id | null; crew?: Id | null /* an event's team marked (not its guests) */; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; came?: number /* of the expected, who counted */; param: string | null; next: number; created?: Ts; screens: number; paired: number; vol?: boolean /* the volunteers ledger's session: its door (VolDoor) */; helpers?: number; last?: { name: string; at: Ts; team?: boolean /* marked on the event's team list (server checkin._team) */ } | null /* show: the last one counted */ }
 /** The check-in the capsule shows (/api/me): one I run (ScreenSheet's numbers, for its first frame), or one I help at (my QR). until: when its event is over */
+export interface MeetupScan { id: Id; user: Id; name: string; at: Ts; phase: 'in' | 'out'; flag: 'outsider' | 'department' | 'unassigned' | null; review: 'added' | 'declined' | null; ask: boolean }
+export interface MeetupScans { rows: MeetupScan[]; next: Id | null }
 export type MyCheckin = (ScreenSession & { helper: false; until: Ts }) | { helper: true; session: Id; event: Id | null; title: string; scanner: boolean; until: Ts };
 /** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
 export interface ScreenHelper { session: Id; event: Id | null; title: string; joined: boolean; scanner: boolean }
@@ -938,6 +940,22 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Native surveys; answer content and identities are never returned to the student list. */
+export interface ResearchQuestion {
+  id: string; type: 'text' | 'long' | 'choice' | 'multi' | 'scale'; label: string;
+  hint?: string; required?: boolean; options?: string[]; other?: boolean; low?: string; high?: string;
+}
+export interface ResearchSpec {
+  title: string; intro: string; thanks: string; lang: 'ru' | 'kk' | 'en';
+  sections: { title: string; questions: ResearchQuestion[] }[];
+}
+export type ResearchAnswers = Record<string, string | string[]>;
+export interface ResearchSurvey { slug: string; title: string; about: string; answers: number; answered: boolean; spec: ResearchSpec }
+export interface ResearchInput { title: string; goal: string; questions: string; organizer: string; consent: string }
+export interface ResearchRequest extends Omit<ResearchInput, 'consent'> {
+  id: Id; person: PersonRef; username: string | null; at: Ts; approved: boolean;
+}
 
 /** Private support data; never embedded in another person's card. */
 export interface Support {
