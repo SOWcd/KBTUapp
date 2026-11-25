@@ -125,7 +125,8 @@ def test_new_posts_become_the_club_posts(env, monkeypatch):
     _pics(monkeypatch, ok=False)
     assert _sweep(cfg, meta, con) == 1
     top = _posts(c, oid)[0]
-    assert top["title"] == "Chess Club" and top["body"] == "https://www.instagram.com/p/C0aaaaaaaa5/" and not top["photo"]
+    name = con.execute("SELECT name FROM orgs WHERE id = ?", (oid,)).fetchone()[0]  # create_org drops "Club"
+    assert top["title"] == name and top["body"] == "https://www.instagram.com/p/C0aaaaaaaa5/" and not top["photo"]
 
 
 def test_no_business_account_waits_a_day_and_fails_nothing_else(env, monkeypatch):
