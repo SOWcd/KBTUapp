@@ -2337,4 +2337,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Receipt IDs stay spent even if account/event cleanup deletes the newest pre-upgrade upload.
     (230, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
       ON CONFLICT(key) DO UPDATE SET value = CAST(MAX(CAST(meta.value AS INTEGER), CAST(excluded.value AS INTEGER)) AS TEXT);"""),
+    # Remove personal values copied into audit payloads; retain the action and nonpersonal context.
+    (231, """UPDATE audit_log SET data = json_remove(data, '$.q') WHERE action = 'registry_search';
+    UPDATE audit_log SET data = json_remove(data, '$.was', '$.now') WHERE action = 'staff_kaspi';"""),
 ]
