@@ -3253,24 +3253,40 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                          "sha256_cert_fingerprints": list(cfg.android_certs)}}],
                             headers={"Cache-Control": "public, max-age=300"})
 
-    @app.get("/play-demo")
-    def play_demo(request: Request, con: Con, k: str = ""):
-        """Google Play's reviewer signs in without Telegram: PLAY_DEMO's secret link (admin play-demo) opens the
-        made-up demo account (web_auth.demo_user) in this browser; a wrong or missing key is a plain 404"""
-        if not cfg.play_demo or not hmac.compare_digest(k.encode(), cfg.play_demo.encode()):
+    def demo_token(request: Request, con, k: object) -> str | None:
+        """The stores' reviewers sign in without Telegram (android/README.md): PLAY_DEMO's code opens the made-up demo
+        account (web_auth.demo_user). A new session's token, or None where a real person is signed in already (a
+        leaked code mustn't sign them out: a new profile for the reviewer); a wrong or missing code is a plain 404"""
+        if not cfg.play_demo or not isinstance(k, str) or not hmac.compare_digest(k.encode(), cfg.play_demo.encode()):
             raise ApiError("not_found")
         old = request.cookies.get(web_auth.COOKIE, "")
-        try:  # a real person signed in here keeps their session: a leaked link mustn't sign them out (a new profile for the reviewer)
+        try:
             if web_auth.lookup(con, old, cfg.admins)["tg_id"] != web_auth.DEMO_TG_ID:
-                return RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+                return None
         except ApiError as e:
             if e.code != "unauthorized":
                 raise
         t = logic.now()
         with db.tx(con):
-            token = web_auth.issue(con, web_auth.demo_user(con, t), old, t)
+            return web_auth.issue(con, web_auth.demo_user(con, t), old, t)
+
+    @app.get("/play-demo")
+    def play_demo(request: Request, con: Con, k: str = ""):
+        """The reviewer's link (admin play-demo): the code in the address"""
+        token = demo_token(request, con, k)
         response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
-        _web_cookie(response, token)
+        if token:
+            _web_cookie(response, token)
+        return response
+
+    @app.post("/api/web/demo", status_code=204)
+    def web_demo(request: Request, con: Con, body: dict = Body(...)):
+        """The sign-in page's visible "Sign in with a code" (App Review 2.5.19: no hidden doors): the same code typed"""
+        _web_csrf(request, cfg.domain)
+        token = demo_token(request, con, body.get("code"))
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        if token:
+            _web_cookie(response, token)
         return response
 
     @app.get("/exit")
@@ -3288,7 +3304,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     legal = Path(__file__).with_name("i18n") / "legal"
     LEGAL_NAMES = {"privacy": {"ru": "\u041f\u043e\u043b\u0438\u0442\u0438\u043a\u0430", "kk": "\u0421\u0430\u044f\u0441\u0430\u0442", "en": "Privacy"},
-                   "terms": {"ru": "\u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435", "kk": "\u041a\u0435\u043b\u0456\u0441\u0456\u043c", "en": "Terms"}}
+                   "terms": {"ru": "\u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435", "kk": "\u041a\u0435\u043b\u0456\u0441\u0456\u043c", "en": "Terms"},
+                   "delete": {"ru": "\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430",
+                              "kk": "\u0410\u043a\u043a\u0430\u0443\u043d\u0442\u0442\u044b \u0436\u043e\u044e", "en": "Delete account"}}
 
     @app.get("/privacy")
     def privacy_page(lang: str = "ru"):
@@ -3298,13 +3316,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def terms_page(lang: str = "ru"):
         return legal_page("terms", lang)
 
+    @app.get("/delete")
+    def delete_page(lang: str = "ru"):
+        """How to delete an account, public: Google Play's and the App Store's account-deletion link (android/README.md)"""
+        return legal_page("delete", lang)
+
     def legal_page(doc: str, lang: str) -> Response:
-        """kbtu.sow.kz/privacy and /terms: plain pages anyone can open, in ru, kk or en; the app links
+        """kbtu.sow.kz/privacy, /terms and /delete: plain pages anyone can open, in ru, kk or en; the app links
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
-        other = "terms" if doc == "privacy" else "privacy"
+        other = "terms" if doc == "privacy" else "privacy"  # /delete links the policy too
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KBTU App: {LEGAL_NAMES[doc][lang]}</title><style>
 :root {{ color-scheme: light dark; --bg: #fff; --text: #14161f; --dim: #5b6170; --accent: #3B6BFF; --line: #e4e7ee; }}
