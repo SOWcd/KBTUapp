@@ -107,7 +107,8 @@
   let last = ''; // the code just read: a flagged receipt is let in by it after a look (admit)
   async function check(raw: string, admit = false) {
     const p = ours(raw);
-    if (p) { haptic.tap(); leave(); sheets.deepLink(p); return; }
+    // our own QRs open as if tapped (the door's check-in QR marks a team member), but a badge (u_) is a walk-in: checked in
+    if (p && !p.startsWith('u_')) { haptic.tap(); leave(); sheets.deepLink(p); return; }
     if (busy || !raw.trim()) return;
     busy = true; last = raw;
     try {
