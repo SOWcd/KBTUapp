@@ -5,7 +5,10 @@
 #   as the pre-commit hook, on what is staged:  git config core.hooksPath .githooks  (once per clone)
 #   in CI, on what a PR or a push adds:         .githooks/pre-commit <base commit>
 # Only added lines count, so older text elsewhere never blocks a commit that doesn't touch it.
-if [ -n "$1" ]; then set -- "$1...HEAD"; else set -- --cached; fi
+# a merge commit: only what is new against the merged-in branch counts (its own lines were checked when they landed)
+if [ -n "$1" ]; then set -- "$1...HEAD"
+elif git rev-parse -q --verify MERGE_HEAD >/dev/null; then set -- --cached MERGE_HEAD
+else set -- --cached; fi
 git -c core.quotepath=off diff "$@" -U0 --no-color --no-ext-diff --diff-filter=d -- . \
     ':(exclude)web/src/lib/i18n' ':(exclude)server/kbtu/texts.py' ':(exclude)server/kbtu/i18n' ':(exclude)web/public/pitch*.html' ':(exclude)web/public/sabit.html' ':(exclude)web/public/install.html' ':(exclude)web/public/android.html' ':(exclude)android/listing.md' ':(exclude)ios/KBTUApp/*.lproj/*' |
   perl -CS -ne '
