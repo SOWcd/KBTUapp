@@ -399,7 +399,7 @@
       </Row>
       {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} value={fresh ? undefined : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
       {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
-      {#if staff}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
+      {#if staff || m.role === 'head' || m.role === 'vice' || m.role === 'president'}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}
       {#if staff}<Row icon={Gift} title={t('santa.title')} value={santa ? tn('santa.playing', santa.taken) : undefined} accessory="chevron" onclick={startSanta} />{/if}
       {#if path}<Row icon={MountainSnow} title={t('op.title')} value={path.steps.top ? t('op.atTop') : t('op.level', { n: level })} accessory="chevron" onclick={openAscent} />{/if}
       {#if may(m, 'profile')}<Row icon={Pencil} title={t('ce.title')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id)} />{/if}

@@ -2393,6 +2393,30 @@ MIGRATIONS: list[tuple[int, str]] = [
           SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
           WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
     END;"""),
+    # A signed comment written in the app under a channel post (fchannel.comment_*) is a row of fchan_replies that this
+    # table names a commenter for: the bot sends it under the person's short name. An anonymous author's reply has no row
+    # here, and fchan_replies itself never gets a user id (its post is the only way to that author)
+    (234, """CREATE TABLE IF NOT EXISTS fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;"""),
+    # Meetup scans keep each attempt, apart from attendance's one row.
+    (235, """ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
+    ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
+    ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
+    ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));
+    CREATE TABLE IF NOT EXISTS qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_session ON qr_meet_scans(session_id, id);
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_user ON qr_meet_scans(user_id);
+    UPDATE qr_sessions SET meetup = 1 WHERE crew_event_id IS NOT NULL OR (org_id IS NOT NULL AND event_id IS NULL);
+    """),
     # a cover per format (the Feed's tall slide, the event's card, a list's thumbnail): its own crop (focus) or its own
     # photo over the event's one cover; and a member's draft waiting for the club's President or a Vice (organizing.py)
     (237, """CREATE TABLE IF NOT EXISTS event_covers (

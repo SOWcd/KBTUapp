@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
+from . import ai, casting, checkin, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -546,6 +546,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
+    if kind == "meetup_review":
+        notice = checkin.meetup_notice(con, int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, notice["kind"], dept=notice["dept"]), f"meet_{ref[1]}") if notice else None
     if kind in SANTA_KINDS:
         return _santa(con, m, lang)
     if kind in ("donation_confirmed", "donation_rejected"):

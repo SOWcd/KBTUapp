@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { DonationReview, MyRegistration, SantaChats } from '../api';
+import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -20,6 +20,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
 import { clearCache } from './cache';
 import { castingOn } from '../posts';
+import { unreachable } from '../offlineTickets';
 
 export const data = $state({
   support: null as Support | null,
@@ -51,6 +52,9 @@ export const data = $state({
   news: null as { casts: Post[]; posts: Post[] } | null, // tab 2 → News for club members: broadcasts, then my clubs' posts
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
+  meetups: null as ScreenSession[] | null,
+  meetupSetup: {} as Record<number, TeamSetup>,
+  meetupScans: {} as Record<number, MeetupScans>,
   appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
   solved: [] as Solved[],                     // "Solved by your appeals": with my appeals, one request
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
@@ -65,6 +69,9 @@ export const data = $state({
   staffMutesFailed: false,
   santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
+  // no network, or the events' request never reached the server: the kept tickets show, with the offline note. The
+  // phone's own word first, so a launch without network draws them in its first frame (nothing jumps in after)
+  offline: typeof navigator !== 'undefined' && navigator.onLine === false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
@@ -301,6 +308,19 @@ export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
 }
 
+export async function loadMeetupSetup(org: Id): Promise<void> {
+  try { data.meetupSetup[org] = await api.teamSetup(org); } catch { /* keep the last department list */ }
+}
+
+export async function loadMeetups(): Promise<void> {
+  try {
+    data.meetups = await api.screens();
+    for (const s of data.meetups) if (s.meetup && !data.meetupScans[s.session]) {
+      void api.meetupScans(s.session).then((p) => { data.meetupScans[s.session] ??= p; }).catch(() => {});
+    }
+  } catch { /* keep the last list */ }
+}
+
 /** DMP's registry for this month (the overseers' main page), in the background; false when the server said no. */
 /** The ledger is no longer mine to see (access taken back, unlinked, the switch off): the copy goes and every sheet of it closes. */
 export function volGone(e: unknown): boolean {
@@ -368,7 +388,8 @@ export async function loadAfisha(): Promise<void> {
   void loadMyPast();
   const at = taps, ratedAt = ratingTaps;
   await Promise.allSettled([
-    api.events().then((events) => { if (at === taps) data.events = events; data.error = false; }, () => { data.error = true; })
+    api.events().then((events) => { if (at === taps) data.events = events; data.error = false; data.offline = false; },
+      (e) => { data.error = true; data.offline = unreachable(e); })
       .finally(() => { data.eventsReady = true; }),
     api.orgs().then((orgs) => {
       if (at === taps) { data.orgs = orgs.filter((o) => !o.small); data.small = orgs.filter((o) => o.small); }
