@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -89,6 +90,12 @@ class Config:
     apns_team_id: str = ""
     apns_key: str = field(default="", repr=False)
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
+    # PLAY_DEMO: Google Play's reviewer signs in at /play-demo?k=<this> (logic/web_auth.py, android/README.md); empty: off,
+    # and every demo session with it. 32+ random characters, or off
+    play_demo: str = field(default="", repr=False)
+    # ANDROID_CERT_SHA256: the Android app's signing certificates (AA:BB:..., comma-separated) for
+    # /.well-known/assetlinks.json; empty: no file, the app shows a browser bar
+    android_certs: tuple[str, ...] = ()
 
 
 def _dotenv() -> dict[str, str]:
@@ -118,6 +125,22 @@ def _kz_phone(s: str) -> str:
         print("DONATE_PHONE is not a Kazakh number (+7 700 000 00 00): the Support page is off", flush=True)
         return ""
     return "+" + d if s else ""
+
+
+def _play_demo(s: str) -> str:
+    """PLAY_DEMO: the reviewer's link is the only key to the demo account; a short one could be guessed"""
+    if s and len(s) < 32:
+        print("PLAY_DEMO is shorter than 32 characters: the Play review demo is off", flush=True)
+        return ""
+    return s
+
+
+def _certs(s: str) -> tuple[str, ...]:
+    """ANDROID_CERT_SHA256: SHA-256 fingerprints as AA:BB:... (Play Console's app signing page, keytool -list)"""
+    certs = tuple(x.strip().upper() for x in s.split(",") if x.strip())
+    if bad := [x for x in certs if not re.fullmatch(r"(?:[0-9A-F]{2}:){31}[0-9A-F]{2}", x)]:
+        print(f"ANDROID_CERT_SHA256: {len(bad)} entries aren't SHA-256 fingerprints (AA:BB:...): left out", flush=True)
+    return tuple(x for x in certs if x not in bad)
 
 
 def load() -> Config:
@@ -178,4 +201,6 @@ def load() -> Config:
         apns_key_id=env.get("APNS_KEY_ID", "").strip(),
         apns_team_id=env.get("APNS_TEAM_ID", "").strip(),
         apns_key=env.get("APNS_KEY", "").strip().replace("\\n", "\n"),
+        play_demo=_play_demo(env.get("PLAY_DEMO", "").strip()),
+        android_certs=_certs(env.get("ANDROID_CERT_SHA256", "")),
     )
