@@ -100,6 +100,30 @@ def test_broadcast_refuses_unsafe_requests(audience):
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
 
 
+def test_broadcast_to_one_platform(audience, capsys):
+    """--platform android: only people seen on Android (user_platforms), the usual rules too; a preview goes regardless,
+    and a later broadcast of the same name to another platform skips whoever already got it."""
+    con, _ = audience
+    con.execute("INSERT INTO user_platforms (user_id, kind, seen_at) SELECT id, 'android', 0 FROM users WHERE tg_id IN (11, 13, 14)")
+    con.execute("INSERT INTO user_platforms (user_id, kind, seen_at) SELECT id, 'ios', 0 FROM users WHERE tg_id IN (11, 12)")
+    android = ["broadcast", NAME, URL, "--platform", "android"]
+    admin.main([*android, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 1"        # 11; 13 can't be written to, 14 is banned
+    admin.main([*android, "@reader"])                                 # the creator has no row: a preview still goes
+    assert capsys.readouterr().out.strip() == "queued 1"
+    admin.main(android)
+    assert capsys.readouterr().out.strip() == "queued 1"
+    admin.main(["broadcast", NAME, URL, "--platform", "ios"])
+    assert capsys.readouterr().out.strip() == "queued 1"             # 12; 11 already has it
+    assert [r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id ORDER BY u.tg_id")] == [10, 11, 12]
+    for bad in (["--platform", "linux"], ["--platform"], ["--platform", "--dry"], ["--platform", "ios", "--platform", "web"]):
+        with pytest.raises(SystemExit):
+            admin.main(["broadcast", NAME, URL, *bad])
+    with pytest.raises(SystemExit):
+        admin.main(["broadcast", "--platform", "ios", NAME, URL])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 3
+
+
 def test_a_failed_preview_can_go_again(audience, capsys):
     con, _ = audience
     admin.main(["broadcast", NAME, URL, "@reader"])

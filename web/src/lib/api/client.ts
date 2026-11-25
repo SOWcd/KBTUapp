@@ -192,7 +192,8 @@ export const server = {
   donationQueue: (): Promise<DonationReview[]> => call('GET', '/admin/donations'),
   reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),
   donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
-  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
+  // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
+  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
