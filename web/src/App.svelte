@@ -3,7 +3,8 @@
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
-  import { ui, TABS, overlays, open, close, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
+  import { ui, TABS, overlays, open, close, say, moment, backTo, goTab, type Tab } from './lib/state/ui.svelte';
+  import { native, nativeTabs, nativeTickets } from './lib/native';
   import { may } from './lib/perms';
   import { fresh } from './lib/state/assistant.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain, runningCheckin } from './lib/state/session.svelte';
@@ -148,6 +149,12 @@
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
   sheets.deepLink = (p) => deepLink(p);
+  // the iPhone app already open: a tapped notification's "start" arrives as kb:open (ios/, its launch: ?startapp)
+  $effect(() => {
+    const open = (e: Event) => { const p = (e as CustomEvent<unknown>).detail; if (typeof p === 'string' && p) deepLink(p); };
+    addEventListener('kb:open', open);
+    return () => removeEventListener('kb:open', open);
+  });
   sheets.research = () => { void loadResearch(); void lazy(researchSheet, {}); };
   const asResearchStudent = (action: () => void) => asStudent(() => {
     const student = session.me?.student;
@@ -351,6 +358,9 @@
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => ui.tab !== 'forum' && channelUnread(), club: () => false,
     profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.inbox ?? 0) > 0,
   };
+  // the iPhone app: its own tab bar in place of Nav's tabs, and my tickets kept for the door without a network (native.ts)
+  $effect(() => { if (native.has('tabs')) nativeTabs(tabs.map((k) => ({ id: k, title: TAB_LABEL[k](), dot: TAB_DOT[k]() })), ui.tab, gated || !!session.banned || !!session.revoked, goTab); });
+  $effect(() => { if (native.has('tickets') && data.eventsReady && !data.error) nativeTickets([...data.events, ...data.opened], i18n.lang); });
   /** A club of mine: the Clubs tab with its Studio pushed over it. */
   function toClub(org: number) { ui.tab = 'club'; sheets.studio(org); }
   // a screen builds on its first showing and stays alive (scroll kept); a tab never shown builds nothing (the hidden tabs

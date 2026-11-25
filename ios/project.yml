@@ -1,0 +1,53 @@
+# The iPhone app: a thin native shell over https://kbtu.sow.kz (ios/README.md). XcodeGen makes the Xcode project from
+# this file on the CI runner (.github/workflows/ios.yml); the .xcodeproj is never committed. BUNDLE_ID (kz.sow.kbtu
+# unless the IOS_BUNDLE_ID variable says otherwise) and TEAM_ID come from the environment there.
+name: KBTUApp
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: ${TEAM_ID}
+targets:
+  KBTUApp:
+    type: application
+    platform: iOS
+    sources:
+      - KBTUApp
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_ID}
+        PRODUCT_NAME: KBTUApp
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_BITCODE: NO
+    entitlements:
+      path: KBTUApp/KBTUApp.entitlements
+      properties:
+        aps-environment: production
+        com.apple.developer.applesignin: [Default]
+    info:
+      path: KBTUApp/Info.plist
+      properties:
+        CFBundleDisplayName: KBTU App
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ru, kk]
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        # only the web boot screen's ground, never a logo: the web's own boot screen comes up on it (README.md)
+        UILaunchScreen:
+          UIColorName: Ground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIViewControllerBasedStatusBarAppearance: true
+        NSCameraUsageDescription: The door scanner reads tickets' and badges' QR codes.
+        KBHome: https://kbtu.sow.kz/
+        # the web view goes only here (WebController limitsNavigationsToAppBoundDomains): our site, and t.me for the news'
+        # embedded Telegram posts (frames; no script of ours runs there). Telegram's sign-in opens in the system's sheet
+        # (TelegramLink.swift); the bridge answers our site's main frame alone
+        WKAppBoundDomains: [kbtu.sow.kz, t.me]

@@ -2532,4 +2532,31 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (user_id, kind)
     ) STRICT;
     CREATE INDEX IF NOT EXISTS user_platforms_by_kind ON user_platforms(kind, user_id);"""),
+    # the iPhone app (logic/apple.py): one account, many sign-ins. Telegram stays users.tg_id; identities holds the
+    # others (provider 'apple': Apple's "sub" for this app), each with its own consent (apple.CONSENT). push_devices: an
+    # APNs token per signed-in web session, gone with the session (sign-out, expiry, a changed tg_id) or the account
+    (244, """CREATE TABLE IF NOT EXISTS identities (
+      provider TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, subject),
+      UNIQUE (user_id, provider)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS push_devices (
+      token TEXT PRIMARY KEY,
+      session BLOB NOT NULL REFERENCES web_sessions(digest) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS push_devices_session ON push_devices(session);
+    CREATE INDEX IF NOT EXISTS push_devices_user ON push_devices(user_id);"""),
+    # notifications on one channel per person (push.py): the app's push while a token is live, else the bot. provider:
+    # who carries the token (apns now, fcm for the Android app); dead_at: its last push failed (the app's next launch
+    # registers it again); users.notify_via: the person's pick in Settings, the app by default
+    (245, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
+    ALTER TABLE push_devices ADD COLUMN dead_at INTEGER;
+    ALTER TABLE users ADD COLUMN notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'));"""),
 ]

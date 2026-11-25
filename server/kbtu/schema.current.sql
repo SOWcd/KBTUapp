@@ -664,6 +664,15 @@ CREATE TABLE helper_offers (
       consent TEXT NOT NULL,
       created_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE identities (
+      provider TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, subject),
+      UNIQUE (user_id, provider)
+    ) STRICT;
 CREATE TABLE ig_accounts (
       org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       handle     TEXT NOT NULL,
@@ -860,6 +869,13 @@ CREATE TABLE profile_views (
       user_id   INTEGER NOT NULL,
       PRIMARY KEY (day, viewer_id, user_id)
     ) WITHOUT ROWID;
+CREATE TABLE push_devices (
+      token TEXT PRIMARY KEY,
+      session BLOB NOT NULL REFERENCES web_sessions(digest) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    , provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm')), dead_at INTEGER) STRICT;
 CREATE TABLE pymk (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1419,7 +1435,7 @@ CREATE TABLE users (
   ban_reason      TEXT,
   created_at      INTEGER NOT NULL,
   seen_at         INTEGER NOT NULL
-, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}') STRICT;
+, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'))) STRICT;
 CREATE TABLE videos (
       id         INTEGER PRIMARY KEY,
       owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1654,6 +1670,8 @@ CREATE INDEX posts_feed ON posts(audience, pinned, created_at);
 CREATE INDEX posts_recent ON posts(audience, created_at);
 CREATE INDEX prefill_rest_email ON prefill_rest(email);
 CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
+CREATE INDEX push_devices_session ON push_devices(session);
+CREATE INDEX push_devices_user ON push_devices(user_id);
 CREATE INDEX pymk_other ON pymk (other_id);
 CREATE INDEX pymk_dismissed_other ON pymk_dismissed (other_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);

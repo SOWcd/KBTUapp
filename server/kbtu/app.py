@@ -294,6 +294,8 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
     """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
     t = logic.now()
+    if tg["id"] >= logic.apple.SYNTH:  # never a Telegram ID (52 bits): the Apple-made accounts' range (logic/apple.py)
+        raise ApiError("forbidden", "init_data")
     photo = tg.get("photo_url") if str(tg.get("photo_url") or "").startswith("https://t.me/") else None
     fresh = (tg.get("username"), tg.get("first_name") or "", tg.get("last_name") or "", photo)
     dm = int(bool(tg.get("allows_write_to_pm")))
@@ -687,6 +689,100 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             _web_cookie(response, "")
         return response
 
+    # ------------------------------------------------------------ the iPhone app (logic/apple.py, ios/)
+
+    def apple_subject(body: dict) -> str:
+        if not cfg.ios_bundle:
+            raise ApiError("not_found")
+        sub = logic.apple.subject(body.get("token"), body.get("nonce"), cfg.ios_bundle, logic.now())
+        if sub is None:
+            raise ApiError("forbidden", "web_login")
+        return sub
+
+    def web_only(request: Request) -> str:
+        """The session these routes act on; a Mini App is Telegram already and has no session of ours"""
+        if not (token := getattr(request.state, "web_token", "")):
+            raise ApiError("forbidden", "telegram")
+        return token
+
+    @app.post("/api/web/apple", status_code=204)
+    def web_apple(request: Request, con: Con, body: dict = Body(...)):
+        """Sign in with Apple: the account its Apple ID reaches, made now when it has none (its consent at the button)"""
+        _web_csrf(request, cfg.domain)
+        sub, t = apple_subject(body), logic.now()
+        with db.tx(con):
+            uid = logic.apple.sign_in(con, body, sub, str(body.get("lang") or ""), t)
+            _viewer_user(con, logic.one(con, "SELECT * FROM users WHERE id = ?", uid))  # banned: refused, with why
+            web_auth.forget(con, t)
+            token = web_auth.issue(con, uid, request.cookies.get(web_auth.COOKIE, ""), t)
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, token)
+        return response
+
+    @app.post("/api/me/logins/apple", status_code=204)
+    def link_apple(con: Con, v: Me, body: dict = Body(...)):
+        sub = apple_subject(body)
+        with db.tx(con):
+            logic.apple.link_apple(con, v.id, body, sub, logic.now())
+
+    @app.delete("/api/me/logins/apple", status_code=204)
+    def unlink_apple(request: Request, con: Con, v: Me):
+        token = getattr(request.state, "web_token", "")
+        with db.tx(con):
+            logic.apple.unlink_apple(con, v.id, web_auth._digest(token) if token else None)
+
+    @app.get("/api/me/logins/telegram")
+    def telegram_start(request: Request, v: Me, state: str = "", ios: int = 0):
+        web_only(request)
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, bool(ios))}
+
+    @app.get("/api/web/telegram")
+    def telegram_sign_in_start(state: str = ""):
+        """The iPhone app's entrance: Telegram's sign-in page in the system's sign-in sheet (a popup in the web view loses
+        window.opener on iOS 17.5+), back through /tg-back; the proof then signs in at /api/web/login like the widget's"""
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, True)}
+
+    @app.get("/tg-back")
+    def telegram_back():
+        """Telegram's return into the iPhone app's sign-in sheet (logic/apple.py APP_SCHEME); the proof stays in the
+        fragment, so no Referer or log carries it"""
+        return Response(logic.apple.TG_BACK_HTML, media_type="text/html; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.apple.TG_BACK_CSP})
+
+    @app.post("/api/me/logins/telegram", status_code=204)
+    def link_telegram(request: Request, con: Con, v: Me, body: dict = Body(...)):
+        """Telegram's proof (its sign-in page's #tgAuthResult) put on my Apple-made account: the bot can write to me then"""
+        old, t = web_only(request), logic.now()
+        tg = auth.check_widget(body, cfg.bot_token, t)
+        if tg is None:
+            raise ApiError("forbidden", "web_login")
+        with db.tx(con):
+            web_auth.consume(con, tg, t)
+            push = logic.rows(con, "SELECT token FROM push_devices WHERE session = ?", web_auth._digest(old))
+            logic.apple.link_telegram(con, v.id, tg, t)  # every session of mine ends here (the tg_id trigger)
+            token = web_auth.issue(con, v.id, old, t)
+            logic.apple.keep_devices(con, v.id, [r[0] for r in push], web_auth._digest(token), t)
+        request.state.renew_web_cookie = False
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, token)
+        return response
+
+    @app.post("/api/me/devices", status_code=204)
+    def add_device(request: Request, con: Con, v: Me, body: dict = Body(...)):
+        """This iPhone's push token for my session here (it ends with the session)"""
+        if not cfg.ios_bundle:
+            raise ApiError("not_found")
+        token = web_only(request)
+        with db.tx(con):
+            logic.apple.add_device(con, v.id, web_auth._digest(token), body, logic.now())
+
+    @app.delete("/api/me/devices", status_code=204)
+    def drop_device(request: Request, con: Con, v: Me):
+        """Notifications off in iOS Settings: this session's push token goes (with IOS_BUNDLE_ID off too: a way out)"""
+        token = web_only(request)
+        with db.tx(con):
+            logic.apple.drop_device(con, v.id, web_auth._digest(token))
+
     def kri_google(con, v: Viewer) -> bool:
         """Google may answer this student's assistant first, once they say yes: its key, ASSIST_LEAD unset or google
         (off: the operator's kill switch), the assistant open to them, the policy that names Google in force (ai_on) and
@@ -696,7 +792,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
         demo = is_demo(request)  # the reviewer sees no real person: no support contacts, no donation number
-        if not getattr(request.state, "web_token", ""):
+        web = bool(getattr(request.state, "web_token", ""))
+        lg = logic.apple.logins(con, v.id)
+        if not web:
             logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
         if cfg.reports:
@@ -706,6 +804,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if report_log:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
+                                   # outside Telegram: which sign-ins reach this account (Settings links the other one)
+                                   **({"logins": lg} if web or lg["apple"] else {}),  # the Mini App too once Apple is linked: a link from a borrowed session is seen and undone there
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,

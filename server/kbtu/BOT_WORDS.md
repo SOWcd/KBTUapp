@@ -21,4 +21,7 @@ take-down, as a forward of the channel's post would.
 
 Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself, or the post's photos and videos as one album (`TIKTOK=1`, `kbtu/tiktok.py`; an Instagram story's video only with `INSTAGRAM_COOKIES`), no caption, no words of the bot's own.
 
+The iPhone app's notifications (`kbtu/apns.py`) are the same rendered bot message to the same person, sent there
+instead of Telegram (never both): they add no words and no exception.
+
 The CSV exports use template captions and go to the requester's private chat with the bot. Attendee exports may contain sign-up answers. Team log exports include attendance comments for people with current report consent and require the club's `reports` right.
