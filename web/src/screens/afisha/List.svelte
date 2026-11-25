@@ -52,8 +52,7 @@
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { hit as orgHit } from '../../lib/clubs';
-  import { hit, namesOf } from '../../lib/search';
+  import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
   import { afishaFilter, filterEvents, choices, active, pick, clearFilter } from '../../lib/state/afisha.svelte';
@@ -243,7 +242,7 @@
     return [...events.values()].filter((e) => canAskRating(e, now)).sort((a, b) => endOf(b) - endOf(a))[0];
   });
 
-  // the pull-down search: the events held, upcoming and the last month's that ended, by title, place or club
+  // the pull-down search: the app's global one (events, clubs, people, news, the forum, places, subjects)
   let q = $state('');
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
@@ -251,7 +250,8 @@
     toTickets.fn = () => { q = ''; void tick().then(() => (document.querySelector('.tab.on .tix') ?? document.querySelector('.tab.on .heroes'))?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
     return () => { toTickets.fn = null; };
   });
-  const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
+  // the global search's events: the upcoming ones held, then the last month's that ended (screens/afisha/Everything)
+  const searchable = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))] : []);
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -324,10 +324,7 @@
   <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
   {#if searching}
-    <div class="past">
-      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
-      {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
-    </div>
+    <Everything {q} events={searchable} />
   {:else}
   {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
     {@const e = ratePrompt}

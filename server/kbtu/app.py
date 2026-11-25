@@ -2636,6 +2636,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def find_all(con: Con, v: Me, q: str = ""):
         return {"events": logic.search.events(con, v, q[:80]), "clubs": logic.search.clubs(con, v, q[:80])}
 
+    # the app's global search, what it doesn't hold: findable people and the forum channel's posts (logic/search.more)
+    @app.get("/api/search/more")
+    def find_more(request: Request, con: Con, v: Me, q: str = ""):
+        try:
+            forum = bool(forum_viewer(request, v, con))
+        except ApiError:
+            forum = False
+        return logic.search.more(con, v, q[:80], forum=forum, channel=request.app.state.cfg.forum_channel)
+
     @app.put("/api/events/{eid}/reg-until")
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_reg_until(con, v, eid, body.get("until"))

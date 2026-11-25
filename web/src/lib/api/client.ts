@@ -580,6 +580,7 @@ export const server = {
   staff: (): Promise<Staff> => call('GET', '/admin/staff'), // admin: the app's team and the banned
   staffSearch: (q: string): Promise<StaffRow[]> => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
   search: (q: string): Promise<{ events: EventCard[]; clubs: OrgRef[] }> => call('GET', '/search?q=' + encodeURIComponent(q)), // the one search: by any name, what I may see (the admin: all)
+  searchMore: (q: string): Promise<import('./types').SearchMore> => call('GET', '/search/more?q=' + encodeURIComponent(q)), // the global search: what the app doesn't hold
   staffMutes: (): Promise<import('./types').StaffMute[]> => call('GET', '/admin/notifications'), // staff: my work-item notifications
   setStaffMute: (kind: string, on: boolean): Promise<import('./types').StaffMute[]> => call('PUT', `/admin/notifications/${kind}`, { on }), // admin → People: by name, @username, student ID or id
   inbox: (): Promise<import('./types').Inbox> => call('GET', '/admin/inbox'), // staff: everything waiting, and what was done lately
