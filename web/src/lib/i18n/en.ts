@@ -2185,7 +2185,7 @@ const en: Dict = {
   'cr.title': "People of the app",
   'cr.founder': "Creator",
   'cr.idea': "Idea",
-  'cr.team': "Team",
+  'cr.team': "Chief vibe coder",
   'cr.list': "Ideas and finds",
   'cr.student': "Student",
   'cr.students': "Students",
