@@ -440,8 +440,10 @@ def sweep_holds(con) -> None:
             promote(con, one(con, "SELECT * FROM events WHERE id = ?", r[0]))
 
 
-def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
-    sweep_holds(con)
+def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None, *,
+           sweep: bool = True) -> list[dict]:
+    if sweep:  # off for the read-only demo (app.is_demo): the worker sweeps anyway
+        sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
     # Bound starts_at to use an index range. The lookback covers even stored events longer than the
     # 31-day cap in organizing.clean_event, so they stay visible while they run.
@@ -522,8 +524,9 @@ def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     return e
 
 
-def event(con, v: Viewer, eid: int) -> dict:
-    sweep_holds(con)
+def event(con, v: Viewer, eid: int, *, sweep: bool = True) -> dict:
+    if sweep:
+        sweep_holds(con)
     return full(con, v, _event(con, v, eid))
 
 
@@ -594,7 +597,8 @@ def promote(con, e: sqlite3.Row) -> None:
     for nxt in waiting:
         pay = bool(e["price"]) and not _free_seat(con, e, nxt["user_id"])
         if pay:
-            con.execute("UPDATE registrations SET status = 'hold', hold_until = ?, waitlisted_at = NULL, updated_at = ? WHERE id = ?", (core.now() + HOLD, core.now(), nxt["id"]))
+            con.execute("UPDATE registrations SET status = 'hold', hold_until = ?, waitlisted_at = NULL, created_at = ?, updated_at = ? WHERE id = ?",
+                        (min(core.now() + HOLD, end_of(e)), core.now(), core.now(), nxt["id"]))
         else:
             con.execute("UPDATE registrations SET status = 'going', free = ?, waitlisted_at = NULL, updated_at = ? WHERE id = ?",
                         (int(bool(e["price"])), core.now(), nxt["id"]))
@@ -763,7 +767,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
-        hold = core.now() + HOLD if status == "hold" else None
+        hold = min(core.now() + HOLD, end_of(e)) if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
             renew_cancelled_ticket(con, eid, r)
@@ -812,12 +816,12 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     if e and e["guest_list"] and (r or _visible(con, v, e)):
         raise ApiError("guest_list")
     old = None
-    if r and (e["status"] != "published" or r["status"] == "hold" and r["hold_until"] < core.now()):
+    if r and (e["status"] != "published" or end_of(e) <= core.now() or r["status"] == "hold" and r["hold_until"] < core.now()):
         r = None  # cancelled since, or the hold ran out while the file was read (OCR): the waitlist's seat
     if r and r["status"] == "going":
         old = one(con, """SELECT * FROM receipts WHERE id = (SELECT MAX(id) FROM receipts WHERE registration_id = ?)
             AND status = 'accepted' AND reviewed_at IS NULL AND flags != 'spot' AND created_at >= ?""", r["id"], r["created_at"])  # this seat's own  # a spot one: as final as a checked one
-        if not old or end_of(e) < core.now():
+        if not old:
             r = None
         elif one(con, "SELECT COUNT(*) FROM receipt_replaced WHERE registration_id = ?", r["id"])[0] >= RECEIPT_TRIES:
             raise ApiError("rate_limited", "receipt")  # enough: the organizer looks at the last one
@@ -833,6 +837,7 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
     Returns the card and the replaced picture's path, for the caller to drop from disk once this is committed."""
     with tx(con):
         r, e, old = _receipt_slot(con, v, eid)
+        cid = core.next_id(con, "receipts")  # before deleting the old upload: stale reviews must never name its replacement
         f = None
         if old:  # its fingerprint stays (the duplicate check, the cap); its row and picture go
             f = one(con, "SELECT sha256, path FROM files WHERE id = ?", old["file_id"])
@@ -845,9 +850,9 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
         # so a forgery that beats OCR gets seen. The draw is once per seat: a seat that had any receipt before (replaced,
         # or before a cancel; one row per person and event) is always picked, so neither re-rolls it. Not clean and no
-        # warning either (a field unread): 'partial', in "Check receipts" too. Neither is told to the student
-        # (my.receiptFlags) nor stops them at the door (organizing.flagged).
-        clean = _receipt_clean(con, e, saved["sha256"], read, flags)
+        # warning either (a field unread): 'partial', in "Check receipts" too, and held at the door until reviewed.
+        # A payment predating this hold also needs review: deleted accounts erase duplicate evidence. Kaspi prints minutes.
+        clean = _receipt_clean(con, e, saved["sha256"], read, flags) and got["paid_at"] >= r["created_at"] // 60 * 60
         if clean and (_audit() or one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
                 UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"])):
             flags, clean = SPOT, False
@@ -856,9 +861,9 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         reviewed_at = core.now() if clean else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
-        cid = con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, reviewed_at, reviewed_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""", (r["id"], fid, via, got.get("amount"), got.get("no"), got.get("sender"), got.get("recipient"),
-                                                            got.get("paid_at"), flags, reviewed_at, core.now())).lastrowid
+        con.execute("""INSERT INTO receipts (id, registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, reviewed_at, reviewed_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""", (cid, r["id"], fid, via, got.get("amount"), got.get("no"), got.get("sender"), got.get("recipient"),
+                                                                got.get("paid_at"), flags, reviewed_at, core.now()))
         if reviewed_at is not None:
             con.execute("INSERT INTO receipt_auto_checks (receipt_id) VALUES (?)", (cid,))
         if not old:
@@ -877,7 +882,8 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     got = read or {}
     out = []
     # a receipt someone else replaced counts too, or replacing it would wash a reused one clean
-    if one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
+    if one(con, "SELECT 1 FROM donations WHERE sha256 = ? OR receipt_no = ?", sha, got.get("no")) or \
+            one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
             one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)) or \
@@ -902,7 +908,7 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 
 AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
-PARTIAL = "partial"  # no warning, but not every field could be read: a person looks
+PARTIAL = "partial"  # payment not fully verified: a person must check before admission
 
 
 def _audit() -> bool:
@@ -913,7 +919,9 @@ def _same_minute(con, got: dict) -> list[sqlite3.Row]:
     """Receipts with this one's minute, sum and payee (Kaspi prints the minute)."""
     if not (got.get("paid_at") and got.get("amount") and got.get("recipient")):
         return []
-    return rows(con, "SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"])
+    return rows(con, """SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?
+        UNION ALL SELECT sender_name FROM donations WHERE paid_at = ? AND read_amount = ? AND recipient_name = ?""",
+                *([got["paid_at"], got["amount"], got["recipient"]] * 2))
 
 
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:

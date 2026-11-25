@@ -10,10 +10,11 @@
   import Circle from '@lucide/svelte/icons/circle';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import { menu } from '../../ui/menu';
-  import { api, ApiErr, type DoorPerson, type Id, type TeamList } from '../../lib/api';
+  import { api, ApiErr, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { errorText, eventById } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
   import { time, nowTs } from '../../lib/time';
@@ -24,6 +25,7 @@
   import SearchField from '../../ui/SearchField.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import Tag from '../../ui/Tag.svelte';
   import { checkinMessages } from './checkinMessages';
   import SortChip from '../../ui/SortChip.svelte';
@@ -31,14 +33,17 @@
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
-  let team = $state<TeamList | null>(null);
-  let guests = $state<DoorPerson[] | null>(null);
+  const { state: teamRead, load: loadTeam } = readState(() => api.teamList(id), true);
+  const { state: guestsRead, load: loadGuests } = readState(() => api.door(id));
   // the organizers' list of buyers not in the app (and people with no student ID): ticked by name
-  let pend = $state<{ key: string; name: string; adult: boolean | null; came: boolean; at?: number | null; team?: string | null }[]>([]);
+  const { state: pendingRead, load: loadPending } = readState(async () => (await api.doorPending(id)).list ?? []);
+  const team = $derived(teamRead.value);
+  const guests = $derived(guestsRead.value);
+  const pend = $derived(pendingRead.value ?? []);
   const load = () => {
-    if (!guestsOnly) api.teamList(id).then((l) => (team = l)).catch(() => {});
-    api.doorPending(id).then((x) => (pend = x.list ?? [])).catch(() => {});
-    api.door(id).then((l) => (guests = l)).catch(() => {});
+    if (!guestsOnly) void loadTeam();
+    void loadPending();
+    void loadGuests();
   };
   $effect(load);
   const aud = $derived(team?.audience ?? 'both');
@@ -55,6 +60,11 @@
   // inside each group; the groups stay where they are. By the time they came: in «Came» only, so a row ticked in
   // «Not came» stays under the thumb
   const ORDERS: Order<Item>[] = [usual(), byName((x) => x.name), { id: 'came', label: 'sort.came', by: (x) => (tab === 'came' ? x.at : null), desc: true }];
+  $effect(() => { if (tab === 'other' && !team) tab = 'not'; });
+  const reads = $derived(tab === 'other' ? (guestsOnly ? [] : [teamRead])
+    : [...(guestsOnly ? [] : [teamRead]), ...(aud === 'team' ? [] : [guestsRead]), pendingRead]);
+  const failed = $derived(reads.some((read) => read.status === 'error'));
+  const loading = $derived(reads.some((read) => read.status === 'loading'));
   // rows marked or unmarked in this tab stay in it until the next switch
   let stay = $state<string[]>([]);
   let q = $state('');
@@ -82,7 +92,7 @@
     say(t('mk.marked', { name: x.name.split(' ').slice(0, 2).join(' ') }), 'sparkles_3d', () => void unmark(x), undefined, true);
     try {
       if (x.pend) { await api.tickPending(id, x.pend); const p = pend.find((y) => y.key === x.pend); if (p) p.came = true; }
-      else if (x.uid == null) team = await api.teamMark(id, x.key, true);
+      else if (x.uid == null) teamRead.value = await api.teamMark(id, x.key, true);
       else {
         const r = await api.checkinPerson(id, x.uid, admit);
         if (r.result === 'flagged' || r.result === 'ask_org') { // a receipt nobody checked: nothing recorded (server organizing._held)
@@ -103,7 +113,7 @@
     set(x, null, false);
     try {
       if (x.pend) { await api.tickPending(id, x.pend, false); onchange?.(); return; }
-      if (x.uid == null) team = await api.teamMark(id, x.key, false);
+      if (x.uid == null) teamRead.value = await api.teamMark(id, x.key, false);
       else await api.undoCheckin(id, x.uid);
       haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default', undefined, undefined, true); onchange?.();
     } catch (e) { set(x, was.at, was.manual); err(e); }
@@ -143,12 +153,13 @@
 <Sheet {overlay} icon={UsersRound} full title={t('mk.people')}>
   <div class="col">
     <SearchField bind:value={q} placeholder={t('door.search')} />
-    <Segmented items={[{ value: 'not', label: t('mk.notCame') }, { value: 'came', label: t('mk.came') }, ...(aud !== 'guests' ? [{ value: 'other' as const, label: t('mk.other') }] : [])]}
+    <Segmented items={[{ value: 'not', label: t('mk.notCame') }, { value: 'came', label: t('mk.came') }, ...(!guestsOnly && team && aud !== 'guests' ? [{ value: 'other' as const, label: t('mk.other') }] : [])]}
       bind:value={tab} onchange={() => { haptic.tap(); stay = []; }} />
+    {#if failed}<EmptyState onretry={load} />{:else if loading}<Skeleton />{/if}
     {#if tab === 'other'}
       {#if others.length}
         <Group>{#each others as o, i (i)}<Row dense title={o.name} value={time(o.at)} />{/each}</Group>
-      {:else}<EmptyState inline text={t('mk.none')} />{/if}
+      {:else if !loading && !failed}<EmptyState inline text={t('mk.none')} />{/if}
     {:else if groups.length}
       {#if items.length > 1}<SortChip list="door" orders={ORDERS} />{/if}
       {#each groups as [name, g] (name)}
@@ -164,7 +175,7 @@
           {/each}
         </Group>
       {/each}
-    {:else if team || guests}<EmptyState inline text={t('mk.none')} />{/if}
+    {:else if !loading && !failed}<EmptyState inline text={t('mk.none')} />{/if}
   </div>
 </Sheet>
 

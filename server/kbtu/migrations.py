@@ -2289,8 +2289,112 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # People of the app's Team: the core developers the creator picked (`kbtu.admin team add|del`, credits.py), shown
+    # only after their own yes. Not users.mark: that goes out with every person_ref, consent or not
+    (227, """CREATE TABLE IF NOT EXISTS credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;"""),
+    # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
+    # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
+    (228, """CREATE TABLE IF NOT EXISTS pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_other ON pymk (other_id);
+    CREATE TABLE IF NOT EXISTS pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_dismissed_other ON pymk_dismissed (other_id);"""),
+    # a club's YouTube channel in its news (youtube.py): each linked channel once resolved (path: the link's channel/UC...,
+    # @handle, c/ or user/ part; channel_id NULL: no channel there, tried again a day later) and how far its feed was taken;
+    # each video posted once (its id), with the post it became
+    (229, """CREATE TABLE IF NOT EXISTS yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS yt_videos_by_org ON yt_videos(org_id, channel_id);"""),
+    # Receipt IDs stay spent even if account/event cleanup deletes the newest pre-upgrade upload.
+    (230, """INSERT INTO meta (key, value) VALUES ('seq:receipts', (SELECT CAST(COALESCE(MAX(id), 0) AS TEXT) FROM receipts))
+      ON CONFLICT(key) DO UPDATE SET value = CAST(MAX(CAST(meta.value AS INTEGER), CAST(excluded.value AS INTEGER)) AS TEXT);"""),
+    # Remove personal values copied into audit payloads; retain the action and nonpersonal context.
+    (231, """UPDATE audit_log SET data = json_remove(data, '$.q') WHERE action = 'registry_search';
+    UPDATE audit_log SET data = json_remove(data, '$.was', '$.now') WHERE action = 'staff_kaspi';"""),
+    # Withdrawn study offers still count toward the sender's daily limit.
+    (232, """ALTER TABLE contacts ADD COLUMN withdrawn_at INTEGER;
+    ALTER TABLE contacts ADD COLUMN offer_message TEXT;
+    DROP INDEX one_contact;
+    CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+    CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+    CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
+    (233, """CREATE TABLE IF NOT EXISTS donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS donations_by_user ON donations(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_status ON donations(source, status, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+    CREATE TABLE IF NOT EXISTS sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS sponsor_consents_by_user ON sponsor_consents(user_id, id);
+    CREATE TRIGGER IF NOT EXISTS sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at)
+          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
+          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
+    END;"""),
     # Meetup scans keep each attempt, apart from attendance's one row.
-    (227,"""ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
+    (235, """ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
     ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
     ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
     ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));

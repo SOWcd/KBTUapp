@@ -3,7 +3,7 @@
   "font": 1,
   "radius": 0,
   "hex": 3,
-  "mix": 2,
+  "mix": 1,
   "weight": 1,
   "legacy": 0
  },
@@ -162,7 +162,7 @@
  "screens/profile/LookPage.svelte": {
   "font": 2,
   "radius": 6,
-  "hex": 42,
+  "hex": 35,
   "mix": 0,
   "weight": 1,
   "legacy": 0

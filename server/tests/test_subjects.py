@@ -11,10 +11,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, bot, db, logic
+from kbtu import ai, app as server, bot, db, logic, texts
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "tools"))
@@ -146,8 +147,9 @@ def test_contact_is_the_find_people_offer(subj):
     con.execute("UPDATE users SET tg_username = 'bob_tg' WHERE id = ?", (p["bob"],))
     aid = c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json()["mine"] and \
         con.execute("SELECT id FROM asks WHERE user_id = ?", (p["ann"],)).fetchone()[0]
-    assert c.post("/api/subjects/offer", headers=tma(2), json={"ask": aid}).json() == {"status": "pending"}
-    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["offered"] == "pending"
+    sent = c.post("/api/subjects/offer", headers=tma(2), json={"ask": aid}).json()
+    person = c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]
+    assert sent == {"id": person["offerId"], "status": "pending"} and person["offered"] == "pending"
     m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "ru"}
     assert m["user_id"] == p["ann"] and CALC in bot._render(con, m)[0] and "bob_tg" not in bot._render(con, m)[0]
     cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
@@ -173,6 +175,76 @@ def _ann_offer(c, con, sid: str, by: int) -> tuple[int, str]:
     aid = c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={}).json() and con.execute("SELECT id FROM asks WHERE user_id = 1").fetchone()[0]
     assert c.post("/api/subjects/offer", headers=tma(by), json={"ask": aid}).status_code == 200
     return tuple(con.execute("SELECT id, token FROM contacts ORDER BY id DESC").fetchone())
+
+
+def test_only_the_sender_can_withdraw_a_pending_subject_offer(subj):
+    c, con, p, sid, _ = subj
+    cid, tok = _ann_offer(c, con, sid, 2)
+    url = f"/api/subjects/offer/{cid}"
+    ann = logic.Viewer(p["ann"], "user", True)
+    assert [o["id"] for o in logic.contacts(con, ann)] == [cid]
+    for who in (1, 3):
+        assert c.delete(url, headers=tma(who)).status_code == 404
+    m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "en"}
+    assert c.delete(url, headers=tma(2)).status_code == 204
+    assert bot._render(con, m) is None and logic.contacts(con, ann) == []
+    assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["offered"] is None
+    assert logic.decide_contact(con, p["ann"], cid, True, tok) is None
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'contact_ok'").fetchone()
+
+    accepted, token = _ann_offer(c, con, sid, 2)
+    assert accepted != cid and c.delete(url, headers=tma(2)).status_code == 404
+    assert logic.decide_contact(con, p["ann"], accepted, True, token) == "accepted"
+    assert c.delete(f"/api/subjects/offer/{accepted}", headers=tma(2)).status_code == 404
+    assert [o["status"] for o in logic.contacts(con, ann)] == ["accepted"]
+    declined, token = _ann_offer(c, con, sid, 3)
+    assert logic.decide_contact(con, p["ann"], declined, False, token) == "declined"
+    assert c.delete(f"/api/subjects/offer/{declined}", headers=tma(3)).status_code == 404
+
+    ask = logic.create_ask(con, ann, {"kind": "help", "title": "Charger?"}, True)
+    logic.contact(con, logic.Viewer(p["bob"], "user", True), aid=ask["id"])
+    ordinary = con.execute("SELECT id FROM contacts WHERE ask_id = ?", (ask["id"],)).fetchone()[0]
+    assert c.delete(f"/api/subjects/offer/{ordinary}", headers=tma(2)).status_code == 404
+
+
+@pytest.mark.parametrize("sent_first", [True, False])
+def test_withdrawal_edits_the_bot_card_even_if_delivery_is_in_flight(subj, sent_first):
+    c, con, p, sid, _ = subj
+    cid, tok = _ann_offer(c, con, sid, 2)
+    con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (p["ann"],))
+    m, = [m for m in bot._due(con) if m["kind"] == "contact_ask"]
+    assert bot._take(con, m, False)
+    if sent_first:
+        bot._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
+    assert c.delete(f"/api/subjects/offer/{cid}", headers=tma(2)).status_code == 204
+    if not sent_first:
+        bot._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
+    calls = []
+
+    class Http:
+        async def post(self, url, *, json):
+            calls.append((url.rsplit("/", 1)[-1], json))
+            return httpx.Response(400, json={"ok": False, "description": "message can't be edited"})
+
+    cfg = c.app.state.cfg
+    asyncio.run(bot._withdrawn_offers(cfg, Http(), con))
+    how, body = calls.pop()
+    assert how == "editMessageText" and (body["chat_id"], body["message_id"]) == (1, 42)
+    assert body["reply_markup"] == {"inline_keyboard": []}
+    assert con.execute("SELECT offer_message FROM contacts WHERE id = ?", (cid,)).fetchone()[0] is None
+    # If Telegram left the card in place, its original buttons only explain what happened.
+    asyncio.run(bot._tapped(cfg, Http(), con, {"id": "tap", "from": {"id": 1}, "data": f"ct:{cid}:{tok}:y",
+                                              "message": {"message_id": 42, "chat": {"id": 1}}}))
+    assert calls == [("answerCallbackQuery", {"callback_query_id": "tap", "text": texts.bot_message(m["lang"], "contact_withdrawn")[0]})]
+
+
+def test_withdrawing_does_not_refund_the_daily_offer_limit(subj, monkeypatch):
+    c, con, _, sid, _ = subj
+    monkeypatch.setattr(logic.forum, "CONTACTS_A_DAY", 1)
+    cid, _ = _ann_offer(c, con, sid, 2)
+    assert c.delete(f"/api/subjects/offer/{cid}", headers=tma(2)).status_code == 204
+    aid = con.execute("SELECT id FROM asks").fetchone()[0]
+    assert c.post("/api/subjects/offer", headers=tma(2), json={"ask": aid}).status_code == 429
 
 
 def test_old_accept_never_answers_a_reused_offer(subj):

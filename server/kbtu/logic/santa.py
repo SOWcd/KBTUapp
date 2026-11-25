@@ -19,7 +19,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import PERSON, ApiError, Viewer, _may, full, log_action, now, one, person_ref, rights_of, rows
+from .core import PERSON, ApiError, Viewer, _may, full, log_action, next_id, now, one, person_ref, rights_of, rows
 
 WISH_MAX = 300
 MIN = 3
@@ -410,14 +410,15 @@ def chat(con, v: Viewer, eid: int) -> dict:
     """My two threads in a drawn game: `to`, where I write as the Santa of my person (named on the event's page), and
     `from`, with my own Santa. A message says only whether it is mine: never an id or a name, so my Santa stays secret."""
     out = {}
-    for side in ("to", "from"):
-        p = _thread(con, eid, v.id, side == "to")
-        if not p:
-            raise ApiError("not_found")
-        closed = bool(one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p))  # reported: shut for both, its words now the staff's to read
-        out[side] = {"closed": closed, "msgs": [] if closed else [
-            {"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]}
-            for m in reversed(rows(con, f"SELECT id, from_giver, text, created_at {_MSGS} ORDER BY id DESC LIMIT ?", eid, *p, MSG_PAGE))]}
+    with tx(con, write=False):  # a report or a change to the ring cannot split this snapshot
+        for side in ("to", "from"):
+            p = _thread(con, eid, v.id, side == "to")
+            if not p:
+                raise ApiError("not_found")
+            closed = bool(one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p))  # shut for both, its words now the staff's to read
+            out[side] = {"closed": closed, "msgs": [] if closed else [
+                {"id": m["id"], "mine": bool(m["from_giver"]) == (side == "to"), "text": m["text"], "at": m["created_at"]}
+                for m in reversed(rows(con, f"SELECT id, from_giver, text, created_at {_MSGS} ORDER BY id DESC LIMIT ?", eid, *p, MSG_PAGE))]}
     return out
 
 
@@ -450,7 +451,9 @@ def write(con, v: Viewer, eid: int, body: dict) -> dict:
         if one(con, "SELECT COUNT(*) FROM santa_sends WHERE user_id = ? AND at > ?", v.id, now() - DAY)[0] >= MSG_DAY:
             raise ApiError("rate_limited", "santa_msgs")
         con.execute("INSERT INTO santa_sends (user_id, at) VALUES (?, ?)", (v.id, now()))
-        mid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, text, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        # Only positive IDs are used for messages, including when the table holds only reports.
+        mid = con.execute("""INSERT INTO santa_msgs (id, event_id, giver_id, to_id, from_giver, text, created_at)
+                          VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM santa_msgs WHERE id > 0), ?, ?, ?, ?, ?, ?)""",
                           (eid, *p, int(mine), text, now())).lastrowid
         other, kind = (p[1], "santa_msg") if mine else (p[0], "santa_reply")
         if not one(con, """SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = ? AND ref LIKE ? AND (send_after > ? OR sent_at IS NULL AND error IS NULL)""",
@@ -469,8 +472,10 @@ def report(con, v: Viewer, eid: int, body: dict) -> None:
             raise ApiError("not_found")
         if one(con, f"SELECT 1 {_MSGS} AND text IS NULL", eid, *p):
             return
-        rid = con.execute("INSERT INTO santa_msgs (event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?)",
-                          (eid, *p, int(mine), now())).lastrowid
+        # Keep new report IDs distinct from every legacy report, even one already swept with no alert or audit row.
+        rid = -next_id(con, "santa_msgs")
+        con.execute("INSERT INTO santa_msgs (id, event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (rid, eid, *p, int(mine), now()))
         notify_staff(con, _mods(con), "santa_reported", f"srp:{rid}")
 
 
@@ -482,7 +487,7 @@ def reports(con, v: Viewer) -> list[dict]:
     and both its people, oldest first."""
     _mod(v)
     out = []
-    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN} ORDER BY id"):
+    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN} ORDER BY abs(id)"):
         who = {p["id"]: person_ref(p) for p in rows(con, PERSON + " WHERE u.id IN (?, ?)", r["giver_id"], r["to_id"])}
         e = one(con, "SELECT title FROM events WHERE id = ?", r["event_id"])
         out.append({"id": r["id"], "at": r["created_at"], "title": e["title"], "giver": who.get(r["giver_id"]), "to": who.get(r["to_id"]),

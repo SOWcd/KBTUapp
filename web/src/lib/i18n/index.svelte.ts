@@ -3,6 +3,7 @@
 // no reload (a reload looks like a crash).
 import ru, { type Dict, type Key, type Plural } from './ru';
 import { tg } from '../tg';
+import { campusPlace, type CampusPlace } from '../campusPlace';
 
 export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Lang[] = ['ru', 'kk', 'en'];
@@ -71,7 +72,14 @@ export function fmtNum(n: number): string {
 
 /** Tenge amount: «3 000 ₸». */
 /** An event's place as shown; empty while it's to be confirmed (a room asked of DMP by memo) */
-export const placeOf = (place: string, online?: boolean): string => place || t(online ? 'event.online' : 'event.placeTba');
+export function placeOf(place: string, online?: boolean): string {
+  const campus = campusPlace(place);
+  return campus ? campusPlaceLabel(campus) : place || t(online ? 'event.online' : 'event.placeTba');
+}
+
+export function campusPlaceLabel({ side, floor, room }: CampusPlace): string {
+  return `${t(`campus.code.${side}`)} · ${t('route.floor', { n: floor })}${room ? ` · ${room}` : ''}`;
+}
 /** A class's subject in the app's language when a portal page in it was sent (or the old sign-in brought it), else the last page's */
 export const subjectOf = (c: { subject: string; names?: Partial<Record<Lang, string>> | null }): string => c.names?.[i18n.lang] || c.subject;
 

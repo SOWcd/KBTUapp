@@ -90,7 +90,7 @@ def test_visibility_matrix(env):
             assert s.title() not in raw.replace(f"en {s}", ""), s
     assert "Guestname" not in raw and "tg_id" not in raw and "whose" not in raw
     assert [p["person"]["id"] for p in got["people"] if p["person"]] == [yes_id]
-    assert set(got) == {"founder", "idea", "people", "mine", "version"}
+    assert set(got) == {"founder", "idea", "team", "people", "mine", "version"} and got["team"] == []
     assert all(set(p) == {"person", "items"} and all(set(i) == {"kind", "text", "on"} for i in p["items"]) for p in got["people"])
     # the deleted account: its line stays, with no Telegram id left on it, and its answers are gone
     assert con.execute("SELECT tg_id FROM credits WHERE en = 'en gone'").fetchone()[0] is None
@@ -164,6 +164,62 @@ def test_creator_and_idea_author(env):
     got = _yes(c, 7000302).json()
     assert got["idea"] == {"person": got["idea"]["person"], "items": [item]} and got["idea"]["person"]["id"] == muse["id"]
     assert got["people"] == [] and got["mine"]["consent"] is True
+
+
+def _team(got):
+    """the Team block as (name, [en lines])"""
+    return [(p["person"]["name"], [i["text"]["en"] for i in p["items"]]) for p in got["team"]]
+
+
+def test_team_order_and_consent(env, monkeypatch, capsys):
+    """The Team (`kbtu.admin team add|del`, audited): first added first; a member's lines under their card and not
+    again below; only after their own yes (before it: not in the block, their lines nameless below); a member with
+    no line can say yes too (the bot asks them); off the Team, their lines go back to the list."""
+    c, cfg = env
+    con = _con(cfg)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 900, "viewer")
+    ada, bo, shy, new = (login(c, tg, n) for tg, n in ((7000801, "ada"), (7000802, "bo"), (7000803, "shy"), (7000804, "new")))
+    _line(con, 7000801, "code", "2026-11-01", "ada a")
+    _line(con, 7000801, "find", "2026-11-03", "ada b")
+    _line(con, 7000803, "code", "2026-11-02", "shy")
+    _line(con, 7000805, "find", "2026-11-04", "other")
+    for i, tg in enumerate(("7000802", "7000801", "7000803", "7000804")):  # bo first, then ada (a lower user id)
+        admin.main(["team", "add", tg])
+        con.execute("UPDATE credit_team SET added_at = ? WHERE user_id = (SELECT id FROM users WHERE tg_id = ?)", (1000 + i, int(tg)))
+        con.commit()
+    admin.main(["team", "add", "7000801"])
+    assert capsys.readouterr().out.strip().endswith("already")
+    assert [tuple(r) for r in con.execute("SELECT action, target FROM audit_log WHERE action LIKE 'team_%' ORDER BY id")] == [
+        ("team_add", f"user:{u['id']}") for u in (bo, ada, shy, new)]
+    # nobody has said yes: no Team, every line nameless in the list
+    got = _get(c)
+    assert got["team"] == [] and _who(got) == [(None, ["en other"]), (None, ["en ada b"]), (None, ["en shy"]), (None, ["en ada a"])]
+    assert "Ada" not in json.dumps(got) and "Bo T" not in json.dumps(got)
+    # the Team is something of mine to answer for, lines or not
+    assert _get(c, 7000802)["mine"] == {"consent": None, "rev": None, "idea": False, "items": [], "team": True}
+    con.execute("UPDATE users SET can_dm = 1")  # the bot can write to them (ask only queues reachable people)
+    con.commit()
+    assert credits.ask(con, dry=True) == 4
+    for tg in (7000801, 7000802, 7000804):
+        assert _yes(c, tg).status_code == 200
+    assert _no(c, 7000803).status_code == 200
+    got = _get(c)
+    assert _team(got) == [("Bo T", []), ("Ada T", ["en ada b", "en ada a"]), ("New T", [])]
+    assert _who(got) == [(None, ["en other"]), (None, ["en shy"])]  # ada's lines are not repeated; shy's stay nameless
+    assert all(set(p) == {"person", "items"} for p in got["team"])
+    # off the Team: ada is a named person in the list again, the order of the rest unchanged
+    admin.main(["team", "del", "7000801"])
+    got = _get(c)
+    assert _team(got) == [("Bo T", []), ("New T", [])]
+    assert _who(got) == [(None, ["en other"]), ("Ada T", ["en ada b", "en ada a"]), (None, ["en shy"])]
+    assert con.execute("SELECT action FROM audit_log WHERE action LIKE 'team_%' ORDER BY id DESC LIMIT 1").fetchone()[0] == "team_del"
+    # a withdrawal takes them out of the block; deleting the account takes the row
+    assert _no(c, 7000802).status_code == 200
+    assert _team(_get(c)) == [("New T", [])]
+    delete_now(c, cfg, tma(7000804))
+    assert _get(c)["team"] == [] and con.execute("SELECT COUNT(*) FROM credit_team").fetchone()[0] == 2  # bo's and shy's
+    assert ("credit_team", "user_id") in logic._DEL_GONE
 
 
 def test_consent_record(env):
@@ -367,7 +423,7 @@ def test_listing_is_one_snapshot(env, monkeypatch):
     real = credits.rows
     monkeypatch.setattr(credits, "rows", lambda con_, *a: (seen.append(con_.in_transaction), real(con_, *a))[1])
     credits.listing(con, logic.Viewer(me["id"], "user", True))
-    assert seen == [True, True] and not con.in_transaction
+    assert seen == [True, True, True] and not con.in_transaction  # the top, the Team, the lines
 
 
 def test_rev_is_never_reused(env):
@@ -455,3 +511,61 @@ def test_github_login(env, capsys, monkeypatch):
     assert f"#{a}  2026-11-02  idea  gh Octo-Cat, no answer" in capsys.readouterr().out
     delete_now(c, cfg, tma(7000702))
     assert con.execute("SELECT COUNT(*) FROM credits WHERE gh IS NOT NULL").fetchone()[0] == 3
+
+
+def test_telegram_and_github(env, capsys, monkeypatch):
+    """One person known by both: after their yes one card, their name and face with the login (and that login's own
+    lines) in it; without a yes the login's card and the nameless rows as ever, nothing tying the two."""
+    c, cfg = env
+    con = _con(cfg)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 900, "viewer")
+    login(c, 7000801, "alpha")
+    login(c, 7000802, "bee")
+
+    def cid(word):
+        return con.execute("SELECT id FROM credits WHERE en = ?", (f"en {word}",)).fetchone()[0]
+
+    admin.main(["credit", "add", "7000801", "code", "ru a-both", "kk a-both", "en a-both", "--gh", "Octo"])
+    credits.ship(con, cid("a-both"), "2026-11-03")
+    _line(con, "gh:octo", kind="code", day="2026-11-02", word="a-gh")
+    _line(con, 7000801, day="2026-11-01", word="a-plain")
+    _line(con, 7000802, kind="find", day="2026-11-04", word="b-both")
+    admin.main(["credit", "gh", str(cid("b-both")), "bee-dev"])
+    _line(con, 7000802, day="2026-11-01", word="b-plain")
+    assert tuple(con.execute("SELECT tg_id, gh FROM credits WHERE id = ?", (cid("a-both"),)).fetchone()) == (7000801, "Octo")
+    for bad in (["credit", "gh", "999999", "x"], ["credit", "gh", str(cid("b-plain")), "-bad"], ["credit", "gh", "1"],
+                ["credit", "add", "gh:x", "code", "a", "b", "c", "--gh", "y"], ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "a_b"],
+                ["credit", "add", "7000801", "code", "a", "b", "c", "--x", "y"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    capsys.readouterr()
+    admin.main(["credit", "list"])
+    assert f"#{cid('a-both')}  2026-11-03  code  tg 7000801 + gh Octo, no answer" in capsys.readouterr().out
+
+    def cards(got):
+        return sorted(((p["person"] or {}).get("name", ""), p.get("gh", ""), [i["text"]["en"] for i in p["items"]]) for p in got["people"])
+
+    before = [("", "", ["en a-plain"]), ("", "", ["en b-plain"]),
+              ("", "Octo", ["en a-both", "en a-gh"]), ("", "bee-dev", ["en b-both"])]
+    got = _get(c)
+    assert cards(got) == before
+    raw = json.dumps(got, ensure_ascii=False)
+    assert not any(x in raw for x in ("7000801", "7000802", "Alpha T", "Bee T"))
+
+    assert _get(c, 7000801)["mine"]["gh"] == "Octo"  # the consent sheet shows the login a yes will name them with
+    assert _get(c, 7000802)["mine"]["gh"] == "bee-dev"
+    assert _yes(c, 7000801).status_code == 200
+    # a login put beside their Telegram id after a yes they gave without seeing it: refused
+    for bad in (["credit", "gh", str(cid("a-plain")), "other-login"],
+                ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "other-login"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    got = _get(c)
+    assert cards(got) == [("", "", ["en b-plain"]), ("", "bee-dev", ["en b-both"]),
+                          ("Alpha T", "Octo", ["en a-both", "en a-gh", "en a-plain"])]
+    raw = json.dumps(got, ensure_ascii=False)
+    assert not any(x in raw for x in ("7000801", "7000802", "Bee T"))  # the other one: untouched, unnamed
+
+    assert _no(c, 7000801).status_code == 200  # taken back: the login's card and the nameless row again
+    assert cards(_get(c)) == before
