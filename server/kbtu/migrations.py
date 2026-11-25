@@ -2525,11 +2525,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;"""),
     # The kind of device someone opens the app on (account.seen_platform from /api/me): one row per kind, its last day
     # at most once a day, so the creator can write to Android users alone (admin broadcast --platform). Gone after 90 days
-    (243, """CREATE TABLE user_platforms (
+    (243, """CREATE TABLE IF NOT EXISTS user_platforms (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       kind    TEXT NOT NULL CHECK (kind IN ('android', 'ios', 'desktop', 'web')),
       seen_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, kind)
     ) STRICT;
-    CREATE INDEX user_platforms_by_kind ON user_platforms(kind, user_id);"""),
+    CREATE INDEX IF NOT EXISTS user_platforms_by_kind ON user_platforms(kind, user_id);"""),
 ]
