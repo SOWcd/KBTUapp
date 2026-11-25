@@ -253,9 +253,10 @@ export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: 
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
+  team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; only who said yes
   people: CreditPerson[];          // newest shipped first, a named person's lines together
   /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
-  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
+  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
 /** at the door (Member+): the real short name beside a nick */
@@ -274,6 +275,7 @@ export interface Settings {
   nProjectPings: boolean;
   showGoing: boolean;
   canFriend: boolean;           // others may send me a friend request
+  suggestMe: boolean;           // People you may know: suggested to clubmates who turned it on, and they to me (server logic/pymk.py)
   hideFirstYear: boolean;
 }
 
@@ -837,7 +839,10 @@ export interface PersonCard extends PersonRef {
 export interface FriendRow { person: PersonRef; fullName: string; course: number | null; school: string | null; at: Ts }
 /** The Friends page (§4.7): requests both ways, and the coming events friends go to (only those who let friends see
  *  it; each card's `friends` says who). A quietly declined request of mine stays in `outgoing` for 30 days. */
-export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing: FriendRow[]; going: EventCard[] }
+/** People you may know: a clubmate who turned it on too; `clubs` is how many we share, never which (server logic/pymk.py). */
+export interface Suggestion { person: PersonRef; course: number | null; school: string | null; clubs: number }
+/** `suggest`: null while I haven't turned "Suggest me" on (the page offers it), else up to 5 to show. */
+export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing: FriendRow[]; going: EventCard[]; suggest: Suggestion[] | null }
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }

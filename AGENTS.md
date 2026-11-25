@@ -104,5 +104,5 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 
 ## Feature switches
 
-Server env switches (`FORUM`, `BOARD`, `DOCS`, `REPORTS`, `TIKTOK`, `FORUM_CHANNEL`, ...): README.md "Feature switches".
+Server env switches (`FORUM`, `BOARD`, `DOCS`, `REPORTS`, `TIKTOK`, `INSTAGRAM_COOKIES`, `FORUM_CHANNEL`, ...): README.md "Feature switches".
 No switch changes the policy or the consent version.

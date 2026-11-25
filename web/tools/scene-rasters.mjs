@@ -1,5 +1,5 @@
 // The lanyard card's drawn layers as pictures (perf round 3). Each layer the card draws (src/assets/lanyards/
-// {scenes,schools,sower}/*-card.svg from the round generators, KBTU's rosette and colonnade) rendered once at its own size on a
+// {scenes,schools}/*-card.svg from the round generators, KBTU's rosette and colonnade) rendered once at its own size on a
 // 3x phone, 3% over for the tilt's overscan (base.css .z --zs), saved beside it as .webp. The card, its back, the ticket
 // draw the .webp: a phone decodes a picture once, off the main thread, where the SVG (thousands of path points, blur
 // filters) was recorded and rasterised again on every paint at 3x: the profile's open, each flip, each new layer.
@@ -23,16 +23,15 @@ const OVERSCAN = { 'scenes/mk-sky-card.svg': 1.04, 'kbtu-rosette.svg': 1.04, 'kb
   // layers that stand still on the card (no --zs): ClubScene's mid ridge, skyline, windows, ground, hill, flask, Faces'
   // ribbons; SchoolScene's unclassed and wave layers
   ...Object.fromEntries(['mk-mid', 'spe-ground', 'qa-hill', 'ai-flask', 'fc-neon', 'en-mid', 'cs-mid', 'knl-mid', 'lit-mid', 'tm-mid', 'w3-mid', 'zh-mid', 'cin-mid', 'nis-mid', 'cyb-mid', 'dd-mid', 'bh-mid'].map((n) => [`scenes/${n}-card.svg`, 1])),
-  ...Object.fromEntries(['geo-strata', 'bs-board', 'law-desk', 'kma-waves'].map((n) => [`schools/${n}-card.svg`, 1])),
-  'sower/mid-card.svg': 1 }; // ui/SowerArt's still layer
+  ...Object.fromEntries(['geo-strata', 'bs-board', 'law-desk', 'kma-waves'].map((n) => [`schools/${n}-card.svg`, 1])) };
 
-const files = [...['scenes', 'schools', 'sower'].flatMap((d) => readdirSync(new URL(d + '/', ROOT)).filter((f) => f.endsWith('-card.svg')).map((f) => `${d}/${f}`)),
+const files = [...['scenes', 'schools'].flatMap((d) => readdirSync(new URL(d + '/', ROOT)).filter((f) => f.endsWith('-card.svg')).map((f) => `${d}/${f}`)),
   'kbtu-rosette.svg', 'kbtu-facade.svg'];
 // perf round 4: each layer at the lowest quality, and a smooth one (sky, glow, gradient) at a smaller size, that keeps it
 // within a quarter of an 8-bit step of the q .85 picture on average and its 99.9th percentile within 6 (12 at least) of
 // it, both against the lossless render at the shown size: 2715 -> 2167 KB. q .65 for most; [quality, size] here.
 const ENC = { 'schools/ise-earth-card.svg': [0.75, 1], 'schools/smsgt-field-card.svg': [0.75, 1], 'scenes/ch-crest-card.svg': [Q, 1],
-  'scenes/kn-jersey-card.svg': [Q, 1], 'sower/far-card.svg': [0.8, 1], 'sower/near-card.svg': [Q, 1], 'schools/seogi-dusk-card.svg': [Q, 0.75],
+  'scenes/kn-jersey-card.svg': [Q, 1], 'schools/seogi-dusk-card.svg': [Q, 0.75],
   ...Object.fromEntries(['scenes/cr-spectrum', 'schools/kma-moon', 'schools/law-shelf', 'schools/sce-sky', 'schools/sss-sky'].map((n) => [`${n}-card.svg`, [0.75, 0.75]])) };
 const [quality, less] = [(f) => ENC[f]?.[0] ?? 0.65, (f) => ENC[f]?.[1] ?? 1];
 const scale = (f) => 3 * (OVERSCAN[f] ?? ZS) * less(f);

@@ -10,13 +10,14 @@
   import { SvelteMap } from 'svelte/reactivity';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Circle from '@lucide/svelte/icons/circle';
-  import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
+  import { api, ApiErr, type Id, type RoundSlot } from '../../lib/api';
   import { clubDm } from '../../lib/clubdm';
   import { useDraft } from '../../lib/draft';
   import { session } from '../../lib/state/session.svelte';
   import { placeOf } from '../../lib/i18n/index.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, loadAfisha } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, time, slotTime } from '../../lib/time';
@@ -31,13 +32,14 @@
   import Answers, { missing } from './Answers.svelte';
   import Chip from '../../ui/Chip.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
 
   let { overlay, org, source = 'club' }: { overlay: Overlay; org: Id; source?: string } = $props();
 
-  const club = $derived(data.orgs.find((o) => o.id === org));
-  let r = $state<Round | null>(null);
-  let gone = $state(false);
+  const club = $derived(data.orgs.find((o) => o.id === org) ?? data.small.find((o) => o.id === org));
+  const { state: round, load } = readState(() => api.round(org));
+  const r = $derived(round.value);
   let picks = $state<Id[]>([]);
   let answers = $state<Record<string, string | string[]>>({});
   let sent = $state(false);
@@ -50,19 +52,21 @@
   let tried = $state(false);
   const draft = useDraft<{ picks: Id[]; answers: Record<string, string | string[]> }>(() => r ? `kb-round-${r.id}` : null);
 
+  async function loadRound() {
+    await load();
+    if (round.status !== 'ready') return;
+    const x = r;
+    if (!x) return;
+    if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
+    const d = draft.read();
+    if (Array.isArray(d?.picks) && d.answers && typeof d.answers === 'object') {
+      picks = d.picks.filter((id) => x.departments.some((dept) => dept.tagId === id));
+      answers = d.answers;
+    }
+    if (x.departments.length === 1) picks = [x.departments[0].tagId]; // one department: nothing to pick
+  }
   onMount(() => {
-    api.round(org).then((x) => {
-      if (!x) { gone = true; return; }
-      r = x;
-      if (x.departments.length === 1) picks = [x.departments[0].tagId];  // one department: nothing to pick
-      if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
-      const d = draft.read();
-      if (Array.isArray(d?.picks) && d.answers && typeof d.answers === 'object') {
-        picks = d.picks.filter((id) => x.departments.some((dept) => dept.tagId === id));
-        if (x.departments.length === 1) picks = [x.departments[0].tagId];
-        answers = d.answers;
-      }
-    }).catch(() => { gone = true; });
+    void loadRound();
     api.org(org).then((x) => (contact = x.contact ?? null)).catch(() => {});
   });
   const hasDraft = $derived.by(() => {
@@ -95,7 +99,7 @@
     const sentAt = draft.stamp();
     const sending = snap; // what's typed while it goes isn't saved yet
     try {
-      r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
+      round.value = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
       if (!sent) count('do.casting');
       draft.discard(sentAt);
       const first = !sent;
@@ -165,9 +169,14 @@
 </script>
 
 <Sheet {overlay} icon={ClipboardPen} tall title={club?.name ?? t('cast.title')} hold={changed} onhold={askLeave}>
-  {#if gone}
+  {#if round.status === 'error'}
+    <EmptyState onretry={loadRound} />
+  {:else if round.status === 'loading'}
+    {#if club?.round}<p class="t-foot sub">{t('cast.until', { when: dayMonth(club.round.closesAt) + ', ' + time(club.round.closesAt) })}</p>{/if}
+    <Skeleton />
+  {:else if !r || (!r.open && !r.mine)}
     <EmptyState icon={ClipboardPen} title={t('cast.closed')} />
-  {:else if r}
+  {:else}
     {@const final = r.mine?.stage === 'yes' || r.mine?.stage === 'no'}
     {@const steps = [[t('cast.stepSent'), sent], [t('cast.stepReview'), !!r.mine?.invited || final], ...(r.interviews ? [[t('cast.stepAudition'), final]] : []),
       [r.resultsBy ? t('cast.stepResultsBy', { when: dayMonth(r.resultsBy) }) : t('cast.stepResults'), final]] as [string, boolean][]}

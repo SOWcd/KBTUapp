@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -100,4 +101,6 @@ export default defineConfig({
     target: ['es2020', 'safari15', 'chrome100'],
     assetsInlineLimit: 0,
   },
+  // unit tests live beside the code; web/e2e is Playwright's (npm run e2e)
+  test: { include: ['src/**/*.test.ts'] },
 });
