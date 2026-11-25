@@ -287,7 +287,7 @@ CREATE TABLE contacts (                               -- "I can help" / "write t
         status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
         created_at INTEGER NOT NULL,
         decided_at INTEGER
-    , token TEXT) STRICT;
+    , token TEXT, withdrawn_at INTEGER, offer_message TEXT) STRICT;
 CREATE TABLE credit_consents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1439,7 +1439,9 @@ CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE 
 CREATE INDEX club_report_marks_by_user ON club_report_marks(user_id);
 CREATE INDEX comments_by_event ON comments(event_id, created_at);
 CREATE INDEX comments_by_post ON comments(post_id, created_at);
-CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
+CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;
 CREATE INDEX credit_consents_user ON credit_consents (user_id, id);
 CREATE INDEX credits_tg ON credits (tg_id);
 CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;

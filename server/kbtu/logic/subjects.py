@@ -86,12 +86,12 @@ def card(con, v: Viewer, path: str, sid: str) -> dict:
     if not s:
         raise ApiError("not_found")
     people = []
-    for p in con.execute(f"""SELECT {PERSON_COLS}, s.course, s.school, u.tg_id, u.tg_username, a.id AS ask, a.body, c.status AS offered
+    for p in con.execute(f"""SELECT {PERSON_COLS}, s.course, s.school, u.tg_id, u.tg_username, a.id AS ask, a.body, c.status AS offered, c.id AS offer_id
             FROM asks a JOIN users u ON u.id = a.user_id LEFT JOIN students s ON s.user_id = u.id
-            LEFT JOIN contacts c ON c.ask_id = a.id AND c.from_id = :me AND c.to_id = a.user_id
+            LEFT JOIN contacts c ON c.ask_id = a.id AND c.from_id = :me AND c.to_id = a.user_id AND c.withdrawn_at IS NULL
             WHERE a.subject = :sid AND {_SEEN} ORDER BY a.id DESC LIMIT 200""", {"now": _now(), "me": v.id, "sid": sid}).fetchall():
         people.append({"ask": p["ask"], "person": person_ref(p), "name": short_name(p), "course": p["course"], "school": p["school"],
-                       "note": p["body"] or None, "offered": p["offered"],
+                       "note": p["body"] or None, "offered": p["offered"], "offerId": p["offer_id"],
                        **({"telegram": _link(p)} if p["offered"] == "accepted" else {})})
     a = one(con, "SELECT * FROM asks WHERE subject = ? AND user_id = ? AND expires_at > ?", sid, v.id, _now())
     held = _held(con, v.id, sid)
@@ -216,9 +216,30 @@ def sweep_counters(con) -> None:
 
 def offer(con, v: Viewer, aid: object) -> dict:
     """"Study together": the find-people offer to whoever listed themselves (forum.contact), only on a subject's listing."""
-    if not isinstance(aid, int) or isinstance(aid, bool) or not one(con, "SELECT 1 FROM asks WHERE id = ? AND subject IS NOT NULL", aid):
+    with tx(con):
+        if not isinstance(aid, int) or isinstance(aid, bool) or not (a := one(con, "SELECT user_id FROM asks WHERE id = ? AND subject IS NOT NULL", aid)):
+            raise ApiError("not_found")
+        contact(con, v, aid=aid)
+        return dict(one(con, "SELECT id, status FROM contacts WHERE ask_id = ? AND from_id = ? AND to_id = ? AND withdrawn_at IS NULL",
+                        aid, v.id, a["user_id"]))
+
+
+def withdraw(con, v: Viewer, cid: int) -> None:
+    """Keep the offer's identity for the daily cap and old bot buttons."""
+    at = _now()
+    if not con.execute("""UPDATE contacts SET status = 'declined', withdrawn_at = ?, decided_at = ?
+            WHERE id = ? AND from_id = ? AND status = 'pending'
+            AND EXISTS (SELECT 1 FROM asks WHERE id = contacts.ask_id AND subject IS NOT NULL)""",
+                       (at, at, cid, v.id)).rowcount:
         raise ApiError("not_found")
-    return contact(con, v, aid=aid)
+
+
+def offer_delivered(con, cid: int, uid: int, chat: int, mid: int) -> None:
+    """Record the bot card's address, including when the sender withdrew during delivery."""
+    payload = json.dumps({"chat_id": chat, "message_id": mid})
+    con.execute("""UPDATE contacts SET offer_message = ? WHERE id = ? AND to_id = ?
+        AND (status = 'pending' OR withdrawn_at IS NOT NULL)
+        AND EXISTS (SELECT 1 FROM asks WHERE id = contacts.ask_id AND subject IS NOT NULL)""", (payload, cid, uid))
 
 
 def _now() -> int:

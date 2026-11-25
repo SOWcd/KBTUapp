@@ -2295,4 +2295,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       added_at INTEGER NOT NULL
     ) STRICT;"""),
+    # Withdrawn study offers still count toward the sender's daily limit.
+    (228, """ALTER TABLE contacts ADD COLUMN withdrawn_at INTEGER;
+    ALTER TABLE contacts ADD COLUMN offer_message TEXT;
+    DROP INDEX one_contact;
+    CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+    CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+    CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
 ]
