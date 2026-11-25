@@ -22,6 +22,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -95,7 +96,8 @@
   {#if o}
     <div class="hero">
       {#if o.myRights?.includes('profile')}
-        <button class="lg" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /><span class="cam"><Camera size={16} /></span></button>
+        <span class="lg"><button class="logo" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /></button>
+          <span class="cam"><IconButton icon={Camera} kind="primary" size="s" label={t('ce.title')} onclick={() => sheets.clubEdit(o.id)} /></span></span>
       {:else}<OrgLogo org={o} size={84} />{/if}
       <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}</h2>
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
@@ -246,10 +248,10 @@
 
 <style>
   .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: var(--s-2) 0 var(--s-1); }
-  .lg { position: relative; transition: transform var(--t-fast) var(--ease); }
-  .lg:active { transform: scale(0.95); }
-  .cam { position: absolute; right: -4px; bottom: -4px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 3px var(--bg-raised); }
+  .lg { position: relative; display: flex; }
+  .logo { display: flex; transition: transform var(--t-fast) var(--ease); }
+  .logo:active { transform: scale(0.95); }
+  .cam { position: absolute; right: -6px; bottom: -6px; display: flex; }
   .name { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--s-2); }
   .ok { color: var(--accent); display: inline-flex; }
   .stats { color: var(--text-2); }

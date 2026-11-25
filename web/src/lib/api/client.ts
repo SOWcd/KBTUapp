@@ -1,7 +1,7 @@
 import type { ChatFill } from '../eventFill';
 // The real server (SPEC §6). Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
+import type { Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
@@ -156,7 +156,27 @@ async function uploadVideo(file: Blob, progress: (done: number) => void, wide = 
   return call('POST', `/videos/${id}/done`);
 }
 
+async function receiptImage(path: string): Promise<string> {
+  if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
+  const account = accountRequest();
+  const r = await fetch(path, { headers: authHeaders(), signal: account }).catch(() => null);
+  if (r?.status === 401) dispatchEvent(new Event('kb:web-session-ended'));
+  if (!r?.ok) throw new ApiErr(r?.status === 404 ? 'not_found' : 'unavailable');
+  const blob = await r.blob();
+  if (account.aborted || accountClosed()) throw new ApiErr('forbidden', 'init_data');
+  return URL.createObjectURL(blob);
+}
+
+let graphRead: Promise<Graph> | undefined;
+
 export const server = {
+  support: (): Promise<Support> => call('GET', '/donate'),
+  sponsors: (): Promise<Sponsor[]> => call('GET', '/sponsors'),
+  sponsorConsent: (show: boolean, consent: string, rev: number | null): Promise<Support> => call('PUT', '/donate/consent', { show, consent, rev }),
+  donationReceipt: (file: Blob, consent: string): Promise<Support> => call('POST', `/donate/receipt?consent=${encodeURIComponent(consent)}`, file),
+  donationQueue: (): Promise<DonationReview[]> => call('GET', '/admin/donations'),
+  reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),
+  donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
@@ -265,6 +285,7 @@ export const server = {
   answerFriend: (user: Id, accept: boolean): Promise<Friends> => call('POST', `/friends/requests/${user}/${accept ? 'accept' : 'decline'}`),
   takeBackRequest: (user: Id): Promise<void> => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user: Id): Promise<void> => call('DELETE', `/friends/${user}`),
+  dismissSuggestion: (user: Id): Promise<void> => call('POST', '/pymk/dismiss', { id: user }), // People you may know's x: never suggested to each other again
   linkCard: (code: string): Promise<LinkCard> => call('GET', `/invite/${code}`), // whose invite link it is (adds nobody; guests too)
   addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
@@ -280,10 +301,13 @@ export const server = {
   /** "Sent it to DMP?" -> Yes: these events leave the next memos */
   memoSent: (org: Id, ids: Id[]): Promise<void> => call('POST', `/orgs/${org}/memo/sent`, { ids }),
   memoAgain: (org: Id, event: Id): Promise<void> => call('POST', `/orgs/${org}/memo/again/${event}`),
-  /** one memo item written from the sheet's small form (no event needed) */
-  /** indoor routes' graph (PLAN item 22); the admin saves it from the version he edited (conflict: someone saved since) */
-  mapGraph: (): Promise<Graph> => call('GET', '/map/graph'),
+  // The route graph is static. The map, keypad and route panel share it, and a failed read can be retried.
+  mapGraph: (): Promise<Graph> => (graphRead ??= call<Graph>('GET', '/map/graph').catch((error) => {
+    graphRead = undefined;
+    throw error;
+  })),
   mapRooms: (): Promise<{ updated: string; rooms: Record<string, Record<string, number[]>> }> => call('GET', '/map/rooms'), // "free now" on the map; 404 when off (ROOMS_FILE)
+  /** one memo item written from the sheet's small form (no event needed) */
   memoItem: (org: Id, item: { kind: string; fields: object; place: string; startsAt: Ts; endsAt: Ts | null }): Promise<string> => call<{ text: string }>('POST', `/orgs/${org}/memo/item`, item).then((r) => r.text),
   /** my Latin name and positions, fixed once; empty = computed */
   memoSign: (org: Id, sign: MemoSign): Promise<MemoDraft> => call('PUT', `/orgs/${org}/memo/sign`, sign),
@@ -446,17 +470,7 @@ export const server = {
   /** Paid events (§4.3): my receipt for the seat I hold → the ticket at once (Kaspi's PDF or an image; the server reads it). */
   uploadReceipt: (event: Id, file: Blob): Promise<EventCard> => call('POST', `/events/${event}/receipt`, file),
   /** A receipt's image (its sender, the event's Head+, the admin), as an object URL to show. */
-  receiptImage: async (id: Id): Promise<string> => {
-    // Private (§4.3): fetch can attach the authentication headers an <img> cannot.
-    if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
-    const account = accountRequest();
-    const r = await fetch(`/api/receipts/${id}/image`, { headers: authHeaders(), signal: account }).catch(() => null);
-    if (r?.status === 401) dispatchEvent(new Event('kb:web-session-ended'));
-    if (!r?.ok) throw new ApiErr(r?.status === 404 ? 'not_found' : 'unavailable');
-    const blob = await r.blob();
-    if (account.aborted || accountClosed()) throw new ApiErr('forbidden', 'init_data');
-    return URL.createObjectURL(blob);
-  },
+  receiptImage: (id: Id): Promise<string> => receiptImage(`/api/receipts/${id}/image`),
   /** Head+: the receipt is fine, or rejected (the ticket stops working, the seat goes on, the bot tells the student). */
   // why: a rejection's reason, which the bot names to the student (server seats.REJECT_WHY)
   reviewReceipt: (id: Id, reject: boolean, why?: RejectWhy): Promise<void> => call('POST', `/receipts/${id}/review`, why ? { reject, why } : { reject }),
@@ -485,7 +499,8 @@ export const server = {
   subject: (id: string): Promise<SubjectCard> => call('GET', `/subjects/${encodeURIComponent(id)}`),
   joinSubject: (id: string, note: string): Promise<SubjectCard> => call('PUT', `/subjects/${encodeURIComponent(id)}/me`, { note }),
   leaveSubject: (id: string): Promise<void> => call('DELETE', `/subjects/${encodeURIComponent(id)}/me`),
-  subjectOffer: (ask: Id): Promise<{ status: 'pending' }> => call('POST', '/subjects/offer', { ask }),
+  subjectOffer: (ask: Id): Promise<{ id: Id; status: 'pending' | 'accepted' | 'declined' }> => call('POST', '/subjects/offer', { ask }),
+  withdrawSubjectOffer: (id: Id): Promise<void> => call('DELETE', `/subjects/offer/${id}`),
   releaseAsk: (id: Id): Promise<Ask> => call('POST', `/forum/asks/${id}/release`),
   hideAsk: (id: Id): Promise<void> => call('POST', `/forum/asks/${id}/hide`),
   liftHold: (id: Id): Promise<void> => call('POST', `/forum/holds/${id}`), // a subject take-down lifted (Done's Undo makes it again)
@@ -511,6 +526,8 @@ export const server = {
   revealChannelPost: (id: Id): Promise<PersonRef> => call('POST', `/forum-posts/${id}/reveal`), // the owner alone; audited
   channelReplies: (post: Id): Promise<import('./types').ChannelReply[]> => call('GET', `/forum-posts/${post}/replies`), // my replies under my anonymous post
   newChannelReply: (post: Id, body: string, link: string): Promise<import('./types').ChannelReply> => call('POST', `/forum-posts/${post}/replies`, { body, link }), // the AI first; the bot sends it seconds later
+  channelThread: (post: Id): Promise<import('./types').ChannelComment[]> => call('GET', `/forum-posts/${post}/thread`), // the comments written in the app
+  newChannelComment: (post: Id, body: string): Promise<import('./types').ChannelReply> => call('POST', `/forum-posts/${post}/thread`, { body }), // signed with my name; the AI first, the bot sends it seconds later
   deleteChannelReply: (id: Id): Promise<void> => call('DELETE', `/forum-replies/${id}`), // mine: out of the group
   channelReplyMod: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-replies/${id}/mod`, { ok, again }), // held: out or removed; live: kept or taken down; again: a lost send, re-sent
   channelReplyRestore: (id: Id): Promise<void> => call('POST', `/forum-replies/${id}/restore`), // a take-down undone
@@ -580,6 +597,7 @@ export const server = {
   staff: (): Promise<Staff> => call('GET', '/admin/staff'), // admin: the app's team and the banned
   staffSearch: (q: string): Promise<StaffRow[]> => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
   search: (q: string): Promise<{ events: EventCard[]; clubs: OrgRef[] }> => call('GET', '/search?q=' + encodeURIComponent(q)), // the one search: by any name, what I may see (the admin: all)
+  searchMore: (q: string): Promise<import('./types').SearchMore> => call('GET', '/search/more?q=' + encodeURIComponent(q)), // the global search: what the app doesn't hold
   staffMutes: (): Promise<import('./types').StaffMute[]> => call('GET', '/admin/notifications'), // staff: my work-item notifications
   setStaffMute: (kind: string, on: boolean): Promise<import('./types').StaffMute[]> => call('PUT', `/admin/notifications/${kind}`, { on }), // admin → People: by name, @username, student ID or id
   inbox: (): Promise<import('./types').Inbox> => call('GET', '/admin/inbox'), // staff: everything waiting, and what was done lately
@@ -616,7 +634,6 @@ export const server = {
   rosterDecide: (row: Id, ok: boolean): Promise<void> => call('POST', `/roster/requests/${row}`, { ok }), // the main channel's posts in the club's news
   mirrorOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
   swearOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }), // President or Vice; conflict rights: the bot can't delete and restrict there
-  callOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/call`, { on }), // President or Vice
   swearReport: (org: Id): Promise<SwearRow[]> => call('GET', `/orgs/${org}/chats/swear`), // President, Vice, Heads
   chatRoles: (org: Id, chat: Id): Promise<ChatRoles> => call('GET', `/orgs/${org}/chats/${chat}/roles`), // the group's admins against the club's roles, asked of Telegram now
   deleteChat: (id: Id): Promise<void> => call('DELETE', `/admin/chats/${id}`), // a suggestion declined too

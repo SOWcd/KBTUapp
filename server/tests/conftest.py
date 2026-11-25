@@ -120,6 +120,12 @@ def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
         con.executescript("""ALTER TABLE event_guests DROP COLUMN walk_in;
+            DROP INDEX one_contact;
+            DROP INDEX contacts_by_sender;
+            DROP INDEX withdrawn_offer_messages;
+            ALTER TABLE contacts DROP COLUMN offer_message;
+            ALTER TABLE contacts DROP COLUMN withdrawn_at;
+            CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
             DROP TABLE gallery_consents;
             ALTER TABLE gallery_photos DROP COLUMN place;
             ALTER TABLE posts DROP COLUMN tg_fmt;

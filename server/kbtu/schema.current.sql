@@ -287,13 +287,17 @@ CREATE TABLE contacts (                               -- "I can help" / "write t
         status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
         created_at INTEGER NOT NULL,
         decided_at INTEGER
-    , token TEXT) STRICT;
+    , token TEXT, withdrawn_at INTEGER, offer_message TEXT) STRICT;
 CREATE TABLE credit_consents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       show INTEGER NOT NULL CHECK (show IN (0, 1)),  -- 0: a no, a withdrawal, or a grant ended by an account move
       version TEXT NOT NULL,  -- the consent text it answered
       at INTEGER NOT NULL) STRICT;
+CREATE TABLE credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
       id INTEGER PRIMARY KEY,
       tg_id INTEGER,
@@ -303,6 +307,33 @@ CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
       en TEXT NOT NULL,
       shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
       created_at INTEGER NOT NULL, gh TEXT) STRICT;
+CREATE TABLE donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
 CREATE TABLE door_guests (
       id         INTEGER PRIMARY KEY,
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -518,6 +549,10 @@ CREATE TABLE fchan_reply_reports (
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       at       INTEGER NOT NULL,
       PRIMARY KEY (reply_id, user_id)
+    ) STRICT;
+CREATE TABLE fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
@@ -790,6 +825,21 @@ CREATE TABLE profile_views (
       user_id   INTEGER NOT NULL,
       PRIMARY KEY (day, viewer_id, user_id)
     ) WITHOUT ROWID;
+CREATE TABLE pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+CREATE TABLE pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
 CREATE TABLE qr_expected (
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
       email      TEXT NOT NULL,
@@ -1072,6 +1122,13 @@ CREATE TABLE skills (
         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at INTEGER NOT NULL,
         used_at    INTEGER NOT NULL                       -- last added to someone or a request: unused 30 days, out of suggestions
+    ) STRICT;
+CREATE TABLE sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
     ) STRICT;
 CREATE TABLE staff_mutes (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1407,6 +1464,22 @@ CREATE TABLE web_sessions (
       created_at INTEGER NOT NULL,
       last_used_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+CREATE TABLE yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
@@ -1435,9 +1508,16 @@ CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE 
 CREATE INDEX club_report_marks_by_user ON club_report_marks(user_id);
 CREATE INDEX comments_by_event ON comments(event_id, created_at);
 CREATE INDEX comments_by_post ON comments(post_id, created_at);
-CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
+CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;
 CREATE INDEX credit_consents_user ON credit_consents (user_id, id);
 CREATE INDEX credits_tg ON credits (tg_id);
+CREATE INDEX donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+CREATE INDEX donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+CREATE INDEX donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+CREATE INDEX donations_by_status ON donations(source, status, created_at);
+CREATE INDEX donations_by_user ON donations(user_id, created_at);
 CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;
 CREATE INDEX ev_matches_away ON ev_matches(away);
 CREATE INDEX ev_matches_editor ON ev_matches(updated_by);
@@ -1495,6 +1575,8 @@ CREATE INDEX posts_feed ON posts(audience, pinned, created_at);
 CREATE INDEX posts_recent ON posts(audience, created_at);
 CREATE INDEX prefill_rest_email ON prefill_rest(email);
 CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
+CREATE INDEX pymk_other ON pymk (other_id);
+CREATE INDEX pymk_dismissed_other ON pymk_dismissed (other_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);
 CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
@@ -1532,6 +1614,7 @@ CREATE INDEX santa_sends_by_user ON santa_sends (user_id, at);
 CREATE INDEX saved_by_event ON saved_events(event_id);
 CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
 CREATE INDEX short_links_by_org ON short_links(org_id);
+CREATE INDEX sponsor_consents_by_user ON sponsor_consents(user_id, id);
 CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;
 CREATE INDEX subs_by_org ON subscriptions(org_id, created_at);
 CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
@@ -1564,6 +1647,7 @@ CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
 CREATE INDEX web_login_used_expires ON web_login_used(expires_at);
 CREATE INDEX web_sessions_last_used ON web_sessions(last_used_at);
 CREATE INDEX web_sessions_user ON web_sessions(user_id);
+CREATE INDEX yt_videos_by_org ON yt_videos(org_id, channel_id);
 CREATE TRIGGER chat_seen_chat_sync_delete AFTER DELETE ON chat_sync BEGIN
   DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
       (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
@@ -1729,6 +1813,12 @@ CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
       UPDATE fchan_posts SET comments = MAX(0, comments + CASE WHEN NEW.status IN ('deleting', 'deleted', 'restored') THEN -1 ELSE 1 END)
         WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
+    END;
+CREATE TRIGGER sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at)
+          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
+          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
     END;
 CREATE TRIGGER web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
       WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN

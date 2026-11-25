@@ -86,6 +86,7 @@
   import { grow } from '../../ui/grow';
   import { glass } from '../../ui/glass';
   import Avatar from '../../ui/Avatar.svelte';
+  import Button from '../../ui/Button.svelte';
   import Notice from '../../ui/Notice.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import ChannelRefused from './ChannelRefused.svelte';
@@ -212,7 +213,7 @@
     motion = f ? morph(f, from, shown) : [win.animate([{ opacity: shown }, { opacity: 0 }], { duration: calm() ? 1 : 200, easing: ease(), fill: 'forwards' })];
     motion[0].onfinish = () => {
       flushSync(() => removeOverlay(overlay.id));
-      document.querySelector<HTMLElement>('[data-compose]')?.focus({ preventScroll: true });
+      document.querySelector<HTMLElement>('[data-compose] button')?.focus({ preventScroll: true });
     };
   }
   $effect(() => { if (overlay.closing) untrack(leave); });  // Back, the scrim, a send: the draft stays, nothing to ask
@@ -290,10 +291,12 @@
     {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}</span>{/key}
     <span class="who" aria-live="polite"><b class="ellipsis">{anon ? t('fc.nickNew') : sign}</b><span class="sub">{t('fc.toChannel')}</span></span>
     <span class="ghost ellipsis" aria-hidden="true">{t('fc.share')}</span>
-    <button class="send" class:ready aria-disabled={!ready} onclick={post} aria-label={t('fc.post')} aria-describedby="cw-hold">
-      <span class="ic pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
-      <span class="ic go" aria-hidden="true"><ArrowUp size={20} strokeWidth={2.4} /></span>
-    </button>
+    <!-- one round button: folded, the pill's pen (the same secondary IconButton); open, Send, primary once it can
+         send. Never disabled: held, a tap says why (the hints are a live region) -->
+    <span class="send" class:held={!ready && !out}><Button kind={ready && !out ? 'primary' : 'gray'} size="s" round label={t('fc.post')} onclick={post}>
+      {#snippet icon()}<span class="ic pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
+        <span class="ic go" aria-hidden="true"><ArrowUp size={18} strokeWidth={2.4} /></span>{/snippet}
+    </Button></span>
   </div>
   <div class="body">
   <div class="rest scroll" data-kb-own>
@@ -375,13 +378,9 @@
   .out .who { opacity: 0; transition-duration: var(--t-fast); transition-delay: 0s; }
   .out .ghost { opacity: 1; transition-delay: 0s, 80ms; }
 
-  /* the pen turns into Send: one round button, the accent while it can send (held: grey, a tap says why) */
-  .send { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--fill-2); color: var(--text-3);
-    transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform var(--t-base) var(--ease); }
-  .send.ready { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 12px -4px var(--accent); }
-  /* folded: the pill's own quiet pen lens (Channel .pen), so the hand-over at either end changes nothing */
-  .out .send { background: var(--fill); color: var(--text); box-shadow: inset 0 1px 0.5px var(--lg-rim-lo), inset 0 0 0 0.5px var(--line-2); }
-  .send::after { content: ''; position: absolute; inset: -4px; } /* 44 to the finger */
+  /* the pen turns into Send (held: the quiet ink, a tap says why) */
+  .send { flex: none; display: flex; }
+  .held :global(.btn) { color: var(--text-3); }
   .ic { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 200ms var(--ease), transform var(--t-base) var(--ease); }
   .pen { opacity: 0; transform: rotate(24deg) scale(0.8); }
   .out .pen { opacity: 1; transform: none; }
@@ -441,6 +440,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .pic.up img { animation: none; }
-    .scrim, .who, .face, .ghost, .send, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
+    .scrim, .who, .face, .ghost, .ic, .rest, .footer, .photo-tool { transition-duration: 1ms !important; transition-delay: 0s !important; }
   }
 </style>
