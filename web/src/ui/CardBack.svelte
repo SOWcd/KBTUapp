@@ -21,6 +21,8 @@
     onmedal?: () => void; medalLabel?: string; // the medallion as a button (Hero: back to the face)
     mark?: Snippet;        // the QR's middle; the look's mark by default
   } = $props();
+  // the name's longest word in letters: its size is fitted so that word fits the column beside the medallion (.bnm)
+  const nw = $derived(Math.max(1, ...name.split(/[\s-]+/).map((w) => w.length)));
 </script>
 
 <div class="cb {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
@@ -33,7 +35,7 @@
   {#if onplate}<button class="plate" onclick={onplate} aria-label={plateLabel}>{@render code()}</button>
   {:else}<span class="plate">{@render code()}</span>{/if}
   <span class="bside">
-    <b class="bnm">{name}</b>
+    <b class="bnm" style:--nw={nw}>{name}</b>
     <span class="role">{title}</span>
     <span class="meta">{line}</span>
     <span class="bno">№ {no}</span>
@@ -80,16 +82,21 @@
   button.plate:active { transform: scale(0.96); }
   /* the name and the rest down to the number at the foot. At the most (a two-line name and course line) the name stands
      beside the medallion, so its column stays clear of it; the role starts below the medallion, one line */
-  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1; align-self: stretch; }
-  .bnm { padding-right: 64px; } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a 12 px gap */
+  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1; align-self: stretch;
+    container-type: inline-size; }
+  .bnm { --pr: 64px; padding-right: var(--pr); } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a 12 px gap */
   .bside > * { flex: none; max-width: 100%; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
   .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
-  .sower .bnm { padding-right: 70px; }
+  .sower .bnm { --pr: 70px; }
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
-  .bnm { font: 780 var(--fs-card)/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
+  /* a long word (Aleksandra, Nursultanbek) never splits mid-word: the size comes down so the longest word fits beside the
+     medallion (0.68 em a letter at this weight, measured on Cyrillic), to the micro size at the least; a name longer still
+     ends in an ellipsis on its second line */
+  .bnm { font: 780 var(--fs-card)/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: break-word;
+    font-size: clamp(var(--fs-micro), calc((100cqi - var(--pr)) / (var(--nw) * 0.68)), var(--fs-card));
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .role { margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     font: 760 var(--fs-tab)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--role, rgb(169, 192, 255)); }
@@ -100,5 +107,5 @@
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
   /* a narrow phone: a smaller plate and medallion, so the name keeps 64 px beside it */
-  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } .bmed { top: 12px; right: 12px; width: 44px; height: 44px; } .bnm { padding-right: 54px; } }
+  @media (max-width: 359px) { .plate { width: 112px; height: 112px; } .bmed { top: 12px; right: 12px; width: 44px; height: 44px; } .bnm { --pr: 54px; } }
 </style>
