@@ -160,7 +160,7 @@ def _queue(cfg, uid: int, ref: str, kind: str = "backup_ok") -> None:
 
 def _sent(cfg, ref: str) -> tuple:
     with db.connect(cfg.db_path) as con:
-        return con.execute("SELECT sent_at IS NOT NULL, error FROM bot_outbox WHERE ref = ?", (ref,)).fetchone()
+        return tuple(con.execute("SELECT sent_at IS NOT NULL, error FROM bot_outbox WHERE ref = ?", (ref,)).fetchone())
 
 
 def _dead(cfg) -> list:
