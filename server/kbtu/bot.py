@@ -952,6 +952,7 @@ def _chores(cfg: Config, con) -> None:
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on
+    logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day

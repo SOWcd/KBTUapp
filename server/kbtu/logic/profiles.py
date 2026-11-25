@@ -877,7 +877,8 @@ def friends(con, v: Viewer) -> dict:
         WHERE r.status = 'going' AND u.show_going = 1 AND e.status = 'published' AND COALESCE(e.ends_at, e.starts_at + {NO_END}) > ?
         AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)
         ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles, hidden)]
-    return {"friends": mine, "incoming": incoming, "outgoing": outgoing, "going": cards(con, v, going)}
+    return {"friends": mine, "incoming": incoming, "outgoing": outgoing, "going": cards(con, v, going),
+            "suggest": pymk.shown(con, v)}  # People you may know: with the page, never fetched on open
 
 
 def find_student(con, v: Viewer, username: str) -> dict:
@@ -959,7 +960,9 @@ def take_back_request(con, v: Viewer, uid: int) -> None:
 def unfriend(con, v: Viewer, uid: int) -> None:
     """Quietly; either side, any time (§4.7)."""
     need_student(v)
-    con.execute("DELETE FROM friendships WHERE a = ? AND b = ?", (min(uid, v.id), max(uid, v.id)))
+    with tx(con):
+        con.execute("DELETE FROM friendships WHERE a = ? AND b = ?", (min(uid, v.id), max(uid, v.id)))
+        pymk.forget(con, v.id, uid)  # never back as a suggestion either way
 
 
 def _inviter(con, code: object) -> sqlite3.Row:
@@ -1014,7 +1017,7 @@ def friend_joined(con, v: Viewer, since: int) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, pymk  # noqa: E402
 from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402

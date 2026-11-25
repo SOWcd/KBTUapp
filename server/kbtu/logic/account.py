@@ -16,7 +16,7 @@ from .. import media, portal
 from .. import db
 from ..db import tx
 
-from . import notifications
+from . import notifications, pymk
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
@@ -534,7 +534,7 @@ def me(con, v: Viewer) -> dict:
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
-        "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
+        "settings": {**{k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()}, "suggestMe": pymk.is_on(con, v.id)},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [_membership(con, m, mains, logos) for m in members],
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
@@ -851,6 +851,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets[col] = val if k in ("lang", "theme") else int(bool(val))
     if "bio" in patch or "showcase" in patch or "nick" in patch:
         need_student(v)
+    if "suggestMe" in patch:  # People you may know: my yes to its text, or gone both ways (logic/pymk.py)
+        need_student(v)
+        pymk.switch(con, v.id, bool(patch["suggestMe"]))
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
     if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
@@ -1287,6 +1290,7 @@ _DEL_GONE = {
     ("subject_holds", "user_id"),  # a moderator's take-down of my listing on a subject (logic/subjects.py)
     ("kri_consents", "user_id"),  # my yes to Google answering the assistant first (assistant.GOOGLE_YES)
     ("appeal_ai_consents", "user_id"),  # my last opt-in to send an appeal draft abroad
+    ("pymk_consents", "user_id"), ("pymk", "user_id"), ("pymk", "other_id"), ("pymk_dismissed", "user_id"), ("pymk_dismissed", "other_id"),  # People you may know: my switch, suggestions to me and of me, dismissals both ways
     ("swear_hits", "user_id"),  # the bot's swear warnings to me in clubs' groups (chatmod.py; by my Telegram id too, below)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }

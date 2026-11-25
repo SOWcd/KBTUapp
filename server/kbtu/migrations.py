@@ -2289,4 +2289,23 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
+    # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
+    (227, """CREATE TABLE IF NOT EXISTS pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_other ON pymk (other_id);
+    CREATE TABLE IF NOT EXISTS pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+    CREATE INDEX IF NOT EXISTS pymk_dismissed_other ON pymk_dismissed (other_id);"""),
 ]

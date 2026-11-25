@@ -265,6 +265,7 @@ export const server = {
   answerFriend: (user: Id, accept: boolean): Promise<Friends> => call('POST', `/friends/requests/${user}/${accept ? 'accept' : 'decline'}`),
   takeBackRequest: (user: Id): Promise<void> => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user: Id): Promise<void> => call('DELETE', `/friends/${user}`),
+  dismissSuggestion: (user: Id): Promise<void> => call('POST', '/pymk/dismiss', { id: user }), // People you may know's x: never suggested to each other again
   linkCard: (code: string): Promise<LinkCard> => call('GET', `/invite/${code}`), // whose invite link it is (adds nobody; guests too)
   addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
