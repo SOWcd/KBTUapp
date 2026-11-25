@@ -3138,10 +3138,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return None
         # Vite puts a content hash into every name under assets/, so those never change; nor do the map's tiles, whose
         # folder names their cut (map/u2/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
-        # video) changes rarely: a day, then revalidated in the background; a page (.html) and the manifest (the home-screen
-        # name iOS reads when adding; a stale one kept "KBTU" after the rename) are always asked again
+        # video) changes rarely: a day, then revalidated in the background; a page (.html), the manifest (the home-screen
+        # name iOS reads when adding; a stale one kept "KBTU" after the rename) and the service worker (a deploy reaches
+        # the next launch, web/src/sw.ts) are always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
-                 "no-cache" if f.suffix == ".html" or path == "manifest.json" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
+                 "no-cache" if f.suffix == ".html" or path in ("manifest.json", "sw.js") else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
         if f.suffix in (".mp4", ".webm", ".mov", ".m4a", ".mp3"):
             cache += ", no-transform"  # the CDN gzipped a video and dropped Range: iOS shows it black (owner, Nov 23)
         headers, send = {"Cache-Control": cache}, f
@@ -3188,6 +3189,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f
+        if path.startswith("assets/") or path == "sw.js":  # gone with a deploy: a 404, never the page under a .js name
+            raise ApiError("not_found")  # (the service worker would keep it as code; a build without sw.js stops its updates)
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
             with pool.conn() as con:  # only past the files (else every asset takes a connection)

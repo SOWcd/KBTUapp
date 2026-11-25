@@ -971,6 +971,8 @@ const en: Dict = {
   'tk.holder': "Attendee",
   'tk.code': "Code",
   'tk.hint': "Show this QR at the door",
+  'tk.offline': "Offline",
+  'tk.offlineNote': "No connection: your tickets are saved on this phone",
   'tk.dmOn': "Turn on reminders",
   'dm.why': "Let the bot message you: I'll send the ticket and remind you before it starts",
   'dm.on': "Done, the bot will message you",

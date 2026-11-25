@@ -11,6 +11,7 @@
   import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
+  import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
@@ -740,6 +741,7 @@
       out.push(`${JSON.stringify(k)}:${json}`);
     }
     writeCache(`{${out.join(',')}}`);
+    keepTickets(data.events); // the door's copy: outlives the snapshot's week (lib/offlineTickets)
   };
   $effect(() => {
     void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key
@@ -762,7 +764,10 @@
     const seen = () => (document.hidden ? left() : back());
     document.addEventListener('visibilitychange', seen);
     const offs = [on('deactivated', left), on('activated', back)];
-    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
+    // opened offline: the network back, the lists and the account again (the offline note goes with the answer)
+    const online = () => { if (data.offline) { void loadMe(true); void loadAfisha(); } };
+    addEventListener('online', online);
+    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); removeEventListener('online', online); offs.forEach((f) => f()); };
   });
 
   // The API and cache already translate the first load. Walk the reactive stores only when the language changes.

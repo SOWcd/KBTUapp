@@ -20,6 +20,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
 import { clearCache } from './cache';
 import { castingOn } from '../posts';
+import { unreachable } from '../offlineTickets';
 
 export const data = $state({
   events: [] as EventCard[],
@@ -60,6 +61,7 @@ export const data = $state({
   staffMutesFailed: false,
   santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
+  offline: false,          // the events' request never reached the server: the kept tickets show, with the offline note
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
@@ -317,6 +319,7 @@ export async function loadAfisha(): Promise<void> {
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
     if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
     data.error = events.status === 'rejected';
+    data.offline = events.status === 'rejected' && unreachable(events.reason);
   } catch { data.error = true; }
   data.eventsReady = true;
 }
