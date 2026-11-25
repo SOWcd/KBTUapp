@@ -26,12 +26,12 @@ DONE = ICON.format('<path d="M20 6 9 17l-5-5"/>')
 
 # the app's tokens (web/src/ui/tokens.css); the phone's own font (a web font would be a request), the app's Inter if installed
 CSS = """
-:root{color-scheme:light dark;--bg:#F3F5FB;--card:#FFF;--line:rgba(11,20,51,.08);--text:#0B1433;--text-2:rgba(11,20,51,.7);
+:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--line:rgba(11,20,51,.08);--text:#0B1433;--text-2:rgba(11,20,51,.7);
  --text-3:rgba(11,20,51,.5);--accent:#3B6BFF;--accent-text:#2A57E6;--kb:#E8EEFF;--mine:#F0F1F5;
  --ok:#117640;--shadow:0 1px 2px rgba(24,36,90,.05),0 18px 40px -14px rgba(24,36,90,.2);--lift:0 10px 22px -12px rgba(59,107,255,.6)}
-@media (prefers-color-scheme:dark){:root{--bg:#07080F;--card:#11131E;--line:rgba(255,255,255,.07);--text:#F4F6FF;
+@media (prefers-color-scheme:dark){:root{--bg:#000000;--card:#131314;--line:rgba(255,255,255,.07);--text:#F4F6FF;
  --text-2:rgba(240,243,255,.68);--text-3:rgba(232,236,255,.42);--accent-text:#8FA8FF;--kb:#19254B;
- --mine:#1D1F2A;--ok:#5FD99A;--shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 24px 48px -18px #000;--lift:0 10px 22px -10px #000}}
+ --mine:#1C1C1E;--ok:#5FD99A;--shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 24px 48px -18px #000;--lift:0 10px 22px -10px #000}}
 *{box-sizing:border-box;margin:0}
 html{background:var(--bg)}
 body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;color:var(--text);text-align:center;
@@ -123,8 +123,8 @@ if (copy) {
 
 PAGE = Template("""<!doctype html><html lang="$lang"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F5FB">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#07080F">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
 <title>$title</title><style>$css</style></head><body>
 <main><div class="day" aria-hidden="true"><b>17:00</b><b>18:00</b><b>19:00</b><b>20:00</b>
 <div class="ev mine"><i></i></div><div class="ev kb"><span>$mark<i></i></span><i></i><svg class="tick" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10"/>

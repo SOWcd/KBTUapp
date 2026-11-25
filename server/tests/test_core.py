@@ -157,7 +157,7 @@ def test_multi_day_event(env, monkeypatch):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     start = int(time.time()) + 3 * 3600
     end = start + 10 * 86400
-    body = {"title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    body = {"seats": None, "title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["error"] == "bad_input"   # ends when it starts
     assert c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": start + 40 * 86400}).json()["error"] == "bad_input"  # days, not years
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": end}).json()["id"]
@@ -284,9 +284,9 @@ def test_postman(env, monkeypatch):
     con.execute("UPDATE users SET can_dm = 1, lang = 'kk'")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
-        VALUES (5, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
+        VALUES (20003, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
     uid = con.execute("SELECT id FROM users WHERE tg_id = 10").fetchone()[0]
-    for kind, ref in (("seat_free", "event:5"), ("new_event", "event:5"), ("event_changed", "event:404:1")):
+    for kind, ref in (("usage_week", "uw:20003"), ("seat_free", "event:20003"), ("new_event", "event:20003"), ("event_changed", "event:404:1")):
         con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, ?, ?, 0)", (uid, kind, ref))
     sent = []
 
@@ -303,14 +303,14 @@ def test_postman(env, monkeypatch):
     from kbtu import texts
     kk = texts.bot_message("kk", "seat_free", title="Hack <night>", when=texts.when(1791090000, "kk"), place="305")[0]
     assert first["chat_id"] == 10 and first["text"] == kk and "Hack &lt;night&gt;" in kk   # Kazakh, escaped
-    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_5")
+    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_20003")
     state = dict(con.execute("SELECT kind, COALESCE(error, 'sent') FROM bot_outbox").fetchall())
-    assert state == {"seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
+    assert state == {"usage_week": "gone", "seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
     assert con.execute("SELECT can_dm FROM users WHERE id = ?", (uid,)).fetchone()[0] == 0
 
     con.execute("DELETE FROM bot_outbox")
     con.execute("UPDATE users SET can_dm = 1")
-    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:5', 0)", (uid,))
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:20003', 0)", (uid,))
     stale = bot.rows(con, "SELECT b.*, u.tg_id, u.lang, u.can_dm FROM bot_outbox b JOIN users u ON u.id = b.user_id")
     sent.clear()
 
@@ -376,7 +376,7 @@ def test_photos(env):
     assert served.headers["content-type"] == "image/webp" and "immutable" in served.headers["cache-control"]
     assert not Image.open(io.BytesIO(served.content)).getexif()                                        # no EXIF, no GPS
     start = int(time.time()) + 86400
-    body = {"title": "Poster", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "coverId": up["id"]}
+    body = {"seats": None, "title": "Poster", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "coverId": up["id"]}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert ev["cover"]["thumb"] == up["thumb"] and ev["tint"] == "#2c50bf"                            # the colour sent: the editor picks the photo's
     assert ev["cover"]["focus"] is None                                                                # the middle until marked
@@ -441,7 +441,7 @@ def test_videos(env, tmp_path):
     assert c.put(f"/api/videos/{vid}?at={half}", headers=P, content=raw[half:]).json() == {"at": len(raw)}
     assert c.post(f"/api/videos/{vid}/done", headers=P).json()["status"] == "queued"
     start = int(time.time()) + 86400
-    body = {"title": "Reel", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "videoId": vid}
+    body = {"seats": None, "title": "Reel", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "videoId": vid}
     ev = c.post("/api/orgs/1/events", headers=P, json=body).json()
     assert ev["video"]["status"] == "queued"                                                           # the editor sees it coming
     c.post(f"/api/events/{ev['id']}/publish", headers=P)
@@ -901,7 +901,7 @@ def test_members_csv(env):
     head, top, row = (r.split(";") for r in data.decode("utf-8-sig").splitlines())
     role = head.index("Role")
     assert "Middle name" not in head and "Department" not in head and "Position" not in head  # none, or empty: no column
-    assert top[role] == "President" and row[role] == "Member" and row[head.index("First name (Latin)")] == "Ali*" and "made up" in caption
+    assert top[role] == "President" and row[role] == "Member" and row[head.index("First name (Latin)")] == "Ali*" and "generated automatically" in caption
     assert texts.latin("\u0414\u0430\u0443\u043b\u0435\u0442\u04b1\u043b\u044b") == "Dauletuly"
     assert "24Bali" not in data.decode("utf-8-sig") and "kbtu.kz" not in data.decode("utf-8-sig") and "7700" not in data.decode("utf-8-sig")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'members_export'").fetchone()[0] == 1
@@ -926,6 +926,15 @@ def test_guard_join(env):
     finally:
         logic.seats.chat_join = real
     con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ann["id"],))
+    calls = []  # a plain join request (no guard query) in that linked chat: a student approved, a stranger left alone
+
+    class Http:
+        async def post(self, url, json):
+            calls.append((url.rsplit("/", 1)[1], json["user_id"]))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -100}, "from": {"id": 20}}))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -100}, "from": {"id": 999}}))
+    asyncio.run(bot._join(cfg, Http(), con, {"chat": {"id": -200}, "from": {"id": 20}}))   # a chat the app doesn't know
+    assert calls == [("approveChatJoinRequest", 20)]
     key = bot.guard_key(cfg)
     t = logic.guard_token(key, -100, 20, "q:1")
     assert logic.guard_read(key, t) == (-100, 20, "q:1")
@@ -1275,11 +1284,11 @@ def test_invite_cards(env, monkeypatch):
     real = httpx.AsyncClient
     monkeypatch.setattr(server.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(telegram)))
     A = tma(61, "Ali")
-    assert c.post("/api/share", headers=A, json={"kind": "fr"}).json() == {"id": "prep1"}
+    assert c.post("/api/share", headers=A, json={"kind": "rf"}).json() == {"id": "prep1"}
     card = sent[-1]["result"]
     url = card["reply_markup"]["inline_keyboard"][0][0]["url"]
     code = c.get("/api/me", headers=A).json()["referrals"]["code"]
-    assert card["type"] == "article" and url.endswith(f"startapp=r_{code}")            # an older app's "fr": the one invite link
+    assert card["type"] == "article" and url.endswith(f"startapp=r_{code}")
     assert card["reply_markup"]["inline_keyboard"][0][0]["text"] == "\U0001f91d \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 \u0434\u0440\u0443\u0437\u044c\u044f"
     assert "http" not in card["input_message_content"]["message_text"] and "Ali T" in card["input_message_content"]["message_text"]
     assert c.post("/api/share", headers=A, json={"kind": "join", "id": 1}).status_code == 200
@@ -1295,7 +1304,7 @@ def test_invite_cards(env, monkeypatch):
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ali["id"],))
     assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "creator_laugh"}).status_code == 403  # the creator's own: not an admin's
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
-    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 200
+    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "uses": None, "days": 14}).status_code == 200
     token = sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("gl_")[1]
     assert "\u0434\u043e" in sent[-1]["result"]["input_message_content"]["message_text"].lower()                   # "until" its day
     login(c, 63, "zed")
@@ -1463,8 +1472,7 @@ def test_album(env, monkeypatch):
         return raw.getvalue()
 
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is True
-    assert c.get("/api/events/1", headers=Z).json()["canAddPhotos"] is False               # going, but didn't come
-    assert c.post("/api/events/1/photos", headers=Z, content=jpeg(0)).status_code == 403
+    assert c.get("/api/events/1", headers=Z).json()["canAddPhotos"] is True                # going, not let in: any student may add (owner)
     e = c.post("/api/events/1/photos", headers=A, content=jpeg(0)).json()
     assert len(e["photos"]) == 1 and e["photos"][0]["canDelete"] is True
     first = e["photos"][0]["id"]
@@ -2311,6 +2319,16 @@ def test_bot_texts_match_across_languages():
                 assert [fields(x) for x in ru if isinstance(x, str)] == [fields(x) for x in other if isinstance(x, str)], (key, lang)
 
 
+def test_bot_texts_open_with_an_emoji():
+    """The owner's hard rule: every bot message starts with an emoji (a bare paragraph gets skipped)."""
+    import unicodedata
+    for lang, table in texts.BOT.items():
+        for key, v in table.items():
+            text = (v[0] if isinstance(v, tuple) else v).lstrip()
+            if isinstance(text, str) and text and not text.startswith("{"):
+                assert unicodedata.category(text[0]) == "So" or text[0] in "ℹ", (lang, key, text[:30])
+
+
 def test_club_applications(env, monkeypatch):
     """Starting a club (§4.6): one pending application per person, the admins hear about it; yes = the club exists with
     the applicant as President; no = a reason, and a new application only in 30 days."""
@@ -2319,14 +2337,13 @@ def test_club_applications(env, monkeypatch):
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
     login(c, 60, "boss"); ali = login(c, 61, "ali"); zhan = login(c, 62, "zhan")
     B, A, Z = tma(60, "Boss"), tma(61, "Ali"), tma(62, "Zhan")
-    # A4: a name, a description, up to 6 social links; no "why" (the form before the refactor still sends one link)
+    # A4: a name, a description, up to 6 social links
     links = ["https://instagram.com/chess.kbtu", "https://tiktok.com/@chesskbtu"]
     good = {"name": "Chess Club", "short": "CH", "description": "We play chess every week.", "emoji": "trophy_3d", "cover": 2, "links": links}
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["javascript:alert(1)"]}).status_code == 400
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://tiktok.com/@x"] * 7}).status_code == 400
     assert c.post("/api/club-applications", headers=A, json={**good, "links": "https://tiktok.com/@x"}).status_code == 400
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://tiktok.com/@x"] * 2}).status_code == 400  # keyed in the app
-    assert c.post("/api/club-applications", headers=A, json={k: x for k, x in good.items() if k != "links"} | {"link": "javascript:alert(1)"}).status_code == 400
     app = c.post("/api/club-applications", headers=A, json=good).json()
     assert app["links"] == links and app["why"] is None
     assert app["status"] == "pending" and c.post("/api/club-applications", headers=A, json=good).json()["message"] == "pending"
@@ -2350,9 +2367,9 @@ def test_club_applications(env, monkeypatch):
     assert c.get(f"/api/orgs/{done['orgId']}", headers=A).json()["links"] == links           # the club got them all
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application_decided'").fetchone()
     assert bot._render(con, told)[2] == f"cl_{done['orgId']}"
-    z = c.post("/api/club-applications", headers=Z, json={k: x for k, x in good.items() if k != "links"} | {"name": "Go Club", "link": "https://tiktok.com/@go",
-                                                                                                           "why": "Old form"}).json()
-    assert (z["links"], z["why"]) == (["https://tiktok.com/@go"], "Old form")                          # an old client
+    go = {**good, "name": "Go Club", "links": ["https://tiktok.com/@go"], "why": "Weekly games"}
+    z = c.post("/api/club-applications", headers=Z, json=go).json()
+    assert (z["links"], z["why"]) == (go["links"], go["why"])
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False}).status_code == 400  # a reason
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False, "reason": "There is a Go club already"}).json()["status"] == "rejected"
     assert c.get("/api/club-applications/mine", headers=Z).json()["application"]["reason"] == "There is a Go club already"
@@ -2492,7 +2509,7 @@ def test_meetings(env):
     assert ans[mem["id"]]["came"] and not ans[mem2["id"]]["came"]
     assert ans[mem["id"]]["note"] == "Exam at 6"                     # said no (why), came: the reason stays (codex ideas2 3)
     # a tag's meeting expects only the tag's people
-    tagged = c.post("/api/orgs/1/events", headers=H, json={**body, "meetingTag": 5, "startsAt": start + 86400, "endsAt": start + 90000}).json()
+    tagged = c.post("/api/orgs/1/events", headers=H, json={"seats": None, **body, "meetingTag": 5, "startsAt": start + 86400, "endsAt": start + 90000}).json()
     c.post(f"/api/events/{tagged['id']}/publish", headers=H)
     assert {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'meeting_invite' AND ref = ?", (f"mi:{tagged['id']}",))} == {mem2["id"]}
     assert [a["person"]["id"] for a in c.get(f"/api/events/{tagged['id']}/meeting", headers=H).json()] == [mem2["id"]]
@@ -2507,7 +2524,7 @@ def test_team_only_event(env):
     con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (mem["id"], "member")])
     con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (?, 1, 0)", (ali["id"],))
     P, M, A = tma(70, "Pres"), tma(71, "Mem"), tma(72, "Ali")
-    body = {"title": "Team sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "visibility": "members"}
+    body = {"seats": None, "title": "Team sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "visibility": "members"}
     assert c.post("/api/orgs/1/events", headers=P, json={**body, "visibility": "leaders"}).status_code == 400
     e = c.post("/api/orgs/1/events", headers=P, json=body).json()
     assert e["visibility"] == "members"
@@ -2526,7 +2543,7 @@ def test_shared_cards_never_leak(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (bob["id"], "member")])
     P, M, A = tma(70, "Pres"), tma(71, "Mem"), tma(72, "Ali")
-    body = {"title": "Sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    body = {"seats": None, "title": "Sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
     team = c.post("/api/orgs/1/events", headers=P, json={**body, "visibility": "members"}).json()
     pub = c.post("/api/orgs/1/events", headers=P, json={**body, "title": "Open day"}).json()
     for e in (team, pub):
@@ -2558,7 +2575,7 @@ def test_teambuilding_thunder(env):
     start = int(time.time()) + 86400
 
     def came(visibility: str) -> None:
-        e = c.post("/api/orgs/1/events", headers=P, json={"title": "Sync", "place": "305", "startsAt": start, "emoji": "laptop_3d",
+        e = c.post("/api/orgs/1/events", headers=P, json={"seats": None, "title": "Sync", "place": "305", "startsAt": start, "emoji": "laptop_3d",
                                                             "color": "#3B6BFF", "visibility": visibility}).json()
         c.post(f"/api/events/{e['id']}/publish", headers=P)
         if visibility == "public":  # a seat from before he joined (the club's own can't sign up to its public events)
@@ -2580,7 +2597,7 @@ def test_teambuilding_thunder(env):
         came("members")
     assert (team()["count"], team()["level"]) == (3, 1)
     # no tickets: the door has the whole team, and someone who didn't sign up is let in by name
-    e = c.post("/api/orgs/1/events", headers=P, json={"title": "Pizza", "place": "305", "startsAt": start, "emoji": "laptop_3d",
+    e = c.post("/api/orgs/1/events", headers=P, json={"seats": None, "title": "Pizza", "place": "305", "startsAt": start, "emoji": "laptop_3d",
                                                         "color": "#3B6BFF", "visibility": "members"}).json()
     c.post(f"/api/events/{e['id']}/publish", headers=P)
     assert {d["person"]["id"] for d in c.get(f"/api/events/{e['id']}/door", headers=P).json()} == {pres["id"], mem["id"]}
@@ -2623,7 +2640,7 @@ def test_leaders_meeting(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)", [(9, dmp["id"], "head"), (1, pres["id"], "president"), (1, vice["id"], "vice"), (1, mem["id"], "member")])
     D, P, V, M = tma(80, "Dmp"), tma(81, "Pres"), tma(82, "Vice"), tma(83, "Mem")
-    body = {"title": "Leaders meeting", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "trophy_3d", "color": "#3B6BFF",
+    body = {"seats": None, "title": "Leaders meeting", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "trophy_3d", "color": "#3B6BFF",
             "visibility": "leaders", "leadersFrom": "vice"}
     assert c.post("/api/orgs/1/events", headers=P, json=body).status_code == 400              # not an oversight org
     e = c.post("/api/orgs/9/events", headers=D, json=body).json()
@@ -2842,7 +2859,7 @@ def test_receipt_reading(env, monkeypatch):
     assert con.execute("SELECT via FROM receipts ORDER BY id DESC").fetchone()[0] == "bot"
 
     # two seats on hold: the bot asks which, and the tap finds the file in the message its buttons answer
-    ev2 = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Quiz", "place": "305", "startsAt": int(time.time()) + 7200, "emoji": "laptop_3d",
+    ev2 = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Quiz", "place": "305", "startsAt": int(time.time()) + 7200, "emoji": "laptop_3d",
                                                               "color": "#3B6BFF", "price": 500, "payToName": "Arman A.", "payPhone": "87071234567"}).json()
     c.post(f"/api/events/{ev2['id']}/publish", headers=tma(20))
     for e in (eid, ev2["id"]):
@@ -3055,14 +3072,15 @@ def test_team_two(env):
     outbox = lambda kind: [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = ?", (kind,))]  # noqa: E731
 
     # roles: a name and colour on a level below the maker's own
-    smm = {"name": "SMM lead", "color": "#FF4FA3", "level": "head"}
+    smm = {"name": "SMM lead", "color": "#FF4FA3", "rights": list(logic.LEVEL_RIGHTS["head"])}
+    vice_rights = list(logic.LEVEL_RIGHTS["vice"])
     assert c.post("/api/orgs/1/roles", headers=tma(22), json=smm).status_code == 403                  # a Head makes none
-    assert c.post("/api/orgs/1/roles", headers=tma(21), json={**smm, "level": "vice"}).status_code == 403
-    for bad in ({"color": "pink"}, {"name": ""}, {"name": "x" * 25}, {"level": "president"}):
+    assert c.post("/api/orgs/1/roles", headers=tma(21), json={**smm, "rights": vice_rights}).status_code == 403
+    for bad in ({"color": "pink"}, {"name": ""}, {"name": "x" * 25}, {"rights": ["president"]}):
         assert c.post("/api/orgs/1/roles", headers=tma(21), json={**smm, **bad}).status_code == 400
     rid = c.post("/api/orgs/1/roles", headers=tma(21), json=smm).json()["roles"][0]["id"]
     assert c.post("/api/orgs/1/roles", headers=tma(20), json={**smm, "name": "smm LEAD"}).json()["message"] == "taken"
-    treasurer = c.post("/api/orgs/1/roles", headers=tma(20), json={"name": "Treasurer", "color": "#2FBF71", "level": "vice"}).json()["roles"][1]["id"]
+    treasurer = c.post("/api/orgs/1/roles", headers=tma(20), json={"name": "Treasurer", "color": "#2FBF71", "rights": vice_rights}).json()["roles"][1]["id"]
     assert c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"roleId": treasurer}).status_code == 403
     c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"roleId": rid})
     ann = member(11, 10)
@@ -3088,8 +3106,8 @@ def test_team_two(env):
     # the memo signs with them; a known word still wins
     assert texts.memo_pos("head", "SMM lead", kk, None) == {"kk": kk, "ru": "SMM lead", "en": "SMM lead"}
     assert texts.memo_pos("head", "Head of SMM", kk, "x") == texts.memo_pos("head", "Head of SMM")
-    assert c.patch(f"/api/orgs/1/roles/{treasurer}", headers=tma(21), json={"name": "Cash", "color": "#2FBF71", "level": "head"}).status_code == 403
-    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**smm, "level": "member"})                # its people move with it
+    assert c.patch(f"/api/orgs/1/roles/{treasurer}", headers=tma(21), json={**smm, "name": "Cash"}).status_code == 403
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**smm, "rights": ["door"]})          # its people move with it
     assert member(20, 10)["role"] == "member"
     c.delete(f"/api/orgs/1/roles/{rid}", headers=tma(21))
     assert (member(20, 10)["role"], member(20, 10)["title"]) == ("member", None)
@@ -3193,11 +3211,11 @@ def test_memo(env, monkeypatch):
     monday = logic._next_week()
     base = {"emoji": "laptop_3d", "color": "#3B6BFF", "seats": 50}
     asks = {"room": {"any": True, "projector": True}, "guests": {"side": "tole", "list": "Ivanov Ivan, Satbayev University\n"}}
-    a = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": asks}).json()
+    a = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": asks}).json()
     assert a["memo"] == asks                                                                  # the editor gets it back (Head+)
-    b = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Quiz", "place": "", "startsAt": monday + 3 * 86400 + 13 * 3600, "memo": {"room": {}}}).json()
-    c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Talk", "place": "Atrium", "startsAt": monday + 2 * 86400})
-    assert c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "X", "place": "", "startsAt": monday, "memo": {"cake": {}}}).status_code == 400
+    b = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Quiz", "place": "", "startsAt": monday + 3 * 86400 + 13 * 3600, "memo": {"room": {}}}).json()
+    c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Talk", "place": "Atrium", "startsAt": monday + 2 * 86400})
+    assert c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "X", "place": "", "startsAt": monday, "memo": {"cake": {}}}).status_code == 400
     for e in (a, b):
         c.post(f"/api/events/{e['id']}/publish", headers=tma(20))
     assert c.get(f"/api/events/{a['id']}", headers=tma(10)).json()["memo"] is None             # students never see it
@@ -3214,7 +3232,7 @@ def test_memo(env, monkeypatch):
     assert text.count("Pres Testov") == 3 and "Pres Testov\n+7 (701) 234 56 78\n-------" in text       # kk and ru, then the Latin one
     pos = texts.MEMO2_POS["president"]
     assert "\n".join((texts.MEMO2_SIGN["kk"][0], texts.MEMO2_SIGN["kk"][1].format(org="IT Club", pos=pos["kk"]))) in text
-    assert "Regards and best wishes,\nPresident of Student Organization «IT Club»\nPres Testov" in text
+    assert "Kind regards,\nPresident of the student organization “IT Club”\nPres Testov" in text
     assert c.get("/api/orgs/1/memo", headers=tma(10)).status_code == 403
 
     # Wednesday 10:00 in Almaty: the President hears it once
@@ -3236,7 +3254,7 @@ def test_memo(env, monkeypatch):
     # DMP gave a room: typed in, nobody is told now
     c.post(f"/api/events/{b['id']}/registration", headers=tma(10), json={})
     before = con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0]
-    upd = c.patch(f"/api/events/{b['id']}", headers=tma(20), json={**base, "title": "Quiz", "place": "Aud. 412", "startsAt": b["startsAt"]})
+    upd = c.patch(f"/api/events/{b['id']}", headers=tma(20), json={"seats": None, **base, "title": "Quiz", "place": "Aud. 412", "startsAt": b["startsAt"]})
     assert upd.status_code == 200 and con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0] == before
 
 
@@ -3266,7 +3284,7 @@ def test_memo_v2(env, monkeypatch):
              "print": {"items": [{"name": "Poster", "count": 5, "format": "A3", "bw": False, "density": 2}]},
              "film": {"date": "2026-10-21", "from": "10:00", "to": "12:00", "note": "interview"}}
     base = {"emoji": "laptop_3d", "color": "#3B6BFF", "seats": 50}
-    a = c.post("/api/orgs/1/events", headers=tma(21), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": every})
+    a = c.post("/api/orgs/1/events", headers=tma(21), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": every})
     assert a.status_code == 200
     a = a.json()
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, visibility, meeting, memo, created_by, created_at, updated_at)
@@ -3288,7 +3306,7 @@ def test_memo_v2(env, monkeypatch):
                 texts.MEMO2_PROVIDE_HEAD.format(items="; ".join([*provide, "extension cord"])), texts.MEMO2_QUIET,
                 texts.MEMO2_DATES.format(dates=texts._dates(every["promo"]["dates"])),
                 f"{texts.MEMO2_FILM}\n", "10:00-12:00", "interview", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]) + f"\n{' '.join(cyr)}\n+7 (700) 111 22 33",
-                texts.MEMO2_SIGN["kk"][1].format(org="StudEx", pos=sec["kk"]), "Secretary of Student Organization «StudEx»\nAigerim Saparova"):
+                texts.MEMO2_SIGN["kk"][1].format(org="StudEx", pos=sec["kk"]), "Secretary of the student organization “StudEx”\nAigerim Saparova"):
         assert bit in t, bit
     assert texts._dates(["2026-10-14", "2026-10-13", "2026-11-03"]) == f"13, 14 {texts.MONTHS['ru'][9]} \u0438 3 {texts.MONTHS['ru'][10]} 2026"
     seventh = next(x for x in t.split("\n") if x.startswith("7) "))
@@ -3317,7 +3335,7 @@ def test_memo_v2(env, monkeypatch):
     con.commit()
     sent = c.get("/api/registry/memos", headers=tma(29)).json()
     assert len(sent) == 1 and sent[0]["org"]["id"] == 1 and sent[0]["by"] and {x["id"] for x in sent[0]["events"]} == {a["id"], 90}
-    c.patch(f"/api/events/{a['id']}", headers=tma(20), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": a["startsAt"], "memo": {"room": {}}})
+    c.patch(f"/api/events/{a['id']}", headers=tma(20), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": a["startsAt"], "memo": {"room": {}}})
     assert [x["title"] for x in c.get("/api/orgs/1/memo", headers=tma(20)).json()["events"]] == ["Hackday"]
     one_ = c.get("/api/orgs/1/memo", headers=tma(20)).json()["text"]
     assert one_.split("\n")[1] == texts.MEMO2_TITLE[0] and texts.MEMO2_FOR["event"].split("{")[0] not in one_  # one event: no per-event line
@@ -3334,7 +3352,7 @@ def test_memo_v2(env, monkeypatch):
     con.execute("UPDATE events SET memo = NULL WHERE org_id = 1")
     m = c.get("/api/orgs/1/memo", headers=tma(21)).json()
     assert m["text"].startswith(texts.MEMO2_TO) and texts.MEMO2_BLANK.format(org="StudEx") in m["text"] and m["signFrom"] in m["text"]
-    item = {"kind": "room", "fields": {"any": True, "projector": True}, "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "endsAt": monday + 86400 + 15 * 3600}
+    item = {"seats": None, "kind": "room", "fields": {"any": True, "projector": True}, "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "endsAt": monday + 86400 + 15 * 3600}
     r = c.post("/api/orgs/1/memo/item", headers=tma(21), json=item)
     assert r.status_code == 200 and "305" in r.json()["text"] and "13:00-15:00" in r.json()["text"]
     assert c.post("/api/orgs/1/memo/item", headers=tma(22), json=item).status_code == 403   # a Head without "memo"
@@ -3378,6 +3396,8 @@ def test_place_changes(env, monkeypatch):
     con.execute("UPDATE events SET starts_at = ?, place = 'Aud. 305', place_url = NULL WHERE id = ?", (int(time.time()) - 600, e["id"]))
     con.execute("UPDATE registrations SET checked_in_at = ? WHERE event_id = ? AND user_id = ?", (int(time.time()), e["id"], uid[10]))
     assert c.post(f"/api/events/{e['id']}/place", headers=tma(20), json={"place": "Aud. 202"}).status_code == 200
+    gone = c.delete(f"/api/events/{e['id']}/registration", headers=tma(10))                   # in the room: the seat stays
+    assert gone.status_code == 409 and gone.json()["message"] == "checked_in"
     soon = told()
     assert set(soon) == {uid[11], uid[12]} and all(t <= int(time.time()) for t in soon.values())
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 7200, int(time.time()) - 3600, e["id"]))
@@ -3496,7 +3516,7 @@ def test_casting(env):
     assert c.post(f"/api/round-apps/{ann['id']}/decide", headers=tma(20), json={"stage": "yes", "tagId": 1}).json()["takenTag"] == 1
     assert c.get("/api/orgs/1/round", headers=tma(20)).json()["counts"] == {"yes": 1, "no": 1}
 
-    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20)).json() == {"accepted": 1, "declined": 1}
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).json() == {"accepted": 1, "declined": 1}
     assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (uid[10],)).fetchone()[0] == "member"
     assert [tuple(x) for x in con.execute("SELECT tag_id FROM member_tags WHERE user_id = ?", (uid[10],))] == [(1,)]
     assert con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (uid[11],)).fetchone() is None
@@ -3504,7 +3524,8 @@ def test_casting(env):
     assert sent == {"round_yes": uid[10], "round_no": uid[11]}
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_yes'").fetchone()
     assert "SMM" in bot._render(con, row)[0]
-    assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None and c.post(f"/api/rounds/{rid}/send", headers=tma(20)).status_code == 409
+    assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).status_code == 409
     # sixty days after the results the answers and notes go; who applied and how it ended stay
     con.execute("UPDATE rounds SET sent_at = ? WHERE id = ?", (int(time.time()) - 61 * 86400, rid))
     casting.forget(con)
@@ -3596,7 +3617,7 @@ def test_casting_whole_club(env):
     assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [], "answers": {q: "Anime"}}).json()["mine"]["departments"] == []
     app = c.get(f"/api/rounds/{r['id']}/apps", headers=tma(20)).json()[0]
     assert c.post(f"/api/round-apps/{app['id']}/decide", headers=tma(20), json={"stage": "yes"}).json() == {"stage": "yes", "takenTag": None}
-    assert c.post(f"/api/rounds/{r['id']}/send", headers=tma(20)).json() == {"accepted": 1, "declined": 0}
+    assert c.post(f"/api/rounds/{r['id']}/send", headers=tma(20), json={"final": True}).json() == {"accepted": 1, "declined": 0}
     assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ann,)).fetchone()[0] == "member"
     # one department: the student picks nothing, it's that one; no next text and no slots: no audition step
     con.execute("INSERT INTO org_tags (id, org_id, name, color, created_at) VALUES (1, 1, 'Art', '#FF4FA3', 0)")
@@ -3623,7 +3644,7 @@ def test_saved_tomorrow(env, monkeypatch):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
     day = (int(time.time()) + 5 * 3600) // 86400
     start = (day + 1) * 86400 - 5 * 3600 + 18 * 3600                       # tomorrow 18:00 in Almaty
-    e = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Quiz", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    e = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Quiz", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{e['id']}/publish", headers=tma(20))
     for tg in (10, 11):
         c.put(f"/api/events/{e['id']}/saved", headers=tma(tg))
@@ -3902,6 +3923,9 @@ def test_volunteers(env):
     assert c.put(f"/api/events/{e['id']}/volunteers/{ids[22]}", headers=tma(20), json={"yes": True}).status_code == 409   # one place
     assert c.put(f"/api/events/{e['id']}/volunteers/{ids[22]}", headers=tma(20), json={"yes": False}).status_code == 200
     assert {r[0] for r in con.execute("SELECT kind FROM bot_outbox WHERE kind LIKE 'volunteer_%'")} == {"volunteer_yes", "volunteer_no"}
+    c.delete(f"/api/events/{e['id']}/volunteer", headers=tma(22))                                            # a "no" can't be undone
+    c.post(f"/api/events/{e['id']}/volunteer", headers=tma(22), json={})                                     # by leaving and applying again
+    assert con.execute("SELECT status FROM volunteers WHERE event_id = ? AND user_id = ?", (e["id"], ids[22])).fetchone()[0] == "no"
     assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["volunteers"] == {"need": 1, "senior": True, "taken": 1, "mine": None, "asked": 0}
 
 
@@ -4484,7 +4508,7 @@ def test_translations(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '', 1)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     start = (int(time.time()) // 86400 + 1) * 86400 + 7 * 3600  # noon in Almaty: the range stays within one day
-    body = {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
+    body = {"seats": None, "title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
             "emoji": "laptop_3d", "color": "#3B6BFF"}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert logic.ai_next(con) is None                                     # a draft stays home; a club with no description too
@@ -4838,8 +4862,7 @@ def test_app_team(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    # the bot keeps quiet to him. Only his chat counts: send_due also runs the chores, and on a Monday from 9:00 (Almaty)
-    # stats.week() sends the owner (a founder here) the week's digest (was: `not sent`, which failed every Monday)
+    # The bot skips the banned user's chat.
     assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
     assert logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"
     assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200
@@ -4979,14 +5002,14 @@ def test_custom_short_links(env):
                     [(1, ids["pres"], "president"), (1, ids["vice"], "vice"), (1, ids["head"], "head"), (2, ids["other"], "president")])
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["boss"],))
     start = int(time.time()) + 3600
-    ev = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Hack night", "place": "305", "startsAt": start, "endsAt": start + 7200,
+    ev = c.post("/api/orgs/1/events", headers=H["pres"], json={"seats": None, "title": "Hack night", "place": "305", "startsAt": start, "endsAt": start + 7200,
                                                                 "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     add = lambda who, body, org=1: c.post(f"/api/orgs/{org}/links", headers=H[who], json=body)  # noqa: E731
     assert add("head", {"slug": "join-it", "kind": "club"}).status_code == 403                  # Vice and above
     assert add("other", {"slug": "join-it", "kind": "club"}).status_code == 403                 # someone else's club
     assert add("vice", {"slug": "hack", "kind": "event", "eventId": ev["id"]}).status_code == 400  # a draft
     c.post(f"/api/events/{ev['id']}/publish", headers=H["pres"])
-    other = c.post("/api/orgs/2/events", headers=H["other"], json={"title": "Blitz", "place": "305", "startsAt": start, "endsAt": start + 60,
+    other = c.post("/api/orgs/2/events", headers=H["other"], json={"seats": None, "title": "Blitz", "place": "305", "startsAt": start, "endsAt": start + 60,
                                                                     "emoji": "trophy_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{other['id']}/publish", headers=H["other"])
     assert add("vice", {"slug": "blitz", "kind": "event", "eventId": other["id"]}).status_code == 400  # another club's event
@@ -5023,7 +5046,7 @@ def test_custom_short_links(env):
     assert not con.execute("SELECT 1 FROM short_links WHERE slug = 'hack-night'").fetchone()
     # an event deleted in the app keeps its link's name for its club, which may take it again
     con.execute("UPDATE orgs SET status = 'active' WHERE id = 1")
-    ev2 = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Draft", "place": "305", "startsAt": start, "endsAt": start + 60,
+    ev2 = c.post("/api/orgs/1/events", headers=H["pres"], json={"seats": None, "title": "Draft", "place": "305", "startsAt": start, "endsAt": start + 60,
                                                                  "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{ev2['id']}/publish", headers=H["pres"])
     assert add("vice", {"slug": "draft-ev", "kind": "event", "eventId": ev2["id"]}).status_code == 200
@@ -5338,11 +5361,16 @@ def test_channel_mirror(env, tmp_path):
     pic = media.save(png.getvalue(), tmp_path)
     outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
 
-    # a post: the first line its title
-    p1 = mirror.take(con, 500, mirror.Msg(id=10, date=logic.now() - 60, text="Stand-up night on Friday\nSign up by Thursday.\nFree entry.",
-                                           photo=pic, views=120, reactions=[("\U0001F525", 7), ("\u2764", 3), ("\u2605", 0)]))
+    # The title split and trimming preserve the Telegram offsets, including the title's emoji.
+    text = "  \U0001F3A4 Stand-up night on Friday  \n  Sign up by Thursday.\nFree entry."
+    url = "https://example.com/signup"
+    p1 = mirror.take(con, 500, mirror.Msg(id=10, date=logic.now() - 60, text=text, photo=pic,
+                                        entities=[("bold", 5, 8, None), ("bold", 34, 7, None), ("text_link", 45, 8, url),
+                                                  ("text_link", 55, 4, "tg://resolve?domain=mic_news")],
+                                        views=120, reactions=[("\U0001F525", 7), ("\u2764", 3), ("\u2605", 0)]))
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
-    assert (got["title"], got["body"]) == ("Stand-up night on Friday", "Sign up by Thursday.\nFree entry.")
+    assert (got["title"], got["body"]) == ("\U0001F3A4 Stand-up night on Friday", "Sign up by Thursday.\nFree entry.")
+    assert got["titleFmt"] == [["bold", 3, 8, None]] and got["fmt"] == [["bold", 0, 7, None], ["text_link", 11, 8, url]]
     assert got["photo"] and got["tg"] == {"url": "https://t.me/mic_news/10", "views": 120, "reactions": [["\U0001F525", 7], ["\u2764", 3]], "media": None}
     assert got["commentsOn"] is False and got["canEdit"] is False
     assert c.get("/api/posts?scope=org:1", headers=tma(80)).json()[0]["canEdit"] is False   # not even its President: Telegram's
@@ -5351,11 +5379,14 @@ def test_channel_mirror(env, tmp_path):
     assert c.patch(f"/api/posts/{p1}", headers=tma(80), json={"pinned": True}).json()["pinned"] is True  # a pin is the club's own
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox                      # nobody notified
 
-    # an edit, and the counts later
+    # A formatting-only edit replaces both sets of ranges. Removing every entity clears the field.
+    assert mirror.take(con, 500, mirror.Msg(id=10, date=0, text=text, entities=[("italic", 34, 7, None)])) == p1
+    got = c.get("/api/posts?scope=org:1", headers=tma(81)).json()[0]
+    assert got["fmt"] == [["italic", 0, 7, None]] and "titleFmt" not in got and got["editedAt"]
     assert mirror.take(con, 500, mirror.Msg(id=10, date=0, text="Stand-up night moved to Saturday", views=300, reactions=[("\U0001F525", 9)])) == p1
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
     assert (got["title"], got["body"], got["tg"]["views"], got["tg"]["reactions"]) == ("Stand-up night moved to Saturday", "", 300, [["\U0001F525", 9]])
-    assert got["editedAt"] and got["photo"]                                                             # the photo stays
+    assert got["editedAt"] and got["photo"] and "fmt" not in got
 
     # an album: three messages, one post; its caption on the second; a video only a link
     a = [mirror.Msg(id=20, date=logic.now(), grouped=77, photo=pic), mirror.Msg(id=21, date=logic.now(), grouped=77, text="Photos from the night"),
@@ -5506,10 +5537,12 @@ def test_mirror_languages(env):
     ru = "\u0420\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u043b\u043e\u0441\u044c\n\u0412 \u0441\u0440\u0435\u0434\u0443"
     pid = mirror.take(con, 700, mirror.Msg(id=10, date=t0, text=kk, views=50))
     assert mirror.take(con, 700, mirror.Msg(id=11, date=t0 + 60, text=ru, views=7)) == pid
-    assert mirror.take(con, 700, mirror.Msg(id=12, date=t0 + 120, text="Timetable changed\nOn Wednesday")) == pid
+    assert mirror.take(con, 700, mirror.Msg(id=12, date=t0 + 120, text="Timetable changed\nOn Wednesday",
+                                          entities=[("italic", 21, 9, None)])) == pid
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(80)).json()}
     assert list(got) == [pid] and got[pid]["title"].startswith("\u0414\u04d9\u0440\u0456\u0441") and got[pid]["tg"]["views"] == 50  # the first message's counts
-    assert got[pid]["i18n"] == {"ru": {"title": ru.split("\n")[0], "body": ru.split("\n")[1]}, "en": {"title": "Timetable changed", "body": "On Wednesday"}}
+    assert got[pid]["i18n"] == {"ru": {"title": ru.split("\n")[0], "body": ru.split("\n")[1]},
+                               "en": {"title": "Timetable changed", "body": "On Wednesday", "fmt": [["italic", 3, 9, None]]}}
     two = mirror.take(con, 700, mirror.Msg(id=13, date=t0 + 180, text="Another announcement"))    # English again: another post
     late = mirror.take(con, 700, mirror.Msg(id=14, date=t0 + 7200, text=ru))                     # two hours later: another post
     assert len({pid, two, late}) == 3
@@ -5725,7 +5758,7 @@ def test_roster_load_and_join(env):
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
     orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
     got = roster.load(con, items, orgmap)
-    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
+    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 2)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
     assert con.execute("SELECT official FROM orgs WHERE name = 'Chess'").fetchone()[0] == 1          # no "KBTU" in a name
 
@@ -5745,53 +5778,8 @@ def test_roster_load_and_join(env):
     welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
     assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"
 
-    ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
-    assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()                                         # waiting for approval
-    assert not me["memberships"] and me["roster"] is None and me["city"] is None
-    assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
-    assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
-    req = c.get("/api/roster/requests", headers=tma(70)).json()
-    assert [(r["sheetName"], r["name"]) for r in req] == [("Someone Else", "Bek Testov")]
-    org = req[0]["org"]["id"]                                                            # its Studio: that club's only
-    assert len(c.get(f"/api/roster/requests?org={org}", headers=tma(70)).json()) == 1 and c.get(f"/api/roster/requests?org={org + 999}", headers=tma(70)).json() == []
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=h(72), json={"ok": True}).status_code == 403
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
-    me = c.get("/api/me", headers=h(72)).json()
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"] is None   # never the row's city
-
-
-def test_roster_claim_no_rights(env):
-    """A claim at the student's word (review, Nov 2): a member's row never hands over a club role that carries rights;
-    an officer's row grants no membership while pending; a waiting claim isn't overwritten."""
-    from kbtu import roster
-    c, cfg = env
-    pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
-    con = db.connect(cfg.db_path)
-    h = lambda uid, u: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": "X", "username": u}, BOT)}  # noqa: E731
-    c.get("/api/me", headers=h(81, "zed_t"))
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, created_at) VALUES (1, 'HR', '#8E8E93', 'member', 'casting,team', 0)")
-    row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": "Someone Else", "school": None,  # noqa: E731
-                       "year": None, "course": None, "city": None, "phone": None, "tg": "zed_t", "email": None, **k}
-    roster.load(con, [row(position="HR", title="HR")], {"Open Mic sheet": "mic"})
-    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
-    roster.decide(con, logic.Viewer(pres["id"], "user", True), ask[0]["id"], True)
-    assert tuple(con.execute("SELECT role, role_id FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()) == ("member", None)
-    con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],))
-    roster.load(con, [row(full_name="Other Person", position="Head of SMM", title="Head of SMM", role="head")], {"Open Mic sheet": "mic"})
-    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
-    assert not con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()
-    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code in (404, 409)   # claimed: not twice
-    req = c.get("/api/roster/requests", headers=tma(80)).json()
-    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
-    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()   # "not them": out again
-    con.close()
+    me = c.get("/api/me", headers=h(72)).json()                                         # Bek: the username, another name: in all the same
+    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"]["name"] == "Aktau"
 
 
 def test_roster_app_wins(env):
@@ -5855,7 +5843,7 @@ def test_phone_asked_at_signup(env):
     start = int(time.time()) + 3600
     eids = []
     for title in ("Trip", "Hike"):
-        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
+        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
                                                                   "color": "#3B6BFF", "needsPhone": True}).json()
         assert ev["needsPhone"] is True
         c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
@@ -5869,7 +5857,7 @@ def test_phone_asked_at_signup(env):
     assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
     assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
     # a club whose event never asked doesn't get the kept phone in its guest list
-    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{plain['id']}/publish", headers=tma(20))
     go(plain["id"])
     v = logic.Viewer(pres["id"], "user", True)
@@ -7410,11 +7398,11 @@ def test_event_questions(env, monkeypatch):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    off = {"title": "Quiz", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF",
+    off = {"seats": None, "title": "Quiz", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF",
            "form": [{"label": "Team?", "kind": "text", "required": True}]}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=off).json()["form"] is None   # BOARD off: questions not taken
     _board_on(c, cfg)
-    base = {"title": "Hackathon", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "Hackathon", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
     qs = [{"label": "Your team?", "kind": "text", "required": True}, {"label": "T-shirt", "kind": "choice", "options": ["S", "M", "L"], "required": False}]
     for bad in ([{"label": "x", "kind": "text"}], [{"label": "Size", "kind": "choice", "options": ["S"]}], [qs[0]] * 6,
                 [{"label": "Size", "kind": "choice", "options": ["S", "S"]}], [{"label": "Size", "kind": "file"}],
@@ -7664,7 +7652,7 @@ def test_partner_events(env):
                     [(1, pres["id"], "president"), (1, head["id"], "head"), (9, dmp["id"], "head"), (1, dmp["id"], "head")])
     con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (?, 1, 0)", (ali["id"],))
     start = int(time.time()) + 86400
-    body = {"title": "Halloween", "place": "Bar", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    body = {"seats": None, "title": "Halloween", "place": "Bar", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
     party = {**body, "guestHost": "  Night  Owls ", "externalUrl": "https://owls.kz/halloween"}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=party).json()["message"] == "partner"   # a student initiative
     ev = c.post("/api/orgs/1/events", headers=tma(80), json=party).json()                              # DMP may
@@ -8373,7 +8361,7 @@ def test_memo_is_a_recognised_clubs_alone(env):
     rights = {m["org"]["id"]: m["rights"] for m in c.get("/api/me", headers=tma(20)).json()["memberships"]}
     assert "memo" not in rights[1] and "memo" in rights[2] and "events" in rights[1]
     monday = logic._next_week()
-    ev = {"emoji": "laptop_3d", "color": "#3B6BFF", "title": "Talk", "place": "", "startsAt": monday + 86400 + 13 * 3600, "memo": {"room": {"any": True}}}
+    ev = {"seats": None, "emoji": "laptop_3d", "color": "#3B6BFF", "title": "Talk", "place": "", "startsAt": monday + 86400 + 13 * 3600, "memo": {"room": {"any": True}}}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=ev).json()["memo"] is None
     assert c.post("/api/orgs/2/events", headers=tma(20), json=ev).json()["memo"] == {"room": {"any": True}}
     assert c.get(f"/api/orgs/1/memo?week={monday}", headers=tma(20)).status_code == 403

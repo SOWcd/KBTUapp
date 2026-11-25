@@ -1,7 +1,7 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { ClubTag, CommentThread, EventBracket, EventGroups, Org, TeamMember, TeamSetup } from '../api';
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GalleryTopic, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
+import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { Overlay } from './ui.svelte';
@@ -87,9 +87,9 @@ export const sheets = {
   badgeQr: (_award: Manual, _code: GrantItem['code']) => {},
   /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
   cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
-  club: (_id: Id, _verified?: Org) => {},
+  club: (_id: Id) => {},
   /** `from`: the tapped poster, which grows into the sheet's header; `album`: its guests' album opened over it (the bot's ph_) */
-  event: (_id: Id, _from?: Element | null, _album?: boolean, _verified?: EventFull) => {},
+  event: (_id: Id, _from?: Element | null, _album?: boolean) => {},
   /** the event sheet for an unsaved editor form: what students will see */
   preview: (_e: EventFull) => {},
   /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
@@ -102,10 +102,8 @@ export const sheets = {
   photos: (_photos: AlbumPhoto[], _start: number, _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _from?: Element | ((p: AlbumPhoto) => Element | null | undefined)) => {},
   /** every photo of an album at once, a grid as in the phone's Photos (live: `list` and `adding` are read as they change) */
   album: (_list: () => AlbumPhoto[], _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _add?: () => void, _adding?: () => number) => {},
-  /** the Gallery: the albums' shelf, the themes, the feed; `albums`: every album alone (the shelf's All) */
-  gallery: (_albums?: boolean) => {},
-  /** my chosen photos into the Gallery: the preview, where to, Publish (GALLERY); `topic`: chosen already (Add under that theme) */
-  galleryAdd: (_files: File[], _topic?: GalleryTopic) => {},
+  /** the Gallery: the albums' strip and every photo by place, one "+" to add mine */
+  gallery: () => {},
   login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id, _staff?: boolean) => {}, // staff: Admin's "an event for a club"
@@ -135,6 +133,9 @@ export const sheets = {
   /** Studio's «Guest list»: the organizers' file, its preview and save, the door's list as a CSV */
   guestList: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
+  /** Secret Santa's chat: one thread of my pair ('to': I am the Santa of `name`; 'from': with my own Santa) */
+  santaChat: (_event: Id, _side: 'to' | 'from', _name?: string) => {},
+  santaReports: () => {},                // the staff: reported Secret Santa chats
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */
   eventQr: (_event: Id) => {},
@@ -162,6 +163,10 @@ export const sheets = {
   /** People of the app: the screen; my own "name me?" sheet */
   credits: () => {},
   creditAsk: () => {},
+  /** students make the app: the ways to help and the signed offer; what is wrong (anonymous or in Telegram); the admin's list of both */
+  helpUs: () => {},
+  feedback: () => {},
+  adminVoices: () => {},
   /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
   santaHi: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch
@@ -185,8 +190,6 @@ export const sheets = {
   deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
   /** the server says the policy changed (a refused write): the fresh /api/me raises the gate (ConsentGate) */
   consent: () => {},
-  /** A single verified post from the stories viewer. */
-  post: (_post: Post) => {},
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
   /** a tab's other pages (one tab, one screen): every post (Afisha's "All"), the Feed full screen
@@ -254,7 +257,7 @@ export const sheets = {
   /** DMP's tree of every organisation's groups */
   dmpChats: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
-  comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void, _verified?: CommentThread) => {},
+  comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
   /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */
   report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', _id: Id, _about?: string, _onsent?: () => void) => {},
   /** "Bring a friend" to an event */

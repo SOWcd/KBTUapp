@@ -179,17 +179,23 @@
         openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
   }
-  // "Close registration" (organizers asked to stop sign-ups; theirs and Admin's alike): closes now, the toast's Undo puts the old deadline back
+  // "Close registration" (organizers asked to stop sign-ups; theirs and Admin's alike): one tap, closes now, tickets
+  // stay; the toast's Undo puts the old deadline back
   const regClosed = $derived(!!e?.regUntil && e.regUntil <= nowTs());
   const regOn = (r: EventCard['regUntil']) => { const x = eventById(id); if (x) x.regUntil = r; };
   async function setReg(until: number | 'now' | null, done: string, was: EventCard['regUntil']) {
     try { regOn((await api.setRegUntil(id, until)).regUntil); studioChanged(); haptic.ok(); say(done, 'locked_3d', () => void setReg(was ?? null, t(!was || was > nowTs() ? 'mg.regOpened' : 'mg.regClosed'), e?.regUntil)); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // a deadline set before closing comes back with "Open registration" while it's ahead (a double tap loses nothing)
+  let before = $state<number | null>(null);
+  function shut() {
+    before = e?.regUntil && e.regUntil > nowTs() ? e.regUntil : null;
+    void setReg('now', t('mg.regClosed'), e?.regUntil);
+  }
   async function closeReg() {
     if (e?.santa) { await closeSanta(); return; }
-    if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t('mg.closeRegText'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
-    void setReg('now', t('mg.regClosed'), e?.regUntil);
+    shut();
   }
   // a Santa game's sign-up closed is its deadline come: the bot's round draws within seconds, for good (no Undo)
   async function closeSanta() {
@@ -230,7 +236,7 @@
   let more = $state(false);
   // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (a fold of two is pointless)
   const folded = $derived(!e ? 0 : [head, head && e.teamMax, head && e.teamMax, head && e.status !== 'cancelled' && !plain, head && e.needsVolunteers,
-    head && e.guestHost && teamMark, head && live && !e.guestHost, reports, head && live && !e.guestHost && !e.santa?.drawn && (!started || e.lateSignup),
+    head && e.guestHost && teamMark, head && live && !e.guestHost, reports, head && live && !e.guestHost && !e.guestList && !e.meeting && !e.santa?.drawn && (!started || e.lateSignup),
     head && live && !started, head && e.status === 'cancelled'].filter(Boolean).length);
   // whom the door records (server checkin.set_audience): an ordinary public event's, where the team is told apart from
   // guests; the event's organizers set it, the Mark screen counts and lists only that
@@ -264,6 +270,13 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function cancelEvent() {
+    // people signed up and sign-up still open: closing it is often what was meant (their tickets stay, it reopens)
+    // (dismissing it goes on to the cancel's own confirm: nothing is cancelled without that OK)
+    if (e && e.taken > 0 && !regClosed && !e.santa && !e.guestHost && !e.guestList && !e.meeting
+      && await sheets.ask({ title: t('mg.closeInstead'), text: t('mg.closeInsteadText', { n: e.taken }), ok: t('mg.closeReg'), cancel: t('mg.cancelAnyway') })) {
+      shut();
+      return;
+    }
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
     catch { say(t('common.error'), 'warning_3d'); }
@@ -410,8 +423,8 @@
               {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
             {/if}
             {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}
-            {#if head && live && !e.guestHost && !e.santa?.drawn && (!started || e.lateSignup)}
-              {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
+            {#if head && live && !e.guestHost && !e.guestList && !e.meeting && !e.santa?.drawn && (!started || e.lateSignup)}
+              {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(before && before > nowTs() ? before : null, t('mg.regOpened'), e.regUntil)} />
               {:else}<Row title={t('mg.closeReg')} onclick={closeReg} />{/if}
             {/if}
             {#if head && live && !started}<Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} />{/if}

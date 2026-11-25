@@ -7,8 +7,8 @@
 <!-- the iPhone's status bar (the home-screen app; iOS 26.1 lets no page draw under it) and the browser's own bars take
      this colour: each theme's ground, the very colour of the page's top edge, so the bar and the page are one surface.
      The system's theme until the script below and the app (lib/tg.ts paint) put the person's own -->
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#07080F">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F5FB">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="KBTU App">
 <title>KBTU App</title>
@@ -24,75 +24,149 @@
   if (/^\/(show|screen)\/?$/.test(location.pathname)) return;
   try { t = localStorage.getItem('kb-theme'); } catch (e) {}
   document.documentElement.dataset.boot = t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  // the ring layer around the emblem, a different one of the four each launch (owner, Nov 24; the CSS's kb-* classes)
+  var v = ['', 'kb-arcs', 'kb-orbits', 'kb-dial'][Math.random() * 4 | 0];
+  if (v) document.documentElement.classList.add(v);
   // the status bar's colour: this theme's ground, whichever the system's is
-  var c = document.documentElement.dataset.boot === 'light' ? '#F3F5FB' : '#07080F', m = document.querySelectorAll('meta[name="theme-color"]');
+  var c = document.documentElement.dataset.boot === 'light' ? '#F2F2F7' : '#000000', m = document.querySelectorAll('meta[name="theme-color"]');
   for (var i = 0; i < m.length; i++) m[i].content = c;
+  // The home-screen app on an iPhone: the launch picture covers the whole screen, the page begins under the status
+  // bar (the window is shorter by it), so 45% of the window would sit lower than the picture's 45% of the screen and
+  // the emblem would jump as the page takes over. There the emblem stands where the picture has it: 55% of the screen
+  // above the window's bottom edge, which is the screen's. The CSS works it out from the window's height at layout,
+  // never this script: this early innerHeight can still be the whole screen's (the emblem then sat a status bar lower).
+  try { if (navigator.standalone && screen.width < 500) document.documentElement.style.setProperty('--kb-em', 'calc(100% - ' + screen.height * .55 + 'px)'); } catch (e) {}
 })();
 </script>
-<!-- The boot screen: an emblem on the plain ground. Its still first frame (the ground and the mark) is the home-screen
-     app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run the tool). Then a
-     hairline draws round the mark, the legend writes itself on along its circle (a stroke uncovering it) and turns slowly.
-     lib/boot.ts hands it over: .o = fading away over the app; .u = under the page as the entrance's ground: its lights
-     wake, the legend goes, and the entrance draws its own mark where this one stood and glides it into place.
-     Transform, opacity, stroke only. -->
+<!-- The boot screen: the emblem on the ground, its centre at 45% of the height (the optical centre; --kb-em, set above,
+     is that same point of the launch picture in the home-screen app). Its still first frame (the ground and the mark)
+     is the home-screen app's launch picture (tools/splash.mjs draws public/splash from this very CSS: change it, run
+     the tool), and the mark never moves from there. The app is often up within half a second, so everything is said in
+     ~0.65 s, around the still mark: the ground's own lights (the entrance's, at a fraction) come up as a quiet field,
+     the legend settles onto its circle, a ring layer opens past it into the screen (one of four, picked at random
+     each launch by the script above: only that layer differs, everything else is shared), a shade crosses the columns
+     (and again every few seconds while a slow line loads).
+     lib/boot.ts hands it over: .o = the emblem settles back a little and dissolves with the ground while the app
+     lifts into place under it, 0.3 s (transitions on #boot and .em, the intro on their children: the two compose, so
+     an app ready early still gets a whole gesture; it waits only for the 0.4 s since the first paint to pass);
+     .u = under the page as the entrance's ground: its lights wake fully, the legend and the arcs go, and the entrance
+     draws its own mark where this one stood and glides it into place. Transform and opacity of HTML boxes only: all on
+     the compositor, running while the bundle keeps the main thread busy. -->
 <style id="boot-css">
-html[data-boot]{background:#07080F}
-html[data-boot=light]{background:#F3F5FB}
-#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#07080F;transition:opacity .42s cubic-bezier(.4,0,.2,1)}
+html[data-boot]{background:#000000}
+html[data-boot=light]{background:#F2F2F7}
+#boot{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;overflow:hidden;pointer-events:none;color:#F4F6FF;background:#000000;transition:opacity .3s cubic-bezier(.33,.33,.4,1)}
 [data-boot] #boot{display:block}
-[data-boot=light] #boot{color:#0B1433;background:#F3F5FB}
+[data-boot=light] #boot{color:#0B1433;background:#F2F2F7}
 #boot.u{z-index:auto}
 #boot.o{opacity:0}
-#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:0;transition:opacity 1.4s cubic-bezier(.4,0,.2,1);animation:kb-drift 24s ease-in-out infinite alternate paused}
+#boot b{--u:min(1vmin,6px);position:absolute;left:calc(50% + (var(--x) - 70)*var(--u));top:calc(50% + (var(--y) - 70)*var(--u));width:calc(140*var(--u));height:calc(140*var(--u));background:radial-gradient(closest-side,var(--c),transparent);opacity:calc(var(--o)*.5);transition:opacity 1.4s cubic-bezier(.4,0,.2,1);animation:kb-drift 24s ease-in-out infinite alternate paused,kb-on .7s cubic-bezier(.2,.8,.2,1) backwards}
 #boot b:nth-child(1){--c:#3B6BFF;--o:.5;--x:-45;--y:-70;--dx:16%;--dy:10%}
-#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s}
-#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s}
+#boot b:nth-child(2){--c:#7C4DFF;--o:.42;--x:50;--y:80;--dx:-14%;--dy:-12%;animation-duration:29s,.7s}
+#boot b:nth-child(3){--c:#30B0C7;--o:.16;--x:45;--y:-20;--dx:-22%;--dy:18%;animation-duration:34s,.7s}
 [data-boot=light] #boot b:nth-child(1){--o:.3}
 [data-boot=light] #boot b:nth-child(2){--o:.26}
 [data-boot=light] #boot b:nth-child(3){--o:.14}
 #boot.u b{opacity:var(--o);animation-play-state:running}
-#boot .em{position:absolute;left:50%;top:50%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .42s cubic-bezier(.4,0,.2,1)}
-#boot.o .em{transform:scale(1.14)}
-#boot .em svg{position:absolute;left:0;top:0}
-#boot .lg{transition:opacity .28s;animation:kb-turn 90s linear .2s infinite}
+#boot .em{position:absolute;left:50%;top:45%;width:216px;height:216px;margin:-108px 0 0 -108px;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+@media (orientation:portrait){#boot .em{top:var(--kb-em,45%)}}
+#boot.o .em{transform:scale(.96)}
+/* the app lifts into place under it (a phone only: on a wider screen #app's own transform centres its column, base.css) */
+@media (max-width:599.98px){#boot.o+#app{animation:kb-lift .3s cubic-bezier(.2,.8,.2,1)}}
+@keyframes kb-lift{from{transform:translateY(8px) scale(.985)}}
+/* three hairline arcs past the legend, the outer one wider than a phone: parts of the emblem's circles, each bright at its
+   head and fading out along its tail, swung into place as if drawn and then going round very slowly, all the same way, the
+   nearer the quicker and the heavier (depth: line and pace by distance). The inner and the outer one carry a small point of
+   light at the head, a planet and its trail, the far one smaller. The planet goes round in step with the legend (90 s both)
+   and lights it: the legend and its circle are full on the planet's side and dimmer away from it (a mask that turns with the
+   legend, so nothing more moves). At the handover (.o, .u) the arcs open a little as the emblem settles back: s holds them.
+   (the line is the transparent border of a round box over a conic gradient, everything inside the border masked away: both of
+   its edges are the box's own circles, so it is evenly thick and truly round; u swings in, its :before and :after go round together) */
+#boot s{position:absolute;left:50%;top:50%;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .28s}
+#boot.o s,#boot.u s{transform:scale(1.07)}
+#boot u{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);animation:kb-arc .8s cubic-bezier(.16,1,.3,1) .05s backwards}
+#boot u:before,#boot u:after{position:absolute;transform:rotate(var(--a)) scaleX(var(--s,1));animation:kb-round var(--t) linear infinite}
+#boot u:before{content:'';top:0;right:0;bottom:0;left:0;border:var(--k) solid transparent;border-radius:50%;opacity:var(--o);background:conic-gradient(transparent calc(100% - var(--l)),calc(100% - var(--l)*.35),currentColor calc(100% - var(--h,0%)),transparent) border-box;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box exclude,linear-gradient(#000,#000)}
+#boot u:after{left:50%;top:calc(var(--k)/2 - var(--p)/2);width:var(--p);height:var(--p);margin-left:calc(var(--p)/-2);background:radial-gradient(closest-side,currentColor 68%,transparent);opacity:var(--q);transform-origin:50% calc(var(--d)/2 + var(--p)/2 - var(--k)/2);animation:kb-round var(--t) linear infinite,kb-on .4s var(--w) backwards}
+#boot u:nth-of-type(1){--d:312px;--k:1.5px;--o:.56;--a:40deg;--e:400deg;--l:54%;--t:90s;--p:5px;--q:1;--w:.15s}
+#boot u:nth-of-type(2){--d:412px;--k:1.15px;--o:.32;--a:172deg;--e:532deg;--l:20%;--h:.8%;--t:150s;animation-delay:.12s;animation-duration:.95s}
+#boot u:nth-of-type(3){--d:500px;--k:.85px;--o:.3;--a:204deg;--e:564deg;--l:28%;--t:240s;--p:3px;--q:.65;--w:.3s;animation-delay:.2s;animation-duration:1.1s}
+#boot u:nth-of-type(odd):after{content:''}
+/* the other three ring layers (a class on <html>, the script above); the legend is lit by the planet only.
+   kb-arcs: the three hairline arcs before the planet, even and alike, the middle one going round the other way (mirrored).
+   kb-orbits: two calm full hairline orbits, the emblem's circles carried into the screen.
+   kb-dial: a precision dial (an engineering school's instrument): fine ticks every 3 degrees, a longer one every 30, turning
+   very slowly against the legend; a sparser scale wider than a phone turns the other way (the two svg.dl, hidden otherwise) */
+.kb-arcs #boot .lg svg,.kb-orbits #boot .lg svg,.kb-dial #boot .lg svg{-webkit-mask:none;mask:none}
+.kb-arcs #boot u{--k:1.2px;--h:.8%;animation-duration:.9s}
+.kb-arcs #boot u:after,.kb-orbits #boot u:before,.kb-orbits #boot u:after,.kb-orbits #boot u:nth-of-type(3),.kb-dial #boot u{display:none}
+.kb-arcs #boot u:nth-of-type(1){--d:324px;--o:.5;--a:20deg;--e:380deg;--l:54%;--t:150s}
+.kb-arcs #boot u:nth-of-type(2){--d:412px;--o:.36;--a:150deg;--e:-210deg;--s:-1;--l:20%;--t:90s;--r:100deg;animation-delay:.11s}
+.kb-arcs #boot u:nth-of-type(3){--d:500px;--o:.28;--a:40deg;--e:400deg;--l:30%;--t:210s;animation-delay:.17s}
+.kb-orbits #boot u{border:1px solid;border-radius:50%;opacity:var(--o);animation:kb-orbit .6s cubic-bezier(.2,.8,.2,1) .05s backwards}
+.kb-orbits #boot u:nth-of-type(1){--d:324px;--o:.11}
+.kb-orbits #boot u:nth-of-type(2){--d:500px;--o:.06;animation-delay:.11s}
+#boot .dl{display:none;position:absolute;left:0;top:0;margin:-250px 0 0 -250px;fill:none;stroke:currentColor;animation:kb-dial .7s cubic-bezier(.2,.8,.2,1) .05s backwards,kb-turn 300s linear .75s infinite reverse}
+#boot .dl+.dl{--r:14deg;animation-delay:.11s,.81s;animation-duration:.7s,420s;animation-direction:normal}
+.kb-dial #boot .dl{display:block}
+#boot .lg svg{-webkit-mask:conic-gradient(from 40deg,#000,rgba(0,0,0,.56) 50%,#000);mask:conic-gradient(from 40deg,#000,rgba(0,0,0,.56) 50%,#000)}
+#boot .lg{position:absolute;left:0;top:0;transition:opacity .28s;animation:kb-in .6s cubic-bezier(.2,.8,.2,1) backwards}
+#boot .lg svg{display:block;animation:kb-turn 90s linear infinite}
 #boot .lg text{font:600 10.5px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;fill:currentColor;opacity:.78}
-#boot .lg .hr{fill:none;stroke:currentColor;stroke-width:.75;opacity:.3;stroke-dasharray:378;stroke-dashoffset:378;animation:kb-draw 1.1s cubic-bezier(.5,0,.2,1) .1s forwards}
-#boot .lg .wr{fill:none;stroke:#fff;stroke-width:26;stroke-dasharray:510;stroke-dashoffset:510;animation:kb-draw 1.5s cubic-bezier(.5,0,.2,1) .2s forwards}
-#boot .em .mk{left:80px;top:84px}
-#boot.u .lg{opacity:0}
+#boot .lg circle{fill:none;stroke:currentColor;stroke-width:.75;opacity:.3}
+#boot .mk{position:absolute;left:80px;top:84px;width:56px;height:48px}
+#boot .mk i{position:absolute;top:14px;width:6px;height:22px;border-radius:3px;background:currentColor;animation:kb-col 3.9s .06s infinite backwards}
+#boot .mk i:nth-child(1){left:2px;top:3px;width:52px;height:8px;animation:none}
+#boot .mk i:nth-child(2){left:4px}
+#boot .mk i:nth-child(3){left:14.5px;animation-delay:.1s}
+#boot .mk i:nth-child(4){left:25px;animation-delay:.14s}
+#boot .mk i:nth-child(5){left:35.5px;animation-delay:.18s}
+#boot .mk i:nth-child(6){left:46px;animation-delay:.22s}
+#boot .mk i:nth-child(7){left:0;top:39px;width:56px;height:6px;animation:none}
+#boot.u .lg,#boot.u s{opacity:0}
 #boot.u .mk{visibility:hidden}
+/* the handover is one motion, 0.3 s: the emblem settles back, the arcs open and the app rises on one curve, the ground clears evenly over
+   them (not front-loaded: the opening arcs are seen over the page); the mark and the legend go first, so the page never shows through them */
+#boot.o .lg,#boot.o .mk{opacity:0;transition:opacity .16s cubic-bezier(.4,0,.6,1)}
 @keyframes kb-drift{to{transform:translate3d(var(--dx),var(--dy),0) scale(1.12)}}
 @keyframes kb-turn{to{transform:rotate(1turn)}}
-@keyframes kb-draw{to{stroke-dashoffset:0}}
+@keyframes kb-on{from{opacity:0}}
+@keyframes kb-arc{from{opacity:0;transform:rotate(var(--r,-100deg))}}
+@keyframes kb-round{to{transform:rotate(var(--e)) scaleX(var(--s,1))}}
+@keyframes kb-orbit{from{opacity:0;transform:scale(.88)}}
+@keyframes kb-dial{from{opacity:0;transform:rotate(var(--r,-20deg)) scale(.95)}}
+@keyframes kb-in{from{opacity:0;transform:rotate(-20deg) scale(.94)}}
+/* a shade crosses the colonnade: each column dims and clears a beat after its neighbour, ~0.5 s of the 3.9 s round */
+@keyframes kb-col{0%{opacity:1}3%{opacity:.38}9%,100%{opacity:1}}
 /* The iPhone's status bar (the home-screen app) is a strip in theme-color, the ground's colour, that no page draws
    under: the lights fade into the plain ground before the top edge, so the strip and the page are one surface. */
-#boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 72px);background:linear-gradient(#07080F 30%,rgba(7,8,15,0))}
-[data-boot=light] #boot:after{background:linear-gradient(#F3F5FB 30%,rgba(243,245,251,0))}
-@media (prefers-reduced-motion:reduce){#boot b,#boot .lg{animation:none}#boot .lg .hr,#boot .lg .wr{animation:none;stroke-dashoffset:0}#boot,#boot .em,#boot b{transition:none}}
+#boot:after{content:'';position:absolute;top:0;left:0;right:0;height:calc(env(safe-area-inset-top,0px) + 160px);background:linear-gradient(#000000 12%,rgba(0,0,0,.62) 40%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0))}
+[data-boot=light] #boot:after{background:linear-gradient(#F2F2F7 12%,rgba(242,242,247,.62) 40%,rgba(242,242,247,.2) 72%,rgba(242,242,247,0))}
+@media (prefers-reduced-motion:reduce){#boot.o+#app{animation:none}#boot b,#boot u,#boot u:before,#boot u:after,#boot .dl,#boot .lg,#boot .lg svg,#boot .mk i{animation:none!important}#boot,#boot .em,#boot b,#boot s,#boot u,#boot .lg{transition:none!important}}
 </style>
 <!-- splash:start -->
-<link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/440x956-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/430x932-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/430x932-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/428x926-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/428x926-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/420x912-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/420x912-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896-2x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/414x896-2x-light.png" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/402x874-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/402x874-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/393x852-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/393x852-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/390x844-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/390x844-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x812-3x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x812-3x-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x667-2x-dark.png" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash/375x667-2x-light.png" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/440x956-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/440x956-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/430x932-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/430x932-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/428x926-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/428x926-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/420x912-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/420x912-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-2x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/414x896-2x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/402x874-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/402x874-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/393x852-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/393x852-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/390x844-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/390x844-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x812-3x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x812-3x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x667-2x-dark.png?v=3" media="(prefers-color-scheme: dark) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="/splash/375x667-2x-light.png?v=3" media="(prefers-color-scheme: light) and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
 <!-- splash:end -->
 <link rel="preconnect" href="https://telegram.org">
 <!-- deferred: parsing and the first paint don't wait for telegram.org; it still runs before the app module -->
@@ -129,10 +203,14 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
     var el = document.getElementById('app') || document.body, b = document.getElementById('boot');
     if (b) b.parentNode.removeChild(b); // the boot screen lies over the app
     el.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;padding:16px;margin:0;' +
-      'font:13px/1.5 ui-monospace,monospace;color:#ff9d8a;background:#07080F;min-height:100vh">' +
+      'font:13px/1.5 ui-monospace,monospace;color:#ff9d8a;background:#000000;min-height:100vh">' +
       'KBTU App не запустился\n\n' + String(msg).replace(/[<>&]/g, '') + '</pre>';
   }
+  // Browser extensions (Safari's included) run in the page and throw their own errors, e.g. "Invalid call to
+  // runtime.sendMessage(). Tab not found.": not ours, never a reason to cover the app.
+  function foreign(x) { return /-extension:\/\/|runtime\.sendMessage/.test(String(x && (x.stack || x.message) || x || '')); }
   window.addEventListener('error', function (e) {
+    if (foreign(e.filename) || foreign(e.error) || foreign(e.message)) return;
     // telegram-web-app.js comes from another origin: its failures arrive as a bare "Script error."
     // that can't be fixed or told apart from ad-blocker noise. Not worth covering a working app.
     if ((e.message || '') === 'Script error.' && !e.filename) return;
@@ -140,7 +218,7 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
     show((e.message || e.error) + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
   });
   window.addEventListener('unhandledrejection', function (e) {
-    if (window.__kbStarted) return;
+    if (window.__kbStarted || foreign(e.reason)) return;
     show('promise: ' + (e.reason && e.reason.message || e.reason));
   });
   // (the boot screen is no blank screen: under it a slow line gets longer before the page gives up)
@@ -151,5 +229,5 @@ setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long
 })();
 </script>
 </head>
-<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><svg class="lg" viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/><mask id="kb-write" maskUnits="userSpaceOnUse" x="-108" y="-108" width="216" height="216"><circle class="wr" r="81" transform="rotate(-90)"/></mask></defs><circle class="hr" r="60" transform="rotate(-90)"/><g mask="url(#kb-write)"><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></g></svg><svg class="mk" viewBox="0 0 28 24" width="56" height="48"><g fill="currentColor"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/><rect x="2" y="7" width="3" height="11" rx="1.5"/><rect x="7.25" y="7" width="3" height="11" rx="1.5"/><rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/><rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></svg></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+<body><div id="boot" aria-hidden="true"><b></b><b></b><b></b><div class="em"><s><u></u><u></u><u></u><svg class="dl" viewBox="-250 -250 500 500" width="500" height="500"><circle r="142.5" pathLength="360" stroke-width="5" stroke-dasharray=".3 2.7" opacity=".24"/><circle r="144.5" pathLength="360" stroke-width="9" stroke-dasharray=".45 29.55" opacity=".44"/></svg><svg class="dl" viewBox="-250 -250 500 500" width="500" height="500"><circle r="246" pathLength="360" stroke-width="6" stroke-dasharray=".2 5.8" opacity=".13"/></svg></s><div class="lg"><svg viewBox="-108 -108 216 216" width="216" height="216"><defs><path id="kb-ring" d="M0-80a80 80 0 1 1 0 160a80 80 0 1 1 0-160"/></defs><circle r="60"/><text><textPath href="#kb-ring" textLength="502" lengthAdjust="spacing">KBTU APP · PER STUDENTES · PRO STUDENTIBUS · MMXXVI ·&#160;</textPath></text></svg></div><div class="mk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>

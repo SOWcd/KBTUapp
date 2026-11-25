@@ -346,8 +346,7 @@ def is_dept(con, oid: int, tag: int) -> bool:
 def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
     """The results decided so far, in one tap: the accepted are members at once with their department's tag, the
     declined hear the club's own words (or the app's); each applicant is told once, the undecided wait for a later send
-    and the round goes on. final (results and the round's end in one tap; a cached client's too): the undecided hear "no" and the round
-    is over. The bot sends at its own pace."""
+    and the round goes on. With final, the undecided hear "no" and the round is over. The bot sends at its own pace."""
     r = _get(con, rid)
     _may(con, v, r["org_id"], "casting")
     oid = r["org_id"]

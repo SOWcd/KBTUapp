@@ -1,7 +1,7 @@
 <script lang="ts">
   // App shell: the tabs (one scrolling screen each; what used to be their other pages opens as a sheet), the capsule on
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
-  import { onMount, tick, untrack, type Component } from 'svelte';
+  import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
   import { may } from './lib/perms';
@@ -10,14 +10,13 @@
   import { CONSENT_VOL } from './lib/legal';
   import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
-  import { recovery } from './lib/state/recovery';
-  import { keepNavigation, launchNavigation, readNavigation, type Navigation, type Place, type ScrollAnchor } from './lib/state/navigation';
   import { readCache, writeCache } from './lib/state/cache';
-  import { channel, channelUnread, loadChannel, loadOlder, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
+  import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
+  import { visit } from './lib/helpus';
   import { nameOf } from './lib/short';
   import { sheets, type SheetKey } from './lib/state/sheets';
   import { setTeamConsent } from './lib/teamConsent';
@@ -26,10 +25,11 @@
   import { classesLeft } from './lib/classes';
   import { backButton, haptic, inTelegram, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { deskRegistry } from './lib/desk';
-  import { api, ApiErr, localize, staffEvents, staffOrg, type Id, type MyCheckin } from './lib/api';
+  import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live } from './ui/Capsule.svelte';
   import { anthem } from './lib/state/anthem.svelte';
@@ -40,11 +40,11 @@
   import ListPage from './screens/afisha/List.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
-  import StandaloneBar from './ui/StandaloneBar.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
+  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
@@ -54,43 +54,38 @@
   // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
   const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
   // (the promise settles once it's open or given up: a queued moment waits for it, lib/moments.ts)
-  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null, place?: Place): Promise<void> {
+  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): Promise<void> {
     if (session.revoked || session.banned) return Promise.resolve();
     const mine = ++want, got = loaded.get(load);
-    if (got) { open(got.default, props, stat, key, place); return Promise.resolve(); }
+    if (got) { open(got.default, props, stat, key); return Promise.resolve(); }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, place); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
-  sheets.event = (id, from, album, verified) => lazy(eventSheet, { id, from, album, verified }, 'sheet.event',
-    album ? `album:${id}` : id,
-    staffEvents.has(id) || staffOrg.full && staffOrg.events.has(id) ? undefined : { kind: 'event', id });
+  sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album }, 'sheet.event', album ? `album:${id}` : id);
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e }, undefined, `preview:${e.id}`);
   sheets.draftPreview = (id) => void api.event(id).then((e) => sheets.preview({ ...e, status: 'published' }), () => say(t('common.error'), 'warning_3d'));
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
   sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
   sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));
   sheets.person = (id, invite) => lazy(personSheet, { id, invite }, 'sheet.person', invite ? `invite:${id}:${invite.code}` : id);
-  sheets.club = (id, verified) => lazy(clubSheet, { id, verified }, 'sheet.club', id,
-    staffOrg.full && staffOrg.id === id ? undefined : { kind: 'club', id });
+  sheets.club = (id) => lazy(clubSheet, { id }, 'sheet.club', id);
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id }, 'sheet.ticket');
   const stories = () => import('./screens/sheets/Stories.svelte');
   sheets.stories = (groups, start, at) => lazy(stories, { groups, start, at });
-  sheets.post = (post) => lazy(stories, { groups: [{ org: post.org, items: [{ post }], unread: !post.read, cast: false }], at: 0, restored: true });
   // named, so its chunk is kept once loaded and opens in the tap's frame (an arrow made here each call never was)
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
   sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
   const galleryPage = () => import('./screens/afisha/Gallery.svelte');
-  sheets.gallery = (albums) => lazy(galleryPage, { albums });
-  sheets.galleryAdd = (files, topic) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files, topic });
+  sheets.gallery = () => lazy(galleryPage, {});
   // one sign-in sheet at a time, and none once Microsoft has confirmed me: a second one (Microsoft's return opening its
   // own over the waiting one) stayed under the first and asked a new student to sign in with Microsoft again (Nov 14)
   sheets.login = (after, lock) => {
@@ -114,8 +109,9 @@
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
   // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
-  // the last tab's chunk is warmed while the first requests run, and the other chunks come with the first data
+  // their chunks are warmed once the first tab is drawn
   const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
+    forum: channelPage,
     club: () => import('./screens/afisha/Clubs.svelte'),
     profile: () => import('./screens/profile/Me.svelte'),
   };
@@ -143,13 +139,13 @@
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void channelPage(); warmChannelFeeds(); };
+  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
-  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, undefined, id == null ? null : `${org}:${id}:${!!staff}`);
-  sheets.deepLink = (p) => { interacted = true; deepLink(p); };
-  sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, undefined, `${id}:${!!names}:${!!qr}`);
-  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, undefined, `only:${id}`); // a scan-only helper: the Mark screen, no lists
+  sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
+  sheets.deepLink = (p) => deepLink(p);
+  sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, 'sheet.scanner', `${id}:${!!names}:${!!qr}`);
+  sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, 'sheet.scanner', `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
   sheets.appeals = () => asStudent(() => lazy(() => import('./screens/appeals/Appeals.svelte'), {}));
   sheets.myAppeal = (id) => lazy(() => import('./screens/appeals/MyAppeal.svelte'), { id });
@@ -165,6 +161,8 @@
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.eventReport = (id, org) => lazy(() => import('./screens/club/EventReport.svelte'), { id, org }, undefined, org == null ? id : `${id}:${org}`);
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
+  sheets.santaChat = (event, side, name) => lazy(() => import('./screens/sheets/SantaChat.svelte'), { event, side, name }, undefined, `santa-${event}-${side}`);
+  sheets.santaReports = () => lazy(() => import('./screens/admin/SantaReports.svelte'), {});
   // a new conversation opens with the keyboard up, as every AI app does. iOS raises it only for a focus inside the tap,
   // and the chunk may come later: a stand-in field takes the focus now, the assistant's own field takes it over as it
   // mounts (iOS keeps the keyboard across the move) with any words typed meanwhile; a reopened conversation keeps the
@@ -188,12 +186,12 @@
     f.addEventListener('blur', () => f.remove(), { once: true });
     return f;
   }
-  sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
-  sheets.doorPeople = (id, onchange, guestsOnly) => lazy(() => import('./screens/club/People.svelte'), { id, onchange, guestsOnly }, undefined, `${id}:${!!guestsOnly}`);
+  sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id }, 'sheet.attendees');
+  sheets.doorPeople = (id, onchange, guestsOnly) => lazy(() => import('./screens/club/People.svelte'), { id, onchange, guestsOnly }, 'sheet.doorpeople', `${id}:${!!guestsOnly}`);
   sheets.guestList = (id) => lazy(() => import('./screens/club/GuestList.svelte'), { id }, undefined, String(id));
   sheets.eventQr = (event) => lazy(() => import('./screens/club/EventQr.svelte'), { event });
   // a helper lands on the same Mark screen as the organizer (owner, Nov 14: helpers didn't know where to go); no scanner of the event: its QR alone
-  sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true }, undefined, `session:${sess}`)
+  sheets.helperQr = (sess, event, scanner) => (event && scanner ? lazy(() => import('./screens/club/Scanner.svelte'), { id: event, qr: true, sess, only: true }, 'sheet.scanner', `session:${sess}`)
     : lazy(() => import('./screens/club/EventQr.svelte'), { sess, event, scanner }));
   sheets.handQr = (sess) => lazy(() => import('./screens/club/EventQr.svelte'), { sess, hand: true });
   const screenSheet = () => import('./screens/club/ScreenSheet.svelte');
@@ -209,7 +207,7 @@
     }
     haptic.tap(); sheets.screens();
   };
-  sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org }, undefined, `${id}:${!!staff}:${org ?? ''}`);
+  sheets.manage = (id, staff, org) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff, org }, 'sheet.manage', `${id}:${!!staff}:${org ?? ''}`);
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });
@@ -252,13 +250,18 @@
   const peoplePage = () => import('./screens/profile/People.svelte');
   sheets.credits = () => lazy(peoplePage, {});
   sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
+  const helpPage = () => import('./screens/profile/HelpSheet.svelte'), feedbackPage = () => import('./screens/profile/FeedbackSheet.svelte');
+  const voicesPage = () => import('./screens/admin/AdminVoices.svelte'); // stable loaders: lazy()'s cache is keyed by them
+  sheets.helpUs = () => asStudent(() => lazy(helpPage, {}));
+  sheets.feedback = () => asStudent(() => lazy(feedbackPage, {}));
+  sheets.adminVoices = () => lazy(voicesPage, {});
   sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
   sheets.teamSetup = (org, onchange) => lazy(() => import('./screens/club/TeamSetupSheet.svelte'), { org, onchange });
-  sheets.member = (org, user, setup, depts, onchange) => lazy(() => import('./screens/club/MemberSheet.svelte'), { org, user, setup, depts, onchange });
+  sheets.member = (org, user, setup, depts, onchange) => lazy(() => import('./screens/club/MemberSheet.svelte'), { org, user, setup, depts, onchange }, 'sheet.member');
   sheets.removeMember = (org, user, name, request, ondone) => lazy(() => import('./screens/club/RemoveSheet.svelte'), { org, user, name, request, ondone });
-  sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
+  sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org }, 'sheet.joininbox');
   sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
   sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
   const adminSheet = () => import('./screens/admin/AdminSheet.svelte');
@@ -296,8 +299,8 @@
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
   sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
   sheets.dmpChats = () => lazy(() => import('./screens/dmp/ChatsTree.svelte'), {});
-  sheets.comments = (kind, id, title, onchange, verified) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'),
-    { kind, id, title, onchange, verified }, 'sheet.comments', `${kind}:${id}`, kind === 'post' ? { kind: 'postComments', id } : undefined);
+  sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'),
+    { kind, id, title, onchange }, 'sheet.comments', `${kind}:${id}`);
   sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }, undefined, `${target}:${id}`));
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
@@ -308,7 +311,7 @@
   sheets.news = () => lazy(newsPage, {}, 'sheet.news');
   sheets.feed = () => lazy(feedPage, {}, 'sheet.feed');
   sheets.friends = () => lazy(friendsPage, {}, 'sheet.friends');
-  sheets.team = (at) => lazy(teamPage, { at });
+  sheets.team = (at) => lazy(teamPage, { at }, 'sheet.team');
   setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- the Clubs tab: one feed for everyone; a club of mine opens its Studio pushed over it (round 5) ----
@@ -354,107 +357,6 @@
     });
     // a tab in its own chunk is drawn unseen once the chunk is in (else the first tap would lay it out)
     if (pageReady(k)) draw(); else loadPage(k).then(draw, draw);
-  }
-  const sections: Partial<Record<Tab, HTMLElement>> = {};
-  const scrolls = $state<Partial<Record<Tab, ScrollAnchor>>>({});
-  let recovering = $state(true), interacted = $state(false);
-  let checkpointOwner: string | null = null;
-  let saveNav: ReturnType<typeof keepNavigation>;
-  function scrollOf(tab: Tab) { return sections[tab]?.querySelector<HTMLElement>(':scope > .page.scroll'); }
-  function anchor(node: HTMLElement): ScrollAnchor {
-    const top = Math.max(0, Math.round(node.scrollTop));
-    if (!top) return { top };
-    const box = node.getBoundingClientRect();
-    const y = box.top + Math.min(120, box.height / 2);
-    const item = document.elementsFromPoint(box.left + box.width / 2, y)
-      .map((el) => el.closest<HTMLElement>('[data-nav-anchor]')).find((el) => el && node.contains(el));
-    return item ? { top, item: item.dataset.navAnchor, offset: Math.round(item.getBoundingClientRect().top - box.top) } : { top };
-  }
-  function trackTab(section: HTMLElement, tab: Tab) {
-    sections[tab] = section;
-    const scroll = (ev: Event) => {
-      if (ui.tab === tab && ev.target instanceof HTMLElement && ev.target.parentElement === section && ev.target.matches('.page.scroll')) scrolls[tab] = anchor(ev.target);
-    };
-    section.addEventListener('scroll', scroll, { capture: true, passive: true });
-    return { destroy: () => { delete sections[tab]; section.removeEventListener('scroll', scroll, true); } };
-  }
-  function currentNav() {
-    const active = overlays.filter((o) => !o.closing);
-    const privateView = staffOrg.full || active.some((o) => o.component === loaded.get(adminSheet)?.default);
-    return { tab: ui.tab, club: ui.club, scroll: scrolls[ui.tab] ?? { top: 0 }, sheet: privateView ? null : active.at(-1)?.place ?? null };
-  }
-  function flushNav() {
-    if (!session.verified || session.banned || session.revoked) return;
-    const owner = recovery.scope();
-    if (!owner) return;
-    const nav = currentNav();
-    if (checkpointOwner !== owner) {
-      checkpointOwner = owner;
-      saveNav = keepNavigation(owner, (recovering || interacted ? readNavigation() : null) ?? nav);
-    }
-    if (!recovering || interacted) saveNav(nav);
-  }
-  $effect(flushNav);
-
-  async function recoverPlace(nav: Navigation, owner: string) {
-    const tab = nav.tab === 'forum' && !session.channel ? 'afisha' : nav.tab;
-    ui.tab = tab;
-    ui.club = session.me?.memberships.some((m) => m.org.id === nav.club) ? nav.club : null;
-    const intent = want;
-    const here = () => !interacted && want === intent && ui.tab === tab && recovery.scope() === owner && !gated;
-    const restoreScroll = async () => {
-      if (!nav.scroll.top || tab !== nav.tab) return;
-      if (tab === 'forum') { await channelPage(); await loadChannel(); }
-      else await loadPage(tab);
-      await tick();
-      const node = scrollOf(tab);
-      if (!node || !here()) return;
-      const locate = () => nav.scroll.item && node.querySelector<HTMLElement>(`[data-nav-anchor="${nav.scroll.item}"]`);
-      let item = locate();
-      // The forum retains only its first page across a launch. Bring back enough rows to reach the anchor.
-      for (let page = 0; tab === 'forum' && !item && channel.more && here() && page < 6; page++) {
-        if (node.scrollHeight - node.clientHeight >= nav.scroll.top && !nav.scroll.item) break;
-        if (!(await loadOlder()).length) break;
-        await tick();
-        item = locate();
-      }
-      if (!here()) return;
-      node.scrollTop = item ? node.scrollTop + item.getBoundingClientRect().top - node.getBoundingClientRect().top - (nav.scroll.offset ?? 0) : nav.scroll.top;
-      scrolls[tab] = anchor(node);
-    };
-    const restoreSheet = async () => {
-      const p = nav.sheet;
-      if (!p) return null;
-      if (p.kind === 'event') {
-        const event = await api.event(p.id, 'ordinary');
-        if (event.status === 'draft') return null;
-        return () => {
-          if (!data.events.some((e) => e.id === p.id)) data.opened.push(event);
-          return sheets.event(p.id, null, false, event);
-        };
-      }
-      if (p.kind === 'club') {
-        const listed = data.orgs.find((o) => o.id === p.id) ?? data.small.find((o) => o.id === p.id);
-        if (!listed) return null;
-        const club = await api.org(p.id, 'ordinary');
-        return () => {
-          const { leaders, chats, groupLink, contact, ...card } = club;
-          Object.assign(listed, card);
-          return sheets.club(p.id, club);
-        };
-      }
-      if (p.kind === 'postComments' && session.me?.student) {
-        const thread = await api.comments('post', p.id);
-        return () => sheets.comments('post', p.id, t('cm.title'), undefined, thread);
-      }
-      if (p.kind === 'post' && p.org) {
-        const post = (await api.posts({ org: p.org })).find((x) => x.id === p.id && x.title);
-        if (post) return () => sheets.post(post);
-      }
-      return null;
-    };
-    const [, reopen] = await Promise.all([restoreScroll().catch(() => {}), restoreSheet().catch(() => null)]);
-    if (here()) await reopen?.();
   }
   $effect(() => { count(`tab.${ui.tab}`); });
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
@@ -544,30 +446,6 @@
     untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
   });
 
-  const tabLink: Record<Tab, string> = { afisha: 'afisha', forum: 'fp', club: 'clubs', profile: 'me' };
-  const screenLink = $derived.by(() => {
-    // Links only describe destinations. Never forward launch tokens or private overlay props.
-    for (const o of [...overlays].reverse()) {
-      if (o.closing) continue;
-      const id = o.props.id;
-      switch (o.stat) {
-        case 'sheet.event': if (typeof id === 'number' && !o.props.preview) return `${o.props.album ? 'ph' : 'ev'}_${id}`; break;
-        case 'sheet.club': if (typeof id === 'number') return `cl_${id}`; break;
-        case 'sheet.person': if (typeof id === 'number') return `u_${id}`; break;
-        case 'sheet.ticket': if (typeof id === 'number') return `ev_${id}`; break;
-        case 'sheet.comments': if (typeof id === 'number') return `${o.props.kind === 'event' ? 'cm' : 'cp'}_${id}`; break;
-        case 'sheet.studio': if (typeof o.props.org === 'number') return `cl_${o.props.org}`; break;
-        case 'sheet.friends': return 'friends';
-        case 'sheet.map': return o.props.exit ? 'exit' : 'map';
-        case 'sheet.week': return 'sched';
-        case 'sheet.awards': return 'awards';
-        case 'sheet.news': return 'news';
-        case 'sheet.feed': return 'feed';
-      }
-    }
-    return tabLink[ui.tab];
-  });
-
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
   const rosterShown = new Set<string>();
@@ -590,6 +468,7 @@
 
   // ---- greeting ----
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
+  idle(() => visit(dayNo(nowTs()))); // and for the one-time help ask (lib/helpus: this phone's days, kept on it), after the first paint
   // an office's own people (DMP) are greeted as the team, once per phone, full screen (owner, Nov 17: the toast was missed):
   // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
@@ -674,6 +553,7 @@
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
+    if (p === 'voices') { sheets.adminVoices(); return; }                       // the bot, to the creator: a line or an offer to help came
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
     // the bot's "photos are in the album" / "add yours": the event, its album open over it. The sheet opens the album
     // itself once its details are in (it used to be a second fetch and a second lazy() here, which any other sheet
@@ -869,9 +749,8 @@
     keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(() => keep(), { timeout: 3000 }) : keep()), 1000);
   });
   onMount(() => {
-    const away = () => { if (document.hidden) { flushNav(); clearTimeout(keepTimer); keep(true); } };
+    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(true); } };
     document.addEventListener('visibilitychange', away);
-    addEventListener('pagehide', flushNav);
     // back after 30 s or more: the app's data again, quietly (every loader keeps its last copy if it fails). Telegram's
     // events and the page's both land here; the first one back clears leftAt, so one return is one refresh. Not the Gallery:
     // its first page would cut the list of a viewer left open, and it reloads as it opens.
@@ -884,11 +763,17 @@
     const seen = () => (document.hidden ? left() : back());
     document.addEventListener('visibilitychange', seen);
     const offs = [on('deactivated', left), on('activated', back)];
-    return () => { removeEventListener('pagehide', flushNav); document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
+    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
   });
 
-  // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
-  $effect(() => { void i18n.lang; untrack(() => { localize(data); localize(session.me); }); });
+  // The API and cache already translate the first load. Walk the reactive stores only when the language changes.
+  let localizedLang = untrack(() => i18n.lang);
+  $effect(() => {
+    const lang = i18n.lang;
+    if (lang === localizedLang) return;
+    localizedLang = lang;
+    untrack(() => { localize(data); localize(session.me); });
+  });
 
   // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
@@ -914,6 +799,13 @@
     if (session.me?.appeals?.sg) void loadSg();
     if (session.me?.ask) void loadAsks();
     if (session.me?.ask?.staff) void loadHelpq();
+  }
+
+  function warmNavigation() {
+    if (session.banned || session.revoked) return;
+    warm(personSheet); warm(clubSheet);
+    if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
+    for (const tab of tabs) void loadPage(tab).catch(() => {});
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -972,30 +864,41 @@
   // the home-screen app, offered once per phone (InstallSheet marks it shown): phones in Telegram only, (for everyone later) never on this
   // phone's first launch (the welcome, the sign-in and the policy come first) nor on a launch that came for something
   // (a deep link); the last of the launch's moments
+  let hinted = false;
+  // the bot can't write to them (they never opened its chat): on every launch until it can (owner, Nov 23: ~half the
+  // users get no tickets or reminders); Telegram's own "allow messages" is one tap
+  // a sheet that shows it (DmSheet: a plain question was closed unread), its chunk warmed with the first sheets
+  const dmSheet = () => import('./screens/sheets/DmSheet.svelte');
+  let dmHinted = false;
+  function dmHint() {
+    if (dmHinted || !session.me || session.me.canDm || session.banned || session.revoked) return;
+    dmHinted = true;
+    return lazy(dmSheet, {});
+  }
   function installHint() {
-    // ponytail: the creator only until the video guides are recorded (owner, Nov 22); then drop the founder check
-    if (!session.me?.founder) return;
+    if (hinted) return;
     if (!inTelegram || onComputer || tg.startParam || seen('kb-install')) return;
+    hinted = true;
     return lazy(() => import('./screens/sheets/InstallSheet.svelte'), {});
   }
 
   onMount(() => {
+    // Drop old navigation checkpoints, including per-copy keys in both sign-in modes.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && /^(?:kb-nav(?::\d+)?|kb-(?:web-)?recovery:\d+:[^:]*:kb-nav:[^:]*)$/.test(key)) localStorage.removeItem(key);
+      }
+    } catch { /* storage blocked */ }
     count(launchedFrom(tg.startParam));
     const offBack = backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !gated && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
-    const touch = () => {
-      if (recovering) want++;
-      interacted = true;
-    };
-    addEventListener('pointerdown', touch, true);
-    addEventListener('wheel', touch, { capture: true, passive: true });
-    addEventListener('keydown', touch, true);
     // the last copy first (the instant re-open), the server's answer replaces it
-    const recoverTg = inTelegram ? tg.user?.id : session.me?.tg.id;
-    const snap = readCache(recoverTg);
+    const snap = readCache(inTelegram ? tg.user?.id : session.me?.tg.id);
     if (snap) {
+      localize(snap); // translate the plain cache before assigning it to reactive state
       if (inTelegram) {
         session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       }
@@ -1003,46 +906,28 @@
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
-      localize(data); if (inTelegram) localize(session.me); // cached in another language, maybe
+      setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
-    const hint = tg.startParam ? null : readNavigation(recovery, recovery.scope() ?? recovery.peek(recoverTg));
-    if (hint) void loadPage(hint.tab).catch(() => {});
-    Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(async () => {
+    Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
-      // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
-      for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
-      for (const k of TABS) loadPage(k).catch(() => {});
       if (session.banned || session.revoked) return;
+      // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
+      warm(eventSheet);
+      requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
-      let microsoftReturn = !!session.me?.msPending;
-      const owner = recovery.scope();
-      const nav = !gated && !interacted && !overlays.length ? launchNavigation(tg.startParam, microsoftReturn) : null;
+      const microsoftReturn = !!session.me?.msPending;
       if (inTelegram && !tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
-        const claim = api.msClaim('').then(async () => {
+        void api.msClaim('').then(async () => {
           await loadMe();
-          if (session.banned || session.revoked) return false;
+          if (session.banned || session.revoked) return;
           haptic.ok();
           if (session.me?.student?.ms) say(t('login.msDone'), 'sparkles_3d');
           msBack(true);
-          return true;
-        }, () => false);
-        if (nav) microsoftReturn = await claim;
+        }, () => {});
       }
-      if (session.banned || session.revoked) return;
-      // the web app opens on the Afisha (owner, Nov 22): its session is known only after the cookie check, so a restored tab
-      // arrived after the first frame and the Afisha jumped to it
-      if (inTelegram && owner && nav && owner === recovery.scope() && !microsoftReturn && !gated && !interacted && !overlays.length) {
-        await recoverPlace(nav, owner);
-        if (!interacted) {
-          checkpointOwner = owner;
-          saveNav = keepNavigation(owner, currentNav());
-        }
-      }
-      recovering = false;
-      if (session.banned || session.revoked) return;
-      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) greet();
+      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) moment(greet); // in the queue: never over a launch sheet (the install offer), after it closes
       if (tg.startParam) deepLink();
       else if (session.me?.msPending) msBack();
       void credits.then(() => {
@@ -1058,7 +943,7 @@
       const desk = deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer);
       // asked again when its turn comes: opened by hand meanwhile (a slow start), it stays as the person left it
       if (inTelegram) { moment(tgComment); moment(desk ? () => { if (deskRegistry(session.me?.oversee, tg.startParam, inTelegram && onComputer, registryOpened)) sheets.registry(); } : computerHint); }
-      booted = true; setTimeout(() => { moment(celebrate); moment(installHint); });
+      booted = true; setTimeout(() => { moment(celebrate); moment(installHint); moment(dmHint); });
     });
     const clockTimer = setInterval(() => (clock = nowTs()), 30000);
 
@@ -1066,9 +951,6 @@
       offBack();
       clearInterval(clockTimer);
       removeEventListener('keydown', esc);
-      removeEventListener('pointerdown', touch, true);
-      removeEventListener('wheel', touch, true);
-      removeEventListener('keydown', touch, true);
     };
   });
 </script>
@@ -1078,14 +960,13 @@
     <div class="banned" role="alert"><p>{t('common.error')}</p></div>
   {:else if !session.banned}
     {#each tabs as tab (tab)}
-      <section class="tab" use:trackTab={tab} class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
+      <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
         {#if tab === 'afisha'}
           {#if built.afisha}<ListPage />{/if}
-        {:else if tab === 'forum'}
-          {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
-        {:else if tab === 'club'}
-          {#if built.club && pages.club}<pages.club />{/if}
-        {:else if built.profile && pages.profile}<pages.profile />{/if}
+        {:else}
+          {@const Page = pages[tab]}
+          {#if built[tab] && Page}<Page />{/if}
+        {/if}
       </section>
     {/each}
 
@@ -1095,7 +976,7 @@
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
@@ -1114,18 +995,31 @@
       <p class="t-foot">{t('ban.data')}</p>
     </div>
   {/if}
+  <!-- a phone turned sideways in the home-screen app (iOS can't lock it; Telegram's Mini App is locked by Telegram) -->
+  <div class="turn" aria-hidden="true"><Smartphone size={34} /><p class="t-callout">{t('app.turn')}</p></div>
 </main>
 
 <style>
   .cap-theme { display: contents; }
+  .turn { display: none; }
+  @media (orientation: landscape) and (max-height: 500px) {
+    :global(html[data-web]) .turn { position: absolute; inset: 0; z-index: 10001; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; background: var(--bg); color: var(--text-2); }
+  }
   .banned { position: absolute; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
     padding: 24px; text-align: center; background: var(--glow), var(--bg); }
   .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    -webkit-mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top));
-    mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top)); }
+    /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
+    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
+    -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
+    mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
   /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
      --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */

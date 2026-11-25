@@ -53,7 +53,7 @@ img { max-width: 100%; }
 .t-cap { font: 650 11px/1.2 var(--font-text); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
 /* the design system's type, one class per step of tokens.css --fs-* (the .t-* above stay as they are until their screens
    move): Inter's own tracking per size; a long word breaks at its soft hyphen or at the edge, never "anywhere" */
-.fs-title { font: 800 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.03em; }
+.fs-title { font: 700 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.04em; }
 .fs-t1 { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.022em; }
 .fs-sec { font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; }
 .fs-t3 { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
@@ -327,6 +327,5 @@ html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
 /* the home-screen app (no Telegram): iOS 26 without a translucent status bar reported a short innerHeight at launch, so
    --app-h left a black band at the bottom and the nav rode up (owner, Nov 22); here the box simply fills the window */
 :root[data-web] #app { bottom: 0; height: auto; } /* ui/Pane.svelte does the same for its pane */
-/* iOS 26 home-screen app: the window reports a height short by the status bar (WebKit bug 301108), leaving a black band
-   under the nav even with bottom: 0; only the large viewport unit spans the whole screen there */
-@media (display-mode: standalone) { :root[data-web] #app { bottom: auto; height: max(100lvh, var(--screen-h, 0px)); } } /* main.ts --screen-h */
+/* Measured on an iPhone 16 home-screen app (Nov 22, public/vp.html): with the default status bar the window starts under
+   it and the window height (793 of 852) is true; 100lvh and screen.height overshoot by the status bar (the nav was cut off) */

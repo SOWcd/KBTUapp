@@ -9,6 +9,7 @@ No KBTU session outlives a request (SPEC §4.1), so the bot keeps none to refres
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import html
@@ -63,6 +64,15 @@ EMPTY_WAIT = 60             # after an /all that called nobody: no rescan of the
 _moved: dict[int, int] = {}  # a group turned supergroup: old id -> new (a run that spans it records its wait under the new)
 TAG_MAX = 300               # people one /all calls at most: 60 messages, about 3 minutes at TAG_GAP
 _sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
+# A deploy stops the container (SIGTERM; Docker's grace is 10 s, then SIGKILL): stop() ends the long poll at once, a batch
+# at its next update, the postman at its next message; jobs spawned beside the ears get the rest of DRAIN, then go.
+# It starts only after uvicorn has closed its connections, and the lifespan waits DRAIN + 2 s before it cancels.
+# ponytail: 6 s fits Docker's default grace; a longer stop_grace_period on the host can buy a longer DRAIN
+DRAIN = 6
+OFFSET_KEEP = 86400         # a stored offset older than this isn't trusted: Telegram keeps updates a day (and picks random ids after a week of silence)
+_stop: asyncio.Event | None = None  # run()'s, while it runs; set by stop()
+_stop_by = float("inf")     # time.monotonic() when the drain ends
+_replay: int | None = None  # the update the last process died in the middle of (stored busy): handled again only where that is safe
 
 
 # A bot whose owner has Telegram Premium can use custom emoji. If Telegram rejects them but accepts
@@ -143,6 +153,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
+    if kind == "app_broadcast":  # the creator's CLI announcement, with a Telegram URL button
+        msg = texts.broadcast_message(lang, m["ref"])
+        url = json.loads(m["payload"]).get("url")
+        votes = [{"text": texts.bot_message(lang, f"vote_{v}")[0], "callback_data": f"bv:{v}:{m['ref']}"} for v in (1, 0)]
+        return (msg[0], None, [[{"text": msg[1], "url": url}], votes]) if msg and url else None
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
@@ -323,12 +338,18 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "event_reported":  # er:<event>:<its oldest open report>, to moderators: 3 people reported it; quiet once decided or taken down
         r = one(con, "SELECT 1 FROM reports r JOIN events e ON e.id = r.target_id AND e.hidden_at IS NULL WHERE r.id = ? AND r.status = 'open'", int(ref[2]))
         return (*texts.bot_message(lang, kind), "capps") if r else None
+    if kind == "santa_reported":  # srp:<report>, to moderators: a Santa chat was reported; quiet once handled
+        r = one(con, "SELECT 1 FROM santa_msgs WHERE id = ? AND text IS NULL AND done_at IS NULL", int(ref[1]))
+        return (*texts.bot_message(lang, kind), "capps") if r else None
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None
     if kind == "chat_approved":  # ca:<chat>, to each who suggested it, while it is still in the catalog: the Chats screen
         c = one(con, "SELECT title, kind, forum FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
         return (*texts.chat_approved(lang, "forum" if c["forum"] else c["kind"], c["title"]), "chats") if c else None
+    if kind in ("anon_feedback", "helper_offer"):  # afb:<day> | ho:<id>, to the creator: the template only, the words are read in Admin
+        boss = one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1 AND role = 'admin'", m["user_id"])  # still the creator
+        return (*texts.bot_message(lang, kind), "voices") if boss else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
@@ -480,8 +501,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if a["decline_text"]:  # the club's own words are in the app, never in the bot's message (AGENTS.md: templates only)
             return (*texts.bot_message(lang, "round_no_why", org=a["name"]), f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), "clubs")
-    if kind == "usage_week":  # uw:<monday>, to the creator alone: the anonymous counters of the seven days before it
-        return (*texts.bot_message(lang, kind, **logic.stats.fields(con, 7, int(ref[1]))), "")
+    if kind == "usage_week":  # retired (owner, Nov 23): a row still queued from before goes nowhere
+        return None
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
@@ -567,7 +588,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
 
 
 SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_wish", "santa_two", "santa_alone", "santa_eve",
-                         "santa_few", "santa_wait", "santa_late"})
+                         "santa_few", "santa_wait", "santa_late", "santa_msg", "santa_reply"})
 
 
 def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
@@ -579,7 +600,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
     e = one(con, """SELECT e.*, o.name AS org, s.drawn_at, g.budget FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
         JOIN santa_events s ON s.event_id = e.id LEFT JOIN santa_games g ON g.event_id = e.id
         WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
-    if not e or (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
+    chat = kind in ("santa_msg", "santa_reply")  # the chat outlives the gifts day
+    if not e or not chat and (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
         return None
     playing = one(con, logic.santa._GOING + " AND p.user_id = ?", e["id"], uid)
     title, go = logic.title_in(e, lang), f"ev_{e['id']}"
@@ -602,6 +624,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
+    if chat and not logic.santa.pushable(con, e["id"], uid, kind):
+        return None  # no chat for them any more (retired, over, out of the club) or the thread shut; never its words, only that there are some
     where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
@@ -919,7 +943,6 @@ def _chores(cfg: Config, con) -> None:
     """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
     hold the API worker's event loop, /healthz included."""
     logic.strip_emoji_names(con)  # Normalize stored names once so the displayed names follow the club naming rules.
-    logic.stats.week(con)  # Monday morning: the week's usage numbers to the creator
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
@@ -1007,6 +1030,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
+            if _stopping():  # between messages: one taken and cut mid-send would go again after its LEASE, maybe twice
+                return
             msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
             if msg is None:
                 continue
@@ -1028,8 +1053,9 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if not notifications.allowed(con, category, m["user_id"], to):
                     _mark(con, m, False, "gone")
                     continue
-                body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
-                    _feedback_buttons(cfg, to, m["lang"], category))
+                if m["kind"] in MUTE_ROW:
+                    body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
+                        _feedback_buttons(cfg, to, m["lang"], category))
             try:
                 r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
                 if r is None:
@@ -1282,7 +1308,7 @@ def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg
     return body
 
 
-async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: int | None = None) -> dict | None:
+async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: int | None = None, again: bool = False) -> dict | None:
     """A receipt sent to the bot (§4.3; Kaspi → Share → Telegram → the bot): it goes to the sender's seat on hold, the
     only one, or the one they pick (the buttons answer the receipt's own message, so the pick finds the file in
     reply_to_message: nothing to keep in between). The answer to send, or None for a group chat."""
@@ -1294,6 +1320,20 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
     if not u:
         return say("receipt_signin")
+
+    def taken(eid: int, title: str, c: dict) -> dict:
+        if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
+            return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
+        if one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):  # a team event: the team is the next step, on the event's page
+            return say("receipt_ok_team", f"ev_{eid}", title=title)
+        return say("receipt_ok", f"tk_{eid}", title=title)
+    viewer = logic.Viewer(u["id"], u["role"], True)
+    # again: the last process died in the middle of this very receipt (bot.hear). Taken already: the same answer, never
+    # "no seat on hold" (its seat isn't on hold any more), and never a second seat that went on hold meanwhile
+    if again and (e := one(con, """SELECT e.* FROM receipts c JOIN registrations r ON r.id = c.registration_id
+            JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.status = 'going' AND c.via = 'bot'
+            AND c.created_at >= ? AND (? IS NULL OR e.id = ?) ORDER BY c.id DESC""", u["id"], int(msg.get("date") or 0) - 60, eid, eid)):
+        return taken(e["id"], e["title"], logic.card(con, viewer, e))
     logic.sweep_holds(con)
     holds = rows(con, """SELECT e.id, e.title FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'hold' ORDER BY r.hold_until""", u["id"])
@@ -1309,7 +1349,6 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     f = _file(msg) or {}
     if int(f.get("file_size") or 0) > media.MAX_BYTES:
         return say("receipt_bad")
-    viewer = logic.Viewer(u["id"], u["role"], True)
     try:
         logic.receipt_open(con, viewer, eid)
     except logic.ApiError as exc:
@@ -1331,12 +1370,12 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
         media.drop(root, [] if one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
         return say("receipt_none")
     media.drop(root, gone)  # the one it replaced
-    title = next(h["title"] for h in holds if h["id"] == eid)
-    if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
-        return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
-    if one(con, "SELECT 1 FROM events WHERE id = ? AND team_max IS NOT NULL", eid):  # a team event: the team is the next step, on the event's page
-        return say("receipt_ok_team", f"ev_{eid}", title=title)
-    return say("receipt_ok", f"tk_{eid}", title=title)
+    return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
+
+
+# Only announcements a student can browse or ignore get "Don't send these" (Codex review, owner Nov 23); a ticket, a
+# reply or a reminder keeps the whole keyboard for its own action. Settings still mutes every category.
+MUTE_ROW = {"new_event", "casting_open", "round_open", "broadcast"}
 
 
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
@@ -1348,7 +1387,7 @@ def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: s
 def _feedback_buttons(cfg: Config, chat: int, lang: str, category: str) -> list[dict]:
     nonce = secrets.token_hex(8)
     return [{"text": texts.bot_message(lang, f"feedback_{action}")[0],
-             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("useful", "off")]
+             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("off",)]
 
 
 # Telegram holds the button state. ponytail: keep the last 512 edits in memory for taps already in
@@ -1357,7 +1396,7 @@ _feedback_edits: OrderedDict[str, set[str]] = OrderedDict()
 
 
 async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg: dict, data: str) -> None:
-    match = re.fullmatch(r"nf:(useful|off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
+    match = re.fullmatch(r"nf:(off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
     chat = msg.get("chat") or {}
     tg, mid, sent_at = chat.get("id"), msg.get("message_id"), msg.get("date")
     if not match or chat.get("type") != "private" or tg != (cq.get("from") or {}).get("id") or not tg or not mid or not sent_at:
@@ -1370,51 +1409,52 @@ async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg
     if not keyboard or not any(b.get("callback_data") == data for b in keyboard[-1]):
         return
     edits = _feedback_edits.get(nonce, set())
-    if action in edits or (action == "useful" and "off" in edits):
+    if action in edits:
         return
     ids = {"chat_id": tg, "message_id": mid}
     links = keyboard[:-1]
     undo = _feedback_token(cfg, tg, "undo", category, nonce, mid)
     card = undo.rsplit(":", 1)[1]
-    if action == "useful":
-        if not await anyio.to_thread.run_sync(notifications.can_mark_useful, con, tg, category, card):
-            return
-        row = [{**b, "text": "✓", "callback_data": "nf:seen"} if b.get("callback_data") == data else b for b in keyboard[-1]]
-        r = await _tg(cfg, http, "editMessageReplyMarkup", {**ids, "reply_markup": {"inline_keyboard": [*links, row]}})
-    else:
-        state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
-        if state is None:
-            return
-        lang, on, can_undo = state
-        original = msg.get("text") or ""
-        if action == "undo":
-            for locale in texts.BOT:
-                off = texts.bot_message(locale, "feedback_disabled")[0]
-                original = "" if original == off else original.removesuffix(f"\n\n{off}")
-        status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
-        edited = f"{original}\n\n{status}" if original else status
-        entities = msg.get("entities") or []
-        if len(edited) > 4096:
-            edited, entities = status, []
-        keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
-        r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
-            "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
+    state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
+    if state is None:
+        return
+    lang, on, can_undo = state
+    original = msg.get("text") or ""
+    if action == "undo":
+        for locale in texts.BOT:
+            off = texts.bot_message(locale, "feedback_disabled")[0]
+            original = "" if original == off else original.removesuffix(f"\n\n{off}")
+    status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
+    edited = f"{original}\n\n{status}" if original else status
+    entities = msg.get("entities") or []
+    if len(edited) > 4096:
+        edited, entities = status, []
+    keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
+    r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
+        "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
     if r.json().get("ok"):
         _feedback_edits[nonce] = edits | {action}
         _feedback_edits.move_to_end(nonce)
         if len(_feedback_edits) > 512:
             _feedback_edits.popitem(last=False)
-        if action == "useful":
-            await anyio.to_thread.run_sync(notifications.feedback, con, category, sent_at, "useful")
 
 
-async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
+async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bool = False) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:); and on the forum's
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
+        return
+    if v := re.fullmatch(r"bv:([01]):([a-z0-9_]{1,40})", data):  # a broadcast's Interesting / Not interesting: the tapper's own vote, changeable
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if u:
+            con.execute("INSERT OR REPLACE INTO broadcast_votes (name, user_id, vote, at) VALUES (?, ?, ?, ?)", (v[2], u["id"], int(v[1]), int(time.time())))
+            con.execute("UPDATE users SET n_broadcasts = ? WHERE id = ?", (int(v[1]), u["id"]))  # "don't send these" turns broadcasts off (Settings turns them back on)
+        if msg.get("message_id") and (kb := (msg.get("reply_markup") or {}).get("inline_keyboard")):  # the vote row says thanks, the link stays
+            await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageReplyMarkup", json={
+                "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
         return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
@@ -1444,7 +1484,7 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     m = re.fullmatch(r"rc:(\d+)", data)
     if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
         return
-    body = await _receipt(cfg, http, con, orig, int(m[1])) if _file(orig) else None
+    body = await _receipt(cfg, http, con, orig, int(m[1]), again) if _file(orig) else None
     if body:
         await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
@@ -1563,7 +1603,7 @@ async def _all_no(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int, lan
     """/all not run: a template under the command, then both are deleted (theirs: if the bot may)."""
     text, _ = texts.bot_message(lang if lang in ("kk", "en") else "ru", key)
     sent = await _call(cfg, http, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_parameters": {"message_id": mid, "allow_sending_without_reply": True}}, 0)
-    await asyncio.sleep(ALL_NO_TTL)
+    await _nap(ALL_NO_TTL)  # a stop deletes them early: no process would be left to do it later
     for m in (mid, ((sent or {}).get("result") or {}).get("message_id")):
         if m:
             await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": m}, 0)
@@ -1664,7 +1704,7 @@ async def _swear_act(cfg: Config, http: httpx.AsyncClient, chat: int, cid: int, 
 
 
 async def _unsay(cfg: Config, http: httpx.AsyncClient, chat: int, mid: int) -> None:
-    await asyncio.sleep(WARN_FOR)
+    await _nap(WARN_FOR)  # a stop deletes it early: no process would be left to do it later
     await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
 
 
@@ -1818,7 +1858,7 @@ async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str
                 return
         finally:
             con.close()
-        if tiktok.room(msg["chat"]["id"]):
+        if tiktok.room(msg["chat"]["id"], user=int((msg.get("from") or {}).get("id") or 0), video=tiktok.key(url)):
             await _tiktok(cfg, http, msg, url, started)
     except Exception as exc:
         log.warning("group video: %s", type(exc).__name__)
@@ -1839,8 +1879,9 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, sta
 
     async def reply():
         try:
-            route = await _video_reply(http, api, chat, msg["message_id"], url)
-        except Exception as exc:  # the network or the source failed: leave the link alone
+            async with asyncio.timeout(tiktok.REPLY_SECONDS):
+                route = await _video_reply(http, api, chat, msg["message_id"], url)
+        except Exception as exc:  # the network or the source failed, or took too long: leave the link alone
             route = type(exc).__name__
         _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
 
@@ -1852,15 +1893,27 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
     body = {**chat, "reply_parameters": reply, "supports_streaming": True}
     form = {**chat, "reply_parameters": json.dumps(reply)}
     alias = tiktok.key(url)
+    short_host = bool(tiktok.LINK.match(url)["short_host"])
 
     async def reuse(k: str) -> str | None:
         entry = tiktok.cached(k)
         if not entry:
             return None
         file_id, duration = entry
-        if tiktok.LINK.match(url)["short_host"] and duration >= 180:
+        if isinstance(file_id, tuple):  # an album's items: a slideshow's photos, a post's photos and videos
+            if len(file_id) == 1:
+                (one,) = file_id
+                kind, media = one["type"], one["media"]
+                extra = {k: v for k, v in one.items() if k not in ("type", "media")}
+                r = await http.post(api + ("sendPhoto" if kind == "photo" else "sendVideo"),
+                                    json={**chat, "reply_parameters": reply, **extra, kind: media}, timeout=60)
+            else:
+                r = await http.post(api + "sendMediaGroup",
+                                    json={**chat, "reply_parameters": reply, "media": [dict(m) for m in file_id]}, timeout=60)
+        elif short_host and duration >= 180:
             return "unavailable"  # youtu.be has a stricter duration limit than /shorts/
-        r = await http.post(api + "sendVideo", json={**body, "video": file_id}, timeout=60)
+        else:
+            r = await http.post(api + "sendVideo", json={**body, "video": file_id}, timeout=60)
         answer = r.json()
         if answer.get("error_code", r.status_code) == 400:
             if tiktok.cached(k) == entry:
@@ -1873,15 +1926,39 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
 
     if route := await reuse(alias):
         return route
-    got = await tiktok.fetch(http, url)
-    if not got:
-        return "unavailable"
-    if isinstance(got, list):
-        async with _video_uploads:
-            return await _video_album(http, api, form, got)
-    if got.key != alias and (route := await reuse(got.key)):
-        return route
+    # The same video asked for at once (several chats, or twice in one) is fetched once: the others wait for the first
+    # and send its file id. A youtu.be link flies apart from /shorts/ ones: its source answer can differ (shorter cap).
+    lane = alias + ":be" if short_host else alias
+    async with tiktok.flight(lane) as shared:
+        if shared.runs:
+            if route := await reuse(alias):
+                return route
+            if shared.gone:
+                return "unavailable"
+        got = await tiktok.fetch(http, url)
+        if not got:
+            shared.gone = True
+            return "unavailable"
+        if isinstance(got, (list, tiktok.Album)):  # an Album's key is its link's (ig:<code>): this flight's
+            async with _video_uploads:
+                route = await _video_album(http, api, form, got, alias)
+            shared.gone = route == "unavailable"
+            return route
+        if got.key == lane:
+            route = await _video_send(http, api, body, form, alias, got)
+            shared.gone = route == "unavailable"
+            return route
+        async with tiktok.flight(got.key) as same:  # another link to this same video may be on its way
+            if same.gone:
+                return "unavailable"
+            if route := await reuse(got.key):
+                return route
+            route = await _video_send(http, api, body, form, alias, got)
+            shared.gone = same.gone = route == "unavailable"  # the source had nothing sendable
+            return route
 
+
+async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict, alias: str, got: tiktok.Clip) -> str:
     for version in await tiktok.versions(http, got):
         f = version.video
         duration = got.duration or f.get("duration") or 0
@@ -1897,15 +1974,13 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
                 return "refused"
         if not answer.get("ok"):
             async with _video_uploads:
-                upload = await tiktok.prepare_upload(http, got, version)
+                try:
+                    upload = await tiktok.prepare_upload(http, got, version)
+                except tiktok.Paused:  # the source rests: a later version may still go by URL
+                    upload = None
                 if not upload:
                     continue  # e.g. the real size exceeds the estimate: try the next resolution
-                video, thumb, tracks = upload
-                meta = {k: int(tracks[k]) for k in ("duration", "width", "height") if tracks.get(k)}
-                files = {"video": ("video.mp4", video, "video/mp4")}
-                if thumb:
-                    files["thumbnail"] = ("thumbnail.jpg", thumb, "image/jpeg")
-                    meta["thumbnail"] = "attach://thumbnail"
+                meta, files = _video_files(tiktok.Part(*upload), "video", "thumbnail")
                 r = await http.post(api + "sendVideo", data={**form, **meta, "supports_streaming": "true"}, files=files, timeout=120)
                 answer = r.json()
                 route = "upload"
@@ -1918,18 +1993,78 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
     return "unavailable"
 
 
-async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str]) -> str:
-    photos = await tiktok.photos(http, urls)
-    if not photos:
-        return "unavailable"
-    if len(photos) == 1:
-        method, files = "sendPhoto", {"photo": ("tiktok.jpg", photos[0], "image/jpeg")}
+def _video_files(part: tiktok.Part, name: str, thumb: str) -> tuple[dict, dict]:
+    """A video upload's InputMedia fields (its real duration and size, the thumbnail as an attachment) and its files."""
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    files = {name: (f"{name}.mp4", part.data, "video/mp4")}
+    if part.thumb:
+        files[thumb] = (f"{thumb}.jpg", part.thumb, "image/jpeg")
+        meta["thumbnail"] = f"attach://{thumb}"
+    return meta, files
+
+
+async def _video_album(http: httpx.AsyncClient, api: str, form: dict, got: list[str] | tiktok.Album, alias: str) -> str:
+    """A slideshow's photos, or an Instagram post's photos and videos: one alone as itself, more as one album, no
+    caption. The items that failed are left out; none left: nothing at all."""
+    if isinstance(got, tiktok.Album):
+        parts = await tiktok.gather(http, got)
     else:
-        method = "sendMediaGroup"
-        files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(photos)}
-        form["media"] = json.dumps([{"type": "photo", "media": f"attach://{k}"} for k in files])
-    r = await http.post(api + method, data=form, files=files, timeout=120)
-    return "photos" if r.json().get("ok") else "refused"
+        parts = [tiktok.Part(p) for p in await tiktok.photos(http, got)]
+    answer: dict = {}
+    for attempt in range(2):
+        if not parts:
+            return "unavailable"
+        answer = await _album_send(http, api, form, parts)
+        if answer.get("ok") or attempt:
+            break
+        # Telegram refuses an album whole for one item it can't take, naming it ("message #3"): once, the rest go
+        bad = re.search(r"message #(\d+) ", str(answer.get("description") or ""))
+        if answer.get("error_code") != 400 or not bad or len(parts) < 2 or not 1 <= int(bad[1]) <= len(parts):
+            break
+        del parts[int(bad[1]) - 1]
+    if not answer.get("ok"):
+        return "refused"
+    sent = answer.get("result")
+    sent = sent if isinstance(sent, list) else [sent]
+    # each item's file id (a photo's largest size): another chat gets them by id, without a second download
+    media = tuple(_sent_media(m, p) for m, p in zip(sent, parts))
+    if len(sent) == len(parts) and all(media):
+        tiktok.remember(alias, media, 0)
+    return "photos" if all(p.tracks is None for p in parts) else "album"
+
+
+async def _album_send(http: httpx.AsyncClient, api: str, form: dict, parts: list[tiktok.Part]) -> dict:
+    if len(parts) == 1 and parts[0].tracks is None:
+        method, data, files = "sendPhoto", form, {"photo": ("tiktok.jpg", parts[0].data, "image/jpeg")}
+    elif len(parts) == 1:
+        meta, files = _video_files(parts[0], "video", "thumbnail")
+        method, data = "sendVideo", {**form, **meta, "supports_streaming": "true"}
+    else:
+        files, media = {}, []
+        for i, p in enumerate(parts):  # each file its own part; a video's thumbnail beside it
+            if p.tracks is None:
+                files[f"p{i}"] = (f"{i}.jpg", p.data, "image/jpeg")
+                media.append({"type": "photo", "media": f"attach://p{i}"})
+            else:
+                meta, more = _video_files(p, f"v{i}", f"t{i}")
+                files.update(more)
+                media.append({"type": "video", "media": f"attach://v{i}", **meta, "supports_streaming": True})
+        method, data = "sendMediaGroup", {**form, "media": json.dumps(media)}
+    r = await http.post(api + method, data=data, files=files, timeout=120)
+    answer = r.json()
+    return answer if answer.get("ok") else {**answer, "error_code": answer.get("error_code", r.status_code)}
+
+
+def _sent_media(m, part: tiktok.Part) -> dict | None:
+    """The InputMedia that sends this item again by its file id."""
+    if not isinstance(m, dict):
+        return None
+    if part.tracks is None:
+        file_id = ((m.get("photo") or [{}])[-1] or {}).get("file_id")
+        return {"type": "photo", "media": file_id} if isinstance(file_id, str) else None
+    file_id = (m.get("video") or {}).get("file_id")
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    return {"type": "video", "media": file_id, **meta, "supports_streaming": True} if isinstance(file_id, str) else None
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
@@ -1969,7 +2104,9 @@ def guard_key(cfg: Config) -> bytes:
 
 
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
-    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. In a chat
+    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. A club's
+    chat linked in the app (the bot an admin that may add members): a confirmed student in, a banned person out, anyone
+    else left to the chat's admins. In a chat
     whose guard bot we are (a query_id, answered within 10 s): a student in at once, a stranger gets the app to sign up
     (POST /api/guard lets them in after), a banned person out."""
     if qid := req.get("query_id"):
@@ -1982,8 +2119,11 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
             log.warning("guard: %s", str(r.json().get("description"))[:200])
         return
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
-    if ok is None:
-        return
+    if ok is None:  # not an event's chat: a chat linked in the app lets a confirmed student in (owner, Nov 24)
+        d = logic.guard_join(con, req["chat"]["id"], req["from"]["id"])
+        if d not in ("approve", "decline"):  # someone we don't know, or a chat we don't know: its admins decide
+            return
+        ok = d == "approve"
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{'approve' if ok else 'decline'}ChatJoinRequest",
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 
@@ -2080,6 +2220,134 @@ async def _checkouts(cfg: Config, http: httpx.AsyncClient, updates: list[dict]) 
         await asyncio.sleep(CHECKOUT_RETRY)
 
 
+def stop() -> None:
+    """The lifespan's shutdown (SIGTERM, a deploy): what is under way finishes, within DRAIN; nothing new starts."""
+    global _stop, _stop_by
+    if _stop is None:  # before run() got going: it sees this and doesn't start
+        _stop = asyncio.Event()
+    if not _stop.is_set():
+        _stop_by = time.monotonic() + DRAIN
+        _stop.set()
+
+
+def _stopping() -> bool:
+    return _stop is not None and _stop.is_set()
+
+
+async def _nap(seconds: float) -> None:
+    """asyncio.sleep, cut short by stop()."""
+    if _stop is None:
+        await asyncio.sleep(seconds)
+        return
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(_stop.wait(), seconds)
+
+
+async def _or_stop(aw):
+    """aw's result, or None when stop() comes first (aw is cancelled)."""
+    task = asyncio.ensure_future(aw)
+    if _stop is None:
+        return await task
+    waiter = asyncio.ensure_future(_stop.wait())
+    try:
+        await asyncio.wait({task, waiter}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        waiter.cancel()
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    return None if task.cancelled() else task.result()
+
+
+def _save(cfg: Config, con, offset: int, busy: bool, reply: dict | None = None, ms: int = 1000) -> None:
+    """Where the ears are (meta bot_offset), after each update: the next process resumes there (_resume), so nothing
+    handled before a stop or a crash is handled again. busy: the update at `offset` has started (a crash may leave it
+    half done); reply: its answer, the work behind it done, which the next process sends if this one dies sending it.
+    Best effort, a second at most: a skipped write costs only this (Telegram's own confirmation at the next poll holds)."""
+    state = {"bot": cfg.bot_token.split(":")[0], "next": offset, "at": int(time.time()),
+             **({"busy": 1} if busy else {}), **({"reply": reply} if reply else {})}
+    try:
+        db.maybe(con, con.execute, "INSERT INTO meta (key, value) VALUES ('bot_offset', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                 (json.dumps(state),), ms=ms)
+    except sqlite3.Error as exc:
+        log.warning("offset: %s", type(exc).__name__)
+
+
+def _keep_videos(cfg: Config, before: set[int]) -> None:
+    """The group videos started (_video_seen), kept beside the offset: a batch the next process gets again doesn't send
+    them twice."""
+    if _video_seen <= before:
+        return
+    try:
+        con = db.connect(cfg.db_path)  # its own: the batch's may be inside a thread's transaction right now
+        try:
+            db.maybe(con, con.execute, "INSERT INTO meta (key, value) VALUES ('bot_videos', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                     (json.dumps(sorted(_video_seen)),), ms=1000)
+        finally:
+            con.close()
+    except sqlite3.Error as exc:
+        log.warning("offset: %s", type(exc).__name__)
+
+
+def _resume(cfg: Config, con) -> tuple[int, dict | None]:
+    """At start: the stored offset, and the answer the last process died sending (handed out once, and only while
+    FRESH). 0 when none is stored, or it is another bot's, or too old (or from the future: the clock jumped) to trust;
+    Telegram's own confirmation then decides, which lags by at most a batch. Also what the last process had started:
+    its group videos, and the update it died in the middle of (_replay)."""
+    global _replay
+    _replay = None
+    try:
+        got = one(con, "SELECT value FROM meta WHERE key = 'bot_offset'")
+        s = json.loads(got[0]) if got else {}
+        vids = one(con, "SELECT value FROM meta WHERE key = 'bot_videos'")
+        vids = json.loads(vids[0]) if vids else []
+    except (sqlite3.Error, ValueError) as exc:
+        log.warning("offset: %s", type(exc).__name__)
+        return 0, None
+    if isinstance(s, dict) and s.get("reply"):  # once: dying while sending it again doesn't send it a third time
+        try:
+            con.execute("UPDATE meta SET value = ? WHERE key = 'bot_offset'", (json.dumps({k: v for k, v in s.items() if k != "reply"}),))
+        except sqlite3.Error as exc:  # not forgotten: then not sent either
+            log.warning("offset: %s", type(exc).__name__)
+            s.pop("reply")
+    if not isinstance(s, dict) or type(s.get("next")) is not int or type(s.get("at")) is not int:
+        return 0, None
+    age = time.time() - s["at"]
+    if s.get("bot") != cfg.bot_token.split(":")[0] or not -300 <= age <= OFFSET_KEEP:
+        return 0, None
+    if isinstance(vids, list):
+        _video_seen.update(i for i in vids if type(i) is int)
+    _replay = s["next"] if s.get("busy") else None
+    return s["next"], s["reply"] if age <= FRESH and isinstance(s.get("reply"), dict) else None
+
+
+async def _drain() -> None:
+    """After stop(): jobs spawned beside the ears (tgc.spawn: /all, swear warnings, group videos, the AI's looks) finish
+    until the deadline; the rest are cancelled. None runs again: their updates are done (an /all cut short calls nobody
+    twice, a group video isn't sent twice)."""
+    while pending := [t for t in tgc._tasks if not t.done()]:
+        if (left := _stop_by - time.monotonic()) <= 0:
+            break
+        await asyncio.wait(pending, timeout=left)
+    if pending := [t for t in tgc._tasks if not t.done()]:
+        log.warning("stop: %d jobs cut", len(pending))
+        for t in pending:
+            t.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def _wind_down(calm: list[asyncio.Task], rest: list[asyncio.Task]) -> None:
+    """A child of run()'s group: at stop(), the ears and the postman end their update or message by themselves (until the
+    deadline); the loops that start over anyway (videos, translations, the mirror, the chat sync) are cancelled."""
+    await _stop.wait()
+    for t in rest:
+        t.cancel()
+    _, late = await asyncio.wait(calm, timeout=max(0.0, _stop_by - time.monotonic()))
+    for t in late:
+        log.warning("stop: cut %s", t.get_coro().__name__)
+        t.cancel()
+
+
 async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, done: asyncio.Event) -> None:
     """Telegram allows 10 s for a pre-checkout and a batch can spend longer on one receipt's OCR, so while a batch runs
     this looks for new ones. getUpdates at the batch's own offset confirms nothing (they all come again to the next
@@ -2095,30 +2363,42 @@ async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, don
             # miss its 10 s and the donor taps again; upgrade: a webhook (a look past the batch would confirm what it hasn't run)
             r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates", params={"offset": offset, "timeout": 0, "allowed_updates": _wanted(cfg)})
             updates = r.json().get("result") or []
-            _video_updates(cfg, http, updates)
+            if not _stopping():  # a video started now would be cut by the drain and then skipped as seen; the next process starts it
+                before = set(_video_seen)
+                _video_updates(cfg, http, updates)
+                _keep_videos(cfg, before)
             await _checkouts(cfg, http, updates)
         except Exception as exc:  # noqa: BLE001 - hear awaits this: nothing here may cost the batch its offset
             log.warning("checkouts: %s", type(exc).__name__)
 
 
 async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
-    """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
+    """One long poll: answers what came and returns the next offset (the same one when the round failed). Each update
+    handled is stored (_save) before the next starts; after stop() the poll ends at once and a batch at its next update."""
+    global _replay
     try:
-        r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": _wanted(cfg)}, timeout=WAIT + 10)
+        r = await _or_stop(http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
+                                    params={"offset": offset, "timeout": WAIT, "allowed_updates": _wanted(cfg)}, timeout=WAIT + 10))
+        if r is None:  # stopped while waiting: nothing of this poll is confirmed, the next process gets it all
+            return offset
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
-        await asyncio.sleep(5)
+        await _nap(5)
         return offset
     if not answer.get("ok"):  # 409: a webhook is set elsewhere, so this bot's messages go there; say so, now and then
         log.warning("ears: %s", str(answer.get("description", r.status_code))[:200])
-        await asyncio.sleep(60)
+        await _nap(60)
         return offset
     batch = answer["result"]
+    if _stopping():  # it came as the stop did: left for the next process, unconfirmed (pre-checkouts can't wait for it)
+        await _checkouts(cfg, http, batch)
+        return offset
     if cfg.tiktok:
         _video_seen.intersection_update(u["update_id"] for u in batch)
+        before = set(_video_seen)
         _video_updates(cfg, http, batch)
+        _keep_videos(cfg, before)
     await _checkouts(cfg, http, batch)  # Stars' pre-checkouts need no database and have 10 s to answer
     con = db.connect(cfg.db_path)
     done = asyncio.Event()
@@ -2139,6 +2419,11 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 except Exception as exc:  # noqa: BLE001 - the rest of the batch still goes
                     log.warning("guard: %s", type(exc).__name__)
         for upd in answer["result"]:
+            if _stopping():  # the rest of the batch goes to the next process, from here
+                offset = upd["update_id"]
+                break
+            _save(cfg, con, upd["update_id"], True)  # the ones before it done, this one started
+            cut = upd["update_id"] == _replay  # the last process died in the middle of this one
             msg = {}
             try:  # all of it: a locked database even in the ban check would replay the whole batch
                 offset = upd["update_id"] + 1
@@ -2182,7 +2467,12 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
                     continue  # banned: the bot neither answers nor acts for him
                 if "callback_query" in upd:
-                    await _tapped(cfg, http, con, upd["callback_query"])
+                    # cut in the middle: an offer decided, a mute's "useful" counted may have run (once is safer: a
+                    # button left untouched is tapped again); a receipt's pick runs again (losing it costs a seat)
+                    if cut and not str(upd["callback_query"].get("data") or "").startswith("rc:"):
+                        log.warning("ears: a tap cut by the last stop, skipped")
+                        continue
+                    await _tapped(cfg, http, con, upd["callback_query"], cut)
                     continue
                 if "inline_query" in upd:  # "@KBTUappBot ..." typed in any chat (inline mode, BotFather /setinline)
                     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerInlineQuery", json=inline_answer(cfg, con, upd["inline_query"]))
@@ -2195,6 +2485,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _member(cfg, http, con, upd["my_chat_member"])
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
+                    if cut and not msg.get("migrate_to_chat_id"):  # /all or a chat's linking may have run: never twice
+                        log.warning("ears: a group command cut by the last stop, skipped")
+                        continue
                     if _event_copy(cfg, msg):
                         tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
@@ -2213,7 +2506,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     # with no answer and the hold would run out (paid, no seat); so this update again next round, as a
                     # Stars payment does (the same picture is the same file, add_receipt one transaction)
                     try:
-                        body = await _receipt(cfg, http, con, msg)
+                        body = await _receipt(cfg, http, con, msg, again=cut)
                     except sqlite3.OperationalError as exc:
                         if "locked" not in str(exc) and "busy" not in str(exc):
                             raise
@@ -2224,6 +2517,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     body = await _schedule(cfg, http, con, msg) if _sched_file(msg) else _welcome(con, cfg, msg)
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
+                    _save(cfg, con, offset, False, body)  # the work is done: a stop now costs at most the answer, which the next process sends
                     await _send(cfg, http, body)
             except Exception as exc:  # one update that breaks (a page the parser chokes on) never stops the bot for everyone
                 log.warning("ears: %s", type(exc).__name__)  # the type only: never a page's words
@@ -2232,6 +2526,10 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "sched_bad")))
                     except Exception as again:
                         log.warning("ears: %s", type(again).__name__)
+        if batch:
+            _save(cfg, con, offset, False)
+        if _replay is not None and _replay < offset:
+            _replay = None
     finally:
         done.set()
         if watch:
@@ -2241,22 +2539,40 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
 
 
 async def _ears(cfg: Config, http: httpx.AsyncClient) -> None:
-    offset = 0
-    while True:
+    """Until stop(): from where the last process stopped (_resume), the answer it died sending first."""
+    con = db.connect(cfg.db_path)
+    try:
+        offset, reply = _resume(cfg, con)
+    finally:
+        con.close()
+    if reply:
+        try:
+            await _send(cfg, http, reply)
+        except httpx.HTTPError as exc:
+            log.warning("ears: %s", type(exc).__name__)
+    while not _stopping():
         try:
             offset = await hear(cfg, http, offset)
         except Exception:  # a bug in one round must not stop the ears
             log.exception("ears round")
-            await asyncio.sleep(5)
+            await _nap(5)
+    # stopped between updates: once more, waiting longer (the drain has time), so a write the batch skipped on a busy
+    # database doesn't leave an answer to send again or a finished update marked started (an update a retry path left
+    # unfinished runs again either way)
+    con = db.connect(cfg.db_path)
+    try:
+        _save(cfg, con, offset, False, ms=3000)
+    finally:
+        con.close()
 
 
 async def _postman(cfg: Config, http: httpx.AsyncClient) -> None:
-    while True:
+    while not _stopping():
         try:
             await send_due(cfg, http)
         except Exception:  # a bug in one round must not stop the postman
             log.exception("bot round")
-        await asyncio.sleep(POLL)
+        await _nap(POLL)
 
 
 async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict, gap: float = SYNC_GAP) -> dict | None:
@@ -2417,7 +2733,18 @@ async def run(cfg: Config) -> None:
     """Forever, in one process: every worker (and, during a deploy, the other container) waits on a lock file next to
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
     that process dies, the lock goes with it and another takes over within seconds. Then the outbox, every few
-    seconds, and the ears (one poller at a time: Telegram refuses a second)."""
+    seconds, and the ears (one poller at a time: Telegram refuses a second). Until stop(): what is under way finishes
+    (DRAIN), and only then is the lock let go, so the next leader starts where this one stopped (_resume)."""
+    global _stop, _stop_by
+    if not _stopping():
+        _stop, _stop_by = asyncio.Event(), float("inf")
+    try:
+        await _lead(cfg)
+    finally:
+        _stop = None
+
+
+async def _lead(cfg: Config) -> None:
     global _sync_live
     with open(f"{cfg.db_path}.bot.lock", "w") as lock:
         while True:
@@ -2425,7 +2752,9 @@ async def run(cfg: Config) -> None:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except BlockingIOError:
-                await asyncio.sleep(5)
+                if _stopping():
+                    return
+                await _nap(5)
         log.warning("postman in process %d", os.getpid())  # one line per start (warning: the level the container's log keeps)
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         if cfg.chat_sync:  # before the first poll: a join in that window would never come again
@@ -2436,14 +2765,16 @@ async def run(cfg: Config) -> None:
                 await _commands(cfg, http)
                 # a failing child takes its siblings down, all awaited, then they start again under the same lock: no
                 # poller outlives leadership (a plain gather leaves them running after the lock is let go)
-                while True:
+                while not _stopping():
                     try:
                         async with asyncio.TaskGroup() as tg:
-                            for job in (_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg),
-                                        *([_chat_sync(cfg, http)] if cfg.chat_sync else [])):
-                                tg.create_task(job)
+                            calm = [tg.create_task(_postman(cfg, http)), tg.create_task(_ears(cfg, http))]
+                            rest = [tg.create_task(job) for job in (_videos(cfg), _translator(cfg), _userbot(cfg),
+                                                                    *([_chat_sync(cfg, http)] if cfg.chat_sync else []))]
+                            tg.create_task(_wind_down(calm, rest))
                     except Exception:  # noqa: BLE001 - restarted under the same lock; a cancel (shutdown) goes through
                         log.exception("bot children")
-                        await asyncio.sleep(5)
+                        await _nap(5)
+                await _drain()  # inside: the jobs still use this client
         finally:
             await mtbot.close()  # the bot's MTProto session goes before the lock does

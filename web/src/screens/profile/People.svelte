@@ -47,7 +47,7 @@
 <!-- a word rising from under its own baseline, as the pitch's headings do -->
 {#snippet rise(text: string, at = 0)}{#each text.split(' ') as w, i (i)}<span class="w"><span style:--i={at + i}>{w}</span></span>{/each}{/snippet}
 
-<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare opal glow>
+<Pane {overlay} title={t('cr.title')} icon={UsersRound} bare glow>
   <div class="ppl">
     <h1 class="lbl ttl" use:largeTitle={(g) => (overlay.quiet = !g)}>{t('cr.title')}</h1>
     {#if !c}
@@ -59,6 +59,15 @@
             <div class="stat"><span class="lbl">{t(`cr.n.${s.k}`)}</span><b class="num">{@render rise(String(s.n), i)}</b></div>
           {/each}
         </div>
+      {/if}
+      <!-- my lines are here, my name isn't: the yes one tap away, where I look for it (the sheet: what everyone would see) -->
+      {#if c.mine && c.mine.consent !== true}
+        <div class="one me up" style:--d="1"><Card onclick={() => { haptic.tap(); sheets.creditAsk(); }}>
+          <span class="star">
+            <span class="txt"><span class="lbl">{t('cr.meT')}</span><b class="nm">{t('cr.meShow')}</b></span>
+            <span class="mk"><ChevronRight size={18} /></span>
+          </span>
+        </Card></div>
       {/if}
       {#if c.founder}
         {@const p = c.founder}
@@ -125,7 +134,8 @@
 
   /* a card a person: the creator's first, a quiet brand tint in its corner; the idea's author; then everyone else */
   .one, .crown { margin: var(--s-3) calc(-1 * var(--s-1)) 0; }
-  .crown { margin-top: var(--s-8); }  /* after .one's shorthand */
+  .crown, .me { margin-top: var(--s-8); }  /* after .one's shorthand */
+  .me + .crown { margin-top: var(--s-3); }
   .crown :global(.card) { background: radial-gradient(120% 90% at 0% 0%, var(--accent-soft), transparent 65%), var(--surface); }
   .star { display: flex; align-items: center; gap: var(--s-4); width: 100%; color: var(--text); }
   .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }

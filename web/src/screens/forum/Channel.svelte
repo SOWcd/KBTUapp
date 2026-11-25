@@ -1,8 +1,6 @@
 <script lang="ts">
-  // The Forum tab has a personalized order and the public channel's order. Liquid Glass: a still,
-  // soft light behind the feed, each post a clear
-  // pane over it (a translucent body, a lit rim, no blur: fifty live blurs would cook an old iPhone), the composer and
-  // the side doors real glass (base.css .glass-pill, Button's glass). Each post a card: the face
+  // The Forum tab has a personalized order and the public channel's order. The composer and the side doors are
+  // glass (base.css .glass-pill, Button's glass); each post the app's card on the plain ground: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
   // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
@@ -17,7 +15,7 @@
   import { tick, untrack } from 'svelte';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import type { TransitionConfig } from 'svelte/transition';
+  import { fade, type TransitionConfig } from 'svelte/transition';
   import { calm } from '../../ui/fold';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
@@ -287,7 +285,9 @@
   </div>
 
   {#if feed.length}
-    <div class="feed" class:settled>
+    <!-- another order is another list: swapped whole with one quick fade, not every card shuffling past the others -->
+    {#key channel.order}
+    <div class="feed" class:settled in:fade={{ duration: calm() ? 0 : 180 }}>
       {#each rows as r, i (r === 'nw' ? r : keyOf(r))}
         <!-- one element per row (flip needs it) -->
         <div class="item" animate:flip={{ duration: calm() ? 0 : 320, easing: cubicOut }} transition:card>
@@ -298,7 +298,7 @@
         {@const live = (p.msg ?? 0) > 0 && p.status === 'live'}
         {@const why = p.mine && p.human ? heldWhy(p) : undefined}
         {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
-        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id} data-nav-anchor={live ? `post-${p.id}` : undefined}>
+        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
             <span class="rail">
@@ -336,9 +336,10 @@
           {#if live}
             {@const pick = pendingHearts[p.id] ?? p}
             <div class="feedback">
-              <button class="heart" aria-pressed={pick.hearted} onclick={() => heart(p)}>
+              <!-- the app's own heart: a small chip, heart and count; its name is for screen readers only (owner: the words were too big) -->
+              <button class="heart" aria-pressed={pick.hearted} aria-label="{t('fc.appHearts')}: {pick.hearts}" onclick={() => heart(p)}>
                 <Heart size={16} fill={pick.hearted ? 'currentColor' : 'none'} aria-hidden="true" />
-                {t('fc.appHearts')} <span>{pick.hearts}</span>
+                {#if pick.hearts}<span aria-hidden="true">{compact(pick.hearts)}</span>{/if}
               </button>
               <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
               {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
@@ -360,6 +361,7 @@
       {/each}
       {#if searching && !matched.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
     </div>
+    {/key}
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
@@ -369,48 +371,20 @@
 </div>
 
 <style>
-  /* the ground: three soft cool lights that stay put while the feed scrolls (a scroller's own background doesn't
-     move with its content), so every pane and the capsule have something to bend. Static paint, no filter, no motion:
-     nothing to stop under lowfx or reduced motion.
-     ponytail: still lights; a slow drift on a layer of its own (transform only) if the owner wants it alive */
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column;
-    --pane: rgba(255, 255, 255, 0.05); --pane-sheen: rgba(255, 255, 255, 0.05);
-    --pane-hi: rgba(255, 255, 255, 0.42); --pane-lo: rgba(255, 255, 255, 0.14); --pane-rim: rgba(255, 255, 255, 0.07);
-    --pane-lift: 0 16px 30px -22px rgba(0, 0, 0, 0.7);
-    background:
-      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.24), transparent 70%),
-      radial-gradient(75% 40% at 105% 58%, rgba(124, 92, 255, 0.15), transparent 70%),
-      radial-gradient(85% 50% at -5% 95%, rgba(40, 160, 255, 0.13), transparent 70%); }
-  /* light: white rims vanish on white, so a pane is a milky body with a white lit arc, an ink reflection and a navy lift */
-  :global(:root[data-theme='light']) .page {
-    --pane: rgba(255, 255, 255, 0.56); --pane-sheen: rgba(255, 255, 255, 0.55);
-    --pane-hi: var(--lg-rim-hi); --pane-lo: rgba(11, 20, 51, 0.16); --pane-rim: rgba(11, 20, 51, 0.05);
-    --pane-lift: 0 1px 2px rgba(24, 36, 90, 0.04), 0 14px 28px -18px rgba(24, 36, 90, 0.22);
-    background:
-      radial-gradient(90% 38% at 8% 30%, rgba(59, 107, 255, 0.2), transparent 70%),
-      radial-gradient(75% 40% at 105% 58%, rgba(150, 110, 255, 0.15), transparent 70%),
-      radial-gradient(85% 50% at -5% 95%, rgba(60, 180, 255, 0.16), transparent 70%); }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; }
   .page > :global(*) { flex-shrink: 0; }
-  /* a post: a clear pane over the lights. The glass family's recipe (base.css, ui/Button) without the live blur: a
-     translucent body with a sheen in its top, a rim bright on the arc that faces the light and dim on the opposite
-     one (two gradients through a ring mask, painted once), a soft lift */
-  .post { border-radius: var(--r-xl); background: linear-gradient(180deg, var(--pane-sheen), transparent 96px) var(--pane); box-shadow: var(--pane-lift); }
-  .post::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
-    background:
-      radial-gradient(ellipse 60% 110px at 22% 0%, var(--pane-hi), transparent 72%),
-      radial-gradient(ellipse 55% 90px at 78% 100%, var(--pane-lo), transparent 75%),
-      var(--pane-rim);
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude; }
+  /* a post: the app's card (ui/Card's surface and hair rim) */
+  .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
 
   /* the composer: the capsule's glass (base.css .glass-pill: the one live blur here besides the doors'), my face, a
      quiet prompt, the pen */
   .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-full); text-align: left;
     transition: transform 450ms var(--ease-bounce); }
   .compose:active { transform: scale(0.985); transition-duration: 80ms; }
-  .compose.away { visibility: hidden; } /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back) */
+  /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back). It stays under the window's
+     ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
+     to thin out over */
+  .compose.away { opacity: 0; pointer-events: none; transition: transform 450ms var(--ease-bounce), opacity 0s linear 90ms; }
   /* the side doors: a row of small glass pills, no card; a scroller on a narrow phone (4 px above: their hit areas;
      the room below, taken back by the margin: their lift, which the scroller would cut) */
   .doors { display: flex; gap: var(--s-2); margin: var(--s-3) calc(-1 * var(--gutter)) -14px; padding: 4px var(--gutter) 18px; overflow-x: auto; scrollbar-width: none; }
@@ -485,9 +459,10 @@
   /* The heart and Telegram counts wrap together. Sharing and the discussion stay on their own row. */
   .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; margin-top: var(--s-3); }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
-  .heart { display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 44px; border-radius: var(--r-full);
+  .heart { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--s-3); min-height: 32px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1.2 var(--font-text); font-variant-numeric: tabular-nums; }
   .heart[aria-pressed='true'] { color: var(--danger-text); }
+  .heart::before { content: ''; position: absolute; inset: -6px -2px; } /* a 44 px tap target round the small chip */
   .rx { flex: none; display: flex; gap: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-body); line-height: 1; }
@@ -499,7 +474,7 @@
   .f + .f { margin-left: -6px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
   .talk { flex: none; display: flex; margin-left: auto; }
-  /* the button's glass on a clear body here (Button's sits on the solid surface): the pane and its light show through */
+  /* the button's glass on a clear body here (Button's sits on the solid surface): the card shows through */
   .talk :global(.btn) { background:
     radial-gradient(ellipse 40% 60% at var(--hx) 0%, var(--lg-spot), transparent 70%),
     linear-gradient(180deg, var(--lg-sheen), transparent 60%) var(--fill); }

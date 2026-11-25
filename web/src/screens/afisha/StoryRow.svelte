@@ -27,14 +27,16 @@
   // a new event earns a circle only from an official organization or one I'm in or follow, as the posts do (server _REACH)
   const reach = $derived(new Set(data.orgs.filter((o) => o.official || o.kind !== 'club' || o.top || o.myRole || o.subscribed).map((o) => o.id)));
   const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv).filter((g) => g.org.kind === 'club'));
+  // one or two stories: small pills in one line, not a 100 px row for a lone circle (the hero starts higher)
+  const few = $derived(groups.length < 3);
 </script>
 
 {#if groups.length}
-<div class="row hscroll">
+<div class={['row hscroll', { few }]}>
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
-      <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>
-      <b class="ellipsis" use:fit={g.org}>{tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
+      <span class="ring"><span class="in"><OrgLogo org={g.org} size={few ? 28 : 54} /></span></span>
+      <b class="ellipsis" use:fit={g.org}>{!few && tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
     </button>
   {/each}
 </div>
@@ -49,4 +51,9 @@
   .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
   b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
   .new b { color: var(--text); }
+  .few { margin-bottom: var(--s-3); }
+  .few .s { flex-direction: row; width: auto; max-width: 70%; gap: var(--s-2); padding-right: var(--s-3); border-radius: var(--r-full); background: var(--fill); }
+  .few .ring { width: var(--ctl-s); height: var(--ctl-s); padding: 2px; }
+  .few .in { border-width: 2px; }
+  .few b { font-size: var(--fs-sub); }
 </style>

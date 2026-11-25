@@ -21,7 +21,7 @@ def _setup(c, cfg):
     start = int(time.time()) + 600
     eids = []
     for title in ("Case", "Talk"):
-        body = {"title": title, "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF"}
+        body = {"seats": None, "title": title, "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF"}
         eid = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["id"]
         assert c.post(f"/api/events/{eid}/publish", headers=tma(20)).status_code == 200
         eids.append(eid)

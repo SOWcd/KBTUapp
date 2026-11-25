@@ -10,7 +10,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, tgShare } from '../../lib/tg';
   import { dateInput, fromInputs, time } from '../../lib/time';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import Sheet from '../../ui/Sheet.svelte';
@@ -62,7 +62,7 @@
   async function copy() {
     if (!(await copyText(link, t('sl.copied')))) say(t('common.error'), 'warning_3d');
   }
-  const share = () => { haptic.tap(); openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('ledg.handMsg', { title }))}`); };
+  const share = () => { haptic.tap(); tgShare(link, t('ledg.handMsg', { title })); };
   async function back() {
     if (!d || !(await sheets.ask({ title: t('ledg.handBackAsk'), text: t('ledg.handBackText'), ok: t('ledg.handBack'), cancel: t('common.cancel'), danger: true }))) return;
     link = '';

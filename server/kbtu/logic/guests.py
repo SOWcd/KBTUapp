@@ -10,7 +10,7 @@ from ..db import tx
 from . import core, seats
 from .core import ApiError, one, rows
 
-KEY = b""  # app.create and the import CLI derive this key from TOKEN_KEY
+KEY = b""  # app.create and the admin CLI derive this key from TOKEN_KEY
 _HASH_BYTES = 16
 
 
@@ -49,6 +49,7 @@ def set_age(con, rid: int, adult: int | bool, by: int | None) -> None:
 
 
 def _ticket(con, eid: int, uid: int, adult: int | None) -> None:
+    """Record an off-app ticket without queueing a bot message or running the normal sign-up flow."""
     t = core.now()
     r = one(con, "SELECT id, status FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r:
@@ -62,6 +63,14 @@ def _ticket(con, eid: int, uid: int, adult: int | None) -> None:
                 hold_until = NULL, waitlisted_at = NULL, updated_at = ? WHERE id = ?""", (t, rid))
     if adult is not None:
         set_age(con, rid, adult, None)
+
+
+def _carry_door(con, g, uid: int) -> None:
+    con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?",
+                (g["team"], g["event_id"], uid))
+    if g["came_at"] is not None:
+        con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+            WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
 
 
 def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int]:
@@ -108,11 +117,12 @@ def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int
 def _place(con, eid: int, parsed: list, age: bool) -> tuple[int, int, int, int]:
     """The list's rows with a student ID or a username, inside the caller's tx: a ticket for whoever is in the app
     under that surname, a pending row (a one-way surname code) for a student ID not in the app yet. The first list
-    makes it a guest-list event: app sign-ups the list doesn't name lose their seat. (registered, pending, offline,
-    seats dropped)"""
+    makes it a guest-list event: app sign-ups the list doesn't name lose their seat. An ended event gives no new
+    ticket, only claims those the door let in. (registered, pending, offline, seats dropped)"""
     registered = pending = offline = dropped = 0
     matched = set()
-    e = one(con, "SELECT guest_list FROM events WHERE id = ?", eid)
+    e = one(con, "SELECT guest_list, COALESCE(ends_at, starts_at + ?) <= ? AS ended FROM events WHERE id = ?",
+            core.NO_END, core.now(), eid)
     if not e:
         raise ApiError("not_found")
     con.execute("UPDATE events SET guest_list = 1, age_check = CASE WHEN ? THEN 1 ELSE age_check END WHERE id = ?", (int(age), eid))
@@ -126,31 +136,34 @@ def _place(con, eid: int, parsed: list, age: bool) -> tuple[int, int, int, int]:
                 WHERE lower(u.tg_username) = ? LIMIT 2""", username)
             u = found[0] if len(found) == 1 and found[0][0] is not None else None
         surnames = _surnames(u) if u else set()
-        if words & surnames:
-            old = one(con, """DELETE FROM event_guests WHERE event_id = ? AND student_id = ?
-                RETURNING adult, surname_hash""", eid, sid) if sid else None
-            if adult is None and old and _proves_surname(old["surname_hash"], eid, sid, surnames):
+        if words & surnames and not e["ended"]:
+            old = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ?", eid, sid) if sid else None
+            proved = old and _proves_surname(old["surname_hash"], eid, sid, surnames)
+            if adult is None and proved:
                 adult = old["adult"]
             _ticket(con, eid, u[0], adult)
+            if proved:
+                _carry_door(con, old, u[0])
+            if old and (proved or old["came_at"] is None):
+                con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (eid, sid))
             matched.add(u[0])
             registered += 1
         elif sid:
-            # The surname can be in any position. Keep only the codes of the possible surname words.
+            # Keep the hashes of possible surnames. A reimport cannot change the proof used at the door, nor a row
+            # the door already let in (its 18+ is from the ID card).
             code = b"".join(sorted(_surname_hash(eid, sid, word) for word in words))
-            con.execute("""INSERT INTO event_guests (event_id, student_id, adult, surname_hash) VALUES (?, ?, ?, ?)
+            pending += con.execute("""INSERT INTO event_guests (event_id, student_id, adult, surname_hash) VALUES (?, ?, ?, ?)
                 ON CONFLICT (event_id, student_id) DO UPDATE SET surname_hash = excluded.surname_hash,
-                adult = CASE WHEN event_guests.came_at IS NOT NULL AND event_guests.adult IS NOT NULL
-                        AND excluded.surname_hash = event_guests.surname_hash THEN event_guests.adult  -- the door saw the ID card
-                    ELSE COALESCE(excluded.adult, CASE WHEN excluded.surname_hash = event_guests.surname_hash
-                    THEN event_guests.adult END) END""", (eid, sid, adult, code))
-            pending += 1
+                adult = COALESCE(excluded.adult, CASE WHEN excluded.surname_hash = event_guests.surname_hash
+                    THEN event_guests.adult END) WHERE event_guests.came_at IS NULL""", (eid, sid, adult, code)).rowcount
         else:
             offline += 1
-    if not e["guest_list"]:
+    if not e["guest_list"] and not e["ended"]:
         # On activation, existing app sign-ups only keep a ticket if the spreadsheet includes them.
         for r in rows(con, "SELECT * FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
             if r["user_id"] not in matched:
                 dropped += seats._seat_out(con, r, "removed")
+    registered += claim_event(con, eid)
     return registered, pending, offline, dropped
 
 
@@ -162,19 +175,28 @@ def erase_pending(con, uid: int) -> None:
 
 
 def claim(con, uid: int) -> None:
+    _claim(con, "s.user_id", uid)
+
+
+def claim_event(con, eid: int) -> int:
+    return _claim(con, "g.event_id", eid)
+
+
+def _claim(con, column: str, key: int) -> int:
+    claimed = 0
     with tx(con):
-        for g in rows(con, """SELECT g.*, s.last_name, s.last_lat FROM students s JOIN event_guests g ON g.student_id = s.student_id
-            JOIN events e ON e.id = g.event_id WHERE s.user_id = ? AND s.manual = 0 AND e.guest_list = 1
+        for g in rows(con, f"""SELECT g.*, s.user_id, s.last_name, s.last_lat FROM students s JOIN event_guests g ON g.student_id = s.student_id
+            JOIN events e ON e.id = g.event_id WHERE {column} = ? AND s.manual = 0 AND e.guest_list = 1
             AND e.status != 'cancelled' AND (COALESCE(e.ends_at, e.starts_at + ?) > ?
-                OR (e.starts_at IS NULL AND e.ends_at IS NULL))""", uid, core.NO_END, core.now()):
+                OR (e.starts_at IS NULL AND e.ends_at IS NULL) OR g.came_at IS NOT NULL)""", key, core.NO_END, core.now()):
             if not _proves_surname(g["surname_hash"], g["event_id"], g["student_id"], _surnames(g)):
                 continue
+            uid = g["user_id"]
             _ticket(con, g["event_id"], uid, g["adult"])
-            con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?", (g["team"], g["event_id"], uid))
-            if g["came_at"]:  # let in by hand before signing in: the ticket is a checked-in one
-                con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
-                    WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+            _carry_door(con, g, uid)
             con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))
+            claimed += 1
+    return claimed
 
 
 def need_ticket(con, eid: int, uid: int) -> None:
@@ -377,8 +399,5 @@ def claim_username(con, uid: int) -> None:
         for g in rows(con, """SELECT g.* FROM event_guests g JOIN events e ON e.id = g.event_id WHERE g.username = ? AND e.guest_list = 1
                 AND e.status != 'cancelled' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", name[0], core.NO_END, core.now()):
             _ticket(con, g["event_id"], uid, g["adult"])
-            con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?", (g["team"], g["event_id"], uid))
-            if g["came_at"]:
-                con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
-                    WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+            _carry_door(con, g, uid)
             con.execute("DELETE FROM event_guests WHERE event_id = ? AND student_id = ?", (g["event_id"], g["student_id"]))

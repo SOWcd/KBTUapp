@@ -203,7 +203,7 @@ def test_nothing_locked(env):
     club's tool, and the top's."""
     c, con, ids, oid = _setup(env)
     rnd = {"title": "Fall", "closesAt": logic.now() + 7 * DAY, "departments": []}
-    ev = {"title": "Blitz", "place": "305", "startsAt": logic.now() + 2 * DAY, "emoji": "crown_3d", "color": "#3B6BFF"}
+    ev = {"seats": None, "title": "Blitz", "place": "305", "startsAt": logic.now() + 2 * DAY, "emoji": "crown_3d", "color": "#3B6BFF"}
     assert c.post(f"/api/orgs/{oid}/round", headers=tma(PRES), json=rnd).status_code == 200
     assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=ev).status_code == 200
     paid = {**ev, "price": 1000, "payToName": "Chess Club", "payPhone": "87011234567"}

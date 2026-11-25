@@ -147,7 +147,7 @@
   <!-- ---- type ---- -->
   <h2 class="lh">Type</h2>
   <div class="card-ish type">
-    <p class="fs-title" use:fitTitle>{t('set.privacy')}</p><i class="k">fs-title 34/800, use:fitTitle (down to 24: one word never breaks)</i>
+    <p class="fs-title" use:fitTitle>{t('set.privacy')}</p><i class="k">fs-title 34/700, use:fitTitle (down to 24: one word never breaks)</i>
     <p class="fs-t1">Dana Seitova</p><i class="k">fs-t1 28/700</i>
     <p class="fs-sec">{t('clubs.popular')}</p><i class="k">fs-sec 22/700</i>
     <p class="fs-t3 num">2 000 ₸</p><i class="k">fs-t3 20/700</i>

@@ -2207,6 +2207,88 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE reports7 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     CREATE INDEX reports_by_target ON reports (target, target_id);"""),
+    # public forms (logic/forms.py): anonymous answers, so no user, IP or cookie column on purpose
+    (219, """CREATE TABLE IF NOT EXISTS forms (
+      id INTEGER PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      spec TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS form_answers (
+      id INTEGER PRIMARY KEY,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS form_answers_by_form ON form_answers(form_id, created_at);"""),
+    # /all in a club's group kept to its Telegram admins (Studio's switch); a group not here: its club roles call too
+    (220, "CREATE TABLE IF NOT EXISTS chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;"),
+    # Secret Santa's chat (logic/santa.py): one thread per pair, kept by both its people; text NULL: that side reported
+    # the thread (closed; done_at: staff handled it). santa_chats.until: the chat's end, fixed at the draw (the gifts day + 3
+    # days: an edit of the event never revives it); 0 once anyone left the ring: the chat is retired for everyone alike
+    # and its words go (whose thread vanished would name a Santa), a reported thread stays for the staff.
+    # santa_sends: the day's count of my messages, apart from them so a deleted thread refunds nothing
+    (221, """CREATE TABLE IF NOT EXISTS santa_msgs (
+      id INTEGER PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      giver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_giver INTEGER NOT NULL CHECK (from_giver IN (0, 1)),
+      text TEXT CHECK (length(text) BETWEEN 1 AND 500),
+      created_at INTEGER NOT NULL,
+      done_at INTEGER) STRICT;
+    CREATE INDEX IF NOT EXISTS santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
+    CREATE INDEX IF NOT EXISTS santa_msgs_to ON santa_msgs (to_id);
+    CREATE INDEX IF NOT EXISTS santa_msgs_giver ON santa_msgs (giver_id);
+    CREATE TABLE IF NOT EXISTS santa_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL) STRICT;
+    CREATE INDEX IF NOT EXISTS santa_sends_by_user ON santa_sends (user_id, at);
+    CREATE TABLE IF NOT EXISTS santa_chats (  -- its own table, not a column: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      until INTEGER NOT NULL) STRICT;
+    INSERT OR IGNORE INTO santa_chats (event_id, until) SELECT s.event_id, e.starts_at + 259200 FROM santa_events s
+      JOIN events e ON e.id = s.event_id WHERE s.drawn_at IS NOT NULL;
+    CREATE TRIGGER IF NOT EXISTS santa_msgs_gone AFTER DELETE ON santa_people BEGIN
+      UPDATE santa_chats SET until = 0 WHERE event_id = OLD.event_id;
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND NOT EXISTS (SELECT 1 FROM santa_msgs r
+        WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
+    END;"""),
+    (222, "ALTER TABLE posts ADD COLUMN tg_fmt TEXT;"),
+    # logic/helpus.py: an anonymous line to the creator (no user column and only the day, on purpose) and a signed offer to help
+    (223, """CREATE TABLE IF NOT EXISTS anon_feedback (
+      id INTEGER PRIMARY KEY,
+      body TEXT NOT NULL CHECK (length(body) <= 1000),
+      day INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS helper_offers (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      kinds TEXT NOT NULL,
+      note TEXT CHECK (note IS NULL OR length(note) <= 500),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS helper_offers_by_user ON helper_offers(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS anon_feedback_by_day ON anon_feedback(day);"""),
+    # where a Gallery photo was taken, as one of four words the phone itself picked from the photo's EXIF (gallery.PLACES);
+    # the coordinates never arrive
+    (224, "ALTER TABLE gallery_photos ADD COLUMN place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'));"),
+    (225, """CREATE TABLE IF NOT EXISTS gallery_consents (
+        user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+        at INTEGER NOT NULL
+    ) STRICT;"""),
+    # a broadcast's Interesting / Not interesting (bot._tapped): one vote per person per broadcast, to learn what to send
+    (226, """CREATE TABLE IF NOT EXISTS broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;"""),
     # a guest added at the door, not on the organizers' list (guests.walk_in): a corrected list never removes it
-    (219, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
+    (227, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
 ]

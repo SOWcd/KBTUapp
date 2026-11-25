@@ -13,10 +13,14 @@
   import { sheets } from '../../lib/state/sheets';
   import { roleName, titleOf } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, org, title }: { overlay: Overlay; org: Id; title: string } = $props();
   let list = $state<Member[] | null>(null);
   let shut = $state(false);
+  const ORDERS: Order<Member>[] = [usual('sort.role'), byName((m) => m.person.name)]; // the server's: highest role first
+  const rows = $derived(sorted('club.people', ORDERS, list ?? []));
   $effect(() => { api.people(org).then((x) => (list = x)).catch(() => (shut = true)); });
 </script>
 
@@ -24,14 +28,21 @@
   {#if shut}
     <EmptyState inline text={t('club.listHidden')} />
   {:else if list}
+    <div class="col">
+    {#if rows.length > 1}<SortChip list="club.people" orders={ORDERS} />{/if}
     <Group>
-      {#each list as m (m.person.id)}
+      {#each rows as m (m.person.id)}
         <Row dense title={m.person.name} value={m.role !== 'member' || m.title ? roleName(m.role, titleOf(m)) : undefined} accessory="chevron" onclick={() => sheets.person(m.person.id)}>
           {#snippet lead()}<Avatar person={m.person} size={36} tappable={false} />{/snippet}
         </Row>
       {/each}
     </Group>
+    </div>
   {:else}
     <Skeleton n={5} />
   {/if}
 </Sheet>
+
+<style>
+  .col { display: flex; flex-direction: column; gap: var(--s-3); }
+</style>

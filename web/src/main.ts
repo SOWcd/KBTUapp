@@ -12,15 +12,9 @@ import './lib/state/keyboard.svelte'; // the app's box at its height without a k
 
 document.documentElement.lang = i18n.lang;
 if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
-// iOS 26 home-screen app: innerHeight and even 100lvh come short by the status bar (WebKit 301108), leaving a band at the
-// bottom; a full-screen app's true height is the screen's own (iOS keeps screen.* in portrait, so pick by orientation)
-if ((navigator as { standalone?: boolean }).standalone) { // iOS only: Android's screen.* includes its system bars
-  const fit = () => document.documentElement.style.setProperty('--screen-h', `${innerWidth > innerHeight ? screen.width : screen.height}px`);
-  fit(); addEventListener('resize', fit);
-}
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
-boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#07080F');
+boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000');
 
 // A deploy replaces the lazily loaded screens, so an app opened before it fails to load its next sheet and the tap
 // does nothing: reload into the new build.

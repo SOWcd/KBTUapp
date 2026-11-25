@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { draftRecord } from '../draft';
-import { ACCOUNT_KEY, DRAFT_AGE, recoveryStore, SCREEN_AGE } from './recovery';
-import { checkpoint, launchNavigation, readNavigation, type Navigation } from './navigation';
+import { ACCOUNT_KEY, DRAFT_AGE, recoveryStore } from './recovery';
 
 function device() {
   let at = 100_000;
@@ -19,80 +18,20 @@ function device() {
     open: (web = false) => recoveryStore(() => storage, () => at, web),
   };
 }
-const nav: Navigation = { tab: 'club', club: 3, scroll: { top: 480, item: 'club-3', offset: 24 }, sheet: { kind: 'event', id: 7 } };
-const home: Navigation = { tab: 'afisha', club: null, scroll: { top: 0 }, sheet: null };
-function save(store: ReturnType<typeof recoveryStore>, value: unknown) {
-  store.writeCheckpoint(store.scope(), 'kb-nav', JSON.stringify(value));
-}
 afterEach(() => vi.useRealTimers());
 
-describe('cold Mini App recovery', () => {
-  it('recovers a tab, anchor and one safe sheet after verifying the Telegram identity', () => {
+describe('account-scoped storage', () => {
+  it('expires drafts after seven days without refreshing them on read', () => {
     const d = device(), first = d.open();
     first.verify(100, 1);
-    save(first, nav);
-
-    const reopened = d.open();
-    expect(readNavigation(reopened)).toBeNull();
-    expect(reopened.verify(100, 1)).toBe(true);
-    expect(readNavigation(reopened)).toEqual(nav);
-  });
-
-  it('ignores invalid destinations and extra overlay data', () => {
-    const d = device(), window = d.open();
-    window.verify(100, 1);
-    for (const kind of ['ticket', 'qr', 'receipt', 'scanner', 'admin', 'join', 'award', 'compose']) {
-      save(window, { ...home, sheet: { kind, id: 1, token: 'example' }, stack: [nav.sheet] });
-      expect(readNavigation(window)).toEqual(home);
-    }
-    save(window, { ...nav, sheet: { ...nav.sheet, token: 'example' } });
-    expect(readNavigation(window)).toEqual(nav);
-  });
-
-  it('does not read a checkpoint when an explicit link or verified Microsoft return is present', () => {
-    const read = vi.fn(() => nav);
-    expect(launchNavigation('ev_19', false, read)).toBeNull();
-    expect(launchNavigation('unknown_link', false, read)).toBeNull();
-    expect(launchNavigation('', true, read)).toBeNull();
-    expect(read).not.toHaveBeenCalled();
-    expect(launchNavigation('', false, read)).toEqual(nav);
-  });
-
-  it('expires screens after six hours and drafts after seven days without refreshing either on read', () => {
-    const d = device(), first = d.open();
-    first.verify(100, 1);
-    save(first, nav);
     first.write(first.scope(), 'kb-join-1', '"answer"');
 
-    d.time(SCREEN_AGE - 1);
+    d.time(DRAFT_AGE - 1);
     const second = d.open();
     second.verify(100, 1);
-    expect(readNavigation(second)).toEqual(nav);
-    d.time(1);
-    expect(readNavigation(second)).toBeNull();
     expect(second.read(second.scope(), 'kb-join-1', DRAFT_AGE)).toBe('answer');
-    d.time(DRAFT_AGE - SCREEN_AGE);
+    d.time(1);
     expect(second.read(second.scope(), 'kb-join-1', DRAFT_AGE)).toBeNull();
-  });
-
-  it('keeps the latest actual change between two copies, including when the older copy hides', () => {
-    const d = device(), first = d.open();
-    first.verify(100, 1);
-    const second = d.open();
-    second.verify(100, 1);
-    const old = { ...home, tab: 'profile' as const };
-    const saveFirst = checkpoint((json) => first.writeCheckpoint(first.scope(), 'kb-nav', json), home);
-    const saveSecond = checkpoint((json) => second.writeCheckpoint(second.scope(), 'kb-nav', json), home);
-
-    saveFirst(old);
-    d.time(1);
-    saveSecond(nav);
-    d.time(1);
-    saveFirst(old);
-    expect(readNavigation(first)).toEqual(nav);
-    expect([...d.values.keys()].filter((k) => k.includes(':kb-nav:'))).toHaveLength(2);
-    saveFirst(home);
-    expect(readNavigation(second)).toEqual(home);
   });
 
   it('purges the prior account and legacy records, and rejects pending work from the prior account', () => {
@@ -101,7 +40,6 @@ describe('cold Mini App recovery', () => {
     d.storage.setItem('kb-appeal', 'unowned');
     d.storage.setItem('kb-ask:100', 'without an expiry');
     old.verify(100, 1);
-    save(old, nav);
     old.write(old.scope(), 'kb-ask', '"private"');
     const oldOwner = old.scope();
     const pending = d.open();
@@ -122,18 +60,19 @@ describe('cold Mini App recovery', () => {
   it('invalidates both copies on purge and rotates recovery when an erased student returns', () => {
     const d = device(), a = d.open();
     a.verify(100, 1, true, 52);
-    save(a, nav);
+    a.write(a.scope(), 'kb-ask', '"student draft"');
     const b = d.open();
     b.verify(100, 1, false);
-    expect(readNavigation(b)).toBeNull();
+    expect(b.read(b.scope(), 'kb-ask', DRAFT_AGE)).toBeNull();
     expect(a.lost()).toBe(true);
 
-    save(b, nav);
+    b.write(b.scope(), 'kb-ask', '"guest draft"');
     const c = d.open();
     c.verify(100, 1);
+    expect(c.read(c.scope(), 'kb-ask', DRAFT_AGE)).toBe('guest draft');
     b.invalidate(100);
     expect(c.lost()).toBe(true);
-    expect(readNavigation(c)).toBeNull();
+    expect(c.read(c.scope(), 'kb-ask', DRAFT_AGE)).toBeNull();
   });
 
   it('keeps a newly verified account epoch when an older cold window notices the purge', () => {
@@ -143,26 +82,26 @@ describe('cold Mini App recovery', () => {
     expect(waiting.peek(100)).toBe(a.scope());
     const next = d.open();
     next.verify(100, 1, false);
-    save(next, home);
+    next.write(next.scope(), 'kb-ask', '"new draft"');
     expect(waiting.lost()).toBe(true);
     waiting.invalidate(100);
-    expect(readNavigation(next)).toEqual(home);
+    expect(next.read(next.scope(), 'kb-ask', DRAFT_AGE)).toBe('new draft');
   });
 
-  it('restores a browser checkpoint without disturbing the Mini App when signing out', () => {
+  it('keeps browser and Mini App drafts in separate sign-in scopes', () => {
     const d = device(), mini = d.open(), browser = d.open(true);
     mini.verify(100, 1);
-    save(mini, nav);
+    mini.write(mini.scope(), 'kb-ask', '"Mini App draft"');
     browser.verify(200, 2);
-    save(browser, home);
+    browser.write(browser.scope(), 'kb-ask', '"browser draft"');
 
     const reopened = d.open(true);
     expect(reopened.verify(200, 2)).toBe(true);
-    expect(readNavigation(reopened)).toEqual(home);
+    expect(reopened.read(reopened.scope(), 'kb-ask', DRAFT_AGE)).toBe('browser draft');
     browser.invalidate(200);
     expect(reopened.lost()).toBe(true);
-    expect(readNavigation(reopened)).toBeNull();
-    expect(readNavigation(mini)).toEqual(nav);
+    expect(reopened.read(reopened.scope(), 'kb-ask', DRAFT_AGE)).toBeNull();
+    expect(mini.read(mini.scope(), 'kb-ask', DRAFT_AGE)).toBe('Mini App draft');
   });
 
   it('does not let an older expired Telegram credential purge a newer verified copy', () => {
@@ -170,9 +109,9 @@ describe('cold Mini App recovery', () => {
     a.verify(100, 1, true, 52, 100);
     const b = d.open();
     b.verify(100, 1, true, 52, 200);
-    save(b, nav);
+    b.write(b.scope(), 'kb-ask', '"new draft"');
     a.invalidate(100, 100);
-    expect(readNavigation(b)).toEqual(nav);
+    expect(b.read(b.scope(), 'kb-ask', DRAFT_AGE)).toBe('new draft');
   });
 
   it('leaves the verified app usable when storage is unavailable', () => {

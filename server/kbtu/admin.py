@@ -43,12 +43,16 @@
                                 sources, errors, open time; the numbers of the Monday message to the creator
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
-  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
+  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json> | --gz <b64 of gzip {"rows", "map"}>   the clubs' rosters from DMP's sheet (PLAN 95): rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
+                                creator only: queue a bot template once per reachable user. --dry counts new recipients;
+                                @username or Telegram ID queues it for one person first
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login, never tied to an account);
@@ -61,17 +65,25 @@
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
+  .venv/bin/python -m kbtu.admin came <@username | telegram id> <event id>   a guest the organizers let in by hand whose list
+                                row the retention sweep already erased: a checked-in ticket (manual), audited as came_by_hand
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
                                 one too, with no receipt (the organizer vouches for the money); audited as seat_by_hand
   .venv/bin/python -m kbtu.admin guest-names <event id> --gz <b64>   the door's list by name (student_id,name,adult,username)
   .venv/bin/python -m kbtu.admin unseat <@username | telegram id> <event id>   a seat taken off by hand (an organizer's swap)
+  .venv/bin/python -m kbtu.admin form new <slug> --gz <base64 gzip json>   a public form at /f/<slug>, open to anyone with no
+                                account (logic/forms.py has the spec's shape); answers are anonymous. form close <slug> stops it,
+                                form answers <slug> prints them as CSV (a column per question), form list counts them
   .venv/bin/python -m kbtu.admin guests <event id> < list.csv   the creator enables imported tickets and age checks.
                                 CSV: student_id,adult,username,full_name (optional header, adult 1, 0 or blank).
                                 The surname must match. A Telegram username is used only without a valid student ID.
-                                The first import closes prior app sign-ups outside the list. Counts only.
+                                The first import for an open event closes prior app sign-ups outside the list. Counts only.
+  .venv/bin/python -m kbtu.admin guests claim <event id>   link pending tickets to matching student accounts.
+                                After the event ends, only guests checked in at the door qualify. Counts only.
   .venv/bin/python -m kbtu.admin event-new <org slug or id> < event.json   publish a free guest-list event quietly.
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
+  .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -105,7 +117,7 @@
   .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
                                 students), once each, an hour before; --test: to the creator now; no flag: counts
   .venv/bin/python -m kbtu.admin event create <club slug> < event.json   a club's event made for it, no role given: one JSON object,
-                                the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, guestHost,
+                                the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, "seats": a number or null for no limit, required, guestHost,
                                 externalUrl, ...) and "cover": "<base64 jpg/png>"; a DRAFT by the creator, never a price (the
                                 club sets it in Studio), in the audit log; prints `draft <id>`
   .venv/bin/python -m kbtu.admin event publish <event id>   that draft (any draft) out by the usual rules (followers hear by
@@ -176,6 +188,39 @@ def _user(con, who: str):
     return u
 
 
+def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
+    if not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
+        sys.exit("broadcast: expected an https://t.me/ URL")
+    if not all(texts.broadcast_message(lang, name) for lang in texts.BOT):
+        sys.exit("broadcast: expected a translated bot template with a button and no required fields")
+    dry = target == "--dry"
+    with db.tx(con, write=not dry):
+        if not one(con, "SELECT 1 FROM users WHERE is_founder = 1 AND role = 'admin' AND banned_at IS NULL AND tg_id > 0"):
+            sys.exit("broadcast: needs the active creator admin")
+        only = None
+        if target is not None and not dry:
+            if re.fullmatch(r"@[A-Za-z0-9_]+", target):
+                matches = rows(con, "SELECT id FROM users WHERE lower(tg_username) = lower(?) LIMIT 2", target[1:])
+            elif re.fullmatch(r"[0-9]+", target):
+                matches = rows(con, "SELECT id FROM users WHERE tg_id = ?", target)
+            else:
+                sys.exit("broadcast: expected @username or Telegram ID")
+            if len(matches) != 1:
+                sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
+            only = matches[0]["id"]
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
+            AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
+                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
+        if dry:
+            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
+        else:
+            count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+                SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
+                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
+    print(f"{'would queue' if dry else 'queued'} {count}")
+
+
 def _gz_arg(args: list[str]) -> bytes | None:
     """`--gz <base64 gzip>` at the end instead of stdin: the prod gate passes arguments, not stdin (ssh claude-kbtu)."""
     import base64
@@ -243,7 +288,7 @@ def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -
     if any(not isinstance(raw.get(k), str) for k in fields):
         sys.exit("title, description and place must be strings")
     body = {k: raw[k] for k in fields}
-    body.update(startsAt=_event_time(raw.get("starts_at"), "starts_at"), emoji="sparkles_3d", color="#3B6BFF")
+    body.update(startsAt=_event_time(raw.get("starts_at"), "starts_at"), emoji="sparkles_3d", color="#3B6BFF", seats=None)  # a guest list: no cap
     if raw.get("ends_at") is not None:
         body["endsAt"] = _event_time(raw["ends_at"], "ends_at")
     v = Viewer(boss[0], "admin", True, staff_org=org[0])
@@ -342,15 +387,26 @@ def main(args: list[str]) -> None:
     con = db.connect(cfg.db_path)
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
+    guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     cmd = args[0] if args else ""
     gz = _gz_arg(args)
     if gz is not None:
         args = args[:-2]
-    if cmd == "guests" and len(args) == 2 and re.fullmatch(r"[0-9]{1,19}", args[1]):
-        eid = int(args[1])
+    if cmd == "guests" and (len(args) == 2 or (len(args) == 3 and args[1] == "claim" and gz is None)):
+        if not re.fullmatch(r"[0-9]{1,19}", args[-1]):
+            sys.exit(__doc__)
+        eid = int(args[-1])
         if eid >= 2**63:
             sys.exit("no such event")
-        guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
+        if len(args) == 3:
+            with db.tx(con):
+                if not one(con, "SELECT 1 FROM users WHERE is_founder = 1"):
+                    sys.exit("needs the creator")
+                if not one(con, "SELECT 1 FROM events WHERE id = ?", eid):
+                    sys.exit("no such event")
+                claimed = guests.claim_event(con, eid)
+            print(f"claimed {claimed}")
+            return
         try:
             registered, pending, offline, bad = guests.import_csv(con, eid, gz.decode("utf-8", "replace").splitlines(keepends=True) if gz is not None else sys.stdin)
         except ApiError as exc:
@@ -376,12 +432,23 @@ def main(args: list[str]) -> None:
             if not con.execute("UPDATE events SET reg_until = ?, late_signup = 0 WHERE id = ? AND starts_at > ?", (at, int(args[1]), at)).rowcount:
                 sys.exit("no such event, or it starts before that time")
         print("sign-up closes", args[2])
+    elif cmd == "event-link" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]) and re.fullmatch(r"https://\S{1,300}", args[2]):
+        with db.tx(con):  # the "register elsewhere" button's link (an organizer's ask), in the audit log
+            if not con.execute("UPDATE events SET external_url = ? WHERE id = ? AND external_url IS NOT NULL", (args[2], int(args[1]))).rowcount:
+                sys.exit("no such event with an outside link")
+            log_action(con, None, "event_link", f"event:{args[1]}", json.dumps({"url": args[2]}))
+        print("link", args[2])
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
-    elif cmd == "roster" and len(args) == 4 and args[1] == "load":
+    elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
         from . import roster
         try:
-            got = roster.load(con, json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8")))
+            if gz is not None:  # the prod gate passes arguments only: {"rows": [...], "map": {...}} as `--gz`
+                given = json.loads(gz)
+                items, orgmap = given["rows"], given["map"]
+            else:
+                items, orgmap = json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8"))
+            got = roster.load(con, items, orgmap)
         except ValueError as exc:
             sys.exit(str(exc))
         print(f"rows {got['rows']}, new {got['added']}, clubs made {len(got['orgs_made'])}, joined now {got['joined']}, "
@@ -424,6 +491,11 @@ def main(args: list[str]) -> None:
         from .logic import santa
         n = santa.news(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "broadcast-votes" and len(args) == 2:
+        yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
+        print(f"{args[1]}: {yes} interested, {no} not")
+    elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
+        _broadcast(con, *args[1:])
     elif cmd == "credit" and args[1:2] in (["add"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and len(args) == 7:
@@ -450,6 +522,18 @@ def main(args: list[str]) -> None:
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
+    elif cmd == "came" and len(args) == 3 and args[2].isdigit():  # the creator alone, on the organizers' word
+        from .db import tx
+        uid, eid = _user(con, args[1])["id"], int(args[2])
+        with tx(con):
+            e = one(con, "SELECT starts_at FROM events WHERE id = ?", eid)
+            if not e:
+                raise SystemExit("no such event")
+            guests._ticket(con, eid, uid, None)
+            con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
+                WHERE event_id = ? AND user_id = ?""", (e["starts_at"] or now(), eid, uid))
+            log_action(con, None, "came_by_hand", f"event:{eid}", json.dumps({"user": uid}))
+        print("came")
     elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
         from .logic import seats
         print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
@@ -481,6 +565,26 @@ def main(args: list[str]) -> None:
         from . import casting
         n = casting.nudge_now(con, int(args[1]), dry=bool(args[2:]))
         print(f"{'would send now' if args[2:] else 'sending now'} {n}")
+    elif cmd == "form" and args[1:2] in (["new"], ["close"], ["answers"], ["list"]):  # public forms (logic/forms.py)
+        from .logic import forms
+        try:
+            if args[1] == "new" and len(args) == 3 and gz is not None:
+                forms.create(con, args[2], json.loads(gz))
+                print(f"form /f/{args[2]}")
+            elif args[1] == "close" and len(args) == 3:
+                forms.close(con, args[2])
+                print(f"closed /f/{args[2]}")
+            elif args[1] == "answers" and len(args) == 3:
+                sys.stdout.write(forms.export(con, args[2]))  # CSV as is: its control characters went at the door
+            elif args[1] == "list" and len(args) == 2:
+                for slug, is_open, n in forms.listing(con):
+                    print(f"{'open' if is_open else 'closed':<6} {n:>5}  /f/{slug}")
+            else:
+                sys.exit(__doc__)
+        except ValueError:
+            sys.exit("the spec: JSON expected")
+        except ApiError as exc:
+            sys.exit(f"{exc.code} {exc.message}".strip())
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"
@@ -832,7 +936,7 @@ def main(args: list[str]) -> None:
             sys.exit("needs the creator and the dmp office")
         v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600
         e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
-                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head"})
+                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
     elif cmd == "event" and len(args) == 3 and args[1] in ("create", "publish"):

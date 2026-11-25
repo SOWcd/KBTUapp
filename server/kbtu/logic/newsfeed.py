@@ -42,6 +42,7 @@ def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "reactions": {k: reactions.get((p["id"], k), 0) for k in ("fire", "heart")}, "mine": {k: (p["id"], k) in mine for k in ("fire", "heart")},
         "read": p["id"] in read, "createdAt": p["created_at"],
         "casting": _casting_shape(p),
+        **({k: v for k, v in json.loads(p["tg_fmt"]).items() if k in ("titleFmt", "fmt")} if p["tg_fmt"] else {}),
         **({"i18n": _tg_i18n(p)} if p["i18n"] else {}),  # a channel's post in the viewer's language (mirror.py)
     } for p in found]
 
@@ -274,7 +275,7 @@ def wipe_post(con, pid: int) -> list[str]:
     comments under it. The row stays (reactions, the audit). Inside the caller's tx; returns files to remove from disk."""
     fid = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)[0]
     gone = uncover(con, pid) if fid else []  # a channel post's untouched draft wearing its picture (autoev.py)
-    con.execute("UPDATE posts SET title = '', body = '', i18n = NULL, lang = NULL, tr_by = NULL, photo_file_id = NULL WHERE id = ?", (pid,))
+    con.execute("UPDATE posts SET title = '', body = '', tg_fmt = NULL, i18n = NULL, lang = NULL, tr_by = NULL, photo_file_id = NULL WHERE id = ?", (pid,))
     con.execute("DELETE FROM comments WHERE post_id = ?", (pid,))
     return gone + _drop_unused(con, fid)
 

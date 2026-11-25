@@ -2,7 +2,6 @@
 import { tg } from '../tg';
 
 export const ACCOUNT_KEY = 'kb-recovery-account';
-export const SCREEN_AGE = 6 * 60 * 60_000;
 export const DRAFT_AGE = 7 * 24 * 60 * 60_000;
 const V = 1;
 
@@ -31,7 +30,7 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
     const a = parse<Account>(raw);
     return a && accountId(a.tg) && accountId(a.user) && typeof a.epoch === 'string' ? a : null;
   };
-  const launch = marker(), windowId = epoch();
+  const launch = marker();
   let lease: string | null = null, cached: string | null = null;
   let stopped = false;
   const live = () => !stopped && !!lease && lease === marker();
@@ -47,11 +46,11 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
     const scope = keep && scopeOf(keep);
     for (const key of keys()) {
       if (marker() !== expected) return;
-      if (!web && /^kb-(?:nav|appeal|ask|again|round-\d+|cache-\d+)(?::\d+)?$/.test(key)) remove(key);
+      if (!web && /^kb-(?:appeal|ask|again|round-\d+|cache-\d+)(?::\d+)?$/.test(key)) remove(key);
       else if (key.startsWith(prefix)) {
         if (!scope || !key.startsWith(scope)) { remove(key); continue; }
         if (key === scope + 'student' || key === scope + 'auth' || key === scope + 'snapshot') continue;
-        const ttl = key.includes(':kb-nav:') ? SCREEN_AGE : key.endsWith(':kb-again') ? 30 * 60_000 : DRAFT_AGE;
+        const ttl = key.endsWith(':kb-again') ? 30 * 60_000 : DRAFT_AGE;
         if (!fresh(parse<RecordOf<unknown>>(get(key))?.at ?? NaN, ttl)) remove(key);
       }
     }
@@ -102,16 +101,6 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
   const readable = (owner: string | null) => !!owner && (owner === scope() || owner === peek(account(launch)?.tg));
   const read = <T,>(owner: string | null, key: string, age: number): T | null =>
     readable(owner) ? readRecord<T>(owner + key, age)?.value ?? null : null;
-  function newest<T>(owner: string | null, key: string, age: number): T | null {
-    if (!readable(owner)) return null;
-    let best: RecordOf<T> | null = null;
-    for (const k of keys().sort()) {
-      if (!k.startsWith(owner + key + ':')) continue;
-      const r = readRecord<T>(k, age);
-      if (r && (!best || r.at >= best.at)) best = r;
-    }
-    return best?.value ?? null;
-  }
   function write(owner: string | null, key: string, json: string, at = now()) {
     if (!owner || scope() !== owner) return;
     const k = owner + key;
@@ -125,9 +114,7 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
   function clear(owner: string | null, key: string) {
     if (owner && scope() === owner) remove(owner + key);
   }
-  const writeCheckpoint = (owner: string | null, key: string, json: string) => write(owner, key + ':' + windowId, json);
-  return { accountKey, verify, invalidate, scope, peek, read, write, clear, newest, writeCheckpoint, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
-
+  return { accountKey, verify, invalidate, scope, peek, read, write, clear, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
 }
 
 export const recovery = recoveryStore(() => localStorage, clock, !tg.initData);

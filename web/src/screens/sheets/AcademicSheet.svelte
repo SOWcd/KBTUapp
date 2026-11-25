@@ -5,8 +5,9 @@
   import { fold } from '../../ui/fold';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { termsOf, MASTER, ONLINE, span, nameOf, whenOf } from '../../lib/academic';
+  import { termsOf, MASTER, ONLINE, span, nameOf, whenOf, type Row as AcadRow } from '../../lib/academic';
   import { session } from '../../lib/state/session.svelte';
+  import { schoolOf } from '../../lib/short';
   import { dateInput, dayRange, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
@@ -19,7 +20,12 @@
   const today = dateInput(nowTs());
   // my calendar by my student ID's letter (master's: M); the sheet opens fresh each time
   const mine = termsOf(session.me?.student?.studentId), master = mine === MASTER;
-  const terms = mine.map((x) => ({ ...x, rows: [...x.rows].sort((a, b) => span(a)[0].localeCompare(span(b)[0])) }));
+  // ISE keeps its own dates: an ISE student sees those instead of the general ones, everyone else only the general
+  // ones; with no school known, both (each marked)
+  const school = session.me?.student?.school ? (schoolOf(session.me.student.school)?.slug ?? 'other') : null;
+  const forMe = (r: AcadRow, rows: AcadRow[]) => r.who === 'ise' ? !school || school === 'ise'
+    : !(school === 'ise' && !r.who && rows.some((x) => x.who === 'ise' && x.key === r.key));
+  const terms = mine.map((x) => ({ ...x, rows: x.rows.filter((r) => forMe(r, x.rows)).sort((a, b) => span(a)[0].localeCompare(span(b)[0])) }));
   const pastCount = terms.reduce((n, x) => n + x.rows.filter((r) => span(r)[1] < today).length, 0);
   let showPast = $state(false);
   const rowsOf = (rows: (typeof terms)[number]['rows']) => (showPast ? rows : rows.filter((r) => span(r)[1] >= today));

@@ -20,7 +20,7 @@ TEAMS = {"teamMin": 2, "teamMax": 4}
 
 def _event(c, start=None, publish=True, **extra):
     start = start or int(time.time()) + 5 * 3600
-    body = {"title": "Case Cup", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
+    body = {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert "id" in ev, ev
     if publish:
@@ -71,7 +71,7 @@ def test_editor_switch(club):
     card = _sheet(c, eid, 10)
     assert (card["teamMin"], card["teamMax"]) == (2, 4) and card["teams"] == {"min": 2, "max": 4, "cap": None, "locked": False, "team": None}
     assert "teamMin" not in _sheet(c, _event(c), 10)  # an ordinary event says nothing
-    base = {"title": "X", "place": "Hall", "startsAt": int(time.time()) + 9000, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "X", "place": "Hall", "startsAt": int(time.time()) + 9000, "emoji": "laptop_3d", "color": "#3B6BFF"}
     for bad in ({"teamMin": 1, "teamMax": 4}, {"teamMin": 5, "teamMax": 4}, {"teamMin": 2, "teamMax": 11}, {"teamMin": 2},
                 {"teamMin": "2", "teamMax": 4}, {**TEAMS, "teamCap": 1}, {**TEAMS, "teamCap": "16"}, {**TEAMS, "lateSignup": True}):
         r = c.post("/api/orgs/1/events", headers=tma(20), json={**base, **bad})
@@ -88,7 +88,7 @@ def test_switch_on_and_off_with_sign_ups(club):
     c, con = club
     a, b, x = _people(c, 3)
     eid = _event(c)
-    base = {"title": "Case Cup", "place": "Hall", "startsAt": int(time.time()) + 5 * 3600, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": int(time.time()) + 5 * 3600, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert _go(c, eid, a).json()["my"]["status"] == "going"
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, "teamMin": 2, "teamMax": 3}).status_code == 200
     assert _mine(c, eid, a) is None and [p["id"] for p in _list(c, eid)["solo"]] == _ids(con, [a])
@@ -327,7 +327,7 @@ def test_lock_at_start(club, monkeypatch):
     assert c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()["message"] == "locked"
     assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": None}).json()["message"] == "locked"
     assert c.delete(f"/api/events/{eid}/registration", headers=tma(a)).status_code == 409  # no stepping out after the start either
-    base = {"title": "Case Cup", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, "teamMin": 3, "teamMax": 4}).json()["message"] == "locked"
     assert _mine(c, eid, a)["name"] == "Owls" and x
 
@@ -486,7 +486,7 @@ def test_converted_event_waits_for_consent(club):
     eid = _event(c)
     for p in (a, b, x, y):
         _go(c, eid, p)
-    base = {"title": "Case Cup", "place": "Hall", "startsAt": int(time.time()) + 5 * 3600, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": int(time.time()) + 5 * 3600, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, **TEAMS}).status_code == 200
     r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
     assert (r["placed"], r["left"], r["noConsent"]) == (2, 0, 2)

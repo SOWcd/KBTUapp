@@ -84,14 +84,17 @@ export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
 const CAMPUS_WORDS = /kbtu|[\u043a\u049b]\u0431\u0442\u0443|room|secret|campus|\u043a\u0430\u043c\u043f\u0443\u0441|hall|\u0437\u0430\u043b|\u0445\u043e\u043b\u043b|atri|\u0430\u0442\u0440\u0438\u0443\u043c|cowork|\u043a\u043e\u0432\u043e\u0440\u043a|foyer|\u0444\u043e\u0439\u0435|\u0430\u0443\u0434\u0438\u0442|\u043a\u0430\u0431\u0438\u043d\u0435\u0442|library|\u0431\u0438\u0431\u043b\u0438\u043e\u0442|\u043a\u0456\u0442\u0430\u043f\u0445\u0430\u043d|canteen|\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|yard|\u0434\u0432\u043e\u0440|\u0430\u0443\u043b\u0430|online|\u043e\u043d\u043b\u0430\u0439\u043d|\u0443\u0442\u043e\u0447\u043d|tba|\u0442\u0435\u0440\u0440\u0430\u0441|\u043a\u043e\u0440\u043f\u0443\u0441|building/i;
 export function addressGis(place: string): string | null {
   const p = place.trim();
-  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || awayOf(p) || !/\p{L}{3,}/u.test(p)) return null;
+  if (atDorm(p)) return DORM_2GIS; // the dorm's own card, not a search
+  if (!p || roomOf(p) || spotOf(p) || atBldg2(p) || awayOf(p) || !/\p{L}{3,}/u.test(p)) return null;
   // a street address (a house number), or a named venue off campus ("Mad Murphy's Irish Pub", owner Nov 20): two words or
   // more; never with the campus's own words, so "Hall" or an assembly hall stay plain
   const address = /(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p);
   if (CAMPUS_WORDS.test(p) || (!address && (/\d/.test(p) || p.split(/\s+/).filter((w) => /\p{L}{2,}/u.test(w)).length < 2))) return null;
   return `https://2gis.kz/almaty/search/${encodeURIComponent(p)}`;
 }
-export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
+// the portal's "DMiS", and what organizers type: dorm, obshchaga, zhatakhana (kk), Jastar City, Islam Karimov 70 (its street)
+export const atDorm = (place: string | null | undefined): boolean =>
+  !!place && /\u0434\u043c\u0438\u0441|dorm|\u043e\u0431\u0449\u0430\u0433|\u0436\u0430\u0442\u0430\u049b\u0445\u0430\u043d|jastar|\u0436\u0430\u0441\u0442\u0430\u0440|(islam|\u0438\u0441\u043b\u0430\u043c)\s+(karimov|\u043a\u0430\u0440\u0438\u043c\u043e\u0432)/i.test(place);
 
 /** KBTU's second building, away from the main one: the portal writes "312 (Korpus No. 2 ...)". It has no
  *  map here, so its rooms never open the main one; the schedule shows "312 · B2" that opens it in 2GIS (the link he sent).
@@ -136,4 +139,39 @@ export function nearRooms(rooms: Record<string, number[][]>, room: string, ar: n
   const one = (x: { k: string; at: number[] }): [string, number[]] => [x.k, x.at];
   if (!lo || !hi) return lo || hi ? [one((lo ?? hi)!)] : [];
   return Math.hypot(lo.at[0] - hi.at[0], (lo.at[1] - hi.at[1]) * ar) < 0.25 ? [one(lo), one(hi)] : [one(-lo.d <= hi.d ? lo : hi)];
+}
+
+/** A point on the main map's plan (Uni-Q's: the routes' graph is drawn on it): a floor and fractions of its width and height */
+type At = { f: number; u: number; v: number };
+type Door = At & { k?: string; name?: string; r?: string[] };
+/** What a typed text means on the main map, for a route's start or end and "Show on map": an entrance by its name,
+ *  a named place with a point (the canteen), a room where its number is printed, else its door on the graph, else its
+ *  nearest numbered neighbour ("435 isn't on the plan: somewhere here", near: the room asked for). rooms: by floor, the
+ *  room → where its number is printed; doors: the graph's points; ar: the plan's height to its width */
+export function locate(text: string, rooms: Record<string, number[][]>[], doors: Door[], ar: number): (At & { room: string; spot?: string; near?: string }) | null {
+  const x = doors.find((n) => n.k === 'x' && n.name === text.trim());
+  if (x) return { f: x.f, u: x.u, v: x.v, room: x.name! };
+  const s = spotOf(text);
+  if (s?.f != null) return { f: s.f, u: s.u!, v: s.v!, room: s.k, spot: s.k };
+  const r = roomOf(text) ?? s?.room ?? null, f = floorOf(r);
+  if (!r || f == null) return null;
+  const at = rooms[f]?.[r]?.[0], door = doors.find((n) => n.r?.includes(r));
+  if (at) return { f, u: at[0], v: at[1], room: r };
+  if (door) return { f: door.f, u: door.u, v: door.v, room: r };
+  const nb = nearRooms(rooms[f] ?? {}, r, ar)[0];
+  return nb ? { f, u: nb[1][0], v: nb[1][1], room: nb[0], near: r } : null;
+}
+
+/** What a tap on the main map means for a route's end: the entrance, the named place or the room whose number is
+ *  nearest the finger, within reach (a fraction of the plan's width: a finger's size at the zoom on screen); else
+ *  nothing, and the point itself is the end. An entrance or a named place wins over a room's number at the same reach */
+export function tapAt(p: At, rooms: Record<string, number[][]>[], doors: Door[], ar: number, reach: number): { exit?: string; spot?: string; room?: string } | null {
+  const d = (q: { u: number; v: number }) => Math.hypot(q.u - p.u, (q.v - p.v) * ar);
+  const x = doors.filter((n) => n.k === 'x' && n.name && n.f === p.f && d(n) < reach).sort((a, b) => d(a) - d(b))[0];
+  if (x) return { exit: x.name };
+  const s = SPOTS.filter((s) => s.f === p.f && d({ u: s.u!, v: s.v! }) < reach).sort((a, b) => d({ u: a.u!, v: a.v! }) - d({ u: b.u!, v: b.v! }))[0];
+  if (s) return { spot: s.k };
+  let best = '', bd = reach;
+  for (const [r, at] of Object.entries(rooms[p.f] ?? {})) for (const [u, v] of at) if (d({ u, v }) < bd) { bd = d({ u, v }); best = r; }
+  return best ? { room: best } : null;
 }

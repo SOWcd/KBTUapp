@@ -1,7 +1,9 @@
 <script lang="ts">
-  // The home-screen app, offered once per phone inside Telegram (App installHint): what it is, the icon landing on a
-  // home screen's row, and "Add", which opens /install in the phone's browser (Safari or Chrome hold "Add to Home
-  // Screen"; Telegram's own browser does not). For its first 5 s it can't be closed (Back, the scrim and a pull spring
+  // The home-screen app, offered once per phone inside Telegram (App installHint): what it is, a phone playing the
+  // owner's own recording of it (a tap on the icon, the splash, the Afisha: a real app, not a shortcut into Telegram;
+  // muted, looped, resting on the Afisha; the files come with this lazy sheet, never with the app), and "Add", which
+  // opens /install in the phone's browser (Safari or Chrome hold "Add to Home Screen"; Telegram's own browser does
+  // not). For its first 5 s it can't be closed (Back, the scrim and a pull spring
   // back: Sheet `hold`), so it is read first: the ring by "Not now" fills meanwhile (the owner's ask, Nov 22).
   import { onMount } from 'svelte';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
@@ -11,17 +13,31 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Smartphone from '@lucide/svelte/icons/smartphone';
+  import clip from '../../assets/install/open.mp4';
+  import poster from '../../assets/install/open.webp';
 
   let { overlay }: { overlay: Overlay } = $props();
   const WAIT = 5;
   let left = $state(WAIT), started = $state(false);
+  // reduced motion: the poster (the home screen with our icon) stands still
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let video: HTMLVideoElement;
+  const clipBlob = still ? null : fetch(clip).then((r) => r.blob());  // asked for before the sheet mounts
 
   onMount(() => {
     once('kb-install'); // shown: never again on this phone, however it ends
     // the ring's first frame is empty, then each second glides into the next (a step per second under reduced motion)
     const first = requestAnimationFrame(() => (started = true));
+    // iOS plays inline without a tap only when muted is a property, not just the attribute; refused (Low Power Mode): the poster stays
+    // played from a blob: iOS plays a src only with HTTP Range, and the CDN serves this file whole (gzipped)
+    let url = '';
+    clipBlob?.then((b) => {
+      if (!video) return;
+      url = URL.createObjectURL(b);
+      video.src = url; video.muted = true; video.play().catch(() => {});
+    }).catch(() => {});
     const tick = setInterval(() => { if (--left <= 0) clearInterval(tick); }, 1000);
-    return () => { cancelAnimationFrame(first); clearInterval(tick); };
+    return () => { cancelAnimationFrame(first); clearInterval(tick); if (url) URL.revokeObjectURL(url); };
   });
 
   function add() {
@@ -38,10 +54,8 @@
 
 <Sheet {overlay} icon={Smartphone} title={t('inst.title')} hold={() => left > 0}>
   <div class="inst">
-    <div class="home" aria-hidden="true">
-      <i></i>
-      <span class="app"><img src="/favicon.svg" alt="" width="56" height="56" /><b>KBTU App</b></span>
-      <i></i>
+    <div class="phone" aria-hidden="true">
+      <video bind:this={video} {poster} width="440" height="952" muted playsinline loop disablepictureinpicture disableremoteplayback></video>
     </div>
     <h2 class="t-h2">{t('inst.title')}</h2>
     <p class="t-callout">{t('inst.text')}</p>
@@ -57,20 +71,20 @@
 <style>
   .inst { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-1) var(--s-1) var(--s-2); text-align: center; }
   .inst p { color: var(--text-2); text-wrap: pretty; }
-  /* a home screen's row: two quiet places and ours between them, which lands once the sheet stands */
-  .home { display: flex; align-items: flex-start; gap: var(--s-5); margin-bottom: var(--s-2); padding: var(--s-5) var(--s-5) var(--s-3); border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 0.5px var(--line-2); }
-  .home i { width: 56px; height: 56px; border-radius: var(--r-m); background: var(--fill); }
-  .app { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); animation: land 720ms var(--ease-spring) 420ms backwards; }
-  .app img { display: block; border-radius: var(--r-m); box-shadow: var(--lg-lift); }
-  .app b { font: 500 var(--fs-micro)/1 var(--font-text); color: var(--text-2); }
-  @keyframes land { from { opacity: 0; transform: translate3d(0, -18px, 0) scale(1.18); } }
+  /* a phone: a black bezel around the recording, the screen's corners a real iPhone's share of its width */
+  .phone { width: 148px; margin: var(--s-2) 0 var(--s-3); padding: 5px; border-radius: var(--r-xl); background: black; box-shadow: 0 0 0 0.5px var(--line-2), var(--lg-lift), 0 28px 44px -28px rgba(0, 0, 0, 0.55); animation: rise 620ms var(--ease-spring) 180ms backwards; }
+  .phone video { display: block; width: 100%; height: auto; aspect-ratio: 440 / 952; border-radius: var(--r-l); background: black; object-fit: cover; pointer-events: none; }
+  /* a short screen: a smaller phone, so the words under it still show without a scroll */
+  @media (max-height: 700px) { .phone { width: 112px; padding: 4px; border-radius: var(--r-l); } .phone video { border-radius: var(--r-m); } }
+  @media (max-height: 600px) { .phone { width: 92px; margin: 0 0 var(--s-1); } }
+  @keyframes rise { from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.96); } }
   .acts { display: flex; flex-direction: column; gap: var(--s-1); }
   /* the wait: a hairline ring that closes over 5 s. An 18 px stroke, the one thing here that isn't transform or opacity */
   .ring { transform: rotate(-90deg); fill: none; stroke: var(--fill-2); stroke-width: 2; }
   .ring .go { stroke: currentColor; stroke-linecap: round; stroke-dasharray: 1; }
   .ring.started .go { transition: stroke-dashoffset 1s linear; }
   @media (prefers-reduced-motion: reduce) {
-    .app { animation: none; }
+    .phone { animation: none; }
     .ring.started .go { transition: none; }
   }
 </style>

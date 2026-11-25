@@ -83,13 +83,17 @@ def test_ticket_misses_are_shared_and_scoped(env, monkeypatch):
     helper = login(c, 2, "helper")["id"]
     uid = login(c, 1, "ann")["id"]
     _reg(con, eid, uid, "PASS")
+    badge = f"u_{uid}_" + con.execute("SELECT qr_code FROM users WHERE id = ?", (uid,)).fetchone()[0]
     con.execute("INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at) VALUES (?, ?, ?, 'scan', 1, 0)", (eid, helper, oid))
     for _ in range(5):
         assert _ticket(c, eid, 2, "MISS").json()["result"] == "not_found"
     with pytest.raises(logic.ApiError, match="rate_limited"):
         logic.checkin(con, logic.Viewer(helper, "user", True), eid, "PASS")
-    assert _ticket(c, eid, 9, "PASS").json()["result"] == "ok"
-    now += 61
+    assert _ticket(c, eid, 9, "MISS").json()["result"] == "not_found"
+    assert _ticket(c, eid, 2, badge).json()["result"] == "ok"
+    assert _ticket(c, eid, 2, "MISS").json()["error"] == "rate_limited"
+    now += 60
+    assert _ticket(c, eid, 2, "MISS").json()["result"] == "not_found"
     assert _ticket(c, eid, 2, "PASS").json()["result"] == "already"
 
 

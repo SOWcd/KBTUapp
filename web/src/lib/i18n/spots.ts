@@ -22,7 +22,7 @@ export const KK_SPOTS: Spots = {
   'route.spot.dispatch': "Диспетчерлік",
   'route.spot.rector': "Ректор",
   'route.spot.vrScience': "Ғылым жөніндегі проректор",
-  'route.spot.vrSocial': "Әлеуметтік мәселелер проректоры",
+  'route.spot.vrSocial': "Әлеуметтік мәселелер жөніндегі проректор",
   'route.spot.legal': "Заң департаменті",
   'route.spot.accounting': "Бухгалтерия",
 };

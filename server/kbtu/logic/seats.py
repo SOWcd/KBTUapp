@@ -1,6 +1,7 @@
 """Events for students: the lists, registration and seats, receipts, volunteers, event chats, the channel, calendars."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -50,7 +51,8 @@ def volunteer_apply(con, v: Viewer, eid: int, note: object) -> dict:
 def volunteer_leave(con, v: Viewer, eid: int) -> dict:
     """Taking my application back (or stepping down): the place opens again."""
     e = _event(con, v, eid)
-    con.execute("DELETE FROM volunteers WHERE event_id = ? AND user_id = ?", (eid, v.id))
+    # a "no" holds: deleting it would let them apply again into the organizer's queue (Inkar's review, Nov 23)
+    con.execute("DELETE FROM volunteers WHERE event_id = ? AND user_id = ? AND status != 'no'", (eid, v.id))
     return full(con, v, e)
 
 
@@ -151,14 +153,12 @@ GUARD_TTL = 15 * 60  # a guarded request's app link, then join again
 
 def guard_token(key: bytes, chat_id: int, tg_id: int, qid: str) -> str:
     """The app's link for a guarded join request: who, where, which query, when, signed (no row kept: nothing to delete)."""
-    import base64
     body = base64.urlsafe_b64encode(json.dumps([chat_id, tg_id, qid, int(time.time())], separators=(",", ":")).encode()).decode().rstrip("=")
     return body + "." + hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]
 
 
 def guard_read(key: bytes, token: str) -> tuple[int, int, str]:
     """(chat, Telegram id, query) from guard_token's link; forbidden when it's forged, gone when it's old."""
-    import base64
     body, _, sig = (token or "").partition(".")
     if not body or not hmac.compare_digest(sig, hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]):
         raise ApiError("forbidden")
@@ -269,7 +269,6 @@ REF_KEY = secrets.token_bytes(32)
 
 
 def ev_ref(uid: int) -> str:
-    import base64
     return base64.b32encode(hmac.new(REF_KEY, f"evref:{uid}".encode(), hashlib.sha256).digest())[:10].decode()
 
 
@@ -453,8 +452,7 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
         # a cancelled event stays a day, struck through, for those who meant to go; then it leaves the Afisha (owner)
         sql += " AND (status != 'cancelled' OR cancelled_at > ?)"; args.append(core.now() - CANCELLED_SHOWN)
     else:
-        # a club's page: its own and the ones it co-hosts (accepted, cohosts.py)
-        sql += " AND (org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))"; args += [org, org]
+        sql += " AND " + OF_ORG; args += [org, org]
     if frm is not None:
         sql += " AND starts_at >= ?"; args.append(frm)
     if to is not None:
@@ -465,6 +463,9 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)], share=True)
 
 
+# a club's page: its own events and the ones it co-hosts (accepted, cohosts.py); args: the club twice
+OF_ORG = """(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
+    WHERE x.org_id = ? AND x.status = 'accepted'))"""
 CANCELLED_SHOWN = 86400  # a cancelled event's day on the Afisha
 PAST_DAYS = 30  # the Afisha's "Past" reaches back a month
 
@@ -474,8 +475,7 @@ def past_events(con, v: Viewer, org: int | None = None, mine: bool = False, atte
     card's `my`), or a club's latest few (its page's "Recent": its own and the ones it co-hosts), or mine: the ones I
     was signed up for or came to. Attended: only my recent check-ins, including events off the Afisha."""
     where, args, n = (f"{on_afisha()} AND COALESCE(ends_at, starts_at + ?) > ?", [*on_afisha_args(v), NO_END, core.now() - PAST_DAYS * 86400], 50) \
-        if org is None else ("""(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x
-        JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))""", [org, org], 6)
+        if org is None else (OF_ORG, [org, org], 6)
     if attended:
         if not v.student:
             return []
@@ -625,9 +625,7 @@ def joined(con, oid: int, uid: int) -> None:
     """Someone is now in club oid (any path that adds a member, inside its transaction): their guest seats at its own
     upcoming events go back ('removed', no message: they're the team) and the waitlist moves into them."""
     for e in rows(con, TEAM_SEATS, uid, oid, core.now()):
-        con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
-            WHERE event_id = ? AND user_id = ?""", (core.now(), e["id"], uid))
-        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (uid, f"event:{e['id']}:%"))
+        _seat_out(con, one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid), "removed", captain=False)
         promote(con, e)
 
 
@@ -819,7 +817,7 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     if r and r["status"] == "going":
         old = one(con, """SELECT * FROM receipts WHERE id = (SELECT MAX(id) FROM receipts WHERE registration_id = ?)
             AND status = 'accepted' AND reviewed_at IS NULL AND flags != 'spot' AND created_at >= ?""", r["id"], r["created_at"])  # this seat's own  # a spot one: as final as a checked one
-        if not old or (e["ends_at"] or e["starts_at"] + 3 * 3600) < core.now():
+        if not old or end_of(e) < core.now():
             r = None
         elif one(con, "SELECT COUNT(*) FROM receipt_replaced WHERE registration_id = ?", r["id"])[0] >= RECEIPT_TRIES:
             raise ApiError("rate_limited", "receipt")  # enough: the organizer looks at the last one
@@ -950,7 +948,7 @@ def review_receipt(con, v: Viewer, rid: int, reject: object, why: object = None)
     if not isinstance(reject, bool) or why is not None and (not reject or why not in REJECT_WHY):
         raise ApiError("bad_input")
     with tx(con):
-        c = one(con, "SELECT c.*, r.event_id, r.user_id, r.status AS reg, r.free FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.id = ?", rid)
+        c = one(con, "SELECT c.*, r.event_id, r.user_id, r.status AS reg, r.free, r.created_at AS since FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.id = ?", rid)
         if not c:
             raise ApiError("not_found")
         e = _staff_event(con, v, c["event_id"], "events")
@@ -962,10 +960,8 @@ def review_receipt(con, v: Viewer, rid: int, reject: object, why: object = None)
             log_action(con, v.id, "receipt_reject", f"receipt:{rid}", json.dumps({"why": why}) if why else "{}")
             # an old receipt from before a cancel and a new sign-up (the same row) doesn't end the new ticket: not a
             # free one (1st-year seat), not one on an event free now, not one paid by a newer receipt
-            if not e["guest_list"] and c["reg"] == "going" and not c["free"] and e["price"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
-                evteams.left(con, e["id"], c["user_id"])  # the captain hears it
-                con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'receipt_rejected', updated_at = ? WHERE id = ?", (core.now(), c["registration_id"]))
-                con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (c["user_id"], f"event:{e['id']}:%"))
+            if not e["guest_list"] and c["reg"] == "going" and not c["free"] and e["price"] and c["created_at"] >= c["since"] and rid == one(con, "SELECT MAX(id) FROM receipts WHERE registration_id = ?", c["registration_id"])[0]:
+                _seat_out(con, one(con, "SELECT * FROM registrations WHERE id = ?", c["registration_id"]), "receipt_rejected")  # the captain hears it
                 notify(con, c["user_id"], "receipt_rejected", f"event:{e['id']}:{rid}", json.dumps({"why": why}) if why else "{}")
                 promote(con, e)
 
@@ -986,8 +982,9 @@ def seat_by_hand(con, uid: int, eid: int) -> str:
             return "already going"
         if r:
             renew_cancelled_ticket(con, eid, r)
+            # a new seat starts now, as on a sign-up: receipts from before it aren't this seat's
             con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL,
-                updated_at = ? WHERE id = ?""", (core.now(), r["id"]))
+                free = 0, updated_at = ?, created_at = ? WHERE id = ?""", (core.now(), core.now(), r["id"]))
             rid = r["id"]
         else:
             rid = con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, ?, ?)",
@@ -1011,9 +1008,11 @@ def unregister(con, v: Viewer, eid: int) -> dict:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if not r:
             raise ApiError("not_found")
+        if r["checked_in_at"]:  # in the room already (a late-sign-up event): the seat stays, as remove_seats keeps it
+            raise ApiError("conflict", "checked_in")
         if not signup_open(e):
             raise ApiError("closed")
-        if _seat_out(con, r, "self"):
+        if r["status"] != "cancelled" and _seat_out(con, r, "self"):  # a stale second cancel keeps why it ended
             promote(con, e)
     return card(con, v, e)
 

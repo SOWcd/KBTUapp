@@ -1,7 +1,9 @@
 <script lang="ts" module>
-  import type { Graph, Leg, MapNode, Route } from '../../lib/route';
+  import type { Graph, Leg, MapNode, Pt, Route } from '../../lib/route';
   /** What the map draws for routes (CampusMap owns it): the graph, the chosen route and its step */
-  export type RouteView = { graph: Graph | null; route: Route | null; step: number; ends?: [string, string] };
+  export type RouteView = { graph: Graph | null; route: Route | null; step: number; ends?: [string, string]; pick?: Pick };
+  /** an end being picked on the map: A or B, and what the last tap (or the typed room) found there */
+  export type Pick = { end: 'a' | 'b'; at: Pt | null };
 </script>
 
 <script lang="ts">
@@ -21,8 +23,9 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
-  import { roomOf, floorOf, nearRooms, spotOf, adminZone, SPOTS } from '../../lib/map';
-  import { attach, routes, openAt, showsOpen, examOnly, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import { roomOf, spotOf, adminZone, locate, tapAt } from '../../lib/map';
+  import { attach, routes, openAt, showsOpen, examOnly, liftRush, RUSH_WAIT, type Mode } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
 
@@ -31,34 +34,39 @@
     go: (f: number, pts: { u: number; v: number }[]) => void; pick: (f: number) => void; onclose: () => void;
   } = $props();
 
-  // ---- finding the way: where to comes from the room card, where from from the keypad (MapPad), then the ways ----
+  // ---- finding the way: where to comes from the room card, where from from the keypad (MapPad), then the ways; either
+  // end can be typed again (its row in the ways) or tapped on the map (the keypad's map button: a room, an entrance, a
+  // named place, or just a point) ----
+  type End = 'a' | 'b';
+  type P = Pt & { room: string; spot?: string; near?: string };
   let from = $state(''), dest = $state(untrack(() => to ?? '')), leaving = $state(untrack(() => out)); // leaving: "Help me get out"
-  let asked = $state(false); // "from" answered: the ways show
+  /** a point tapped on the map with nothing named there: that end is the point itself */
+  let pins = $state<Record<End, Pt | null>>({ a: null, b: null });
+  /** what is being set now: an end on the keypad or on the map; null: both are, the ways show */
+  let edit = $state<{ end: End; by: 'pad' | 'map' } | null>({ end: 'a', by: 'pad' });
+  /** on the map: what the last tap found (a name, or the point alone) */
+  let cand = $state<{ text: string; pin: Pt | null } | null>(null);
   const spotName = (k: string) => t(`route.spot.${k}` as 'route.spot.canteen');
   /** an entrance by its name on the graph: a start too (A16: people come in from Tole bi, Kazybek bi, Panfilov) */
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   const exits = $derived(exitTiles(rt.graph));
   /** a picked entrance that won't open now: said by its name, the way still goes */
   const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : showsOpen(n, new Date()) ? '' : t(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed'); };
-  /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
-   *  neighbour, "somewhere here" (435 isn't on the plan, lead to where it most likely is) */
-  function place(text: string): (Pt & { room: string; near?: string }) | null {
-    const x = exitNamed(text);
-    if (x) return { f: x.f, u: x.u, v: x.v, room: x.name! };
-    const s = spotOf(text);
-    if (s?.f != null) return { f: s.f, u: s.u!, v: s.v!, room: spotName(s.k) };
-    const r = roomOf(text) ?? s?.room ?? null, f = floorOf(r);
-    if (!r || f == null) return null;
-    const at = rooms[f]?.[r]?.[0], door = rt.graph?.n.find((n) => n.r?.includes(r));
-    if (at) return { f, u: at[0], v: at[1], room: r };
-    if (door) return { f: door.f, u: door.u, v: door.v, room: r };
-    const nb = nearRooms(rooms[f] ?? {}, r, ar)[0];
-    return nb ? { f, u: nb[1][0], v: nb[1][1], room: nb[0], near: r } : null;
+  /** a text as a point on its floor (lib/map locate): where its number is printed, else its door, else its nearest
+   *  numbered neighbour, "somewhere here" (435 isn't on the plan, lead to where it most likely is) */
+  function place(text: string): P | null {
+    const p = locate(text, rooms, rt.graph?.n ?? [], ar);
+    return p?.spot ? { ...p, room: spotName(p.spot) } : p;
   }
-  function optionsFor(text: string, out: boolean): { route: Route; exit?: MapNode }[] {
-    const g = rt.graph, p = place(text);
+  const textOf = (e: End) => (e === 'a' ? from : dest);
+  /** an end as a point: the one tapped, or where its text is */
+  const endAt = (e: End): P | null => { const pin = pins[e]; return pin ? { ...pin, room: '' } : place(textOf(e)); };
+  /** an end as the ways and the header name it */
+  const label = (e: End) => { const pin = pins[e]; return pin ? t('route.pin', { floor: floorName(pin.f) }) : roomOf(textOf(e)) ?? textOf(e); };
+  function optionsFor(p: P | null, out: boolean): { route: Route; exit?: MapNode }[] {
+    const g = rt.graph;
     if (!g || !p) return [];
-    const a = { at: attach(g, p, ar, p.room), pt: p as Pt };
+    const a = { at: attach(g, p, ar, p.room || undefined), pt: p as Pt };
     if (out) { // the nearest exit open now, one answer; the backup (the night post) whenever none other is open,
       // its own hours or not (Saturday 20-22 had no door at all and the button went dead)
       const now = new Date(), main = g.n.filter((x) => x.k === 'x' && !x.b && !x.e && openAt(x, now));
@@ -66,11 +74,11 @@
         .filter((o) => o.route).sort((p, q) => p.route.secs - q.route.secs)[0];
       return best ? [best] : [];
     }
-    const b = place(dest);
-    return b ? routes(g, ar, a, { at: attach(g, b, ar, b.room), pt: b }).map((route) => ({ route })) : [];
+    const b = endAt('b');
+    return b ? routes(g, ar, a, { at: attach(g, b, ar, b.room || undefined), pt: b }).map((route) => ({ route })) : [];
   }
-  const options = $derived(asked ? optionsFor(from, false) : []);
-  const rush = $derived(asked && liftRush(new Date())); // the break between classes: the lifts are packed; read when the ways show
+  const options = $derived(edit ? [] : optionsFor(endAt('a'), false));
+  const rush = $derived(!edit && liftRush(new Date())); // the break between classes: the lifts are packed; read when the ways show
   const secs = (r: Route) => r.secs + (r.mode === 'lift' && rush ? RUSH_WAIT : 0);
   /** the keypad's line under the number: where that is, or the exit it leads to */
   function check(text: string): PadCheck {
@@ -78,7 +86,7 @@
     if (!p) return text.length >= 3 || /[^\d\u0430-\u0433]/.test(text) ? { ok: false, tone: 'no', hint: leaving ? t('route.helpUnknown') : t('pad.noRoom') }
       : { ok: false, hint: leaving ? t('pad.outHint') : t('pad.roomHint') };
     if (leaving) {
-      const o = optionsFor(text, true)[0];
+      const o = optionsFor(place(text), true)[0];
       return o?.exit ? { ok: true, tone: 'ok', hint: `${o.exit.name} \u00b7 ${t('route.openTill', { time: hours(o.exit) }).replace(/^./, (c) => c.toLowerCase())} \u00b7 ${t('route.min', { n: mins(o.route.secs) })}` }
         : { ok: false, tone: 'no', hint: t('route.noExit') };
     }
@@ -89,14 +97,14 @@
   let chosen = $state<{ route: Route; exit?: MapNode } | null>(null);
   function start(o: { route: Route; exit?: MapNode }) {
     haptic.tap();
-    chosen = o; rt.route = o.route; rt.ends = [roomOf(from) ?? from, o.exit?.name ?? roomOf(dest) ?? dest]; show(0);
+    chosen = o; rt.route = o.route; rt.ends = [label('a'), o.exit?.name ?? label('b')]; show(0);
   }
   let drop = $state<HTMLSpanElement>();
   $effect(() => { void cur; jelly(drop); }); // the floors' drop squashes as it slides, as the tab bar's does
   function show(i: number) { rt.step = i; const leg = rt.route!.legs[i]; go(leg.f, leg.pts); }
   function stop() { haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; onclose(); }
   /** the step card's X: back to the ways, A kept (looked at the fast one, wants the lift); the exit has one way */
-  function toWays() { if (!asked) return stop(); haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; }
+  function toWays() { if (leaving) return stop(); haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; }
   const hours = (x: MapNode): string => { const d = new Date(), h = x.h?.[d.getDay() === 0 ? 2 : d.getDay() === 6 ? 1 : 0]; return h ? h.split('-')[1] : ''; };
   function floorName(n: number) { return n ? t('route.floor', { n }) : t('route.basement'); }
   /** a step in words: walk past the named points to the stairs or lift and go up or down, or arrive */
@@ -109,8 +117,8 @@
       if (leg.up?.s === 0) return t('route.toYard') + via; // a level door, no stairs
       return t(lift ? (up ? 'route.liftUp' : 'route.liftDown') : up ? 'route.stairsUp' : 'route.stairsDown', { floor: floorName(leg.to!), near: nearRoom(leg) }).replace(/^./, (c) => c.toUpperCase()) + via; // kk: no room, a small letter first
     }
-    const p = chosen?.exit ? null : place(dest);
-    return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : p?.near ? t('route.toNear', { room: p.near, near: p.room })
+    const p = chosen?.exit ? null : endAt('b');
+    return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : pins.b ? t('route.toPin') : p?.near ? t('route.toNear', { room: p.near, near: p.room })
       : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: spotOf(dest) ? dest : p?.room ?? dest })) + via;
   }
   /** which stairs: " by" the room whose door is nearest to them, or nothing, "the stairs by 384" (a friend's note; a floor has several) */
@@ -123,6 +131,42 @@
     return r ? t('route.by', { room: r }) : '';
   }
   const p_isEnd = (name: string) => name === chosen?.exit?.name;
+
+  // ---- an end on the map ----
+  /** the keypad's map button: the typed place shown on the map (the timetable's "Aud. 305" typed in), or, nothing
+   *  found, the map to tap on */
+  function see(text: string) {
+    haptic.tap();
+    const e = edit!.end, p = text.trim() ? place(text) : null;
+    edit = { end: e, by: 'map' };
+    choose(p ? { text, pin: null } : null, p);
+    if (p) go(p.f, [p]);
+  }
+  function choose(c: typeof cand, p: Pt | null) { cand = c; rt.pick = { end: edit!.end, at: p && { f: p.f, u: p.u, v: p.v } }; }
+  /** a tap on the map while an end is picked there (CampusMap's tap): what is under the finger, within reach (a
+   *  fraction of the plan's width), or the point itself. false: not picking, the map's own tap goes on */
+  export function mapTap(f: number, u: number, v: number, reach: number): boolean {
+    if (edit?.by !== 'map') return false;
+    haptic.select();
+    const hit = tapAt({ f, u, v }, rooms, rt.graph?.n ?? [], ar, reach), text = hit?.exit ?? (hit?.spot ? spotName(hit.spot) : hit?.room);
+    const p = text ? place(text) : null;
+    choose(text && p ? { text, pin: null } : { text: '', pin: { f, u, v } }, p ?? { f, u, v });
+    return true;
+  }
+  /** the end set: the ways (both ends known) */
+  function set(e: End, text: string, pin: Pt | null = null) {
+    if (e === 'a') from = text; else dest = text;
+    pins[e] = pin; cand = null; rt.pick = undefined; edit = null;
+  }
+  /** back from the keypad: to the ways when there are any to go back to, else out of the routes */
+  function back() { cand = null; rt.pick = undefined; if (edit?.by === 'map') edit = { end: edit.end, by: 'pad' }; else if (from || pins.a) edit = null; else onclose(); }
+  const candName = $derived(cand ? (cand.pin ? t('route.pin', { floor: floorName(cand.pin.f) }) : roomOf(cand.text) ?? cand.text) : '');
+  const candHint = $derived.by(() => {
+    if (!cand) return t('route.tapHint');
+    if (cand.pin) return t('route.pinHint');
+    const p = place(cand.text);
+    return p ? (exitNamed(cand.text) ? doorHint(exitNamed(cand.text)!, floorName(p.f)) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) + adminNote(p.room)) : '';
+  });
 
 </script>
 
@@ -146,20 +190,33 @@
   </div>
 {:else if leaving}
   <MapPad title={t('pad.whereTitle')} go={t('route.lead')} point="a" placeTab={t('pad.place')} groups={placeGroups()} {check}
-          onsubmit={(v) => { from = v; const o = optionsFor(v, true)[0]; if (o) start(o); }} {onclose} />
-{:else if !asked}
-  <MapPad title={t('pad.fromTitle')} go={t('pad.showWays')} point="a" placeTab={t('pad.entranceOrPlace')} start={from}
-          groups={[{ title: t('pad.entrances'), tiles: exits }, ...placeGroups()]} {check}
-          onsubmit={(v) => { haptic.tap(); from = v; asked = true; }} {onclose} />
+          onsubmit={(v) => { from = v; const o = optionsFor(place(v), true)[0]; if (o) start(o); }} {onclose} />
+{:else if edit?.by === 'map'}
+  {@const e = edit.end}
+  <!-- an end on the map: tap a room, an entrance, a place or any point; the map stays free to move above the card -->
+  <div class="card pick glass glass-sheet pt-{e}" data-cover use:glass={{ bloom: true }} use:refract>
+    <div class="top"><span class="dot {e}">{e === 'a' ? t('pad.a') : t('pad.b')}</span>
+      <span class="grow"><b class="ellipsis">{cand ? candName : t(e === 'a' ? 'route.tapFrom' : 'route.tapTo')}</b><small class="ellipsis">{candHint}</small></span>
+      <button onclick={back} aria-label={t('common.close')}><X size={18} /></button></div>
+    <button class="set" disabled={!cand} onclick={() => { haptic.tap(); set(e, cand!.text, cand!.pin); }}>{t(e === 'a' ? 'route.setFrom' : 'route.setTo')}</button>
+  </div>
+{:else if edit}
+  {@const e = edit.end}
+  {#key e}
+  <MapPad title={t(e === 'a' ? 'pad.fromTitle' : 'pad.findTitle')} go={t('pad.showWays')} point={e} placeTab={t('pad.entranceOrPlace')} start={pins[e] ? '' : textOf(e)}
+          groups={[{ title: t('pad.entrances'), tiles: exits }, ...placeGroups()]} {check} {see}
+          onsubmit={(v) => { haptic.tap(); set(e, v); }} onclose={back} />
+  {/key}
 {:else}
   <div class="scrim" onclick={onclose} aria-hidden="true"></div>
   <div class="card ways" data-cover>
     <span class="grab" aria-hidden="true"></span>
     <div class="top"><b>{t('route.title')}</b>
       <button onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
-    <!-- the start: tap to change it (back to the keypad) -->
-    <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot a">{t('pad.a')}</span><b>{roomOf(from) ?? from}</b>{#if shut(from)}<small class="shut">{shut(from)}</small>{/if}<Pencil size={14} /></button>
-    <div class="end"><span class="dot b">{t('pad.b')}</span><b>{roomOf(dest) ?? dest}</b>{#if shut(dest)}<small class="shut">{shut(dest)}</small>{/if}</div>
+    <!-- either end: tap to change it (the keypad, and the map from there) -->
+    {#each ['a', 'b'] as const as e (e)}
+      <button class="end" onclick={() => { haptic.tap(); edit = { end: e, by: 'pad' }; }}><span class="dot {e}">{e === 'a' ? t('pad.a') : t('pad.b')}</span><b class="ellipsis">{label(e)}</b>{#if !pins[e] && shut(textOf(e))}<small class="shut">{shut(textOf(e))}</small>{/if}{#if pins[e]}<MapPin size={14} />{:else}<Pencil size={14} />{/if}</button>
+    {/each}
     <div class="opts">
       {#each options as o, i (i)}
         {@const Icon = ICON[o.route.mode]}
@@ -244,5 +301,18 @@
   :global(.theme-light) .bars i { background: rgba(11, 20, 51, 0.12); }
   :global(.theme-light) .bars i.on { background: var(--accent); }
   :global(.theme-light) .nav button:not(.p) { background: rgba(11, 20, 51, 0.07); }
-  @media (prefers-reduced-motion: reduce) { .ways, .step, .opt, .txt { animation: none; } }
+  /* an end on the map: the step card's glass and its point's colour; one row and the button, low, so the map stays free */
+  .pick { padding: 12px 12px 12px 14px; border-radius: var(--r-xl); animation: rise 0.6s var(--ease-spring);
+    -webkit-backdrop-filter: blur(20px) saturate(170%) brightness(1.05); backdrop-filter: var(--refract, blur(20px) saturate(170%) brightness(1.05));
+    background: rgba(18, 22, 36, 0.38); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6), 0 0 28px -8px rgba(90, 130, 255, 0.45); }
+  .pick .top { margin: 0 -4px 10px 0; gap: 10px; }
+  .pick .dot { width: 30px; height: 30px; font-size: var(--fs-body); }
+  .pick .grow b { font: 700 var(--fs-card)/1.2 var(--font-text); color: var(--text); }
+  .pick .grow small { color: var(--text-2); }
+  .set { display: grid; place-items: center; width: 100%; height: 50px; border-radius: var(--r-full); font: 700 var(--fs-body)/1 var(--font-text); color: var(--on-accent); background: var(--accent); transition: opacity 0.25s, filter 0.25s; }
+  .pt-a .set { background: var(--success); }
+  .set:disabled { opacity: 0.35; filter: saturate(0.4); }
+  .end b { min-width: 0; }
+  :global(.theme-light) .pick { background: rgba(255, 255, 255, 0.5); box-shadow: 0 14px 34px -12px rgba(24, 36, 90, 0.4), 0 0 0 0.5px rgba(11, 20, 51, 0.14); }
+  @media (prefers-reduced-motion: reduce) { .ways, .step, .pick, .opt, .txt { animation: none; } }
 </style>

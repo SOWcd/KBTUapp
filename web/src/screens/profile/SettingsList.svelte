@@ -28,6 +28,9 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import LogOut from '@lucide/svelte/icons/log-out';
   import Monitor from '@lucide/svelte/icons/monitor';
+  import Share from '@lucide/svelte/icons/share';
+  import Send from '@lucide/svelte/icons/send';
+  import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import { api, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, dropSchedule } from '../../lib/state/data.svelte';
@@ -36,7 +39,8 @@
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { haptic, inTelegram, openLink, on } from '../../lib/tg';
+  import { haptic, inTelegram, openLink, openTelegramLink, telegramAppLink, on } from '../../lib/tg';
+  import { copyText } from '../../ui/copy';
   import { menu } from '../../ui/menu';
   import { onMount } from 'svelte';
   import { photoItems } from './mine';
@@ -99,6 +103,17 @@
   // my week off the server, here too and not only in the Week sheet
   async function dropWeek() {
     if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
+  }
+
+  // the web app's own rows (they were the bar's ⋯ menu until quick launch took its place)
+  async function share() {
+    const url = telegramAppLink();
+    try {
+      if (navigator.share) await navigator.share({ url });
+      else if (!(await copyText(url, t('sl.copied')))) say(t('common.error'), 'warning_3d');
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) say(t('common.error'), 'warning_3d');
+    }
   }
 
   let signingOut = $state(false);
@@ -180,6 +195,15 @@
       {#if session.donate}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
+  {#if !inTelegram}
+    <div data-unit class="sec">
+      <Group>
+        <Row icon={Send} title={t('tgo.open')} accessory="external" onclick={() => openTelegramLink(telegramAppLink())} />
+        <Row icon={Share} title={t('web.share')} tone="action" onclick={() => void share()} />
+        <Row icon={RotateCw} title={t('web.reload')} tone="action" onclick={() => location.reload()} />
+      </Group>
+    </div>
+  {/if}
   {#if me}
     <div data-unit class="sec">
       <Group>
