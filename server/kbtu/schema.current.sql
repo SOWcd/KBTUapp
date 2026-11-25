@@ -810,6 +810,21 @@ CREATE TABLE push_devices (
       consent TEXT NOT NULL,
       created_at INTEGER NOT NULL
     , provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm')), dead_at INTEGER) STRICT;
+CREATE TABLE pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+CREATE TABLE pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
 CREATE TABLE qr_expected (
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
       email      TEXT NOT NULL,
@@ -1427,6 +1442,22 @@ CREATE TABLE web_sessions (
       created_at INTEGER NOT NULL,
       last_used_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+CREATE TABLE yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
@@ -1517,6 +1548,8 @@ CREATE INDEX prefill_rest_email ON prefill_rest(email);
 CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
 CREATE INDEX push_devices_session ON push_devices(session);
 CREATE INDEX push_devices_user ON push_devices(user_id);
+CREATE INDEX pymk_other ON pymk (other_id);
+CREATE INDEX pymk_dismissed_other ON pymk_dismissed (other_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);
 CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
@@ -1586,6 +1619,7 @@ CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
 CREATE INDEX web_login_used_expires ON web_login_used(expires_at);
 CREATE INDEX web_sessions_last_used ON web_sessions(last_used_at);
 CREATE INDEX web_sessions_user ON web_sessions(user_id);
+CREATE INDEX yt_videos_by_org ON yt_videos(org_id, channel_id);
 CREATE TRIGGER chat_seen_chat_sync_delete AFTER DELETE ON chat_sync BEGIN
   DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
       (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),

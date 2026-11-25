@@ -232,7 +232,7 @@
   }
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
-  const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
+  const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
@@ -577,7 +577,10 @@
     margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
-  .heroes > .hero { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+  /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
+     less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
+  .heroes { scroll-padding-inline: var(--gutter); }
+  .heroes > .hero { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
@@ -627,12 +630,14 @@
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
-  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
+     (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
+  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
   .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  /* one line: when (in the title's ink), how soon, where, whose. The club gives way first (it shrinks a thousand times faster), the room after it */
-  .where { display: flex; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  /* one line: when (in the title's ink), how soon, where, whose. The club goes first and whole: it wraps to a hidden
+     second line (shrunk, it left a lone "·" behind), then the room gives way with an ellipsis */
+  .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .where > span { flex: 0 1 auto; min-width: 0; }
-  .where > .by { flex-shrink: 1000; }
   @media (max-width: 340px) { .where > .by { display: none; } } /* 320: the line is the time and the room alone */
   .where b { font-weight: 600; color: var(--text); }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
