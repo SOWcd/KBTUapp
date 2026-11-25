@@ -52,26 +52,29 @@ def _barred(con, uid: int | None = None) -> set[tuple[int, int]]:
 
 def _rank(con, uid: int | None = None) -> list[tuple[int, int, int, int]]:
     """(person, suggested, shared clubs, score), the best TOP for each; for `uid` alone when given. Score: 2 a club, and
-    1 for the same school and year (a tie-break only: never a suggestion by itself)."""
+    1 for the same school and year (a tie-break only: never a suggestion by itself). One person's counts at a time:
+    every pair of the night in one Counter is millions of tuples (hundreds of MB) at 4,000 people in full clubs."""
     ok = {r[0] for r in con.execute(f"SELECT u.id FROM users u {_JOIN} WHERE {_OK}")}
     if uid is not None and uid not in ok:
         return []
     barred = _barred(con, uid)
-    clubs: dict[int, list[int]] = defaultdict(list)
-    for org, who in con.execute(_CLUBS):
+    members: dict[int, list[int]] = defaultdict(list)
+    clubs_of: dict[int, list[int]] = defaultdict(list)
+    # for me alone (switch, inside the settings' write): only my clubs are read
+    mine = (" AND m.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?)", (uid,)) if uid is not None else ("", ())
+    for org, who in con.execute(_CLUBS + mine[0], mine[1]):
         if who in ok:
-            clubs[org].append(who)
-    shared: Counter[tuple[int, int]] = Counter()
-    for ids in clubs.values():  # ponytail: pairs per club, ~BIG² at worst; fine to 4,000 opted-in people
-        for a in ([uid] if uid in ids else []) if uid is not None else ids:
-            shared.update((a, b) for b in ids if b != a)
+            members[org].append(who)
+            clubs_of[who].append(org)
     year = {r[0]: (r[1], r[2]) for r in con.execute("SELECT user_id, school, course FROM students")}
-    best: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
-    for (a, b), n in shared.items():
-        if (min(a, b), max(a, b)) not in barred:
-            same = year.get(a) == year.get(b) and all(year.get(a, (None, None)))
-            best[a].append((2 * n + same, n, b))
-    return [(a, b, n, score) for a, xs in best.items() for score, n, b in sorted(xs, key=lambda x: (-x[0], x[2]))[:TOP]]
+    out = []
+    for a in [uid] if uid is not None else list(clubs_of):  # ponytail: ~BIG² steps a club, fine to 4,000 opted-in people
+        shared = Counter(b for org in clubs_of.get(a, ()) for b in members[org] if b != a)
+        ya = year.get(a, (None, None))
+        best = sorted(((2 * n + (all(ya) and year.get(b) == ya), n, b) for b, n in shared.items() if (min(a, b), max(a, b)) not in barred),
+                      key=lambda x: (-x[0], x[2]))
+        out += [(a, b, n, score) for score, n, b in best[:TOP]]
+    return out
 
 
 def _store(con, ranked: list[tuple[int, int, int, int]]) -> None:
