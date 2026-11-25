@@ -161,7 +161,8 @@
     <div class="list" bind:this={list}>
       {#each th.items as c (c.id)}
         <div class="cw" use:swipe={c}>
-        <span class="sw" aria-hidden="true"><Reply size={18} /></span>
+        <!-- the swipe's arrow: the round button's look, never a stop of its own (the swipe is the tap) -->
+        <span class="sw" aria-hidden="true" inert><IconButton icon={Reply} size="s" label={t('cm.replyTo', { name: '' })} /></span>
         <div class="c" class:club={!!c.org} data-c={c.id}>
           {#if c.org}<OrgLogo org={c.org} size={34} />{:else if c.person}<Avatar person={c.person} size={34} />{/if}
           <div class="cb">
@@ -219,8 +220,7 @@
   .to { display: flex; align-items: center; gap: 6px; }
   .to .quote { flex: 1; margin-top: 0; }
   .cw { position: relative; touch-action: pan-y; }
-  .sw { position: absolute; right: 2px; top: 50%; margin-top: -16px; width: 32px; height: 32px; border-radius: var(--r-full); display: flex; align-items: center;
-    justify-content: center; background: var(--fill); color: var(--text-2); opacity: 0; transform: scale(0.5); pointer-events: none; }
+  .sw { position: absolute; right: 2px; top: 50%; margin-top: calc(var(--ctl-s) / -2); display: flex; opacity: 0; transform: scale(0.5); pointer-events: none; }
 
   .compose { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; }
   .as { align-self: flex-start; }
