@@ -287,3 +287,16 @@ def test_concurrent_scans_queue_one_push_and_two_departments_cannot_claim_one_me
     assert sorted(results) == [200, 409]
     assert con.execute('SELECT COUNT(*) FROM member_tags WHERE user_id = ?', (ids[1],)).fetchone()[0] == 1
     con.close()
+
+
+def test_one_person_replaying_a_fresh_qr_is_capped(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    oid, tags, ids = _setup(c, con)
+    sid, p = _start(c, oid, tags[0])
+    for _ in range(checkin.MEET_SCANS + 5):
+        assert _scan(c, 4, p).status_code == 200  # the scan still answers; only the evidence stops growing
+    assert _scan(c, 2, p).status_code == 200
+    n = dict(con.execute('SELECT user_id, COUNT(*) FROM qr_meet_scans WHERE session_id = ? GROUP BY user_id', (sid,)).fetchall())
+    assert n == {ids[4]: checkin.MEET_SCANS, ids[2]: 1}
+    con.close()
