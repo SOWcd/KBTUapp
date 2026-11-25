@@ -54,9 +54,11 @@ class Config:
     gemini_key: str = field(default="", repr=False)  # GEMINI_API_KEY: Google (llm.GOOGLE)
     assist_lead: str = ""       # ASSIST_LEAD: unset or google, Google answers first for who said yes (assistant.GOOGLE_YES); off: never
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
-    # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
+    # DONATE_PHONE: the creator's Kaspi number for "Support the app" (Settings); empty: Stars only.
     # Never in the repo, the bundle or the logs (repr=False)
     donate_phone: str = field(default="", repr=False)
+    # The name + initial printed by Kaspi for that phone's owner. Empty: every donation needs the creator's review.
+    donate_recipient: str = field(default="", repr=False)
     # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py); empty: off
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
@@ -155,6 +157,7 @@ def load() -> Config:
         assist_lead=env.get("ASSIST_LEAD", "").strip().lower(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
+        donate_recipient=env.get("DONATE_RECIPIENT", "").strip()[:120],
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
         ask={"1": "all", "staff": "staff"}.get(env.get("ASK", "").strip(), ""),

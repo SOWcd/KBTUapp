@@ -36,7 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
-from .logic import ApiError, Viewer
+from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
 log = logging.getLogger("kbtu.app")
@@ -694,9 +694,54 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.dm_on(con, v, (body or {}).get("event"))
 
     @app.post("/api/donate/stars")
-    async def donate_stars(con: Con, v: Me, body: dict = Body(...)):
+    async def donate_stars(request: Request, con: Con, v: Me, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
-        return {"url": await logic.stars.invoice(app.state.cfg, ai_http(), v.id, lang, body.get("amount"))}
+        return {"url": await logic.stars.invoice(cfg, ai_http(), request.state.tg["id"], lang, body.get("amount"))}
+
+    @app.get("/api/donate")
+    def donate_mine(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.mine(con, v)
+
+    @app.get("/api/sponsors")
+    def sponsors(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.listing(con)
+
+    @app.put("/api/donate/consent")
+    def sponsor_consent(request: Request, con: Con, v: Me, response: Response, body: dict = Body(...)):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.answer(con, v, request.state.tg["id"], body)
+
+    @app.post("/api/donate/receipt")
+    async def donate_receipt(request: Request, con: Con, v: Me, response: Response, consent: str = ""):
+        response.headers["Cache-Control"] = "private, no-store"
+        payer = request.state.tg["id"]
+        await run_in_threadpool(donations.receipt_open, con, v, payer, cfg, consent)
+        data = await read_upload(request)
+        saved, read = await _picture(receipt.take, data, receipts, secrets.token_bytes(32))
+
+        def keep():
+            try:
+                return donations.add_receipt(con, v, payer, cfg, saved, read, consent)
+            except Exception:
+                media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ? AND kind = 'receipt'", saved["path"]) else [saved["path"]])
+                raise
+        return await run_in_threadpool(keep)
+
+    @app.get("/api/donate/receipts/{did}/image")
+    def donation_image(did: int, con: Con, v: Me):
+        return FileResponse(receipts / f"{donations.image_path(con, v, did)}.webp", media_type="image/webp",
+                            headers={"Cache-Control": "private, no-store"})
+
+    @app.get("/api/admin/donations")
+    def donation_queue(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return donations.queue(con, v)
+
+    @app.post("/api/admin/donations/{did}/review", status_code=204)
+    def donation_review(did: int, con: Con, v: Me, body: dict = Body(...)):
+        donations.review(con, v, did, body)
 
     @app.post("/api/me/keep")
     def keep_me(con: Con, v: Me):

@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -292,6 +292,7 @@
   sheets.clubList = (view) => lazy(clubListPage, { view });
   sheets.myClubs = (rows, title) => lazy(() => import('./screens/afisha/MyClubs.svelte'), { rows, title });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
+  sheets.adminDonations = () => lazy(() => import('./screens/admin/AdminDonations.svelte'), {});
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
@@ -442,7 +443,10 @@
   $effect(() => { if (showBack) backButton.show(); else backButton.hide(); });
   $effect(() => {
     if (!session.banned && !session.revoked) return;
-    untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
+    untrack(() => {
+      want++; overlays.splice(0); backTo.fn = null;
+      data.support = null; data.sponsors = null; data.donations = null;
+    });
   });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
@@ -492,6 +496,7 @@
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
   // friends (Profile with the Friends sheet: the bot's request message) ----
   function deepLink(p = tg.startParam, afterSignIn = false) {
+    if (p === 'donate') { ui.tab = 'profile'; sheets.settings('donate'); return; }
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -912,6 +917,7 @@
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
       if (session.banned || session.revoked) return;
+      void loadSupport();
       // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
       warm(eventSheet);
       requestAnimationFrame(() => setTimeout(warmNavigation));

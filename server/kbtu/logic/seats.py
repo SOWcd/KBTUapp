@@ -877,7 +877,8 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     got = read or {}
     out = []
     # a receipt someone else replaced counts too, or replacing it would wash a reused one clean
-    if one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
+    if one(con, "SELECT 1 FROM donations WHERE sha256 = ? OR receipt_no = ?", sha, got.get("no")) or \
+            one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
             one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)) or \
@@ -913,7 +914,9 @@ def _same_minute(con, got: dict) -> list[sqlite3.Row]:
     """Receipts with this one's minute, sum and payee (Kaspi prints the minute)."""
     if not (got.get("paid_at") and got.get("amount") and got.get("recipient")):
         return []
-    return rows(con, "SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"])
+    return rows(con, """SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?
+        UNION ALL SELECT sender_name FROM donations WHERE paid_at = ? AND read_amount = ? AND recipient_name = ?""",
+                *([got["paid_at"], got["amount"], got["recipient"]] * 2))
 
 
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:

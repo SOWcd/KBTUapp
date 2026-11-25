@@ -922,3 +922,16 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Private support data; never embedded in another person's card. */
+export interface Support {
+  total: number; tier: number; thresholds: number[]; starRate: number;
+  version: string; receiptConsent: string; show: boolean; rev: number | null;
+  receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
+}
+export interface Sponsor { name: string; tier: number }
+export interface DonationReview {
+  id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
+  readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
+  flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
+}

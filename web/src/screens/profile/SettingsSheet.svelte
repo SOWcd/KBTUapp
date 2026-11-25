@@ -22,8 +22,8 @@
   import { CITIES, cityName } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe, saveSwitch } from '../../lib/state/session.svelte';
-  import { onMount } from 'svelte';
-  import { data, phrase, loadMyCard, loadCredits } from '../../lib/state/data.svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { data, phrase, loadMyCard, loadCredits, loadSupport } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
@@ -35,6 +35,7 @@
   import Pane from '../../ui/Pane.svelte';
   import Group from '../../ui/Group.svelte';
   import SettingsList from './SettingsList.svelte';
+  import SupportMedal from './SupportMedal.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
@@ -170,10 +171,18 @@
   const SEES = [['set.portal', 'set.portalText'], ['set.allSee', 'set.allSeeText'], ['set.orgSee', 'set.orgSeeText'],
     ['set.teamSee', 'set.teamSeeText'], ['set.youSee', 'set.youSeeText'], ['set.never', 'set.neverText']] as const;
   const page = (path: string) => openLink(`${location.origin}/${path}?lang=${i18n.lang}`);
-  // Support the app: a gift, never a purchase. The number is copied and nothing else: no Kaspi link (none
-  // is public, and a payment link breaks Telegram's rules), no amounts, and nothing recorded, so no badge, status or
-  // thanks can ever depend on it (.claude/reports/donate-review.md)
+  // Support stays voluntary. Confirmed payments contribute to the private total and sponsor medal.
   const donate = $derived(session.donate ? fmtPhone(session.donate) : '');
+  let paymentTimer: ReturnType<typeof setTimeout> | undefined;
+  let live = true;
+  onDestroy(() => { live = false; clearTimeout(paymentTimer); });
+  async function paymentArrived(before: number, tries = 0) {
+    if (!live) return;
+    await loadSupport();
+    if (!live) return;
+    if ((data.support?.total ?? 0) > before) { void loadMyCard(); void loadMe(); }
+    else if (tries < 10) paymentTimer = setTimeout(() => { void paymentArrived(before, tries + 1); }, 1500);
+  }
   // a transfer inside one bank is free, so the page lists every bank the number has (the same number in
   // each); a tap copies it and opens that bank's app (the app itself, not its store page). Each link is the
   // bank's own universal / app link, checked in its apple-app-site-association and assetlinks.json: the bank's
@@ -193,10 +202,11 @@
   async function give(n: number) {
     giving = n;
     try {
+      const before = data.support?.total ?? 0;
       const { url } = await api.starsInvoice(n);
       openInvoice(url, (status) => {
         giving = null;
-        if (status === 'paid') { haptic.ok(); own = ''; say(t('don.thanks'), 'blue_heart_3d'); }
+        if (status === 'paid') { haptic.ok(); own = ''; say(t('don.thanks'), 'blue_heart_3d'); void paymentArrived(before); }
       });
     } catch { giving = null; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
@@ -307,7 +317,7 @@
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </Group></div>
-    {#if me?.student && !me.deleteAt}
+    {#if me && !me.deleteAt && (me.student || data.support?.total || data.support?.receipts.length || data.support?.rev != null)}
       <div class="gap"><Group>{@render act(t('me.deleteData'), deleteData, true)}</Group></div>
     {/if}
   {:else if kind === 'phone'}
@@ -376,7 +386,7 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
-  {:else if kind === 'donate' && donate}
+  {:else if kind === 'donate'}
     <!-- one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->
     <div class="don">
@@ -384,7 +394,7 @@
       <h1 class="don-h" use:fitTitle>{t('set.donate')}</h1>
       <p class="fs-body dim">{t('don.text')}</p>
       <span class="pill">{t('don.head')}</span>
-      <div class="num-card">
+      {#if donate}<div class="num-card">
         <small class="fs-sub faint">{t('don.bank')}</small>
         <b class="num selectable">{donate}</b>
         <button class={['cp', { on: copied }]} onclick={copyDonate}>
@@ -397,8 +407,10 @@
           <button class="bank" onclick={() => { haptic.tap(); void toBank(url); }}><img src="banks/{id}.webp" alt="" width="46" height="46" /><small>{name}</small></button>
         {/each}
       </div>
+      {/if}
       {#if stars}
         <p class="fs-sub faint banks-h">{t('don.stars')}</p>
+        <p class="fs-sub dim">{t('sp.starsData')}</p>
         <form class="stars" onsubmit={(e) => { e.preventDefault(); if (ownStars) void give(ownStars); }}>
           {#each [50, 100, 500] as n (n)}
             <button type="button" class={['st', { on: giving === n }]} disabled={giving !== null} onclick={() => give(n)}><Star size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />{n}</button>
@@ -409,6 +421,7 @@
           {/if}
         </form>
       {/if}
+      <SupportMedal />
       <p class="fs-sub faint dfoot">{t('don.safe')}</p>
     </div>
   {/if}

@@ -933,17 +933,18 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
 def _drop_photo(con, fid: int | None) -> list[str]:
     """A photo of mine nobody shows any more: its row goes, and its files on disk (returned) unless another row has
     the same picture (files are named by their content)."""
-    f = one(con, "SELECT id, path FROM files WHERE id = ?", fid) if fid else None
+    f = one(con, "SELECT id, path, kind FROM files WHERE id = ?", fid) if fid else None
     if not f:
         return []
     con.execute("DELETE FROM files WHERE id = ?", (f["id"],))
     # its reports go with it: the next file may get this id (a plain INTEGER PRIMARY KEY), and must not inherit them
     con.execute("DELETE FROM reports WHERE target = 'photo' AND target_id = ?", (f["id"],))
-    return [] if one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else [f["path"]]
+    # Private receipts and public photos live in different directories, even with the same digest.
+    return [] if one(con, "SELECT 1 FROM files WHERE path = ? AND (kind = 'receipt') = ?", f["path"], f["kind"] == "receipt") else [f["path"]]
 
 
 _FILE_REFS = (("users", "avatar_file_id"), ("orgs", "logo_file_id"), ("events", "cover_file_id"),
-              ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
+              ("donations", "file_id"), ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
               ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"))
 _FILE_USED = " UNION ALL ".join(f"SELECT 1 FROM {table} WHERE {col} = {{fid}}" for table, col in _FILE_REFS)
 UNUSED_COVERS = 20  # room for an editor's unsaved cover and slides
@@ -997,12 +998,18 @@ def _paid_ahead(con, uid: int) -> bool:
                uid, NO_END, core.now()) is not None
 
 
+def _may_delete(con, v: Viewer) -> None:
+    # Telegram-only donors also need a way to erase their linked payment data.
+    if not v.student and not one(con, "SELECT 1 FROM donations WHERE user_id = ? UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?", v.id, v.id):
+        need_student(v)
+
+
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
     """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
-    need_student(v)
+    _may_delete(con, v)
     at = core.now() + DELETE_WAIT
     if con.execute("UPDATE users SET delete_at = ? WHERE id = ? AND delete_at IS NULL", (at, v.id)).rowcount:
         notify(con, v.id, "delete_soon", f"del:{at}")
@@ -1015,7 +1022,7 @@ def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
 def delete_info(con, v: Viewer) -> dict:
     """What the delete sheet tells before: the album photos I added (they stay without my name unless I say so), and
     whether a paid ticket ahead makes the deletion wait."""
-    need_student(v)
+    _may_delete(con, v)
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
@@ -1251,6 +1258,7 @@ def replay_deletions(con) -> tuple[int, int]:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
+    ("donations", "user_id"), ("sponsor_consents", "user_id"),
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
@@ -1322,6 +1330,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
     me_, ended = {"u": v.id}, "SELECT id FROM events WHERE COALESCE(ends_at, starts_at + :end) <= :now"
     with tx(con):
         _hand_over(con, v.id)
+        con.execute("DELETE FROM donations WHERE user_id = ?", (v.id,))
         # money: the receipts go, theirs is personal (the club saw them); the paid seat it was for, if over, moves on
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
             WHERE r.user_id = ?""", v.id)]
