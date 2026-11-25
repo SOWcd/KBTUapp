@@ -182,7 +182,15 @@ export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'r
 export interface Media {
   id?: Id; url: string; thumb: string; w: number; h: number; blur: string; color?: string | null /* a photo's average colour */;
   focus?: [number, number] | null; // an event cover's point that every frame keeps in view, 0..1; null = the middle
+  /** An event cover's formats that have their own crop ({focus}) or their own photo (a whole Media) over it; read
+   *  through lib/photo coverFor, never by hand. */
+  formats?: Partial<Record<CoverFormat, Partial<Media>>>;
 }
+/** Where an event's cover shows: the Feed's tall slide and its story, the event's card (the Afisha's hero, its own page,
+ *  a share card), a list's square thumbnail. */
+export type CoverFormat = 'feed' | 'card' | 'list';
+/** Why a member's draft came back from the club's President or a Vice (server organizing.REVIEW_REASONS). */
+export type ReviewReason = 'details' | 'when' | 'cover' | 'repeat' | 'later';
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
@@ -358,6 +366,7 @@ export interface Me {
   settings: Settings;
   memberships: Membership[];
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
+  dmpHi?: OrgRef | null;        // on DMP's list (server kbtu.admin dmp), not signed in, not greeted yet: its hello, then Microsoft
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
    *  Badges as skins; never picked, a new club's comes by itself. */
@@ -464,6 +473,9 @@ export interface EventCard {
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
   fromPost?: string;            // Studio, the club's Head+: a draft found in the club's channel (server autoev.py), its post's link
+  /** A draft, in Studio and its editor: mine (I made it: a member's own stays theirs to edit until approved), askedAt:
+   *  sent to the club's President and Vices and waiting, reason: why it came back. */
+  review?: { mine: boolean; askedAt: number | null; reason: ReviewReason | null };
   teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
   teamMax?: number;
   teamCap?: number | null;      // at most this many teams; null: no cap
@@ -657,6 +669,9 @@ export interface EventInput {
   slideIds?: Id[];
   /** The cover's focus, [x, y] from 0 to 1; null = the middle; left out keeps it. */
   coverFocus?: [number, number] | null;
+  /** A format's own crop ({focus}) or its own photo ({id, focus}) over the cover; a format's null: back to the cover;
+   *  left out keeps them. */
+  coverFormats?: Partial<Record<CoverFormat, { id?: Id | null; focus?: [number, number] | null } | null>>;
   /** Paid (§4.3): tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's
    *  Vice+ send these, and they are fixed once someone has paid; left out keeps them. */
   price?: number | null;
@@ -682,6 +697,11 @@ export interface AttendeeReceipt {
 }
 /** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
+/** a row of the organizers' list at the door (server guests.door_list): by name, not in the app; walkIn: added at the door */
+export interface ListGuest { key: string; name: string; adult: boolean | null; came: boolean; at?: Ts | null; team?: string | null; walkIn?: boolean }
+/** what a guest list does (server guests.load), the same for its preview: rows kept, in the app already, by name on the list,
+ *  repeated rows skipped, bad rows (1-based, why), app seats the first list ends, old list rows a corrected file drops */
+export interface GuestListResult { rows: number; inApp: number; onList: number; dupes: number; bad: { row: number; why: 'name' | 'student_id' | 'adult' | 'username' | 'long' }[]; badCount: number; dropped: number; removed: number }
 export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null; team?: string | null }
 /** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
 /** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */

@@ -130,6 +130,8 @@ export const sheets = {
   attendees: (_id: Id) => {},
   /** the Mark screen's «People»: the team by department and the guests, came / not came, marked by hand; onchange after a mark */
   doorPeople: (_id: Id, _onchange?: () => void, _guestsOnly?: boolean) => {},
+  /** Studio's «Guest list»: the organizers' file, its preview and save, the door's list as a CSV */
+  guestList: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   /** Secret Santa's chat: one thread of my pair ('to': I am the Santa of `name`; 'from': with my own Santa) */
   santaChat: (_event: Id, _side: 'to' | 'from', _name?: string) => {},

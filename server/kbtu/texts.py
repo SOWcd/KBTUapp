@@ -390,6 +390,9 @@ BOT = {
         "prefill_other_id": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, но номер студенческого у него другой, чем в списке. Данные из списка всё равно подставлены: проверь, тот ли это человек.", None),
         "prefill_id_held": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, а номер студенческого из списка уже у пользователя #{holder}. Данные из списка подставлены: проверь, кто из них кто.", None),
         "auto_event": ("🗓 В канале <b>{org}</b> нашлось событие. Мы сделали черновик в Студии: проверь дату и место и опубликуй.", "Проверить"),
+        "event_review": ("📝 В <b>{org}</b> участник предложил событие. Посмотри и одобри или верни.", "Посмотреть"),
+        "event_approved": ("✅ Твоё событие в <b>{org}</b> одобрено и опубликовано.", "Открыть"),
+        "event_returned": ("↩️ Событие в <b>{org}</b> вернули на доработку. Причина в Студии.", "Открыть"),
         "channel_ask": ("📢 У <b>{name}</b> есть публичный Telegram-канал? Подключи его в профиле клуба, и его посты будут появляться в новостях приложения сами, без повторной публикации.", "📢 Подключить канал"),
         "sid_free": ("🪪 Номер студенческого <b>{sid}</b> освободился. Открой приложение и введи его снова.", "Открыть"),
         "sid_check": ("🪪 Твой номер студенческого <b>{sid}</b> указал ещё один студент.\n\nПроверь его в профиле → Мои данные. Если там опечатка, исправь: номер освободится.", "Проверить"),
@@ -614,6 +617,9 @@ BOT = {
         "prefill_other_id": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, бірақ оның студенттік билет нөмірі тізімдегіден басқа. Тізімдегі деректер бәрібір енгізілді: сол адам ба, тексер.", None),
         "prefill_id_held": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, ал тізімдегі студенттік билет нөмірі #{holder} пайдаланушыда тұр. Тізімдегі деректер енгізілді: кім кім екенін тексер.", None),
         "auto_event": ("🗓 <b>{org}</b> арнасынан іс-шара табылды. Студияда нобайын жасадық: күні мен орнын тексеріп, жарияла.", "Тексеру"),
+        "event_review": ("📝 <b>{org}</b> клубында мүше іс-шара ұсынды. Қарап, мақұлда немесе қайтар.", "Қарау"),
+        "event_approved": ("✅ <b>{org}</b> клубындағы іс-шараң мақұлданып, жарияланды.", "Ашу"),
+        "event_returned": ("↩️ <b>{org}</b> клубындағы іс-шараң түзетуге қайтарылды. Себебі Студияда.", "Ашу"),
         "channel_ask": ("📢 <b>{name}</b> клубының ашық Telegram-арнасы бар ма? Оны клуб профилінде қос, сонда оның посттары қосымшаның жаңалықтарында өздігінен шығады, қайта жариялаудың қажеті жоқ.", "📢 Арнаны қосу"),
         "sid_free": ("🪪 <b>{sid}</b> студент нөмірі босады. Қосымшаны ашып, оны қайта енгіз.", "Ашу"),
         "sid_check": ("🪪 Сенің <b>{sid}</b> студент нөміріңді тағы бір студент көрсетті.\n\nОны профильде → Менің деректерім бөлімінде тексер. Қате болса, түзет: нөмір босайды.", "Тексеру"),
@@ -833,6 +839,9 @@ BOT = {
         "prefill_other_id": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, but their student ID differs from the list's. The list's data was filled in anyway: check it's the same person.", None),
         "prefill_id_held": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, and the list's student ID is held by user #{holder}. The list's data was filled in: check who is who.", None),
         "auto_event": ("🗓 We found an event in <b>{org}</b>'s channel and made a draft in Studio: check the date and place, then publish.", "Check"),
+        "event_review": ("📝 A member proposed an event in <b>{org}</b>. Have a look, then approve or return it.", "Review"),
+        "event_approved": ("✅ Your event in <b>{org}</b> is approved and published.", "Open"),
+        "event_returned": ("↩️ Your event in <b>{org}</b> was returned for changes. The reason is in Studio.", "Open"),
         "channel_ask": ("📢 Does <b>{name}</b> have a public Telegram channel? Link it in the club profile and its posts will show up in the app's news by themselves, no reposting needed.", "📢 Link the channel"),
         "sid_free": ("🪪 Student ID <b>{sid}</b> is free now. Open the app and enter it again.", "Open"),
         "sid_check": ("🪪 Another student gave your student ID <b>{sid}</b>.\n\nCheck it in your profile → My data. If it has a typo, fix it: the ID frees up.", "Check"),
@@ -1124,6 +1133,32 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
                                        p["phone"], st[p["status"]], stamp(p["created_at"]), stamp(p["checked_in_at"]), st["yes"] if p["walk_in"] else "",
                                        st["yes"] if p["checkin_manual"] else "", *(a.get(q, "") for q in asked))])
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
+
+
+GUEST_LIST_HEAD = {
+    "ru": ("Имя", "Команда", "Пришёл", "Время", "Откуда"),
+    "kk": ("Аты", "Команда", "Келді", "Уақыты", "Қайдан"),
+    "en": ("Name", "Team", "Came", "Time", "From"),
+}
+GUEST_LIST_FROM = {
+    "ru": {"list": "список", "app": "приложение", "walk": "добавлен на входе", "yes": "да", "no": "нет"},
+    "kk": {"list": "тізім", "app": "қосымша", "walk": "кіреберісте қосылды", "yes": "иә", "no": "жоқ"},
+    "en": {"list": "list", "app": "app", "walk": "added at the door", "yes": "yes", "no": "no"},
+}
+GUEST_LIST_CAPTION = {"ru": "Список гостей: {title}", "kk": "Қонақтар тізімі: {title}", "en": "Guest list: {title}"}
+
+
+def guest_list_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
+    """The door's list after the event (organizing.guest_list_export): as attendees_csv, UTF-8 with a BOM and ';'."""
+    lang = lang if lang in GUEST_LIST_HEAD else "ru"
+    out, f = io.StringIO(), GUEST_LIST_FROM[lang]
+    w = csv.writer(out, delimiter=";")
+    w.writerow(GUEST_LIST_HEAD[lang])
+    stamp = lambda ts: time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
+    for p in people:
+        w.writerow([_cell(x) for x in (p["name"], p["team"], f["yes"] if p["at"] else f["no"], stamp(p["at"]),
+                                       f["walk"] if p["walkIn"] else f["app"] if p["app"] else f["list"])])
+    return "guests.csv", ("\ufeff" + out.getvalue()).encode(), GUEST_LIST_CAPTION[lang].format(title=title)[:1000]
 
 
 TEAM_LOG_HEAD = {

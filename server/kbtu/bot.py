@@ -277,6 +277,17 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
             WHERE e.id = ? AND e.status = 'draft' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
         return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}") if e else None
+    if kind == "event_review":  # er:<event>:<day>, to the club's President and Vices: a member's draft waits for their yes; quiet once answered or gone
+        e = one(con, """SELECT e.org_id, o.name FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
+            JOIN event_reviews r ON r.event_id = e.id AND r.asked_at IS NOT NULL
+            JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role IN ('president', 'vice')
+            WHERE e.id = ? AND e.status = 'draft' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}") if e else None
+    if kind in ("event_approved", "event_returned"):  # ea:<event>, eb:<event>:<day>, to the member who made it; quiet if it changed since
+        back = "" if kind == "event_approved" else "AND EXISTS (SELECT 1 FROM event_reviews r WHERE r.event_id = e.id AND r.asked_at IS NULL AND r.reason IS NOT NULL)"
+        e = one(con, f"""SELECT e.id, e.org_id, o.name FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
+            WHERE e.id = ? AND e.created_by = ? AND e.hidden_at IS NULL AND e.status = ? {back}""", int(ref[1]), m["user_id"], "draft" if back else "published")
+        return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}" if back else f"ev_{e['id']}") if e else None
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
         return (*texts.bot_message(lang, kind, when=texts.when(at, lang).split(",")[0]), "me") if at else None

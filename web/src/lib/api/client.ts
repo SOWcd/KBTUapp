@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg, SantaReport } from './types';
+import type { ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -182,6 +182,7 @@ export const server = {
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
+  dmpHi: (): Promise<void> => call('POST', '/me/dmp-hi'), // DMP's one-time hello left (me.dmpHi): never again
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
   updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
@@ -335,6 +336,8 @@ export const server = {
   createEvent: (org: Id, input: EventInput): Promise<EventFull> => call('POST', `/orgs/${org}/events`, input), // a draft
   updateEvent: (id: Id, input: EventInput): Promise<EventFull> => call('PATCH', `/events/${id}`, input),
   publishEvent: (id: Id): Promise<EventFull & { told?: boolean; tellAfter?: number | null }> => call('POST', `/events/${id}/publish`), // told: the followers heard (a public event); else from when they may
+  submitEvent: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/submit`), // a member's own draft to the club's President and Vices
+  reviewEvent: (id: Id, ok: boolean, reason?: ReviewReason): Promise<EventFull & { told?: boolean; tellAfter?: number | null }> => call('POST', `/events/${id}/review`, { ok, reason }), // their answer: yes publishes it
   cancelEvent: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/cancel`),
   deleteEvent: (id: Id): Promise<void> => call('DELETE', `/events/${id}`), // drafts only
   attendees: (id: Id): Promise<Attendee[]> => call('GET', `/events/${id}/attendees`), // the co-host's event team too, without receipts
@@ -451,9 +454,15 @@ export const server = {
   checkinPerson: (id: Id, user: Id, admit?: boolean): Promise<CheckinResult> => call('POST', `/events/${id}/checkin`, { userId: user, admit }),
   undoCheckin: (id: Id, user: Id): Promise<void> => call('DELETE', `/events/${id}/checkin/${user}`),
   /** an age_check event's door (server organizing.mark_age): a ticket holder 18+ or not, after a look at the ID */
-  doorPending: (id: Id): Promise<{ pending: number; pendingCame: number; list?: { key: string; name: string; adult: boolean | null; came: boolean; at?: number | null; team?: string | null }[] }> => call('GET', `/events/${id}/door-pending`),
+  doorPending: (id: Id): Promise<{ pending: number; pendingCame: number; list?: import('./types').ListGuest[] }> => call('GET', `/events/${id}/door-pending`),
   letIn: (id: Id, studentId: string, surname: string, adult?: boolean): Promise<{ already: boolean; adult: boolean | null; pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending`, { studentId, surname, adult }), // a list buyer not in the app, by hand
   tickPending: (id: Id, key: string, came = true, adult?: boolean): Promise<{ pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending/tick`, { key, came, adult }),
+  /** someone not on the list let in at the door (server guests.walk_in): checked in at once, kept by a corrected list */
+  walkIn: (id: Id, name: string, team?: string, adult?: boolean): Promise<import('./types').ListGuest & { pending: number; pendingCame: number }> => call('POST', `/events/${id}/door-pending/walk-in`, { name, team, adult }),
+  /** the organizers' own guest list from Studio (server organizing.guest_list): rows [name, student ID, 18+, username, team]; save false: a preview, nothing written */
+  guestList: (id: Id, rows: string[][], save: boolean): Promise<import('./types').GuestListResult> => call('POST', `/events/${id}/guest-list`, { rows, save }),
+  /** the bot sends the door's list as a CSV to my chat (came / not, walk-ins, teams); forbidden/'no_dm' as the attendees' */
+  exportGuestList: (id: Id): Promise<void> => call('POST', `/events/${id}/guest-list/export`),
   doorExtra: (id: Id, step?: 1 | -1): Promise<{ extra: number }> => step ? call('POST', `/events/${id}/door-extra`, { step }) : call('GET', `/events/${id}/door-extra`), // outsiders let in without the app: a bare count
   markAge: (id: Id, user: Id, adult: boolean): Promise<{ adult: boolean }> => call('POST', `/events/${id}/age`, { user_id: user, adult }),
   /** the bot asks the checked-in guests marked under 18 to leave (once in 10 min: rate_limited); count = messaged */
