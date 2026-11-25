@@ -144,6 +144,12 @@
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
   sheets.deepLink = (p) => deepLink(p);
+  // the iPhone app already open: a tapped notification's "start" arrives as kb:open (ios/, its launch: ?startapp)
+  $effect(() => {
+    const open = (e: Event) => { const p = (e as CustomEvent<unknown>).detail; if (typeof p === 'string' && p) deepLink(p); };
+    addEventListener('kb:open', open);
+    return () => removeEventListener('kb:open', open);
+  });
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, 'sheet.scanner', `${id}:${!!names}:${!!qr}`);
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, 'sheet.scanner', `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)

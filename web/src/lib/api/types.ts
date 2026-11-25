@@ -323,6 +323,7 @@ export interface Me {
   msOnly?: boolean;             // the creator's staff (kbtu.admin staff-ok): Microsoft and the policy, no student ID
   msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
+  logins?: { telegram: boolean; apple: boolean }; // GET /api/me outside Telegram: which sign-ins reach this account (logic/apple.py)
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
   subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in

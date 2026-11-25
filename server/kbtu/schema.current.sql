@@ -613,6 +613,15 @@ CREATE TABLE helper_offers (
       consent TEXT NOT NULL,
       created_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE identities (
+      provider TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, subject),
+      UNIQUE (user_id, provider)
+    ) STRICT;
 CREATE TABLE join_requests (
   id         INTEGER PRIMARY KEY,
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -794,6 +803,13 @@ CREATE TABLE profile_views (
       user_id   INTEGER NOT NULL,
       PRIMARY KEY (day, viewer_id, user_id)
     ) WITHOUT ROWID;
+CREATE TABLE push_devices (
+      token TEXT PRIMARY KEY,
+      session BLOB NOT NULL REFERENCES web_sessions(digest) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE qr_expected (
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
       email      TEXT NOT NULL,
@@ -1499,6 +1515,8 @@ CREATE INDEX posts_feed ON posts(audience, pinned, created_at);
 CREATE INDEX posts_recent ON posts(audience, created_at);
 CREATE INDEX prefill_rest_email ON prefill_rest(email);
 CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
+CREATE INDEX push_devices_session ON push_devices(session);
+CREATE INDEX push_devices_user ON push_devices(user_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);
 CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;

@@ -2,6 +2,8 @@
 // WebApp methods exist but THROW (WebAppMethodUnsupported), and one uncaught throw at start
 // leaves a blank screen. Nothing in the app calls window.Telegram directly.
 
+import { inApp, native, scan as nativeScan, scanClose } from './native';
+
 type Inset = { top: number; bottom: number; left: number; right: number };
 export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 type TgUser = { id: number; first_name: string; last_name?: string; username?: string; language_code?: string; photo_url?: string };
@@ -78,8 +80,9 @@ export function tgTry(fn: (w: WebApp) => void): void {
 export const tg = {
   initData: W?.initData ?? '',
   user: inTelegram ? W?.initDataUnsafe?.user ?? null : null,
-  // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query
-  startParam: inTelegram ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
+  // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query; so
+  // does the iPhone app's launch from a notification (ios/: the push's "start")
+  startParam: inTelegram || inApp ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
   platform: W?.platform ?? 'unknown',
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
@@ -195,14 +198,16 @@ export function openLink(url: string, web = false): void {
   else window.open(url, '_blank', 'noopener');
 }
 
-/** QR scanner (phones only). `onText` returns true to close the popup. Returns false when unavailable. */
+/** QR scanner (phones only): the iPhone app's own, else Telegram's popup. `onText` returns true to close it.
+ *  Returns false when unavailable. */
 export function scanQr(text: string, onText: (value: string) => boolean): boolean {
+  if (native.has('scan')) { nativeScan(text, onText); return true; }
   if (!can('6.4') || !W?.showScanQrPopup) return false;
   tgTry((w) => w.showScanQrPopup!({ text }, (v) => onText(v)));
   return true;
 }
 
-export function closeScanner(): void { if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
+export function closeScanner(): void { scanClose(); if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
 
 /** Telegram's own payment window can take Stars here: they came with Bot API 7.4, an older client hides the option. */
 export const canStars = (): boolean => can('7.4') && !!W?.openInvoice;

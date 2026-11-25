@@ -2295,4 +2295,25 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       added_at INTEGER NOT NULL
     ) STRICT;"""),
+    # the iPhone app (logic/apple.py): one account, many sign-ins. Telegram stays users.tg_id; identities holds the
+    # others (provider 'apple': Apple's "sub" for this app), each with its own consent (apple.CONSENT). push_devices: an
+    # APNs token per signed-in web session, gone with the session (sign-out, expiry, a changed tg_id) or the account
+    (228, """CREATE TABLE IF NOT EXISTS identities (
+      provider TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, subject),
+      UNIQUE (user_id, provider)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS push_devices (
+      token TEXT PRIMARY KEY,
+      session BLOB NOT NULL REFERENCES web_sessions(digest) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS push_devices_session ON push_devices(session);
+    CREATE INDEX IF NOT EXISTS push_devices_user ON push_devices(user_id);"""),
 ]

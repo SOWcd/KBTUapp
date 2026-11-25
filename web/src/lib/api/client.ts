@@ -17,10 +17,11 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
   ...(!tg.initData || webWrite ? { 'X-KBTU': '1' } : {}),
 });
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
+type ApplePass = { token: string; nonce: string; consent: string; lang?: string };
 
-async function changeWebSession(path: '/web/login' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
   await call('POST', path, body);
-  if (!tg.initData && path !== '/web/login') dispatchEvent(new Event('kb:signedOut'));
+  if (!tg.initData && (path === '/web/logout' || path === '/web/logout-all')) dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
 }
 
@@ -161,6 +162,13 @@ export const server = {
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
+  // the iPhone app (logic/apple.py): Apple's identity token for this tap's nonce, with the consent of the policy's clause
+  appleLogin: (p: ApplePass): Promise<void> => changeWebSession('/web/apple', p),
+  linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
+  unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
+  telegramLinkStart: (): Promise<{ url: string }> => call('GET', '/me/logins/telegram'), // Telegram's sign-in page, back with #tgAuthResult
+  linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
+  pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't

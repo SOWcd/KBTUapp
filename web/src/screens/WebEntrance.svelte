@@ -19,6 +19,8 @@
   import { loadMe } from '../lib/state/session.svelte';
   import { onComputer, onIos } from '../lib/tg';
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
+  import { APPLE_CONSENT, appleToken, native, nonce, pushToken } from '../lib/native';
+  import { say } from '../lib/state/ui.svelte';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
   let view = $state<'checking' | 'signin' | 'offline'>('checking');
@@ -31,6 +33,36 @@
     const me = api.me(true);
     await loadMe(false, true, await (limit ? Promise.race([me, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), limit))]) : me));
     entered = true;
+    void telegramBack();
+    // the iPhone app: Apple's own prompt once, then this phone's token each launch (it can change); for this session only
+    void pushToken().then((token) => token && api.pushDevice(token, APPLE_CONSENT)).catch(() => {});
+  }
+
+  // back from Telegram's sign-in page (Settings → Link Telegram, logic/apple.py): its proof in #tgAuthResult
+  async function telegramBack() {
+    const m = location.hash.match(/tgAuthResult=([\w+/=-]+)/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname);
+    try {
+      const bytes = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      await api.linkTelegram(JSON.parse(new TextDecoder().decode(bytes)));
+      await loadMe();
+      say(t('logins.tgDone'), 'sparkles_3d');
+    } catch (e) {
+      say(t(e instanceof ApiErr && e.message === 'telegram_taken' ? 'logins.tgTaken' : 'common.error'), 'warning_3d');
+    }
+  }
+
+  // Sign in with Apple (the iPhone app only, App Store 4.8): Apple's sheet, then our session; closed: nothing happens
+  async function apple() {
+    if (busy) return;
+    busy = true;
+    loginFailed = false;
+    try {
+      const n = nonce(), token = await appleToken(n);
+      if (token) { await api.appleLogin({ token, nonce: n, consent: APPLE_CONSENT, lang: i18n.lang }); await enter(); }
+    } catch { loginFailed = true; }
+    finally { busy = false; }
   }
 
   // while the session is checked the page draws nothing: index.html's boot screen (its emblem) carries on
@@ -141,6 +173,16 @@
               <p class="fs-sub" role="alert">{t('web.widgetFailed')}</p>
               <Button kind="plain" onclick={() => { widgetFailed = false; retry++; }}>{t('common.retry')}</Button>
             {/if}
+            {#if native.has('apple')}
+              <!-- the same dock and size as Telegram's button: neither way in is the lesser one (App Store 4.8) -->
+              <div class="dock glass glass-pill">
+                <button class="apple fs-body" onclick={apple} disabled={busy}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
+                  {t('logins.apple')}
+                </button>
+              </div>
+              <p class="fs-cap dim">{t('logins.appleNote')}</p>
+            {/if}
             {#if loginFailed}<p class="fs-sub" role="alert">{t('web.signInFailed')}</p>{/if}
           </div>
           <p class="fine fs-cap in" style:--i={9}>{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
@@ -199,6 +241,10 @@
   .widget::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--fill); animation: breathe 1400ms ease-in-out infinite alternate; }
   .widget.ready::before { display: none; }
   .widget.busy { opacity: 0.35; }
+  /* Apple's own look: black on a light page, white on a dark one (its guidelines), Telegram's button's size */
+  .apple { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 238px; max-width: 100%; height: 40px;
+    border-radius: var(--r-full); background: var(--text); color: var(--bg); font-weight: 600; }
+  .apple:disabled { opacity: 0.35; }
   /* color-scheme: else Chromium paints white corners behind the button in dark */
   .widget :global(iframe) { position: relative; display: block; max-width: 100%; border-radius: var(--r-full); color-scheme: light;
     opacity: 0; transition: opacity var(--t-slow) var(--ease); }

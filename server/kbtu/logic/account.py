@@ -997,12 +997,19 @@ def _paid_ahead(con, uid: int) -> bool:
                uid, NO_END, core.now()) is not None
 
 
+def _may_delete(con, v: Viewer) -> None:
+    """A student's account, or one an Apple sign-in made or reaches (App Store 5.1.1(v): an account the app creates can
+    be deleted in it); a Telegram guest has nothing of an account to delete."""
+    if not v.student and not one(con, "SELECT 1 FROM identities WHERE user_id = ?", v.id):
+        need_student(v)
+
+
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
     """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
-    need_student(v)
+    _may_delete(con, v)
     at = core.now() + DELETE_WAIT
     if con.execute("UPDATE users SET delete_at = ? WHERE id = ? AND delete_at IS NULL", (at, v.id)).rowcount:
         notify(con, v.id, "delete_soon", f"del:{at}")
@@ -1015,7 +1022,7 @@ def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
 def delete_info(con, v: Viewer) -> dict:
     """What the delete sheet tells before: the album photos I added (they stay without my name unless I say so), and
     whether a paid ticket ahead makes the deletion wait."""
-    need_student(v)
+    _may_delete(con, v)
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
@@ -1253,6 +1260,7 @@ _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram acco
 _DEL_GONE = {
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
     ("web_sessions", "user_id"),
+    ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
