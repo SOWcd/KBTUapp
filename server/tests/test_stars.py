@@ -9,7 +9,7 @@ import time
 import httpx
 import pytest
 
-from kbtu import bot, db, logic, texts
+from kbtu import bot, bot_dm, db, logic, texts
 from test_core import BOT, env, tma  # noqa: F401  (env: the fixture)
 
 
@@ -139,7 +139,7 @@ def test_a_pre_checkout_doesnt_wait_behind_a_slow_batch(env, monkeypatch):
                 break
         answered_in_batch.append(bool(tg.sent("answerPreCheckoutQuery")))
 
-    monkeypatch.setattr(bot, "_tapped", slow)
+    monkeypatch.setattr(bot_dm, "_tapped", slow)
     monkeypatch.setattr(bot, "PEEK", 0.01)
     hear(cfg, tg)
     assert answered_in_batch == [True] and tg.sent("answerPreCheckoutQuery")[0]["ok"] is True
@@ -185,7 +185,7 @@ def test_a_locked_database_keeps_the_payment_for_the_next_round(env, monkeypatch
     def locked(*_):
         raise sqlite3.OperationalError("database is locked")
 
-    monkeypatch.setattr(bot, "_tapped", on_tap)
+    monkeypatch.setattr(bot_dm, "_tapped", on_tap)
     monkeypatch.setattr(logic.stars, "paid", locked)
     batch = [tap(5), payment(6), tap(7)]
     assert hear(cfg, Telegram(batch, [])) == 6

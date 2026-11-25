@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from kbtu import ai, bot, db, llm, logic, media, outbox, texts
+from kbtu import ai, bot, bot_dm, db, llm, logic, media, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -46,7 +46,7 @@ class Http:  # Telegram's getChat: a public forum group for calc_help, nothing f
 
 def say(cfg, con, tg, text):
     con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
-    return asyncio.run(bot._suggest(cfg, Http(), con, {"message_id": 1, "chat": {"id": tg, "type": "private"}, "from": {"id": tg},
+    return asyncio.run(bot_dm._suggest(cfg, Http(), con, {"message_id": 1, "chat": {"id": tg, "type": "private"}, "from": {"id": tg},
                                                      "date": logic.now(), "text": text}))
 
 
@@ -71,7 +71,7 @@ def test_links_to_the_bot(env, monkeypatch):
     assert say(cfg, con, 50, "t.me/calc_help") == {**r, "text": texts.chat_reply("ru", [("waiting", "Calculus <help>", "forum")])}
     assert texts.chat_reply("en", [("sent", "X", "invite")]).startswith("✅ Got it: chat by invite link “X”.")
     # within 10 s of the last message: "later", nothing looked up
-    assert asyncio.run(bot._suggest(cfg, Http(), con, {"chat": {"id": 50, "type": "private"}, "date": logic.now(), "text": "t.me/later_one"}))["text"] \
+    assert asyncio.run(bot_dm._suggest(cfg, Http(), con, {"chat": {"id": 50, "type": "private"}, "date": logic.now(), "text": "t.me/later_one"}))["text"] \
         == texts.bot_message("ru", "chat_later")[0]
     # 10 suggestions a day: 2 made, 6 more fit, the rest counted
     for i in range(6):

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, receipt, app as server, texts
+from kbtu import auth, bot, bot_dm, config, db, logic, receipt, app as server, texts
 
 
 BOT = "123:" + "test" * 9
@@ -375,10 +375,10 @@ def test_exit_link(env):
     assert r.status_code == 307 and r.headers["location"].endswith("?startapp=exit")
     con = db.connect(cfg.db_path)
     msg = {"chat": {"id": 5, "type": "private"}, "date": int(time.time()), "text": "/exit", "from": {"language_code": "ru"}}
-    out = bot._welcome(con, cfg, msg)
+    out = bot_dm._welcome(con, cfg, msg)
     assert out["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp=exit")
     msg["text"] = "/start"
-    assert bot._welcome(con, cfg, msg)["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp")
+    assert bot_dm._welcome(con, cfg, msg)["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp")
 
 
 def test_db_must_exist(tmp_path, monkeypatch):

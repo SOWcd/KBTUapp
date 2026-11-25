@@ -13,7 +13,8 @@ import anyio.to_thread
 import httpx
 
 from . import casting, checkin, db, instagram, logic, mirror, texts, tgc, youtube
-from .bot import MUTE_ROW, _chores, _feedback_buttons, _send, _stopping, _tg, _userpics, offsite_round, post_channel, refresh_chats
+from .bot import _chores, _send, _stopping, _tg, _userpics, offsite_round, post_channel, refresh_chats
+from .bot_dm import MUTE_ROW, _feedback_buttons
 from .config import Config
 from .logic import notifications, now, one, rows
 

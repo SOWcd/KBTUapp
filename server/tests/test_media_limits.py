@@ -8,7 +8,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from kbtu import bot, db, download, logic, receipt, texts
+from kbtu import bot_dm, db, download, logic, receipt, texts
 from test_core import env, login, tma  # noqa: F401
 
 
@@ -76,7 +76,7 @@ def test_receipt_rejections_share_one_budget_across_app_and_bot(organizer, monke
         def handle(req):
             return httpx.Response(200, json={"result": {"file_path": "p.jpg"}}) if req.url.path.endswith("getFile") else httpx.Response(200, content=b"bot")
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
-            return await bot._receipt(cfg, client, con, msg)
+            return await bot_dm._receipt(cfg, client, con, msg)
     assert send_app().json()["message"] == "not_receipt"
     assert asyncio.run(send_bot())["text"] == texts.bot_message("ru", "receipt_not")[0]
     assert send_app().status_code == 429

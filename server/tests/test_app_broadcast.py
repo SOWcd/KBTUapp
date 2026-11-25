@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from kbtu import admin, bot, db, outbox, texts
+from kbtu import admin, bot_dm, db, outbox, texts
 from test_core import env  # noqa: F401  (env: the fixture)
 
 NAME = "app_home"
@@ -117,7 +117,7 @@ def test_broadcast_votes(audience, capsys):
         async def post(self, url, json):
             calls.append((url.rsplit("/", 1)[1], json))
     kb = [[{"text": "x", "url": URL}], [{"text": "y", "callback_data": "bv:1:" + NAME}]]
-    tap = lambda tg, v: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": tg}, "data": f"bv:{v}:{NAME}",  # noqa: E731
+    tap = lambda tg, v: asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "q", "from": {"id": tg}, "data": f"bv:{v}:{NAME}",  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": tg}, "reply_markup": {"inline_keyboard": kb}}}))
     tap(11, 1)
     tap(12, 0)

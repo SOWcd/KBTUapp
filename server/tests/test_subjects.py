@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, bot, db, logic, outbox, texts
+from kbtu import ai, app as server, bot_dm, db, logic, outbox, texts
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "tools"))
@@ -233,7 +233,7 @@ def test_withdrawal_edits_the_bot_card_even_if_delivery_is_in_flight(subj, sent_
     assert body["reply_markup"] == {"inline_keyboard": []}
     assert con.execute("SELECT offer_message FROM contacts WHERE id = ?", (cid,)).fetchone()[0] is None
     # If Telegram left the card in place, its original buttons only explain what happened.
-    asyncio.run(bot._tapped(cfg, Http(), con, {"id": "tap", "from": {"id": 1}, "data": f"ct:{cid}:{tok}:y",
+    asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "tap", "from": {"id": 1}, "data": f"ct:{cid}:{tok}:y",
                                               "message": {"message_id": 42, "chat": {"id": 1}}}))
     assert calls == [("answerCallbackQuery", {"callback_query_id": "tap", "text": texts.bot_message(m["lang"], "contact_withdrawn")[0]})]
 

@@ -9,7 +9,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, bot, db, logic, outbox, app as server, texts
+from kbtu import ai, bot_dm, db, logic, outbox, app as server, texts
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -158,11 +158,11 @@ def test_forum_bot_cards(env, monkeypatch):
     sent = []
     async def tg(cfg, http, method, body, files=None):
         sent.append(body)
-    monkeypatch.setattr(bot, "_tg", tg)
+    monkeypatch.setattr(bot_dm, "_tg", tg)
     class Http:
         async def post(self, *a, **k):
             return None
-    tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
+    tap = lambda who, data: asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": who}}}))
     tap(91, f"ct:{cid}:{tok}:y")                                                                      # Ben can't accept his own offer
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending" and sent[-1]["text"] == texts.bot_message("ru", "contact_gone")[0]

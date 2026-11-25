@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, media, outbox, app as server, texts, video
+from kbtu import auth, bot, bot_dm, config, db, logic, media, outbox, app as server, texts, video
 from test_core import BOT, delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -328,7 +328,7 @@ def test_chat_avatars_on_disk(env, monkeypatch):
     monkeypatch.setattr(media, "chat_peek", peek)
     def suggest(handle):
         con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
-        return asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 63, "type": "private"}, "date": logic.now(), "text": handle}))["text"]
+        return asyncio.run(bot_dm._suggest(cfg, None, con, {"chat": {"id": 63, "type": "private"}, "date": logic.now(), "text": handle}))["text"]
     on_disk = lambda p: (root / f"{p}.webp").exists()  # noqa: E731
     assert suggest("@jam_news").startswith("✅") and suggest("@broken_pic").startswith("✅")
     first = con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
