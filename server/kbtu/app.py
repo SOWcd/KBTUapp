@@ -1453,7 +1453,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/posts")
     def list_posts(con: Con, v: Me, scope: str = "all"):
-        if scope.startswith("org:") and not scope[4:].isdigit():
+        if scope.startswith("org:") and not (scope[4:].isascii() and scope[4:].isdigit()):  # a superscript two is a digit to isdigit, not to int()
             raise ApiError("bad_input")
         return logic.posts(con, v, scope)
 
@@ -3109,7 +3109,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum-posts/{pid}/mod", status_code=204)
     def fchan_mod_decide(pid: int, con: Con, v: FChan, body: dict = Body(...)):
-        F.mod_decide(con, v, pid, body.get("ok"))
+        F.mod_decide(con, v, pid, body.get("ok"), body.get("again", False))
 
     @app.post("/api/forum-posts/{pid}/restore", status_code=204)
     def fchan_mod_restore(pid: int, con: Con, v: FChan):
