@@ -33,7 +33,7 @@ export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 's
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
 export interface WaitingChat { id: Id; title: string; kind: 'group' | 'channel' }  // a chat I made our bot an admin in, no club's yet (ten minutes)
-export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */; callRoles: boolean /* /all by its club roles too, else the group's admins alone */; swearMiss: ('delete' | 'ban')[] /* the bot's rights it lacks there: the filter paused */ }
+export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */; swear: boolean /* a group's swear filter */; swearMiss: ('delete' | 'ban')[] /* the bot's rights it lacks there: the filter paused */ }
 /** A person's swear warnings in the club's groups, 30 days: the club's own people by name, anyone else null ("a chat member"). */
 // Studio → Chats → Roles and admins: app names only (an app id for the club's own people), never a Telegram id
 export interface ChatRoles { state: 'ok' | 'gone' | 'notAdmin' | 'unavailable'; admins?: { id: Id | null; name: string }[]; others?: number;
@@ -249,14 +249,14 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* not named, a GitHub login's lines together under it */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own (their yes ties them) */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
   team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; only who said yes
   people: CreditPerson[];          // newest shipped first, a named person's lines together
   /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
-  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[] } | null;
+  mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
 /** at the door (Member+): the real short name beside a nick */
