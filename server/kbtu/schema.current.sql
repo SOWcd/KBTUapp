@@ -1200,7 +1200,7 @@ CREATE TABLE sponsor_consents (
       version TEXT NOT NULL,
       show INTEGER NOT NULL CHECK (show IN (0, 1)),
       at INTEGER NOT NULL
-    ) STRICT;
+    , amount TEXT CHECK (amount IS NULL OR show = 1)) STRICT;
 CREATE TABLE staff_mutes (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         kind    TEXT NOT NULL,

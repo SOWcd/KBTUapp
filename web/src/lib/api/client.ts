@@ -173,6 +173,7 @@ export const server = {
   support: (): Promise<Support> => call('GET', '/donate'),
   sponsors: (): Promise<Sponsor[]> => call('GET', '/sponsors'),
   sponsorConsent: (show: boolean, consent: string, rev: number | null): Promise<Support> => call('PUT', '/donate/consent', { show, consent, rev }),
+  sponsorAmount: (show: boolean, consent: string, rev: number | null): Promise<Support> => call('PUT', '/donate/amount', { show, consent, rev }),
   donationReceipt: (file: Blob, consent: string): Promise<Support> => call('POST', `/donate/receipt?consent=${encodeURIComponent(consent)}`, file),
   donationQueue: (): Promise<DonationReview[]> => call('GET', '/admin/donations'),
   reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),

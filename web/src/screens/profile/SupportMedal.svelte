@@ -14,13 +14,14 @@
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import Award from '@lucide/svelte/icons/award';
 
   const mine = $derived(data.support);
   let busy = $state(false);
   let picker = $state<HTMLInputElement>();
   let choosing = $state(false);
   let switchKey = $state(0);
-  const RECEIPT_CONSENT = 'dn1', PUBLIC_CONSENT = 'sp1';
+  const RECEIPT_CONSENT = 'dn1', PUBLIC_CONSENT = 'sp1', AMOUNT_CONSENT = 'sa1';
   const policy = () => ({ label: t('set.policy'), url: `${location.origin}/privacy?lang=${i18n.lang}` });
 
   onMount(() => {
@@ -53,18 +54,24 @@
       say(t(error instanceof ApiErr && error.code === 'rate_limited' ? 'sp.limit' : error instanceof ApiErr && error.code === 'bad_input' ? 'ed.photoBad' : 'common.error'), 'warning_3d');
     } finally { busy = false; supportWrite(false); }
   }
-  async function publish(show: boolean) {
+  // Two separate yeses: the name on the Sponsors list (sp1), then, only beside it, the total (sa1). Hiding the name
+  // hides the total too (the server does the same), and a withdrawal never asks.
+  async function publish(show: boolean, amount = false) {
     if (!mine || busy || choosing) return;
     const rev = mine.rev;
     choosing = true;
-    const agreed = !show || await sheets.ask({ title: t('sp.public'), text: t('sp.publicConsent'), ok: t('sp.publish'), cancel: t('common.cancel'), link: policy() });
+    const agreed = !show || await sheets.ask(amount
+      ? { title: t('sp.amount'), text: t('sp.amountConsent'), ok: t('sp.publishAmount'), cancel: t('common.cancel'), link: policy() }
+      : { title: t('sp.public'), text: t('sp.publicConsent'), ok: t('sp.publish'), cancel: t('common.cancel'), link: policy() });
     choosing = false;
     if (!agreed) { switchKey++; return; }
-    const was = mine.show;
-    mine.show = show; busy = true; supportWrite(true); haptic.tap();
+    const was = { show: mine.show, showAmount: mine.showAmount };
+    if (amount) mine.showAmount = show;
+    else { mine.show = show; if (!show) mine.showAmount = false; }
+    busy = true; supportWrite(true); haptic.tap();
     data.sponsors = null;
-    try { data.support = await api.sponsorConsent(show, PUBLIC_CONSENT, rev); }
-    catch { if (data.support) data.support.show = was; switchKey++; say(t('common.error'), 'warning_3d'); }
+    try { data.support = await (amount ? api.sponsorAmount(show, AMOUNT_CONSENT, rev) : api.sponsorConsent(show, PUBLIC_CONSENT, rev)); }
+    catch { if (data.support) Object.assign(data.support, was); switchKey++; say(t('common.error'), 'warning_3d'); }
     finally { busy = false; supportWrite(false); }
   }
 </script>
@@ -75,7 +82,7 @@
       <div class="earned">
         <Medal a={sponsorMedal(mine.tier)} size={96} />
         <div><h2 class="t-h2">{t('ach.sponsor.name')} · {tierLabel(mine.tier, 3)}</h2>
-          <p class="fs-body">{t('sp.total', { amount: money(mine.total) })}</p><p class="fs-sub dim">{t('sp.private')}</p></div>
+          <p class="fs-body">{t('sp.total', { amount: money(mine.total) })}</p><p class="fs-sub dim">{t(mine.showAmount ? 'sp.amountShown' : 'sp.private')}</p></div>
       </div>
     {:else}<p class="fs-body">{t('sp.total', { amount: money(mine.total) })}</p>{/if}
     <p class="fs-sub dim">{t('sp.tiers', { second: money(mine.thresholds[1]), third: money(mine.thresholds[2]), rate: money(mine.starRate) })}</p>
@@ -93,15 +100,12 @@
     </Group>
   {/if}
   {#if mine && (mine.tier || mine.show)}
-    {#key switchKey}<Group footnote={t('sp.publicHint')}>
-      <Row title={t('sp.public')} accessory="switch" checked={mine.show} disabled={busy || choosing || (!mine.show && mine.version !== PUBLIC_CONSENT)} onchange={publish} />
+    {#key switchKey}<Group footnote={t(mine.show ? 'sp.amountHint' : 'sp.publicHint')}>
+      <Row title={t('sp.public')} accessory="switch" checked={mine.show} disabled={busy || choosing || (!mine.show && mine.version !== PUBLIC_CONSENT)} onchange={(on) => publish(on)} />
+      {#if mine.show}<Row title={t('sp.amount')} accessory="switch" checked={mine.showAmount} disabled={busy || choosing || (!mine.showAmount && mine.amountVersion !== AMOUNT_CONSENT)} onchange={(on) => publish(on, true)} />{/if}
     </Group>{/key}
   {/if}
-  <Group caption={t('sp.sponsors')} footnote={t('sp.listHint')}>
-    {#if data.sponsors?.length}
-      {#each data.sponsors as p, i (i)}<Row title={p.name} value={tierLabel(p.tier, 3)} />{/each}
-    {:else if data.sponsors}<Row title={t('sp.empty')} />{/if}
-  </Group>
+  <Group><Row icon={Award} title={t('sp.sponsors')} value={data.sponsors?.length ? String(data.sponsors.length) : undefined} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('sponsors'); }} /></Group>
 </div>
 
 <style>

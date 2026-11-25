@@ -329,6 +329,55 @@ def test_publication_needs_current_explicit_consent_and_withdrawal_wins(support,
     assert c.get("/api/sponsors", headers=tma(8)).json() == []
 
 
+def shown(support, on, tg=7, **changes):
+    return support[0].put("/api/donate/amount", headers=tma(tg),
+                          json={"show": on, "consent": donations.AMOUNT_CONSENT, "rev": mine(support, tg)["rev"], **changes})
+
+
+def board(support):
+    return [(p["tier"], p.get("amount")) for p in support[0].get("/api/sponsors", headers=tma(64)).json()]
+
+
+def test_amount_is_a_second_opt_in_shown_only_beside_the_name(support, monkeypatch):
+    c, _, con, ids, clock = support
+    did = upload(support, monkeypatch, fields(clock[0], amount=5107))["receipts"][0]["id"]
+    assert decide(support, did, "confirm", 5107).status_code == 204
+    assert mine(support)["showAmount"] is False and mine(support)["amountVersion"] == donations.AMOUNT_CONSENT
+    assert shown(support, True).status_code == 409  # the name is off: no figure beside nobody
+    assert consent(support, True).status_code == 200
+    assert board(support) == [(2, None)]  # the name alone never brings the amount
+    assert shown(support, True, consent=donations.CONSENT).status_code == 400
+    assert shown(support, "yes").status_code == 400
+    assert shown(support, True).status_code == 200
+    assert mine(support)["showAmount"] is True and board(support) == [(2, 5107)]
+    # a second donor: a smaller shown total sorts below; a hidden one sorts after the shown ones of its tier
+    bek = upload(support, monkeypatch, fields(clock[0], amount=2500, no="222222222222222222"), tg=8, shade=120)["receipts"][0]["id"]
+    assert decide(support, bek, "confirm", 2500).status_code == 204
+    rev = mine(support, 8)["rev"]
+    assert c.put("/api/donate/consent", headers=tma(8), json={"show": True, "consent": donations.CONSENT, "rev": rev}).status_code == 200
+    assert board(support) == [(2, 5107), (1, None)]
+    assert shown(support, True, tg=8).status_code == 200
+    assert board(support) == [(2, 5107), (1, 2500)]
+    # a stale yes loses; a withdrawal always wins
+    rev = mine(support)["rev"]
+    assert shown(support, False, rev=None, consent="old").status_code == 200
+    assert shown(support, True, rev=rev).status_code == 409
+    assert board(support) == [(2, None), (1, 2500)]
+    assert shown(support, True).status_code == 200
+    # hiding the name hides the amount; showing the name again never brings the figure back unasked
+    assert consent(support, False).status_code == 200 and board(support) == [(1, 2500)]
+    assert consent(support, True).status_code == 200
+    assert mine(support)["showAmount"] is False and board(support) == [(2, None), (1, 2500)]
+    # a new name version hides the amount with the name (everyone's: both agreed to sp1)
+    assert shown(support, True).status_code == 200
+    monkeypatch.setattr(donations, "CONSENT", "sp2")
+    assert mine(support)["showAmount"] is False and board(support) == []
+    monkeypatch.undo()
+    con.execute("UPDATE users SET tg_id = 800 WHERE id = ?", (ids[8],))
+    assert board(support) == [(2, 5107)]
+    assert con.execute("SELECT amount FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC", (ids[8],)).fetchone()[0] is None
+
+
 def test_consent_does_not_follow_a_telegram_account_change(support, monkeypatch):
     c, _, con, ids, clock = support
     upload(support, monkeypatch, fields(clock[0]))

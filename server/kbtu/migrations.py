@@ -2501,4 +2501,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       published_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS ig_media_by_org ON ig_media(org_id, handle);"""),
+    # the Sponsors list's second switch (donations.AMOUNT_CONSENT): the total shown beside the name. The version agreed
+    # to, NULL while off; only on a row that also shows the name. The tg_id-moved trigger's new row leaves it NULL
+    (241, "ALTER TABLE sponsor_consents ADD COLUMN amount TEXT CHECK (amount IS NULL OR show = 1);"),
 ]

@@ -524,9 +524,9 @@
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
-  // friends (Profile with the Friends sheet: the bot's request message) ----
+  // friends (Profile with the Friends sheet: the bot's request message), donate, sponsors (the honour board) ----
   function deepLink(p = tg.startParam, afterSignIn = false) {
-    if (p === 'donate') { ui.tab = 'profile'; sheets.settings('donate'); return; }
+    if (p === 'donate' || p === 'sponsors') { ui.tab = 'profile'; sheets.settings(p); return; }
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)

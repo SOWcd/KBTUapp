@@ -975,10 +975,11 @@ export interface ResearchRequest extends Omit<ResearchInput, 'consent'> {
 /** Private support data; never embedded in another person's card. */
 export interface Support {
   total: number; tier: number; thresholds: number[]; starRate: number;
-  version: string; receiptConsent: string; show: boolean; rev: number | null;
+  version: string; amountVersion: string; receiptConsent: string; show: boolean; showAmount: boolean; rev: number | null;
   receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
 }
-export interface Sponsor { name: string; tier: number }
+/** amount: the confirmed total, only when they agreed to show it (sa1) */
+export interface Sponsor { name: string; tier: number; amount?: number }
 export interface DonationReview {
   id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
   readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
