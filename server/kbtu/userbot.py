@@ -74,6 +74,8 @@ async def run(cfg: Config) -> None:
                 log.warning("userbot: signed in as id %d", me)  # never the phone or the name
                 said = True
             con = db.connect(cfg.db_path)
+            with db.tx(con):  # /all never calls this account (chatlist._with_live)
+                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('userbot_id', ?)", (str(me),))
             mirror.alive(con)
             await client.get_dialogs()  # the joined channels' access hashes: a StringSession keeps no entities
             work = Mirror(cfg, client, con, me)

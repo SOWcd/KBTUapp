@@ -50,7 +50,7 @@
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .faces { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
-  .sower { background: rgb(30, 30, 30); }
+  .sower { background: rgb(10, 10, 11); }
   .studex { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .cheer { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
   .knights { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
@@ -61,7 +61,7 @@
   .moments { --role: rgb(244, 217, 190); }
   .faces { --role: rgb(255, 155, 214); }
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .sower { --role: rgb(192, 193, 190); }
+  .sower { --role: rgb(245, 245, 247); }
   /* no tilt reaches the back (the face's glass writes --gx): its depth layers stand still, so they are painted with the
      side, not each kept as a layer of its own */
   .cb :global(.z) { will-change: auto; }
@@ -77,7 +77,7 @@
   .bside > * { flex: none; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
-  .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
+  .sower .bmed { top: 16px; right: 16px; width: 44px; height: 44px; } /* as on the face */
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
   .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
@@ -87,7 +87,7 @@
   .meta { display: block; margin-top: 1px; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .moments .meta { color: rgba(255, 255, 255, 0.84); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
-  .sower .meta { color: rgba(232, 232, 231, 0.7); }
+  .sower .meta { color: rgb(134, 134, 139); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
   /* the anime club's art where this side sets the name (mid-right): its mist moved under it, its swirl's ink haloed */
@@ -96,9 +96,6 @@
   /* kbtu.mag: its issues stand where this side sets the name: quieter here, the name haloed in their cream */
   .kbtumag :global(.near) { opacity: 0.45; }
   .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
-  /* SOWER: the hand stands where this side sets the name: quieter here, the name lifted off it */
-  .sower :global(.near) { opacity: 0.45; }
-  .sower .bside { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.8), 0 0 10px rgba(14, 14, 14, 0.7); }
   .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
 </style>
