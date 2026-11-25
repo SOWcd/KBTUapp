@@ -9,7 +9,7 @@ from test_fchan_replies import clock, group_sends, tick, world  # noqa: F401
 def test_signed_comment_flow(env, monkeypatch):
     w = world(env, monkeypatch)
     clock(monkeypatch)
-    r = w.c.post(f"/api/forum-posts/{w.pid}/comments", headers=tma(2), json={"body": "The soup was fine today"}).json()
+    r = w.c.post(f"/api/forum-posts/{w.pid}/thread", headers=tma(2), json={"body": "The soup was fine today"}).json()
     assert r.get("state") == "soon", r
     row = w.con.execute("SELECT s.user_id, r.comment_msg FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE r.id = ?", (r["id"],)).fetchone()
     assert row[0] is not None and row[1] is None                                    # signed: names its commenter, answers the thread
@@ -27,7 +27,7 @@ def test_signed_comment_flow(env, monkeypatch):
 def test_signed_comment_rules(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
-    post = lambda body, h=tma(2): w.c.post(f"/api/forum-posts/{w.pid}/comments", headers=h, json={"body": body})  # noqa: E731
+    post = lambda body, h=tma(2): w.c.post(f"/api/forum-posts/{w.pid}/thread", headers=h, json={"body": body})  # noqa: E731
     assert post("The soup was fine today").status_code == 200
     assert post("Right after, too soon").status_code == 429                         # REPLY_GAP
     t[0] += 61
@@ -39,7 +39,7 @@ def test_signed_comment_rules(env, monkeypatch):
 def test_signed_comment_held_and_deleted(env, monkeypatch):
     w = world(env, monkeypatch, word="person")
     clock(monkeypatch)
-    r = w.c.post(f"/api/forum-posts/{w.pid}/comments", headers=tma(2), json={"body": "Ask the teacher about it"}).json()
+    r = w.c.post(f"/api/forum-posts/{w.pid}/thread", headers=tma(2), json={"body": "Ask the teacher about it"}).json()
     assert r.get("state") == "held", r
     assert w.c.get(f"/api/forum-posts/{w.pid}/thread", headers=tma(1)).json() == []  # held: only its author sees it
     assert w.c.get(f"/api/forum-posts/{w.pid}/thread", headers=tma(2)).json()[0]["state"] == "held"

@@ -2984,7 +2984,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_thread(pid: int, con: Con, v: FChan):
         return F.thread(con, v, pid)
 
-    @app.post("/api/forum-posts/{pid}/comments")
+    @app.post("/api/forum-posts/{pid}/thread")  # not /comments: /api/{kind}s/{tid}/comments takes that path
     async def fchan_comment(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
         rid, text = await run_in_threadpool(F.comment_reserve, con, v, pid, body)
         verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
