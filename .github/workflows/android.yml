@@ -40,8 +40,7 @@ jobs:
           [[ "$CODE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo "::error::version_code must be a whole number"; exit 1; }
           [[ "$NAME" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || { echo "::error::version_name: letters, digits and . + - only"; exit 1; }
           jq --argjson c "$CODE" --arg n "$NAME" '.appVersionCode = $c | .appVersionName = $n' twa-manifest.json > m.json && mv m.json twa-manifest.json
-          npm install -g --no-audit --no-fund @bubblewrap/cli@latest  # ponytail: unpinned until the first green run names a version to pin
-          npm ls -g --depth=0 @bubblewrap/cli
+          npm install -g --no-audit --no-fund @bubblewrap/cli@1.27.0  # targetSdk 36; a newer one when Play asks for a newer target
           mkdir -p ~/.bubblewrap
           echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
           bubblewrap update --skipVersionUpgrade --manifest=./twa-manifest.json
@@ -65,7 +64,7 @@ jobs:
           fi
           jarsigner -keystore "$ks" -storepass:env PW -keypass:env PW -sigalg SHA256withRSA -digestalg SHA-256 \
             -signedjar "kbtuapp-$CODE.aab" app/build/outputs/bundle/release/app-release.aab upload
-          jarsigner -verify "kbtuapp-$CODE.aab" | tail -1
+          jarsigner -verify "kbtuapp-$CODE.aab" | grep -q "jar verified."
           # the upload certificate's fingerprint is public: one of the two for ANDROID_CERT_SHA256 on the server
           keytool -list -v -keystore "$ks" -storepass:env PW -alias upload | grep -m1 "SHA256:"
           rm -f "$ks"
