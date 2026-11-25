@@ -31,7 +31,7 @@ describe('hero rank', () => {
     const m = fresh();
     shown(m, { key: 'e1', kind: 'friends' }, D - 1, true);
     expect(stale(m, D)).toBe('e1');
-    expect(keys(rank(items, m, D))).toEqual(['e2', 'e3', 'p1']);
+    expect(keys(rank(items, m, D))).toEqual(['e3', 'e2', 'p1']); // yesterday's show counts too: friends 1/4 x 6 < club 1/3 x 5
     shown(m, { key: 'e2', kind: 'friends' }, D, true); // today rolled: yesterday's still counts
     expect(stale(m, D)).toBe('e1');
     expect(stale(m, D + 1)).toBe('e2');
